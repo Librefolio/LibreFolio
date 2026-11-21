@@ -20,7 +20,13 @@ caught. These helpers serve the code that logs a failure and the platform's safe
   and ``is_reported`` to write only a short line, pointing to the first one, in a request the failure reached after
   another. ``mark_traceback_reported`` marks the exceptions a traceback shows. The mark is an attribute of the
   exception object: exceptions cannot be weakly referenced.
+- ``code_site`` says where an exception was raised, in code locations only, for a line that must not repeat the
+  exception's message (it can carry the user's amounts): the PAC planner's engine failures and the Tool worker's plugin
+  failures.
 """
+
+import traceback
+from pathlib import Path
 
 #: No chain is walked further: a guard against a cycle the links were built into, or a runaway chain.
 _LIMIT = 50
@@ -195,3 +201,35 @@ def traceback_reporting_request(error: BaseException) -> str | None:
         if marked_traceback:
             return marked_request
     return None
+
+
+# LibreFolio's own code, told apart from libraries in a failure site; paths are shown from the repository root, library
+# files by name only.
+_BACKEND_ROOT = Path(__file__).resolve().parents[3]
+_REPO_ROOT = _BACKEND_ROOT.parent
+
+
+def _frame_text(frame: traceback.FrameSummary) -> str:
+    path = Path(frame.filename).resolve()
+    shown = path.relative_to(_REPO_ROOT).as_posix() if path.is_relative_to(_BACKEND_ROOT) else path.name
+    return f"{shown}:{frame.lineno}:{frame.name}"
+
+
+def code_site(error: BaseException) -> dict[str, str | list[str]]:
+    """Where ``error`` was raised, by code location only, never its message, arguments or local variables.
+
+    ``where`` is the innermost frame of LibreFolio code, ``callers`` the at most two LibreFolio frames that called it,
+    nearest first (absent when there is none), and ``raised_in`` the library frame below it, if any. Each is
+    ``path:line:function``, the path from the repository root for LibreFolio's files and the file name for a library's.
+    """
+    frames = traceback.extract_tb(error.__traceback__)
+    own = [frame for frame in frames if Path(frame.filename).resolve().is_relative_to(_BACKEND_ROOT)]
+    site: dict[str, str | list[str]] = {}
+    if own:
+        site["where"] = _frame_text(own[-1])
+        callers = [_frame_text(frame) for frame in reversed(own[-3:-1])]
+        if callers:
+            site["callers"] = callers
+    if frames and (not own or own[-1] is not frames[-1]):
+        site["raised_in"] = _frame_text(frames[-1])
+    return site

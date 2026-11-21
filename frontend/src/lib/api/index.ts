@@ -23,7 +23,7 @@
 // =============================================================================
 // ZODIOS CLIENT
 // =============================================================================
-export {zodiosApi, ApiError, axiosInstance} from './zodios-client';
+export {zodiosApi, ApiError, axiosInstance, apiRequestHeaders, observeFetchAnswer} from './zodios-client';
 
 // =============================================================================
 // ZOD SCHEMAS (for deriving types in /lib/types/)

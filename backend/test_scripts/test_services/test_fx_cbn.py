@@ -8,7 +8,7 @@ Lane 75, wave 2, lot L30 (plan ``plan-phase02FxCentralBanksOndata2.prompt.md``).
 - The answer is a JSON list, newest first; each row has ``currency``, ``ratedate``, ``buyingrate``, ``centralrate`` and
   ``sellingrate`` (numbers as text). The plugin reads the central rate.
 - Currency names carry trailing spaces or tabs and variants (POUND/POUNDS STERLING, DANISH KRONA/KRONER, JAPANESE
-  YEN) and noise (SDR, WAUA, NAIRA, POESO).
+  YEN), the SDR (named SDR, served as XDR) and noise (WAUA, NAIRA, POESO).
 - 97 duplicate day+currency keys, 64 of them with different central rates (e.g. JPY 2017-10-09: 2.7072 and 46.0795).
 - No terms of use found; the endpoint is undocumented (decision D10 c of the lane).
 
@@ -118,6 +118,16 @@ async def test_cbn_yen_and_cfa_map_to_jpy_and_xof(monkeypatch: pytest.MonkeyPatc
 
 
 @pytest.mark.asyncio
+async def test_cbn_sdr_maps_to_xdr(monkeypatch: pytest.MonkeyPatch):
+    """The bank's «SDR» is the IMF's unit: ``1848.9020`` naira per SDR, served as XDR."""
+    _route(monkeypatch, cbn_mod, _by_url(recent=[_row("SDR", "2026-11-18", "1848.9020")]))
+
+    rates = await CBNProvider().fetch_rates(RECENT_RANGE, ["XDR"])
+
+    assert rates["XDR"] == [(date(2026, 11, 18), "XDR", "NGN", Decimal("1848.9020"))]
+
+
+@pytest.mark.asyncio
 async def test_cbn_names_with_trailing_spaces_or_tabs_are_stripped(monkeypatch: pytest.MonkeyPatch):
     """«EURO\\t» and «YEN » find their code after ``strip()``."""
     rows = [_row("EURO\t", "2026-11-18", "1570.5"), _row("YEN ", "2026-11-18", "8.46")]
@@ -179,8 +189,8 @@ async def test_cbn_the_other_names_of_the_map_reach_their_codes(monkeypatch: pyt
 
 @pytest.mark.asyncio
 async def test_cbn_unknown_names_are_discarded(monkeypatch: pytest.MonkeyPatch):
-    """SDR, WAUA, NAIRA, POESO and a name never seen are no currency: nothing is returned for them."""
-    rows = [_row(name, "2026-11-18", "5.5") for name in ("SDR", "WAUA", "NAIRA", "POESO", "NEW COIN")] + USD_DAY
+    """WAUA, NAIRA, POESO and a name never seen are no currency: nothing is returned for them."""
+    rows = [_row(name, "2026-11-18", "5.5") for name in ("WAUA", "NAIRA", "POESO", "NEW COIN")] + USD_DAY
     _route(monkeypatch, cbn_mod, _by_url(recent=rows))
 
     rates = await CBNProvider().fetch_rates(RECENT_RANGE, ["USD", "EUR"])
@@ -448,7 +458,7 @@ async def test_cbn_catalogue_is_the_mapped_currencies_plus_ngn_without_a_request
 
     currencies = await CBNProvider().get_supported_currencies()
 
-    assert currencies == ["AED", "CHF", "CNY", "DKK", "EUR", "GBP", "JPY", "NGN", "SAR", "USD", "XOF", "ZAR"]
+    assert currencies == ["AED", "CHF", "CNY", "DKK", "EUR", "GBP", "JPY", "NGN", "SAR", "USD", "XDR", "XOF", "ZAR"]
     assert CBNProvider().fallback_currencies == currencies
     assert asked == []
 
@@ -465,5 +475,5 @@ def test_cbn_identity_urls_and_constants():
     names = cbn_mod.CURRENCY_NAMES
     assert names["US DOLLAR"] == "USD" and names["YEN"] == "JPY" and names["CFA"] == "XOF"
     assert names["POUND STERLING"] == names["POUNDS STERLING"] == "GBP"
-    assert len(names) == 14
-    assert "SDR" not in names and "WAUA" not in names
+    assert names["SDR"] == "XDR" and len(names) == 15
+    assert "WAUA" not in names and "NAIRA" not in names and "POESO" not in names

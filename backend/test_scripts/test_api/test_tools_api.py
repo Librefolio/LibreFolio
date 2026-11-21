@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import asyncio
+import gzip
+import json
 import re
 from collections.abc import Awaitable, Callable, Iterator
+from dataclasses import replace
 from types import SimpleNamespace
 from typing import NoReturn
 from uuid import uuid4
@@ -17,20 +20,27 @@ from backend.app.api.v1 import tools as tools_api
 from backend.app.api.v1.auth import get_current_user
 from backend.app.config import get_settings
 from backend.app.schemas.tools import (
+    ToolBatchMetrics,
     ToolCatalogResponse,
     ToolComputeBatchRequest,
     ToolComputeBatchResponse,
     ToolComputeFailure,
+    ToolComputeProgress,
     ToolDescriptor,
     ToolDiagnosticsResponse,
     ToolDiscoveryFailure,
+    ToolError,
+    ToolItemMetrics,
     ToolMemoryCapability,
     ToolPlatformPolicy,
     ToolPoolResourceReservation,
     ToolPoolSnapshot,
     ToolResourceCapabilities,
 )
+from backend.app.services.platform.middleware import MIDDLEWARE_STACK, install_middleware
+from backend.app.services.tools.base import ToolExecutionError
 from backend.test_scripts.test_server_helper import _TestingServerManager
+from backend.test_scripts.test_services import _reb_small_requests as reb
 
 settings = get_settings()
 API_BASE = f"http://localhost:{settings.TEST_PORT}/api/v1"
@@ -786,3 +796,295 @@ async def test_tools_diagnostics_is_strict_safe_for_normal_user(test_server):
         PASSWORD.lower(),
     ):
         assert forbidden not in serialized_strings
+
+
+# ---------------------------------------------------------------------------
+# The streaming route (lot V1 of project 67): one JSON line per progress message, then the result of /compute
+# ---------------------------------------------------------------------------
+
+COMPUTE_STREAM_PATH = "/api/v1/tools/compute/stream"
+NDJSON = "application/x-ndjson"
+
+
+def _ndjson(body: bytes) -> list[dict[str, object]]:
+    assert body.endswith(b"\n"), "every line, the last one too, ends with a newline"
+    return [json.loads(line) for line in body.decode("utf-8").split("\n") if line]
+
+
+async def _stream(client: httpx.AsyncClient, envelope: dict[str, object]) -> tuple[httpx.Response, list[dict[str, object]]]:
+    async with client.stream("POST", f"{API_BASE}/tools/compute/stream", json=envelope, headers={"Accept-Encoding": "gzip"}, timeout=TIMEOUT) as response:
+        body = b"".join([chunk async for chunk in response.aiter_bytes()])
+    assert response.status_code == 200, body
+    assert response.headers["content-type"].startswith(NDJSON)
+    assert "content-encoding" not in response.headers, "the stream is never compressed: gzip would hold the lines back"
+    return response, _ndjson(body)
+
+
+def _without_run_details(result: dict[str, object]) -> dict[str, object]:
+    """A result without what changes from one run to the next: the execution id and the metrics."""
+    return {key: value for key, value in result.items() if key not in {"execution_id", "metrics"}}
+
+
+@pytest.mark.asyncio
+async def test_stream_route_ends_with_the_same_result_as_compute(test_server):
+    """Same request, same user: the stream's last line is ``{kind: "result", response}`` where ``response`` has the shape of
+    the ``POST /tools/compute`` answer and the same ``result``; every line before it is a progress line."""
+    async with httpx.AsyncClient() as client:
+        await _login_normal_user(client)
+        catalog = (await client.get(f"{API_BASE}/tools/catalog", timeout=TIMEOUT)).json()
+        descriptor = next(item for item in catalog["items"] if item["tool_code"] == "portfolio_rebalancer")
+        identity = {key: descriptor[key] for key in ("tool_code", "contract_version", "implementation_version", "schema_fingerprint")}
+        parameters = {**reb.t4(), "operation": "preview"}
+
+        def envelope() -> dict[str, object]:
+            return {"request_id": f"request-{uuid4().hex}", "items": [{"correlation_id": "stream-same", **identity, "parameters": parameters}]}
+
+        computed = await client.post(f"{API_BASE}/tools/compute", json=envelope(), timeout=TIMEOUT)
+        streamed_envelope = envelope()
+        _response, lines = await _stream(client, streamed_envelope)
+
+    assert computed.status_code == 200, computed.text
+    *progress, last = lines
+    assert all(line["kind"] == "progress" for line in progress)
+    assert set(last) == {"kind", "response"} and last["kind"] == "result"
+    streamed = last["response"]
+    assert set(streamed) == set(computed.json()) == COMPUTE_KEYS
+    assert streamed["request_id"] == streamed_envelope["request_id"]
+    ToolComputeBatchResponse.model_validate({key: value for key, value in streamed.items() if key not in {"success_count", "failed_count"}})
+    (streamed_item,) = streamed["results"]
+    (computed_item,) = computed.json()["results"]
+    assert streamed_item["status"] == computed_item["status"] == "success", streamed_item
+    assert _without_run_details(streamed_item) == _without_run_details(computed_item)
+
+
+@pytest.mark.asyncio
+async def test_tool_without_phases_streams_only_the_result(test_server):
+    """No declared phase, no progress line: the stream is the result line alone, with today's failures intact."""
+    envelope, items = _unknown_envelope()
+    async with httpx.AsyncClient() as client:
+        await _login_normal_user(client)
+        _response, lines = await _stream(client, envelope)
+
+    (line,) = lines
+    assert line["kind"] == "result"
+    assert [result["error"]["code"] for result in line["response"]["results"]] == ["unknown_tool"] * len(items)
+    assert [result["correlation_id"] for result in line["response"]["results"]] == [item["correlation_id"] for item in items]
+
+
+# In process: the real router behind the app's whole middleware stack (``MIDDLEWARE_STACK``, GZip on any size), driven
+# at the ASGI level, so that what is sent and when is observed message by message (httpx's ASGI transport would hand
+# over the whole body at the end).
+
+
+def _failure_response(batch: ToolComputeBatchRequest) -> ToolComputeBatchResponse:
+    results = [
+        ToolComputeFailure(
+            status="error",
+            error=ToolError(code="unknown_tool", retryable=False),
+            correlation_id=item.correlation_id,
+            tool_code=item.tool_code,
+            contract_version=item.contract_version,
+            implementation_version=item.implementation_version,
+            schema_fingerprint=item.schema_fingerprint,
+            execution_id=None,
+            metrics=ToolItemMetrics(total_ms=0),
+        )
+        for item in batch.items
+    ]
+    return ToolComputeBatchResponse(request_id=batch.request_id, results=results, metrics=ToolBatchMetrics(server_processing_ms=0))
+
+
+def _progress(batch: ToolComputeBatchRequest, phase: str, step: int | None = None, total: int | None = None) -> ToolComputeProgress:
+    return ToolComputeProgress(kind="progress", correlation_id=batch.items[0].correlation_id, phase=phase, step=step, total=total, elapsed_ms=1)
+
+
+class _StreamExecutor(_TransportExecutor):
+    """An executor whose compute is scripted by the test: it may report progress, wait, fail or be cancelled."""
+
+    def __init__(self, policy: ToolPlatformPolicy, script: Callable[..., Awaitable[ToolComputeBatchResponse]]) -> None:
+        super().__init__(policy)
+        self.script = script
+
+    def batch_request_timeout_ms(self, batch: ToolComputeBatchRequest) -> int:
+        return self.policy.request_timeout_ms
+
+    async def compute(self, batch, *, principal_key, request_started=None, settings=None, on_progress=None):
+        return await self.script(batch, on_progress)
+
+
+async def _drive_stream(
+    monkeypatch,
+    script,
+    envelope: dict[str, object],
+    *,
+    disconnect: asyncio.Event,
+    on_body: Callable[[bytes], None] = lambda body: None,
+    policy: ToolPlatformPolicy | None = None,
+) -> list[dict]:
+    """POST the stream route of a fresh app — the Tool router behind the app's whole ``MIDDLEWARE_STACK``, its GZip on
+    any size — and return every ASGI message it sends."""
+    policy = policy or ToolPlatformPolicy()
+    executor = _StreamExecutor(policy, script)
+    monkeypatch.setattr(tools_api, "get_tool_executor", lambda: executor)
+    app = FastAPI()
+    app.include_router(tools_api.router, prefix="/api/v1")
+    app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(id=1)
+    stack = tuple(replace(entry, options={**entry.options, "minimum_size": 1}) if entry.name == "gzip" else entry for entry in MIDDLEWARE_STACK)
+    install_middleware(app, stack)
+    body = json.dumps(envelope).encode()
+    received = False
+    messages: list[dict] = []
+
+    async def receive() -> dict:
+        nonlocal received
+        if not received:
+            received = True
+            return {"type": "http.request", "body": body, "more_body": False}
+        await disconnect.wait()
+        return {"type": "http.disconnect"}
+
+    async def send(message: dict) -> None:
+        messages.append(message)
+        if message["type"] == "http.response.body" and message.get("body"):
+            on_body(message["body"])
+
+    scope = {
+        "type": "http",
+        "asgi": {"version": "3.0", "spec_version": "2.3"},  # what uvicorn reports here: Starlette listens for the disconnect
+        "http_version": "1.1",
+        "method": "POST",
+        "scheme": "http",
+        "path": COMPUTE_STREAM_PATH,
+        "raw_path": COMPUTE_STREAM_PATH.encode(),
+        "query_string": b"",
+        "root_path": "",
+        "headers": [(b"host", b"tools.test"), (b"content-type", b"application/json"), (b"accept-encoding", b"gzip"), (b"content-length", str(len(body)).encode())],
+        "client": ("127.0.0.1", 50000),
+        "server": ("tools.test", 80),
+    }
+    async with asyncio.timeout(DEADLINE_CEILING_S):
+        await app(scope, receive, send)
+    return messages
+
+
+def _start(messages: list[dict]) -> tuple[int, dict[bytes, bytes]]:
+    start = next(message for message in messages if message["type"] == "http.response.start")
+    return start["status"], dict(start["headers"])
+
+
+@pytest.mark.asyncio
+async def test_stream_route_sends_progress_before_the_result_through_gzip(monkeypatch):
+    """The first progress line leaves the server before the calculation ends, uncompressed, behind the real GZip middleware:
+    the script only finishes once the transport has sent that line."""
+    envelope, _items = _unknown_envelope()
+    line_sent = asyncio.Event()
+
+    async def script(batch, on_progress):
+        on_progress(_progress(batch, "validate"))
+        await line_sent.wait()  # never set if the stream is held back: the ceiling then fails the test
+        on_progress(_progress(batch, "search", 1, 2))
+        return _failure_response(batch)
+
+    messages = await _drive_stream(monkeypatch, script, envelope, disconnect=asyncio.Event(), on_body=lambda body: line_sent.set() if b'"progress"' in body else None)
+
+    status, headers = _start(messages)
+    assert status == 200
+    assert headers[b"content-type"].startswith(NDJSON.encode())
+    assert b"content-encoding" not in headers
+    lines = _ndjson(b"".join(message.get("body", b"") for message in messages if message["type"] == "http.response.body"))
+    assert [(line["kind"], line.get("phase"), line.get("step"), line.get("total")) for line in lines] == [("progress", "validate", None, None), ("progress", "search", 1, 2), ("result", None, None, None)]
+    assert lines[0]["correlation_id"] == envelope["items"][0]["correlation_id"]
+    assert lines[-1]["response"]["request_id"] == envelope["request_id"]
+
+
+@pytest.mark.asyncio
+async def test_stream_route_disconnect_cancels_the_compute(monkeypatch):
+    """Closing the browser after the first line cancels the calculation, as on ``/compute``; no result line follows."""
+    envelope, _items = _unknown_envelope()
+    disconnect = asyncio.Event()
+    cancelled = asyncio.Event()
+
+    async def script(batch, on_progress):
+        on_progress(_progress(batch, "validate"))
+        try:
+            await asyncio.Event().wait()  # nobody sets it: only a cancellation ends this calculation
+        except asyncio.CancelledError:
+            cancelled.set()
+            raise
+        raise AssertionError("unreachable")
+
+    messages = await _drive_stream(monkeypatch, script, envelope, disconnect=disconnect, on_body=lambda body: disconnect.set())
+    async with asyncio.timeout(DEADLINE_CEILING_S):
+        await cancelled.wait()
+
+    body = b"".join(message.get("body", b"") for message in messages if message["type"] == "http.response.body")
+    assert [line["kind"] for line in _ndjson(body)] == ["progress"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("code", "status_code"), [("queue_full", 429), ("service_unavailable", 503)])
+async def test_stream_route_admission_errors_stay_http_statuses(monkeypatch, code, status_code):
+    """A refusal before any job starts is the HTTP status of ``/compute``, never a 200 stream."""
+    envelope, _items = _unknown_envelope()
+
+    async def script(batch, on_progress):
+        raise ToolExecutionError(code, retryable=True)
+
+    messages = await _drive_stream(monkeypatch, script, envelope, disconnect=asyncio.Event())
+
+    status, headers = _start(messages)
+    assert status == status_code
+    body = b"".join(message.get("body", b"") for message in messages if message["type"] == "http.response.body")
+    if headers.get(b"content-encoding") == b"gzip":  # an ordinary JSON answer, compressed like any other
+        body = gzip.decompress(body)
+    assert json.loads(body) == {"detail": {"code": code, "retryable": True}}
+
+
+@pytest.mark.asyncio
+async def test_stream_route_deadline_ends_the_stream_without_a_result_and_cancels(monkeypatch):
+    """A calculation still running at the request's deadline: the stream ends without its result line (the client reads
+    a broken answer) and the calculation is cancelled, as ``/compute`` would end it."""
+    policy = ToolPlatformPolicy(
+        ingress_timeout_ms=10,
+        queue_timeout_ms=10,
+        engine_timeout_ms=10,
+        soft_timeout_ms=20,
+        output_reserve_ms=10,
+        job_timeout_ms=30,
+        cleanup_timeout_ms=10,
+        response_reserve_ms=10,
+        request_timeout_ms=300,
+        client_timeout_ms=400,
+    )
+    envelope, _items = _unknown_envelope()
+    cancelled = asyncio.Event()
+
+    async def script(batch, on_progress):
+        on_progress(_progress(batch, "validate"))
+        try:
+            await asyncio.Event().wait()  # nobody sets it: only the deadline's cancellation ends this calculation
+        except asyncio.CancelledError:
+            cancelled.set()
+            raise
+        raise AssertionError("unreachable")
+
+    messages = await _drive_stream(monkeypatch, script, envelope, disconnect=asyncio.Event(), policy=policy)
+    async with asyncio.timeout(DEADLINE_CEILING_S):
+        await cancelled.wait()
+
+    status, _headers = _start(messages)
+    assert status == 200
+    body = b"".join(message.get("body", b"") for message in messages if message["type"] == "http.response.body")
+    assert [line["kind"] for line in _ndjson(body)] == ["progress"]
+
+
+@pytest.mark.asyncio
+async def test_stream_route_unexpected_failure_before_any_line_is_not_a_stream(monkeypatch):
+    """A calculation that fails before any line is an HTTP error, as on ``/compute``: never a 200 with an empty stream."""
+    envelope, _items = _unknown_envelope()
+
+    async def script(batch, on_progress):
+        raise RuntimeError("private failure")
+
+    with pytest.raises(RuntimeError, match="private failure"):
+        await _drive_stream(monkeypatch, script, envelope, disconnect=asyncio.Event())

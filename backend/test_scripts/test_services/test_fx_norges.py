@@ -150,6 +150,16 @@ async def test_norges_no_data_answer_is_no_rate_and_no_error(monkeypatch: pytest
     assert rates == {"USD": [], "JPY": []}
 
 
+@pytest.mark.asyncio
+async def test_norges_serves_the_sdr_as_nok_per_one_xdr(monkeypatch: pytest.MonkeyPatch):
+    """Q7 (a): «1 XDR = 13.02207 NOK» (unit multiplier 0), kept like any currency."""
+    _route(monkeypatch, norges_mod, lambda request: _csv(_row("XDR", 0, "2026-11-19", "13.02207")))
+
+    rates = await NorgesBankProvider().fetch_rates((date(2026, 11, 16), date(2026, 11, 20)), ["XDR"])
+
+    assert rates["XDR"] == [(date(2026, 11, 19), "XDR", "NOK", Decimal("13.02207"))]
+
+
 #: Answers that are not the CSV: each must be one clear ``FXServiceError`` for the whole call, never a rate. The call
 #: is one request for every currency, so the error is the call's: the core records it on every leg, and nothing empty
 #: goes into its fetch cache.
@@ -183,9 +193,10 @@ async def test_norges_too_many_requests_is_a_rate_limit(monkeypatch: pytest.Monk
 
 
 @pytest.mark.asyncio
-async def test_norges_catalogue_drops_indices_sdr_and_closed_series(monkeypatch: pytest.MonkeyPatch):
-    """The last observation of each series: indices (I44, TWI), the SDR and a series whose last value is more than a
-    month older than the newest one in the answer are dropped; NOK, the base, is listed."""
+async def test_norges_catalogue_keeps_the_sdr_and_drops_indices_and_closed_series(monkeypatch: pytest.MonkeyPatch):
+    """The last observation of each series: indices (I44, TWI) and a series whose last value is more than a
+    month older than the newest one in the answer are dropped; the SDR (XDR) is a currency like any other (Q7 (a)); NOK,
+    the base, is listed."""
     asked = _route(
         monkeypatch,
         norges_mod,
@@ -202,7 +213,7 @@ async def test_norges_catalogue_drops_indices_sdr_and_closed_series(monkeypatch:
 
     currencies = await NorgesBankProvider().get_supported_currencies()
 
-    assert currencies == ["JPY", "NOK", "USD"]
+    assert currencies == ["JPY", "NOK", "USD", "XDR"]
     assert asked[0].url.path.endswith("/EXR/B..NOK.SP") and asked[0].url.params["lastNObservations"] == "1"
 
 
@@ -220,4 +231,4 @@ def test_norges_identity_and_texts():
     for texts in (provider.description_i18n, provider.warning_i18n):
         assert set(texts) == {"en", "it", "fr", "es"} and all(texts.values())
     assert "NLOD" in provider.description_i18n["en"]
-    assert "NOK" in provider.fallback_currencies and "XDR" not in provider.fallback_currencies
+    assert "NOK" in provider.fallback_currencies and "XDR" in provider.fallback_currencies and not {"I44", "TWI"} & set(provider.fallback_currencies)

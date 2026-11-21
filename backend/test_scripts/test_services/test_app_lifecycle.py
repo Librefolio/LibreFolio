@@ -79,6 +79,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.routing import iter_route_contexts
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.pool import NullPool
+from starlette.middleware.gzip import DEFAULT_EXCLUDED_CONTENT_TYPES
 from starlette.routing import Mount
 from structlog.testing import capture_logs
 
@@ -958,7 +959,8 @@ def test_the_middleware_stack_is_gzip_then_cors() -> None:
     print_section("MIDDLEWARE_STACK: gzip outside cors, with their options")
     assert_in_relative_order(MIDDLEWARE_STACK, ("gzip", "cors"), "MIDDLEWARE_STACK")
     entries = {entry.name: entry for entry in MIDDLEWARE_STACK}
-    assert (entries["gzip"].cls, dict(entries["gzip"].options)) == (GZipMiddleware, {"minimum_size": 1024, "compresslevel": 6})
+    gzip_options = {"minimum_size": 1024, "compresslevel": 6, "exclude_content_types": (*DEFAULT_EXCLUDED_CONTENT_TYPES, "application/x-ndjson")}
+    assert (entries["gzip"].cls, dict(entries["gzip"].options)) == (GZipMiddleware, gzip_options)
     assert (entries["cors"].cls, dict(entries["cors"].options)) == (CORSMiddleware, {"allow_credentials": True, "allow_methods": ["*"], "allow_headers": ["*"]})
     print_success("✓ gzip outside cors, each with its class and options")
 

@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import errno
+import logging
 import os
 import re
 import signal
@@ -52,9 +53,11 @@ from backend.app.services.tools import worker as worker_module
 from backend.app.services.tools.base import ToolExecutionContext, ToolExecutionError, ToolPlugin
 from backend.app.services.tools.executor import ToolExecutor
 from backend.app.services.tools.registry import build_tool_definition
-from backend.app.services.tools.wire import decode_json, encode_json
+from backend.app.services.tools.wire import LOG_FRAME_MAX_BYTES, decode_json, encode_json
 from backend.app.services.tools.worker import PipeCancellation, ToolWorkerJob
 from backend.test_scripts.test_services._tools_executor_fixtures import (
+    FIXTURE_LOG_FLOOD_LINES,
+    FIXTURE_PROGRESS_PHASES,
     FIXTURE_TOOL_CODE,
     FixtureOutput,
     FixturePlugin,
@@ -2866,3 +2869,378 @@ def test_cleanup_does_not_claim_success_when_native_inspection_is_denied(monkeyp
     assert tree.closed is False
     assert handle.closed is False
     assert handle.calls == []
+
+
+# ---------------------------------------------------------------------------
+# Progress messages (lot V1 of project 67): child → parent → listener
+# ---------------------------------------------------------------------------
+
+
+async def _run_with_progress(runtime: _Runtime, scenario: str) -> tuple[ToolComputeFailure | object, list]:
+    """One real worker item whose progress messages are collected as the executor hands them over."""
+    executor = runtime.executor(workers=1)
+    events: list = []
+    task = asyncio.create_task(executor.compute(_batch(_item("owned-progress", scenario)), principal_key="private-principal", on_progress=events.append))
+    runtime.tasks.append(task)
+    handle = await _begin_worker(runtime.harness, stage="compute")
+    response = await asyncio.wait_for(task, timeout=_WAIT)
+    await asyncio.to_thread(_assert_native_termination, handle)
+    (result,) = response.results
+    return result, events
+
+
+def _phases(events: list) -> list[tuple[str, int | None, int | None]]:
+    return [(event.phase, event.step, event.total) for event in events]
+
+
+@pytest.mark.asyncio
+async def test_report_progress_sends_declared_phases_between_ready_and_result(runtime):
+    """A real child reports the declared phases: they reach the listener in order, with the item's correlation id and a
+    non-decreasing elapsed time, all before the result, which is intact."""
+    result, events = await _run_with_progress(runtime, "progress")
+
+    assert result.status == "success", result
+    assert result.result["status"] == "ready"
+    assert _phases(events) == [("validate", None, None), ("search", 1, 2), ("search", 2, 2), ("report", None, None)]
+    assert {event.correlation_id for event in events} == {"owned-progress"}
+    assert {event.phase for event in events} <= set(FIXTURE_PROGRESS_PHASES)
+    elapsed = [event.elapsed_ms for event in events]
+    assert elapsed == sorted(elapsed) and elapsed[0] >= 0
+
+
+@pytest.mark.asyncio
+async def test_undeclared_phase_or_extra_field_is_dropped_not_fatal(runtime):
+    """An undeclared phase, a step over its total, a total without a step, an extra field, a step of the wrong type or
+    zero: each is dropped, the calculation ends well, and only the valid message passes (contract §10: not a worker_crashed)."""
+    result, events = await _run_with_progress(runtime, "progress_rogue")
+
+    assert result.status == "success", result
+    assert _phases(events) == [("report", None, None)]
+    assert "PRIVATE" not in repr(events)
+
+
+@pytest.mark.asyncio
+async def test_progress_messages_are_capped_and_deduplicated(runtime):
+    """A flood: a repeated (phase, step, total) passes once, and no more than the cap reaches the listener; the result is
+    intact."""
+    result, events = await _run_with_progress(runtime, "progress_flood")
+
+    assert result.status == "success", result
+    phases = _phases(events)
+    assert len(phases) == executor_module.TOOL_PROGRESS_MESSAGE_CAP == 50
+    assert len(set(phases)) == len(phases)
+    assert phases[:3] == [("search", 1, None), ("search", 1, 100), ("search", 2, 100)]
+
+
+def test_child_progress_reporter_is_bounded_and_closes(monkeypatch):
+    """The child's reporter never blocks or raises: it drops a malformed call, stops at its own frame cap (so the pipe
+    cannot fill), swallows a broken pipe, and sends nothing once compute has returned."""
+    sent: list[bytes] = []
+
+    class _Pipe:
+        broken = False
+
+        def send_bytes(self, payload: bytes) -> None:
+            if self.broken:
+                raise BrokenPipeError
+            sent.append(payload)
+
+    pipe = _Pipe()
+    reporter = worker_module.PipeProgressReporter(pipe, "e" * 32)
+    reporter.report("search", 1, 2)
+    for malformed in (("search", True, None), ("search", -1, None), (7, None, None), ("search", 1.5, None)):
+        reporter.report(*malformed)
+    assert [decode_json(frame) for frame in sent] == [{"kind": "progress", "execution_id": "e" * 32, "phase": "search", "step": 1, "total": 2}]
+
+    for step in range(2, 500):
+        reporter.report("search", step, None)
+    assert len(sent) == worker_module.CHILD_PROGRESS_FRAME_CAP
+
+    pipe.broken = True
+    other = worker_module.PipeProgressReporter(pipe, "f" * 32)
+    other.report("search")  # a broken pipe is swallowed
+
+    pipe.broken = False
+    closed = worker_module.PipeProgressReporter(pipe, "g" * 32)
+    closed.close()
+    before = len(sent)
+    closed.report("search")
+    assert len(sent) == before
+    assert not hasattr(closed, "send_frame"), "the reporter writes progress frames only, never a raw frame"
+
+    context = ToolExecutionContext(execution_id="x", soft_deadline=time.monotonic() + 10, hard_deadline=time.monotonic() + 20, cancelled=lambda: False)
+    context.report_progress("search", 1, 2)  # no channel: a no-op
+
+
+# ---------------------------------------------------------------------------
+# Worker log lines (lot LOGS of project 67): the child's lines reach the parent's log, bounded and masked
+# ---------------------------------------------------------------------------
+
+
+async def _run_with_logs(runtime: _Runtime, scenario: str) -> tuple[object, list[dict]]:
+    """One real worker item, with the parent at INFO and its structured lines captured."""
+    executor = runtime.executor(workers=1)
+    root = logging.getLogger()
+    level = root.level
+    root.setLevel(logging.INFO)
+    try:
+        with capture_logs() as lines, structlog.contextvars.bound_contextvars(request_id="the-request"):
+            task = asyncio.create_task(executor.compute(_batch(_item("owned-logs", scenario)), principal_key="private-principal"))
+            runtime.tasks.append(task)
+            handle = await _begin_worker(runtime.harness, stage="compute")
+            response = await asyncio.wait_for(task, timeout=_WAIT)
+            await asyncio.to_thread(_assert_native_termination, handle)
+    finally:
+        root.setLevel(level)
+    (result,) = response.results
+    return result, lines
+
+
+@pytest.mark.asyncio
+async def test_worker_log_lines_reach_the_parent_log(runtime):
+    """A real child's lines reach the parent's log at the parent's level: a structured line keeps its fields and gains the
+    item's execution id; a line under the level stays out; a library's plain line arrives as text; a malformed log frame
+    is dropped, never fatal, and the result is intact."""
+    result, lines = await _run_with_logs(runtime, "log")
+
+    assert result.status == "success", result
+    execution_id = result.result["execution_id"]
+    worker = [line for line in lines if line.get("worker") == "tool"]
+    fixture = [line for line in worker if line["event"] == "Fixture line"]
+    assert len(fixture) == 1, worker
+    assert fixture[0]["log_level"] == "info"
+    assert fixture[0]["seed"] == 11 and fixture[0]["value"] == 1.5
+    assert fixture[0]["execution_id"] == execution_id
+    assert fixture[0]["worker_logger"] == "tools.fixture"
+    assert not [line for line in worker if line["event"] == "Fixture debug line"]
+    library = [line for line in worker if line["event"] == "Library line w"]
+    assert len(library) == 1 and library[0]["log_level"] == "warning" and library[0]["worker_logger"] == "fixture.library"
+    assert "PRIVATE" not in repr(lines)
+    (hostile,) = [line for line in worker if line["event"] == "Hostile line %s"]
+    assert "positional_args" not in hostile and hostile.get("request_id") != "FAKE"
+
+
+@pytest.mark.asyncio
+async def test_worker_log_flood_is_capped_with_one_count_line(runtime):
+    """A flood: the child sends at most its cap of lines, then one line that counts the rest; the result is intact."""
+    result, lines = await _run_with_logs(runtime, "log_flood")
+
+    assert result.status == "success", result
+    worker = [line for line in lines if line.get("worker") == "tool"]
+    flood = [line for line in worker if line["event"] == "Flood line"]
+    assert len(flood) == worker_module.CHILD_LOG_FRAME_CAP < FIXTURE_LOG_FLOOD_LINES
+    assert [line["index"] for line in flood] == list(range(worker_module.CHILD_LOG_FRAME_CAP))
+    (dropped,) = [line for line in worker if line["event"] == "Tool worker log lines dropped"]
+    assert dropped["dropped"] == FIXTURE_LOG_FLOOD_LINES - worker_module.CHILD_LOG_FRAME_CAP
+    assert dropped["log_level"] == "warning"
+
+
+def test_child_log_channel_is_bounded_and_silent_elsewhere(monkeypatch):
+    """The child's log channel never blocks or raises: it shares the progress frames' lock, stops at its own cap and counts
+    the rest in one line at close, cuts a line too long for its frame, swallows a broken pipe, and in a process forked from
+    the worker (a seeded run) it sends nothing, so two processes never write on one pipe."""
+    sent: list[bytes] = []
+
+    class _Pipe:
+        broken = False
+
+        def send_bytes(self, payload: bytes) -> None:
+            if self.broken:
+                raise BrokenPipeError
+            sent.append(payload)
+
+    pipe = _Pipe()
+    channel = worker_module.PipeProgressReporter(pipe, "e" * 32)
+    channel.log(logging.INFO, "tools.fixture", "one line")
+    assert decode_json(sent[0]) == {"kind": "log", "execution_id": "e" * 32, "level": logging.INFO, "logger": "tools.fixture", "message": "one line"}
+
+    channel.log(logging.INFO, "tools.fixture", "x" * 100_000)
+    long_line = decode_json(sent[1])
+    assert len(sent[1]) <= LOG_FRAME_MAX_BYTES and long_line["message"].startswith("x") and long_line["message"].endswith("…")
+
+    for index in range(worker_module.CHILD_LOG_FRAME_CAP + 40):
+        channel.log(logging.INFO, "tools.fixture", f"line {index}")
+    assert len(sent) == worker_module.CHILD_LOG_FRAME_CAP
+    channel.report("search", 1, 2)  # the progress frames keep their own cap
+    assert decode_json(sent[-1])["kind"] == "progress"
+    channel.close()
+    counted = decode_json(sent[-1])
+    assert counted["kind"] == "log" and counted["level"] == logging.WARNING
+    assert decode_json(counted["message"].encode()) == {"event": "Tool worker log lines dropped", "dropped": 42}
+    before = len(sent)
+    channel.log(logging.INFO, "tools.fixture", "after close")
+    assert len(sent) == before
+
+    pipe.broken = True
+    worker_module.PipeProgressReporter(pipe, "f" * 32).log(logging.INFO, "x", "a broken pipe is swallowed")
+
+    pipe.broken = False
+    forked = worker_module.PipeProgressReporter(pipe, "g" * 32)
+    monkeypatch.setattr(worker_module.os, "getpid", lambda: -1)
+    forked.log(logging.INFO, "x", "from a forked seeded run")
+    forked.report("search")
+    forked.close()
+    assert len(sent) == before
+
+
+def test_child_log_routing_keeps_the_level_and_masks_secrets():
+    """In the child, structured and library lines go to the channel as one rendered line each, at the level the parent
+    gave; a secret of the job in flight never leaves the child unmasked."""
+    from backend.app.utils.runtime.secret_masking import secrets_in_flight  # noqa: PLC0415 — beside its only use
+
+    sent: list[bytes] = []
+
+    class _Pipe:
+        def send_bytes(self, payload: bytes) -> None:
+            sent.append(payload)
+
+    channel = worker_module.PipeProgressReporter(_Pipe(), "e" * 32)
+    # The routing reconfigures this process's logging: saved and put back here, in the test's own body, so pytest's
+    # capture handlers (swapped between setup and call) are never re-attached stale.
+    root = logging.getLogger()
+    handlers, level, config = root.handlers[:], root.level, structlog.get_config()
+    try:
+        worker_module.route_logs_to_parent(channel, logging.INFO)
+        with secrets_in_flight(frozenset({"S3CRET-VALUE"})):
+            get_logger("tools.fixture").info("Token S3CRET-VALUE", key="S3CRET-VALUE", seed=3)
+            get_logger("tools.fixture").debug("Hidden line")
+            logging.getLogger("fixture.library").warning("Library S3CRET-VALUE")
+    finally:
+        for handler in root.handlers[:]:
+            root.removeHandler(handler)
+        for handler in handlers:
+            root.addHandler(handler)
+        root.setLevel(level)
+        structlog.configure(**config)
+
+    frames = [decode_json(frame) for frame in sent]
+    assert "S3CRET-VALUE" not in repr(frames)
+    assert [frame["logger"] for frame in frames] == ["tools.fixture", "fixture.library"]
+    structured = decode_json(frames[0]["message"].encode())
+    assert structured["event"] == "Token ***" and structured["key"] == "***" and structured["seed"] == 3
+    assert frames[1]["level"] == logging.WARNING and frames[1]["message"] == "Library ***"
+
+
+def test_execute_puts_the_job_secrets_in_flight(monkeypatch):
+    """The worker runs the plugin with the job's secrets in flight, so the lines it logs are masked before they leave."""
+    from contextlib import contextmanager  # noqa: PLC0415 — beside its only use
+
+    seen: list[frozenset[str]] = []
+
+    @contextmanager
+    def recording(values: frozenset[str]):
+        seen.append(values)
+        yield
+
+    class _Settings:
+        @staticmethod
+        def secret_values() -> frozenset[str]:
+            return frozenset({"K3Y"})
+
+    monkeypatch.setattr(worker_module, "secrets_in_flight", recording)
+    monkeypatch.setattr(FixturePlugin, "bind_settings", lambda self, bound: None, raising=False)
+    frame = worker_module._execute(_in_process_job("echo", settings=_Settings()), SimpleNamespace(is_set=lambda: False), FixtureRegistry)
+
+    assert frame["status"] == "success", frame
+    assert seen == [frozenset({"K3Y"})]
+
+
+def _in_process_job(scenario: str, *, parameters: dict | None = None, **changes) -> ToolWorkerJob:
+    """A worker job for the fixture Tool, for the worker's ``_execute`` run in this process."""
+    item = _item("in-process", scenario)
+    now = time.monotonic()
+    job = ToolWorkerJob(
+        execution_id=uuid4().hex,
+        tool_code=item.tool_code,
+        contract_version=item.contract_version,
+        implementation_version=item.implementation_version,
+        schema_fingerprint=item.schema_fingerprint,
+        parameters=encode_json(parameters if parameters is not None else item.parameters),
+        soft_deadline=now + 50,
+        hard_deadline=now + 60,
+        max_parameter_bytes=1_048_576,
+        max_result_bytes=1_048_576,
+        max_json_depth=32,
+    )
+    return replace(job, **changes) if changes else job
+
+
+def _failure_lines(scenario: str, **changes) -> tuple[dict, list[dict]]:
+    """The worker run in this process on ``scenario``: its result frame, and its «Tool plugin failed» lines."""
+    with capture_logs() as lines:
+        frame = worker_module._execute(_in_process_job(scenario, **changes), SimpleNamespace(is_set=lambda: False), FixtureRegistry)
+    return frame, [line for line in lines if line["event"] == worker_module.PLUGIN_FAILURE_EVENT]
+
+
+# ---------------------------------------------------------------------------
+# A plugin failure keeps its cause (H-60 follow-up of lot LOGS): one line, the class and the code site, never the message
+# ---------------------------------------------------------------------------
+
+
+def test_worker_logs_a_plugin_failure_once_by_class_and_site():
+    """A plugin that raises: the item fails with its code, and the worker writes one line naming the Tool, the phase, the
+    exception's class and where it was raised, never its message, which can carry the user's amounts."""
+    frame, failures = _failure_lines("raise")
+
+    assert frame["status"] == "error" and frame["error"]["code"] == "execution_failed"
+    (line,) = failures
+    assert line["log_level"] == "error"
+    assert line["tool_code"] == FIXTURE_TOOL_CODE and line["phase"] == "compute"
+    assert line["error_type"] == "_PrivateFixtureFailure"
+    assert line["where"].startswith("backend/test_scripts/test_services/_tools_executor_fixtures.py:")
+    assert "PRIVATE" not in repr(line) and "1234.56" not in repr(line)
+
+
+def test_worker_does_not_log_again_a_failure_the_plugin_logged():
+    """A plugin that logged its own failure before re-raising it (the PAC's ``_log_engine_failure``): the «reported» mark
+    tells the worker, which writes nothing more. One line per failure."""
+    with capture_logs() as lines:
+        frame = worker_module._execute(_in_process_job("raise_reported"), SimpleNamespace(is_set=lambda: False), FixtureRegistry)
+
+    assert frame["status"] == "error" and frame["error"]["code"] == "execution_failed"
+    assert [line["event"] for line in lines if line["event"] in ("Fixture engine failure", worker_module.PLUGIN_FAILURE_EVENT)] == ["Fixture engine failure"]
+
+
+def test_worker_logs_an_invalid_output_without_its_text():
+    """A result its output contract refuses is a plugin's bug: one line, the phase and the class, never the refused text."""
+    frame, failures = _failure_lines("invalid_output")
+
+    assert frame["status"] == "error" and frame["error"]["code"] == "invalid_output"
+    (line,) = failures
+    assert line["phase"] == "output" and line["error_type"] == "ValidationError"
+    assert "PRIVATE_OUTPUT_REJECTED" not in repr(line)
+
+
+def test_worker_does_not_log_invalid_parameters():
+    """Parameters the input contract refuses are the caller's, answered with their own details: no failure line."""
+    frame, failures = _failure_lines("echo", parameters={"operation": "exercise", "scenario": "not-a-scenario"})
+
+    assert frame["status"] == "error" and frame["error"]["code"] == "invalid_parameters"
+    assert failures == []
+
+
+@pytest.mark.asyncio
+async def test_worker_failure_line_reaches_the_parent_log(runtime):
+    """A real child: the failure line is written after compute returned, and still reaches the parent's log, with the item's
+    execution id: the channel stays open for log lines until the result frame."""
+    result, lines = await _run_with_logs(runtime, "raise")
+
+    assert result.status == "error" and result.error.code == "execution_failed"
+    errors = [line for line in lines if line.get("log_level") in {"error", "critical"}]
+    (line,) = errors  # one line for the failure: the parent writes none of its own
+    assert line.get("worker") == "tool" and line["event"] == worker_module.PLUGIN_FAILURE_EVENT, errors
+    assert line["error_type"] == "_PrivateFixtureFailure" and line["phase"] == "compute"
+    assert line["execution_id"] and "PRIVATE" not in repr(lines)
+
+
+@pytest.mark.asyncio
+async def test_worker_does_not_log_again_in_a_child_a_failure_the_plugin_logged(runtime):
+    """A real child: a failure the plugin logged inside its ``except`` and re-raised (as the PAC does) is marked «reported»
+    under the child's own logging, so the parent's log holds the plugin's line only, never the worker's second one."""
+    result, lines = await _run_with_logs(runtime, "raise_reported")
+
+    assert result.status == "error" and result.error.code == "execution_failed"
+    errors = [line for line in lines if line.get("log_level") in {"error", "critical"}]
+    (line,) = errors
+    assert line.get("worker") == "tool" and line["event"] == "Fixture engine failure", errors
+    assert "PRIVATE" not in repr(lines)

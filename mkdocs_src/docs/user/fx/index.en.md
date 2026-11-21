@@ -26,7 +26,7 @@ its [detail page](detail/index.md).
   choice.
 - In the table, the **Δ** columns show the change over the last day, over the period and, on long
   periods, over 1W to 5Y. **Columns** adds hidden ones, such as each pair's **Providers**.
-- Select rows to act on several pairs at once, or right-click a row.
+- Select rows to act on several pairs at once, from the bar above the table (it moves to the bottom when you scroll), or right-click a row. Each action shows how many pairs it acts on: **Sync** takes only the pairs with a provider.
 
 ### 🔍 Filter by currency
 

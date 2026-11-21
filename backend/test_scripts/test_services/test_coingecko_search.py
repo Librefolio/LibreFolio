@@ -161,7 +161,10 @@ async def test_p3_search_answers_the_coins_by_market_cap_in_the_preferred_curren
         "currency": "EUR",
         "type": AssetType.CRYPTO.value,
         "provider_params": {"vs_currency": "EUR"},
+        # S3 (developer, 20/11): the row carries the coin's logo, the very image its metadata gives (``image.large``)
+        "icon_url": next(coin for coin in coins if coin["id"] == "pepe")["large"],
     }
+    assert all(row.get("icon_url") == coin.get("large") for row, coin in zip(rows, sorted(coins, key=lambda c: (c["market_cap_rank"] is None, c["market_cap_rank"] or 0)), strict=True)), "each row its own coin's logo"
     print_success(f"{len(rows)} coins, Pepe first")
 
 

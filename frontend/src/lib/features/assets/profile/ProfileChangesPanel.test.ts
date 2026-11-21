@@ -19,7 +19,7 @@ vi.mock('./profileSources', async (original) => ({...((await original()) as obje
 vi.mock('$lib/stores/app/notify.svelte', () => ({notify: (...args: unknown[]) => notify(...args)}));
 vi.mock('$lib/stores/reference/countryStore', () => ({ensureCountriesLoaded: vi.fn(async () => undefined), getCountryInfo: (iso3: string) => ({name: iso3})}));
 
-import {cleanup, fireEvent, render, screen, setupI18n, waitFor} from '$test/component';
+import {cleanup, fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
 import type {ProfileVoice} from './profileStore';
 import ProfileChangesPanel from './ProfileChangesPanel.svelte';
 
@@ -135,7 +135,7 @@ describe('ProfileChangesPanel', () => {
         forgetProfileRows.mockResolvedValue({kind: 'forgotten', deleted: 1});
         mount();
         await open();
-        await fireEvent.click(screen.getByTestId('profile-changes-next'));
+        await fireEvent.click(within(screen.getByTestId('profile-changes-pager')).getByTestId('pagination-next'));
         await waitFor(() => expect(screen.getByTestId('profile-change-what-1')).toBeInTheDocument());
 
         await forgetRow('1');

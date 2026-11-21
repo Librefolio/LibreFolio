@@ -213,9 +213,6 @@
         "forgetFailed": "The changes could not be forgotten.",
         "loadFailed": "The changes could not be read.",
         "empty": "No change yet.",
-        "range": "{from}–{to} of {total}",
-        "previousPage": "Previous page",
-        "nextPage": "Next page",
         "who": {
           "deletedUser": "a deleted user"
         },

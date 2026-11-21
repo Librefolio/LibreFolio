@@ -14,6 +14,10 @@
     import {BUTTON_LINK, BUTTON_PRIMARY, BUTTON_SECONDARY, INPUT, LABEL_ROW, NOTICE, SECTION_TITLE} from '../ui';
     import HelpTip from '../shared/HelpTip.svelte';
     import PlannerDialog from '../shared/PlannerDialog.svelte';
+    import {getPlannerProfile, testId} from '../profile';
+
+    /** Read once, while the component is created: the Tool's profile (F1 of project 67), the PAC's when none is set. */
+    const profile = getPlannerProfile();
     const KEY = 'tools.pacAllocator.planner.assetEditor';
 
     /** Only a manual Asset is edited here: an Asset of LibreFolio keeps the data LibreFolio stores (R8.3). */
@@ -164,22 +168,22 @@
 </script>
 
 {#snippet typePicker()}
-    <div data-testid="pac-planner-asset-editor-class">
+    <div data-testid={testId('asset-editor-class', profile)}>
         <div class={LABEL_ROW}>
             <span>{$t('common.type', {default: 'Type'})} *</span>
             <HelpTip label={$t('common.type', {default: 'Type'})} help={$t(`${KEY}.typeHelp`, {default: 'The kind of instrument, as on the Asset page. It is shown in the result and does not change the orders.'})} />
         </div>
-        <AssetTypeSelect value={working.assetClass.trim().toUpperCase()} testId="pac-planner-asset-editor-type" placeholder={pickCategory('asset_type')} onchange={setType} />
+        <AssetTypeSelect value={working.assetClass.trim().toUpperCase()} testId={testId('asset-editor-type', profile)} placeholder={pickCategory('asset_type')} onchange={setType} />
     </div>
 {/snippet}
 
-<PlannerDialog open {title} testid="pac-planner-asset-editor" {onclose} maxWidth="4xl">
+<PlannerDialog open {title} testid={testId('asset-editor', profile)} {onclose} maxWidth="4xl">
     <section class="space-y-2" aria-labelledby="{ids}-identity">
         <h3 id="{ids}-identity" class={SECTION_TITLE}>{$t(`${KEY}.identity`, {default: 'Identity'})}</h3>
         <div class="grid gap-3 sm:grid-cols-2">
             <div>
                 <div class={LABEL_ROW}><label for="{ids}-name">{$t('common.name', {default: 'Name'})} *</label></div>
-                <input id="{ids}-name" class={INPUT} bind:value={working.name} maxlength="128" data-testid="pac-planner-asset-editor-name" />
+                <input id="{ids}-name" class={INPUT} bind:value={working.name} maxlength="128" data-testid={testId('asset-editor-name', profile)} />
             </div>
             {@render typePicker()}
             <div>
@@ -190,7 +194,7 @@
                         help={$t(`${KEY}.tickerHelp`, {default: 'Optional: a ticker, an ISIN or any code that helps you recognise the Asset in the result. It does not link the Asset to LibreFolio, and two manual Assets are never merged by name or code.'})}
                     />
                 </div>
-                <input id="{ids}-ticker" class={INPUT} bind:value={working.ticker} maxlength="128" data-testid="pac-planner-asset-editor-ticker" />
+                <input id="{ids}-ticker" class={INPUT} bind:value={working.ticker} maxlength="128" data-testid={testId('asset-editor-ticker', profile)} />
             </div>
         </div>
     </section>
@@ -201,50 +205,50 @@
             <div class="grid gap-3 sm:grid-cols-3">
                 <div>
                     <div class={LABEL_ROW}><label for="{ids}-amount">{$t(`${KEY}.priceAmount`, {default: 'Price'})} *</label></div>
-                    <ExactDecimalInput id="{ids}-amount" bind:value={working.price.amount} step="0.01" className={INPUT} testid="pac-planner-asset-editor-price" />
+                    <ExactDecimalInput id="{ids}-amount" bind:value={working.price.amount} step="0.01" className={INPUT} testid={testId('asset-editor-price', profile)} />
                 </div>
                 <div>
                     <div class={LABEL_ROW}><span>{$t(`${KEY}.priceCurrency`, {default: 'Currency'})} *</span></div>
-                    <CurrencySearchSelect bind:value={working.price.currency} compact testId="pac-planner-asset-editor-price-currency" />
+                    <CurrencySearchSelect bind:value={working.price.currency} compact testId={testId('asset-editor-price-currency', profile)} />
                 </div>
                 <div>
                     <div class={LABEL_ROW}>
                         <label for="{ids}-basis">{$t(`${KEY}.quoteBasis`, {default: 'Units per price'})} *</label>
                         <HelpTip label={$t(`${KEY}.quoteBasis`, {default: 'Units per price'})} help={$t(`${KEY}.quoteBasisHint`, {default: "'Units per price' says how many units the source price represents; it is not an order step."})} />
                     </div>
-                    <ExactDecimalInput id="{ids}-basis" bind:value={working.price.quoteBaseQuantity} step="1" className={INPUT} testid="pac-planner-asset-editor-basis" />
+                    <ExactDecimalInput id="{ids}-basis" bind:value={working.price.quoteBaseQuantity} step="1" className={INPUT} testid={testId('asset-editor-basis', profile)} />
                 </div>
             </div>
-            <button type="button" class={BUTTON_LINK} data-testid="pac-planner-asset-editor-price-clear" onclick={() => (working.price = null)}>
+            <button type="button" class={BUTTON_LINK} data-testid={testId('asset-editor-price-clear', profile)} onclick={() => (working.price = null)}>
                 {$t(`${KEY}.priceClear`, {default: 'No price: the calculation will ask for it'})}
             </button>
         {:else}
-            <p class={NOTICE.warning} data-testid="pac-planner-asset-editor-no-price">{$t('tools.pacAllocator.planner.assets.priceMissing', {default: 'Price missing: it stays in the draft, the calculation will ask for it.'})}</p>
-            <button type="button" class={BUTTON_SECONDARY} data-testid="pac-planner-asset-editor-price-add" onclick={addPrice}>
+            <p class={NOTICE.warning} data-testid={testId('asset-editor-no-price', profile)}>{$t('tools.pacAllocator.planner.assets.priceMissing', {default: 'Price missing: it stays in the draft, the calculation will ask for it.'})}</p>
+            <button type="button" class={BUTTON_SECONDARY} data-testid={testId('asset-editor-price-add', profile)} onclick={addPrice}>
                 <Plus class="h-4 w-4" aria-hidden="true" />{$t(`${KEY}.priceAdd`, {default: 'Enter a price'})}
             </button>
         {/if}
     </section>
 
-    <section class="space-y-3" aria-labelledby="{ids}-exposures" data-testid="pac-planner-asset-editor-composition">
+    <section class="space-y-3" aria-labelledby="{ids}-exposures" data-testid={testId('asset-editor-composition', profile)}>
         <h3 id="{ids}-exposures" class="flex items-center gap-1 {SECTION_TITLE}">
             {$t('tools.pacAllocator.planner.assets.composition', {default: 'Composition'})}
             <HelpTip label={$t('tools.pacAllocator.planner.assets.composition', {default: 'Composition'})} help={compositionHelp()} />
         </h3>
-        <div class="rounded-lg border border-lf-subtle p-3" data-testid="pac-planner-exposure-block" data-dimension="sector">
+        <div class="rounded-lg border border-lf-subtle p-3" data-testid={testId('exposure-block', profile)} data-dimension="sector">
             <DistributionEditor kind="sector" bind:value={sectorValue} onchange={(value) => writeDimension('sector', value)} zIndex={70} />
         </div>
-        <div class="rounded-lg border border-lf-subtle p-3" data-testid="pac-planner-exposure-block" data-dimension="geography">
+        <div class="rounded-lg border border-lf-subtle p-3" data-testid={testId('exposure-block', profile)} data-dimension="geography">
             <DistributionEditor kind="geographic" bind:value={geographyValue} onchange={(value) => writeDimension('geography', value)} zIndex={70} />
         </div>
     </section>
 
     {#if error}
-        <p class={NOTICE.danger} role="alert" data-testid="pac-planner-asset-editor-error">{$t(error.key, {default: error.fallback, values: error.values})}</p>
+        <p class={NOTICE.danger} role="alert" data-testid={testId('asset-editor-error', profile)}>{$t(error.key, {default: error.fallback, values: error.values})}</p>
     {/if}
 
     {#snippet footer()}
-        <button type="button" class={BUTTON_SECONDARY} data-testid="pac-planner-asset-editor-cancel" onclick={onclose}>{$t('common.cancel', {default: 'Cancel'})}</button>
-        <button type="button" class={BUTTON_PRIMARY} data-testid="pac-planner-asset-editor-apply" onclick={apply}>{$t('tools.pacAllocator.planner.applyToDraft', {default: 'Apply to the draft'})}</button>
+        <button type="button" class={BUTTON_SECONDARY} data-testid={testId('asset-editor-cancel', profile)} onclick={onclose}>{$t('common.cancel', {default: 'Cancel'})}</button>
+        <button type="button" class={BUTTON_PRIMARY} data-testid={testId('asset-editor-apply', profile)} onclick={apply}>{$t('tools.pacAllocator.planner.applyToDraft', {default: 'Apply to the draft'})}</button>
     {/snippet}
 </PlannerDialog>

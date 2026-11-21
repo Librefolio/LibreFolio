@@ -28,8 +28,9 @@ export function defaultAsOf(now: Date = new Date()): string {
     return local < utc ? local : utc;
 }
 
+/** The PAC's identity, read by its profile (`profile.ts`): the default profile of the planner. */
 export const PLANNER_TOOL_CODE = 'pac_allocator';
-export const PLANNER_CONTRACT_VERSION = '1.0.0';
+export const PLANNER_CONTRACT_VERSION = '2.0.0';
 
-/** The only value the 1.0.0 wire accepts for `operation`. */
+/** The only value the 2.0.0 wire accepts for `operation`. */
 export const PLANNER_OPERATION = 'plan';

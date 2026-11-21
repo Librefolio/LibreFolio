@@ -33,7 +33,7 @@
     import TransactionsTable from '$lib/features/transactions/TransactionsTable.svelte';
     import {resolveFormItemsForView, type FormModalItems} from '$lib/features/transactions/resolveFormItems';
     import {loadPartnerRows, loadEventTooltipMap} from '$lib/features/transactions/loadTransactionRows';
-    import DataTableToolbar from '$lib/components/table/DataTableToolbar.svelte';
+    import type {BulkAction} from '$lib/components/table/types';
     import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
     import ConfirmModal from '$lib/components/ui/modals/ConfirmModal.svelte';
     import DocsLink from '$lib/components/ui/DocsLink.svelte';
@@ -288,15 +288,16 @@
         return guardEditableRows(rows, txStoreCanEdit, toasts, $_);
     }
 
-    function onEditBulk() {
-        if (selectedRows.length === 0) return;
-        const rows = guardViewerOnly(selectedRows);
-        if (!rows) return;
-        openBulk({action: 'edit', txIds: rows.map((r) => r.id)});
+    /** Edit the rows the panel hands (the ones the user can edit, 77 SEL-B); the guard stays as a net. */
+    function onEditBulk(rows: TXReadItem[] = selectedRows) {
+        if (rows.length === 0) return;
+        const editable = guardViewerOnly(rows);
+        if (!editable) return;
+        openBulk({action: 'edit', txIds: editable.map((r) => r.id)});
     }
-    function onCloneBulk() {
-        if (selectedRows.length === 0) return;
-        openBulk({action: 'clone', txIds: selectedRows.map((r) => r.id)});
+    function onCloneBulk(rows: TXReadItem[] = selectedRows) {
+        if (rows.length === 0) return;
+        openBulk({action: 'clone', txIds: rows.map((r) => r.id)});
     }
     function handleFormCommitted() {
         formOpen = false;
@@ -335,9 +336,9 @@
     // Bulk delete → reuse BulkModal with initialStatus: 'delete' (B23 Step 1-2)
     // =========================================================================
 
-    async function onBulkDelete() {
-        if (selectedRows.length === 0) return;
-        const editableRows = guardViewerOnly(selectedRows);
+    async function onBulkDelete(rows: TXReadItem[] = selectedRows) {
+        if (rows.length === 0) return;
+        const editableRows = guardViewerOnly(rows);
         if (!editableRows) return;
         await startDelete(editableRows);
     }
@@ -454,6 +455,38 @@
     let linkHint = $derived(linkState.kind === 'disabled' ? $_(`transactions.chargesLink.reason.${linkState.reason}`, {values: {type: $_(`transactions.types.${linkState.params.type}`) || linkState.params.type, ref: txRowRef(linkState.params.id, null, $_)}}) : '');
     let chargesLinkOpen = $state(false);
     let linking = $state(false);
+
+    /**
+     * 77 SEL-B: the bulk actions of the table's selection panel, through the rule of `resolveSelectionAction`. Edit and
+     * Delete take the rows the user can edit (their number says how many); Clone takes every row. «Link as pair» and
+     * «Link the charges» are decided by the whole selection, as before: hidden when it is not theirs, and off with
+     * their reason when the selection blocks them (66 C21: a row with charges; 66 F6).
+     */
+    let selectionActions = $derived<BulkAction<TXReadItem>[]>([
+        {id: 'edit', icon: Pencil, label: () => $_('common.edit') || 'Edit', primary: true, appliesTo: (row) => txStoreCanEdit(row.id), onClick: (rows) => onEditBulk(rows)},
+        {id: 'clone', icon: Copy, label: () => $_('transactions.actions.clone') || 'Clone', onClick: (rows) => onCloneBulk(rows)},
+        {
+            id: 'promote',
+            icon: Link2,
+            label: () => `🔗 ${$_('transactions.actions.promotePair') || 'Link as pair'}`,
+            pointless: () => !promoteMatch,
+            // 66 C21: a selected row with charges keeps «Link as pair» off, with its reason (rule 8: a pair leg has no charges).
+            blocked: () => (promoteChargesHolder ? {hint: () => promoteHint, reason: 'hasCharges'} : null),
+            onClick: () => onPromotePair(),
+        },
+        {
+            id: 'link-charges',
+            icon: Link2,
+            label: () => $_('transactions.chargesLink.action') || 'Link the charges',
+            shortLabel: () => $_('transactions.chargesLink.actionShort') || 'Link',
+            pointless: () => linkState.kind === 'hidden',
+            blocked: () => (linkState.kind === 'disabled' ? {hint: linkHint, reason: linkState.reason} : null),
+            onClick: () => {
+                chargesLinkOpen = true;
+            },
+        },
+        {id: 'delete', icon: Trash2, label: () => $_('common.delete') || 'Delete', variant: 'danger', appliesTo: (row) => txStoreCanEdit(row.id), onClick: (rows) => onBulkDelete(rows)},
+    ]);
 
     async function confirmLink() {
         if (linkState.kind !== 'ok') return;
@@ -837,35 +870,6 @@
             </div>
         </div>
         <div class="flex items-center gap-2 ml-auto">
-            {#if selectedRows.length > 0}
-                <DataTableToolbar
-                    variant="floating"
-                    selectedCount={selectedRows.length}
-                    bulkActions={[
-                        {id: 'edit', icon: Pencil, label: () => $_('common.edit') || 'Edit', primary: true, onClick: () => onEditBulk()},
-                        {id: 'clone', icon: Copy, label: () => $_('transactions.actions.clone') || 'Clone', onClick: () => onCloneBulk()},
-                        ...(promoteMatch
-                            ? [{id: 'promote', icon: Link2, label: () => `🔗 ${$_('transactions.actions.promotePair') || 'Link as pair'}`, disabled: promoteChargesHolder !== null, hint: () => promoteHint, reason: promoteChargesHolder ? 'hasCharges' : undefined, onClick: () => onPromotePair()}]
-                            : []),
-                        ...(linkState.kind !== 'hidden'
-                            ? [
-                                  {
-                                      id: 'link-charges',
-                                      icon: Link2,
-                                      label: () => $_('transactions.chargesLink.action') || 'Link the charges',
-                                      shortLabel: () => $_('transactions.chargesLink.actionShort') || 'Link',
-                                      onClick: () => (chargesLinkOpen = true),
-                                      disabled: linkState.kind === 'disabled',
-                                      hint: linkHint,
-                                      reason: linkState.kind === 'disabled' ? linkState.reason : undefined,
-                                  },
-                              ]
-                            : []),
-                        {id: 'delete', icon: Trash2, label: () => $_('common.delete') || 'Delete', variant: 'danger', onClick: () => onBulkDelete()},
-                    ]}
-                    onClearSelection={clearSelection}
-                />
-            {/if}
             <div use:guideAnchor={'transactions.page.columns'} data-testid="transactions-columns-guide-target">
                 <ColumnVisibilityToggle tableRef={transactionsTableComponent?.getTableRef()} />
             </div>
@@ -933,6 +937,7 @@
             onPageChange={handlePageChange}
             onPageSizeChange={handlePageSizeChange}
             onFiltersChange={handleColumnFiltersChange}
+            {selectionActions}
         />
     {/if}
 </div>

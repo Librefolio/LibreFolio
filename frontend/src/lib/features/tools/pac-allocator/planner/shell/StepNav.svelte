@@ -2,7 +2,11 @@
     import {ChevronDown, ChevronUp, Circle, CircleAlert, CircleCheck, CircleDot} from 'lucide-svelte';
     import {t} from '$lib/i18n';
     import {STEP_FALLBACKS, stepKey} from '../labels';
-    import {PLANNER_STEPS, type PlannerStep} from '../types';
+    import type {PlannerStep} from '../types';
+    import {getPlannerProfile, domId, testId} from '../profile';
+
+    /** Read once, while the component is created: the Tool's profile (F1 of project 67), the PAC's when none is set. */
+    const profile = getPlannerProfile();
 
     interface Props {
         current: PlannerStep;
@@ -15,7 +19,7 @@
         onselect: (step: PlannerStep) => void;
     }
 
-    let {current, steps = PLANNER_STEPS, visited, problemSteps, variant, disabled = false, onselect}: Props = $props();
+    let {current, steps = profile.steps, visited, problemSteps, variant, disabled = false, onselect}: Props = $props();
 
     let open = $state(false);
 
@@ -70,7 +74,7 @@
                         : 'text-lf-secondary hover:bg-lf-hover'}"
                     aria-current={value === 'current' ? 'step' : undefined}
                     {disabled}
-                    data-testid="pac-planner-nav-step"
+                    data-testid={testId('nav-step', profile)}
                     data-step={step}
                     data-state={value}
                     onclick={() => choose(step)}
@@ -85,13 +89,13 @@
     </ol>
 {/snippet}
 
-<nav aria-label={$t('tools.pacAllocator.planner.nav.label', {default: 'Configuration progress'})} data-testid="pac-planner-nav" data-variant={variant}>
+<nav aria-label={$t('tools.pacAllocator.planner.nav.label', {default: 'Configuration progress'})} data-testid={testId('nav', profile)} data-variant={variant}>
     {#if variant === 'compact'}
         <div class="flex items-center justify-between gap-2">
-            <p class="text-sm font-medium" data-testid="pac-planner-nav-position">
+            <p class="text-sm font-medium" data-testid={testId('nav-position', profile)}>
                 {$t('tools.pacAllocator.planner.nav.position', {default: '{index}/{total} {step}', values: {index: index + 1, total: steps.length, step: label(current)}})}
             </p>
-            <button type="button" class="inline-flex items-center gap-1 rounded-lg border border-lf-input px-2 py-1 text-sm" aria-expanded={open} aria-controls="pac-planner-nav-list" {disabled} data-testid="pac-planner-nav-toggle" onclick={() => (open = !open)}>
+            <button type="button" class="inline-flex items-center gap-1 rounded-lg border border-lf-input px-2 py-1 text-sm" aria-expanded={open} aria-controls={domId('nav-list', profile)} {disabled} data-testid={testId('nav-toggle', profile)} onclick={() => (open = !open)}>
                 {$t('tools.pacAllocator.planner.nav.steps', {default: 'Steps'})}
                 {#if open}<ChevronUp class="h-4 w-4" aria-hidden="true" />{:else}<ChevronDown class="h-4 w-4" aria-hidden="true" />{/if}
             </button>
@@ -100,7 +104,7 @@
             <div class="h-1.5 rounded bg-lf-checked motion-safe:transition-[width]" style:width={progress}></div>
         </div>
         {#if open}
-            <div id="pac-planner-nav-list" class="mt-2" data-testid="pac-planner-nav-list">{@render list(false)}</div>
+            <div id={domId('nav-list', profile)} class="mt-2" data-testid={testId('nav-list', profile)}>{@render list(false)}</div>
         {/if}
     {:else}
         {@render list(variant === 'horizontal')}

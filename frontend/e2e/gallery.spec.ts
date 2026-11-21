@@ -126,6 +126,7 @@ import {
     framePacTargets,
     leavePacTargetsIncomplete,
     openPacPlanner,
+    pinPacMarketData,
     resolvePacIds,
     restorePacScreen,
     settlePacShot,
@@ -2907,11 +2908,14 @@ test.describe('Gallery Screenshots', () => {
                     await expect(loaded.getByTestId('tool-diagnostics-loaded-entry').filter({hasText: 'pac_allocator'})).toBeVisible();
                     await expect(tools).toHaveAttribute('data-busy', 'false');
 
-                    // Bottom edge on the loaded tools: the PAC allocator entry and its version are in the frame on
-                    // every viewport, with as much of the panel above them as fits.
-                    await loaded.evaluate((el) => el.scrollIntoView({block: 'end'}));
+                    // PHONE — bottom edge on the loaded tools: the PAC allocator entry and its version are in the frame,
+                    // with as much of the panel above them as fits.
+                    // DESKTOP — the tall-screen rule (coordinator, C4; galleryTallShots.ts): the whole Tools panel, framed
+                    // from its top first. The screen grows downwards only, so a panel scrolled to its end would keep its top
+                    // out of the shot once it lists more than one Tool.
+                    if (viewport === 'desktop') await frameFromTop(page, tools);
+                    else await loaded.evaluate((el) => el.scrollIntoView({block: 'end'}));
                     await freezeAnimations(page);
-                    // DESKTOP — the tall-screen rule (coordinator, C4; galleryTallShots.ts): the whole Tools panel.
                     if (viewport === 'desktop') await extendScreenToBlock(page, tools, `desktop/${lang}/${theme}/settings/about-tool-diagnostics`);
                     await screenshot(page, viewport, lang, theme, 'settings', 'about-tool-diagnostics');
                     await restoreTallScreen(page);
@@ -3045,6 +3049,9 @@ test.describe('Gallery Screenshots', () => {
                 await expect(page.locator('html'), 'the language survived the load').toHaveAttribute('lang', lang);
                 await freezeAnimations(page);
                 const draft = await buildPacDraft(page, ids);
+                // A data pin, for these shots only: Apple's price and EUR/USD typed by hand, so the result does not depend on the
+                // day of the mock data while the known defect GPAC-b exists (galleryPac.ts, pinPacMarketData; lots 0b and SLIP).
+                await pinPacMarketData(page, draft);
                 await calculatePacPlan(page);
                 await scrollBackToHeader(page);
                 return draft;

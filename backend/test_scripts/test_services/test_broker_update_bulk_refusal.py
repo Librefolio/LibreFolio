@@ -47,6 +47,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from backend.app.db.base import SQLModel  # imports every model, and backend.app.db.session with its PRAGMA listener
 from backend.app.db.models import Asset, AssetType, Broker, BrokerUserAccess, Transaction, TransactionType, User, UserRole
+from backend.app.schemas.broker_profile import BrokerOperatingProfile, operating_profile_text
 from backend.app.schemas.brokers import BRUpdateItem
 from backend.app.services.brokers.broker_service import BrokerService
 from backend.app.utils.datetime_utils import utcnow
@@ -62,8 +63,14 @@ FIELDS = (
     "opened_at",
     "allow_cash_overdraft",
     "allow_asset_shorting",
+    "operating_profile",
     "updated_at",
 )
+
+#: The operating profile (P1 of project 67) a broker starts with, and the one a refused item brings: a refused item must
+#: leave the stored profile as it was (plan P1, test 22).
+OLD_PROFILE = {"profile_version": 1, "order_modes": [], "conversion_mode": "manual"}
+NEW_PROFILE = {"profile_version": 1, "order_modes": [], "conversion_mode": "automatic", "tax_regime": "administered"}
 
 OLD_OPENED = date(2019, 5, 5)
 NEW_OPENED = date(2020, 1, 1)
@@ -118,6 +125,7 @@ async def new_broker(session: AsyncSession, owner_id: int, *, overdraft: bool = 
         opened_at=OLD_OPENED,
         allow_cash_overdraft=overdraft,
         allow_asset_shorting=shorting,
+        operating_profile=operating_profile_text(BrokerOperatingProfile.model_validate(OLD_PROFILE)),
         created_at=utcnow(),
         updated_at=utcnow(),
     )
@@ -183,6 +191,7 @@ def refused_item(**flags) -> BRUpdateItem:
         default_import_plugin="new_plugin",
         is_active=False,
         opened_at=NEW_OPENED,
+        operating_profile=NEW_PROFILE,
         **flags,
     )
 

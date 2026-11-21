@@ -423,7 +423,9 @@ def plant_archive_a_folder(root: Path, tmp_path: Path, created: datetime) -> Non
 
 
 def plant_invalid_names(root: Path, tmp_path: Path, created: datetime) -> None:
-    job_id = uuid.uuid4().hex
+    # A letter first: an id whose first 8 characters are all digits upper-cases to itself, and the first name
+    # would then be a valid kept name (about 1 run in 40).
+    job_id = "a" + uuid.uuid4().hex[1:]
     for name in (
         f"librefolio-backup-{created:%Y%m%d-%H%M%S}-ui-{job_id[:8].upper()}",
         f"librefolio-backup-{created:%Y%m%d-%H%M%S}-ui-{job_id[:7]}",

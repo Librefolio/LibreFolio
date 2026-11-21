@@ -1,0 +1,17 @@
+{
+  "pluginSettings": {
+    "fx": {
+      "BOK": {
+        "label": {
+          "api_key": "Clave API"
+        },
+        "description": {
+          "api_key": "La clave gratuita de la API ECOS del Bank of Korea, que se solicita en el sitio de ECOS."
+        },
+        "missing": {
+          "api_key": "la clave API ECOS del Bank of Korea"
+        }
+      }
+    }
+  }
+}

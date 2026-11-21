@@ -1102,3 +1102,42 @@ class TestSelfServiceAccess:
             assert len([a for a in accesses if a["role"] == "OWNER"]) >= 1
 
             print_success("✓ Stranger got 403 on PATCH and DELETE")
+
+
+# ============================================================================
+# THE OPERATING PROFILE AND THE ROLES (P1 of project 67, test 25)
+# ============================================================================
+
+OPERATING_PROFILE = {"profile_version": 1, "order_modes": [], "conversion_mode": "automatic", "tax_regime": "declarative"}
+
+
+class TestOperatingProfileRoles:
+    """Anyone with access reads the profile; EDITOR and OWNER write it; a VIEWER's PATCH is refused and changes nothing."""
+
+    @pytest.mark.asyncio
+    async def test_a_viewer_reads_the_profile_and_cannot_write_it(self, test_server):
+        async with httpx.AsyncClient() as owner, httpx.AsyncClient() as viewer, httpx.AsyncClient() as editor:
+            owner_id, _, _, _ = await create_user_and_login(owner)
+            broker_id = await create_broker(owner)
+            viewer_id, _, _, _ = await create_user_and_login(viewer)
+            editor_id, _, _, _ = await create_user_and_login(editor)
+            accesses = [
+                {"user_id": owner_id, "role": "OWNER", "share_percentage": 1.0},
+                {"user_id": viewer_id, "role": "VIEWER", "share_percentage": 0},
+                {"user_id": editor_id, "role": "EDITOR", "share_percentage": 0},
+            ]
+            assert (await bulk_set_access(owner, broker_id, accesses)).status_code == 200
+            written = await owner.patch(f"{API_BASE}/brokers/{broker_id}", json={"operating_profile": OPERATING_PROFILE}, timeout=TIMEOUT)
+            assert written.json()["success_count"] == 1, written.text
+
+            seen = (await viewer.get(f"{API_BASE}/brokers/{broker_id}", timeout=TIMEOUT)).json()["operating_profile"]
+            assert seen["conversion_mode"] == "automatic" and seen["tax_regime"] == "declarative"
+
+            refused = await viewer.patch(f"{API_BASE}/brokers/{broker_id}", json={"operating_profile": None}, timeout=TIMEOUT)
+            assert refused.status_code == 200 and refused.json()["results"][0]["success"] is False, refused.text
+            assert (await owner.get(f"{API_BASE}/brokers/{broker_id}", timeout=TIMEOUT)).json()["operating_profile"] == seen
+
+            by_editor = await editor.patch(f"{API_BASE}/brokers/{broker_id}", json={"operating_profile": {**OPERATING_PROFILE, "conversion_mode": "manual"}}, timeout=TIMEOUT)
+            assert by_editor.json()["success_count"] == 1, by_editor.text
+            assert (await owner.get(f"{API_BASE}/brokers/{broker_id}", timeout=TIMEOUT)).json()["operating_profile"]["conversion_mode"] == "manual"
+            print_success("✓ VIEWER reads and cannot write; EDITOR writes")

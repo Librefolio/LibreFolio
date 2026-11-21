@@ -730,6 +730,11 @@ class Broker(SQLModel, table=True):
     created_at: datetime = Field(default_factory=utcnow, sa_type=UtcDateTime)
     updated_at: datetime = Field(default_factory=utcnow, sa_type=UtcDateTime)
 
+    # The broker's operating profile (project 67, P1): order modes, fees, conversion mode and tax regime, as the canonical
+    # JSON text of ``schemas/broker_profile.BrokerOperatingProfile``; NULL = no profile. Added by migration 006. Read and
+    # written only through ``stored_operating_profile`` / ``operating_profile_text``, which tolerate a text they cannot read.
+    operating_profile: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
+
 
 class BrokerUserAccess(SQLModel, table=True):
     """

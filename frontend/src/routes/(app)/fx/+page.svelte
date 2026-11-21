@@ -25,7 +25,7 @@
     import ViewModeToggle from '$lib/components/ui/ViewModeToggle.svelte';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
-    import DataTableToolbar from '$lib/components/table/DataTableToolbar.svelte';
+    import type {BulkAction} from '$lib/components/table/types';
     import {CurrencySearchSelect} from '$lib/components/ui/select';
     import {type ChartPrimaryView, type ChartSettings, effectiveCalendarReturnWindow, getGlobalSettings, getSettingsForPair, getSettingsVersion, setGlobalSettings, setItemPrimaryView, setPairSettings, setScopePrimaryView} from '$lib/stores/chartSettingsStore.svelte';
     import {CALENDAR_RETURN_INSTANCE_ID, emptyCalendarReturnView, extractCalendarReturnView, type CalendarReturnView} from '$lib/features/signals/calendarReturn';
@@ -1282,30 +1282,41 @@
     // Bulk Actions (table selection)
     // =========================================================================
 
-    function handleBulkSyncFx() {
-        syncModalPairs = selectedFxRows.filter((r) => !r.manualOnly).map((r) => `${r.base}-${r.quote}`);
+    function handleBulkSyncFx(rows: FxRow[] = selectedFxRows) {
+        syncModalPairs = rows.filter((r) => !r.manualOnly).map((r) => `${r.base}-${r.quote}`);
         syncModalOpen = true;
     }
 
-    async function handleBulkRefreshFx() {
-        for (const row of selectedFxRows) {
+    async function handleBulkRefreshFx(rows: FxRow[] = selectedFxRows) {
+        for (const row of rows) {
             await handleRefreshPair({slug: row.slug});
         }
         fxTableComponent?.getTableRef()?.clearSelection();
         selectedFxRows = [];
     }
 
-    function handleBulkInvertFx() {
-        const slugs = selectedFxRows.map((r) => r.slug);
+    function handleBulkInvertFx(rows: FxRow[] = selectedFxRows) {
+        const slugs = rows.map((r) => r.slug);
         fxTableComponent?.bulkToggleInversion(slugs);
         fxTableComponent?.getTableRef()?.clearSelection();
         selectedFxRows = [];
     }
 
-    async function handleBulkDeleteFx() {
-        deletingPairs = selectedFxRows.map((r) => ({base: r.base, quote: r.quote, slug: r.slug}));
+    async function handleBulkDeleteFx(rows: FxRow[] = selectedFxRows) {
+        deletingPairs = rows.map((r) => ({base: r.base, quote: r.quote, slug: r.slug}));
         bulkDeleteDialogOpen = true;
     }
+
+    /**
+     * 77 SEL-B: the bulk actions of the table's selection panel. «Sync» takes the pairs with a provider only — a manual
+     * pair has nothing to sync, and with none selected the action is not there (Q-SEL-17); the others take every pair.
+     */
+    let fxSelectionActions = $derived<BulkAction<FxRow>[]>([
+        {id: 'sync', icon: RotateCw, label: () => $_('common.sync'), appliesTo: (row) => !row.manualOnly, onClick: (rows) => handleBulkSyncFx(rows)},
+        {id: 'refresh', icon: RefreshCw, label: () => $_('common.refresh'), onClick: (rows) => handleBulkRefreshFx(rows)},
+        {id: 'invert', icon: ArrowLeftRight, label: () => $_('common.swapDirection'), onClick: (rows) => handleBulkInvertFx(rows)},
+        {id: 'delete', icon: Trash2, label: () => $_('common.delete'), variant: 'danger', onClick: (rows) => handleBulkDeleteFx(rows)},
+    ]);
 
     async function confirmBulkDelete() {
         if (deletingPairs.length === 0) return;
@@ -1446,22 +1457,6 @@
             </div>
         </div>
         <div class="flex flex-wrap items-center gap-2 justify-end ml-auto">
-            {#if viewMode === 'list' && selectedFxRows.length > 0}
-                <DataTableToolbar
-                    variant="floating"
-                    selectedCount={selectedFxRows.length}
-                    bulkActions={[
-                        {id: 'sync', icon: RotateCw, label: () => $_('common.sync'), onClick: () => handleBulkSyncFx()},
-                        {id: 'refresh', icon: RefreshCw, label: () => $_('common.refresh'), onClick: () => handleBulkRefreshFx()},
-                        {id: 'invert', icon: ArrowLeftRight, label: () => $_('common.swapDirection'), onClick: () => handleBulkInvertFx()},
-                        {id: 'delete', icon: Trash2, label: () => $_('common.delete'), variant: 'danger', onClick: () => handleBulkDeleteFx()},
-                    ]}
-                    onClearSelection={() => {
-                        fxTableComponent?.getTableRef()?.clearSelection();
-                        selectedFxRows = [];
-                    }}
-                />
-            {/if}
             <ViewModeToggle bind:mode={viewMode} storageKey="fxViewMode" />
             <button class="flex items-center gap-1.5 px-3 py-2 text-sm bg-lf-action text-lf-on-action rounded-lg hover:bg-lf-action-hover transition-colors whitespace-nowrap" data-testid="fx-add-pair-button" use:guideAnchor={'fx.page.add'} onclick={handleAddPair}>
                 <Plus size={16} />
@@ -1715,6 +1710,7 @@
             onsync={handleSyncPair}
             onrefresh={handleRefreshPair}
             ondelete={handleDeletePair}
+            selectionActions={fxSelectionActions}
             oninversionchange={() => {
                 void fetchAllPairSeries();
                 // A pair swapped in the table: the cards in the rolling-return view read the swapped rate's return.

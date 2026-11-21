@@ -262,7 +262,8 @@ One security can have several codes. LibreFolio keeps **one asset** with all of 
 **More Info** in the asset form:
 
 - **Identifiers**: the main codes, one per type (ISIN, ticker…). **Add identifier** adds a row and
-  **Ask Provider** fetches them.
+  **Ask Provider** fetches them. Tick several rows and **Delete**, with their number, appears beside
+  the section's title; it asks before removing them.
 - **Other identifiers**: any extra code or broker label. Type one and press Enter, comma, semicolon
   or Tab. These codes are searchable and help recognise the asset on later imports.
 
@@ -316,8 +317,10 @@ or country, with its weight in percent.
 
 - **Add sector** / **Add country** adds a row: pick the entry, then type its weight.
 - The **Total** turns green at 100%, amber when something is missing, red when you go over.
-- **Balance to 100%**, a row action, moves the whole gap into that row. **Balance selected rows**
-  shares it among the selected rows, in proportion to their weights.
+- **Balance to 100%**, a row action, moves the whole gap into that row. Tick several rows and the
+  bar in the section's title row offers **Balance** with their number: it shares the gap among
+  them, in proportion to their weights. At a total of 100% there is no gap, and it does not appear.
+  **Delete** in the same bar removes the ticked rows, after asking.
 - **Remove** deletes a row, **Ask the source** fetches the enrichers' breakdown, and **Import CSV**
   loads one from a file. Removing the last row clears the breakdown when you save.
 

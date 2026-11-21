@@ -19,6 +19,7 @@ from backend.test_scripts import test_aiosqlite_guard as aiosqlite_guard
 _LOGIN_LIMIT_VARIABLE = "LIBREFOLIO_LOGIN_LIMIT"
 _SESSION_LOGIN_LIMIT = os.environ.setdefault(_LOGIN_LIMIT_VARIABLE, "off")
 
+
 # Matches PRAGMA busy_timeout=30000 in backend/app/db/session.py: this fixture
 # competes for the same write lock as the app, so it waits as long as the app.
 _SEED_LOCK_TIMEOUT_S = 30.0
@@ -118,6 +119,23 @@ def restore_registration_setting():
             )
     except sqlite3.Error:
         pass
+
+
+@pytest.fixture(autouse=True)
+def single_planner_run():
+    """One Rebalancer run per plan in this process, with SCIP's own seed, as before lot SEEDS of project 67: hundreds of
+    planner tests read what one run did (patches, counts of solves). Set for each test: the lane's configuration drops
+    ``LIBREFOLIO_PLANNER_SEEDS`` at collection (lot E-15). The test server keeps the lane's three seeds
+    (``test_server_helper.TEST_SERVER_PLANNER_SEEDS``); a test that wants the seeded runs passes ``seeds=`` to the
+    planner."""
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setenv("LIBREFOLIO_PLANNER_SEEDS", "single")
+        # The variable counts in test mode only, and a pytest run outside the runner has none: the configuration's reader
+        # is told directly. A light module: the solver is not loaded here.
+        from backend.app.config import planner as planner_config  # noqa: PLC0415
+
+        patch.setattr(planner_config, "planner_fixed_seeds", lambda: ())
+        yield
 
 
 @pytest.fixture(autouse=True)

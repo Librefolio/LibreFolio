@@ -268,6 +268,17 @@ Once started, the child:
 
 The worker closes its pipe endpoints on exit. **A result frame is not a cleanup acknowledgement.**
 
+### 📝 Log lines from the worker
+
+A spawn child never runs the server's `configure_logging`, so the worker routes its own lines to the parent instead. `route_logs_to_parent` installs one handler. It renders every record as the server does (one JSON object, secrets masked) and sends it as a `log` frame on the response pipe. The frame shares the progress frames' channel and lock. The level is the parent's, carried by `ToolWorkerJob.log_level`. The parent writes each line through its own logger: same level and logger name, the line's fields, plus `worker: "tool"`, `worker_logger`, `worker_at` (the child's timestamp), `execution_id` and the request's `request_id`. The server's log file keeps a single writer.
+
+- **Bounded:** at most `CHILD_LOG_FRAME_CAP` (200) lines per job. One more line, «Tool worker log lines dropped», counts the rest. A line too long for its frame (`LOG_FRAME_MAX_BYTES`) keeps its head. A malformed frame, or one past the parent's cap, is dropped, never a crash.
+- **Masked:** the job's setting secrets are in flight while it runs (`secrets_in_flight`), so a line that shows one carries `***`.
+- **A plugin failure keeps its cause:** when `compute` (or the plugin's output) fails, the worker writes one line, «Tool plugin failed». It names the Tool, the phase, the exception's class and where it was raised (`code_site`: code locations only), never the message, which can carry the user's amounts. A failure the plugin already logged, which carries the «reported» mark, gets no second line. Invalid parameters are the caller's and get none. The log lines stay open until the result frame; only the progress frames stop when `compute` returns.
+- **One process:** a process forked from the worker (the Rebalancer's seeded runs) inherits the handler but sends nothing on the pipe; its warnings go to stderr, as before.
+
+Log what helps a diagnosis, such as identifiers, counts, timings and states. Never log the parameters or personal data.
+
 ### 🧹 Descendant cleanup
 
 `OwnedProcessTree` tracks the multiprocessing root, its fresh process group, and captured descendants. Process identities include PID and creation time; session adoption verifies that the group belongs to the worker and is not the supervisor's own group.

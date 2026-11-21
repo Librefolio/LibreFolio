@@ -18,6 +18,8 @@
   Svelte 5 runes.
 -->
 <script lang="ts">
+    import type {Snippet} from 'svelte';
+    import type {BulkAction} from '$lib/components/table/types';
     import {_ as t} from '$lib/i18n';
     import {addDays, addMonths, daysBetween, midpointDate, todayIso as todayISO} from '$lib/utils/dateOnly';
     import {Plus, Scissors, X, Link2, Trash2, CalendarDays, CalendarClock, Info} from 'lucide-svelte';
@@ -896,51 +898,70 @@
         },
     ]);
 
-    let rowActions: RowAction<ScheduleRow>[] = $derived([
-        {
-            id: 'split',
-            testid: 'schedule-action-split',
-            icon: Scissors,
-            label: () => $t('assets.schedule.split'),
-            visible: (row) => !row.isLate,
-            disabled: (row) => disabled || readonly || daysBetween(row.start_date, row.end_date) < 2,
-            onClick: (row) => {
-                const idx = normalRows.findIndex((r) => r.id === row.id);
-                if (idx >= 0) handleSplitRequest(idx);
-            },
-        },
-        {
-            id: 'delete',
-            testid: 'schedule-action-delete',
-            icon: X,
-            label: () => $t('common.delete'),
-            variant: 'danger',
-            visible: (row) => !row.isLate,
-            disabled: () => disabled || readonly,
-            onClick: (row) => {
-                const idx = normalRows.findIndex((r) => r.id === row.id);
-                if (idx >= 0) handleDelete(idx);
-            },
-        },
-    ]);
+    // Read-only, a period offers no action, so the table has no actions column (77 SEL-M, Q-SEL-12; as Distribution)
+    let rowActions: RowAction<ScheduleRow>[] = $derived(
+        disabled || readonly
+            ? []
+            : [
+                  {
+                      id: 'split',
+                      testid: 'schedule-action-split',
+                      icon: Scissors,
+                      label: () => $t('assets.schedule.split'),
+                      // A period under 2 days says why it cannot be split (77 SEL-M)
+                      visible: (row) => !row.isLate,
+                      blocked: (row) => (daysBetween(row.start_date, row.end_date) < 2 ? {hint: () => $t('assets.schedule.splitTooShort'), reason: 'too-short'} : null),
+                      onClick: (row) => {
+                          const idx = normalRows.findIndex((r) => r.id === row.id);
+                          if (idx >= 0) handleSplitRequest(idx);
+                      },
+                  },
+                  {
+                      id: 'delete',
+                      testid: 'schedule-action-delete',
+                      icon: X,
+                      label: () => $t('common.delete'),
+                      variant: 'danger',
+                      visible: (row) => !row.isLate,
+                      onClick: (row) => {
+                          const idx = normalRows.findIndex((r) => r.id === row.id);
+                          if (idx >= 0) handleDelete(idx);
+                      },
+                  },
+              ],
+    );
 
-    /** Bulk actions for DataTableToolbar */
-    let bulkActions = $derived([
+    /** Whether the given periods follow one another in the schedule, with no period left out between them. */
+    function areConsecutive(rows: ScheduleRow[]): boolean {
+        const indices = rows
+            .map((row) => normalRows.findIndex((p) => p.id === row.id))
+            .filter((i) => i >= 0)
+            .sort((a, b) => a - b);
+        return indices.every((index, k) => k === 0 || index === indices[k - 1] + 1);
+    }
+
+    /**
+     * The selection bar's actions (77 SEL-D2), each with the number of ticked periods. «Merge» takes two periods at
+     * least, and only periods one after the other: otherwise it is off and says why (mock B7). The late-interest row is
+     * never ticked (`isRowSelectable`), so both act on the ticked periods, which `selectedIds` mirrors.
+     */
+    const bulkActions: BulkAction<ScheduleRow>[] = [
         {
             id: 'merge',
             icon: Link2,
             label: () => $t('assets.schedule.merge'),
+            minSelection: 2,
+            blocked: (rows) => (areConsecutive(rows) ? null : {hint: () => $t('assets.schedule.mergeNotConsecutive'), reason: 'not-consecutive'}),
             onClick: () => handleMerge(),
-            disabled: !areSelectedContiguous,
         },
         {
             id: 'delete',
             icon: Trash2,
-            label: () => $t('common.deleteSelected'),
-            variant: 'danger' as const,
+            label: () => $t('common.delete'),
+            variant: 'danger',
             onClick: () => handleBulkDelete(),
         },
-    ]);
+    ];
 
     function getRowId(row: ScheduleRow): string {
         return row.id;
@@ -949,6 +970,12 @@
     function getRowClass(row: ScheduleRow): string {
         if (row.isLate) return 'late-row';
         return '';
+    }
+
+    /** The title's text is visually hidden (77 SEL-D2 (a), the bar in its place): only then the icon's tooltip names the section. */
+    function titleTextHidden(trigger: HTMLElement): boolean {
+        const text = trigger.closest('[data-testid="schedule-title"]')?.querySelector('[data-testid="schedule-title-text"]');
+        return !text || text.getBoundingClientRect().width <= 1;
     }
 
     function handleSelectionChange(ids: string[]) {
@@ -994,7 +1021,49 @@
     }
 </script>
 
-<div class="space-y-3">
+<!-- The section head (77 SEL-D2): the title, the table's selection bar, «Add period». The table draws it and hands it the
+     bar; with no period it is drawn here with an empty bar. -->
+{#snippet head(bar: Snippet)}
+    <!-- 77 SEL-D2, designer's option (a): in a narrow head, while rows are ticked, the bar stands in for the title. Its
+         text is only visually hidden, so a screen reader finds the same heading; the icon's tooltip shows it (CSS below). -->
+    <div class="flex min-h-8 items-center gap-2 flex-wrap" class:selecting={selectedIds.length > 0} data-selecting={selectedIds.length > 0 ? 'true' : 'false'} data-testid="schedule-head">
+        <div class="flex items-center gap-2" data-testid="schedule-title">
+            <span class="title-tip" data-testid="schedule-title-icon">
+                <Tooltip text={$t('assets.schedule.title')} interactiveChild showIf={titleTextHidden}>
+                    <CalendarDays size={16} class="text-lf-muted" aria-hidden="true" />
+                </Tooltip>
+            </span>
+            <span class="title-text text-sm font-medium text-lf-secondary" data-testid="schedule-title-text">
+                {$t('assets.schedule.title')}
+            </span>
+        </div>
+
+        <!-- Spacer pushes everything after this to the right -->
+        <div class="flex-1"></div>
+
+        {@render bar()}
+
+        <!-- Add Period (right-most) -->
+        {#if !readonly && !disabled}
+            <button
+                type="button"
+                data-testid="schedule-add-period"
+                onclick={handleAddPeriod}
+                class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg
+                       border border-lf-subtle
+                       text-lf-secondary bg-lf-card
+                       hover:bg-lf-hover transition-colors"
+            >
+                <Plus size={14} />
+                <span class="hidden sm:inline">{$t('assets.schedule.addPeriod')}</span>
+            </button>
+        {/if}
+    </div>
+{/snippet}
+
+{#snippet noBar()}{/snippet}
+
+<div class="space-y-3" data-testid="schedule-editor">
     <!-- Initial Value + Currency + Global settings (responsive 2×2 grid) -->
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <!-- Row 1: Initial Value + Currency -->
@@ -1085,75 +1154,9 @@
         </div>
     </div>
 
-    <!-- Header: title + bulk toolbar + Add button (all inline) -->
-    <div class="flex items-center gap-2 flex-wrap">
-        <div class="flex items-center gap-2">
-            <CalendarDays size={16} class="text-lf-muted" />
-            <span class="text-sm font-medium text-lf-secondary">
-                {$t('assets.schedule.title')}
-            </span>
-        </div>
-
-        <!-- Spacer pushes everything after this to the right -->
-        <div class="flex-1"></div>
-
-        <!-- Inline bulk toolbar (shown when rows selected) — right-aligned -->
-        {#if selectedIds.length > 0}
-            <div class="flex items-center gap-1.5 pr-2 border-r border-lf-subtle">
-                <button
-                    type="button"
-                    class="inline-flex items-center gap-1 px-2 py-1 text-xs rounded-md
-                           bg-lf-panel text-lf-secondary
-                           hover:bg-lf-neutral transition-colors"
-                    data-testid="schedule-clear-selection"
-                    onclick={() => {
-                        selectedIds = [];
-                    }}
-                    title={$t('common.clearSelection') || 'Clear selection'}
-                >
-                    <span>{selectedIds.length}</span>
-                    <span class="hidden sm:inline">{$t('common.selected')}</span>
-                    <span class="text-lf-muted">×</span>
-                </button>
-                {#each bulkActions as action}
-                    <button
-                        type="button"
-                        data-testid="schedule-bulk-{action.id}"
-                        onclick={action.onClick}
-                        disabled={action.disabled}
-                        title={typeof action.label === 'function' ? action.label() : action.label}
-                        class="inline-flex items-center gap-1 px-2 py-1 text-xs rounded-md transition-colors
-                               disabled:opacity-40 disabled:cursor-not-allowed
-                               {action.variant === 'danger' ? 'text-lf-danger hover:bg-lf-danger-soft' : 'text-lf-secondary hover:bg-lf-hover'}"
-                    >
-                        <action.icon size={14} />
-                        <span class="hidden sm:inline">
-                            {typeof action.label === 'function' ? action.label() : action.label}
-                        </span>
-                    </button>
-                {/each}
-            </div>
-        {/if}
-
-        <!-- Add Period (right-most) -->
-        {#if !readonly && !disabled}
-            <button
-                type="button"
-                data-testid="schedule-add-period"
-                onclick={handleAddPeriod}
-                class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg
-                       border border-lf-subtle
-                       text-lf-secondary bg-lf-card
-                       hover:bg-lf-hover transition-colors"
-            >
-                <Plus size={14} />
-                <span class="hidden sm:inline">{$t('assets.schedule.addPeriod')}</span>
-            </button>
-        {/if}
-    </div>
-
     <!-- DataTable or Empty State -->
     {#if normalRows.length === 0 && (!lateRow || !lateRow.enabled)}
+        {@render head(noBar)}
         <!-- Empty state -->
         <div class="p-8 border border-dashed border-lf-subtle rounded-xl text-center space-y-3" data-testid="schedule-empty">
             <div class="text-3xl">📅</div>
@@ -1185,6 +1188,9 @@
             enableSelection={!readonly && !disabled}
             selectionMode="multi"
             onSelectionChange={handleSelectionChange}
+            {bulkActions}
+            selectionPanel={true}
+            selectionHead={head}
             enableActions={!readonly && !disabled}
             {rowActions}
             enableSorting={false}
@@ -1346,6 +1352,23 @@
 />
 
 <style>
+    /* 77 SEL-D2 (a): while rows are ticked, the title's text gives its place to the bar. Below 30rem of head (the
+       `dt-head` container of the selection panel) the title, the compact bar and «+» do not fit one line: measured
+       322 px against a head of 259 px at 390, in Italian; the text's room comes back from 509 px (the head at 640). */
+    @container dt-head (max-width: 29.98rem) {
+        .selecting .title-text {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            margin: -1px;
+            padding: 0;
+            overflow: hidden;
+            clip: rect(0 0 0 0);
+            border: 0;
+            white-space: nowrap;
+        }
+    }
+
     :global(.late-row) {
         border-top: 2px dashed var(--lf-border-subtle);
     }

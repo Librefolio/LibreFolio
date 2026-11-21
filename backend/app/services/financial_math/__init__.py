@@ -48,6 +48,8 @@ Modules:
 * ``fx_rates`` — the orientation of a stored FX rate: a pair read from source to destination,
   either way; and the unit rates a calculation reads by day, kept as steps and answered on the asked days only
   (``AskedDayRates``, P3).
+* ``fees`` — the broker fee formula, ``fixed + clamp(rate * notional, floor, cap)`` and nothing for a zero
+  notional, generic on the number type (``Decimal``, ``Fraction``, the PAC's exact rational).
 * ``interest`` — the time fraction between two dates under a day count convention (ACT/365, ACT/360, ACT/ACT,
   30/360), simple interest and daily compounding over a span in closed form: the primitives the Scheduled
   Investment provider builds its accrual on.
@@ -61,6 +63,8 @@ Modules:
   of a list of changes, for the report, lots and positions series and every backend reader of them.
 * ``splits`` — the ADJUSTMENT rows linked to a SPLIT asset event, loaded with one query, the ids
   an average-cost replay marks as a rescale, and the rule for a usable split ratio.
+* ``acceptable_cost`` — the Rebalancer's table «maximum acceptable cost»: rows of misplaced money to two significant
+  digits, ``2·λ·d²/F``, and ``λ`` from the euros typed on the reference row (B4 of project 67).
 * ``weights`` — a part's share of a total (none on a total at or below zero), the slices of an
   allocation (none on a sum at or below zero), gross weights, concentration (largest weight, Herfindahl index), and
   the effective number of positions (10 000 over the index of the weights renormalized on their own sum).

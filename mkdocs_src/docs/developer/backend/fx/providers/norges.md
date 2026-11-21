@@ -8,7 +8,7 @@
 | **API Format** | CSV (SDMX, `format=csv`, `;`-separated), every asked currency in one request |
 | **API Key** | Not required |
 | **Licence** | Norwegian Licence for Open Government Data, NLOD 2.0 ([national data catalogue](https://data.norge.no/en/datasets/23076ce8-b442-407c-817f-0d4ec3cbe744)): free reuse with attribution |
-| **Currencies** | Discovered at runtime by `get_supported_currencies()`: on 2026-11-16, 35 plus NOK. `GET /fx/providers` caches the list for 24 h (`backend/app/services/fx/catalog.py`) |
+| **Currencies** | Discovered at runtime by `get_supported_currencies()`: on 2026-11-16, 35 plus NOK; with the SDR (`XDR`) served since 2026-11-20, 36 plus NOK. `GET /fx/providers` caches the list for 24 h (`backend/app/services/fx/catalog.py`) |
 | **Update Frequency** | Daily, Norwegian business days, around 16:00 CET |
 | **Historical Data** | From 1980-12-10 for the oldest series (USD, JPY…), from 1999-01-04 for EUR, later for others (VND from 2021-01-04) |
 | **API Docs** | [Norges Bank open data](https://www.norges-bank.no/en/topics/statistics/open-data/), [query builder](https://app.norges-bank.no/query/index.html#/en/) |
@@ -50,7 +50,7 @@ Worked example, the JPY row of one day:
 
 ### 💰 Supported Currencies
 
-On 2026-11-16, 35 currencies plus NOK: AUD 🇦🇺, BDT 🇧🇩, BRL 🇧🇷, BYN 🇧🇾, CAD 🇨🇦, CHF 🇨🇭, CNY 🇨🇳, CZK 🇨🇿, DKK 🇩🇰,
+On 2026-11-16, 35 currencies plus NOK, and since 2026-11-20 the SDR as well (`XDR`, the IMF's unit of account, a basket of USD, EUR, CNY, JPY and GBP: 13.02207 NOK per 1 XDR on 2026-11-19, `UNIT_MULT` 0): AUD 🇦🇺, BDT 🇧🇩, BRL 🇧🇷, BYN 🇧🇾, CAD 🇨🇦, CHF 🇨🇭, CNY 🇨🇳, CZK 🇨🇿, DKK 🇩🇰,
 EUR 🇪🇺, GBP 🇬🇧, HKD 🇭🇰, HUF 🇭🇺, IDR 🇮🇩, ILS 🇮🇱, INR 🇮🇳, ISK 🇮🇸, JPY 🇯🇵, KRW 🇰🇷, MMK 🇲🇲, MXN 🇲🇽, MYR 🇲🇾, NZD 🇳🇿,
 PHP 🇵🇭, PKR 🇵🇰, PLN 🇵🇱, RON 🇷🇴, SEK 🇸🇪, SGD 🇸🇬, THB 🇹🇭, TRY 🇹🇷, TWD 🇹🇼, USD 🇺🇸, VND 🇻🇳, ZAR 🇿🇦.
 
@@ -61,7 +61,7 @@ Beyond the ECB provider's catalogue, Norges Bank quotes BDT, BYN, MMK, PKR and V
 `get_supported_currencies()` asks `EXR/B..NOK.SP?format=csv&lastNObservations=1`: the last observation of every series.
 On 2026-11-16 the answer listed 41 series, and the plugin keeps the live currencies only:
 
-- **Not currencies** (`NOT_CURRENCIES`): the two NOK exchange-rate indices `I44` and `TWI`, and the IMF's SDR `XDR`.
+- **Not currencies** (`NOT_CURRENCIES`): the two NOK exchange-rate indices `I44` and `TWI`. The IMF's SDR `XDR` is served.
 - **Closed series** (`CLOSED_AFTER`, 31 days): a series whose last value is more than 31 days older than the newest value
   of the answer. On 2026-11-16: RUB (last value 2022-03-01), HRK (2022-12-30), BGN (2025-12-31).
 - **NOK**, the base, is always added.

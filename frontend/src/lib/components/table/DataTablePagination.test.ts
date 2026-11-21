@@ -321,3 +321,58 @@ describe('DataTablePagination — pageCount overrides the computed number of pag
         expect(pageButtons(container)).toEqual(['2', '3']);
     });
 });
+
+/**
+ * 77 SEL-A: inside a table's dock, under the row of the selection actions, the pager is `docked` — the dock is the
+ * balloon then, and the pager its second row. It stays the same component instance in both states (no remount when the
+ * actions come and go), so it publishes the state on its root instead of being swapped.
+ */
+describe('DataTablePagination — docked (77 SEL-A)', () => {
+    it('says whether it sits in a dock, and keeps every control there', async () => {
+        await setupI18n();
+        const {rerender} = mount({pageIndex: 0});
+        expect(screen.getByTestId('data-table-pagination')).toHaveAttribute('data-docked', 'false');
+        await rerender({docked: true} as never);
+        expect(screen.getByTestId('data-table-pagination')).toHaveAttribute('data-docked', 'true');
+        expect(screen.getByTestId('pagination-next')).toBeEnabled();
+        expect(screen.getByTestId('pagination-size-trigger')).toBeInTheDocument();
+    });
+});
+
+/**
+ * 77 SEL-D1 (designer, 20/11; Q-SEL-17: a control that does nothing is not shown): with one page size only there is
+ * nothing to choose, so the selector goes, «per page» with it; the number of items and the pages stay. The rule is the
+ * pager's own, for every caller, with no prop. The «Modifiche del profilo» pager, which the server pages by 20, is one.
+ */
+describe('DataTablePagination — one page size, no selector (77 SEL-D1)', () => {
+    it('with a single option there is no size selector; the total and the pages stay', async () => {
+        await setupI18n();
+        const {onPageChange} = mount({pageIndex: 0, pageSize: 20, totalItems: 25, pageSizeOptions: [20]});
+        expect(screen.queryByTestId('pagination-size-trigger')).toBeNull();
+        expect(screen.getByTestId('pagination-total').textContent).toContain('25');
+        await fireEvent.click(screen.getByTestId('pagination-next'));
+        expect(lastArg(onPageChange)).toBe(1);
+    });
+
+    it('with two options the selector is there (guard)', async () => {
+        await setupI18n();
+        mount({pageIndex: 0, pageSize: 20, totalItems: 25, pageSizeOptions: [20, 50]});
+        expect(screen.getByTestId('pagination-size-trigger')).toBeInTheDocument();
+        expect(screen.getByTestId('pagination-total')).toBeInTheDocument();
+    });
+});
+
+/**
+ * Below 480 px the words «per page» leave the balloon (77 SEL-D2, the designer: the pager of the data editor's balloon at
+ * 390 px). They stay the selector's accessible name, with the size it holds, so the control still says what it is; the
+ * visible words are hidden from the accessibility tree, which would read them twice. The width is CSS: only a browser
+ * measures it (the photos of SEL-D2).
+ */
+describe('DataTablePagination — the size selector names itself (77 SEL-D2)', () => {
+    it('the trigger is named «<size> per page»; the visible words are not read again', async () => {
+        await setupI18n();
+        const {container} = mount({pageSize: 25});
+        expect(screen.getByTestId('pagination-size-trigger')).toHaveAttribute('aria-label', '25 per page');
+        expect(container.querySelector('.page-size-label')).toHaveAttribute('aria-hidden', 'true');
+    });
+});

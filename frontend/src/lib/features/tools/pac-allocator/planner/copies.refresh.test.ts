@@ -93,7 +93,7 @@ const PROFILE: SourceIssue = {
     code: PROFILE_CODE,
     kind: 'unsupported',
     severity: 'error',
-    path: {kind: 'field', section: 'brokers', entity_kind: 'broker', entity_id: BROKER_ID, field: 'execution_profile_status'},
+    path: {kind: 'field', section: 'brokers', entity_kind: 'broker', entity_id: BROKER_ID, field: 'operating_profile_status'},
     params: [],
 };
 
@@ -117,7 +117,8 @@ function brokerRow(id: number, name: string, active = true) {
         active,
         allow_cash_overdraft: false,
         allow_asset_shorting: false,
-        execution_profile_status: 'not_available',
+        operating_profile_status: 'not_available',
+        operating_profile: null,
         provenance_id: 'source:broker-domain',
     };
 }
@@ -175,7 +176,7 @@ async function copiedAutoPair(): Promise<{draft: PlannerDraft; plan: RefreshPlan
     expect(rateIsCopied(fx), 'precondition: the copied rate is unchanged').toBe(true);
 
     const plan = refreshPlan(draft);
-    expect(plan, 'precondition: the re-read plans the cash of Broker 7 and the pair').toEqual({assetIds: [], cashBrokerIds: [OWNER], fxPairs: [PAIR]});
+    expect(plan, 'precondition: the re-read plans the cash of Broker 7 and the pair').toEqual({assetIds: [], cashBrokerIds: [OWNER], fxPairs: [PAIR], positionKeys: []});
     if (!plan) throw new Error('unreachable: the plan was asserted above');
     return {draft, plan};
 }
@@ -271,7 +272,7 @@ const PROFILE_OUTSIDE: SourceIssue = {
     code: PROFILE_CODE,
     kind: 'unsupported',
     severity: 'error',
-    path: {kind: 'field', section: 'brokers', entity_kind: 'broker', entity_id: OUTSIDE_ID, field: 'execution_profile_status'},
+    path: {kind: 'field', section: 'brokers', entity_kind: 'broker', entity_id: OUTSIDE_ID, field: 'operating_profile_status'},
     params: [],
 };
 
@@ -325,7 +326,7 @@ async function planOfBrokerSeven(): Promise<{draft: PlannerDraft; plan: RefreshP
     const {draft} = await copiedAutoPair();
     draft.addAsset(draftAssetFromInfo({id: ASSET, display_name: 'Asset Eleven probe', identifier_ticker: null, asset_type: 'ETF', icon_url: null, active: true}));
     const plan = refreshPlan(draft);
-    expect(plan, 'precondition: the plan reads the Asset, the cash of Broker 7 and EUR/USD, nothing of Broker 9').toEqual({assetIds: [ASSET], cashBrokerIds: [OWNER], fxPairs: [PAIR]});
+    expect(plan, 'precondition: the plan reads the Asset, the cash of Broker 7 and EUR/USD, nothing of Broker 9').toEqual({assetIds: [ASSET], cashBrokerIds: [OWNER], fxPairs: [PAIR], positionKeys: []});
     if (!plan) throw new Error('unreachable: the plan was asserted above');
     return {draft, plan};
 }

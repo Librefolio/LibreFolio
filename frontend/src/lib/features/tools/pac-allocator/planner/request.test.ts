@@ -64,12 +64,15 @@ vi.mock('$lib/api', () => ({
 import {toolContractMap} from '$lib/api/tool-contract-map.generated';
 import {draftAssetFromInfo} from './copies';
 import {PlannerDraft, priceIsCopied, routeKey, type DraftAsset, type DraftFunding, type DraftMode} from './draft.svelte';
-import {buildRequest, capabilityId, feeScheduleId, localProblems, type BuiltRequest} from './request';
+import {buildRequest, capabilityId, feeScheduleId, localProblems, stepOfWirePath, type BuiltRequest} from './request';
+import {issueStep} from './issues';
+import {sectionCounts} from './review';
+import {REBALANCER_PLANNER_PROFILE} from './profile';
 import type {PlannerStep} from './types';
 
 const NOW = new Date('2026-09-16T12:00:00Z');
 const AS_OF = '2026-09-16';
-const codec = toolContractMap.pac_allocator['1.0.0'].input;
+const codec = toolContractMap.pac_allocator['2.0.0'].input;
 /** The `none` variant every minimum, route cap and variable fee cap defaults to. */
 const NONE = {kind: 'none'};
 
@@ -199,7 +202,7 @@ describe('buildRequest: an all-default scenario', () => {
         // Precondition: every value below is the default the wizard starts from.
         const mode = eurMode(draft, brokerKey);
         expect(mode).toMatchObject({kind: 'whole_quantity', fixedFee: '0', ratePercent: '0', floor: '0', cap: ''});
-        expect(draft.data.routes[routeKey(assetKey, brokerKey)]).toMatchObject({enabled: true, priority: '0', minimumIfActive: '', requiredMinimum: '', cap: '', marginPercent: '0'});
+        expect(draft.data.routes[routeKey(assetKey, brokerKey)]).toMatchObject({enabled: true, priority: '0', minimumIfActive: '', cap: '', marginPercent: '0'});
         expect(fundingEntry(draft, brokerKey, cashKey)).toMatchObject({enabled: true, priority: '0', cap: ''});
         expect(draft.data.fxSpreadPercent).toBe('0');
         expect(draft.requiredPairs).toEqual([]);
@@ -228,6 +231,27 @@ describe('buildRequest: an all-default scenario', () => {
         expect(route.side).toBe('buy');
     });
 
+    it('never writes a required minimum, and ignores one an older draft object still carries (M19)', () => {
+        const {draft, brokerKey, assetKey} = cashScenario();
+        const route = draft.data.routes[routeKey(assetKey, brokerKey)] as unknown as Record<string, unknown>;
+        route.requiredMinimum = '5';
+
+        const request = wireOf(build(draft));
+
+        const sent = itemBy(request.order_routes, 'route_id', routeWireId(draft, assetKey, brokerKey));
+        expect(keysOf(sent)).not.toContain('required_minimum');
+        expect(JSON.stringify(request)).not.toContain('required_minimum');
+    });
+
+    it('writes every target as an entry of its kind (contract 2.0.0)', () => {
+        const {draft, assetKey} = cashScenario();
+
+        const request = wireOf(build(draft));
+
+        expect(itemBy(request.target_weights, 'asset_id', assetKey)).toMatchObject({kind: 'asset', asset_id: assetKey});
+        expect(asList(request.target_weights).every((entry) => entry.kind === 'asset')).toBe(true);
+    });
+
     it('resolves every omitted value to its schema default, and invents no fee schedule', () => {
         const {draft, brokerKey, assetKey, cashKey, accountBrokerKey} = cashScenario();
         const resolved = resolvedOf(build(draft));
@@ -247,7 +271,6 @@ describe('buildRequest: an all-default scenario', () => {
         expect(itemBy(resolved.order_routes, 'route_id', routeWireId(draft, assetKey, brokerKey))).toMatchObject({
             priority: 0,
             minimum_if_active: NONE,
-            required_minimum: NONE,
             cap: NONE,
             execution_margin_rate: '0',
             fee_schedule_id: null,
@@ -263,8 +286,8 @@ describe('buildRequest: an all-default scenario', () => {
         expect(draft.targetTotal).toBe('100');
 
         const request = wireOf(build(draft));
-        expect(itemBy(request.target_weights, 'asset_id', unweighted.key)).toStrictEqual({asset_id: unweighted.key, weight: '0'});
-        expect(itemBy(request.target_weights, 'asset_id', assetKey)).toStrictEqual({asset_id: assetKey, weight: '1'});
+        expect(itemBy(request.target_weights, 'asset_id', unweighted.key)).toStrictEqual({kind: 'asset', asset_id: unweighted.key, weight: '0'});
+        expect(itemBy(request.target_weights, 'asset_id', assetKey)).toStrictEqual({kind: 'asset', asset_id: assetKey, weight: '1'});
         expect(asObject(itemBy(request.assets, 'asset_id', unweighted.key).identity)).toHaveProperty('ticker', null);
     });
 });
@@ -352,7 +375,7 @@ describe('buildRequest: values the user changed', () => {
         const resolved = resolvedOf(built);
         expect(resolved.existing_cash).toStrictEqual([]);
         expect(itemBy(resolved.brokers, 'broker_id', brokerKey).fee_schedules).toStrictEqual([{...schedule, rate: '0', variable_floor: null, variable_cap: NONE}]);
-        expect(itemBy(resolved.order_routes, 'route_id', route.wireId)).toMatchObject({required_minimum: NONE, fee_schedule_id: scheduleId});
+        expect(itemBy(resolved.order_routes, 'route_id', route.wireId)).toMatchObject({fee_schedule_id: scheduleId});
     });
 
     it.each([
@@ -499,5 +522,248 @@ describe('localProblems: the sign of an amount and of an order step (C-76, TP-12
 
         // `built`: no local problem, and the codec takes the body, so the request would be sent as it is.
         expect({problems: raised, built: buildRequest(draft, NOW).ok}).toEqual({problems: owed, built: owed.length === 0});
+    });
+});
+
+/*
+ * F2 of project 67: a minimum and a maximum per Asset, on its value at the end of the plan (contract 2.0.0 §5.2).
+ * A limit is typed as text: «500» is an amount in the valuation currency, «35%» a share of the plan's total. An empty
+ * field is no limit. The frontend checks the shape and compares two limits only when they are in the same form; every
+ * other comparison needs the Tool's reference and is the backend's (`allocation.bound_*` codes).
+ */
+
+/**
+ * The request of a two-Asset draft (60% / 40%) as today's builder wrote it before limits existed, captured from the
+ * code at HEAD `e4a5ae6cb` with the clock fixed at NOW. A draft with no limit must still send exactly these bytes.
+ */
+const BEFORE_LIMITS = String.raw`{"operation":"plan","snapshot":{"snapshot_id":"draft:1","draft_revision":1,"captured_at":"2026-09-16T12:00:00.000Z"},"as_of":"2026-09-16","valuation_currency":"EUR","provenance":[{"kind":"manual","provenance_id":"manual:manual-asset:3/quote","label":"manual price","entered_at":"2026-09-16T12:00:00.000Z"},{"kind":"manual","provenance_id":"manual:manual-asset:8/quote","label":"manual price","entered_at":"2026-09-16T12:00:00.000Z"},{"kind":"manual","provenance_id":"manual:manual-broker:1","label":"manual broker","entered_at":"2026-09-16T12:00:00.000Z"},{"kind":"manual","provenance_id":"manual:manual-broker:5","label":"manual broker","entered_at":"2026-09-16T12:00:00.000Z"},{"kind":"manual","provenance_id":"manual:manual-cash:6","label":"manual cash","entered_at":"2026-09-16T12:00:00.000Z"},{"kind":"manual","provenance_id":"manual:funding:7","label":"funding route","entered_at":"2026-09-16T12:00:00.000Z"},{"kind":"manual","provenance_id":"manual:route:4","label":"order route","entered_at":"2026-09-16T12:00:00.000Z"},{"kind":"manual","provenance_id":"manual:route:9","label":"order route","entered_at":"2026-09-16T12:00:00.000Z"}],"assets":[{"asset_id":"manual-asset:3","identity":{"kind":"manual_asset","name":"Manual ETF probe","ticker":null,"asset_class":"etf"},"quote":{"amount":"10","currency":"EUR","quote_base_quantity":"1","provenance_id":"manual:manual-asset:3/quote"}},{"asset_id":"manual-asset:8","identity":{"kind":"manual_asset","name":"Second probe","ticker":null,"asset_class":"etf"},"quote":{"amount":"10","currency":"EUR","quote_base_quantity":"1","provenance_id":"manual:manual-asset:8/quote"}}],"brokers":[{"broker_id":"manual-broker:1","identity":{"kind":"manual_broker","name":"Broker probe"},"provenance_id":"manual:manual-broker:1","conversion_mode":"manual","capabilities":[{"kind":"whole_quantity","capability_id":"manual-broker:1/mode:EUR","quantity_unit":"asset_unit","quantity_step":"1"}]},{"broker_id":"manual-broker:5","identity":{"kind":"manual_broker","name":"Bank probe"},"provenance_id":"manual:manual-broker:5","conversion_mode":"manual"}],"existing_cash":[{"cash_id":"manual-cash:6","broker_id":"manual-broker:5","available":{"amount":"100","currency":"EUR"},"selected":{"amount":"50","currency":"EUR"},"provenance_id":"manual:manual-cash:6"}],"funding_routes":[{"funding_route_id":"funding:manual-broker:1/funding:7","source":{"kind":"existing_cash","cash_id":"manual-cash:6"},"broker_id":"manual-broker:1","currency":"EUR","provenance_id":"manual:funding:7"}],"target_weights":[{"kind":"asset","asset_id":"manual-asset:3","weight":"0.6"},{"kind":"asset","asset_id":"manual-asset:8","weight":"0.4"}],"order_routes":[{"route_id":"route:4","asset_id":"manual-asset:3","broker_id":"manual-broker:1","capability_id":"manual-broker:1/mode:EUR","side":"buy","provenance_id":"manual:route:4"},{"route_id":"route:9","asset_id":"manual-asset:8","broker_id":"manual-broker:1","capability_id":"manual-broker:1/mode:EUR","side":"buy","provenance_id":"manual:route:9"}],"policy":"proportional"}`;
+
+/** `cashScenario` with a second Asset: targets 60% and 40%, and the two Asset keys. */
+function twoAssetScenario(): Scenario & {secondKey: string} {
+    const scenario = cashScenario();
+    const second = manualAsset(scenario.draft, 'Second probe');
+    scenario.draft.addAsset(second);
+    scenario.draft.data.targets[second.key] = '40';
+    scenario.draft.data.targets[scenario.assetKey] = '60';
+    return {...scenario, secondKey: second.key};
+}
+
+function limitProblemsOf(draft: PlannerDraft): {step: PlannerStep; key: string; entity: string | null}[] {
+    return localProblems(draft)
+        .filter((item) => item.key.startsWith('limit'))
+        .map((item) => ({step: item.step, key: item.key, entity: item.entity}));
+}
+
+describe('buildRequest: limits on the target entries (F2)', () => {
+    it('no limits: the request equals the one built before limits existed', () => {
+        vi.useFakeTimers({toFake: ['Date'], now: NOW});
+        try {
+            const {draft} = twoAssetScenario();
+            expect(JSON.stringify(build(draft).request)).toBe(BEFORE_LIMITS);
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    it('an empty limit field sends no limit', () => {
+        const {draft, assetKey, secondKey} = twoAssetScenario();
+        draft.setLimit(assetKey, 'minimum', '');
+        draft.setLimit(assetKey, 'maximum', '   ');
+        draft.setLimit(secondKey, 'minimum', '10');
+        draft.setLimit(secondKey, 'minimum', '');
+
+        const request = wireOf(build(draft));
+
+        expect(itemBy(request.target_weights, 'asset_id', assetKey)).toStrictEqual({kind: 'asset', asset_id: assetKey, weight: '0.6'});
+        expect(itemBy(request.target_weights, 'asset_id', secondKey)).toStrictEqual({kind: 'asset', asset_id: secondKey, weight: '0.4'});
+        expect(draft.data.limits).toStrictEqual({});
+    });
+
+    it('limits travel as target entries with amount or share', () => {
+        const {draft, assetKey, secondKey} = twoAssetScenario();
+        draft.setLimit(assetKey, 'minimum', '500');
+        draft.setLimit(assetKey, 'maximum', '35%');
+        draft.setLimit(secondKey, 'maximum', '12,5 %');
+
+        const built = build(draft);
+        const request = wireOf(built);
+
+        expect(itemBy(request.target_weights, 'asset_id', assetKey)).toStrictEqual({
+            kind: 'asset',
+            asset_id: assetKey,
+            weight: '0.6',
+            minimum: {kind: 'amount', amount: {amount: '500', currency: 'EUR'}},
+            maximum: {kind: 'share', share: '0.35'},
+        });
+        expect(itemBy(request.target_weights, 'asset_id', secondKey)).toStrictEqual({kind: 'asset', asset_id: secondKey, weight: '0.4', maximum: {kind: 'share', share: '0.125'}});
+        // The codec takes both forms, and the resolved request fills the missing side with «no limit».
+        expect(itemBy(resolvedOf(built).target_weights, 'asset_id', secondKey)).toMatchObject({minimum: null, maximum: {kind: 'share', share: '0.125'}});
+    });
+
+    it('removing an asset removes its limits', () => {
+        const {draft, assetKey, secondKey} = twoAssetScenario();
+        draft.setLimit(secondKey, 'minimum', '5%');
+        draft.setLimit(assetKey, 'maximum', '900');
+
+        draft.removeAsset(secondKey);
+        draft.data.targets[assetKey] = '100';
+
+        expect(Object.keys(draft.data.limits)).toEqual([assetKey]);
+        const request = wireOf(build(draft));
+        expect(asList(request.target_weights).map((entry) => entry.asset_id)).toEqual([assetKey]);
+        expect(JSON.stringify(request)).not.toContain('"share"');
+    });
+});
+
+describe('localProblems: the limits of a target entry (F2)', () => {
+    it('a minimum above the maximum in the same form is a local problem', () => {
+        const {draft, assetKey, secondKey} = twoAssetScenario();
+        draft.setLimit(assetKey, 'minimum', '2000');
+        draft.setLimit(assetKey, 'maximum', '1000');
+        draft.setLimit(secondKey, 'minimum', '30%');
+        draft.setLimit(secondKey, 'maximum', '20%');
+
+        expect(limitProblemsOf(draft)).toEqual([
+            {step: 'targets', key: 'limitMinAboveMax', entity: 'Manual ETF probe'},
+            {step: 'targets', key: 'limitMinAboveMax', entity: 'Second probe'},
+        ]);
+        expect(buildRequest(draft, NOW).ok).toBe(false);
+    });
+
+    it('a minimum equal to the maximum is no problem', () => {
+        const {draft, assetKey} = twoAssetScenario();
+        draft.setLimit(assetKey, 'minimum', '1000');
+        draft.setLimit(assetKey, 'maximum', '1000.00');
+
+        expect(limitProblemsOf(draft)).toEqual([]);
+    });
+
+    it('a minimum above the maximum in different forms is left to the backend', () => {
+        const {draft, assetKey} = twoAssetScenario();
+        draft.setLimit(assetKey, 'minimum', '2000');
+        draft.setLimit(assetKey, 'maximum', '10%');
+
+        expect(limitProblemsOf(draft)).toEqual([]);
+        expect(buildRequest(draft, NOW).ok).toBe(true);
+    });
+
+    it('share minimums above 100 are a local problem naming the entries', () => {
+        const {draft, assetKey, secondKey} = twoAssetScenario();
+        draft.setLimit(assetKey, 'minimum', '33.34%');
+        draft.setLimit(secondKey, 'minimum', '66.67%');
+
+        const problems = localProblems(draft).filter((item) => item.key === 'limitShareMinimumsAboveHundred');
+        expect(problems.map((item) => ({step: item.step, entity: item.entity, values: item.values}))).toEqual([{step: 'targets', entity: null, values: {assets: 'Manual ETF probe, Second probe'}}]);
+
+        // Exactly 100% is allowed: the sum is exact, not a float (33.33 + 66.67).
+        draft.setLimit(assetKey, 'minimum', '33.33%');
+        expect(limitProblemsOf(draft)).toEqual([]);
+        // Amount minimums are never summed here: their total is compared with the reference by the backend.
+        draft.setLimit(assetKey, 'minimum', '999999');
+        expect(limitProblemsOf(draft)).toEqual([]);
+    });
+
+    it('a limit that is not a number, is negative, or a percentage above 100 is a local problem', () => {
+        const {draft, assetKey, secondKey} = twoAssetScenario();
+        draft.setLimit(assetKey, 'minimum', 'abc');
+        draft.setLimit(secondKey, 'maximum', '-5');
+
+        expect(limitProblemsOf(draft)).toEqual([
+            {step: 'targets', key: 'limitInvalid', entity: 'Manual ETF probe'},
+            {step: 'targets', key: 'limitInvalid', entity: 'Second probe'},
+        ]);
+
+        draft.setLimit(assetKey, 'minimum', '');
+        draft.setLimit(secondKey, 'maximum', '120%');
+        expect(limitProblemsOf(draft)).toEqual([{step: 'targets', key: 'limitShareAboveHundred', entity: 'Second probe'}]);
+
+        // A minimum above 100% is reported once, as itself: it does not also enter the sum of the minimums.
+        draft.setLimit(secondKey, 'maximum', '');
+        draft.setLimit(secondKey, 'minimum', '120%');
+        expect(limitProblemsOf(draft)).toEqual([{step: 'targets', key: 'limitShareAboveHundred', entity: 'Second probe'}]);
+    });
+});
+
+describe('the PAC cash rows (F3a of project 67, step 14; U8)', () => {
+    it('PAC cash rows carry only minimum and maximum', () => {
+        const {draft, brokerKey} = cashScenario();
+        const limited = draft.addCashEntry(brokerKey, 'EUR');
+        draft.setLimit(limited.key, 'minimum', '100');
+        draft.setLimit(limited.key, 'maximum', '20%');
+        // A stray figure in the targets never travels: the PAC's cash has no weight (contract §5.2).
+        draft.data.targets[limited.key] = '5';
+        // A cash row with no limit says nothing: it does not travel.
+        draft.addCashEntry(draft.data.cash[0].brokerKey, 'EUR');
+
+        const wire = wireOf(build(draft));
+        const cash = asList(wire.target_weights).filter((entry) => entry.kind === 'cash');
+        expect(cash).toEqual([{kind: 'cash', broker_id: brokerKey, currency: 'EUR', weight: '0', minimum: {kind: 'amount', amount: {amount: '100', currency: 'EUR'}}, maximum: {kind: 'share', share: '0.2'}}]);
+        // The total of the targets is the Assets' alone.
+        expect(localProblems(draft).map((problem) => problem.key)).not.toContain('targetTotalNotHundred');
+    });
+});
+
+describe('the PAC cash rows: problems and the Review (F3a of project 67, step 14)', () => {
+    it('a wrong limit on a PAC cash row is a local problem of Targets, named «Broker · currency»', () => {
+        const {draft, brokerKey} = cashScenario();
+        const row = draft.addCashEntry(brokerKey, 'EUR');
+        draft.setLimit(row.key, 'maximum', '-5');
+        expect(limitProblemsOf(draft)).toEqual([{step: 'targets', key: 'limitInvalid', entity: 'Broker probe · EUR'}]);
+    });
+
+    it('the Review counts a limited PAC cash row «with a limit»; the entries stay the Assets', () => {
+        const {draft, brokerKey} = cashScenario();
+        const row = draft.addCashEntry(brokerKey, 'EUR');
+        draft.setLimit(row.key, 'minimum', '10');
+        expect(sectionCounts(draft).targets).toEqual({entries: 1, count: 1, limited: 1});
+    });
+});
+
+describe('the pre-calculation limit codes go to the Targets step (F2)', () => {
+    it('a codec path under the target entries and a backend issue on an entry both open Targets', () => {
+        expect(stepOfWirePath(['target_weights', 0, 'minimum', 'share'])).toBe('targets');
+        expect(issueStep({section: 'targets', entity_kind: 'asset', entity_id: 'manual-asset:3', field: 'minimum'} as Parameters<typeof issueStep>[0])).toBe('targets');
+        expect(issueStep({section: 'targets', entity_kind: 'asset', entity_id: 'manual-asset:3'} as Parameters<typeof issueStep>[0])).toBe('targets');
+    });
+});
+
+describe('the Rebalancer and its own request (F3a of project 67, step 11)', () => {
+    it("a complete draft under the Rebalancer's profile builds the Rebalancer's own request (step 11)", () => {
+        const draft = new PlannerDraft('EUR', 'invest_only', REBALANCER_PLANNER_PROFILE);
+        draft.data.asOf = AS_OF;
+        draft.addManualBroker('Broker probe');
+        const asset = manualAsset(draft, 'Manual ETF probe');
+        draft.addAsset(asset);
+        draft.data.targets[asset.key] = '100';
+        draft.addManualAccount({name: 'Bank probe', currency: 'EUR', available: '100', selected: '50'});
+        expect(localProblems(draft)).toEqual([]);
+
+        const outcome = buildRequest(draft, NOW);
+
+        // Step 11 builds it, checked by the Rebalancer's codec (`request.rebalancer.test.ts` holds the details).
+        expect(outcome.ok ? [] : outcome.problems.map((problem) => problem.key)).toEqual([]);
+        if (!outcome.ok) return;
+        expect(outcome.built.request).toMatchObject({policy: 'invest_only', target_fidelity: {kind: 'level', level: 'balanced'}});
+        expect(outcome.built.request).not.toHaveProperty('funding_routes');
+    });
+
+    it("the PAC's preview request: operation preview, built while the targets do not sum to 100 yet", () => {
+        const draft = new PlannerDraft('EUR', 'proportional');
+        draft.data.asOf = AS_OF;
+        draft.addManualBroker('Broker probe');
+        const asset = manualAsset(draft, 'Manual ETF probe');
+        draft.addAsset(asset);
+        draft.data.targets[asset.key] = '40';
+        draft.addManualAccount({name: 'Bank probe', currency: 'EUR', available: '100', selected: '50'});
+        expect(localProblems(draft).map((problem) => problem.key)).toEqual(['targetTotalNotHundred']);
+
+        const outcome = buildRequest(draft, NOW, {operation: 'preview'});
+
+        expect(outcome.ok ? [] : outcome.problems.map((problem) => problem.key)).toEqual([]);
+        if (!outcome.ok) return;
+        expect(outcome.built.request).toMatchObject({operation: 'preview', policy: 'proportional'});
+        expect(outcome.built.request).not.toHaveProperty('custom_reference_amount');
+        // The plan still stops on it.
+        expect(buildRequest(draft, NOW).ok).toBe(false);
     });
 });

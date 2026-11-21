@@ -405,11 +405,11 @@
                         syncingRowIds = new Set([...syncingRowIds].filter((id) => id !== rid));
                     }
                 },
-                disabled: (row) => !row.provider_code || row.active === false,
+                // Without a provider there is nothing to sync: not offered; an inactive Asset says why it is off (77 SEL-M, Q-SEL-17)
+                visible: (row) => !!row.provider_code,
+                blocked: (row) => (row.active === false ? {hint: () => $t('assetDetail.syncDisabledInactive'), reason: 'inactive'} : null),
                 iconClass: (row) => (syncingRowIds.has(String(row.id)) ? 'animate-spin' : ''),
-                labelClass: (row) => (!row.provider_code || row.active === false ? 'line-through' : ''),
                 testid: 'asset-table-sync-action',
-                title: (row) => (!row.provider_code ? $t('assetDetail.syncDisabledManual') : row.active === false ? $t('assetDetail.syncDisabledInactive') : ''),
             },
             {
                 id: 'refresh',

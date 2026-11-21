@@ -25,7 +25,7 @@ The Banca d'Italia publishes rates for about 150 currencies. LibreFolio reads th
 
 The naira, the shillings, the cedi, the dong, the Pakistani rupee and the Dominican peso, among many others, are not published by the ECB.
 
-Currencies whose rate the bank has suspended (on 16 November 2026: the Belarusian rouble, the Iranian rial, the North Korean won and the Russian rouble) are not offered. The IMF's SDR, which the bank also lists, is not offered either: it is not a currency.
+Currencies whose rate the bank has suspended (on 16 November 2026: the Belarusian rouble, the Iranian rial, the North Korean won and the Russian rouble) are not offered. The IMF's SDR (XDR), which the bank also lists, is offered like any other currency: it is the IMF's unit of account, a basket of USD, EUR, CNY, JPY and GBP, not a commodity.
 
 ## 📝 Important Notes
 

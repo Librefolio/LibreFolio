@@ -213,9 +213,6 @@
         "forgetFailed": "Impossible d’oublier les modifications.",
         "loadFailed": "Impossible de lire les modifications.",
         "empty": "Aucune modification pour l’instant.",
-        "range": "{from}–{to} sur {total}",
-        "previousPage": "Page précédente",
-        "nextPage": "Page suivante",
         "who": {
           "deletedUser": "un utilisateur supprimé"
         },

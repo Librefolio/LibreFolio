@@ -8,7 +8,7 @@
  * shot ever reaches a real site. The real enrichers are then absent from the catalogue, and the seeded fund
  * (`PROFILE_HISTORY_FUND` in `populate_mock_data.py`, bound to justETF and Borsa Italiana) would show its sources by code
  * and its enrichers as «not active on this instance» — not what a user's instance shows. {@link serveGalleryEnrichers}
- * answers the catalogue instead, as an instance with the three real enrichers answers it. Nothing else is routed: no read,
+ * answers the catalogue instead, as an instance with the four real enrichers answers it. Nothing else is routed: no read,
  * no test, no search reaches a site (the shots only open and close windows).
  *
  * ## How it is made
@@ -16,10 +16,10 @@
  * Generated from the plugins' declarations, no network — regenerate it whole, never by hand, when an enricher's
  * declarations change:
  *
- *     LIBREFOLIO_ENRICHERS_ENABLED=justetf,yfinance,borsa_italiana pipenv run python -c "import json; from backend.app.services.enrichers.bindings import enrichers_catalogue; print(json.dumps(enrichers_catalogue().model_dump(mode='json'), indent=4, ensure_ascii=False))"
+ *     LIBREFOLIO_ENRICHERS_ENABLED=justetf,yfinance,borsa_italiana,esma pipenv run python -c "import json; from backend.app.services.enrichers.bindings import enrichers_catalogue; print(json.dumps(enrichers_catalogue().model_dump(mode='json'), indent=4, ensure_ascii=False))"
  *
  * and paste the output as {@link GALLERY_ENRICHERS_CATALOGUE}. `configured` is the route's readiness, true for the
- * three: none has a required setting.
+ * four: none has a required setting.
  */
 import type {Page} from '@playwright/test';
 import {schemas} from '../../src/lib/api/generated';
@@ -117,6 +117,51 @@ export const GALLERY_ENRICHERS_CATALOGUE = {
             missing_settings: [],
         },
         {
+            code: 'esma',
+            name: 'ESMA (FIRDS)',
+            icon: 'https://www.esma.europa.eu/themes/custom/esma_webst_theme/favicon.ico',
+            help_url: 'https://registers.esma.europa.eu/publication/searchRegister?core=esma_registers_firds',
+            terms: 'open',
+            accepted_identifier_types: ['ISIN'],
+            params_schema: [],
+            supports_search: false,
+            voices: {
+                STOCK: ['issuer_lei', 'legal_form'],
+                BOND: ['coupon_rate', 'coupon_type', 'issuer_lei', 'issuer_type', 'legal_form', 'maturity_date'],
+                FUND: ['distribution_policy', 'issuer_lei'],
+                COMMODITY: ['issuer_lei', 'legal_form'],
+                ETF_REAL_ESTATE: ['distribution_policy', 'issuer_lei'],
+                ETF_COMMODITY: ['distribution_policy', 'issuer_lei'],
+                ETF_STOCK: ['distribution_policy', 'issuer_lei'],
+                ETF_CRYPTO: ['distribution_policy', 'issuer_lei'],
+                ETF_BOND: ['distribution_policy', 'issuer_lei'],
+                ETF: ['distribution_policy', 'issuer_lei'],
+                ETF_MONETARY: ['distribution_policy', 'issuer_lei'],
+            },
+            default_priority: {
+                STOCK: 30,
+                ETF: 30,
+                BOND: 30,
+                CRYPTO: null,
+                FUND: 30,
+                CROWDFUND: null,
+                HOLD: null,
+                COMMODITY: 30,
+                REAL_ESTATE: null,
+                INDEX: null,
+                OTHER: null,
+                ETF_STOCK: 30,
+                ETF_BOND: 30,
+                ETF_COMMODITY: 30,
+                ETF_REAL_ESTATE: 30,
+                ETF_CRYPTO: 30,
+                ETF_MONETARY: 30,
+                CROWDFUND_REAL_ESTATE: null,
+            },
+            configured: true,
+            missing_settings: [],
+        },
+        {
             code: 'justetf',
             name: 'justETF',
             icon: 'https://www.justetf.com/android-chrome-144x144.png?v2',
@@ -127,13 +172,13 @@ export const GALLERY_ENRICHERS_CATALOGUE = {
             supports_search: true,
             voices: {
                 COMMODITY: ['description', 'distribution_policy', 'fund_currency', 'fund_domicile', 'fund_provider', 'fund_size', 'geography', 'inception_date', 'index_name', 'legal_form', 'replication', 'sector', 'ter'],
-                ETF_CRYPTO: ['description', 'distribution_policy', 'fund_currency', 'fund_domicile', 'fund_provider', 'fund_size', 'geography', 'inception_date', 'index_name', 'legal_form', 'replication', 'sector', 'ter'],
                 ETF_REAL_ESTATE: ['description', 'distribution_policy', 'fund_currency', 'fund_domicile', 'fund_provider', 'fund_size', 'geography', 'inception_date', 'index_name', 'replication', 'sector', 'ter'],
-                ETF_BOND: ['description', 'distribution_policy', 'fund_currency', 'fund_domicile', 'fund_provider', 'fund_size', 'geography', 'inception_date', 'index_name', 'replication', 'sector', 'ter'],
                 ETF_COMMODITY: ['description', 'distribution_policy', 'fund_currency', 'fund_domicile', 'fund_provider', 'fund_size', 'geography', 'inception_date', 'index_name', 'legal_form', 'replication', 'sector', 'ter'],
-                ETF_MONETARY: ['description', 'distribution_policy', 'fund_currency', 'fund_domicile', 'fund_provider', 'fund_size', 'geography', 'inception_date', 'index_name', 'replication', 'sector', 'ter'],
-                ETF: ['description', 'distribution_policy', 'fund_currency', 'fund_domicile', 'fund_provider', 'fund_size', 'geography', 'inception_date', 'index_name', 'legal_form', 'replication', 'sector', 'ter'],
                 ETF_STOCK: ['description', 'distribution_policy', 'fund_currency', 'fund_domicile', 'fund_provider', 'fund_size', 'geography', 'inception_date', 'index_name', 'replication', 'sector', 'ter'],
+                ETF_CRYPTO: ['description', 'distribution_policy', 'fund_currency', 'fund_domicile', 'fund_provider', 'fund_size', 'geography', 'inception_date', 'index_name', 'legal_form', 'replication', 'sector', 'ter'],
+                ETF_BOND: ['description', 'distribution_policy', 'fund_currency', 'fund_domicile', 'fund_provider', 'fund_size', 'geography', 'inception_date', 'index_name', 'replication', 'sector', 'ter'],
+                ETF: ['description', 'distribution_policy', 'fund_currency', 'fund_domicile', 'fund_provider', 'fund_size', 'geography', 'inception_date', 'index_name', 'legal_form', 'replication', 'sector', 'ter'],
+                ETF_MONETARY: ['description', 'distribution_policy', 'fund_currency', 'fund_domicile', 'fund_provider', 'fund_size', 'geography', 'inception_date', 'index_name', 'replication', 'sector', 'ter'],
             },
             default_priority: {
                 STOCK: null,
@@ -169,14 +214,14 @@ export const GALLERY_ENRICHERS_CATALOGUE = {
             supports_search: false,
             voices: {
                 STOCK: ['description', 'industry', 'issuer_country', 'market_cap', 'sector'],
-                ETF_CRYPTO: ['description', 'fund_provider', 'inception_date', 'sector', 'ter'],
                 ETF_REAL_ESTATE: ['description', 'fund_provider', 'inception_date', 'sector', 'ter'],
-                ETF_BOND: ['description', 'fund_provider', 'inception_date', 'sector', 'ter'],
-                FUND: ['description', 'fund_provider', 'inception_date', 'sector', 'ter'],
                 ETF_COMMODITY: ['description', 'fund_provider', 'inception_date', 'sector', 'ter'],
-                ETF_MONETARY: ['description', 'fund_provider', 'inception_date', 'sector', 'ter'],
-                ETF: ['description', 'fund_provider', 'inception_date', 'sector', 'ter'],
+                FUND: ['description', 'fund_provider', 'inception_date', 'sector', 'ter'],
                 ETF_STOCK: ['description', 'fund_provider', 'inception_date', 'sector', 'ter'],
+                ETF_CRYPTO: ['description', 'fund_provider', 'inception_date', 'sector', 'ter'],
+                ETF_BOND: ['description', 'fund_provider', 'inception_date', 'sector', 'ter'],
+                ETF: ['description', 'fund_provider', 'inception_date', 'sector', 'ter'],
+                ETF_MONETARY: ['description', 'fund_provider', 'inception_date', 'sector', 'ter'],
             },
             default_priority: {
                 STOCK: 10,
@@ -203,23 +248,23 @@ export const GALLERY_ENRICHERS_CATALOGUE = {
         },
     ],
     default_order: {
-        STOCK: ['yfinance', 'borsa_italiana'],
-        ETF: ['justetf', 'yfinance'],
-        BOND: ['borsa_italiana'],
+        STOCK: ['yfinance', 'borsa_italiana', 'esma'],
+        ETF: ['justetf', 'yfinance', 'esma'],
+        BOND: ['borsa_italiana', 'esma'],
         CRYPTO: [],
-        FUND: ['borsa_italiana', 'yfinance'],
+        FUND: ['borsa_italiana', 'yfinance', 'esma'],
         CROWDFUND: [],
         HOLD: [],
-        COMMODITY: ['justetf'],
+        COMMODITY: ['justetf', 'esma'],
         REAL_ESTATE: [],
         INDEX: [],
         OTHER: [],
-        ETF_STOCK: ['justetf', 'yfinance'],
-        ETF_BOND: ['justetf', 'yfinance'],
-        ETF_COMMODITY: ['justetf', 'yfinance'],
-        ETF_REAL_ESTATE: ['justetf', 'yfinance'],
-        ETF_CRYPTO: ['justetf', 'yfinance'],
-        ETF_MONETARY: ['justetf', 'yfinance'],
+        ETF_STOCK: ['justetf', 'yfinance', 'esma'],
+        ETF_BOND: ['justetf', 'yfinance', 'esma'],
+        ETF_COMMODITY: ['justetf', 'yfinance', 'esma'],
+        ETF_REAL_ESTATE: ['justetf', 'yfinance', 'esma'],
+        ETF_CRYPTO: ['justetf', 'yfinance', 'esma'],
+        ETF_MONETARY: ['justetf', 'yfinance', 'esma'],
         CROWDFUND_REAL_ESTATE: [],
     },
 };

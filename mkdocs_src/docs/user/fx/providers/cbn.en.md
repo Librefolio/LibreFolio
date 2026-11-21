@@ -16,10 +16,10 @@ The **Central Bank of Nigeria (CBN)** provider retrieves the central exchange ra
 
 ## 💰 Supported Currencies
 
-A fixed list of 11 currencies, all against NGN:
+A fixed list of 12 currencies, all against NGN:
 
 - **Major**: USD 🇺🇸, EUR 🇪🇺, GBP 🇬🇧, JPY 🇯🇵, CHF 🇨🇭, DKK 🇩🇰
-- **Other**: CNY 🇨🇳, ZAR 🇿🇦, SAR 🇸🇦, AED 🇦🇪 (from January 2026), XOF (West African CFA franc)
+- **Other**: CNY 🇨🇳, ZAR 🇿🇦, SAR 🇸🇦, AED 🇦🇪 (from January 2026), XOF (West African CFA franc), XDR (the IMF's special drawing right, which the bank calls SDR: a unit of account built on a basket of USD, EUR, CNY, JPY and GBP)
 
 ## 📝 Important Notes
 

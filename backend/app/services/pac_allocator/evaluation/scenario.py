@@ -134,6 +134,8 @@ def _referenced_currencies(
         *(item.available.currency for item in scenario.existing_cash),
         *(item.amount.currency for item in scenario.contributions),
         *(item.currency for item in scenario.funding_routes),
+        *(item.currency for item in scenario.transfer_lanes),
+        *(item.currency for item in scenario.cash_entries),
         *(item.fixed_fee.currency for item in fees.values()),
     }
     if scenario.sell_context is not None:
@@ -185,6 +187,33 @@ def _validate_funding_route_refs(
             raise ExactScenarioContractError(f"funding route {route.route_id} changes source currency")
 
 
+def _validate_transfer_lanes(
+    scenario: ExactPlannerScenario,
+    index: ScenarioIndex,
+) -> None:
+    """A transfer lane moves one currency from a known, active Broker to another one (A2, project 67)."""
+    for lane in scenario.transfer_lanes:
+        label = f"transfer lane {lane.source_broker_id}->{lane.destination_broker_id} {lane.currency}"
+        if lane.source_broker_id == lane.destination_broker_id:
+            raise ExactScenarioContractError(f"{label} moves cash within the same Broker")
+        for broker_id in (lane.source_broker_id, lane.destination_broker_id):
+            broker = index.brokers.get(broker_id)
+            if broker is None:
+                raise ExactScenarioContractError(f"{label} references unknown Broker")
+            if broker.active is False:
+                raise ExactScenarioContractError(f"{label} references inactive Broker")
+
+
+def _validate_cash_entries(
+    scenario: ExactPlannerScenario,
+    index: ScenarioIndex,
+) -> None:
+    """A cash limit names a known Broker (its currency is covered by ``_validate_currency_coverage``)."""
+    for limit in scenario.cash_entries:
+        if limit.broker_id not in index.brokers:
+            raise ExactScenarioContractError(f"cash limit {limit.broker_id} {limit.currency} references unknown Broker")
+
+
 def _validate_order_route_units(
     route: ExactOrderRoute,
     capability: ExactOrderCapability,
@@ -194,12 +223,11 @@ def _validate_order_route_units(
     _validate_capability_step(capability)
     expected_minimum_kind = "whole_quantity" if capability.kind == "whole_quantity" else "monetary_amount"
     expected_cap_kind = "quantity" if capability.kind == "whole_quantity" else "notional"
-    for field_name in ("minimum_if_active", "required_minimum"):
-        minimum = getattr(route, field_name)
-        if minimum.kind not in {"none", expected_minimum_kind}:
-            raise ExactScenarioContractError(f"order route {route.route_id} has incompatible {field_name}")
-        if minimum.kind == "monetary_amount" and minimum.currency != quote_currency:
-            raise ExactScenarioContractError(f"order route {route.route_id} has cross-currency {field_name}")
+    minimum = route.minimum_if_active
+    if minimum.kind not in {"none", expected_minimum_kind}:
+        raise ExactScenarioContractError(f"order route {route.route_id} has incompatible minimum_if_active")
+    if minimum.kind == "monetary_amount" and minimum.currency != quote_currency:
+        raise ExactScenarioContractError(f"order route {route.route_id} has cross-currency minimum_if_active")
     if route.cap is not None and route.cap.kind != expected_cap_kind:
         raise ExactScenarioContractError(f"order route {route.route_id} has incompatible cap unit")
     if route.cap is not None and route.cap.kind == "notional" and route.cap.currency != quote_currency:
@@ -330,6 +358,8 @@ def build_scenario_index(scenario: ExactPlannerScenario) -> ScenarioIndex:
     )
     _validate_static_entity_refs(scenario, result)
     _validate_funding_route_refs(scenario, result)
+    _validate_transfer_lanes(scenario, result)
+    _validate_cash_entries(scenario, result)
     _validate_order_route_refs(scenario, result)
     return result
 

@@ -43,6 +43,8 @@
     import ViewModeToggle from '$lib/components/ui/ViewModeToggle.svelte';
     import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
     import DataTableToolbar from '$lib/components/table/DataTableToolbar.svelte';
+    import {selectionToolbarActions} from '$lib/components/table/selectionActions';
+    import type {BulkAction} from '$lib/components/table/types';
     import AssetBulkEditModal from '$lib/features/assets/bulk/AssetBulkEditModal.svelte';
     import type {BulkAsset} from '$lib/features/assets/bulk/assetBulkEdit';
     import DateRangePicker from '$lib/components/ui/date/DateRangePicker.svelte';
@@ -1629,17 +1631,31 @@
     // Bulk Actions (table selection)
     // =========================================================================
 
-    function handleBulkSyncAssets() {
-        syncModalAssets = selectedAssetRows.filter((r) => !!r.provider_code);
+    function handleBulkSyncAssets(rows: AssetRow[] = selectedAssetRows) {
+        syncModalAssets = rows.filter((r) => !!r.provider_code);
         syncModalOpen = true;
     }
 
-    async function handleBulkRefreshAssets() {
-        for (const a of assets) invalidateAssetPrices(a.id);
+    /** «Reload» on the selected assets only (Q-SEL-10): their cached prices go, the others are kept, as a row's own Reload does. */
+    async function handleBulkRefreshAssets(rows: AssetRow[] = selectedAssetRows) {
+        for (const row of rows) invalidateAssetPrices(row.id);
         rearmMaxPendingBeforeReload();
         await pageBusy.track('assets-bulk-refresh', () => fetchAllPriceData());
         clearAllTableSelections();
     }
+
+    /**
+     * 77 SEL-B: the page's fixed panel (Q-SEL-7: the selection spans the three tables, so it stays a page panel, with no
+     * bar at their top), through the rule of every table: each action with the number of assets it acts on. «Sync» takes
+     * the assets with a provider only, and is not there when none has one (Q-SEL-17).
+     */
+    let assetSelectionActions = $derived<BulkAction<AssetRow>[]>([
+        {id: 'edit', icon: Pencil, label: () => $t('assets.bulkEdit.action', {values: {count: selectedAssetRows.length}}), shortLabel: () => $t('common.edit'), primary: true, onClick: () => handleBulkEditAssets()},
+        {id: 'sync', icon: RotateCw, label: () => $t('common.sync'), appliesTo: (row) => !!row.provider_code, onClick: (rows) => handleBulkSyncAssets(rows)},
+        {id: 'refresh', icon: RefreshCw, label: () => $t('common.refresh'), onClick: (rows) => handleBulkRefreshAssets(rows)},
+        {id: 'delete', icon: Trash2, label: () => $t('common.delete'), variant: 'danger', onClick: () => handleBulkDeleteAssets()},
+    ]);
+    let assetToolbarActions = $derived(selectionToolbarActions(assetSelectionActions, selectedAssetRows));
 
     /** The selected assets, in the order of the selection, as the list holds them now. */
     function selectedBulkAssets() {
@@ -1996,12 +2012,7 @@
                 <DataTableToolbar
                     variant="floating"
                     selectedCount={selectedAssetRows.length}
-                    bulkActions={[
-                        {id: 'edit', icon: Pencil, label: () => $t('assets.bulkEdit.action', {values: {count: selectedAssetRows.length}}), shortLabel: () => $t('common.edit'), primary: true, onClick: () => handleBulkEditAssets()},
-                        {id: 'sync', icon: RotateCw, label: () => $t('common.sync'), onClick: () => handleBulkSyncAssets()},
-                        {id: 'refresh', icon: RefreshCw, label: () => $t('common.refresh'), onClick: () => handleBulkRefreshAssets()},
-                        {id: 'delete', icon: Trash2, label: () => $t('common.delete'), variant: 'danger', onClick: () => handleBulkDeleteAssets()},
-                    ]}
+                    bulkActions={assetToolbarActions}
                     onClearSelection={() => {
                         clearAllTableSelections();
                     }}
@@ -2531,8 +2542,9 @@
         <!-- Table View — F15 round-2: three stacked tables (yours / other users' /
              watched). Column widths, order and visibility stay in sync across the
              three (width via mirrorColumnResize, order/visibility via the toggle's
-             additionalTableRefs); pagination is independent per table. -->
-        <div class="space-y-6">
+             additionalTableRefs); pagination is independent per table. Their pagers rise above the page's fixed selection
+             panel while it shows (Q-SEL-7, `--lf-pager-lift`); a dialog is not in here. -->
+        <div class="space-y-6" style="--lf-pager-lift: var(--lf-selbar-space, 0px)">
             {#each assetPanels as panel (panel.id)}
                 {#if panel.items.length > 0}
                     <section data-testid="assets-table-panel-{panel.id}">

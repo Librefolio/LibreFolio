@@ -6,7 +6,7 @@ The **Transactions** tab of a broker lists its transactions, newest first, for t
     <img class="gallery-img" data-category="brokers" data-name="transactions-tab" alt="Broker Transactions Tab">
 </div>
 
-Above the list you find **Uploaded Reports**, **View in Transactions** and the column picker. Owners and Editors also get **Import**, **Add Transaction** and, once you tick rows, the bar to edit, clone or delete them. A Viewer sees the table, the uploaded reports and **View in Transactions**.
+Above the list you find **Uploaded Reports**, **View in Transactions** and the column picker. Owners and Editors also get **Import**, **Add Transaction** and, once you tick rows, the bar above the table to edit, clone or delete them. A Viewer sees the table without checkboxes, the uploaded reports and **View in Transactions**.
 
 ---
 
@@ -51,6 +51,8 @@ The same wizard opens from **Import** on the [Transactions](../transactions/inde
 
 - **Upload** CSV or Excel files: they are assigned to this broker and listed in the wizard's **Select Files** step. Files you upload together form one set — this is how banks that split an account across several exports, such as Danske Bank, are imported.
 - **Preview** or **Delete** a file. Deleting a report never deletes the transactions imported from it.
+- Tick several files to **Download** or **Delete** them together: the bar above the table shows each action with the
+  number of files it takes. **Delete** counts only the files you may delete, and is not shown when you may delete none.
 - Check each file's **Status** and **Report set** badges — see [Report sets](../files/index.md#report-sets).
 - **Manage all files** opens the [Files & Uploads](../files/index.md#broker-reports) page, filtered on this broker.
 

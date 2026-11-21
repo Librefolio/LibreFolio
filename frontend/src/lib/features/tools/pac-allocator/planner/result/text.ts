@@ -9,14 +9,14 @@ import type {Readable} from 'svelte/store';
 import type {t} from '$lib/i18n';
 import {compareDecimal, decimalScale, fractionToPercent} from '$lib/utils/core/exactDecimal';
 import {exactQuantityCount, formatExactPricePlain, formatExactQuantity, formatPlannerMoneyPlain, formatPlannerPercentUnits, formatPlannerPlainDecimal, formatPlannerPricePlain, formatPlannerQuantity, plannerPlainDecimalCount, plannerQuantityCount, type CurrencyDigits} from '../format';
-import type {PacExactPrice, PacOrderRow, PacResolvedOrderRoute} from '../types';
+import type {PlannerExactPrice, PlannerOrderRow, PlannerResolvedOrderRoute} from '../types';
 
 export type Translator = typeof t extends Readable<infer Formatter> ? Formatter : never;
 
 const KEY = 'tools.pacAllocator.planner.result.text';
 const DETAIL_KEY = 'tools.pacAllocator.planner.result.detail';
 
-export function instructionText(order: PacOrderRow, translate: Translator, digits: CurrencyDigits): string {
+export function instructionText(order: PlannerOrderRow, translate: Translator, digits: CurrencyDigits): string {
     const instruction = order.instruction;
     if (instruction.kind === 'whole_quantity') {
         return translate(`${KEY}.buyUnits`, {default: 'buy {quantity} {count, plural, one {unit} other {units}}', values: {quantity: formatPlannerQuantity(instruction.quantity), count: plannerQuantityCount(instruction.quantity)}});
@@ -25,7 +25,7 @@ export function instructionText(order: PacOrderRow, translate: Translator, digit
 }
 
 /** The order step is a Broker parameter, not wealth. */
-export function instructionStepText(order: PacOrderRow, translate: Translator, digits: CurrencyDigits): string {
+export function instructionStepText(order: PlannerOrderRow, translate: Translator, digits: CurrencyDigits): string {
     const instruction = order.instruction;
     if (instruction.kind === 'whole_quantity') {
         return translate(`${KEY}.stepUnits`, {default: 'step {step} {count, plural, one {unit} other {units}}', values: {step: formatPlannerPlainDecimal(instruction.quantity_step), count: plannerPlainDecimalCount(instruction.quantity_step)}});
@@ -34,21 +34,21 @@ export function instructionStepText(order: PacOrderRow, translate: Translator, d
 }
 
 /** A market price, with its quote base when it is not one unit. */
-export function priceText(price: PacExactPrice, translate: Translator, digits: CurrencyDigits): string {
+export function priceText(price: PlannerExactPrice, translate: Translator, digits: CurrencyDigits): string {
     const text = formatExactPricePlain(price, digits);
     if (compareDecimal(price.quote_base_quantity, '1') === 0) return text;
     return translate(`${KEY}.pricePer`, {default: '{price} per {quantity} {count, plural, one {unit} other {units}}', values: {price: text, quantity: formatPlannerPlainDecimal(price.quote_base_quantity), count: plannerPlainDecimalCount(price.quote_base_quantity)}});
 }
 
 /** The economic quantity of an order: wealth, so masked with privacy on. */
-export function economicQuantityText(quantity: PacOrderRow['economic_quantity'], translate: Translator): string {
+export function economicQuantityText(quantity: PlannerOrderRow['economic_quantity'], translate: Translator): string {
     const values = {quantity: formatExactQuantity(quantity.value), count: exactQuantityCount(quantity.value)};
     if (quantity.kind === 'exact') return translate(`${DETAIL_KEY}.quantityExact`, {default: '{quantity} {count, plural, one {unit} other {units}} (exact)', values});
     return translate(`${DETAIL_KEY}.quantityEstimated`, {default: '{quantity} {count, plural, one {unit} other {units}} (estimated)', values});
 }
 
-type RouteMinimum = PacResolvedOrderRoute['required_minimum'];
-type RouteCap = PacResolvedOrderRoute['cap'];
+type RouteMinimum = PlannerResolvedOrderRoute['minimum_if_active'];
+type RouteCap = PlannerResolvedOrderRoute['cap'];
 
 function unitsText(quantity: string, translate: Translator): string {
     return translate(`${KEY}.units`, {default: '{quantity} {count, plural, one {unit} other {units}}', values: {quantity: formatPlannerQuantity(quantity), count: plannerQuantityCount(quantity)}});

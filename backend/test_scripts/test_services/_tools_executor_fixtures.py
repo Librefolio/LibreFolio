@@ -15,6 +15,7 @@ is emergency teardown, never evidence that the production supervisor succeeded.
 
 from __future__ import annotations
 
+import logging
 import multiprocessing
 import os
 import signal
@@ -32,6 +33,7 @@ from typing import Any, Literal, NoReturn, Self, cast
 import psutil
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from backend.app.logging_config import get_logger
 from backend.app.schemas.tools import ToolDocumentation, ToolOperationPolicy, ToolUIDescriptor
 from backend.app.services.platform.provider_registry import register_plugin
 from backend.app.services.tools.base import ToolExecutionContext, ToolPlugin, ToolService
@@ -43,7 +45,7 @@ _SETUP_TIMEOUT = 30.0
 _CLEANUP_TIMEOUT = 5.0
 _CHILD_CONTROL: Connection | None = None
 _CHILD_EXECUTION_ID: str | None = None
-# The real worker's response endpoint, published only to the close_and_linger scenario.
+# The real worker's response endpoint, published only to the close_and_linger, progress_rogue and log scenarios.
 _CHILD_RESPONSE: Connection | None = None
 FIXTURE_TOOL_CODE = "private_executor_fixture"
 
@@ -213,6 +215,13 @@ class FixtureInput(BaseModel):
         "not_model",
         "descendants",
         "partial_frame",
+        "progress",
+        "progress_rogue",
+        "progress_flood",
+        "log",
+        "log_flood",
+        "raise",
+        "raise_reported",
     ]
     text: str = "private"
     size: int = Field(default=2_048, strict=True, le=1_000_000)
@@ -290,6 +299,79 @@ def _end_without_a_result(scenario: str, execution_id: str) -> None:
         _close_response_and_linger(execution_id)
 
 
+# The phases the fixture's operation declares, in order (lot V1 of project 67).
+FIXTURE_PROGRESS_PHASES = ("validate", "search", "report")
+
+
+def _report_fixture_progress(scenario: str, context: ToolExecutionContext) -> None:
+    """The progress scenarios: the declared phases in order; messages the parent must drop; a flood past every cap."""
+    if scenario == "progress":
+        context.report_progress("validate")
+        context.report_progress("search", 1, 2)
+        context.report_progress("search", 2, 2)
+        context.report_progress("report")
+    elif scenario == "progress_rogue":
+        # A misbehaving child: everything but the last message must be dropped by the parent, never be fatal.
+        context.report_progress("undeclared")
+        context.report_progress("search", 3, 2)
+        context.report_progress("search", None, 2)
+        if _CHILD_RESPONSE is None:
+            raise _PrivateFixtureFailure("progress_rogue requires the private control wrapper")
+        for raw in (
+            {"phase": "search", "secret": "PRIVATE"},
+            {"phase": "search", "step": "2"},
+            {"phase": "search", "step": True},
+            {"phase": "search", "step": 0},
+        ):
+            _CHILD_RESPONSE.send_bytes(encode_json({"kind": "progress", "execution_id": context.execution_id, **raw}))
+        context.report_progress("report")
+    elif scenario == "progress_flood":
+        context.report_progress("search", 1)
+        context.report_progress("search", 1)
+        for step in range(1, 101):
+            context.report_progress("search", step, 100)
+
+
+#: How many lines the log_flood scenario writes: well past the child's cap of log frames.
+FIXTURE_LOG_FLOOD_LINES = 500
+
+
+def _write_fixture_log_lines(scenario: str, context: ToolExecutionContext) -> None:
+    """The log scenarios (lot LOGS of project 67): a structured line, a line under the parent's level, a library's plain
+    line, and log frames the parent must drop; or a flood past every cap."""
+    log = get_logger("tools.fixture")
+    if scenario == "log":
+        log.info("Fixture line", seed=11, value=1.5)
+        log.debug("Fixture debug line")
+        logging.getLogger("fixture.library").warning("Library line %s", "w")
+        if _CHILD_RESPONSE is None:
+            raise _PrivateFixtureFailure("log requires the private control wrapper")
+        for raw in (
+            {"level": 20, "logger": "x", "message": "PRIVATE extra", "secret": "PRIVATE"},
+            {"level": "20", "logger": "x", "message": "PRIVATE level"},
+            {"level": 20, "logger": "x"},
+            # Well formed, but with fields the parent's own processors own: it arrives without them.
+            {"level": 20, "logger": "x", "message": '{"event": "Hostile line %s", "positional_args": ["a"], "request_id": "FAKE"}'},
+        ):
+            _CHILD_RESPONSE.send_bytes(encode_json({"kind": "log", "execution_id": context.execution_id, **raw}))
+    elif scenario == "log_flood":
+        for index in range(FIXTURE_LOG_FLOOD_LINES):
+            log.info("Flood line", index=index)
+
+
+def _raise_fixture_failure(scenario: str) -> None:
+    """The failure scenarios (H-60 follow-up of lot LOGS): a plugin failure nobody logged, and one the plugin logged itself
+    before re-raising it, as the PAC's ``_log_engine_failure`` does. The message is private: it must never be logged."""
+    if scenario == "raise":
+        raise _PrivateFixtureFailure("PRIVATE engine failure on 1234.56 EUR")
+    if scenario == "raise_reported":
+        try:
+            raise _PrivateFixtureFailure("PRIVATE engine failure on 1234.56 EUR")
+        except _PrivateFixtureFailure:
+            get_logger("tools.fixture").error("Fixture engine failure", error_type="_PrivateFixtureFailure")
+            raise
+
+
 @register_plugin(FixtureRegistry)
 class FixturePlugin(ToolPlugin):
     contract_version = "1.0.0"
@@ -326,6 +408,7 @@ class FixturePlugin(ToolPlugin):
                     request_timeout_ms=120_000,
                     client_timeout_ms=130_000,
                     memory_limit_bytes=1_073_741_824,
+                    progress_phases=FIXTURE_PROGRESS_PHASES,
                 ),
             ),
             input_type=FixtureInput,
@@ -354,6 +437,10 @@ class FixturePlugin(ToolPlugin):
             _spawn_descendants(context, parameters.ignore_term)
         if parameters.scenario in ("hold", "descendants"):
             _wait_for_release(parameters.text)
+
+        _report_fixture_progress(parameters.scenario, context)
+        _write_fixture_log_lines(parameters.scenario, context)
+        _raise_fixture_failure(parameters.scenario)
 
         # These two probes must start from a valid, genuinely constructed model.
         text = "private" if parameters.scenario in ("unicode", "invalid_output") else parameters.text
@@ -425,11 +512,12 @@ def controlled_worker_entry(target: Callable[..., object], args: tuple[object, .
                 raise AssertionError("Partial-frame fixture received unexpected worker arguments")
             _stall_after_partial_frame(job, response, cancellation)
         else:
-            if isinstance(parameters, dict) and parameters.get("scenario") == "close_and_linger":
-                # The real worker still runs the handshake and compute; compute then closes this same endpoint.
+            if isinstance(parameters, dict) and parameters.get("scenario") in ("close_and_linger", "progress_rogue", "log"):
+                # The real worker still runs the handshake and compute; compute then closes this same endpoint, or
+                # writes on it the raw frames no plugin can send through report_progress.
                 response = args[1] if len(args) > 1 else None
                 if not isinstance(response, Connection):
-                    raise AssertionError("Close-and-linger fixture received unexpected worker arguments")
+                    raise AssertionError("Raw-response fixture received unexpected worker arguments")
                 _CHILD_RESPONSE = response
             target(*args)
     finally:

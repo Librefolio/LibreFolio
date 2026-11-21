@@ -8,7 +8,7 @@
 | **API Format** | JSON list, newest first; **undocumented** (the endpoints the bank's rate page reads) |
 | **API Key** | Not required |
 | **Terms** | ❔ No terms of use or disclaimer page found. Developer decision D1: offered for a self-hosted instance that stores the rates for its owner |
-| **Currencies** | A fixed name map: 11 currencies plus NGN |
+| **Currencies** | A fixed name map: 12 currencies plus NGN |
 | **Update Frequency** | Nigerian business days |
 | **Historical Data** | From 2001-12-10 (each currency from its own first day) |
 | **Data Page** | [Exchange Rates by Currency](https://www.cbn.gov.ng/rates/ExchRateByCurrency.html) |
@@ -56,7 +56,9 @@ stripped, then looked up in `CURRENCY_NAMES`:
 | SOUTH AFRICAN RAND | ZAR |
 | UAE DIRHAM | AED (from 2026-01-22) |
 
-Every other row is discarded and counted in the log: SDR, WAUA (the African Development Bank's unit of account), and
+The bank's name `SDR` (the IMF's special drawing right, a basket of USD, EUR, CNY, JPY and GBP) maps to `XDR` and is served: 1848.9020 NGN per 1 XDR on 2026-11-19.
+
+Every other row is discarded and counted in the log: WAUA (the African Development Bank's unit of account), and
 eleven rows named NAIRA or POESO with values of other currencies.
 
 ### 📅 The Day of a Rate (D2) and the Duplicates

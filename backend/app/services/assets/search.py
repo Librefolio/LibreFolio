@@ -24,6 +24,17 @@ from backend.app.services.assets.registry import AssetProviderRegistry
 logger = structlog.get_logger(__name__)
 
 
+def _search_icon(item: dict) -> str | None:
+    """A search result's icon (project 76, S3), from the plugin's key ``icon_url``: an ``http(s)`` address or a path of
+    this instance; anything else (another scheme, a blank, not a string) is none, quietly — an icon is decoration, and
+    the result stays as the plugin gave it."""
+    raw = item.get("icon_url")
+    if not isinstance(raw, str):
+        return None
+    icon = raw.strip()
+    return icon if icon.startswith(("https://", "http://", "/")) and not icon.startswith("//") else None
+
+
 def _quote_base_suggestion(code: str, item: dict) -> FAQuoteBaseSuggestion | None:
     """A search result's quote base suggestion (Z-32 d), from the plugin's key ``quote_base_suggestion``: one that does
     not validate is dropped with a warning, and the result stays."""
@@ -347,6 +358,7 @@ class AssetSearchService:
                         provider_params=item.get("provider_params"),
                         quote_base_suggestion=_quote_base_suggestion(code, item),
                         via_web=bool(item.get("_via_web", False)),
+                        icon_url=_search_icon(item),
                     )
                 )
 
@@ -479,6 +491,7 @@ class AssetSearchService:
                         "provider_params": item.get("provider_params"),
                         "quote_base_suggestion": suggestion.model_dump(mode="json") if suggestion else None,
                         "via_web": bool(item.get("_via_web", False)),
+                        "icon_url": _search_icon(item),
                     }
                 )
 

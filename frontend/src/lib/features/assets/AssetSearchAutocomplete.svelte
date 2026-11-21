@@ -59,6 +59,8 @@
         /** The provider's quote base suggestion for this line (Z-32 d), handed to `onselect`. */
         quote_base_suggestion?: {quantity: number; quote_currency?: string | null} | null;
         via_web?: boolean;
+        /** The asset's icon, when the provider knows it at search time (project 76, S3): CoinGecko's coin logo. */
+        icon_url?: string | null;
     }
 
     interface ProviderInfo extends ProviderReadiness {
@@ -370,6 +372,7 @@
                                 currency: r.currency,
                                 asset_type: r.asset_type,
                                 provider_url: r.provider_url,
+                                icon_url: typeof r.icon_url === 'string' && r.icon_url ? r.icon_url : null,
                                 provider_params: r.provider_params,
                                 quote_base_suggestion: r.quote_base_suggestion ?? null,
                                 via_web: r.via_web ?? false,
@@ -432,6 +435,7 @@
                     currency: r.currency,
                     asset_type: r.asset_type,
                     provider_url: r.provider_url,
+                    icon_url: typeof r.icon_url === 'string' && r.icon_url ? r.icon_url : null,
                     provider_params: r.provider_params,
                     quote_base_suggestion: r.quote_base_suggestion ?? null,
                     via_web: r.via_web ?? false,
@@ -749,7 +753,7 @@
         onclick={() => selectResult(result)}
     >
         <!-- Icon placeholder -->
-        <AssetIcon assetType={result.asset_type} iconUrl={null} altText={result.display_name} size="sm" />
+        <AssetIcon assetType={result.asset_type} iconUrl={result.icon_url ?? null} altText={result.display_name} size="sm" />
 
         <!-- Info -->
         <div class="flex-1 min-w-0">

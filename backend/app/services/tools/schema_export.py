@@ -14,6 +14,7 @@ from backend.app.schemas.tools import (
     ToolCatalogResponse,
     ToolComputeBatchRequest,
     ToolComputeBatchResponse,
+    ToolComputeProgress,
     ToolDiagnosticsResponse,
 )
 from backend.app.services.tools.registry import ToolPluginRegistry, ToolRegistrySnapshot
@@ -69,6 +70,7 @@ _TRANSPORT_ROOTS = (
     _TransportRoot("catalog", ToolCatalogResponse, "serialization", "ToolTransportCatalog"),
     _TransportRoot("computeRequest", ToolComputeBatchRequest, "validation", "ToolTransportComputeRequest"),
     _TransportRoot("computeResponse", ToolComputeBatchResponse, "serialization", "ToolTransportComputeResponse"),
+    _TransportRoot("computeProgress", ToolComputeProgress, "serialization", "ToolTransportComputeProgress"),
     _TransportRoot("diagnostics", ToolDiagnosticsResponse, "serialization", "ToolTransportDiagnostics"),
 )
 

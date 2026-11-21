@@ -72,6 +72,16 @@ async def test_nbu_returns_each_rate_as_uah_per_one_unit(monkeypatch: pytest.Mon
 
 
 @pytest.mark.asyncio
+async def test_nbu_serves_the_sdr_as_uah_per_one_xdr(monkeypatch: pytest.MonkeyPatch):
+    """Q7 (a): «1 XDR = 60.7444 UAH» like any currency (the SDR is a currency of the bank's list, not a metal)."""
+    _route(monkeypatch, nbu_mod, _by_currency({"XDR": [_row("XDR", "05.01.2026", "60.7444")]}))
+
+    rates = await NBUProvider().fetch_rates(RANGE, ["XDR"])
+
+    assert rates["XDR"] == [(date(2026, 1, 5), "XDR", "UAH", Decimal("60.7444"))]
+
+
+@pytest.mark.asyncio
 async def test_nbu_asks_one_range_per_currency_in_series(monkeypatch: pytest.MonkeyPatch):
     """One request per currency, one after the other, on the range endpoint: start, end, lower-case valcode, JSON."""
     asked = _route(monkeypatch, nbu_mod, _by_currency({}))
@@ -214,13 +224,13 @@ async def test_nbu_too_many_requests_is_a_rate_limit(monkeypatch: pytest.MonkeyP
 
 
 @pytest.mark.asyncio
-async def test_nbu_catalogue_drops_metals_and_sdr(monkeypatch: pytest.MonkeyPatch):
+async def test_nbu_catalogue_keeps_the_sdr_and_drops_metals(monkeypatch: pytest.MonkeyPatch):
     entries = [{"r030": 840, "txt": "x", "rate": 41.5, "cc": cc, "exchangedate": "05.01.2026", "special": None} for cc in ("USD", "EUR", "JPY", "XAU", "XAG", "XPT", "XPD", "XDR")]
     asked = _route(monkeypatch, nbu_mod, lambda request: httpx.Response(200, headers={"content-type": "application/json"}, text=json.dumps(entries)))
 
     currencies = await NBUProvider().get_supported_currencies()
 
-    assert currencies == ["EUR", "JPY", "UAH", "USD"]
+    assert currencies == ["EUR", "JPY", "UAH", "USD", "XDR"]
     assert asked[0].url.path == "/NBUStatService/v1/statdirectory/exchange"
 
 
@@ -238,4 +248,4 @@ def test_nbu_identity_and_texts():
     for texts in (provider.description_i18n, provider.warning_i18n):
         assert set(texts) == {"en", "it", "fr", "es"} and all(texts.values())
     assert "National Bank of Ukraine" in provider.description_i18n["en"]
-    assert "UAH" in provider.fallback_currencies and not {"XAU", "XDR"} & set(provider.fallback_currencies)
+    assert "UAH" in provider.fallback_currencies and "XDR" in provider.fallback_currencies and not {"XAU", "XAG", "XPT", "XPD"} & set(provider.fallback_currencies)

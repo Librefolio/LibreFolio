@@ -23,7 +23,10 @@ import {
     type VerifiedToolCatalog,
 } from './contracts';
 
+import {postComputeStream, type ToolProgress} from './computeStream';
+
 export {ToolClientError} from './contracts';
+export type {ToolProgress} from './computeStream';
 
 export interface ToolReadOptions {
     signal?: AbortSignal;
@@ -38,6 +41,11 @@ export interface ToolRunOptions<C extends ToolCode, V extends ToolVersion<C>> {
     correlationId: ToolComputeRequest['items'][number]['correlation_id'];
     parameters: ToolInput<C, V>;
     signal?: AbortSignal;
+    /**
+     * The calculation's progress (lot V1 of project 67): with it, the request goes to the streaming route and each
+     * progress message of this item arrives here before the result; the result is the same as without it.
+     */
+    onProgress?: (event: ToolProgress) => void;
 }
 
 type ResultContext<C extends ToolCode, V extends ToolVersion<C>> = {
@@ -298,7 +306,7 @@ function validateBatchResponse(raw: unknown, expected: ExpectedBatch): ToolCompu
 
 /** A stopped wait is not a server cancellation acknowledgement. No retries or toasts are performed here. */
 export async function runTool<const C extends ToolCode, const V extends ToolVersion<C>>(code: C, version: V, options: ToolRunOptions<NoInfer<C>, NoInfer<V>>): Promise<ToolItemResult<C, V>> {
-    const {descriptor, correlationId, parameters, signal} = options;
+    const {descriptor, correlationId, parameters, signal, onProgress} = options;
     if (signal?.aborted) throw new ToolClientError('aborted', 'waiting_stopped');
     const context = prepareToolRun(code, version, descriptor);
     const request = {
@@ -332,15 +340,27 @@ export async function runTool<const C extends ToolCode, const V extends ToolVers
         return await runToolSessionTask(
             context.accountGeneration,
             async (requestSignal) => {
-                const response = await axiosInstance.post<unknown>('/api/v1/tools/compute', snapshot.value, {
-                    signal: requestSignal,
-                    timeout: context.clientTimeoutMs,
-                    headers: {'Content-Type': 'application/json'},
-                    // Keep the raw-wire snapshot stable across asynchronous request interceptors.
-                    transformRequest: [() => snapshot.body],
-                });
+                let raw: unknown;
+                if (onProgress) {
+                    raw = await postComputeStream(snapshot.body, {
+                        signal: requestSignal,
+                        timeoutMs: context.clientTimeoutMs,
+                        onProgress: (event) => {
+                            if (event.correlation_id === correlationId && !requestSignal.aborted) onProgress(event);
+                        },
+                    });
+                } else {
+                    const response = await axiosInstance.post<unknown>('/api/v1/tools/compute', snapshot.value, {
+                        signal: requestSignal,
+                        timeout: context.clientTimeoutMs,
+                        headers: {'Content-Type': 'application/json'},
+                        // Keep the raw-wire snapshot stable across asynchronous request interceptors.
+                        transformRequest: [() => snapshot.body],
+                    });
+                    raw = response.data;
+                }
                 assertResponseCurrent(context.accountGeneration, requestSignal);
-                const {results, ...batch} = validateBatchResponse(response.data, expected);
+                const {results, ...batch} = validateBatchResponse(raw, expected);
                 const item = results[0];
                 if (!item) throw new ToolClientError('protocol', 'response_count_mismatch');
                 const identity = {

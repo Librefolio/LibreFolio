@@ -29,7 +29,6 @@
     "custom": "Custom",
     "date": "Date",
     "delete": "Delete",
-    "deleteSelected": "Delete Selected",
     "deleting": "Deleting...",
     "detail": "Detail",
     "discard": "Discard",
@@ -380,7 +379,8 @@
     },
     "confirmBulkAction": "Are you sure you want to perform this action on",
     "filterLabel": "Filter",
-    "resetLayout": "Reset layout"
+    "resetLayout": "Reset layout",
+    "selectionHint": "Select one or more rows to act on them together."
   },
   "date": {
     "today": "Today",

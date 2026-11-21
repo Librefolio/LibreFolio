@@ -24,6 +24,7 @@ from typing import List, Optional
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from backend.app.db.models import UserRole
+from backend.app.schemas.broker_profile import BrokerOperatingProfile, stored_operating_profile
 from backend.app.schemas.common import (
     BaseBulkDeleteResponse,
     BaseBulkResponse,
@@ -122,6 +123,17 @@ class BRReadItem(StrictModel):
     user_role: Optional[str] = Field(None, description="Current user's role on this broker (OWNER/EDITOR/VIEWER)")
     user_share_percentage: Optional[SafeDecimal] = Field(default=None, description="Current user's ownership percentage")
 
+    operating_profile: Optional[BrokerOperatingProfile] = Field(
+        default=None,
+        description="The broker's operating profile (order modes and fees per currency, conversion mode, tax regime); null when there is none or the stored one cannot be read",
+    )
+
+    @field_validator("operating_profile", mode="before")
+    @classmethod
+    def _stored_profile(cls, value):
+        """The column holds the profile's JSON text: read it tolerantly, so an unreadable one is «no profile» and never breaks a list."""
+        return stored_operating_profile(value) if isinstance(value, str) else value
+
 
 class BRDiscoveryItem(BaseModel):
     """Minimal broker payload for discovery of inaccessible brokers."""
@@ -163,6 +175,10 @@ class BRUpdateItem(StrictModel):
 
     is_active: Optional[bool] = Field(default=None, description="Update account active status")
     opened_at: Optional[date_type] = Field(default=None, description="Update account opening date")
+
+    # D5: the key absent leaves the stored profile as it is; an object replaces the whole document; null clears it. The
+    # service tells absent from null through ``model_fields_set``.
+    operating_profile: Optional[BrokerOperatingProfile] = Field(default=None, description="Replace the operating profile (null clears it; leave the key out to keep it)")
 
     @field_validator("name")
     @classmethod

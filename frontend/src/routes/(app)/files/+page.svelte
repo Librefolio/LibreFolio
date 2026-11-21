@@ -48,14 +48,14 @@
     import FilesTable from '$lib/features/files/FilesTable.svelte';
     import FilePreviewModal from '$lib/features/files/FilePreviewModal.svelte';
     import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
-    import SelectionBar from '$lib/components/table/SelectionBar.svelte';
     import {matchesColumnFilter} from '$lib/components/table/dataTableLogic';
     import FileGrid from '$lib/features/files/FileGrid.svelte';
     import TabBar from '$lib/components/ui/tabs/TabBar.svelte';
     import {buildUrlFilters, parseUrlFilters, type UrlFilterConfig} from '$lib/features/files/urlFilters';
     import {fetchFilePreview} from '$lib/utils/files/filePreview';
     import {resolveParseFailureMessage} from '$lib/features/transactions/import/parseFailure';
-    import type {BrimFile, BrokerInfo, FilePreviewResponse, UploadedFile, UploadScope} from '$lib/types';
+    import type {BrimFile, BrokerInfo, FileData, FilePreviewResponse, UploadedFile, UploadScope} from '$lib/types';
+    import type {BulkAction} from '$lib/components/table/types';
     import type {ColumnDef, FilterValue} from '$lib/components/table/types';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import {uiLocaleStore} from '$lib/stores/app/uiLocale';
@@ -141,7 +141,7 @@
     let brimTableRef: FilesTable;
     $: activeTableRef = activeTab === 'static' ? staticTableRef : brimTableRef;
 
-    // Selection state for SelectionBar
+    // The rows the user selected in the active list (the shared selection panel acts on its own part of them)
     let selectedFileIds: string[] = [];
 
     // BRIM upload with broker selection
@@ -662,9 +662,10 @@
         return selectedFileIds.filter((fileId) => !blocked.has(fileId));
     }
 
-    async function handleBulkDeleteFiles() {
+    /** Delete the selected files the user may delete: `deletable` when the shared panel hands its own rows (77 SEL-A). */
+    async function handleBulkDeleteFiles(deletableIds?: string[]) {
         const isBrim = activeTab === 'brim';
-        const deletable = deletableSelection(isBrim);
+        const deletable = deletableIds ?? deletableSelection(isBrim);
         const kept = selectedFileIds.length - deletable.length;
         if (kept > 0) {
             notify({name: 'file.delete.skipped', detail: {count: kept, isBrim}, toast: {variant: 'warning', message: $t('uploads.deleteSkipped')}});
@@ -688,6 +689,22 @@
             notify({name: 'file.delete.failed', detail: {isBrim, reason: error}});
         }
     }
+
+    /**
+     * 77 SEL-A/B: both lists draw the shared selection panel. «Delete» takes the files the user may delete (the others stay
+     * out of its number) and acts on those only; the table puts its own «Download» before it.
+     */
+    let fileSelectionActions: BulkAction<FileData>[];
+    $: fileSelectionActions = [
+        {
+            id: 'delete',
+            icon: Trash2,
+            label: () => $t('common.delete') || 'Delete',
+            variant: 'danger',
+            appliesTo: (file) => (file as {can_delete?: boolean}).can_delete !== false,
+            onClick: (files) => handleBulkDeleteFiles(files.map((file) => ('file_id' in file ? file.file_id : file.id))),
+        },
+    ];
 
     // Scope (decision 36): sharing is immediate; making a file personal asks first, since the others lose it
     let scopeConfirmFile: UploadedFile | null = null;
@@ -830,22 +847,6 @@
     <div class="mb-6 flex items-center gap-2">
         <TabBar {tabs} bind:activeTab onchange={(tabId) => setActiveTab(tabId as Tab)} class="flex-1" />
         {#if viewMode === 'list' && activeTab !== 'backup'}
-            <SelectionBar
-                selectedCount={selectedFileIds.length}
-                actions={[
-                    {
-                        id: 'delete',
-                        icon: Trash2,
-                        label: $t('common.delete') || 'Delete',
-                        variant: 'danger',
-                        onClick: handleBulkDeleteFiles,
-                    },
-                ]}
-                onClearSelection={() => {
-                    selectedFileIds = [];
-                    activeTableRef?.getTableRef()?.clearSelection();
-                }}
-            />
             <ColumnVisibilityToggle tableRef={activeTableRef?.getTableRef()} />
         {/if}
     </div>
@@ -904,6 +905,7 @@
                     onFiltersChange={handleFiltersChange}
                     onSelectionChange={(ids) => (selectedFileIds = ids)}
                     onScopeChange={requestScopeChange}
+                    selectionActions={fileSelectionActions}
                 />
             {/if}
         {:else if activeTab === 'backup'}
@@ -930,6 +932,7 @@
                     initialFilters={currentFilters}
                     onFiltersChange={handleFiltersChange}
                     onSelectionChange={(ids) => (selectedFileIds = ids)}
+                    selectionActions={fileSelectionActions}
                 />
             {/if}
         {/if}
@@ -1108,18 +1111,20 @@
 <BrokerModal isOpen={createBrokerOpen} mode="create" onclose={() => (createBrokerOpen = false)} />
 
 <style>
+    /* `clip`, not `hidden`: a wide table stays inside the page, but neither box becomes a scroll container, so the
+       table's sticky pager and its selection dock (77 SEL-A) stick to the bottom of the window. */
     .files-page {
         padding: 1.5rem;
         max-width: 1200px;
         margin: 0 auto;
         min-width: 0;
-        overflow: hidden;
+        overflow-x: clip;
         color: var(--lf-text-primary);
     }
 
     .files-page .content {
         min-width: 0;
-        overflow: hidden;
+        overflow-x: clip;
     }
 
     .page-header {

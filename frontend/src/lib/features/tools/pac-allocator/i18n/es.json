@@ -55,12 +55,7 @@
           "currenciesSeen": "Divisas detectadas:"
         },
         "brokerEditor": {
-          "addCurrency": "Añadir divisa",
           "fee": "Comisión de compra",
-          "feeCap": "Máximo",
-          "feeFixed": "Parte fija",
-          "feeFloor": "Mínimo",
-          "feeRate": "Porcentaje",
           "funding": "Liquidez que puede usar {name}",
           "fundingCap": "Máximo utilizable aquí",
           "fundingCapHint": "Lo máximo que el plan puede tomar de esta fuente para las compras aquí. Vacío = el importe completo de la fuente.",
@@ -71,20 +66,29 @@
           "sourceAmount": "fuente {amount}",
           "step": "Incremento",
           "title": "Configurar {name} · datos del escenario (el bróker no se modifica)",
-          "feeCapHelp": "La parte porcentual nunca supera este importe. Vacío = sin máximo.",
-          "feeCapNone": "ninguno",
-          "feeFloorHelp": "La parte porcentual nunca baja de este importe. 0 = sin mínimo.",
           "fundingCapAll": "todo",
           "fundingHelp": "Las compras en este bróker se pueden pagar con su propia liquidez y con cada fuente en verde aquí. Al principio todo está permitido: haz clic en una fuente para excluirla y otra vez para permitirla.",
-          "modesHelp": "Un bloque por cada divisa en la que compras en este bróker: un activo cotizado en esa divisa se compra con sus reglas. Arrastra los bloques en el orden que prefieras.",
-          "pickCurrency": "Divisa del nuevo bloque",
+          "modesHelp": "Un bloque por cada divisa en la que compras en este bróker: un activo cotizado en esa divisa se compra con sus reglas.",
           "priorityHelp": "Solo cuenta entre planes que se acercan igual al objetivo: entonces el plan usa primero las fuentes con el número más bajo. 0 = preferida.",
-          "feeFixedHelp": "Se paga en cada compra, sea cual sea el importe, además de la parte porcentual. 0 = ninguna.",
-          "feeRateHelp": "La parte del importe comprado, en porcentaje: 0,19 significa 0,19 %. El mínimo y el máximo limitan solo esta parte.",
-          "conversionManual": "Conviertes tú antes de comprar",
-          "conversionAutomatic": "El bróker convierte al comprar",
           "addedFor": "Modo {currency} añadido para comprar {asset}, con valores iniciales: revisa el tipo de orden, el incremento y las comisiones, y luego aplica.",
-          "notYetSupported": "Aún no compatibles: régimen fiscal, minusvalías, comisiones de venta."
+          "notYetSupported": "Aún no compatibles: régimen fiscal, minusvalías, comisiones de venta.",
+          "fixBeforeApplying": "Algunos campos no son válidos: corrige los que están en rojo para aplicar.",
+          "profileSave": {
+            "button": "Guardar en el bróker",
+            "title": "¿Guardar en {name}?",
+            "intro": "El bróker se acaba de volver a leer. Confirmar escribe estos cambios; sus otras divisas y su régimen fiscal quedan como están. Una comisión de venta «igual que la compra» sigue a la de compra, también en una divisa nueva.",
+            "created": "{currency}: nueva",
+            "updated": "{currency}: actualizada",
+            "conversionManual": "Conversión de divisa: conviertes tú antes de comprar",
+            "conversionAutomatic": "Conversión de divisa: el bróker convierte cuando compras",
+            "nothing": "El bróker ya dice esto: no hay nada que guardar.",
+            "confirm": "Confirmar",
+            "reading": "Leyendo el bróker…",
+            "readFailed": "No se ha podido leer el bróker: no se ha guardado nada.",
+            "refused": "El bróker no ha aceptado el cambio: no se ha guardado nada.",
+            "saved": "Guardado en el bróker.",
+            "writeFailed": "El guardado no ha terminado: abre el bróker para comprobarlo."
+          }
         },
         "brokers": {
           "addManual": "Bróker manual",
@@ -117,7 +121,8 @@
           "title": "Cálculo en curso",
           "refreshing": "Releyendo de LibreFolio los datos copiados…",
           "elapsed": "Esperando {elapsed} s de un máximo de {limit} s",
-          "barLabel": "Tiempo de espera"
+          "barLabel": "Tiempo de espera",
+          "phase": "{phase} ({index} de {total})"
         },
         "cash": {
           "custody": "Disponible (custodia) {amount}",
@@ -234,7 +239,7 @@
           "allocation": {
             "asset_inactive_not_buyable": "El activo está inactivo: no se puede comprar.",
             "asset_type_missing": "Falta el tipo de activo.",
-            "broker_execution_profile_unsupported": "El perfil de ejecución de este bróker no es compatible con la herramienta.",
+            "broker_execution_profile_unsupported": "La cuenta de este bróker no tiene un perfil operativo, o tiene uno sin modos de orden: rellena sus modos de orden y sus comisiones en el escenario.",
             "broker_inactive": "El bróker está inactivo.",
             "capacity_unsupported": "El escenario supera el tamaño que admite la herramienta.",
             "cash_selection_invalid": "El importe a usar no es válido para esta fila de efectivo.",
@@ -255,7 +260,6 @@
             "fee_floor_exceeds_cap": "La comisión mínima es mayor que la máxima.",
             "fee_rate_out_of_range": "El porcentaje de la comisión está fuera de rango.",
             "fee_schedule_missing": "Falta el esquema de comisiones.",
-            "fiscal_currency_missing": "Falta la divisa fiscal.",
             "funding_cap_negative": "El límite de financiación no puede ser negativo.",
             "fx_rate_missing": "Falta un tipo de cambio.",
             "fx_spread_rate_out_of_range": "El spread de cambio está fuera de rango.",
@@ -284,8 +288,6 @@
             "provenance_stale_confirmed": "El dato es más antiguo que la antigüedad aceptada y se ha confirmado de todos modos.",
             "quote_base_quantity_missing": "Falta la cantidad a la que se refiere el precio.",
             "reference_not_found": "Una referencia apunta a una fila que no existe.",
-            "required_buy_sell_conflict": "El mismo activo debe comprarse y venderse a la vez.",
-            "required_min_notional_unfunded": "Las órdenes mínimas obligatorias cuestan más que la liquidez disponible.",
             "route_priority_negative": "La prioridad de la ruta no puede ser negativa.",
             "saved_fx_invalid": "El tipo de cambio guardado no es válido.",
             "saved_fx_missing": "Falta el tipo de cambio guardado.",
@@ -293,31 +295,36 @@
             "target_total_not_one": "Los objetivos no suman el 100 %.",
             "target_weight_missing": "Falta un objetivo.",
             "target_weight_out_of_range": "Un objetivo debe estar entre 0 y 100 %.",
-            "tax_netting_unsupported": "No se admite la compensación fiscal.",
             "valuation_currency_missing": "Falta la divisa de valoración.",
             "wac_fx_missing": "Falta el tipo de cambio necesario para el precio medio de compra.",
             "wac_missing": "Falta el precio medio de compra.",
             "zero_selected_funding": "La liquidez seleccionada es cero.",
             "fx_rate_inconsistent": "Este tipo de cambio no es coherente con los tipos de cambio de {source_currency} y {destination_currency} frente a {valuation_currency}: convertir {source_currency} a {destination_currency} crearía valor. Alinea los tipos de cambio o define un spread de conversión.",
-            "saved_fx_skipped": "El tipo de cambio {pair} guardado del {skipped_date} no es válido y se ha omitido: en su lugar se ha usado el del {used_date}. Corrígelo en el editor del tipo de cambio {pair} (Editar tipos de cambio); hasta entonces, los resultados pueden ser ligeramente aproximados."
+            "saved_fx_skipped": "El tipo de cambio {pair} guardado del {skipped_date} no es válido y se ha omitido: en su lugar se ha usado el del {used_date}. Corrígelo en el editor del tipo de cambio {pair} (Editar tipos de cambio); hasta entonces, los resultados pueden ser ligeramente aproximados.",
+            "bound_max_below_current": "El máximo está por debajo de lo que el plan ya posee y las ventas están desactivadas.",
+            "bound_min_above_max": "El mínimo es mayor que el máximo.",
+            "bounds_min_sum_exceeds_reference": "Los mínimos suman más que el dinero que el plan puede alcanzar.",
+            "bounds_unsatisfiable": "Ningún plan cumple los mínimos y máximos fijados aquí.",
+            "solver_numerical_error": "El solucionador encontró un error numérico al afinar el plan: se muestra el mejor plan encontrado hasta ahora. Es válido y ejecutable; solo falta la prueba de que sea el óptimo.",
+            "cash_limit_exceeded_by_rounding": "The plan ends this cash entry beyond its limit by {exceeded_by}, because every amount is rounded to the cent. The planner could not hold the plan exactly inside a band this narrow."
           },
           "pac_allocator": {
             "initial_holding_forbidden": "Esta herramienta no acepta posiciones existentes.",
-            "sell_forbidden": "Esta herramienta no vende."
+            "sell_forbidden": "Esta herramienta no vende.",
+            "cash_weight_unsupported": "Un peso sobre la liquidez no se admite en el PAC; fija solo un mínimo o un máximo."
           },
           "portfolio_rebalancer": {
-            "baseline_incumbent_missing": "Falta el plan de partida para la comparación.",
             "carried_loss_negative": "La pérdida arrastrada no puede ser negativa.",
             "cost_basis_negative": "El coste de adquisición no puede ser negativo.",
             "holdings_missing": "Faltan las posiciones.",
             "nonpositive_current_portfolio": "La cartera actual no tiene valor.",
             "sell_fee_missing": "Falta la comisión de venta.",
             "sell_inventory_exceeded": "La venta supera la cantidad que tienes.",
-            "sell_irreducibility_unresolved": "No se ha establecido que ninguna venta pueda eliminarse.",
-            "sell_to_idle_forbidden": "No se permite vender solo para dejar el importe obtenido sin usar.",
             "tax_rate_missing": "Falta el tipo impositivo.",
             "tax_rate_out_of_range": "El tipo impositivo está fuera de rango.",
-            "withholding_missing": "Falta la retención fiscal."
+            "withholding_missing": "Falta la retención fiscal.",
+            "tax_data_missing": "Falta un dato fiscal para una ruta de venta.",
+            "tax_basket_unknown": "Una cesta fiscal se cita pero no se declara."
           }
         },
         "leave": {
@@ -379,7 +386,11 @@
           "route_priority": "Prioridad de brókeres y fuentes",
           "shortfall": "Liquidez no invertida",
           "split_asset_count": "Activos repartidos entre brókeres",
-          "turnover": "Rotación"
+          "turnover": "Rotación",
+          "plan_score": "Score",
+          "target_distance": "Distance from the targets",
+          "wealth_loss": "Money lost",
+          "operation_count": "Fewer operations"
         },
         "origin": {
           "copied": "Copiado",
@@ -433,7 +444,13 @@
           "selectedNegative": "«Importe a usar» no puede ser negativo.",
           "declaredNegative": "«Liquidez declarada» no puede ser negativo.",
           "contributionAmountNegative": "El importe de la aportación no puede ser negativo.",
-          "modeStepNotPositive": "El paso de orden debe ser mayor que cero."
+          "modeStepNotPositive": "El paso de orden debe ser mayor que cero.",
+          "limitInvalid": "Un límite no es un importe ni un porcentaje desde 0.",
+          "limitShareAboveHundred": "Un límite en porcentaje no puede superar el 100 %.",
+          "limitMinAboveMax": "El mínimo supera el máximo.",
+          "limitShareMinimumsAboveHundred": "Los mínimos en porcentaje suman más del 100 %: {assets}.",
+          "positionQuantityInvalid": "La cantidad de una posición está vacía, no es un número o es menor que cero.",
+          "fidelityCustomMissing": "«Personalizada»: escribe cuánto aceptas gastar para la fila de referencia, una cifra mayor que cero."
         },
         "removal": {
           "cash": "Fila de efectivo {broker} · {currency}",
@@ -477,8 +494,11 @@
               "optimalProven": "El solver demostró que no existe un plan mejor, objetivo por objetivo en el orden elegido en Estrategia, y la verificación exacta del plan coincide con sus cifras. La prueba vale dentro del pequeño margen de cálculo del solver, que crece con los importes.",
               "completed": "El solver terminó la búsqueda por sí mismo, sin alcanzar ningún límite.",
               "timeLimit": "El solver alcanzó su límite de tiempo antes de terminar la búsqueda.",
-              "nodeLimit": "El solver alcanzó su límite de nodos, el número de intentos que puede hacer, antes de terminar la búsqueda."
-            }
+              "nodeLimit": "El solver alcanzó su límite de nodos, el número de intentos que puede hacer, antes de terminar la búsqueda.",
+              "margin": "The best possible plan should be at most {margin} better than this one: the solver's own bounds say so, and they are not a proof."
+            },
+            "notProvenWithin": "Local optimum (within {margin})",
+            "noPlanNotProven": "Optimalidad no demostrada"
           },
           "collapseAll": "Contraer todo",
           "detail": {
@@ -494,7 +514,7 @@
             "marginCost": "Coste del margen",
             "midPrice": "Precio mid",
             "midValue": "Valor mid",
-            "minimumFacts": "si está activa {ifActive} · obligatorio {required}",
+            "minimumFacts": "si está activa {ifActive}",
             "minimums": "Mínimos",
             "quantityEstimated": "{quantity} {count, plural, one {título (estimado)} other {títulos (estimados)}}",
             "quantityExact": "{quantity} {count, plural, one {título (exacto)} other {títulos (exactos)}}",
@@ -669,7 +689,8 @@
               "deposit": "Realiza la aportación «{source}» de {amount} en el bróker «{destination}»",
               "transfer": "Transfiere {amount} desde «{source}» al bróker «{destination}»",
               "cash": "Usa {amount} del efectivo disponible en el bróker «{source}»"
-            }
+            },
+            "automaticConversionNote": "{brokers} convierte la divisa en cada compra. El plan cuenta una sola conversión por par de divisas: el bróker puede redondear cada orden por separado, con unos céntimos de diferencia por orden."
           },
           "platform": {
             "draftIntact": "El borrador está intacto.",
@@ -689,7 +710,9 @@
             "proof": "Prueba",
             "reasons": {
               "allocation": {
-                "exact_proof_not_established": "no se ha establecido una prueba exacta"
+                "exact_proof_not_established": "no se ha establecido una prueba exacta",
+                "proof_not_confirmed": "no second search confirmed the proof",
+                "limits_leave_no_rounding_room": "the limits leave no room for rounding"
               },
               "portfolio_rebalancer": {
                 "sell_irreducibility_unresolved": "no se ha establecido que ninguna venta pueda eliminarse"
@@ -718,7 +741,9 @@
               "dual": "La cota que demostró el solver para esta etapa: ninguno de los planes que buscó puede hacerlo mejor. A partir de la segunda etapa, solo buscó entre los planes tan buenos como el elegido en las etapas anteriores.",
               "absoluteGap": "Distancia entre los dos valores. Una brecha de 0 demuestra el mejor valor solo si la etapa está terminada.",
               "relativeGap": "La misma distancia, como fracción del valor."
-            }
+            },
+            "notConfirmed": "One search ended on this plan, but no second search confirmed it: it is the best plan found, not a proven one.",
+            "limitsLeaveNoRoundingRoom": "The limits leave no room for rounding, so the plan was found counting the rounding in its favour. It respects the limits once any top-up shown is added, but it is not proven to be the best."
           },
           "reasons": {
             "allocation": {
@@ -744,20 +769,25 @@
               "body": "Demostrado: ninguna combinación cumple a la vez todas las restricciones estrictas.",
               "constraints": "Restricciones estrictas implicadas (de la solicitud; topes y mínimos ocultos con la privacidad activada):",
               "funding": "Liquidez alcanzable: {amount}",
-              "minimum": "{asset} · {broker}: mínimo obligatorio {minimum}",
               "note": "La interfaz no elige qué restricción relajar: las enumera. Ningún plan parcial se muestra como válido.",
-              "title": "Inviable con estas restricciones"
+              "title": "Inviable con estas restricciones",
+              "limitsTitle": "Ninguna solución con estos límites",
+              "limitsBody": "Sin los límites existe un plan: son ellos los que lo excluyen. Revísalos:",
+              "limitMinimum": "mínimo {value}",
+              "limitMaximum": "máximo {value}"
             },
             "limit": {
               "complete": "El resultado de abajo sigue completo y consultable.",
               "node": "El solver se detuvo en el límite de nodos con un plan válido. Puede existir uno mejor.",
               "stages": "Etapas: {finished} terminadas · {unfinished} sin terminar · ninguna brecha certificada.",
-              "time": "El solver se detuvo en el límite de tiempo con un plan válido. Puede existir uno mejor."
+              "time": "El solver se detuvo en el límite de tiempo con un plan válido. Puede existir uno mejor.",
+              "solverError": "The solver stopped on a numerical error with a valid plan. A better one may exist."
             },
             "noIncumbent": {
               "body": "El solver no encontró ningún plan antes del límite. No es una prueba de que no exista ningún plan.",
               "tips": "Para reducir la búsqueda: menos activos o rutas, topes más ajustados, pasos más grandes.",
-              "title": "Ningún plan dentro de los límites"
+              "title": "Ningún plan dentro de los límites",
+              "completedBody": "The search ended without a plan that can be carried out within these limits. This is not a proof that no plan exists."
             },
             "noOp": {
               "body": "Con {amount} ninguna compra cumple las restricciones: el plan es no hacer nada.",
@@ -833,19 +863,17 @@
           "ordersIn": "Órdenes en",
           "externalAccount": "Cuenta externa",
           "noOrdersHint": "El cálculo no envía ninguna orden a los brókeres.",
-          "factsToggle": "Datos del cálculo ({count})"
+          "factsToggle": "Datos del cálculo ({count})",
+          "limited": "{count, plural, =0 {} one { · # con un límite} other { · # con límites}}"
         },
         "route": {
           "cap": "Compra máxima",
           "margin": "Margen sobre el precio",
           "minimumIfActive": "Compra mínima",
           "priority": "Prioridad",
-          "requiredMinimum": "Compra obligatoria",
           "modeLine": "{kind} · Incremento: {step} · Comisión de compra: {fee}",
           "minimumNone": "sin mínimo",
-          "requiredNone": "sin obligación",
-          "minimumHelp": "Si el plan compra aquí, compra al menos esto. Vacío = basta el incremento del bróker. Útil cuando una compra pequeña haría pesar demasiado la comisión.",
-          "requiredHelp": "El plan compra aquí al menos esto, pase lo que pase. Si los recursos no bastan, el plan se vuelve imposible. Vacío = sin obligación.",
+          "minimumHelp": "Solo vale si el plan compra en esta ruta: entonces compra al menos esto. Vacío = basta el incremento del bróker. Útil cuando una compra pequeña haría pesar demasiado la comisión. Para obligar una compra, fija un mínimo en el objetivo del activo.",
           "capHelp": "Lo máximo que el plan puede comprar de este activo en este bróker. Vacío = sin límite propio: el plan nunca compra más que la liquidez que puede llegar a este bróker. Rellénalo para detener las compras aquí a partir de cierto tamaño.",
           "priorityHelp": "Solo cuenta entre planes que se acercan igual al objetivo: entre ellos, se prefiere comprar en los brókeres con el número más bajo. Pesa más que las comisiones: para que decida el coste, déjalos todos en 0. Todos en 0 = sin preferencia.",
           "marginHelp": "Cada compra se calcula a precio × (1 + margen), para cubrir un precio que sube antes de la orden. Ejemplo: 0,5 % sobre 100 → 100,50. La diferencia es una reserva para la subida: no cuenta como invertida.",
@@ -936,7 +964,8 @@
           "toggle": "Resumen",
           "total": "Total (control)",
           "versions": "Backend/API {api} · UI {ui}",
-          "rates": "Tipos"
+          "rates": "Tipos",
+          "limits": "Con un límite"
         },
         "targets": {
           "copyDistribution": "Copiar la distribución actual",
@@ -951,7 +980,22 @@
           "balance": "Equilibrar al 100 %",
           "totalHelp": "Los objetivos reparten entre los activos el dinero que inviertes ahora, efectivo y aportaciones incluidos: para calcular deben sumar exactamente el 100 %. «Equilibrar todo» reescala todos los objetivos manteniendo sus proporciones (partes iguales si todos están a 0). Marca algunas filas para reescalar solo esas, con «Equilibrar las filas seleccionadas al 100 %». «Equilibrar al 100 %» en una fila da a ese activo lo que falta, o quita el exceso.",
           "balanceAll": "Equilibrar todo",
-          "balanceSelected": "Equilibrar las filas seleccionadas al 100 %"
+          "balanceSelected": "Equilibrar las filas seleccionadas al 100 %",
+          "limits": "Límites",
+          "limitsHelp": "Mínimo y máximo del valor de este Activo al final del plan. Escribe un importe en la divisa de valoración (500) o un porcentaje del total del plan (35 %): el total es el dinero que inviertes ahora. Campo vacío = sin límite.",
+          "limitMinimum": "mín",
+          "limitMaximum": "máx",
+          "limitMinimumLabel": "Mínimo de {asset}",
+          "limitMaximumLabel": "Máximo de {asset}",
+          "limitsNote": "Límites sobre el valor al final del plan. Escribe un importe (500) o un porcentaje del total (35 %). Campo vacío = sin límite.",
+          "limitsCheck": "Revisa los límites",
+          "limitMinAboveMax": "El mínimo ({minimum}) supera el máximo ({maximum}).",
+          "limitsNoteTotal": "Límites del valor al final del plan. Escribe un importe (500) o un porcentaje (35%) del total, el dinero que inviertes ahora: {total}. Campo vacío = ningún límite.",
+          "previewIncomplete": "Las cifras de hoy aparecen cuando ningún campo del borrador está marcado en rojo, en ningún paso.",
+          "previewUnavailable": "Las cifras de hoy no están disponibles ahora; el cálculo no se ve afectado.",
+          "addCashHelp": "El efectivo de un bróker en una divisa se convierte en una fila de los objetivos solo con límites: cuánto debe quedar como mínimo, o como máximo, al final del plan. No tiene objetivo y no cuenta en el total.",
+          "balanceNotNumber": "Un objetivo no es un número",
+          "balanceNoRoom": "Las filas no seleccionadas ya suman el 100 % o más: redúcelas, o selecciónalas."
         },
         "toolErrors": {
           "cleanup_failed": "El cálculo terminó, pero la plataforma no pudo limpiar después.",
@@ -987,7 +1031,9 @@
             "fx": "{count, plural, one {# tipo de cambio actualizado} other {# tipos de cambio actualizados}}",
             "cash": "{count, plural, one {# saldo actualizado} other {# saldos actualizados}}",
             "unchanged": "ningún valor ha cambiado",
-            "missing": "No encontrados, se mantiene el valor copiado: {names}."
+            "missing": "No encontrados, se mantiene el valor copiado: {names}.",
+            "positions": "{count, plural, one {# posición actualizada} other {# posiciones actualizadas}}",
+            "positionsClosed": "{count, plural, one {# posición cerrada} other {# posiciones cerradas}}"
           }
         },
         "ownedAssets": {
@@ -1024,6 +1070,13 @@
         "policyScope": {
           "proportional": "Solo compras: no vende nada."
         }
+      },
+      "progress": {
+        "validate": "Compruebo los datos",
+        "model": "Construyo el modelo",
+        "search": "Busco el plan",
+        "verify": "Verifico las cuentas",
+        "report": "Preparo el resultado"
       }
     }
   }

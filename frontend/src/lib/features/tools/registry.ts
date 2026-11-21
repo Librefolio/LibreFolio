@@ -238,10 +238,16 @@ export function createToolRendererRegistry(registrations: readonly CompiledToolR
 }
 
 const compiledRendererRegistrations: readonly CompiledToolRendererRegistration[] = [
-    defineToolRenderer('pac_allocator', '1.0.0', {
+    defineToolRenderer('pac_allocator', '2.0.0', {
         componentKey: 'pac-allocator',
-        uiVersion: '1.0.0',
+        uiVersion: '2.0.0',
         load: () => import('./pac-allocator/planner/PacPlannerTool.svelte'),
+    }),
+    // F3a of project 67: the Rebalancer, the same planner under its own profile; key and UI version as its plugin declares them.
+    defineToolRenderer('portfolio_rebalancer', '2.0.0', {
+        componentKey: 'portfolio-rebalancer',
+        uiVersion: '1.0.0',
+        load: () => import('./portfolio-rebalancer/RebalancerPlannerTool.svelte'),
     }),
 ];
 const compiledRegistry = createToolRendererRegistry(compiledRendererRegistrations);

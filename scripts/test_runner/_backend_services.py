@@ -71,15 +71,23 @@ PROVIDER_ERROR_TEST_PATHS = (
     "backend/test_scripts/test_services/test_fx_banxico.py",
     "backend/test_scripts/test_services/test_fx_bcb.py",
     "backend/test_scripts/test_services/test_fx_cbc.py",
+    "backend/test_scripts/test_services/test_fx_cbk.py",
     "backend/test_scripts/test_services/test_fx_cbn.py",
+    "backend/test_scripts/test_services/test_fx_bcra.py",
     "backend/test_scripts/test_services/test_fx_bcrp.py",
     "backend/test_scripts/test_services/test_fx_bdi.py",
+    "backend/test_scripts/test_services/test_fx_bnr.py",
     "backend/test_scripts/test_services/test_fx_boc.py",
     "backend/test_scripts/test_services/test_fx_boe_quotes.py",
+    "backend/test_scripts/test_services/test_fx_bog.py",
+    "backend/test_scripts/test_services/test_fx_boi.py",
+    "backend/test_scripts/test_services/test_fx_bok.py",
     "backend/test_scripts/test_services/test_fx_cnb.py",
     "backend/test_scripts/test_services/test_fx_fed_quotes.py",
+    "backend/test_scripts/test_services/test_fx_nbp.py",
     "backend/test_scripts/test_services/test_fx_nbu.py",
     "backend/test_scripts/test_services/test_fx_norges.py",
+    "backend/test_scripts/test_services/test_fx_rbi.py",
     "backend/test_scripts/test_services/test_fx_sarb.py",
     "backend/test_scripts/test_services/test_fx_trm.py",
     "backend/test_scripts/test_services/test_justetf_errors.py",
@@ -125,6 +133,13 @@ PAC_PLANNER_PROOF_TEST_PATH = "backend/test_scripts/test_services/test_pac_plann
 PAC_PLANNER_WIRE_NUMBERS_TEST_PATH = "backend/test_scripts/test_services/test_pac_planner_wire_numbers.py"
 PAC_PLANNER_REPORT_TEST_PATH = "backend/test_scripts/test_services/test_pac_planner_report.py"
 PAC_PLANNER_SERVICE_TEST_PATH = "backend/test_scripts/test_services/test_pac_planner_planner.py"
+PAC_PLANNER_SEQUENCE_TEST_PATH = "backend/test_scripts/test_services/test_pac_planner_plan_sequence.py"
+PAC_PLANNER_CASH_RULE_TEST_PATH = "backend/test_scripts/test_services/test_pac_planner_cash_rule.py"
+PAC_PLANNER_SEEDS_TEST_PATH = "backend/test_scripts/test_services/test_pac_planner_seeds.py"
+PAC_PLANNER_CENTS_OUTSIDE_TEST_PATH = "backend/test_scripts/test_services/test_pac_planner_cents_outside.py"
+PAC_PLANNER_SOUNDNESS_TEST_PATH = "backend/test_scripts/test_services/test_pac_planner_soundness.py"
+PAC_PLANNER_PREVIEW_TEST_PATH = "backend/test_scripts/test_services/test_pac_planner_preview.py"
+PAC_PLANNER_REFERENCE_TEST_PATH = "backend/test_scripts/test_services/test_pac_planner_reference.py"
 
 
 def services_pac_planner_core(verbose: bool = False, test_names: list = None) -> bool:
@@ -185,11 +200,60 @@ def services_pac_planner_report(verbose: bool = False, test_names: list = None) 
     return run_command(cmd, "PAC/Rebalancer wire projection tests", verbose=verbose)
 
 
+def services_pac_planner_soundness(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the distance's writing: one variable under every square, and the G5 seed that misled SCIP's cuts."""
+    print_section("Services: Rebalancer Distance Soundness")
+    cmd = _build_pytest_cmd(PAC_PLANNER_SOUNDNESS_TEST_PATH, test_names)
+    return run_command(cmd, "Rebalancer distance soundness tests", verbose=verbose)
+
+
+def services_pac_planner_sequence(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the plan's step counter: an order the balances can follow, checked on the engine's own plans."""
+    print_section("Services: PAC/Rebalancer Step Counter")
+    cmd = _build_pytest_cmd(PAC_PLANNER_SEQUENCE_TEST_PATH, test_names)
+    return run_command(cmd, "PAC/Rebalancer step counter tests", verbose=verbose)
+
+
+def services_pac_planner_cash_rule(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the Rebalancer's cash rule: no cash goes round, converted money never travels, transfers read off the balances."""
+    print_section("Services: Rebalancer Cash Rule")
+    cmd = _build_pytest_cmd(PAC_PLANNER_CASH_RULE_TEST_PATH, test_names)
+    return run_command(cmd, "Rebalancer cash rule tests", verbose=verbose)
+
+
+def services_pac_planner_seeds(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the Rebalancer's seeded runs: three runs in processes, their outcome, the rule that reads them."""
+    print_section("Services: Rebalancer Seeded Runs")
+    cmd = _build_pytest_cmd(PAC_PLANNER_SEEDS_TEST_PATH, test_names)
+    return run_command(cmd, "Rebalancer seeded runs tests", verbose=verbose)
+
+
+def services_pac_planner_cents_outside(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the Rebalancer's continuous money: no rounding variable, the solver's view equal to SCIP's, the published values kept."""
+    print_section("Services: Rebalancer Cents Outside the Solver")
+    cmd = _build_pytest_cmd(PAC_PLANNER_CENTS_OUTSIDE_TEST_PATH, test_names)
+    return run_command(cmd, "Rebalancer cents outside the solver tests", verbose=verbose)
+
+
 def services_pac_planner_service(verbose: bool = False, test_names: list = None) -> bool:
     """Test the plan orchestration end to end, from a wire request to a wire result."""
     print_section("Services: PAC/Rebalancer Plan Orchestration")
     cmd = _build_pytest_cmd(PAC_PLANNER_SERVICE_TEST_PATH, test_names)
     return run_command(cmd, "PAC/Rebalancer plan orchestration tests", verbose=verbose)
+
+
+def services_pac_planner_preview(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the scenario preview of both Tools: the total, today's items, the table «maximum acceptable cost», no SCIP."""
+    print_section("Services: PAC/Rebalancer Scenario Preview")
+    cmd = _build_pytest_cmd(PAC_PLANNER_PREVIEW_TEST_PATH, test_names)
+    return run_command(cmd, "PAC/Rebalancer scenario preview tests", verbose=verbose)
+
+
+def services_pac_planner_reference(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the PAC's reference values: the comparison rules R1-R7 and every corpus case planned against the recorded file."""
+    print_section("Services: PAC Reference Values")
+    cmd = _build_pytest_cmd(PAC_PLANNER_REFERENCE_TEST_PATH, test_names)
+    return run_command(cmd, "PAC reference values tests", verbose=verbose)
 
 
 def services_fx_conversion(verbose: bool = False, test_names: list = None) -> bool:
@@ -579,6 +643,14 @@ def services_coingecko_search(verbose: bool = False, test_names: list = None) ->
     print_info("Testing: asset_source_providers/coingecko/plugin.py (search, fetch_asset_metadata, get_asset_url), db/models.py ProviderInputType.COINGECKO_ID, assets/base.py")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_coingecko_search.py", test_names)
     return run_command(cmd, "CoinGecko search tests", verbose=verbose)
+
+
+def services_search_result_icon(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the icon a search result may carry (project 76, S3)."""
+    print_section("Services: Search Result Icon")
+    print_info("Testing: schemas/provider.py FAProviderSearchResultItem.icon_url, assets/search.py (search and search_stream)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_search_result_icon.py", test_names)
+    return run_command(cmd, "Search result icon tests", verbose=verbose)
 
 
 def services_refresh_history_starts(verbose: bool = False, test_names: list = None) -> bool:
@@ -1417,8 +1489,8 @@ def services_brim_create_transaction(verbose: bool = False, test_names: list = N
 def services_financial_math(verbose: bool = False, test_names: list = None) -> bool:
     """Test the financial_math layer: average cost, native cash, returns, periods, ledger control totals, and the boundaries of the whole layer."""
     print_section("Services: Financial Math (average cost, native cash, returns, periods, ledger totals, layer boundaries)")
-    print_info("Testing: backend/app/services/financial_math/ (average_cost.py, native_cash.py, returns.py, portfolio/period.py, ledger_totals.py; imports and packages of every module)")
-    print_info("Tests: average costs and cost movements, native cash and cash movements, the first negative cash day (first_negative_cash), effective share, exchange results, rebasing and ratios, the verified MWRR root, periods and unit costs, control totals, layer boundaries")
+    print_info("Testing: backend/app/services/financial_math/ (average_cost.py, native_cash.py, returns.py, portfolio/period.py, ledger_totals.py, fees.py; imports and packages of every module)")
+    print_info("Tests: average costs and cost movements, native cash and cash movements, the first negative cash day (first_negative_cash), effective share, exchange results, rebasing and ratios, the verified MWRR root, periods and unit costs, control totals, fees, layer boundaries")
     print_info("Pure — convert_bulk is stubbed: no server, no shared DB (the ledger totals read private SQLite files under tmp_path)")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_financial_math/", test_names)
@@ -2215,6 +2287,14 @@ def services_enricher_borsa_italiana(verbose: bool = False, test_names: list = N
     return run_command(cmd, "Enricher Borsa Italiana tests", verbose=verbose)
 
 
+def services_enricher_esma(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the ESMA enricher: declarations, the CFI code and the register's fields to stored forms, not found, recognize, read (plan 68, lot C4b)."""
+    print_section("Services: Enricher ESMA")
+    print_info("Testing: backend/app/services/enricher_providers/esma/plugin.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_enricher_esma.py", test_names)
+    return run_command(cmd, "Enricher ESMA tests", verbose=verbose)
+
+
 def services_enricher_yahoo(verbose: bool = False, test_names: list = None) -> bool:
     """Test the Yahoo Finance enricher: declarations, info and fund data to stored forms, not found, recognize, read (plan 68, lot C3)."""
     print_section("Services: Enricher Yahoo Finance")
@@ -2972,6 +3052,46 @@ Note: No backend server required.
     )
     add_test(
         cat,
+        "pac-planner-soundness",
+        services_pac_planner_soundness,
+        name="Rebalancer Distance Soundness",
+        desc="Every square of the Rebalancer's distance holds one variable; the G5 seed whose cuts excluded better plans no longer bounds the score above a valid plan",
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "pac-planner-sequence",
+        services_pac_planner_sequence,
+        name="PAC/Rebalancer Step Counter",
+        desc="The plan's steps numbered in an order the balances can follow; the invariant replayed on the engine's own plans (G5, a PAC deposit and exchange)",
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "pac-planner-seeds",
+        services_pac_planner_seeds,
+        name="Rebalancer Seeded Runs",
+        desc="Three runs with their own seeds, in processes (forked) or in process; a run that fails or overruns is a run with no result; the lowest plan, proven only when two runs closed on it",
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "pac-planner-cash-rule",
+        services_pac_planner_cash_rule,
+        name="Rebalancer Cash Rule",
+        desc="One signed balance per cash cell: a cell that receives sends nothing, converted money never travels, the transfers derived from the balances; the PAC unchanged",
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "pac-planner-cents-outside",
+        services_pac_planner_cents_outside,
+        name="Rebalancer Cents Outside the Solver",
+        desc="The Rebalancer's money continuous in the model, each posting less its reserve: no rounding variable, SCIP's value equal to the replay's view, the published values unchanged, G5 closing with no anomaly",
+        isolation="pure",
+    )
+    add_test(
+        cat,
         "pac-planner-report",
         services_pac_planner_report,
         name="PAC/Rebalancer Wire Projection",
@@ -2983,7 +3103,23 @@ Note: No backend server required.
         "pac-planner-service",
         services_pac_planner_service,
         name="PAC/Rebalancer Plan Orchestration",
-        desc="plan_pac_allocation end to end: ready states, failure availabilities, solver-status proofs, no domain enumeration, test-only oracle and SCIP import isolation",
+        desc="plan_pac_allocation and plan_rebalancing end to end: ready states, failure availabilities, solver-status proofs, no domain enumeration, test-only oracle and SCIP import isolation",
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "pac-planner-preview",
+        services_pac_planner_preview,
+        name="PAC/Rebalancer Scenario Preview",
+        desc="preview_pac_allocation and preview_rebalancing: the plan's total, today's items on F, the table «maximum acceptable cost» and the custom fidelity both ways, exact, without SCIP",
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "pac-planner-reference",
+        services_pac_planner_reference,
+        name="PAC Reference Values",
+        desc="The plans the PAC published before the planner became general, frozen in a file (written once by diagnostics/pac_reference_recorder.py), and the rules R1-R7 that hold later plans to them: no worse objective vector, no more conversions, no new pair, differences only in a file of accepted ones; every corpus case replanned in the Tool's engine window",
         isolation="pure",
     )
     add_test(cat, "asset-source", services_asset_source, name="Asset Source", desc="Provider assignment, synthetic yield")
@@ -3197,6 +3333,16 @@ Note: No backend server required.
         desc="P3: the id travels as COINGECKO_ID, reaching the plugin as OTHER (the reverse map unchanged); search asks /search, coins only by market cap rank (no rank last, in order), rows OTHER, Name (SYMBOL), CRYPTO, the preferred currency as currency and vs_currency, a blank query asks nothing; metadata from /coins/{id} with the P0 flags: name, CRYPTO, logo, the symbol as ticker (left out when too long), coingecko:<id> among the other identifiers; the page; search on, NOT_CONFIGURED without a key; the real path: COINGECKO_ID saved and kept, OTHER received, prices stored, a service search counted on the group",
         # PURE: the real coingecko-sdk on an httpx.MockTransport (the P0 recordings); private SQLite files behind the
         # settings, the counter and the session; no shared database, no server.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "search-result-icon",
+        services_search_result_icon,
+        name="Search Result Icon",
+        desc="S3: a search result's optional icon_url, from the plugin's dict, in the plain and the streamed search: http(s) and local paths kept, any other scheme, a blank or a non-string dropped quietly, every result kept",
+        # PURE: the providers are in-process doubles handed out by AssetProviderRegistry (as quote-base-suggestion's),
+        # pauses on a private fake clock; no lane DB, no server, no network.
         isolation="pure",
     )
     add_test(
@@ -4565,6 +4711,16 @@ Note: No backend server required.
         services_enricher_justetf,
         name="Enricher justETF",
         desc="Plan 68 C1: JustETFEnricher declarations (justetf, PRICE_SOURCE, ISIN, ETF family + COMMODITY at 10, 13 voices (legal_form only where an ETC or ETN can sit), not test-only, pause_seconds > 0); recorded overviews (SWDA, VWCE, bond, hedged, gold ETC) mapped to stored forms through the real catalogue (TER and weights as fractions, fund size millions EUR, replication/distribution/legal-form codes, domicile ISO3, English dates, «Other» kept, sectors helper first then the justETF table, holdings date on countries and sectors); synthetic sheets for every replication text, unknown texts absent and logged, ETC/ETN etc_etn, ETF absent, TER 0; empty «ETF Screener» sheet not found; recognize (non-ISIN no call, 429 raises); read per binding (error isolated, 429 RATE_LIMITED for the rest without a call); search over load_overview",
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "enricher-esma",
+        services_enricher_esma,
+        name="Enricher ESMA",
+        desc="Plan 68 C4b: EsmaEnricher on esma-registers (FIRDS by ISIN): declarations (esma, OPEN, ISIN, degree 30 for STOCK, BOND, FUND, COMMODITY and the ETF family, None for the rest; no params, no search, no page); the CFI code to legal_form (ES share, DB bond, EY etc_etn, no UCITS guess for C), a bond's coupon_type (F/V/Z), issuer_type (T sovereign, C supranational), maturity and the coupon rate only for a fixed rate (BTP Italia's period coupon never), a fund's distribution policy (G/I); the LEI for every instrument and as recognize's identifier; recorded answers (Enel, BTP 2072, BTP Italia, a corporate bond, SWDA, an ETC, a fund the register lacks) replayed through the library's real reduction; not found; a refusal RATE_LIMITED with its retry_after and for the rest without a call; one module-level pace",
+        # PURE: the plugin's find_instrument is the library's real one on a fake transport that fails the test on any
+        # ISIN not offered; no database, no server, no network.
         isolation="pure",
     )
     add_test(

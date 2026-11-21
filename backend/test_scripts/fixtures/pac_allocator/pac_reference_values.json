@@ -1,0 +1,2391 @@
+{
+  "cases": {
+    "fx-chf-funds-usd-implied": {
+      "accounting": {
+        "economic_losses": "0",
+        "final_invested": "22000/217",
+        "free_cash": "4611/1000",
+        "rounding_delta": "1413/217000",
+        "shortfall": "1002/217"
+      },
+      "asset_target_values": {
+        "asset-1": "106"
+      },
+      "cells": {
+        "broker-one|CHF": {
+          "final_spendable": "0",
+          "fx_credit": "0",
+          "fx_debit": "1913/20"
+        },
+        "broker-one|USD": {
+          "final_spendable": "0",
+          "fx_credit": "110",
+          "fx_debit": "0"
+        }
+      },
+      "conversions": {
+        "broker-one|CHF|USD": {
+          "credit": "110",
+          "debit": "1913/20",
+          "spread_loss": "0"
+        }
+      },
+      "costs": {
+        "broker_withheld_tax": "0",
+        "buy_fees": "0",
+        "execution_margin_cost": "0",
+        "fx_spread_loss": "0",
+        "self_reserved_tax": "0",
+        "sell_fees": "0"
+      },
+      "fundings": {
+        "funding-ext-broker-one": "1913/20"
+      },
+      "fx_actions_per_pair": {
+        "broker-one|CHF|USD": 1
+      },
+      "minor_units": {
+        "CHF": "1/100",
+        "EUR": "1/100",
+        "USD": "1/100"
+      },
+      "objective_vector": [
+        "1004004/47089",
+        "1002/217",
+        "2",
+        "0",
+        "1"
+      ],
+      "orders": {
+        "route-asset-1-buy": {
+          "asset_id": "asset-1",
+          "broker_id": "broker-one",
+          "cash_debit": "110",
+          "fee": "0",
+          "quantity": "11"
+        }
+      },
+      "proof_kind": "optimal_proven",
+      "references": {
+        "fixed_reference": "106",
+        "reachable_funding": "106",
+        "selected_funding": "106",
+        "trapped_funding": "0"
+      },
+      "rounding_top_ups": 0,
+      "state": "ready_incumbent",
+      "stop_reason": "completed",
+      "uses_required_minimum": false,
+      "valuation_rates": {
+        "CHF": "53/50",
+        "EUR": "1",
+        "USD": "200/217"
+      }
+    },
+    "fx-chf-funds-usd-spread": {
+      "accounting": {
+        "economic_losses": "5253/35000",
+        "final_invested": "22000/217",
+        "free_cash": "22313/5000",
+        "rounding_delta": "187/38750",
+        "shortfall": "1002/217"
+      },
+      "asset_target_values": {
+        "asset-1": "106"
+      },
+      "cells": {
+        "broker-one|CHF": {
+          "final_spendable": "0",
+          "fx_credit": "0",
+          "fx_debit": "9579/100"
+        },
+        "broker-one|USD": {
+          "final_spendable": "0",
+          "fx_credit": "110",
+          "fx_debit": "0"
+        }
+      },
+      "conversions": {
+        "broker-one|CHF|USD": {
+          "credit": "110",
+          "debit": "9579/100",
+          "spread_loss": "5253/35000"
+        }
+      },
+      "costs": {
+        "broker_withheld_tax": "0",
+        "buy_fees": "0",
+        "execution_margin_cost": "0",
+        "fx_spread_loss": "5253/35000",
+        "self_reserved_tax": "0",
+        "sell_fees": "0"
+      },
+      "fundings": {
+        "funding-ext-broker-one": "9579/100"
+      },
+      "fx_actions_per_pair": {
+        "broker-one|CHF|USD": 1
+      },
+      "minor_units": {
+        "CHF": "1/100",
+        "EUR": "1/100",
+        "USD": "1/100"
+      },
+      "objective_vector": [
+        "1004004/47089",
+        "1002/217",
+        "2",
+        "5253/35000",
+        "1"
+      ],
+      "orders": {
+        "route-asset-1-buy": {
+          "asset_id": "asset-1",
+          "broker_id": "broker-one",
+          "cash_debit": "110",
+          "fee": "0",
+          "quantity": "11"
+        }
+      },
+      "proof_kind": "optimal_proven",
+      "references": {
+        "fixed_reference": "106",
+        "reachable_funding": "106",
+        "selected_funding": "106",
+        "trapped_funding": "0"
+      },
+      "rounding_top_ups": 0,
+      "state": "ready_incumbent",
+      "stop_reason": "completed",
+      "uses_required_minimum": false,
+      "valuation_rates": {
+        "CHF": "53/50",
+        "EUR": "1",
+        "USD": "200/217"
+      }
+    },
+    "fx-eur-funds-usd": {
+      "accounting": {
+        "economic_losses": "0",
+        "final_invested": "2860/31",
+        "free_cash": "387/50",
+        "rounding_delta": "3/1550",
+        "shortfall": "240/31"
+      },
+      "asset_target_values": {
+        "asset-1": "100"
+      },
+      "cells": {
+        "broker-one|EUR": {
+          "final_spendable": "0",
+          "fx_credit": "0",
+          "fx_debit": "4613/50"
+        },
+        "broker-one|USD": {
+          "final_spendable": "0",
+          "fx_credit": "1001/10",
+          "fx_debit": "0"
+        }
+      },
+      "conversions": {
+        "broker-one|EUR|USD": {
+          "credit": "1001/10",
+          "debit": "4613/50",
+          "spread_loss": "0"
+        }
+      },
+      "costs": {
+        "broker_withheld_tax": "0",
+        "buy_fees": "0",
+        "execution_margin_cost": "0",
+        "fx_spread_loss": "0",
+        "self_reserved_tax": "0",
+        "sell_fees": "0"
+      },
+      "fundings": {
+        "funding-ext-broker-one": "4613/50"
+      },
+      "fx_actions_per_pair": {
+        "broker-one|EUR|USD": 1
+      },
+      "minor_units": {
+        "EUR": "1/100",
+        "USD": "1/100"
+      },
+      "objective_vector": [
+        "57600/961",
+        "240/31",
+        "2",
+        "0",
+        "1"
+      ],
+      "orders": {
+        "route-asset-1-buy": {
+          "asset_id": "asset-1",
+          "broker_id": "broker-one",
+          "cash_debit": "1001/10",
+          "fee": "0",
+          "quantity": "10"
+        }
+      },
+      "proof_kind": "optimal_proven",
+      "references": {
+        "fixed_reference": "100",
+        "reachable_funding": "100",
+        "selected_funding": "100",
+        "trapped_funding": "0"
+      },
+      "rounding_top_ups": 0,
+      "state": "ready_incumbent",
+      "stop_reason": "completed",
+      "uses_required_minimum": false,
+      "valuation_rates": {
+        "EUR": "1",
+        "USD": "200/217"
+      }
+    },
+    "fx-usd-funds-eur": {
+      "accounting": {
+        "economic_losses": "0",
+        "final_invested": "9009/100",
+        "free_cash": "450/217",
+        "rounding_delta": "47/21700",
+        "shortfall": "45047/21700"
+      },
+      "asset_target_values": {
+        "asset-1": "20000/217"
+      },
+      "cells": {
+        "broker-one|EUR": {
+          "final_spendable": "0",
+          "fx_credit": "9009/100",
+          "fx_debit": "0"
+        },
+        "broker-one|USD": {
+          "final_spendable": "0",
+          "fx_credit": "0",
+          "fx_debit": "391/4"
+        }
+      },
+      "conversions": {
+        "broker-one|USD|EUR": {
+          "credit": "9009/100",
+          "debit": "391/4",
+          "spread_loss": "0"
+        }
+      },
+      "costs": {
+        "broker_withheld_tax": "0",
+        "buy_fees": "0",
+        "execution_margin_cost": "0",
+        "fx_spread_loss": "0",
+        "self_reserved_tax": "0",
+        "sell_fees": "0"
+      },
+      "fundings": {
+        "funding-ext-broker-one": "391/4"
+      },
+      "fx_actions_per_pair": {
+        "broker-one|USD|EUR": 1
+      },
+      "minor_units": {
+        "EUR": "1/100",
+        "USD": "1/100"
+      },
+      "objective_vector": [
+        "2029232209/470890000",
+        "45047/21700",
+        "2",
+        "0",
+        "1"
+      ],
+      "orders": {
+        "route-asset-1-buy": {
+          "asset_id": "asset-1",
+          "broker_id": "broker-one",
+          "cash_debit": "9009/100",
+          "fee": "0",
+          "quantity": "9"
+        }
+      },
+      "proof_kind": "optimal_proven",
+      "references": {
+        "fixed_reference": "20000/217",
+        "reachable_funding": "20000/217",
+        "selected_funding": "20000/217",
+        "trapped_funding": "0"
+      },
+      "rounding_top_ups": 0,
+      "state": "ready_incumbent",
+      "stop_reason": "completed",
+      "uses_required_minimum": false,
+      "valuation_rates": {
+        "EUR": "1",
+        "USD": "200/217"
+      }
+    },
+    "fx-usd-funds-eur-spread": {
+      "accounting": {
+        "economic_losses": "4932/5425",
+        "final_invested": "90",
+        "free_cash": "272/217",
+        "rounding_delta": "18/5425",
+        "shortfall": "470/217"
+      },
+      "asset_target_values": {
+        "asset-1": "20000/217"
+      },
+      "cells": {
+        "broker-one|EUR": {
+          "final_spendable": "0",
+          "fx_credit": "90",
+          "fx_debit": "0"
+        },
+        "broker-one|USD": {
+          "final_spendable": "0",
+          "fx_credit": "0",
+          "fx_debit": "2466/25"
+        }
+      },
+      "conversions": {
+        "broker-one|USD|EUR": {
+          "credit": "90",
+          "debit": "2466/25",
+          "spread_loss": "4932/5425"
+        }
+      },
+      "costs": {
+        "broker_withheld_tax": "0",
+        "buy_fees": "0",
+        "execution_margin_cost": "0",
+        "fx_spread_loss": "4932/5425",
+        "self_reserved_tax": "0",
+        "sell_fees": "0"
+      },
+      "fundings": {
+        "funding-ext-broker-one": "2466/25"
+      },
+      "fx_actions_per_pair": {
+        "broker-one|USD|EUR": 1
+      },
+      "minor_units": {
+        "EUR": "1/100",
+        "USD": "1/100"
+      },
+      "objective_vector": [
+        "220900/47089",
+        "470/217",
+        "2",
+        "4932/5425",
+        "1"
+      ],
+      "orders": {
+        "route-asset-1-buy": {
+          "asset_id": "asset-1",
+          "broker_id": "broker-one",
+          "cash_debit": "90",
+          "fee": "0",
+          "quantity": "9"
+        }
+      },
+      "proof_kind": "optimal_proven",
+      "references": {
+        "fixed_reference": "20000/217",
+        "reachable_funding": "20000/217",
+        "selected_funding": "20000/217",
+        "trapped_funding": "0"
+      },
+      "rounding_top_ups": 0,
+      "state": "ready_incumbent",
+      "stop_reason": "completed",
+      "uses_required_minimum": false,
+      "valuation_rates": {
+        "EUR": "1",
+        "USD": "200/217"
+      }
+    },
+    "m-10x1": {
+      "accounting": {
+        "economic_losses": "599/400",
+        "final_invested": "2995/2",
+        "free_cash": "49/50",
+        "rounding_delta": "9/400",
+        "shortfall": "5/2"
+      },
+      "asset_target_values": {
+        "asset-00": "150",
+        "asset-01": "150",
+        "asset-02": "150",
+        "asset-03": "150",
+        "asset-04": "150",
+        "asset-05": "150",
+        "asset-06": "150",
+        "asset-07": "150",
+        "asset-08": "150",
+        "asset-09": "150"
+      },
+      "cells": {
+        "broker-00|EUR": {
+          "final_spendable": "49/50",
+          "fx_credit": "0",
+          "fx_debit": "0"
+        }
+      },
+      "conversions": {},
+      "costs": {
+        "broker_withheld_tax": "0",
+        "buy_fees": "599/400",
+        "execution_margin_cost": "0",
+        "fx_spread_loss": "0",
+        "self_reserved_tax": "0",
+        "sell_fees": "0"
+      },
+      "fundings": {},
+      "fx_actions_per_pair": {},
+      "minor_units": {
+        "EUR": "1/100"
+      },
+      "objective_vector": [
+        "10075/4",
+        "5/2",
+        "10",
+        "599/400",
+        "10"
+      ],
+      "orders": {
+        "route-asset-00-broker-00-buy": {
+          "asset_id": "asset-00",
+          "broker_id": "broker-00",
+          "cash_debit": "160",
+          "fee": "4/25",
+          "quantity": "8"
+        },
+        "route-asset-01-broker-00-buy": {
+          "asset_id": "asset-01",
+          "broker_id": "broker-00",
+          "cash_debit": "275/2",
+          "fee": "7/50",
+          "quantity": "5"
+        },
+        "route-asset-02-broker-00-buy": {
+          "asset_id": "asset-02",
+          "broker_id": "broker-00",
+          "cash_debit": "140",
+          "fee": "7/50",
+          "quantity": "4"
+        },
+        "route-asset-03-broker-00-buy": {
+          "asset_id": "asset-03",
+          "broker_id": "broker-00",
+          "cash_debit": "255/2",
+          "fee": "13/100",
+          "quantity": "3"
+        },
+        "route-asset-04-broker-00-buy": {
+          "asset_id": "asset-04",
+          "broker_id": "broker-00",
+          "cash_debit": "150",
+          "fee": "3/20",
+          "quantity": "3"
+        },
+        "route-asset-05-broker-00-buy": {
+          "asset_id": "asset-05",
+          "broker_id": "broker-00",
+          "cash_debit": "345/2",
+          "fee": "9/50",
+          "quantity": "3"
+        },
+        "route-asset-06-broker-00-buy": {
+          "asset_id": "asset-06",
+          "broker_id": "broker-00",
+          "cash_debit": "130",
+          "fee": "13/100",
+          "quantity": "2"
+        },
+        "route-asset-07-broker-00-buy": {
+          "asset_id": "asset-07",
+          "broker_id": "broker-00",
+          "cash_debit": "145",
+          "fee": "3/20",
+          "quantity": "2"
+        },
+        "route-asset-08-broker-00-buy": {
+          "asset_id": "asset-08",
+          "broker_id": "broker-00",
+          "cash_debit": "160",
+          "fee": "4/25",
+          "quantity": "2"
+        },
+        "route-asset-09-broker-00-buy": {
+          "asset_id": "asset-09",
+          "broker_id": "broker-00",
+          "cash_debit": "175",
+          "fee": "9/50",
+          "quantity": "2"
+        }
+      },
+      "proof_kind": "optimal_proven",
+      "references": {
+        "fixed_reference": "1500",
+        "reachable_funding": "1500",
+        "selected_funding": "1500",
+        "trapped_funding": "0"
+      },
+      "rounding_top_ups": 0,
+      "state": "ready_incumbent",
+      "stop_reason": "completed",
+      "uses_required_minimum": false,
+      "valuation_rates": {
+        "EUR": "1"
+      }
+    },
+    "m-10x2_disjoint": {
+      "accounting": {
+        "economic_losses": "1587/200",
+        "final_invested": "2935",
+        "free_cash": "1426/25",
+        "rounding_delta": "1/40",
+        "shortfall": "65"
+      },
+      "asset_target_values": {
+        "asset-00": "300",
+        "asset-01": "300",
+        "asset-02": "300",
+        "asset-03": "300",
+        "asset-04": "300",
+        "asset-05": "300",
+        "asset-06": "300",
+        "asset-07": "300",
+        "asset-08": "300",
+        "asset-09": "300"
+      },
+      "cells": {
+        "broker-00|EUR": {
+          "final_spendable": "7/2",
+          "fx_credit": "0",
+          "fx_debit": "0"
+        },
+        "broker-01|EUR": {
+          "final_spendable": "2677/50",
+          "fx_credit": "0",
+          "fx_debit": "0"
+        }
+      },
+      "conversions": {},
+      "costs": {
+        "broker_withheld_tax": "0",
+        "buy_fees": "1587/200",
+        "execution_margin_cost": "0",
+        "fx_spread_loss": "0",
+        "self_reserved_tax": "0",
+        "sell_fees": "0"
+      },
+      "fundings": {},
+      "fx_actions_per_pair": {},
+      "minor_units": {
+        "EUR": "1/100"
+      },
+      "objective_vector": [
+        "3900",
+        "65",
+        "15",
+        "1587/200",
+        "10"
+      ],
+      "orders": {
+        "route-asset-00-broker-00-buy": {
+          "asset_id": "asset-00",
+          "broker_id": "broker-00",
+          "cash_debit": "300",
+          "fee": "3/10",
+          "quantity": "15"
+        },
+        "route-asset-01-broker-01-buy": {
+          "asset_id": "asset-01",
+          "broker_id": "broker-01",
+          "cash_debit": "605/2",
+          "fee": "131/100",
+          "quantity": "11"
+        },
+        "route-asset-02-broker-00-buy": {
+          "asset_id": "asset-02",
+          "broker_id": "broker-00",
+          "cash_debit": "315",
+          "fee": "8/25",
+          "quantity": "9"
+        },
+        "route-asset-03-broker-01-buy": {
+          "asset_id": "asset-03",
+          "broker_id": "broker-01",
+          "cash_debit": "595/2",
+          "fee": "13/10",
+          "quantity": "7"
+        },
+        "route-asset-04-broker-00-buy": {
+          "asset_id": "asset-04",
+          "broker_id": "broker-00",
+          "cash_debit": "300",
+          "fee": "3/10",
+          "quantity": "6"
+        },
+        "route-asset-05-broker-01-buy": {
+          "asset_id": "asset-05",
+          "broker_id": "broker-01",
+          "cash_debit": "575/2",
+          "fee": "129/100",
+          "quantity": "5"
+        },
+        "route-asset-06-broker-00-buy": {
+          "asset_id": "asset-06",
+          "broker_id": "broker-00",
+          "cash_debit": "260",
+          "fee": "13/50",
+          "quantity": "4"
+        },
+        "route-asset-07-broker-01-buy": {
+          "asset_id": "asset-07",
+          "broker_id": "broker-01",
+          "cash_debit": "290",
+          "fee": "129/100",
+          "quantity": "4"
+        },
+        "route-asset-08-broker-00-buy": {
+          "asset_id": "asset-08",
+          "broker_id": "broker-00",
+          "cash_debit": "320",
+          "fee": "8/25",
+          "quantity": "4"
+        },
+        "route-asset-09-broker-01-buy": {
+          "asset_id": "asset-09",
+          "broker_id": "broker-01",
+          "cash_debit": "525/2",
+          "fee": "127/100",
+          "quantity": "3"
+        }
+      },
+      "proof_kind": "optimal_proven",
+      "references": {
+        "fixed_reference": "3000",
+        "reachable_funding": "3000",
+        "selected_funding": "3000",
+        "trapped_funding": "0"
+      },
+      "rounding_top_ups": 0,
+      "state": "ready_incumbent",
+      "stop_reason": "completed",
+      "uses_required_minimum": false,
+      "valuation_rates": {
+        "EUR": "1"
+      }
+    },
+    "m-1x2": {
+      "accounting": {
+        "economic_losses": "99/25",
+        "final_invested": "2960",
+        "free_cash": "901/25",
+        "rounding_delta": "0",
+        "shortfall": "40"
+      },
+      "asset_target_values": {
+        "asset-00": "3000"
+      },
+      "cells": {
+        "broker-00|EUR": {
+          "final_spendable": "463/25",
+          "fx_credit": "0",
+          "fx_debit": "0"
+        },
+        "broker-01|EUR": {
+          "final_spendable": "438/25",
+          "fx_credit": "0",
+          "fx_debit": "0"
+        }
+      },
+      "conversions": {},
+      "costs": {
+        "broker_withheld_tax": "0",
+        "buy_fees": "99/25",
+        "execution_margin_cost": "0",
+        "fx_spread_loss": "0",
+        "self_reserved_tax": "0",
+        "sell_fees": "0"
+      },
+      "fundings": {},
+      "fx_actions_per_pair": {},
+      "minor_units": {
+        "EUR": "1/100"
+      },
+      "objective_vector": [
+        "1600",
+        "40",
+        "3",
+        "99/25",
+        "2"
+      ],
+      "orders": {
+        "route-asset-00-broker-00-buy": {
+          "asset_id": "asset-00",
+          "broker_id": "broker-00",
+          "cash_debit": "1480",
+          "fee": "37/25",
+          "quantity": "74"
+        },
+        "route-asset-00-broker-01-buy": {
+          "asset_id": "asset-00",
+          "broker_id": "broker-01",
+          "cash_debit": "1480",
+          "fee": "62/25",
+          "quantity": "74"
+        }
+      },
+      "proof_kind": "optimal_proven",
+      "references": {
+        "fixed_reference": "3000",
+        "reachable_funding": "3000",
+        "selected_funding": "3000",
+        "trapped_funding": "0"
+      },
+      "rounding_top_ups": 0,
+      "state": "ready_incumbent",
+      "stop_reason": "completed",
+      "uses_required_minimum": false,
+      "valuation_rates": {
+        "EUR": "1"
+      }
+    },
+    "m-2x2": {
+      "accounting": {
+        "economic_losses": "997/200",
+        "final_invested": "2985",
+        "free_cash": "1001/100",
+        "rounding_delta": "1/200",
+        "shortfall": "15"
+      },
+      "asset_target_values": {
+        "asset-00": "1500",
+        "asset-01": "1500"
+      },
+      "cells": {
+        "broker-00|EUR": {
+          "final_spendable": "1",
+          "fx_credit": "0",
+          "fx_debit": "0"
+        },
+        "broker-01|EUR": {
+          "final_spendable": "901/100",
+          "fx_credit": "0",
+          "fx_debit": "0"
+        }
+      },
+      "conversions": {},
+      "costs": {
+        "broker_withheld_tax": "0",
+        "buy_fees": "997/200",
+        "execution_margin_cost": "0",
+        "fx_spread_loss": "0",
+        "self_reserved_tax": "0",
+        "sell_fees": "0"
+      },
+      "fundings": {},
+      "fx_actions_per_pair": {},
+      "minor_units": {
+        "EUR": "1/100"
+      },
+      "objective_vector": [
+        "225",
+        "15",
+        "6",
+        "997/200",
+        "4"
+      ],
+      "orders": {
+        "route-asset-00-broker-00-buy": {
+          "asset_id": "asset-00",
+          "broker_id": "broker-00",
+          "cash_debit": "40",
+          "fee": "1/25",
+          "quantity": "2"
+        },
+        "route-asset-00-broker-01-buy": {
+          "asset_id": "asset-00",
+          "broker_id": "broker-01",
+          "cash_debit": "1460",
+          "fee": "123/50",
+          "quantity": "73"
+        },
+        "route-asset-01-broker-00-buy": {
+          "asset_id": "asset-01",
+          "broker_id": "broker-00",
+          "cash_debit": "2915/2",
+          "fee": "73/50",
+          "quantity": "53"
+        },
+        "route-asset-01-broker-01-buy": {
+          "asset_id": "asset-01",
+          "broker_id": "broker-01",
+          "cash_debit": "55/2",
+          "fee": "103/100",
+          "quantity": "1"
+        }
+      },
+      "proof_kind": "optimal_proven",
+      "references": {
+        "fixed_reference": "3000",
+        "reachable_funding": "3000",
+        "selected_funding": "3000",
+        "trapped_funding": "0"
+      },
+      "rounding_top_ups": 0,
+      "state": "ready_incumbent",
+      "stop_reason": "completed",
+      "uses_required_minimum": false,
+      "valuation_rates": {
+        "EUR": "1"
+      }
+    },
+    "m-5x1": {
+      "accounting": {
+        "economic_losses": "37/25",
+        "final_invested": "1480",
+        "free_cash": "1851/100",
+        "rounding_delta": "1/100",
+        "shortfall": "20"
+      },
+      "asset_target_values": {
+        "asset-00": "300",
+        "asset-01": "300",
+        "asset-02": "300",
+        "asset-03": "300",
+        "asset-04": "300"
+      },
+      "cells": {
+        "broker-00|EUR": {
+          "final_spendable": "1851/100",
+          "fx_credit": "0",
+          "fx_debit": "0"
+        }
+      },
+      "conversions": {},
+      "costs": {
+        "broker_withheld_tax": "0",
+        "buy_fees": "37/25",
+        "execution_margin_cost": "0",
+        "fx_spread_loss": "0",
+        "self_reserved_tax": "0",
+        "sell_fees": "0"
+      },
+      "fundings": {},
+      "fx_actions_per_pair": {},
+      "minor_units": {
+        "EUR": "1/100"
+      },
+      "objective_vector": [
+        "825/2",
+        "20",
+        "5",
+        "37/25",
+        "5"
+      ],
+      "orders": {
+        "route-asset-00-broker-00-buy": {
+          "asset_id": "asset-00",
+          "broker_id": "broker-00",
+          "cash_debit": "300",
+          "fee": "3/10",
+          "quantity": "15"
+        },
+        "route-asset-01-broker-00-buy": {
+          "asset_id": "asset-01",
+          "broker_id": "broker-00",
+          "cash_debit": "605/2",
+          "fee": "31/100",
+          "quantity": "11"
+        },
+        "route-asset-02-broker-00-buy": {
+          "asset_id": "asset-02",
+          "broker_id": "broker-00",
+          "cash_debit": "280",
+          "fee": "7/25",
+          "quantity": "8"
+        },
+        "route-asset-03-broker-00-buy": {
+          "asset_id": "asset-03",
+          "broker_id": "broker-00",
+          "cash_debit": "595/2",
+          "fee": "3/10",
+          "quantity": "7"
+        },
+        "route-asset-04-broker-00-buy": {
+          "asset_id": "asset-04",
+          "broker_id": "broker-00",
+          "cash_debit": "300",
+          "fee": "3/10",
+          "quantity": "6"
+        }
+      },
+      "proof_kind": "optimal_proven",
+      "references": {
+        "fixed_reference": "1500",
+        "reachable_funding": "1500",
+        "selected_funding": "1500",
+        "trapped_funding": "0"
+      },
+      "rounding_top_ups": 0,
+      "state": "ready_incumbent",
+      "stop_reason": "completed",
+      "uses_required_minimum": false,
+      "valuation_rates": {
+        "EUR": "1"
+      }
+    },
+    "m-5x2_cash1": {
+      "accounting": {
+        "economic_losses": "599/200",
+        "final_invested": "2995",
+        "free_cash": "199/100",
+        "rounding_delta": "3/200",
+        "shortfall": "5"
+      },
+      "asset_target_values": {
+        "asset-00": "600",
+        "asset-01": "600",
+        "asset-02": "600",
+        "asset-03": "600",
+        "asset-04": "600"
+      },
+      "cells": {
+        "broker-00|EUR": {
+          "final_spendable": "199/100",
+          "fx_credit": "0",
+          "fx_debit": "0"
+        },
+        "broker-01|EUR": {
+          "final_spendable": "0",
+          "fx_credit": "0",
+          "fx_debit": "0"
+        }
+      },
+      "conversions": {},
+      "costs": {
+        "broker_withheld_tax": "0",
+        "buy_fees": "599/200",
+        "execution_margin_cost": "0",
+        "fx_spread_loss": "0",
+        "self_reserved_tax": "0",
+        "sell_fees": "0"
+      },
+      "fundings": {},
+      "fx_actions_per_pair": {},
+      "minor_units": {
+        "EUR": "1/100"
+      },
+      "objective_vector": [
+        "75",
+        "5",
+        "5",
+        "599/200",
+        "5"
+      ],
+      "orders": {
+        "route-asset-00-broker-00-buy": {
+          "asset_id": "asset-00",
+          "broker_id": "broker-00",
+          "cash_debit": "600",
+          "fee": "3/5",
+          "quantity": "30"
+        },
+        "route-asset-01-broker-00-buy": {
+          "asset_id": "asset-01",
+          "broker_id": "broker-00",
+          "cash_debit": "605",
+          "fee": "61/100",
+          "quantity": "22"
+        },
+        "route-asset-02-broker-00-buy": {
+          "asset_id": "asset-02",
+          "broker_id": "broker-00",
+          "cash_debit": "595",
+          "fee": "3/5",
+          "quantity": "17"
+        },
+        "route-asset-03-broker-00-buy": {
+          "asset_id": "asset-03",
+          "broker_id": "broker-00",
+          "cash_debit": "595",
+          "fee": "3/5",
+          "quantity": "14"
+        },
+        "route-asset-04-broker-00-buy": {
+          "asset_id": "asset-04",
+          "broker_id": "broker-00",
+          "cash_debit": "600",
+          "fee": "3/5",
+          "quantity": "12"
+        }
+      },
+      "proof_kind": "optimal_proven",
+      "references": {
+        "fixed_reference": "3000",
+        "reachable_funding": "3000",
+        "selected_funding": "3000",
+        "trapped_funding": "0"
+      },
+      "rounding_top_ups": 0,
+      "state": "ready_incumbent",
+      "stop_reason": "completed",
+      "uses_required_minimum": false,
+      "valuation_rates": {
+        "EUR": "1"
+      }
+    },
+    "m-5x2_disjoint": {
+      "accounting": {
+        "economic_losses": "469/100",
+        "final_invested": "2690",
+        "free_cash": "3053/10",
+        "rounding_delta": "1/100",
+        "shortfall": "310"
+      },
+      "asset_target_values": {
+        "asset-00": "600",
+        "asset-01": "600",
+        "asset-02": "600",
+        "asset-03": "600",
+        "asset-04": "600"
+      },
+      "cells": {
+        "broker-00|EUR": {
+          "final_spendable": "851/100",
+          "fx_credit": "0",
+          "fx_debit": "0"
+        },
+        "broker-01|EUR": {
+          "final_spendable": "29679/100",
+          "fx_credit": "0",
+          "fx_debit": "0"
+        }
+      },
+      "conversions": {},
+      "costs": {
+        "broker_withheld_tax": "0",
+        "buy_fees": "469/100",
+        "execution_margin_cost": "0",
+        "fx_spread_loss": "0",
+        "self_reserved_tax": "0",
+        "sell_fees": "0"
+      },
+      "fundings": {},
+      "fx_actions_per_pair": {},
+      "minor_units": {
+        "EUR": "1/100"
+      },
+      "objective_vector": [
+        "32150",
+        "310",
+        "7",
+        "469/100",
+        "5"
+      ],
+      "orders": {
+        "route-asset-00-broker-00-buy": {
+          "asset_id": "asset-00",
+          "broker_id": "broker-00",
+          "cash_debit": "500",
+          "fee": "1/2",
+          "quantity": "25"
+        },
+        "route-asset-01-broker-01-buy": {
+          "asset_id": "asset-01",
+          "broker_id": "broker-01",
+          "cash_debit": "605",
+          "fee": "161/100",
+          "quantity": "22"
+        },
+        "route-asset-02-broker-00-buy": {
+          "asset_id": "asset-02",
+          "broker_id": "broker-00",
+          "cash_debit": "490",
+          "fee": "49/100",
+          "quantity": "14"
+        },
+        "route-asset-03-broker-01-buy": {
+          "asset_id": "asset-03",
+          "broker_id": "broker-01",
+          "cash_debit": "595",
+          "fee": "8/5",
+          "quantity": "14"
+        },
+        "route-asset-04-broker-00-buy": {
+          "asset_id": "asset-04",
+          "broker_id": "broker-00",
+          "cash_debit": "500",
+          "fee": "1/2",
+          "quantity": "10"
+        }
+      },
+      "proof_kind": "optimal_proven",
+      "references": {
+        "fixed_reference": "3000",
+        "reachable_funding": "3000",
+        "selected_funding": "3000",
+        "trapped_funding": "0"
+      },
+      "rounding_top_ups": 0,
+      "state": "ready_incumbent",
+      "stop_reason": "completed",
+      "uses_required_minimum": false,
+      "valuation_rates": {
+        "EUR": "1"
+      }
+    },
+    "m-5x2_fixedonly": {
+      "accounting": {
+        "economic_losses": "3",
+        "final_invested": "2995",
+        "free_cash": "2",
+        "rounding_delta": "0",
+        "shortfall": "5"
+      },
+      "asset_target_values": {
+        "asset-00": "600",
+        "asset-01": "600",
+        "asset-02": "600",
+        "asset-03": "600",
+        "asset-04": "600"
+      },
+      "cells": {
+        "broker-00|EUR": {
+          "final_spendable": "0",
+          "fx_credit": "0",
+          "fx_debit": "0"
+        },
+        "broker-01|EUR": {
+          "final_spendable": "2",
+          "fx_credit": "0",
+          "fx_debit": "0"
+        }
+      },
+      "conversions": {},
+      "costs": {
+        "broker_withheld_tax": "0",
+        "buy_fees": "3",
+        "execution_margin_cost": "0",
+        "fx_spread_loss": "0",
+        "self_reserved_tax": "0",
+        "sell_fees": "0"
+      },
+      "fundings": {},
+      "fx_actions_per_pair": {},
+      "minor_units": {
+        "EUR": "1/100"
+      },
+      "objective_vector": [
+        "75",
+        "5",
+        "9",
+        "3",
+        "6"
+      ],
+      "orders": {
+        "route-asset-00-broker-01-buy": {
+          "asset_id": "asset-00",
+          "broker_id": "broker-01",
+          "cash_debit": "600",
+          "fee": "1",
+          "quantity": "30"
+        },
+        "route-asset-01-broker-00-buy": {
+          "asset_id": "asset-01",
+          "broker_id": "broker-00",
+          "cash_debit": "605",
+          "fee": "0",
+          "quantity": "22"
+        },
+        "route-asset-02-broker-01-buy": {
+          "asset_id": "asset-02",
+          "broker_id": "broker-01",
+          "cash_debit": "595",
+          "fee": "1",
+          "quantity": "17"
+        },
+        "route-asset-03-broker-00-buy": {
+          "asset_id": "asset-03",
+          "broker_id": "broker-00",
+          "cash_debit": "595",
+          "fee": "0",
+          "quantity": "14"
+        },
+        "route-asset-04-broker-00-buy": {
+          "asset_id": "asset-04",
+          "broker_id": "broker-00",
+          "cash_debit": "300",
+          "fee": "0",
+          "quantity": "6"
+        },
+        "route-asset-04-broker-01-buy": {
+          "asset_id": "asset-04",
+          "broker_id": "broker-01",
+          "cash_debit": "300",
+          "fee": "1",
+          "quantity": "6"
+        }
+      },
+      "proof_kind": "optimal_proven",
+      "references": {
+        "fixed_reference": "3000",
+        "reachable_funding": "3000",
+        "selected_funding": "3000",
+        "trapped_funding": "0"
+      },
+      "rounding_top_ups": 0,
+      "state": "ready_incumbent",
+      "stop_reason": "completed",
+      "uses_required_minimum": false,
+      "valuation_rates": {
+        "EUR": "1"
+      }
+    },
+    "m-5x2_nofee": {
+      "accounting": {
+        "economic_losses": "0",
+        "final_invested": "2995",
+        "free_cash": "5",
+        "rounding_delta": "0",
+        "shortfall": "5"
+      },
+      "asset_target_values": {
+        "asset-00": "600",
+        "asset-01": "600",
+        "asset-02": "600",
+        "asset-03": "600",
+        "asset-04": "600"
+      },
+      "cells": {
+        "broker-00|EUR": {
+          "final_spendable": "5/2",
+          "fx_credit": "0",
+          "fx_debit": "0"
+        },
+        "broker-01|EUR": {
+          "final_spendable": "5/2",
+          "fx_credit": "0",
+          "fx_debit": "0"
+        }
+      },
+      "conversions": {},
+      "costs": {
+        "broker_withheld_tax": "0",
+        "buy_fees": "0",
+        "execution_margin_cost": "0",
+        "fx_spread_loss": "0",
+        "self_reserved_tax": "0",
+        "sell_fees": "0"
+      },
+      "fundings": {},
+      "fx_actions_per_pair": {},
+      "minor_units": {
+        "EUR": "1/100"
+      },
+      "objective_vector": [
+        "75",
+        "5",
+        "9",
+        "0",
+        "6"
+      ],
+      "orders": {
+        "route-asset-00-broker-01-buy": {
+          "asset_id": "asset-00",
+          "broker_id": "broker-01",
+          "cash_debit": "600",
+          "fee": "0",
+          "quantity": "30"
+        },
+        "route-asset-01-broker-00-buy": {
+          "asset_id": "asset-01",
+          "broker_id": "broker-00",
+          "cash_debit": "605/2",
+          "fee": "0",
+          "quantity": "11"
+        },
+        "route-asset-01-broker-01-buy": {
+          "asset_id": "asset-01",
+          "broker_id": "broker-01",
+          "cash_debit": "605/2",
+          "fee": "0",
+          "quantity": "11"
+        },
+        "route-asset-02-broker-01-buy": {
+          "asset_id": "asset-02",
+          "broker_id": "broker-01",
+          "cash_debit": "595",
+          "fee": "0",
+          "quantity": "17"
+        },
+        "route-asset-03-broker-00-buy": {
+          "asset_id": "asset-03",
+          "broker_id": "broker-00",
+          "cash_debit": "595",
+          "fee": "0",
+          "quantity": "14"
+        },
+        "route-asset-04-broker-00-buy": {
+          "asset_id": "asset-04",
+          "broker_id": "broker-00",
+          "cash_debit": "600",
+          "fee": "0",
+          "quantity": "12"
+        }
+      },
+      "proof_kind": "optimal_proven",
+      "references": {
+        "fixed_reference": "3000",
+        "reachable_funding": "3000",
+        "selected_funding": "3000",
+        "trapped_funding": "0"
+      },
+      "rounding_top_ups": 0,
+      "state": "ready_incumbent",
+      "stop_reason": "completed",
+      "uses_required_minimum": false,
+      "valuation_rates": {
+        "EUR": "1"
+      }
+    },
+    "m-5x2_samefee": {
+      "accounting": {
+        "economic_losses": "599/200",
+        "final_invested": "2995",
+        "free_cash": "99/50",
+        "rounding_delta": "1/40",
+        "shortfall": "5"
+      },
+      "asset_target_values": {
+        "asset-00": "600",
+        "asset-01": "600",
+        "asset-02": "600",
+        "asset-03": "600",
+        "asset-04": "600"
+      },
+      "cells": {
+        "broker-00|EUR": {
+          "final_spendable": "99/100",
+          "fx_credit": "0",
+          "fx_debit": "0"
+        },
+        "broker-01|EUR": {
+          "final_spendable": "99/100",
+          "fx_credit": "0",
+          "fx_debit": "0"
+        }
+      },
+      "conversions": {},
+      "costs": {
+        "broker_withheld_tax": "0",
+        "buy_fees": "599/200",
+        "execution_margin_cost": "0",
+        "fx_spread_loss": "0",
+        "self_reserved_tax": "0",
+        "sell_fees": "0"
+      },
+      "fundings": {},
+      "fx_actions_per_pair": {},
+      "minor_units": {
+        "EUR": "1/100"
+      },
+      "objective_vector": [
+        "75",
+        "5",
+        "9",
+        "599/200",
+        "6"
+      ],
+      "orders": {
+        "route-asset-00-broker-01-buy": {
+          "asset_id": "asset-00",
+          "broker_id": "broker-01",
+          "cash_debit": "600",
+          "fee": "3/5",
+          "quantity": "30"
+        },
+        "route-asset-01-broker-00-buy": {
+          "asset_id": "asset-01",
+          "broker_id": "broker-00",
+          "cash_debit": "605/2",
+          "fee": "31/100",
+          "quantity": "11"
+        },
+        "route-asset-01-broker-01-buy": {
+          "asset_id": "asset-01",
+          "broker_id": "broker-01",
+          "cash_debit": "605/2",
+          "fee": "31/100",
+          "quantity": "11"
+        },
+        "route-asset-02-broker-01-buy": {
+          "asset_id": "asset-02",
+          "broker_id": "broker-01",
+          "cash_debit": "595",
+          "fee": "3/5",
+          "quantity": "17"
+        },
+        "route-asset-03-broker-00-buy": {
+          "asset_id": "asset-03",
+          "broker_id": "broker-00",
+          "cash_debit": "595",
+          "fee": "3/5",
+          "quantity": "14"
+        },
+        "route-asset-04-broker-00-buy": {
+          "asset_id": "asset-04",
+          "broker_id": "broker-00",
+          "cash_debit": "600",
+          "fee": "3/5",
+          "quantity": "12"
+        }
+      },
+      "proof_kind": "optimal_proven",
+      "references": {
+        "fixed_reference": "3000",
+        "reachable_funding": "3000",
+        "selected_funding": "3000",
+        "trapped_funding": "0"
+      },
+      "rounding_top_ups": 0,
+      "state": "ready_incumbent",
+      "stop_reason": "completed",
+      "uses_required_minimum": false,
+      "valuation_rates": {
+        "EUR": "1"
+      }
+    },
+    "n1-two-usd-assets": {
+      "accounting": {
+        "economic_losses": "17689/10000",
+        "final_invested": "38000/217",
+        "free_cash": "2311/100",
+        "rounding_delta": "12787/2170000",
+        "shortfall": "5400/217"
+      },
+      "asset_target_values": {
+        "asset-1": "100",
+        "asset-2": "100"
+      },
+      "cells": {
+        "broker-one|EUR": {
+          "final_spendable": "0",
+          "fx_credit": "0",
+          "fx_debit": "17689/100"
+        },
+        "broker-one|USD": {
+          "final_spendable": "0",
+          "fx_credit": "190",
+          "fx_debit": "0"
+        }
+      },
+      "conversions": {
+        "broker-one|EUR|USD": {
+          "credit": "190",
+          "debit": "17689/100",
+          "spread_loss": "17689/10000"
+        }
+      },
+      "costs": {
+        "broker_withheld_tax": "0",
+        "buy_fees": "0",
+        "execution_margin_cost": "0",
+        "fx_spread_loss": "17689/10000",
+        "self_reserved_tax": "0",
+        "sell_fees": "0"
+      },
+      "fundings": {
+        "funding-ext-broker-one": "17689/100"
+      },
+      "fx_actions_per_pair": {
+        "broker-one|EUR|USD": 1
+      },
+      "minor_units": {
+        "EUR": "1/100",
+        "USD": "1/100"
+      },
+      "objective_vector": [
+        "16580000/47089",
+        "5400/217",
+        "3",
+        "17689/10000",
+        "2"
+      ],
+      "orders": {
+        "route-asset-1-buy": {
+          "asset_id": "asset-1",
+          "broker_id": "broker-one",
+          "cash_debit": "100",
+          "fee": "0",
+          "quantity": "2"
+        },
+        "route-asset-2-buy": {
+          "asset_id": "asset-2",
+          "broker_id": "broker-one",
+          "cash_debit": "90",
+          "fee": "0",
+          "quantity": "3"
+        }
+      },
+      "proof_kind": "optimal_proven",
+      "references": {
+        "fixed_reference": "200",
+        "reachable_funding": "200",
+        "selected_funding": "200",
+        "trapped_funding": "0"
+      },
+      "rounding_top_ups": 0,
+      "state": "ready_incumbent",
+      "stop_reason": "completed",
+      "uses_required_minimum": false,
+      "valuation_rates": {
+        "EUR": "1",
+        "USD": "200/217"
+      }
+    },
+    "n2-two-way": {
+      "accounting": {
+        "economic_losses": "548/5425",
+        "final_invested": "18680/217",
+        "free_cash": "1808/217",
+        "rounding_delta": "2/5425",
+        "shortfall": "1830/217"
+      },
+      "asset_target_values": {
+        "asset-1": "1465/31",
+        "asset-2": "1465/31"
+      },
+      "cells": {
+        "broker-one|EUR": {
+          "final_spendable": "0",
+          "fx_credit": "10",
+          "fx_debit": "0"
+        },
+        "broker-one|USD": {
+          "final_spendable": "226/25",
+          "fx_credit": "0",
+          "fx_debit": "274/25"
+        }
+      },
+      "conversions": {
+        "broker-one|USD|EUR": {
+          "credit": "10",
+          "debit": "274/25",
+          "spread_loss": "548/5425"
+        }
+      },
+      "costs": {
+        "broker_withheld_tax": "0",
+        "buy_fees": "0",
+        "execution_margin_cost": "0",
+        "fx_spread_loss": "548/5425",
+        "self_reserved_tax": "0",
+        "sell_fees": "0"
+      },
+      "fundings": {},
+      "fx_actions_per_pair": {
+        "broker-one|USD|EUR": 1
+      },
+      "minor_units": {
+        "EUR": "1/100",
+        "USD": "1/100"
+      },
+      "objective_vector": [
+        "2545650/47089",
+        "1830/217",
+        "2",
+        "548/5425",
+        "2"
+      ],
+      "orders": {
+        "route-asset-1-buy": {
+          "asset_id": "asset-1",
+          "broker_id": "broker-one",
+          "cash_debit": "40",
+          "fee": "0",
+          "quantity": "4"
+        },
+        "route-asset-2-buy": {
+          "asset_id": "asset-2",
+          "broker_id": "broker-one",
+          "cash_debit": "50",
+          "fee": "0",
+          "quantity": "5"
+        }
+      },
+      "proof_kind": "optimal_proven",
+      "references": {
+        "fixed_reference": "2930/31",
+        "reachable_funding": "2930/31",
+        "selected_funding": "2930/31",
+        "trapped_funding": "0"
+      },
+      "rounding_top_ups": 0,
+      "state": "ready_incumbent",
+      "stop_reason": "completed",
+      "uses_required_minimum": false,
+      "valuation_rates": {
+        "EUR": "1",
+        "USD": "200/217"
+      }
+    },
+    "n3-two-brokers": {
+      "accounting": {
+        "economic_losses": "931/1000",
+        "final_invested": "20000/217",
+        "free_cash": "269/10",
+        "rounding_delta": "673/217000",
+        "shortfall": "6040/217"
+      },
+      "asset_target_values": {
+        "asset-1": "120"
+      },
+      "cells": {
+        "broker-one|EUR": {
+          "final_spendable": "269/20",
+          "fx_credit": "0",
+          "fx_debit": "931/20"
+        },
+        "broker-one|USD": {
+          "final_spendable": "0",
+          "fx_credit": "50",
+          "fx_debit": "0"
+        },
+        "broker-two|EUR": {
+          "final_spendable": "269/20",
+          "fx_credit": "0",
+          "fx_debit": "931/20"
+        },
+        "broker-two|USD": {
+          "final_spendable": "0",
+          "fx_credit": "50",
+          "fx_debit": "0"
+        }
+      },
+      "conversions": {
+        "broker-one|EUR|USD": {
+          "credit": "50",
+          "debit": "931/20",
+          "spread_loss": "931/2000"
+        },
+        "broker-two|EUR|USD": {
+          "credit": "50",
+          "debit": "931/20",
+          "spread_loss": "931/2000"
+        }
+      },
+      "costs": {
+        "broker_withheld_tax": "0",
+        "buy_fees": "0",
+        "execution_margin_cost": "0",
+        "fx_spread_loss": "931/1000",
+        "self_reserved_tax": "0",
+        "sell_fees": "0"
+      },
+      "fundings": {},
+      "fx_actions_per_pair": {
+        "broker-one|EUR|USD": 1,
+        "broker-two|EUR|USD": 1
+      },
+      "minor_units": {
+        "EUR": "1/100",
+        "USD": "1/100"
+      },
+      "objective_vector": [
+        "36481600/47089",
+        "6040/217",
+        "3",
+        "931/1000",
+        "2"
+      ],
+      "orders": {
+        "route-asset-1-broker-two-buy": {
+          "asset_id": "asset-1",
+          "broker_id": "broker-two",
+          "cash_debit": "50",
+          "fee": "0",
+          "quantity": "1"
+        },
+        "route-asset-1-buy": {
+          "asset_id": "asset-1",
+          "broker_id": "broker-one",
+          "cash_debit": "50",
+          "fee": "0",
+          "quantity": "1"
+        }
+      },
+      "proof_kind": "optimal_proven",
+      "references": {
+        "fixed_reference": "120",
+        "reachable_funding": "120",
+        "selected_funding": "120",
+        "trapped_funding": "0"
+      },
+      "rounding_top_ups": 0,
+      "state": "ready_incumbent",
+      "stop_reason": "completed",
+      "uses_required_minimum": false,
+      "valuation_rates": {
+        "EUR": "1",
+        "USD": "200/217"
+      }
+    },
+    "n4-two-sources": {
+      "accounting": {
+        "economic_losses": "232743/500000",
+        "final_invested": "10000/217",
+        "free_cash": "179257/5000",
+        "rounding_delta": "17869/108500000",
+        "shortfall": "39404/1085"
+      },
+      "asset_target_values": {
+        "asset-1": "412/5"
+      },
+      "cells": {
+        "broker-one|CHF": {
+          "final_spendable": "1619/100",
+          "fx_credit": "0",
+          "fx_debit": "2381/100"
+        },
+        "broker-one|EUR": {
+          "final_spendable": "1869/100",
+          "fx_credit": "0",
+          "fx_debit": "2131/100"
+        },
+        "broker-one|USD": {
+          "final_spendable": "0",
+          "fx_credit": "50",
+          "fx_debit": "0"
+        }
+      },
+      "conversions": {
+        "broker-one|CHF|USD": {
+          "credit": "2711/100",
+          "debit": "2381/100",
+          "spread_loss": "126193/500000"
+        },
+        "broker-one|EUR|USD": {
+          "credit": "2289/100",
+          "debit": "2131/100",
+          "spread_loss": "2131/10000"
+        }
+      },
+      "costs": {
+        "broker_withheld_tax": "0",
+        "buy_fees": "0",
+        "execution_margin_cost": "0",
+        "fx_spread_loss": "232743/500000",
+        "self_reserved_tax": "0",
+        "sell_fees": "0"
+      },
+      "fundings": {},
+      "fx_actions_per_pair": {
+        "broker-one|CHF|USD": 1,
+        "broker-one|EUR|USD": 1
+      },
+      "minor_units": {
+        "CHF": "1/100",
+        "EUR": "1/100",
+        "USD": "1/100"
+      },
+      "objective_vector": [
+        "1552675216/1177225",
+        "39404/1085",
+        "1",
+        "232743/500000",
+        "1"
+      ],
+      "orders": {
+        "route-asset-1-buy": {
+          "asset_id": "asset-1",
+          "broker_id": "broker-one",
+          "cash_debit": "50",
+          "fee": "0",
+          "quantity": "1"
+        }
+      },
+      "proof_kind": "optimal_proven",
+      "references": {
+        "fixed_reference": "412/5",
+        "reachable_funding": "412/5",
+        "selected_funding": "412/5",
+        "trapped_funding": "0"
+      },
+      "rounding_top_ups": 0,
+      "state": "ready_incumbent",
+      "stop_reason": "completed",
+      "uses_required_minimum": false,
+      "valuation_rates": {
+        "CHF": "53/50",
+        "EUR": "1",
+        "USD": "200/217"
+      }
+    },
+    "r-12x2": {
+      "accounting": {
+        "economic_losses": "1197/100",
+        "final_invested": "194439/100",
+        "free_cash": "1091/25",
+        "rounding_delta": "0",
+        "shortfall": "5561/100"
+      },
+      "asset_target_values": {
+        "asset-00": "3432/5",
+        "asset-01": "1961/5",
+        "asset-02": "1471/5",
+        "asset-03": "196",
+        "asset-04": "784/5",
+        "asset-05": "98",
+        "asset-06": "294/5",
+        "asset-07": "196/5",
+        "asset-08": "98/5",
+        "asset-09": "98/5",
+        "asset-10": "98/5",
+        "asset-11": "98/5"
+      },
+      "cells": {
+        "broker-00|EUR": {
+          "final_spendable": "791/100",
+          "fx_credit": "0",
+          "fx_debit": "0"
+        },
+        "broker-01|EUR": {
+          "final_spendable": "3573/100",
+          "fx_credit": "0",
+          "fx_debit": "0"
+        }
+      },
+      "conversions": {},
+      "costs": {
+        "broker_withheld_tax": "0",
+        "buy_fees": "1197/100",
+        "execution_margin_cost": "0",
+        "fx_spread_loss": "0",
+        "self_reserved_tax": "0",
+        "sell_fees": "0"
+      },
+      "fundings": {},
+      "fx_actions_per_pair": {},
+      "minor_units": {
+        "EUR": "1/100"
+      },
+      "objective_vector": [
+        "78027991/10000",
+        "5561/100",
+        "12",
+        "1197/100",
+        "9"
+      ],
+      "orders": {
+        "route-asset-00-broker-01-buy": {
+          "asset_id": "asset-00",
+          "broker_id": "broker-01",
+          "cash_debit": "33711/50",
+          "fee": "99/100",
+          "quantity": "6"
+        },
+        "route-asset-01-broker-00-buy": {
+          "asset_id": "asset-01",
+          "broker_id": "broker-00",
+          "cash_debit": "8764/25",
+          "fee": "3/2",
+          "quantity": "4"
+        },
+        "route-asset-02-broker-00-buy": {
+          "asset_id": "asset-02",
+          "broker_id": "broker-00",
+          "cash_debit": "28161/100",
+          "fee": "3/2",
+          "quantity": "9"
+        },
+        "route-asset-03-broker-00-buy": {
+          "asset_id": "asset-03",
+          "broker_id": "broker-00",
+          "cash_debit": "1229/5",
+          "fee": "3/2",
+          "quantity": "1"
+        },
+        "route-asset-04-broker-00-buy": {
+          "asset_id": "asset-04",
+          "broker_id": "broker-00",
+          "cash_debit": "3948/25",
+          "fee": "3/2",
+          "quantity": "16"
+        },
+        "route-asset-05-broker-00-buy": {
+          "asset_id": "asset-05",
+          "broker_id": "broker-00",
+          "cash_debit": "3206/25",
+          "fee": "3/2",
+          "quantity": "2"
+        },
+        "route-asset-06-broker-01-buy": {
+          "asset_id": "asset-06",
+          "broker_id": "broker-01",
+          "cash_debit": "5973/100",
+          "fee": "99/100",
+          "quantity": "11"
+        },
+        "route-asset-08-broker-00-buy": {
+          "asset_id": "asset-08",
+          "broker_id": "broker-00",
+          "cash_debit": "474/25",
+          "fee": "3/2",
+          "quantity": "1"
+        },
+        "route-asset-11-broker-01-buy": {
+          "asset_id": "asset-11",
+          "broker_id": "broker-01",
+          "cash_debit": "547/20",
+          "fee": "99/100",
+          "quantity": "1"
+        }
+      },
+      "proof_kind": "optimal_proven",
+      "references": {
+        "fixed_reference": "2000",
+        "reachable_funding": "2000",
+        "selected_funding": "2000",
+        "trapped_funding": "0"
+      },
+      "rounding_top_ups": 0,
+      "state": "ready_incumbent",
+      "stop_reason": "completed",
+      "uses_required_minimum": false,
+      "valuation_rates": {
+        "EUR": "1"
+      }
+    },
+    "r-3x2": {
+      "accounting": {
+        "economic_losses": "549/100",
+        "final_invested": "197523/100",
+        "free_cash": "482/25",
+        "rounding_delta": "0",
+        "shortfall": "2477/100"
+      },
+      "asset_target_values": {
+        "asset-00": "1000",
+        "asset-01": "2857/5",
+        "asset-02": "2143/5"
+      },
+      "cells": {
+        "broker-00|EUR": {
+          "final_spendable": "343/50",
+          "fx_credit": "0",
+          "fx_debit": "0"
+        },
+        "broker-01|EUR": {
+          "final_spendable": "621/50",
+          "fx_credit": "0",
+          "fx_debit": "0"
+        }
+      },
+      "conversions": {},
+      "costs": {
+        "broker_withheld_tax": "0",
+        "buy_fees": "549/100",
+        "execution_margin_cost": "0",
+        "fx_spread_loss": "0",
+        "self_reserved_tax": "0",
+        "sell_fees": "0"
+      },
+      "fundings": {},
+      "fx_actions_per_pair": {},
+      "minor_units": {
+        "EUR": "1/100"
+      },
+      "objective_vector": [
+        "22935741/10000",
+        "2477/100",
+        "5",
+        "549/100",
+        "4"
+      ],
+      "orders": {
+        "route-asset-00-broker-00-buy": {
+          "asset_id": "asset-00",
+          "broker_id": "broker-00",
+          "cash_debit": "11237/50",
+          "fee": "3/2",
+          "quantity": "2"
+        },
+        "route-asset-00-broker-01-buy": {
+          "asset_id": "asset-00",
+          "broker_id": "broker-01",
+          "cash_debit": "78659/100",
+          "fee": "99/100",
+          "quantity": "7"
+        },
+        "route-asset-01-broker-00-buy": {
+          "asset_id": "asset-01",
+          "broker_id": "broker-00",
+          "cash_debit": "13146/25",
+          "fee": "3/2",
+          "quantity": "6"
+        },
+        "route-asset-02-broker-00-buy": {
+          "asset_id": "asset-02",
+          "broker_id": "broker-00",
+          "cash_debit": "21903/50",
+          "fee": "3/2",
+          "quantity": "14"
+        }
+      },
+      "proof_kind": "optimal_proven",
+      "references": {
+        "fixed_reference": "2000",
+        "reachable_funding": "2000",
+        "selected_funding": "2000",
+        "trapped_funding": "0"
+      },
+      "rounding_top_ups": 0,
+      "state": "ready_incumbent",
+      "stop_reason": "completed",
+      "uses_required_minimum": false,
+      "valuation_rates": {
+        "EUR": "1"
+      }
+    },
+    "r-3x3": {
+      "accounting": {
+        "economic_losses": "949/100",
+        "final_invested": "61728/25",
+        "free_cash": "2139/100",
+        "rounding_delta": "0",
+        "shortfall": "772/25"
+      },
+      "asset_target_values": {
+        "asset-00": "1250",
+        "asset-01": "2857/4",
+        "asset-02": "2143/4"
+      },
+      "cells": {
+        "broker-00|EUR": {
+          "final_spendable": "653/100",
+          "fx_credit": "0",
+          "fx_debit": "0"
+        },
+        "broker-01|EUR": {
+          "final_spendable": "621/50",
+          "fx_credit": "0",
+          "fx_debit": "0"
+        },
+        "broker-02|EUR": {
+          "final_spendable": "61/25",
+          "fx_credit": "0",
+          "fx_debit": "0"
+        }
+      },
+      "conversions": {},
+      "costs": {
+        "broker_withheld_tax": "0",
+        "buy_fees": "949/100",
+        "execution_margin_cost": "0",
+        "fx_spread_loss": "0",
+        "self_reserved_tax": "0",
+        "sell_fees": "0"
+      },
+      "fundings": {},
+      "fx_actions_per_pair": {},
+      "minor_units": {
+        "EUR": "1/100"
+      },
+      "objective_vector": [
+        "1905171/5000",
+        "772/25",
+        "11",
+        "949/100",
+        "6"
+      ],
+      "orders": {
+        "route-asset-00-broker-00-buy": {
+          "asset_id": "asset-00",
+          "broker_id": "broker-00",
+          "cash_debit": "11237/100",
+          "fee": "3/2",
+          "quantity": "1"
+        },
+        "route-asset-00-broker-01-buy": {
+          "asset_id": "asset-00",
+          "broker_id": "broker-01",
+          "cash_debit": "78659/100",
+          "fee": "99/100",
+          "quantity": "7"
+        },
+        "route-asset-00-broker-02-buy": {
+          "asset_id": "asset-00",
+          "broker_id": "broker-02",
+          "cash_debit": "33711/100",
+          "fee": "2",
+          "quantity": "3"
+        },
+        "route-asset-01-broker-00-buy": {
+          "asset_id": "asset-01",
+          "broker_id": "broker-00",
+          "cash_debit": "17528/25",
+          "fee": "3/2",
+          "quantity": "8"
+        },
+        "route-asset-02-broker-00-buy": {
+          "asset_id": "asset-02",
+          "broker_id": "broker-00",
+          "cash_debit": "9387/25",
+          "fee": "3/2",
+          "quantity": "12"
+        },
+        "route-asset-02-broker-02-buy": {
+          "asset_id": "asset-02",
+          "broker_id": "broker-02",
+          "cash_debit": "3129/20",
+          "fee": "2",
+          "quantity": "5"
+        }
+      },
+      "proof_kind": "optimal_proven",
+      "references": {
+        "fixed_reference": "2500",
+        "reachable_funding": "2500",
+        "selected_funding": "2500",
+        "trapped_funding": "0"
+      },
+      "rounding_top_ups": 0,
+      "state": "ready_incumbent",
+      "stop_reason": "completed",
+      "uses_required_minimum": false,
+      "valuation_rates": {
+        "EUR": "1"
+      }
+    },
+    "r-5x2": {
+      "accounting": {
+        "economic_losses": "399/50",
+        "final_invested": "198257/100",
+        "free_cash": "189/20",
+        "rounding_delta": "0",
+        "shortfall": "1743/100"
+      },
+      "asset_target_values": {
+        "asset-00": "3977/5",
+        "asset-01": "2273/5",
+        "asset-02": "341",
+        "asset-03": "1136/5",
+        "asset-04": "909/5"
+      },
+      "cells": {
+        "broker-00|EUR": {
+          "final_spendable": "789/100",
+          "fx_credit": "0",
+          "fx_debit": "0"
+        },
+        "broker-01|EUR": {
+          "final_spendable": "39/25",
+          "fx_credit": "0",
+          "fx_debit": "0"
+        }
+      },
+      "conversions": {},
+      "costs": {
+        "broker_withheld_tax": "0",
+        "buy_fees": "399/50",
+        "execution_margin_cost": "0",
+        "fx_spread_loss": "0",
+        "self_reserved_tax": "0",
+        "sell_fees": "0"
+      },
+      "fundings": {},
+      "fx_actions_per_pair": {},
+      "minor_units": {
+        "EUR": "1/100"
+      },
+      "objective_vector": [
+        "8989923/10000",
+        "1743/100",
+        "8",
+        "399/50",
+        "6"
+      ],
+      "orders": {
+        "route-asset-00-broker-01-buy": {
+          "asset_id": "asset-00",
+          "broker_id": "broker-01",
+          "cash_debit": "78659/100",
+          "fee": "99/100",
+          "quantity": "7"
+        },
+        "route-asset-01-broker-00-buy": {
+          "asset_id": "asset-01",
+          "broker_id": "broker-00",
+          "cash_debit": "2191/5",
+          "fee": "3/2",
+          "quantity": "5"
+        },
+        "route-asset-02-broker-00-buy": {
+          "asset_id": "asset-02",
+          "broker_id": "broker-00",
+          "cash_debit": "34419/100",
+          "fee": "3/2",
+          "quantity": "11"
+        },
+        "route-asset-03-broker-00-buy": {
+          "asset_id": "asset-03",
+          "broker_id": "broker-00",
+          "cash_debit": "1229/5",
+          "fee": "3/2",
+          "quantity": "1"
+        },
+        "route-asset-04-broker-00-buy": {
+          "asset_id": "asset-04",
+          "broker_id": "broker-00",
+          "cash_debit": "3948/25",
+          "fee": "3/2",
+          "quantity": "16"
+        },
+        "route-asset-04-broker-01-buy": {
+          "asset_id": "asset-04",
+          "broker_id": "broker-01",
+          "cash_debit": "987/100",
+          "fee": "99/100",
+          "quantity": "1"
+        }
+      },
+      "proof_kind": "optimal_proven",
+      "references": {
+        "fixed_reference": "2000",
+        "reachable_funding": "2000",
+        "selected_funding": "2000",
+        "trapped_funding": "0"
+      },
+      "rounding_top_ups": 0,
+      "state": "ready_incumbent",
+      "stop_reason": "completed",
+      "uses_required_minimum": false,
+      "valuation_rates": {
+        "EUR": "1"
+      }
+    },
+    "r-5x3": {
+      "accounting": {
+        "economic_losses": "949/100",
+        "final_invested": "61201/25",
+        "free_cash": "4247/100",
+        "rounding_delta": "0",
+        "shortfall": "1299/25"
+      },
+      "asset_target_values": {
+        "asset-00": "3977/4",
+        "asset-01": "2273/4",
+        "asset-02": "1705/4",
+        "asset-03": "284",
+        "asset-04": "909/4"
+      },
+      "cells": {
+        "broker-00|EUR": {
+          "final_spendable": "459/100",
+          "fx_credit": "0",
+          "fx_debit": "0"
+        },
+        "broker-01|EUR": {
+          "final_spendable": "621/50",
+          "fx_credit": "0",
+          "fx_debit": "0"
+        },
+        "broker-02|EUR": {
+          "final_spendable": "1273/50",
+          "fx_credit": "0",
+          "fx_debit": "0"
+        }
+      },
+      "conversions": {},
+      "costs": {
+        "broker_withheld_tax": "0",
+        "buy_fees": "949/100",
+        "execution_margin_cost": "0",
+        "fx_spread_loss": "0",
+        "self_reserved_tax": "0",
+        "sell_fees": "0"
+      },
+      "fundings": {},
+      "fx_actions_per_pair": {},
+      "minor_units": {
+        "EUR": "1/100"
+      },
+      "objective_vector": [
+        "18445541/5000",
+        "1299/25",
+        "11",
+        "949/100",
+        "6"
+      ],
+      "orders": {
+        "route-asset-00-broker-01-buy": {
+          "asset_id": "asset-00",
+          "broker_id": "broker-01",
+          "cash_debit": "78659/100",
+          "fee": "99/100",
+          "quantity": "7"
+        },
+        "route-asset-00-broker-02-buy": {
+          "asset_id": "asset-00",
+          "broker_id": "broker-02",
+          "cash_debit": "11237/50",
+          "fee": "2",
+          "quantity": "2"
+        },
+        "route-asset-01-broker-00-buy": {
+          "asset_id": "asset-01",
+          "broker_id": "broker-00",
+          "cash_debit": "13146/25",
+          "fee": "3/2",
+          "quantity": "6"
+        },
+        "route-asset-02-broker-00-buy": {
+          "asset_id": "asset-02",
+          "broker_id": "broker-00",
+          "cash_debit": "21903/50",
+          "fee": "3/2",
+          "quantity": "14"
+        },
+        "route-asset-03-broker-02-buy": {
+          "asset_id": "asset-03",
+          "broker_id": "broker-02",
+          "cash_debit": "1229/5",
+          "fee": "2",
+          "quantity": "1"
+        },
+        "route-asset-04-broker-00-buy": {
+          "asset_id": "asset-04",
+          "broker_id": "broker-00",
+          "cash_debit": "22701/100",
+          "fee": "3/2",
+          "quantity": "23"
+        }
+      },
+      "proof_kind": "optimal_proven",
+      "references": {
+        "fixed_reference": "2500",
+        "reachable_funding": "2500",
+        "selected_funding": "2500",
+        "trapped_funding": "0"
+      },
+      "rounding_top_ups": 0,
+      "state": "ready_incumbent",
+      "stop_reason": "completed",
+      "uses_required_minimum": false,
+      "valuation_rates": {
+        "EUR": "1"
+      }
+    }
+  },
+  "header": {
+    "note": "Frozen: written once from the code of the commit above. A difference that A2-A4 cause goes to pac_reference_accepted_differences.json, approved by the release coordinator.",
+    "recorded_at_commit": "5beba725b893dcda159b256c56934b02eaf548ce",
+    "recorder": "backend/test_scripts/diagnostics/pac_reference_recorder.py",
+    "solver_budget_seconds": 30.0
+  }
+}

@@ -172,11 +172,13 @@ The requests are one per currency, so a failure costs one currency only (XRL-H09
 - One request per currency: N currencies cost N requests in series, with 1.2 s between two of them. Measured on
   2026-11-16, 30 currencies took 63.6 s with the scheduler's 14-day horizon and 101.5 s with the whole history
   (`"min"`, 197 020 rows).
-- **A first full-history sync of many currencies can outlast the route timeout**: the sync core waits at most 120 s
-  per route for its legs (`asyncio.wait_for(..., timeout=120.0)` in `backend/app/services/fx/sync.py`). Beyond about
-  35 BCB currencies in one sync, a first full-history sync can time out on some routes. The fetch still completes, and
-  its answer stays in the core's provider cache for 300 s (`_fx_fetch_cache`, ttl 300): a second sync within 5 minutes
-  uses it.
+- **A first full-history sync of many currencies is long**: the sync waits for the provider's whole answer. Its 120 s
+  wait on a route's legs (`asyncio.wait_for(..., timeout=120.0)` in `backend/app/services/fx/sync.py`) starts only after
+  every provider of the sync has answered (phase 2 gathers the fetches, phase 3 waits on the legs), so it never cuts a
+  slow fetch and never switches route because of time (lane 75, L25c). A sync started from the interface waits up to
+  120 s for its answer (`FX_SYNC_TIMEOUT_MS`, or a sync window's longer **Timeout**; see [Architecture](../architecture.md)): beyond about 35 BCB currencies
+  of full history, the interface stops waiting first. The answer stays in the core's provider cache for 300 s
+  (`_fx_fetch_cache`, ttl 300): a second sync within 5 minutes uses it.
 - History starts on 1999-02-01 (VES on 2021-10-04); earlier days are never asked.
 
 ### 🧪 Tests

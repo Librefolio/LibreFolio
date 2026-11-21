@@ -132,6 +132,13 @@ A FEE or a TAX can say which transaction it belongs to (issue #25, plan 66, «Il
       0.01 s with it (as with a full index) and 11.8 s without any index
 
 - Downgrade: the index, then the column.
+
+broker_operating_profile (project 67, P1)
+─────────────────────────────────────────
+``brokers.operating_profile``, a nullable ``TEXT`` holding the broker's operating profile as JSON — order modes and fees
+per currency, conversion mode, tax regime (``schemas/broker_profile.BrokerOperatingProfile``). Every existing broker
+gets ``NULL``: no profile. Declared ``TEXT DEFAULT NULL``, as ``user_settings.ui_preferences`` in 005. The downgrade
+drops the column, and the profiles with it.
 """
 
 import json
@@ -409,6 +416,21 @@ def _downgrade_charge_links(conn: sa.engine.Connection) -> None:
         conn.execute(sa.text(f"ALTER TABLE {_TRANSACTIONS} DROP COLUMN {_PARENT_COLUMN}"))
 
 
+# ─── step broker_operating_profile (project 67, P1) ──────────────────────────────────────────────────────────────────
+
+_BROKER_PROFILE_COLUMN = "operating_profile"
+
+
+def _upgrade_broker_operating_profile(conn: sa.engine.Connection) -> None:
+    if _BROKER_PROFILE_COLUMN not in _columns(conn, "brokers"):
+        conn.execute(sa.text(f"ALTER TABLE brokers ADD COLUMN {_BROKER_PROFILE_COLUMN} TEXT DEFAULT NULL"))
+
+
+def _downgrade_broker_operating_profile(conn: sa.engine.Connection) -> None:
+    if _BROKER_PROFILE_COLUMN in _columns(conn, "brokers"):
+        conn.execute(sa.text(f"ALTER TABLE brokers DROP COLUMN {_BROKER_PROFILE_COLUMN}"))
+
+
 def upgrade() -> None:
     """The steps of the docstring, one line each."""
     conn = op.get_bind()
@@ -417,11 +439,13 @@ def upgrade() -> None:
     _upgrade_drop_classification_params(conn)
     _upgrade_plugin_call_counters(conn)
     _upgrade_charge_links(conn)
+    _upgrade_broker_operating_profile(conn)
 
 
 def downgrade() -> None:
     """Back to 1.3, step by step, in the reverse order of ``upgrade``."""
     conn = op.get_bind()
+    _downgrade_broker_operating_profile(conn)
     _downgrade_charge_links(conn)
     _downgrade_plugin_call_counters(conn)
     _downgrade_drop_classification_params(conn)

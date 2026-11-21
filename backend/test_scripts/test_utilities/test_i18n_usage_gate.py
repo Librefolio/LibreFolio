@@ -1967,3 +1967,88 @@ class BorsaItalianaProvider(AssetSourceProvider):
         # Bare slots would turn any pair of quoted words into a key.
         assert classify("analysis.title", usage, set()) == DEAD
         assert classify("own.hint", usage, set()) == DEAD
+
+
+# ---------------------------------------------------------------------------
+# F1 of project 67, step 0: how the audit reads the namespace a planner file chooses between the PAC
+# (``tools.pacAllocator.planner``) and the Rebalancer (``tools.portfolioRebalancer``). The plan's §3 n. 2 read these
+# verdicts in the code; these cases run them. They fix today's behaviour: if one goes red, proposal 2 of §3 falls.
+# ---------------------------------------------------------------------------
+
+PAC_NS = "tools.pacAllocator.planner"
+REB_NS = "tools.portfolioRebalancer.planner"
+
+
+class TestPlannerNamespaceChoice:
+    """Form 2(a): two whole literal keys; form 2(b): a conditional constant or a union-typed parameter as the head of a
+    template, in the same file; and what proves nothing: a prefix imported from another module."""
+
+    def test_conditional_namespace_constant_proves_both_keys(self, tmp_path):
+        src = _tree(
+            tmp_path / "src",
+            {"Step.svelte": f"<script lang=\"ts\">\n    const NS = rebalancer ? '{REB_NS}' : '{PAC_NS}';\n</script>\n<p>{{$t(`${{NS}}.scenario.title`)}}</p>\n"},
+        )
+        usage = collect_from_source(src)
+        assert classify(f"{PAC_NS}.scenario.title", usage, set()) == USED
+        assert classify(f"{REB_NS}.scenario.title", usage, set()) == USED
+        # Healthy half: a sibling under neither branch's group is not proven.
+        assert classify(f"{PAC_NS}.scenario.subtitle", usage, set()) == DEAD
+
+    def test_union_typed_namespace_parameter_proves_both_keys(self, tmp_path):
+        src = _tree(
+            tmp_path / "src",
+            {"labels.ts": f"export function stepTitle(ns: '{PAC_NS}' | '{REB_NS}', translate: (key: string) => string): string {{\n    return translate(`${{ns}}.steps.title`);\n}}\n"},
+        )
+        usage = collect_from_source(src)
+        assert classify(f"{PAC_NS}.steps.title", usage, set()) == USED
+        assert classify(f"{REB_NS}.steps.title", usage, set()) == USED
+        assert classify(f"{REB_NS}.steps.other", usage, set()) == DEAD
+
+    def test_imported_namespace_prefix_proves_nothing(self, tmp_path):
+        """The constraint: a prefix written in another module, or free, is no evidence at the head of a template."""
+        src = _tree(
+            tmp_path / "src",
+            {
+                "lib/profile.ts": f"export const NS = '{PAC_NS}';\nexport const OTHER = '{REB_NS}';\n",
+                "lib/Step.svelte": "<script lang=\"ts\">\n    import {NS} from './profile';\n    let {prefix}: {prefix: string} = $props();\n</script>\n<p>{$t(`${NS}.goal.title`)}</p>\n<p>{$t(`${prefix}.goal.body`)}</p>\n",
+            },
+        )
+        usage = collect_from_source(src)
+        assert classify(f"{PAC_NS}.goal.title", usage, set()) == DEAD
+        assert classify(f"{REB_NS}.goal.body", usage, set()) == DEAD
+        # Control: the same file and template with a local constant proves the key, so the scan did read the template.
+        control = collect_from_source(_tree(tmp_path / "control", {"Step.svelte": f"<script>\n    const NS = '{PAC_NS}';\n</script>\n<p>{{$t(`${{NS}}.goal.title`)}}</p>\n"}))
+        assert classify(f"{PAC_NS}.goal.title", control, set()) == USED
+
+    def test_ternary_of_two_full_key_literals_proves_both(self, tmp_path):
+        """Form 2(a): the ternary as the argument of the call, and the same two literals chosen into a name first."""
+        src = _tree(
+            tmp_path / "src",
+            {
+                "Notice.svelte": f"<p>{{$t(rebalancer ? '{REB_NS}.notice.sells' : '{PAC_NS}.notice.buys')}}</p>\n",
+                "text.ts": f"export function lead(rebalancer: boolean, t: (key: string) => string): string {{\n    const key = rebalancer ? '{REB_NS}.lead.sells' : '{PAC_NS}.lead.buys';\n    return t(key);\n}}\n",
+            },
+        )
+        usage = collect_from_source(src)
+        for key in (f"{REB_NS}.notice.sells", f"{PAC_NS}.notice.buys", f"{REB_NS}.lead.sells", f"{PAC_NS}.lead.buys"):
+            assert classify(key, usage, set()) == USED, key
+        assert classify(f"{PAC_NS}.notice.sells", usage, set()) == DEAD
+
+    def test_expanded_key_missing_from_catalogue_is_not_reported(self, tmp_path):
+        """The cost of form 2(b) (the plan named this case ``…_is_reported``; the finding is the opposite). Every
+        ``${NS}.x`` expands under both prefixes and proves both keys; the audit gives a verdict to **catalogue** keys
+        only, so a key the expansion proves and the catalogue lacks is named by no list of its report. Nor by another
+        check: ``i18n check`` compares the languages of the catalogue, ``gate-i18n-catalog`` its structure. So a group
+        read through a conditional prefix must exist twice in full: a missing half shows only at run time."""
+        src = _tree(
+            tmp_path / "src",
+            {"Step.svelte": f"<script lang=\"ts\">\n    const NS = rebalancer ? '{REB_NS}' : '{PAC_NS}';\n</script>\n<p>{{$t(`${{NS}}.only.pac`)}}</p>\n"},
+        )
+        usage = collect_from_source(src)
+        catalogue = [f"{PAC_NS}.only.pac"]
+        missing = f"{REB_NS}.only.pac"
+        assert classify(missing, usage, set()) == USED, "the expansion proves the Rebalancer key too"
+        assert missing not in catalogue
+        # What the audit reports: one verdict per catalogue key, and nothing else.
+        report = {key: classify(key, usage, set()) for key in catalogue}
+        assert report == {f"{PAC_NS}.only.pac": USED}

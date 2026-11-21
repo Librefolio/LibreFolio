@@ -89,7 +89,8 @@ layer — its boundaries, imports and guards — are in `financial-math.instruct
 | A series as steps (date … through): the value of a day, a window, the steps of the change rows | `services/financial_math/series_steps.py` |
 | Yield on Cost | `services/financial_math/yield_on_cost.py` |
 | Stock splits linked to the ledger: their rows, the usable ratio, the incoming adjustments without a cost a SPLIT may not lose by a retype, and the ratio a share change implies (`implied_split_ratio`, an import's «possible split») | `services/financial_math/splits.py` |
-| Weights and concentration: a share of a total, allocation slices, gross weights, largest weight and Herfindahl index, the effective number of positions (N_eff = 10 000 ÷ HHI over the weights renormalized on their own sum, RN-15) | `services/financial_math/weights.py` |
+| The Rebalancer's table «maximum acceptable cost»: rows to two significant digits, `2·λ·d²/F`, the custom `λ` from euros | `services/financial_math/acceptable_cost.py` |
+| Weights and concentration: a share of a total, allocation slices, gross weights, largest weight and Herfindahl index, the effective number of positions (N_eff = 10 000 ÷ HHI over the weights renormalized on their own sum, RN-15), the largest deviation of weights from their targets (the Rebalancer's, X14) | `services/financial_math/weights.py` |
 | Holding window of a position: oldest lot still open, a closed position's flight time | `services/financial_math/holding_window.py` |
 | FX conversion | `services/fx/conversion.py` (`convert_bulk`) |
 | Technical indicators | `services/signal_plugins/` (the plugins), `services/signals/` (runtime, contract, registry) |

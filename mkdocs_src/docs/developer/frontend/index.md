@@ -32,7 +32,7 @@ frontend/
 │       ├── api/          # API client (Zodios, generated from OpenAPI)
 │       ├── components/   # Reusable components
 │       │   ├── layout/   # Sidebar, Header, LanguageSelector
-│       │   ├── table/    # DataTable suite (DataTable, toolbar, pagination, column filter, SelectionBar)
+│       │   ├── table/    # DataTable suite (DataTable, toolbar, selection panel, pagination, column filter)
 │       │   └── ui/       # Generic UI atoms
 │       │       ├── input/    # PasswordInput, PasswordStrength
 │       │       ├── media/    # ImageCropper, ImageEditModal, AssetPickerModal, FileEditModal

@@ -35,14 +35,18 @@ type OrderCapKind = Literal["quantity", "notional"]
 type ConstraintPhase = Literal["normalization", "exact", "solver", "publication"]
 type ConstraintEnforcement = Literal["normalizer", "exact_only", "solver_and_exact", "publication_gate"]
 type ObjectiveSense = Literal["min"]
-type DecisionFamily = Literal["funding_transfer", "fx_debit", "buy_quantum", "sell_quantum"]
+type DecisionFamily = Literal["funding_transfer", "fx_debit", "buy_quantum", "sell_quantum", "broker_transfer"]
 type DecisionMode = Literal["disabled", "mutable", "frozen_exact", "additive_only"]
-type ExactPolicyPurpose = Literal["primary", "invest_only_baseline", "sell_extension", "deployment"]
+type ExactPolicyPurpose = Literal["primary", "deployment"]
 type ExactUnitKind = Literal["boolean", "count", "ratio", "asset_quantity", "native_money", "valuation_money", "valuation_money_squared", "ordinal_penalty", "canonical_key"]
 type ExactObjectiveCode = Literal[
     "fixed_l2",
     "shortfall",
-    "turnover",
+    # The Rebalancer (B1 of project 67, specifica §6): one score J, or the chain distance then money lost.
+    "plan_score",
+    "target_distance",
+    "wealth_loss",
+    "operation_count",
     "explicit_cost",
     "incremental_cost",
     "split_asset_count",
@@ -62,9 +66,11 @@ type ExactConstraintCode = Literal[
     "FX_RATE_ORDER_SAFE",
     "FX_SOURCE_CASH",
     "FX_NATIVE_QUANTUM",
+    "FX_NO_RELAY",
+    "TRANSFER_NO_RELAY",
+    "ENTRY_VALUE_WITHIN_LIMITS",
     "ORDER_QUANTIZED",
     "ORDER_MIN_IF_ACTIVE",
-    "ORDER_REQUIRED_MIN",
     "ORDER_CAP",
     "ORDER_SIDE_ALLOWED",
     "NO_IMPLICIT_ROUTE",
@@ -82,8 +88,6 @@ type ExactConstraintCode = Literal[
     "NO_ASSET_BUY_AND_SELL",
     "NO_SHORT_OR_LEVERAGE",
     "REBALANCER_NONEMPTY",
-    "SELL_ELIGIBLE",
-    "SELL_FUNDS_INCREMENTAL_BUY",
 ]
 type LedgerPostingDirection = Literal["credit", "debit"]
 type LedgerPostingFamily = Literal[
@@ -98,6 +102,8 @@ type LedgerPostingFamily = Literal[
     "sell_fee",
     "broker_withheld_tax",
     "self_reserved_tax",
+    "transfer_in",
+    "transfer_out",
 ]
 
 
@@ -422,7 +428,6 @@ class ExactOrderRoute:
     fee_schedule_id: str
     side: OrderSide
     minimum_if_active: ExactOrderMinimum
-    required_minimum: ExactOrderMinimum
     # None: no cap of its own; a buy stays bounded by the resources, a sell by the holding.
     cap: ExactOrderCap | None
     execution_margin_rate: ExactRatio
@@ -437,9 +442,80 @@ class ExactOrderRoute:
 
 
 @dataclass(frozen=True, slots=True)
+class ExactLimit:
+    """One bound on the final value of an entry (V5): an amount in the valuation currency, or a share of the Tool's reference.
+
+    The reference is the money the plan works with (decisioni M17): in the PAC the funding the plan can reach,
+    ``accounting.fixed_reference``; ``pa/limits.py`` resolves a limit to an amount against it.
+    """
+
+    kind: Literal["amount", "share"]
+    value: ExactRatio
+
+    def __post_init__(self) -> None:
+        if self.kind not in {"amount", "share"}:
+            raise ValueError("limit kind must be amount or share")
+        _require_nonnegative(self.value, "limit value")
+        if self.kind == "share" and self.value > ExactRatio(1):
+            raise ValueError("a share limit cannot exceed one")
+
+
+@dataclass(frozen=True, slots=True)
+class ExactCashEntry:
+    """An entry of the plan for one Broker and currency cell: its target weight and its minimum and maximum final spendable
+    cash (V5 on cash). In the PAC the weight is always zero; a Rebalancer cell with a weight is an entry of the distance
+    (specifica §6.1, B1 of project 67). An entry with no weight and no limit says nothing and is refused.
+    """
+
+    broker_id: str
+    currency: str
+    minimum: ExactLimit | None
+    maximum: ExactLimit | None
+    weight: ExactRatio = ExactRatio(0)
+
+    def __post_init__(self) -> None:
+        _require_text(self.broker_id, "cash limit broker_id")
+        _require_currency(self.currency, "cash limit currency")
+        _require_unit_interval(self.weight, "cash entry weight")
+        if self.minimum is None and self.maximum is None and self.weight == ExactRatio(0):
+            raise ValueError("a cash entry needs a weight, a minimum or a maximum: otherwise it says nothing")
+
+
+@dataclass(frozen=True, slots=True)
+class ExactTargetFidelity:
+    """How faithful to the target a Rebalancer plan is (specifica §6.3, D7 of the step-2 plan): one of two shapes.
+
+    ``weighted``: one objective ``J = λ·D/F + (F − W)`` with ``distance_weight`` = ``λ`` > 0, the levels «cost-conscious»
+    (¼), «balanced» (1), «faithful» (4) or a custom value. ``target_first``: a chain, the distance ``D`` first, then the money
+    lost ``F − W``; no ``λ``. The PAC has no fidelity: its objectives are its own cascade.
+    """
+
+    kind: Literal["weighted", "target_first"]
+    distance_weight: ExactRatio | None
+
+    def __post_init__(self) -> None:
+        if self.kind == "weighted":
+            if self.distance_weight is None or self.distance_weight <= ExactRatio(0):
+                raise ValueError("a weighted fidelity needs a positive distance weight")
+        elif self.kind == "target_first":
+            if self.distance_weight is not None:
+                raise ValueError("a target-first fidelity has no distance weight")
+        else:
+            raise ValueError("fidelity kind must be weighted or target_first")
+
+
+# The distance weight λ of each fidelity level (specifica §6.3): the one table the normalizer and the scenario preview read.
+FIDELITY_LEVEL_WEIGHTS: dict[str, ExactRatio] = {"cost_aware": ExactRatio(1, 4), "balanced": ExactRatio(1), "faithful": ExactRatio(4)}
+BALANCED_FIDELITY = ExactTargetFidelity(kind="weighted", distance_weight=FIDELITY_LEVEL_WEIGHTS["balanced"])
+
+
+@dataclass(frozen=True, slots=True)
 class ExactTargetWeight:
     asset_id: str
     weight: ExactRatio
+    # A3 (project 67): V5 limits on the Asset's final value. Absent by default, so every target built before A3 keeps its meaning.
+    minimum: ExactLimit | None = None
+    maximum: ExactLimit | None = None
 
     def __post_init__(self) -> None:
         _require_unit_interval(self.weight, "target weight")
@@ -497,6 +573,38 @@ class ExactSellContext:
 
 
 @dataclass(frozen=True, slots=True)
+class ExactTransferLane:
+    """A lane for moving cash between two Brokers in one currency (A2, project 67): one ``broker_transfer`` decision.
+
+    Free and instant (``decisioni-REB.md`` §11.1). The normalizer fills the lanes for the Rebalancer only (block B); a PAC
+    scenario has none (specification §15 n. 2), except one a test builds by hand (D4 a).
+    """
+
+    source_broker_id: str
+    destination_broker_id: str
+    currency: str
+
+    def __post_init__(self) -> None:
+        _require_text(self.source_broker_id, "transfer source_broker_id")
+        _require_text(self.destination_broker_id, "transfer destination_broker_id")
+        _require_currency(self.currency, "transfer currency")
+
+
+def _validate_product_shape(scenario: ExactPlannerScenario) -> None:
+    """What a product and its policy allow: holdings, SELL context, a target fidelity."""
+    if (scenario.product == "pac") != (scenario.policy in {"proportional", "min_fragmentation"}):
+        raise ValueError("PAC product requires a PAC policy and vice versa")
+    if scenario.product == "pac" and (scenario.holdings or scenario.sell_context is not None):
+        raise ValueError("PAC scenarios cannot contain holdings or SELL context")
+    if scenario.policy == "invest_only" and scenario.sell_context is not None:
+        raise ValueError("invest-only scenarios cannot contain SELL context")
+    if scenario.policy == "invest_and_sell" and scenario.sell_context is None:
+        raise ValueError("invest-and-sell scenarios require SELL context")
+    if (scenario.product == "rebalancer") != (scenario.target_fidelity is not None):
+        raise ValueError("a Rebalancer scenario requires a target fidelity and a PAC scenario has none")
+
+
+@dataclass(frozen=True, slots=True)
 class ExactPlannerScenario:
     snapshot: ExactSnapshot
     product: PlannerProduct
@@ -516,16 +624,13 @@ class ExactPlannerScenario:
     order_routes: tuple[ExactOrderRoute, ...]
     target_weights: tuple[ExactTargetWeight, ...]
     sell_context: ExactSellContext | None
+    transfer_lanes: tuple[ExactTransferLane, ...] = ()
+    cash_entries: tuple[ExactCashEntry, ...] = ()
+    # B1 (project 67): the Rebalancer's target fidelity, required there; the PAC has none.
+    target_fidelity: ExactTargetFidelity | None = None
 
     def __post_init__(self) -> None:
-        if (self.product == "pac") != (self.policy in {"proportional", "min_fragmentation"}):
-            raise ValueError("PAC product requires a PAC policy and vice versa")
-        if self.product == "pac" and (self.holdings or self.sell_context is not None):
-            raise ValueError("PAC scenarios cannot contain holdings or SELL context")
-        if self.policy == "invest_only" and self.sell_context is not None:
-            raise ValueError("invest-only scenarios cannot contain SELL context")
-        if self.policy == "invest_and_sell" and self.sell_context is None:
-            raise ValueError("invest-and-sell scenarios require SELL context")
+        _validate_product_shape(self)
         _require_currency(self.valuation_currency, "valuation_currency")
         _require_canonical_tuple(self.currency_specs, lambda item: item.currency, "currency_specs")
         _require_canonical_tuple(self.provenance, lambda item: item.provenance_id, "provenance")
@@ -543,10 +648,14 @@ class ExactPlannerScenario:
         _require_canonical_tuple(self.funding_routes, lambda item: item.route_id, "funding_routes")
         _require_canonical_tuple(self.order_routes, lambda item: item.route_id, "order_routes")
         _require_canonical_tuple(self.target_weights, lambda item: item.asset_id, "target_weights")
+        _require_canonical_tuple(self.transfer_lanes, lambda item: (item.source_broker_id, item.destination_broker_id, item.currency), "transfer_lanes")
+        _require_canonical_tuple(self.cash_entries, lambda item: (item.broker_id, item.currency), "cash_entries")
         if self.valuation_currency not in {item.currency for item in self.currency_specs}:
             raise ValueError("valuation currency requires a currency spec")
-        if sum((item.weight for item in self.target_weights), ExactRatio(0)) != ExactRatio(1):
-            raise ValueError("target weights must total exactly one")
+        if self.product == "pac" and any(item.weight != ExactRatio(0) for item in self.cash_entries):
+            raise ValueError("a PAC cash entry carries limits only, never a weight")
+        if sum((item.weight for item in (*self.target_weights, *self.cash_entries)), ExactRatio(0)) != ExactRatio(1):
+            raise ValueError("target weights of the Assets and the cash cells must total exactly one")
         if {item.asset_id for item in self.target_weights} != {item.asset_id for item in self.assets}:
             raise ValueError("target weights must cover every normalized Asset exactly once")
 
@@ -721,45 +830,6 @@ class TieBreakRef:
             _require_text(decision_id, "tie-break decision ID")
 
 
-@dataclass(frozen=True, slots=True)
-class ProofRequirement:
-    requirement_id: str
-    code: str
-    allowed_sources: tuple[Literal["deterministic_conflict", "exhaustive_oracle"], ...]
-
-    def __post_init__(self) -> None:
-        _require_text(self.requirement_id, "proof requirement_id")
-        _require_text(self.code, "proof code")
-        if not self.allowed_sources:
-            raise ValueError("proof requirements need at least one exact source")
-        if len(self.allowed_sources) != len(set(self.allowed_sources)):
-            raise ValueError("proof sources must be unique")
-
-
-@dataclass(frozen=True, slots=True)
-class SellIrreducibilityGateRef:
-    gate_id: str
-    sell_decision_id: str
-    fixed_incremental_buy_decision_ids: tuple[str, ...]
-    reopened_decision_ids: tuple[str, ...]
-    counterfactuals: tuple[Literal["decrement_one_quantum", "zero_row"], ...] = ("decrement_one_quantum", "zero_row")
-
-    def __post_init__(self) -> None:
-        _require_text(self.gate_id, "SELL gate_id")
-        _require_text(self.sell_decision_id, "SELL decision_id")
-        for values, field in (
-            (
-                self.fixed_incremental_buy_decision_ids,
-                "fixed incremental BUY decision IDs",
-            ),
-            (self.reopened_decision_ids, "reopened decision IDs"),
-        ):
-            if values != tuple(sorted(set(values))):
-                raise ValueError(f"{field} must be unique and sorted")
-        if self.counterfactuals != ("decrement_one_quantum", "zero_row"):
-            raise ValueError("SELL irreducibility uses the frozen decrement-then-zero order")
-
-
 def _validate_tie_break_coverage(
     tie_breaks: tuple[TieBreakRef, ...],
     decision_by_id: dict[str, DecisionAccess],
@@ -768,20 +838,6 @@ def _validate_tie_break_coverage(
     for tie_break in tie_breaks:
         if set(tie_break.decision_ids) != expected_decision_ids:
             raise ValueError("every tie-break must cover the complete decision vector")
-
-
-def _validate_sell_gate_references(
-    sell_gates: tuple[SellIrreducibilityGateRef, ...],
-    decision_by_id: dict[str, DecisionAccess],
-) -> None:
-    for gate in sell_gates:
-        sell_decision = decision_by_id.get(gate.sell_decision_id)
-        if sell_decision is None or sell_decision.family != "sell_quantum":
-            raise ValueError("SELL gates must reference one SELL decision")
-        if any(decision_by_id.get(decision_id) is None or decision_by_id[decision_id].family != "buy_quantum" for decision_id in gate.fixed_incremental_buy_decision_ids):
-            raise ValueError("SELL gates can freeze only declared BUY decisions")
-        if any(decision_by_id.get(decision_id) is None or decision_by_id[decision_id].family not in {"funding_transfer", "fx_debit"} for decision_id in gate.reopened_decision_ids):
-            raise ValueError("SELL gates can reopen only funding and FX decisions")
 
 
 @dataclass(frozen=True, slots=True)
@@ -796,29 +852,16 @@ class ExactPolicyView:
     constraints: tuple[ConstraintRef, ...]
     objectives: tuple[ObjectiveRef, ...]
     tie_breaks: tuple[TieBreakRef, ...]
-    sell_gates: tuple[SellIrreducibilityGateRef, ...]
-    proof_requirements: tuple[ProofRequirement, ...]
 
     def __post_init__(self) -> None:
         _require_text(self.view_id, "view_id")
         _require_text(self.scenario_fingerprint, "scenario_fingerprint")
-        if self.purpose not in {
-            "primary",
-            "invest_only_baseline",
-            "sell_extension",
-            "deployment",
-        }:
+        if self.purpose not in {"primary", "deployment"}:
             raise ValueError("unknown exact policy purpose")
         if self.phase != "exact":
             raise ValueError("ExactPolicyView must use the exact phase")
         if (self.product == "pac") != (self.policy in {"proportional", "min_fragmentation"}):
             raise ValueError("ExactPolicyView product and policy must be compatible")
-        if self.purpose == "primary" and self.policy == "invest_and_sell":
-            raise ValueError("invest_and_sell requires an invest-only baseline view")
-        if self.purpose in {"invest_only_baseline", "sell_extension"} and self.policy != "invest_and_sell":
-            raise ValueError(f"{self.purpose} requires invest_and_sell policy")
-        if self.purpose != "sell_extension" and (self.sell_gates or self.proof_requirements):
-            raise ValueError("only sell_extension views can carry SELL proof metadata")
         _require_canonical_tuple(self.decisions, lambda item: item.decision_id, "decisions")
         decision_by_id = {item.decision_id: item for item in self.decisions}
         _require_canonical_tuple(self.constraints, lambda item: item.ref_id, "constraints")
@@ -842,12 +885,6 @@ class ExactPolicyView:
         )
         _validate_tie_break_coverage(
             self.tie_breaks,
-            decision_by_id,
-        )
-        _require_canonical_tuple(self.sell_gates, lambda item: item.gate_id, "sell_gates")
-        _require_canonical_tuple(self.proof_requirements, lambda item: item.requirement_id, "proof_requirements")
-        _validate_sell_gate_references(
-            self.sell_gates,
             decision_by_id,
         )
 
@@ -985,7 +1022,6 @@ class ExactFundingSourceEvaluation:
 @dataclass(frozen=True, slots=True)
 class ExactFxEvaluation:
     decision_id: str
-    order_route_id: str
     broker_id: str
     source_currency: str
     destination_currency: str
@@ -999,7 +1035,6 @@ class ExactFxEvaluation:
 
     def __post_init__(self) -> None:
         _require_text(self.decision_id, "FX decision_id")
-        _require_text(self.order_route_id, "FX order_route_id")
         _require_text(self.broker_id, "FX broker_id")
         _require_currency(self.source_currency, "FX source_currency")
         _require_currency(self.destination_currency, "FX destination_currency")
@@ -1124,6 +1159,9 @@ class ExactBrokerLedgerEvaluation:
     accounting_rounding_adjustment: ExactRatio
     final_spendable: ExactRatio
     final_physical: ExactRatio
+    # A2 (project 67): money moved between Brokers, exact both ways. Defaults keep every hand-built row valid.
+    transfer_in: ExactRatio = ExactRatio(0)
+    transfer_out: ExactRatio = ExactRatio(0)
 
     def __post_init__(self) -> None:
         _require_text(self.broker_id, "ledger broker_id")
@@ -1140,9 +1178,11 @@ class ExactBrokerLedgerEvaluation:
             "sell_fees",
             "broker_withheld_tax",
             "self_reserved_tax",
+            "transfer_in",
+            "transfer_out",
         ):
             _require_nonnegative(getattr(self, field), field)
-        expected_spendable = self.initial_selected + self.funding_in + self.fx_credit + self.gross_sell_credit - self.funding_out - self.fx_debit - self.buy_debit - self.buy_fees - self.sell_fees - self.broker_withheld_tax - self.self_reserved_tax
+        expected_spendable = self.initial_selected + self.funding_in + self.fx_credit + self.gross_sell_credit + self.transfer_in - self.funding_out - self.fx_debit - self.buy_debit - self.buy_fees - self.sell_fees - self.broker_withheld_tax - self.self_reserved_tax - self.transfer_out
         if self.final_spendable != expected_spendable:
             raise ValueError("ledger final_spendable does not reconcile")
         if self.final_physical != self.final_spendable + self.self_reserved_tax:
@@ -1196,6 +1236,27 @@ class ExactAssetEvaluation:
 
 
 @dataclass(frozen=True, slots=True)
+class ExactCashTargetEvaluation:
+    """A cash cell with a target (Rebalancer, specifica §6.1): its spendable cash at the end, in the valuation currency,
+    against ``weight · F``."""
+
+    broker_id: str
+    currency: str
+    target_weight: ExactRatio
+    target_value: ExactRatio
+    final_value: ExactRatio
+    residual: ExactRatio
+
+    def __post_init__(self) -> None:
+        _require_text(self.broker_id, "cash target broker_id")
+        _require_currency(self.currency, "cash target currency")
+        _require_unit_interval(self.target_weight, "cash target weight")
+        _require_nonnegative(self.target_value, "cash target value")
+        if self.residual != self.final_value - self.target_value:
+            raise ValueError("cash target residual does not reconcile")
+
+
+@dataclass(frozen=True, slots=True)
 class ExactAccountingEvaluation:
     current_invested: ExactRatio
     selected_funding: ExactRatio
@@ -1210,6 +1271,12 @@ class ExactAccountingEvaluation:
     rounding_adjustment: ExactRatio
     rounding_bound: ExactRatio
     identity_delta: ExactRatio
+    # B1 (project 67), specifica §5-§6: the wealth the plan starts from and ends with, the money lost on the way, and what is
+    # neither in an Asset nor in a cash cell with a target. ``F`` counts every selected cash, trapped or not.
+    initial_wealth: ExactRatio
+    final_wealth: ExactRatio
+    wealth_loss: ExactRatio
+    uninvested: ExactRatio
 
     def __post_init__(self) -> None:
         for field in (
@@ -1220,6 +1287,7 @@ class ExactAccountingEvaluation:
             "fixed_reference",
             "physical_reserves",
             "rounding_bound",
+            "initial_wealth",
         ):
             _require_nonnegative(getattr(self, field), field)
         if self.trapped_funding != self.selected_funding - self.reachable_funding:
@@ -1231,6 +1299,13 @@ class ExactAccountingEvaluation:
         expected_delta = self.shortfall - (self.free_cash + self.physical_reserves + self.economic_losses + self.rounding_adjustment)
         if self.identity_delta != expected_delta:
             raise ValueError("accounting identity_delta does not reconcile")
+        if self.initial_wealth != self.current_invested + self.selected_funding:
+            raise ValueError("initial wealth must equal current invested plus selected funding")
+        if self.wealth_loss != self.initial_wealth - self.final_wealth:
+            raise ValueError("wealth loss must equal initial less final wealth")
+        # The same identity as ``identity_delta``, read on the whole wealth: trapped cash enters both sides and cancels.
+        if self.wealth_loss != self.physical_reserves + self.economic_losses + self.rounding_adjustment + self.identity_delta:
+            raise ValueError("wealth loss does not reconcile with reserves, losses and rounding")
 
 
 @dataclass(frozen=True, slots=True)
@@ -1298,6 +1373,7 @@ class ExactEvaluation:
     ledgers: tuple[ExactBrokerLedgerEvaluation, ...] = ()
     holdings: tuple[ExactHoldingEvaluation, ...] = ()
     assets: tuple[ExactAssetEvaluation, ...] = ()
+    cash_targets: tuple[ExactCashTargetEvaluation, ...] = ()
     accounting: ExactAccountingEvaluation | None = None
     costs: ExactCostEvaluation | None = None
     canonical_tie_decision_ids: tuple[str, ...] = ()
@@ -1327,7 +1403,7 @@ class ExactEvaluation:
             lambda item: (item.source_kind, item.source_id),
             "funding sources",
         )
-        _require_canonical_tuple(self.fx, lambda item: (item.order_route_id, item.source_currency), "FX evaluations")
+        _require_canonical_tuple(self.fx, lambda item: (item.broker_id, item.source_currency, item.destination_currency), "FX evaluations")
         _require_canonical_tuple(self.orders, lambda item: item.route_id, "order evaluations")
         _require_canonical_tuple(
             self.ledgers,
@@ -1402,3 +1478,28 @@ class ExactRoundingTopUp:
         if isinstance(self.rounded_postings, bool) or not isinstance(self.rounded_postings, int) or self.rounded_postings < 1:
             raise ValueError("top-up rounded_postings must be a positive integer")
         _require_positive(self.valuation_amount, "top-up valuation_amount")
+
+
+@dataclass(frozen=True, slots=True)
+class ExactCashLimitOvershoot:
+    """A cash limit a plan of the wide model misses by its rounding (lot ZB of project 67, specification §16.16).
+
+    The wide model holds the cell's exact cash inside the limit; the replay rounds every posting against the plan, so the
+    posted cash may end beyond it by at most the reserves of the cell's postings that happened (``posting_reserve``).
+    ``amount`` is that miss in the cell's own currency, in whole minor units (rounded up where the limit, set in the
+    valuation currency, does not convert to a whole number of them); ``side`` says which limit; ``reserved_postings``
+    counts the postings whose reserve allowed it.
+    """
+
+    broker_id: str
+    currency: str
+    side: Literal["minimum", "maximum"]
+    amount: ExactRatio
+    reserved_postings: int
+
+    def __post_init__(self) -> None:
+        _require_text(self.broker_id, "overshoot broker_id")
+        _require_currency(self.currency, "overshoot currency")
+        _require_positive(self.amount, "overshoot amount")
+        if isinstance(self.reserved_postings, bool) or not isinstance(self.reserved_postings, int) or self.reserved_postings < 1:
+            raise ValueError("overshoot reserved_postings must be a positive integer")

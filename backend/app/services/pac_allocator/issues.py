@@ -5,8 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal, get_args
 
-from backend.app.schemas.pac_allocator.base import PlannerIssueCode
-from backend.app.schemas.pac_allocator.issues import EntityIssuePath, FieldIssuePath, PlannerIssue, PlannerIssueEntityKind, PlannerIssueParam, PlannerIssuePath, PlannerIssueSection, SectionIssuePath
+from backend.app.schemas.pac_allocator.base import PlannerIssueCode, PlannerMoneyInput
+from backend.app.schemas.pac_allocator.issues import EntityIssuePath, FieldIssuePath, MoneyIssueParam, PlannerIssue, PlannerIssueEntityKind, PlannerIssueParam, PlannerIssuePath, PlannerIssueSection, SectionIssuePath
 
 type IssueKind = Literal["missing", "invalid", "unsupported", "constraint", "proof", "info"]
 type IssueSeverity = Literal["info", "warning", "error"]
@@ -37,14 +37,19 @@ def _normalizer_definition(code: PlannerIssueCode, kind: NormalizerIssueKind) ->
 # Canonical public universe.  It intentionally carries no inferred
 # kind/severity policy for codes that this normalizer does not produce.
 CANONICAL_ISSUE_CODES: tuple[PlannerIssueCode, ...] = get_args(PlannerIssueCode)
-if len(CANONICAL_ISSUE_CODES) != 77 or len(set(CANONICAL_ISSUE_CODES)) != 77:
-    raise RuntimeError("PlannerIssueCode must remain the frozen 77-value G3 universe")
+# Lot SE of project 67 added allocation.solver_numerical_error (77 → 78), by the coordinator's decision of 16/11; lot ZB added
+# allocation.cash_limit_exceeded_by_rounding (78 → 79), by the developer's decision of 17/11 (specification §16.16).
+if len(CANONICAL_ISSUE_CODES) != 79 or len(set(CANONICAL_ISSUE_CODES)) != 79:
+    raise RuntimeError("PlannerIssueCode must remain the frozen 79-value universe (A4 closed it at 77, step 4; lots SE and ZB added one each)")
 
 
 # Explicit W1 producer map.  Adding `self.issue(code, ...)` without first
 # defining that code here fails closed rather than inventing a universal
 # default for source, evaluator, solver, proof, or publication issues.
 W1_NORMALIZER_ISSUE_DEFINITIONS: dict[PlannerIssueCode, IssueDefinition] = {
+    "allocation.bound_max_below_current": _normalizer_definition("allocation.bound_max_below_current", "invalid"),
+    "allocation.bound_min_above_max": _normalizer_definition("allocation.bound_min_above_max", "invalid"),
+    "allocation.bounds_min_sum_exceeds_reference": _normalizer_definition("allocation.bounds_min_sum_exceeds_reference", "invalid"),
     "allocation.broker_inactive": _normalizer_definition("allocation.broker_inactive", "unsupported"),
     "allocation.capacity_unsupported": _normalizer_definition("allocation.capacity_unsupported", "unsupported"),
     "allocation.cash_selection_invalid": _normalizer_definition("allocation.cash_selection_invalid", "invalid"),
@@ -58,7 +63,6 @@ W1_NORMALIZER_ISSUE_DEFINITIONS: dict[PlannerIssueCode, IssueDefinition] = {
     "allocation.fee_floor_exceeds_cap": _normalizer_definition("allocation.fee_floor_exceeds_cap", "invalid"),
     "allocation.fee_rate_out_of_range": _normalizer_definition("allocation.fee_rate_out_of_range", "invalid"),
     "allocation.fee_schedule_missing": _normalizer_definition("allocation.fee_schedule_missing", "missing"),
-    "allocation.fiscal_currency_missing": _normalizer_definition("allocation.fiscal_currency_missing", "missing"),
     "allocation.funding_cap_negative": _normalizer_definition("allocation.funding_cap_negative", "invalid"),
     "allocation.fx_rate_inconsistent": _normalizer_definition("allocation.fx_rate_inconsistent", "invalid"),
     "allocation.fx_rate_missing": _normalizer_definition("allocation.fx_rate_missing", "missing"),
@@ -87,8 +91,8 @@ W1_NORMALIZER_ISSUE_DEFINITIONS: dict[PlannerIssueCode, IssueDefinition] = {
     "allocation.target_total_not_one": _normalizer_definition("allocation.target_total_not_one", "invalid"),
     "allocation.target_weight_missing": _normalizer_definition("allocation.target_weight_missing", "missing"),
     "allocation.target_weight_out_of_range": _normalizer_definition("allocation.target_weight_out_of_range", "invalid"),
-    "allocation.tax_netting_unsupported": _normalizer_definition("allocation.tax_netting_unsupported", "unsupported"),
     "allocation.wac_missing": _normalizer_definition("allocation.wac_missing", "missing"),
+    "pac_allocator.cash_weight_unsupported": _normalizer_definition("pac_allocator.cash_weight_unsupported", "unsupported"),
     "portfolio_rebalancer.carried_loss_negative": _normalizer_definition("portfolio_rebalancer.carried_loss_negative", "invalid"),
     "portfolio_rebalancer.cost_basis_negative": _normalizer_definition("portfolio_rebalancer.cost_basis_negative", "invalid"),
     "portfolio_rebalancer.holdings_missing": _normalizer_definition("portfolio_rebalancer.holdings_missing", "missing"),
@@ -123,6 +127,23 @@ def make_issue(
 ) -> PlannerIssue:
     ordered_params = sorted(params, key=lambda param: param.name)
     return PlannerIssue(code=definition.code, severity=definition.severity, kind=definition.kind, path=path, message_key=definition.code, params=ordered_params)
+
+
+def bounds_unsatisfiable_issue(entity_kind: Literal["asset", "cash"], entity_id: str) -> PlannerIssue:
+    """``allocation.bounds_unsatisfiable`` for one entry that carries a limit (M20, decisioni §10.2).
+
+    A ready result cannot carry an ``error``, so the problem is a ``warning`` of kind ``constraint``, its path on the entry; the
+    interface gathers the listed entries into one banner.
+    """
+    return PlannerIssue(code="allocation.bounds_unsatisfiable", severity="warning", kind="constraint", path=entity_path("targets", entity_kind, entity_id), message_key="allocation.bounds_unsatisfiable", params=[])
+
+
+def solver_numerical_error_issue() -> PlannerIssue:
+    """``allocation.solver_numerical_error``: SCIP failed inside a stage after the search already held a plan (lot SE of
+    project 67). The plan is published, not proven, and the run's stop reads ``time_limit``, the wire's only stop for an
+    unfinished stage: this warning names the real cause, so the user does not read it as the clock and raise a budget
+    that would not help. A ``warning`` of kind ``proof`` on the ``proof`` section; no parameter, nothing personal."""
+    return PlannerIssue(code="allocation.solver_numerical_error", severity="warning", kind="proof", path=section_path("proof"), message_key="allocation.solver_numerical_error", params=[])
 
 
 def normalizer_issue_definition(code: PlannerIssueCode) -> IssueDefinition:
@@ -196,3 +217,19 @@ def normalization_availability(issues: list[PlannerIssue] | tuple[PlannerIssue, 
     if error_kinds & {"constraint", "proof"}:
         raise ValueError("Constraint/proof errors cannot determine input normalization availability")
     return "ready"
+
+
+def cash_limit_exceeded_by_rounding_issue(broker_id: str, currency: str, exceeded_by: str) -> PlannerIssue:
+    """``allocation.cash_limit_exceeded_by_rounding`` (lot ZB of project 67, specification §16.16): the prudent model held
+    no plan, the wide one did, and its plan ends this cash cell beyond its limit by the rounding of its postings, at most
+    the reserves of those that happened (one minor unit each). The plan is published, not proven, with this note:
+    ``exceeded_by`` is the miss in the cell's own ``currency``, whole minor units (``PlannerFixedDecimal``). A ``warning``
+    of kind ``constraint`` on the cell, like the rounding top-up's note."""
+    return PlannerIssue(
+        code="allocation.cash_limit_exceeded_by_rounding",
+        severity="warning",
+        kind="constraint",
+        path=entity_path("targets", "cash", f"{broker_id}:{currency}"),
+        message_key="allocation.cash_limit_exceeded_by_rounding",
+        params=[MoneyIssueParam(kind="money", name="exceeded_by", value=PlannerMoneyInput(amount=exceeded_by, currency=currency))],
+    )

@@ -385,3 +385,137 @@ describe('a disabled action with a hint stays reachable (66 F7)', () => {
         });
     }
 });
+
+// ---------------------------------------------------------------------------
+// 77 SEL-A — the number of each action, the bar at the top of a table and the actions row of the dock
+// ---------------------------------------------------------------------------
+
+/**
+ * Plan 77, approved 19/11/2026 (Q-SEL-1, Q-SEL-8, Q-SEL-13, Q-SEL-15, Q-SEL-16).
+ * - An action may carry `count`: the number of rows it acts on, drawn beside it in every variant
+ *   (`toolbar-action-<id>-count`). Without it, nothing changes.
+ * - `variant="top"`: the bar at the top of a table. It keeps its row while nothing is selected, holding a grey hint
+ *   (`selection-toolbar-hint`) so the table does not jump at the first tick; with a selection, the count button and the
+ *   actions with their words (the U8 rule) and numbers. It sits in the flow: nothing fixed, nothing reserved.
+ * - `variant="dock"`: the actions row of a table's dock (the balloon at its bottom). Like the floating card's content —
+ *   a `role="toolbar"`, the words, the gap before the destructive action, Esc deselects from inside — but in the flow of
+ *   its dock, and it reserves nothing at the bottom of the page. Nothing without a selection.
+ */
+describe('the number of rows each action takes (77 SEL-A)', () => {
+    for (const variant of ['floating', 'inline', 'top', 'dock'] as const) {
+        it(`${variant}: an action with a count shows it; one without shows none`, () => {
+            const onClick = vi.fn();
+            render(DataTableToolbar, {
+                selectedCount: 3,
+                variant,
+                bulkActions: [
+                    {id: 'edit', icon: Pencil, label: 'Edit', count: 2, onClick},
+                    {id: 'delete', icon: Trash2, label: 'Delete', variant: 'danger' as const, onClick},
+                ],
+            });
+            expect(screen.getByTestId('toolbar-action-edit-count').textContent?.trim()).toBe('2');
+            expect(screen.queryByTestId('toolbar-action-delete-count')).toBeNull();
+        });
+    }
+
+    // 77 SEL-B (the designer, 20/11): on a phone the number is a dot on the icon's corner, drawn only; the button's name
+    // carries it, so a screen reader says how many rows the action takes.
+    for (const variant of ['floating', 'top', 'dock'] as const) {
+        it(`${variant}: the name of an action with a count says the number`, () => {
+            const onClick = vi.fn();
+            render(DataTableToolbar, {
+                selectedCount: 3,
+                variant,
+                bulkActions: [
+                    {id: 'edit', icon: Pencil, label: 'Edit', count: 25, onClick},
+                    {id: 'delete', icon: Trash2, label: 'Delete', variant: 'danger' as const, onClick},
+                ],
+            });
+            expect(screen.getByTestId('toolbar-action-edit')).toHaveAttribute('aria-label', 'Edit, 25');
+            expect(screen.getByTestId('toolbar-action-delete')).toHaveAttribute('aria-label', 'Delete');
+        });
+
+        it(`${variant}: with a short label and a count, the name is the shown word and the number (never the number twice)`, () => {
+            render(DataTableToolbar, {
+                selectedCount: 3,
+                variant,
+                bulkActions: [{id: 'edit', icon: Pencil, label: 'Edit 3 assets', shortLabel: 'Edit', count: 3, onClick: vi.fn()}],
+            });
+            expect(screen.getByTestId('toolbar-action-edit')).toHaveAttribute('aria-label', 'Edit, 3');
+        });
+    }
+});
+
+describe('variant top (77 SEL-A)', () => {
+    it('keeps its row with the hint while nothing is selected: no count button, no action', () => {
+        const {list} = actions();
+        render(DataTableToolbar, {selectedCount: 0, bulkActions: list, variant: 'top', hint: 'Pick some rows'});
+        // The hint only: the bar itself exists only with a selection, as the floating bar always did.
+        expect(screen.queryByTestId('selection-toolbar')).toBeNull();
+        expect(screen.getByTestId('selection-toolbar-hint').textContent?.trim()).toBe('Pick some rows');
+        expect(screen.queryByTestId('selection-toolbar-clear')).toBeNull();
+        expect(screen.queryByTestId('toolbar-action-edit')).toBeNull();
+    });
+
+    it('without a hint of its own, it says the shared one', () => {
+        const {list} = actions();
+        render(DataTableToolbar, {selectedCount: 0, bulkActions: list, variant: 'top'});
+        expect(screen.getByTestId('selection-toolbar-hint').textContent?.trim()).not.toBe('');
+    });
+
+    it('with a selection: the count button and the actions with their words, in the flow, nothing reserved', async () => {
+        const {list, edit} = actions();
+        const onClearSelection = vi.fn();
+        render(DataTableToolbar, {selectedCount: 3, bulkActions: list, variant: 'top', onClearSelection, hint: 'Pick some rows'});
+        const bar = screen.getByTestId('selection-toolbar');
+        expect(bar).toHaveAttribute('data-selected-count', '3');
+        expect(bar).toHaveAttribute('role', 'toolbar');
+        expect(screen.queryByTestId('selection-toolbar-hint')).toBeNull();
+        expect(screen.getByTestId('toolbar-action-edit-label').textContent?.trim()).toBe('Edit');
+        expect(screen.getByTestId('toolbar-action-edit')).toHaveAttribute('data-primary', 'true');
+        expect(screen.getByTestId('toolbar-action-delete')).toHaveAttribute('data-danger', 'true');
+        expect(document.documentElement.style.getPropertyValue('--lf-selbar-space')).toBe('');
+
+        await fireEvent.click(screen.getByTestId('toolbar-action-edit'));
+        expect(edit).toHaveBeenCalledTimes(1);
+        await fireEvent.click(screen.getByTestId('selection-toolbar-clear'));
+        expect(onClearSelection).toHaveBeenCalledTimes(1);
+    });
+});
+
+describe('variant top: Esc (77 SEL-A)', () => {
+    it('Esc deselects from inside the top bar and stops there (a dialog around it stays open)', async () => {
+        const {list} = actions();
+        const onClearSelection = vi.fn();
+        const outer = vi.fn();
+        document.addEventListener('keydown', outer);
+        render(DataTableToolbar, {selectedCount: 2, bulkActions: list, variant: 'top', onClearSelection});
+        await fireEvent.keyDown(screen.getByTestId('toolbar-action-edit'), {key: 'Escape'});
+        document.removeEventListener('keydown', outer);
+        expect(onClearSelection).toHaveBeenCalledTimes(1);
+        expect(outer).not.toHaveBeenCalled();
+    });
+});
+
+describe('variant dock (77 SEL-A)', () => {
+    it('exists only with a selection, is a toolbar with the words, and reserves nothing at the bottom of the page', async () => {
+        const {list} = actions();
+        const view = render(DataTableToolbar, {selectedCount: 0, bulkActions: list, variant: 'dock'});
+        expect(screen.queryByTestId('selection-toolbar')).toBeNull();
+
+        await view.rerender({selectedCount: 2, bulkActions: list, variant: 'dock'});
+        const bar = screen.getByTestId('selection-toolbar');
+        expect(bar).toHaveAttribute('data-variant', 'dock');
+        expect(bar).toHaveAttribute('role', 'toolbar');
+        expect(screen.getByTestId('toolbar-action-edit-label').textContent?.trim()).toBe('Edit');
+        expect(document.documentElement.style.getPropertyValue('--lf-selbar-space')).toBe('');
+    });
+
+    it('Esc deselects from inside the dock row', async () => {
+        const {list} = actions();
+        const onClearSelection = vi.fn();
+        render(DataTableToolbar, {selectedCount: 2, bulkActions: list, variant: 'dock', onClearSelection});
+        await fireEvent.keyDown(screen.getByTestId('toolbar-action-edit'), {key: 'Escape'});
+        expect(onClearSelection).toHaveBeenCalledTimes(1);
+    });
+});

@@ -322,3 +322,34 @@ describe('AssetModal — the blocker token and the 409 are gone', () => {
         expect(onupdated).not.toHaveBeenCalled();
     });
 });
+
+/**
+ * SEL-FIX1: a failed save scrolls its inline error into view a moment later (a 50 ms timer). A modal closed meanwhile
+ * must take that timer with it: run after the test file's jsdom was torn down, it read a `document` that no longer
+ * existed («ReferenceError: document is not defined», rc=1 on a full run with every test green).
+ */
+describe('AssetModal — no timer outlives the modal (SEL-FIX1)', () => {
+    it('closed right after a failed save, the modal leaves no scroll to its error behind', async () => {
+        summaryFn().mockResolvedValue(summary() as never);
+        patchFn().mockRejectedValue(Object.assign(new Error('Request failed with status code 500'), {response: {status: 500}}));
+        const view = render(AssetModal, {
+            open: true,
+            editMode: true,
+            editData: {id: ASSET_ID, display_name: 'Currency asset', currency: 'USD', asset_type: 'STOCK', quote_base_quantity: 1, active: true},
+            onupdated: vi.fn(),
+        });
+        await waitFor(() => expect(saveBtn()).toBeEnabled());
+        await chooseCurrency('EUR');
+        const lookups = vi.spyOn(document, 'querySelector');
+
+        await fireEvent.click(saveBtn());
+        await waitFor(() => expect(screen.queryByTestId('asset-modal-form-error')).not.toBeNull());
+        view.unmount();
+        const atUnmount = lookups.mock.calls.filter(([selector]) => selector === '[data-form-error]').length;
+        await new Promise((resolve) => setTimeout(resolve, 120));
+
+        const after = lookups.mock.calls.filter(([selector]) => selector === '[data-form-error]').length - atUnmount;
+        expect(after, 'a scroll to the error ran after the modal was gone').toBe(0);
+        lookups.mockRestore();
+    });
+});

@@ -41,6 +41,15 @@ The `DataTable` is a powerful, generic table component built with Svelte 5 Runes
 - **Actions**: Per-row actions behind a **⋮** button in the actions column, and bulk actions on the
   selected rows. Actions with `requireConfirm` go through a [ConfirmModal](modals.md#confirmmodal).
 - **Context Menu**: Right-click on a row opens the same menu as **⋮**, built from `rowActions`.
+  - **Hidden or blocked** (77 SEL-M, Q-SEL-12): an action that makes no sense on a row is hidden with `visible`. One that
+    makes sense but is blocked returns its reason from `blocked(row)` (`{hint, reason}`, as the bulk actions do). Its item
+    is `aria-disabled`, reachable, with an ⓘ; a hover, a tap, a click or the keyboard focus opens the reason in the
+    shared `Tooltip`, placed against the whole menu. Its click runs nothing and leaves the menu open, and it carries
+    `data-disabled-reason` (the code) for the tests. `disabled(row)` without a reason is the old form, still drawn as
+    native `disabled` until its last users move.
+  - **Keyboard** (WAI-ARIA menu): the first item takes the focus when the menu opens; ↑ ↓ Home End move through every
+    item, the blocked ones too; Enter and Space run; Escape and Tab close it and give the focus back to the ⋮ (or to what
+    held it before a right-click). Escape is consumed, so a modal under the menu stays open.
 - **Sticky Columns**: The header row sticks inside the table's scroll area; the selection column,
   pinned columns and, by default, the actions column stick to their edge while the table scrolls
   sideways — on phones the selection and actions columns scroll with it. See
@@ -292,6 +301,11 @@ The pagination bar (`DataTablePagination.svelte`) floats in a balloon that stick
 the scroll area. It appears when pagination is on and the filtered rows outnumber the smallest
 non-zero entry of `pageSizeOptions` — or, with `alwaysShowPagination`, as soon as there is one row.
 Changing the page size returns to the first page and is saved under the table's `storageKey`.
+With a single entry in `pageSizeOptions` there is nothing to choose: the pager draws no page-size selector (nor its
+«per page»), only the number of items and the pages (`pagination-total`, 77 SEL-D1). The profile's «Latest changes»,
+which the server pages by 20, is such a pager.
+Below 480 px the words «per page» leave the balloon and stay in the selector's accessible name («25 per page»); the
+balloon is then a row that wraps, so with few pages the size, the total and the pages share one line (77 SEL-D2).
 
 The page-size menu is positioned with **fixed** coordinates computed from its trigger
 (`getFixedDropdownPosition`, `lib/utils/layout/dropdownPosition.ts`): it opens below the trigger,

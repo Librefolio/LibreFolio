@@ -48,6 +48,8 @@ const STRICT = vi.hoisted(() => {
 // same as txCommitApi.test.ts / auth.test.ts.
 vi.mock('$lib/api', () => ({
     axiosInstance: {get: axiosGet, post: axiosPost},
+    apiRequestHeaders: () => ({}),
+    observeFetchAnswer: () => null,
 }));
 
 // Generated-module runtime mock. The source artifact must still exist so Vite
@@ -129,8 +131,12 @@ vi.mock('$lib/api/generated-tools', async () => {
         metrics: metricsSchema,
     });
 
+    const progressStep = z.union([z.number().int().gte(1), z.null()]);
+    const computeProgressSchema = z.object({kind: z.literal('progress'), correlation_id: z.string(), phase: z.string(), step: progressStep, total: progressStep, elapsed_ms: z.number()}).strict();
+
     return {
         toolTransportSchemas: {
+            computeProgress: computeProgressSchema,
             catalog: catalogSchema,
             diagnostics: diagnosticsSchema,
             computeRequest: computeRequestSchema,
@@ -188,7 +194,8 @@ import {verifyToolDescriptor} from './contracts';
 type DemoResult = {status: 'success'; correlation_id: string; result: unknown} | {status: 'error'; correlation_id: string};
 
 const verifyDescriptorForTest = verifyToolDescriptor as unknown as (catalog: unknown, code: string, version: string) => unknown;
-const runToolForTest = runTool as unknown as (code: string, version: string, options: {descriptor: unknown; correlationId: string; parameters: unknown}) => Promise<DemoResult>;
+type ProgressForTest = {phase: string; step: number | null; total: number | null; correlation_id: string};
+const runToolForTest = runTool as unknown as (code: string, version: string, options: {descriptor: unknown; correlationId: string; parameters: unknown; signal?: AbortSignal; onProgress?: (event: ProgressForTest) => void}) => Promise<DemoResult>;
 const toolContractMapForTest = toolContractMap as unknown as Record<
     string,
     Record<
@@ -716,5 +723,120 @@ describe('tools client — compute request wire contract', () => {
         const parsedWire = JSON.parse(wireBody);
         expect(Object.hasOwn(data, 'protocol_hint')).toBe(false);
         expect(Object.hasOwn(parsedWire, 'protocol_hint')).toBe(false);
+    });
+
+    // -------------------------------------------------------------------
+    // Progress (lot V1 of project 67): with onProgress the same request goes
+    // to the streaming route, read line by line with fetch.
+    // -------------------------------------------------------------------
+
+    const encoder = new TextEncoder();
+
+    function progressLine(correlationId: string, phase: string, step: number | null = null, total: number | null = null): string {
+        return `${JSON.stringify({kind: 'progress', correlation_id: correlationId, phase, step, total, elapsed_ms: 5})}\n`;
+    }
+
+    function resultLine(request: {request_id: string; items: Array<Record<string, unknown>>}, result: unknown): string {
+        const item = request.items[0];
+        const response = {
+            request_id: request.request_id,
+            results: [
+                {
+                    correlation_id: item.correlation_id,
+                    tool_code: item.tool_code,
+                    contract_version: item.contract_version,
+                    implementation_version: item.implementation_version,
+                    schema_fingerprint: item.schema_fingerprint,
+                    execution_id: 'exec-stream',
+                    status: 'success',
+                    result,
+                },
+            ],
+            success_count: 1,
+            failed_count: 0,
+        };
+        return `${JSON.stringify({kind: 'result', response})}\n`;
+    }
+
+    it('runTool with onProgress reads progress lines then the result', async () => {
+        const fetchMock = vi.fn(async (_url: string, init: RequestInit) => {
+            const request = JSON.parse(String(init.body));
+            const correlationId = request.items[0].correlation_id;
+            const chunks = [progressLine(correlationId, 'validate'), progressLine('another-item', 'search', 1, 2) + progressLine(correlationId, 'search', 1, 2), resultLine(request, {streamed: true})];
+            return new Response(
+                new ReadableStream({
+                    start(controller) {
+                        for (const chunk of chunks) controller.enqueue(encoder.encode(chunk));
+                        controller.close();
+                    },
+                }),
+                {status: 200, headers: {'Content-Type': 'application/x-ndjson'}},
+            );
+        });
+        vi.stubGlobal('fetch', fetchMock);
+        const events: ProgressForTest[] = [];
+        try {
+            const result = await runToolForTest(DEMO.toolCode, DEMO.contractVersion, {descriptor: demoDescriptor, correlationId: 'corr-stream', parameters: {label: 'ok'}, onProgress: (event) => events.push(event)});
+
+            expect(axiosPost).not.toHaveBeenCalled();
+            expect(fetchMock).toHaveBeenCalledTimes(1);
+            expect(fetchMock.mock.calls[0][0]).toBe('/api/v1/tools/compute/stream');
+            expect(events.map((event) => [event.phase, event.step, event.total])).toEqual([
+                ['validate', null, null],
+                ['search', 1, 2],
+            ]);
+            expect(result.status).toBe('success');
+            expect(result.correlation_id).toBe('corr-stream');
+            if (result.status === 'success') expect(result.result).toEqual({streamed: true});
+        } finally {
+            vi.unstubAllGlobals();
+        }
+    });
+
+    it('runTool with onProgress aborts the stream on Stop', async () => {
+        const stop = new AbortController();
+        let cancelled = false;
+        let fetchSignal: AbortSignal | undefined;
+        const fetchMock = vi.fn(async (_url: string, init: RequestInit) => {
+            fetchSignal = init.signal ?? undefined;
+            const correlationId = JSON.parse(String(init.body)).items[0].correlation_id;
+            return new Response(
+                new ReadableStream({
+                    start(controller) {
+                        controller.enqueue(encoder.encode(progressLine(correlationId, 'validate')));
+                    },
+                    cancel() {
+                        cancelled = true;
+                    },
+                }),
+                {status: 200, headers: {'Content-Type': 'application/x-ndjson'}},
+            );
+        });
+        vi.stubGlobal('fetch', fetchMock);
+        try {
+            const run = runToolForTest(DEMO.toolCode, DEMO.contractVersion, {descriptor: demoDescriptor, correlationId: 'corr-stop', parameters: {}, signal: stop.signal, onProgress: () => stop.abort()});
+
+            await expect(run).rejects.toMatchObject({kind: 'aborted', code: 'waiting_stopped'});
+            expect(fetchSignal?.aborted).toBe(true);
+            await vi.waitFor(() => expect(cancelled).toBe(true));
+        } finally {
+            vi.unstubAllGlobals();
+        }
+    });
+
+    it('runTool without onProgress still posts to compute', async () => {
+        const fetchMock = vi.fn();
+        vi.stubGlobal('fetch', fetchMock);
+        try {
+            mockSuccessfulCompute({plain: true});
+            const result = await runDemo({}, 'corr-plain');
+
+            expect(fetchMock).not.toHaveBeenCalled();
+            expect(axiosPost).toHaveBeenCalledTimes(1);
+            expect(axiosPost.mock.calls[0][0]).toBe('/api/v1/tools/compute');
+            expect(result.status).toBe('success');
+        } finally {
+            vi.unstubAllGlobals();
+        }
     });
 });

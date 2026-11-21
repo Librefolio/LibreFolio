@@ -1,0 +1,496 @@
+<script lang="ts">
+    /**
+     * The planner's shell, common to the Tools that share it (F1 of project 67; C0 delta §3–§6, UiTarget §13–§16).
+     *
+     * The Tool Host owns the h1, the back link, the docs link, Refresh and the
+     * version line; this shell owns the wizard and the result view. What differs
+     * between the Tools comes from the profile its wrapper sets (`profile.ts`):
+     * the PAC's when none is set. Every figure comes from the backend: the wizard
+     * only edits the draft.
+     */
+    import {onDestroy, onMount, tick, untrack} from 'svelte';
+    import {MediaQuery, SvelteSet} from 'svelte/reactivity';
+    import {afterNavigate, beforeNavigate, goto} from '$app/navigation';
+    import {ArrowLeft, ArrowRight, ChevronDown, ChevronUp, CircleStop} from 'lucide-svelte';
+    import {t} from '$lib/i18n';
+    import ConfirmModal from '$lib/components/ui/modals/ConfirmModal.svelte';
+    import {userSettings} from '$lib/stores/app/settings';
+    import {assertToolAccount, prepareToolRun} from '../../contracts';
+    import {copiedOnly, refreshCopiedFacts, refreshPlan, refreshQuery, type RefreshSummary} from './copies';
+    import type {PlannerSource} from './source';
+    import {PlannerDraft} from './draft.svelte';
+    import {STEP_FALLBACKS, listLocalProblem, stepKey, type ListedIssue} from './labels';
+    import {defaultPolicy} from './policies';
+    import {buildRequest, localProblems} from './request';
+    import {PlannerPreview, toolPreviewCall} from './preview.svelte';
+    import {PlannerRun, type PlannerDescriptor} from './run.svelte';
+    import {loadCopyScope, selectableIds} from './scope';
+    import {SourceLoad, type SourceLoadError} from './sourceLoad.svelte';
+    import type {PlannerStep} from './types';
+    import {declaredPhases, domId, getPlannerProfile, testId} from './profile';
+    import {PLANNER_OPERATION} from './defaults';
+    import {BUTTON_PRIMARY, BUTTON_SECONDARY, CARD, NOTICE, SECTION_TITLE} from './ui';
+    import HelpTip from './shared/HelpTip.svelte';
+    import IssueList from './shared/IssueList.svelte';
+    import StepNav from './shell/StepNav.svelte';
+    import SummaryPanel from './shell/SummaryPanel.svelte';
+    import ScenarioStep from './steps/ScenarioStep.svelte';
+    import LiquidityStep from './steps/LiquidityStep.svelte';
+    import BrokersStep from './steps/BrokersStep.svelte';
+    import AssetsStep from './steps/AssetsStep.svelte';
+    import RoutingStep from './steps/RoutingStep.svelte';
+    import TargetsStep from './steps/TargetsStep.svelte';
+    import FxStep from './steps/FxStep.svelte';
+    import StrategyStep from './steps/StrategyStep.svelte';
+    import RebalancerStrategyStep from './steps/RebalancerStrategyStep.svelte';
+    import ReviewStep from './steps/ReviewStep.svelte';
+    import BusyPanel from './result/BusyPanel.svelte';
+    import RefreshFailedPanel from './result/RefreshFailedPanel.svelte';
+    import RefreshNotice from './result/RefreshNotice.svelte';
+    import ResultView from './result/ResultView.svelte';
+    const PLANNER_KEY = 'tools.pacAllocator.planner';
+
+    interface Props {
+        descriptor: PlannerDescriptor;
+        accountGeneration: number;
+    }
+
+    let {descriptor, accountGeneration}: Props = $props();
+
+    /** Read once, while the shell is created: the profile the Tool's wrapper set, the PAC's when none. */
+    const profile = getPlannerProfile();
+
+    const STEP_TITLE_ID = domId('step-title', profile);
+    const STEP_ALERT_ID = domId('step-alert', profile);
+    const BUSY_TITLE_ID = domId('busy-title', profile);
+    const RESULT_TITLE_ID = domId('result-title', profile);
+    const STOPPED_TITLE_ID = domId('stopped-title', profile);
+    const REFRESH_FAILED_TITLE_ID = domId('refresh-failed-title', profile);
+    const SUMMARY_ID = domId('summary-disclosure', profile);
+
+    // Props are fixed for the life of a mount: an account change unmounts the renderer.
+    const draft = new PlannerDraft(userSettings.get()?.base_currency ?? '', defaultPolicy(profile), profile);
+    const run = new PlannerRun(() => descriptor, profile);
+    /** True from «Calcola» until the run has started: no preview may start in between (one batch per user), and the page is busy. */
+    let launching = $state(false);
+    /** The request waiting for the preview in flight; shown in the waiting panel as the run's own. */
+    let launchingBuilt = $state.raw<Parameters<PlannerRun['start']>[0] | null>(null);
+    /** «Stop» pressed while waiting for the preview: the run does not start. */
+    let launchStopped = false;
+    // The scenario preview (F3a of project 67, steps 8 and 9a): the backend's numbers before the calculation.
+    const preview = new PlannerPreview({
+        call: toolPreviewCall(
+            () => descriptor,
+            profile,
+            () => accountGeneration,
+        ),
+        blocked: () => run.running || launching,
+    });
+    $effect(() => {
+        // Every edit of the draft asks again, after the pause; the class keeps the latest only.
+        void draft.fingerprint;
+        untrack(() => preview.schedule(draft));
+    });
+    /** Re-reads the copied facts the user has not changed, right before every «Calcola». */
+    // The Rebalancer's re-read also keeps the quantities held, for its copied positions (Q-F3a-5c).
+    const refreshLoad = new SourceLoad({positions: profile.positions});
+
+    const SCOPE_ERROR: SourceLoadError = {key: 'tools.pacAllocator.planner.copy.scopeError', fallback: 'The Broker list could not be loaded. Nothing was copied.'};
+    const NO_OWNER_ERROR: SourceLoadError = {key: 'tools.pacAllocator.planner.copy.noOwner', fallback: 'Copying needs at least one Broker you own. Enter the values by hand instead.'};
+
+    const desktop = new MediaQuery('min-width: 1200px');
+    const tablet = new MediaQuery('min-width: 900px');
+
+    let view = $state<'wizard' | 'result'>('wizard');
+    let step = $state<PlannerStep>('scenario');
+    const visited = new SvelteSet<PlannerStep>(['scenario']);
+    /** The step whose Continue found problems; the alert lists them until they are fixed. */
+    let alertStep = $state<PlannerStep | null>(null);
+    let summaryOpen = $state(false);
+    /** Problems found while building the request, valid only for the draft they describe. */
+    let buildFailure = $state.raw<{fingerprint: string; problems: ListedIssue[]} | null>(null);
+    let leaveTarget = $state.raw<{url: URL; delta: number | null; external: boolean} | null>(null);
+    /** A new «Calcola» or a stop supersedes the read in flight. */
+    let refreshSequence = 0;
+    let refreshing = $state(false);
+    let refreshFailure = $state.raw<SourceLoadError | null>(null);
+    /** What the last re-read changed, valid only for the draft it produced. */
+    let refreshNotice = $state.raw<{fingerprint: string; summary: RefreshSummary; source: PlannerSource} | null>(null);
+    let allowLeave = false;
+    let destroyed = false;
+
+    const apiVersion = $derived(descriptor.contract_version);
+    const uiVersion = $derived(descriptor.ui.version);
+    /** How long the client waits for a calculation: the bar of the waiting panel fills against it. `null` when the descriptor cannot say. */
+    const timeoutMs = $derived.by((): number | null => {
+        try {
+            return prepareToolRun(profile.toolCode, profile.contractVersion, descriptor).clientTimeoutMs;
+        } catch {
+            return null;
+        }
+    });
+    /** The phases the plan reports, in order, as the served descriptor declares them (V3 of project 67). */
+    const planPhases = $derived(declaredPhases(descriptor, PLANNER_OPERATION));
+    const problems = $derived(localProblems(draft).map(listLocalProblem));
+    const reviewProblems = $derived.by(() => {
+        if (problems.length > 0) return problems;
+        return buildFailure !== null && buildFailure.fingerprint === draft.fingerprint ? buildFailure.problems : [];
+    });
+    const problemSteps = $derived(new Set(reviewProblems.flatMap((item) => (item.step ? [item.step] : []))));
+    /** R9.4: FX is a step only when a rate is needed, or while it is open or has a problem to show. */
+    const steps = $derived(step === 'fx' || problemSteps.has('fx') ? profile.steps : draft.visibleSteps);
+    const index = $derived(steps.indexOf(step));
+    const alertItems = $derived(alertStep === step ? problems.filter((item) => item.step === step) : []);
+    const runState = $derived.by(() => {
+        if (refreshing) return 'refreshing';
+        if (run.busy) return 'busy';
+        if (refreshFailure) return 'refresh_failed';
+        const outcome = run.outcome;
+        if (!outcome) return run.stopped ? 'stopped' : 'idle';
+        return outcome.kind === 'result' ? outcome.result.result_state : outcome.kind;
+    });
+    const navVariant = $derived(desktop.current ? 'vertical' : tablet.current ? 'horizontal' : 'compact');
+    const leaveCounts = $derived({assets: draft.data.assets.length, sources: draft.data.cash.length + draft.data.contributions.length});
+    const working = $derived(run.running || refreshing || launching);
+    const reviewNotice = $derived(step === 'review' && refreshNotice !== null && refreshNotice.fingerprint === draft.fingerprint && reviewProblems.length > 0 ? refreshNotice : null);
+
+    async function focusFirst(...ids: string[]): Promise<void> {
+        await tick();
+        if (destroyed) return;
+        for (const id of ids) {
+            const element = document.getElementById(id);
+            if (element) {
+                element.focus();
+                return;
+            }
+        }
+    }
+
+    function go(target: PlannerStep): void {
+        step = target;
+        visited.add(target);
+        alertStep = null;
+        void focusFirst(STEP_TITLE_ID);
+    }
+
+    function next(): void {
+        if (problems.some((item) => item.step === step)) {
+            alertStep = step;
+            void focusFirst(STEP_ALERT_ID);
+            return;
+        }
+        if (index < steps.length - 1) go(steps[index + 1]);
+    }
+
+    function back(): void {
+        if (index > 0) go(steps[index - 1]);
+    }
+
+    function editStep(target: PlannerStep): void {
+        refreshFailure = null;
+        view = 'wizard';
+        go(target);
+    }
+
+    function showResult(): void {
+        view = 'result';
+        void focusFirst(RESULT_TITLE_ID, BUSY_TITLE_ID, STOPPED_TITLE_ID);
+    }
+
+    async function calculate(options: {refresh: boolean} = {refresh: true}): Promise<void> {
+        if (run.running || refreshing || launching) return;
+        draft.refreshAsOf();
+        refreshFailure = null;
+        refreshNotice = null;
+        const early = localProblems(draft);
+        if (early.length > 0) {
+            buildFailure = {fingerprint: draft.fingerprint, problems: early.map(listLocalProblem)};
+            editStep('review');
+            return;
+        }
+        if (options.refresh && (await refreshCopies()) !== 'done') return;
+        const outcome = buildRequest(draft);
+        if (!outcome.ok) {
+            buildFailure = {fingerprint: draft.fingerprint, problems: outcome.problems.map(listLocalProblem)};
+            editStep('review');
+            return;
+        }
+        buildFailure = null;
+        await launch(outcome.built);
+    }
+
+    function refreshFailed(sequence: number, error: SourceLoadError): 'failed' | 'stopped' {
+        if (sequence !== refreshSequence || destroyed) return 'stopped';
+        refreshFailure = error;
+        void focusFirst(REFRESH_FAILED_TITLE_ID);
+        return 'failed';
+    }
+
+    /**
+     * One read of the copied, unchanged facts (prices, FX rates, cash balances).
+     * Values the user typed or changed stay as they are; nothing is read when
+     * nothing copied is left. `done` lets the calculation go on.
+     */
+    async function refreshCopies(): Promise<'done' | 'stopped' | 'failed'> {
+        const plan = refreshPlan(draft);
+        if (plan === null) return 'done';
+        const sequence = ++refreshSequence;
+        refreshing = true;
+        view = 'result';
+        void focusFirst(BUSY_TITLE_ID);
+        try {
+            let owners: number[];
+            try {
+                owners = selectableIds(await loadCopyScope());
+            } catch {
+                return refreshFailed(sequence, SCOPE_ERROR);
+            }
+            if (sequence !== refreshSequence || destroyed) return 'stopped';
+            // With no owned Broker a first read is impossible: the calculation reports what is still missing.
+            const readable = owners.length > 0 ? plan : copiedOnly(draft, plan);
+            if (readable === null) return 'done';
+            const query = refreshQuery(draft, readable, owners);
+            if (query.brokerIds.length === 0) return refreshFailed(sequence, NO_OWNER_ERROR);
+            const source = await refreshLoad.load(query, accountGeneration);
+            if (sequence !== refreshSequence || destroyed) return 'stopped';
+            if (!source) return refreshLoad.status === 'error' && refreshLoad.error ? refreshFailed(sequence, refreshLoad.error) : 'stopped';
+            const summary = refreshCopiedFacts(draft, source, readable);
+            refreshNotice = {fingerprint: draft.fingerprint, summary, source};
+            return 'done';
+        } finally {
+            if (sequence === refreshSequence) refreshing = false;
+        }
+    }
+
+    function stopRefresh(): void {
+        refreshSequence += 1;
+        refreshLoad.stop();
+        refreshing = false;
+        editStep('review');
+    }
+
+    async function launch(built: Parameters<PlannerRun['start']>[0]): Promise<void> {
+        view = 'result';
+        // One batch per user: a preview still on its way is waited for (it is short, no optimizer), never aborted, since the
+        // server frees the user's slot only when the job ends.
+        launching = true;
+        launchingBuilt = built;
+        launchStopped = false;
+        try {
+            await preview.settled();
+        } finally {
+            launching = false;
+            launchingBuilt = null;
+        }
+        if (destroyed || launchStopped) return;
+        const running = run.start(built, accountGeneration);
+        void focusFirst(BUSY_TITLE_ID);
+        await running;
+        if (!destroyed && view === 'result' && !run.running) void focusFirst(RESULT_TITLE_ID, STOPPED_TITLE_ID);
+    }
+
+    function retry(): void {
+        const outcome = run.outcome;
+        if (outcome && !run.running && !launching) void launch(outcome.built);
+    }
+
+    function discard(): void {
+        run.discard();
+        editStep('review');
+    }
+
+    // A8: a dirty draft is never dropped without a confirmation. A session change
+    // is not asked about: the registry unmounts the renderer and the draft goes.
+    beforeNavigate((navigation) => {
+        if (allowLeave || !draft.dirty) return;
+        try {
+            assertToolAccount(accountGeneration);
+        } catch {
+            return;
+        }
+        if (navigation.type === 'leave') {
+            navigation.cancel();
+            return;
+        }
+        const to = navigation.to?.url;
+        if (!to) return;
+        navigation.cancel();
+        leaveTarget = {url: to, delta: navigation.type === 'popstate' ? (navigation.delta ?? null) : null, external: navigation.willUnload};
+    });
+
+    afterNavigate(() => {
+        allowLeave = false;
+    });
+
+    async function confirmLeave(): Promise<void> {
+        const target = leaveTarget;
+        leaveTarget = null;
+        if (!target) return;
+        allowLeave = true;
+        if (target.delta !== null) history.go(target.delta);
+        else if (target.external) window.location.assign(target.url.href);
+        else await goto(target.url);
+    }
+
+    onMount(() => {
+        if (draft.data.valuationCurrency !== '') return;
+        void userSettings.load().then(() => {
+            if (destroyed || draft.data.valuationCurrency !== '') return;
+            draft.data.valuationCurrency = userSettings.get()?.base_currency ?? 'EUR';
+        });
+    });
+
+    onDestroy(() => {
+        destroyed = true;
+        refreshSequence += 1;
+        refreshLoad.stop();
+        run.dispose();
+        preview.dispose();
+    });
+</script>
+
+<!-- data-preview: the scenario preview's state, whatever the step; «waiting» while one is scheduled or on its way (a Tool batch). -->
+<div class="min-w-0 space-y-4 text-lf-primary" data-testid={profile.testIdPrefix} data-view={view} data-step={step} data-state={runState} data-busy={working ? 'true' : 'false'} data-preview={preview.state} aria-busy={working}>
+    {#if view === 'result'}
+        {#if refreshing}
+            <BusyPanel phase="refresh" onstop={stopRefresh} />
+        {:else if refreshFailure}
+            <RefreshFailedPanel error={refreshFailure} onretry={() => void calculate()} onproceed={() => void calculate({refresh: false})} onedit={() => editStep('review')} />
+        {:else if run.busy}
+            <BusyPanel built={run.busy} {timeoutMs} progressPhases={planPhases} progressPhase={run.progress} onstop={() => run.stop()} />
+        {:else if launchingBuilt}
+            <!-- The preview in flight ends first (one batch per user): the calculation is about to start. -->
+            <BusyPanel built={launchingBuilt} {timeoutMs} progressPhases={planPhases} progressPhase={null} onstop={() => (launchStopped = true)} />
+        {:else if run.outcome}
+            {#if run.stopped}
+                <p class={NOTICE.info} role="status" data-testid={testId('stopped-previous', profile)}>
+                    {$t(`${PLANNER_KEY}.stopped.previous`, {default: 'You stopped waiting: the plan below is the previous one.'})}
+                </p>
+            {/if}
+            {#if refreshNotice && refreshNotice.fingerprint === run.outcome.built.fingerprint}
+                <RefreshNotice summary={refreshNotice.summary} source={refreshNotice.source} {draft} asOf={draft.data.asOf} />
+            {/if}
+            <ResultView outcome={run.outcome} {draft} {apiVersion} busy={run.running} ongoto={editStep} onedit={() => editStep('review')} oncalculate={() => void calculate()} onretry={retry} ondiscard={discard} />
+        {:else}
+            <section class={CARD} aria-labelledby={STOPPED_TITLE_ID} data-testid={testId('stopped', profile)}>
+                <h2 id={STOPPED_TITLE_ID} tabindex="-1" class="flex items-center gap-2 {SECTION_TITLE} focus:outline-none">
+                    <CircleStop class="h-4 w-4" aria-hidden="true" />
+                    {$t(`${PLANNER_KEY}.stopped.title`, {default: 'Calculation stopped'})}
+                </h2>
+                <p class="mt-3 text-sm">{$t(`${PLANNER_KEY}.stopped.body`, {default: 'You stopped waiting. If the server finishes, its answer is discarded. The configuration is intact.'})}</p>
+                <div class="mt-4 flex flex-wrap gap-3">
+                    <button type="button" class={BUTTON_SECONDARY} data-testid={testId('stopped-edit', profile)} onclick={() => editStep('review')}>
+                        {$t(`${PLANNER_KEY}.actions.editConfiguration`, {default: 'Edit configuration'})}
+                    </button>
+                    <button type="button" class={BUTTON_PRIMARY} data-testid={testId('stopped-calculate', profile)} onclick={() => void calculate()}>
+                        {$t(`${PLANNER_KEY}.review.calculate`, {default: 'Calculate plan'})}
+                    </button>
+                </div>
+            </section>
+        {/if}
+    {:else}
+        <div class={desktop.current ? 'grid grid-cols-[minmax(11rem,13rem)_minmax(0,1fr)] items-start gap-4' : 'space-y-3'}>
+            <!-- R9.2: one column for the steps and, below them, the summary on request, at every width. -->
+            <div class="space-y-2 {CARD} {desktop.current ? 'sticky top-4' : ''}">
+                <StepNav current={step} {steps} {visited} {problemSteps} variant={navVariant} onselect={go} />
+                <button type="button" class="inline-flex items-center gap-1 text-sm font-medium text-lf-secondary" aria-expanded={summaryOpen} aria-controls={SUMMARY_ID} data-testid={testId('summary-toggle', profile)} onclick={() => (summaryOpen = !summaryOpen)}>
+                    {$t(`${PLANNER_KEY}.summary.toggle`, {default: 'Summary'})}
+                    {#if summaryOpen}<ChevronUp class="h-4 w-4" aria-hidden="true" />{:else}<ChevronDown class="h-4 w-4" aria-hidden="true" />{/if}
+                </button>
+                {#if summaryOpen}
+                    <div id={SUMMARY_ID} class="border-t border-lf-subtle pt-3">
+                        <SummaryPanel {draft} {step} {apiVersion} {uiVersion} />
+                    </div>
+                {/if}
+            </div>
+
+            <section class="min-w-0 {CARD}" aria-labelledby={STEP_TITLE_ID} data-testid={testId('step', profile)} data-step={step}>
+                <!-- R11.1: the Route step says what it is for in its own title, on one line, with the «?» beside it. -->
+                <div class="mb-4 flex items-center gap-0.5">
+                    <h2 id={STEP_TITLE_ID} tabindex="-1" class="{SECTION_TITLE} focus:outline-none">
+                        {$t(stepKey(step), {default: STEP_FALLBACKS[step]})}{#if step === 'routing'}<span data-testid={testId('routing-intro', profile)}>{' '}– {$t(`${PLANNER_KEY}.routing.intro`, {default: 'What each Broker can buy'})}</span>{/if}
+                    </h2>
+                    {#if step === 'routing'}
+                        <HelpTip
+                            label={$t(`${PLANNER_KEY}.routing.intro`, {default: 'What each Broker can buy'})}
+                            help={$t(`${PLANNER_KEY}.routing.introHelp`, {
+                                default:
+                                    'For each Broker, click an Asset to allow or exclude it: in green, the plan may propose buying it there. The limits are measured like the orders of that Broker, in units or as an amount. Empty fields restrict nothing: fill them only when you need a constraint.',
+                            })}
+                            testid={testId('routing-help', profile)}
+                        />
+                    {/if}
+                </div>
+
+                {#if alertItems.length > 0}
+                    <div id={STEP_ALERT_ID} tabindex="-1" class="mb-4 {NOTICE.danger} focus:outline-none" role="alert" data-testid={testId('step-alert', profile)}>
+                        <p class="mb-2 font-medium">
+                            {$t(`${PLANNER_KEY}.continueBlocked`, {default: '{count, plural, one {# problem to fix before continuing:} other {# problems to fix before continuing:}}', values: {count: alertItems.length}})}
+                        </p>
+                        <IssueList items={alertItems} testid={testId('step-problem', profile)} />
+                    </div>
+                {/if}
+
+                {#if reviewNotice}
+                    <div class="mb-4"><RefreshNotice summary={reviewNotice.summary} source={reviewNotice.source} {draft} asOf={draft.data.asOf} /></div>
+                {/if}
+
+                {#if step === 'scenario'}
+                    <ScenarioStep {draft} />
+                {:else if step === 'liquidity'}
+                    <LiquidityStep {draft} {accountGeneration} />
+                {:else if step === 'brokers'}
+                    <BrokersStep {draft} {accountGeneration} />
+                {:else if step === 'assets'}
+                    <AssetsStep {draft} {accountGeneration} />
+                {:else if step === 'routing'}
+                    <RoutingStep {draft} />
+                {:else if step === 'targets'}
+                    <TargetsStep {draft} {accountGeneration} {preview} />
+                {:else if step === 'fx'}
+                    <FxStep {draft} {accountGeneration} />
+                {:else if step === 'strategy'}
+                    {#if profile.toolCode === 'portfolio_rebalancer'}
+                        <RebalancerStrategyStep {draft} {preview} />
+                    {:else}
+                        <StrategyStep {draft} />
+                    {/if}
+                {:else}
+                    <ReviewStep {draft} problems={reviewProblems} busy={working} hasResult={run.outcome !== null} ongoto={go} oncalculate={() => void calculate()} onshowresult={showResult} />
+                {/if}
+
+                <div class="sticky bottom-0 z-10 -mx-4 mt-6 flex items-center justify-between gap-3 border-t border-lf-subtle bg-lf-card/95 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur" data-testid={testId('footer', profile)}>
+                    {#if index > 0}
+                        <button type="button" class={BUTTON_SECONDARY} data-testid={testId('back', profile)} onclick={back}>
+                            <ArrowLeft class="h-4 w-4" aria-hidden="true" />
+                            <span class={tablet.current ? '' : 'sr-only'}>{$t('common.back', {default: 'Back'})}</span>
+                        </button>
+                    {:else}
+                        <span></span>
+                    {/if}
+                    {#if step !== 'review'}
+                        <button type="button" class={BUTTON_PRIMARY} data-testid={testId('continue', profile)} onclick={next}>
+                            {$t('common.continue', {default: 'Continue'})}
+                            <ArrowRight class="h-4 w-4" aria-hidden="true" />
+                        </button>
+                    {/if}
+                </div>
+            </section>
+        </div>
+    {/if}
+</div>
+
+<ConfirmModal
+    open={leaveTarget !== null}
+    title={profile.text === 'rebalancer' ? $t('tools.portfolioRebalancer.planner.leave.title', {default: 'Leave the portfolio rebalancer?'}) : $t(`${PLANNER_KEY}.leave.title`, {default: 'Leave the PAC allocator?'})}
+    message={$t(`${PLANNER_KEY}.leave.message`, {
+        default: 'The current configuration is not saved. Leaving, you will lose {assets, plural, one {# Asset} other {# Assets}} and {sources, plural, one {# liquidity source} other {# liquidity sources}}.',
+        values: leaveCounts,
+    })}
+    confirmText={$t(`${PLANNER_KEY}.leave.confirm`, {default: 'Leave and discard'})}
+    cancelText={$t('common.continueEditing')}
+    warning
+    onConfirm={() => void confirmLeave()}
+    onCancel={() => (leaveTarget = null)}
+    testId={testId('leave-confirm', profile)}
+/>

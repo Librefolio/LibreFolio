@@ -29,7 +29,7 @@
 
     import DataTable from '$lib/components/table/DataTable.svelte';
     import DataTablePagination from '$lib/components/table/DataTablePagination.svelte';
-    import type {ColumnDef, CellContent, FilterValue, RowAction, SortState} from '$lib/components/table/types';
+    import type {BulkAction, ColumnDef, CellContent, FilterValue, RowAction, SortState} from '$lib/components/table/types';
     import BrokerBadge from '$lib/components/ui/display/BrokerBadge.svelte';
 
     import {assetStoreVersion, ensureAssetsLoaded, getAssetInfo} from '$lib/stores/reference/assetStore';
@@ -110,6 +110,14 @@
         /** Compact/embedded mode: disables selection, pagination, filters, sorting,
          *  column visibility toggle, and row actions. Used by dashboard home. */
         compact?: boolean;
+        /** 77 SEL-B: no checkboxes where nothing can act on a selection (the dashboard's tab, a broker the reader cannot edit). */
+        selectable?: boolean;
+        /**
+         * 77 SEL-B: the bulk actions of the shared selection panel (the bar at the top of the table, the dock at its
+         * bottom), on the transactions. Given, the table draws them through the rule of `resolveSelectionAction` (each
+         * action on its own rows, with their number); absent, the page draws its own bar.
+         */
+        selectionActions?: BulkAction<TXReadItem>[];
     }
 
     let {
@@ -138,7 +146,20 @@
         hiddenColumns,
         storageKeyOverride,
         compact = false,
+        selectable = true,
+        selectionActions,
     }: Props = $props();
+
+    /** The panel's actions on the rows the table shows: each one reads the transaction of its row. */
+    let tableSelectionActions = $derived<BulkAction<DisplayRow>[] | undefined>(
+        selectionActions?.map((action) => ({
+            ...action,
+            appliesTo: action.appliesTo ? (d: DisplayRow) => action.appliesTo!(d.tx) : undefined,
+            pointless: action.pointless ? (rows: DisplayRow[]) => action.pointless!(rows.map((d) => d.tx)) : undefined,
+            blocked: action.blocked ? (rows: DisplayRow[]) => action.blocked!(rows.map((d) => d.tx)) : undefined,
+            onClick: (rows: DisplayRow[]) => action.onClick(rows.map((d) => d.tx)),
+        })),
+    );
 
     /** Exposed DataTable ref for ColumnVisibilityToggle / external selection control. */
     let tableRef: DataTable<DisplayRow> | undefined = $state(undefined);
@@ -1040,8 +1061,10 @@
         {columns}
         {getRowId}
         storageKey={storageKeyOverride ?? 'transactions-list'}
-        enableSelection={!compact}
-        selectionMode={compact ? 'none' : 'multi'}
+        enableSelection={!compact && selectable}
+        selectionMode={compact || !selectable ? 'none' : 'multi'}
+        bulkActions={tableSelectionActions ?? []}
+        selectionPanel={tableSelectionActions !== undefined}
         enableActions={!compact && !hideActions}
         rowActions={compact || hideActions ? [] : rowActions}
         enablePagination={!compact && !chargesFolded}
@@ -1064,12 +1087,14 @@
         onSelectionChange={handleSelectionChange}
         getRowDisplayName={(d) => `#${d.tx.id} ${d.tx.type}`}
         onRowDoubleClick={(d) => (onRowDoubleClickOverride ? onRowDoubleClickOverride(d.tx) : onViewRow?.(d.tx))}
+        pager={!compact && chargesFolded && externalPaginatorTotal > 0 ? groupedPager : undefined}
     />
-
-    {#if !compact && chargesFolded && externalPaginatorTotal > 0}
-        <DataTablePagination pageIndex={safePage - 1} {pageSize} totalItems={externalPaginatorTotal} pageSizeOptions={[10, 25, 50, 100, 0]} onPageChange={(idx) => onPageChange?.(idx + 1)} onPageSizeChange={(s) => onPageSizeChange?.(s)} />
-    {/if}
 </div>
+
+<!-- The pages of the grouped list are cut here, not by the table: the table hosts this pager in its dock (77 SEL-B). -->
+{#snippet groupedPager(docked: boolean)}
+    <DataTablePagination pageIndex={safePage - 1} {pageSize} totalItems={externalPaginatorTotal} pageSizeOptions={[10, 25, 50, 100, 0]} onPageChange={(idx) => onPageChange?.(idx + 1)} onPageSizeChange={(s) => onPageSizeChange?.(s)} {docked} />
+{/snippet}
 
 <style>
     /* All selectors target HTML injected by DataTable's HtmlCell / row APIs;

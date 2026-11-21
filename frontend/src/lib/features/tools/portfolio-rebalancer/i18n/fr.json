@@ -1,0 +1,221 @@
+{
+  "tools": {
+    "portfolioRebalancer": {
+      "progress": {
+        "validate": "Je contrôle les données",
+        "model": "Je construis le modèle",
+        "search": "Je cherche le plan",
+        "verify": "Je vérifie les comptes",
+        "report": "Je prépare le résultat"
+      },
+      "planner": {
+        "scenario": {
+          "intro": "Vous rééquilibrez un portefeuille que vous détenez déjà : le calcul part des positions et des liquidités que vous apportez au plan, les compte, et rapproche l’ensemble au plus près des poids cibles. C’est une simulation : aucun ordre n’est envoyé."
+        },
+        "leave": {
+          "title": "Quitter le rééquilibreur de portefeuille ?"
+        },
+        "positions": {
+          "title": "Positions",
+          "help": "Ce que vous détenez de cet actif, courtier par courtier, tel que LibreFolio l’enregistre aujourd’hui. Le plan part de ces quantités : vous pouvez en changer une pour simuler un autre portefeuille ; LibreFolio n’est pas modifié.",
+          "broker": "Courtier",
+          "quantity": "Quantité",
+          "quantityHelp": "Les unités du plan : votre part de ce que le courtier détient. Changez-la pour planifier sur une autre quantité.",
+          "quantityLabel": "Quantité de {asset} chez {broker}",
+          "custody": "En dépôt",
+          "custodyHelp": "Les unités que le courtier détient sur le compte, et votre part du compte lorsqu’il est partagé.",
+          "share": "votre part {share}"
+        },
+        "brokers": {
+          "cashOnly": "liquidités seulement",
+          "cashOnlyHint": "Aucun ordre ici : ses liquidités comptent dans le portefeuille, et le plan peut les déplacer vers les courtiers où il achète. Modifiez-le à l’étape Liquidités.",
+          "positionsOnly": "positions seulement",
+          "positionsOnlyHint": "Ses positions comptent dans le portefeuille, mais le plan n’achète ni ne vend ici et n’utilise pas ses liquidités. Ajoutez-le au plan pour opérer ici aussi.",
+          "addToPlan": "Ajouter au plan",
+          "addToPlanFailed": "Le courtier n’a pas pu être lu : rien n’a été ajouté."
+        },
+        "targets": {
+          "cashEntry": "Liquidités · {broker} · {currency}",
+          "otherCash": "Autres liquidités",
+          "otherCashHelp": "Toutes les liquidités sans objectif propre : elles comptent toujours 0 %, et le plan peut les utiliser pour acheter.",
+          "addCash": "Ajouter des liquidités",
+          "addCashHelp": "Les liquidités d’un courtier dans une devise deviennent une ligne des objectifs, avec objectif et limites, comme un actif.",
+          "addCashNone": "Chaque courtier et devise du scénario a déjà sa ligne de liquidités.",
+          "removeCash": "Retirer les liquidités",
+          "intro": "Comment répartir le total qui entre dans le plan, liquidités comprises, en pourcentage.",
+          "introTotal": "Comment répartir le total qui entre dans le plan ({total}), liquidités comprises, en pourcentage.",
+          "limitsNote": "Limites de la valeur à la fin du plan. Écrivez un montant (500) ou un pourcentage (35%) du total qui entre dans le plan. Champ vide = aucune limite.",
+          "limitsNoteTotal": "Limites de la valeur à la fin du plan. Écrivez un montant (500) ou un pourcentage (35%) du total qui entre dans le plan : {total}. Champ vide = aucune limite.",
+          "now": "Aujourd’hui",
+          "nowHelp": "Le poids d’aujourd’hui de cette ligne sur le total qui entre dans le plan. À titre indicatif : ce n’est pas un objectif.",
+          "entry": "Ligne",
+          "wire": "La part du total qui entre dans le plan que cette ligne doit avoir à la fin, en pourcentage. Les décimales sont admises.",
+          "limitsHelp": "Minimum et maximum de la valeur de cette ligne à la fin du plan. Écrivez un montant dans la devise d’évaluation (500) ou un pourcentage du total qui entre dans le plan (35%). Champ vide = aucune limite.",
+          "totalHelp": "Les objectifs répartissent le total qui entre dans le plan, positions et liquidités comprises : pour calculer, ils doivent totaliser exactement 100 %. «Tout équilibrer» remet chaque objectif à l’échelle en gardant les proportions (parts égales s’ils sont tous à 0). Cochez des lignes pour ne remettre à l’échelle que celles-ci. «Équilibrer à 100 %» sur une ligne lui donne ce qui manque, ou retire l’excès.",
+          "nowLine": "aujourd’hui {weight}"
+        },
+        "removal": {
+          "cashEntry": "Liquidités des objectifs {broker} · {currency}"
+        },
+        "review": {
+          "brokers": "{operative, plural, one {# courtier} other {# courtiers}}{external, plural, =0 {} one { · # compte externe} other { · # comptes externes}}{held, plural, =0 {} one { · # avec positions seulement} other { · # avec positions seulement}}",
+          "assets": "{count, plural, one {# actif} other {# actifs}}{positions, plural, =0 {} one { · # position} other { · # positions}}{missing, plural, =0 {} other { · # sans prix}}{stale, plural, =0 {} other { · # prix pas du jour}}",
+          "targets": "{count} sur {total, plural, one {# ligne} other {# lignes}} avec un objectif",
+          "strategy": "{strategy} · {fidelity}",
+          "kindPosition": "Position"
+        },
+        "summary": {
+          "positionsOnly": "Positions seulement",
+          "entries": "Lignes"
+        },
+        "strategy": {
+          "investOnly": "Investir seulement",
+          "fidelity": {
+            "costAware": "Attentif aux coûts",
+            "balanced": "Équilibré",
+            "faithful": "Fidèle à la cible",
+            "targetFirst": "La cible avant tout",
+            "custom": "Personnalisée"
+          },
+          "investOnlyHelp": "Utilise les liquidités pour acheter ce qui est sous l’objectif. Ne vend rien.",
+          "investAndSell": "Investir et vendre",
+          "investAndSellHelp": "Peut aussi vendre, pour se rapprocher davantage de l’objectif. Estime frais et impôts : il faut l’étape Fiscalité.",
+          "comingSoon": "bientôt",
+          "fidelityTitle": "Fidélité à la cible",
+          "fidelityLead": "Ce que vaut, pour vous, la remise en place de ce qui s’écarte de l’objectif.",
+          "fidelityHelp": "Pour remettre en place l’argent hors objectif, le plan dépense en frais au plus ce que le tableau ci-dessous accepte pour ce montant. Plus la fidélité est haute, plus il accepte de dépenser.",
+          "fidelityNote": {
+            "costAware": "Ne bouge que pour de grands écarts.",
+            "balanced": "Un juste milieu.",
+            "faithful": "Bouge aussi pour de petits écarts.",
+            "targetFirst": "Paie n’importe quel coût pour se rapprocher."
+          },
+          "defaultBadge": "par défaut",
+          "customSentence": "Avec {reference} au mauvais endroit, j’accepte de dépenser jusqu’à",
+          "customLabel": "Ce que vous acceptez de dépenser au plus pour la ligne de référence",
+          "customInvalid": "Écrivez un montant supérieur à zéro.",
+          "table": {
+            "title": "Coût maximal acceptable",
+            "lead": "Ce que le plan peut dépenser au maximum, en frais et impôts, pour remettre cet argent en place. Si cela coûte plus, il le laisse où il est.",
+            "leadTotal": "Les chiffres valent pour votre total de {total}.",
+            "misplaced": "Argent au mauvais endroit",
+            "reference": "référence",
+            "upTo": "jusqu’à {amount}",
+            "costAwareShort": "Attentif",
+            "faithfulShort": "Fidèle",
+            "customShort": "La vôtre",
+            "targetFirst": "«La cible avant tout» n’a pas de maximum : il se rapproche d’abord autant que possible, puis choisit la voie la moins coûteuse.",
+            "incomplete": "Les chiffres apparaissent une fois les champs en rouge complétés.",
+            "unavailable": "Les chiffres ne sont pas disponibles pour le moment ; le calcul n’en est pas affecté."
+          }
+        },
+        "result": {
+          "plan": {
+            "buysAt": "Achats sur {broker}",
+            "sequenceHint": "Suivez les numéros : d’abord les dépôts, les virements et les changes, dans l’ordre indiqué, puis les achats."
+          },
+          "allocation": {
+            "beforeShare": "Part aujourd’hui",
+            "beforeShareHelp": "Sa part de tout le portefeuille aujourd’hui, liquidités comprises.",
+            "beforeValue": "Valeur aujourd’hui",
+            "beforeValueHelp": "Ce que vaut la ligne aujourd’hui : les parts détenues au cours de cotation, ou les liquidités.",
+            "targetShareHelp": "La part choisie pour cette ligne à l’étape Objectifs, sur tout le portefeuille.",
+            "targetValueHelp": "Ce que vaudrait la ligne avec exactement sa part cible de tout le portefeuille d’aujourd’hui.",
+            "finalShareHelp": "Sa valeur après le plan, en part de tout le portefeuille d’aujourd’hui, liquidités comprises. L’argent perdu en frais et en impôts compte dans la ligne du non investi.",
+            "finalValueHelp": "Ce que vaut la ligne après le plan : les parts détenues plus celles achetées, ou les liquidités restantes.",
+            "boughtHelp": "La valeur de ce que le plan achète de cet Actif, au cours de cotation : sans frais ni marge sur le prix.",
+            "residualHelp": "Valeur après le plan moins valeur idéale : positive si la ligne finit au-dessus de sa part, négative si en dessous.",
+            "uninvested": "Non investi",
+            "uninvestedHelp": "Tout ce qui n’est ni dans un Actif ni dans des liquidités avec leur propre objectif : aujourd’hui, et après le plan, où cela compte aussi l’argent perdu en frais et en impôts.",
+            "minimum": "Minimum",
+            "minimumHelp": "Le minimum fixé pour cette ligne à l’étape Objectifs : sa valeur après le plan ne descend pas en dessous.",
+            "maximum": "Maximum",
+            "maximumHelp": "Le maximum fixé pour cette ligne à l’étape Objectifs : sa valeur après le plan ne dépasse pas.",
+            "title": "Allocation par ligne"
+          },
+          "kpi": {
+            "valueToday": "Vaut aujourd’hui",
+            "valueTodayHelp": "Tout le portefeuille aujourd’hui : les Actifs détenus au cours de cotation, plus toutes les liquidités et tous les versements choisis pour le plan.",
+            "partsAssets": "Actifs",
+            "partsCash": "Liquidités",
+            "valueAfter": "Vaudra après",
+            "valueAfterHelp": "Tout le portefeuille après le plan : les Actifs et les liquidités restantes. C’est la valeur d’aujourd’hui moins l’argent perdu.",
+            "valueAfterHeld": "dans {assets, plural, one {# Actif} other {# Actifs}} et {cash, plural, one {# ligne de liquidités} other {# lignes de liquidités}}",
+            "moneyLost": "Argent perdu",
+            "moneyLostHelp": "Ce que le plan vous coûte : frais, écarts de change, marges sur le prix, impôts et arrondis. La valeur d’aujourd’hui moins ce montant est la valeur après.",
+            "noLoss": "Rien de perdu",
+            "foreignWithholding": "Retenue à la source étrangère",
+            "largestDeviation": "Écart maximal à l’objectif",
+            "largestDeviationHelp": "L’éloignement de la ligne la plus éloignée de son objectif, après et avant le plan, en points de pourcentage : l’écart entre sa part et sa part cible. Comptent les Actifs et les liquidités avec un objectif ; le non investi non.",
+            "points": "{value} points",
+            "beforePoints": "avant : {value} points",
+            "uninvestedShare": "{value} du total",
+            "transfers": "{count, plural, one {# virement} other {# virements}}",
+            "deviationItem": "{item} : {weight} contre {target}",
+            "beforePointsItem": "avant : {value} points, {item} à {weight} contre {target}",
+            "cashItem": "Liquidités {broker} {currency}"
+          },
+          "header": {
+            "score": "Score {value}",
+            "scoreHelp": "Le score que le plan minimise : λ × distance/F + argent perdu. Ici λ {lambda}, distance/F {distance}, argent perdu {lost}.",
+            "distance": "Distance/F {value}",
+            "distanceHelp": "L’éloignement du portefeuille de ses objectifs à la fin, en argent : les écarts au carré de chaque ligne sur tout le portefeuille. «La cible avant tout» la réduit au maximum, puis l’argent perdu.",
+            "moneyLost": "Argent perdu {value}"
+          },
+          "ledger": {
+            "fields": {
+              "transfer_in": "Transfers in",
+              "transfer_out": "Transfers out"
+            },
+            "help": {
+              "transfer_in": "What arrives in this cash from another Broker of the plan.",
+              "transfer_out": "What leaves this cash for another Broker of the plan.",
+              "funding_in": "The deposits of your contributions into this cash.",
+              "funding_out": "Always 0 in the Rebalancer: money moves between Brokers as transfers, in their own columns.",
+              "alwaysZeroInvestOnly": "Always 0 with «Invest only»: the plan only buys."
+            }
+          },
+          "proof": {
+            "lambda": "λ {value}",
+            "tieBreaks": "Tie-breaks, among the plans as good on the objectives above",
+            "fixedOrder": "a fixed order of Assets and Brokers",
+            "sameData": "A search that ends by itself gives the same plan for the same data; one stopped by the time limit may give another.",
+            "help": {
+              "status": "Whether the solver closed this stage. Finished: it proved the best value. Unfinished: it stopped at the time limit, or, for a tie-break, its plan was set aside because it was no better, in exact arithmetic, on the objectives above. After a stage that stopped, the later ones only searched among plans as good as the one already found, so a gap of 0 there proves nothing."
+            }
+          },
+          "badges": {
+            "help": {
+              "optimalProven": "The solver proved that no plan has a better score (with «Target first»: a smaller distance from the targets, then less money lost), and the exact check of the plan matches its numbers. The tie-breaks after it may have stopped earlier: they only choose among plans just as good. The proof holds within the solver's small calculation margin, which grows with the amounts."
+            }
+          },
+          "states": {
+            "limit": {
+              "tieBreak": "The plan is proven the best on its objective; the limit stopped a tie-break, so an equally good plan may exist."
+            }
+          },
+          "exposure": {
+            "scope": "On the whole portfolio, cash included",
+            "legendNow": "grey: today",
+            "legendAfter": "coloured: after the plan",
+            "legendTarget": "your target",
+            "cash": "Cash",
+            "now": "Today",
+            "after": "After the plan",
+            "target": "Target",
+            "belowTarget": "After the plan: below the target",
+            "aboveTarget": "After the plan: above the target",
+            "onTarget": "After the plan: in line with the target",
+            "showAll": "Show all ({count})",
+            "showFewer": "Show fewer",
+            "title": "Exposures – today, after the plan, target",
+            "help": "How the whole portfolio, cash included, spreads by Asset type, sector and country: today, after the plan, and your target. The cash is the last row of each chart. The charts do not change the plan."
+          }
+        },
+        "objectives": {
+          "route_priority": "Route priority"
+        }
+      }
+    }
+  }
+}

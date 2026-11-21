@@ -160,7 +160,9 @@ export interface HtmlCell {
 }
 
 /**
- * Editable select cell — renders an inline <select> dropdown.
+ * Editable select cell — renders the project's `SimpleSelect` inline (`DataTableCellContent.svelte`), never a native
+ * `<select>`: a choice inside a table cell follows the selector rule (M5). For a selector with search or another shape,
+ * use a `custom` cell with the project's component, as `TargetInputCell` does.
  * Used for identifier type, sector/country selection in distribution editors, etc.
  */
 export interface EditableSelectCell {
@@ -375,7 +377,7 @@ export type FooterCells<T> = Record<string, FooterCellContent> | ((rows: T[], se
  *
  * @typeParam T - The row data type
  */
-export interface RowAction<T> extends Omit<ContextMenuItem, 'id' | 'label' | 'disabled' | 'title' | 'testid' | 'iconClass' | 'labelClass'> {
+export interface RowAction<T> extends Omit<ContextMenuItem, 'id' | 'label' | 'disabled' | 'blocked' | 'title' | 'testid' | 'iconClass' | 'labelClass'> {
     /** Unique action identifier */
     id: string;
 
@@ -391,7 +393,13 @@ export interface RowAction<T> extends Omit<ContextMenuItem, 'id' | 'label' | 'di
     /** Conditionally show/hide action */
     visible?: (row: T) => boolean;
 
-    /** Disable action conditionally */
+    /**
+     * Why the action is blocked on this row, or null when it is not (77 SEL-M, Q-SEL-12): then it is off, reachable, and
+     * the row menu says why. An action that makes no sense on a row is not off: it is hidden, with `visible`.
+     */
+    blocked?: (row: T) => SelectionActionBlock | null;
+
+    /** The old form: off with no reason. New actions use `blocked`; this goes once its last users move. */
     disabled?: (row: T) => boolean;
 
     /** Dynamic CSS class for the icon (e.g. 'animate-spin' when loading) */
@@ -442,8 +450,37 @@ export interface BulkAction<T> {
     /** Confirmation message - string or function with count */
     confirmMessage?: string | ((count: number) => string);
 
-    /** Minimum selection required to enable */
+    /** Minimum number of rows the action must take, under which it is hidden (the rows it can take, `appliesTo`). */
     minSelection?: number;
+
+    // ---- The rule of the selection panel (plan 77, SEL-A; `resolveSelectionAction`) ----
+
+    /** The word shown where the bar has little room, when it is shorter than the label (the label stays its name). */
+    shortLabel?: string | (() => string);
+
+    /** The main action of the bar: drawn solid. */
+    primary?: boolean;
+
+    /** CSS class applied to the icon (e.g. 'animate-spin' while it runs). */
+    iconClass?: string;
+
+    /** Whether the action can take this row. Absent: every selected row. It acts on those rows only, and shows their number. */
+    appliesTo?: (row: T) => boolean;
+
+    /** Whether, on the rows it would take, the action makes no sense here (Q-SEL-17: Balance at 100 %): then it is hidden. */
+    pointless?: (rows: T[]) => boolean;
+
+    /**
+     * Why the action is blocked on the rows it would take, or null when it is not: then it is off, and the hint says why
+     * (Q-SEL-9, 66 F7-a). An action is never off without a reason: the type asks for both.
+     */
+    blocked?: (rows: T[]) => SelectionActionBlock | null;
+}
+
+/** Why a bulk action is off: the words the reader sees, and a code tests read (`data-disabled-reason`). */
+export interface SelectionActionBlock {
+    hint: string | (() => string);
+    reason: string;
 }
 
 // ============ Filter Types ============

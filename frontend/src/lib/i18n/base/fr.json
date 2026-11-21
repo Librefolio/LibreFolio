@@ -29,7 +29,6 @@
     "custom": "Personnalisé",
     "date": "Date",
     "delete": "Supprimer",
-    "deleteSelected": "Supprimer la sélection",
     "deleting": "Suppression...",
     "detail": "Détail",
     "discard": "Abandonner",
@@ -380,7 +379,8 @@
     },
     "confirmBulkAction": "Êtes-vous sûr de vouloir effectuer cette action sur",
     "filterLabel": "Filtre",
-    "resetLayout": "Réinitialiser la disposition"
+    "resetLayout": "Réinitialiser la disposition",
+    "selectionHint": "Sélectionnez une ou plusieurs lignes pour agir sur toutes ensemble."
   },
   "date": {
     "today": "Aujourd'hui",
