@@ -129,3 +129,31 @@ describe('Distribution: the bar in the section head (77 SEL-D2)', () => {
         expect(within(dock).getByTestId('data-table-pagination')).toBeInTheDocument();
     });
 });
+
+describe('Distribution: the row menu (77 SEL-M)', () => {
+    /** Open the row menu of the row that shows `label`, through its ⋮. */
+    async function openRowMenu(section: HTMLElement, label: string): Promise<HTMLElement> {
+        const row = within(section)
+            .getAllByRole('row')
+            .find((r) => r.textContent?.includes(label));
+        if (!row) throw new Error(`no row shows ${label}`);
+        const kebab = within(row).getByTestId(/^row-actions-/);
+        // jsdom has no layout: a menu anchored on a ⋮ of no size closes at once
+        vi.spyOn(kebab, 'getBoundingClientRect').mockReturnValue(new DOMRect(10, 10, 24, 24));
+        await fireEvent.click(kebab);
+        return screen.findByTestId('context-menu');
+    }
+
+    it('at a total of 100 there is nothing to balance: «Balance» is not offered; below it is', async () => {
+        const {section} = mount({Technology: 0.6, Energy: 0.4});
+        let menu = await openRowMenu(section, 'Energy');
+        expect(within(menu).queryByTestId('context-menu-action-balance')).toBeNull();
+        await fireEvent.keyDown(window, {key: 'Escape'});
+        await waitFor(() => expect(screen.queryByTestId('context-menu')).toBeNull());
+        cleanup();
+
+        const short = mount({Technology: 0.5, Energy: 0.3});
+        menu = await openRowMenu(short.section, 'Energy');
+        expect(within(menu).getByTestId('context-menu-action-balance')).not.toHaveAttribute('aria-disabled');
+    });
+});

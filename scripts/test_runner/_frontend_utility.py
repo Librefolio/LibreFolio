@@ -466,6 +466,7 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/components/ui/modals/PageSyncModal.test.ts",
             "src/lib/components/ui/feedback/ToastContainer.test.ts",
             "src/lib/components/ui/feedback/Tooltip.test.ts",
+            "src/lib/components/ui/ContextMenu.test.ts",
             "src/lib/components/ui/feedback/DataQualityBanner.nonIso.test.ts",
             "src/lib/components/ui/feedback/DataQualityBanner.tone.test.ts",
             "src/lib/components/ui/feedback/DataQualityBanner.layout.test.ts",

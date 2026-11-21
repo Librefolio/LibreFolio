@@ -411,7 +411,8 @@
                       icon: Scale,
                       label: () => $t('assets.distribution.balanceRow'),
                       onClick: (row) => balanceEntry(row.id),
-                      disabled: () => isValid,
+                      // At a total of 100 there is nothing to balance: not offered (77 SEL-M, Q-SEL-17)
+                      visible: () => !isValid,
                   },
                   {
                       id: 'delete',

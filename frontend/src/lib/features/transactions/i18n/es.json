@@ -462,7 +462,8 @@
       "chooseTitle": "Elegir el evento",
       "chooseIntro": "Ese día el activo tiene {n} eventos del tipo correcto. ¿Cuál toma esta transacción?",
       "sourceAuto": "automático",
-      "sourceManual": "introducido a mano"
+      "sourceManual": "introducido a mano",
+      "linkingBusy": "Hay una vinculación en curso"
     },
     "docsHelp": {
       "list": "Cada movimiento de los brókeres a los que tienes acceso, del más reciente al más antiguo: compras, ventas, dividendos, comisiones, transferencias y liquidez. Tus posiciones y tu rendimiento se calculan a partir de ellos. Aquí los añades, importas, filtras o editas."

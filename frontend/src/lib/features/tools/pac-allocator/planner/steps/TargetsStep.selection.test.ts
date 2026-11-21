@@ -231,3 +231,28 @@ describe('the targets table on the selection panel (77 SEL-D3)', () => {
         expect(tip.textContent?.trim()).toBe(get(t)('tools.pacAllocator.planner.targets.balanceNoRoom'));
     });
 });
+
+describe('the row menu of a target (77 SEL-M)', () => {
+    async function openRowMenu(key: string): Promise<HTMLElement> {
+        const kebab = screen.getByTestId(`row-actions-${key}`);
+        // jsdom has no layout: a menu anchored on a ⋮ of no size closes at once
+        vi.spyOn(kebab, 'getBoundingClientRect').mockReturnValue(new DOMRect(10, 10, 24, 24));
+        await fireEvent.click(kebab);
+        return screen.findByTestId('context-menu');
+    }
+
+    it('at a total of 100 % «Balance to 100%» is not offered: an Asset row has no other action, so no ⋮ either', async () => {
+        mount(['50', '50', '0']);
+        expect(screen.queryByTestId('row-actions-asset:a')).toBeNull();
+        expect(screen.queryByTestId('pac-planner-target-balance')).toBeNull();
+    });
+
+    it('with a target that is not a number «Balance to 100%» is offered: the field counts 0, in the total as here', async () => {
+        const draft = mount(['50', 'abc', '0']);
+        const menu = await openRowMenu('asset:a');
+        const balance = within(menu).getByTestId('pac-planner-target-balance');
+        expect(balance).not.toHaveAttribute('aria-disabled');
+        await fireEvent.click(balance);
+        expect(draft.data.targets['asset:a']).toBe('100');
+    });
+});

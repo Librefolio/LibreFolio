@@ -47,7 +47,7 @@ vi.mock('$lib/stores/reference/currencyStore', () => ({
 }));
 vi.mock('$lib/stores/currencyGraphStore', () => ({fxProvidersVersion: writable(0)}));
 
-import {render, setupI18n, waitFor} from '$test/component';
+import {fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
 import {uiLocale} from '$lib/stores/app/uiLocale';
 import {clearCardInversions, setCardInverted} from '$lib/features/fx/fxCardInversionStore';
 import {formatFixed, formatPrice} from '$lib/utils/core/formatFixed';
@@ -163,5 +163,23 @@ describe('FxTable — the rate and the absolute Δ keep their significant digits
             eurUsd: {rate: cellOf(table, 'EUR-USD', 'rate'), delta: cellOf(table, 'EUR-USD', 'deltaAbs')},
             usdIdr: {rate: cellOf(table, 'IDR-USD', 'rate'), delta: cellOf(table, 'IDR-USD', 'deltaAbs')},
         }).toEqual({eurUsd: {rate: '1.0823', delta: '0.0000'}, usdIdr: {rate: '16,000.0000', delta: '-556.0000'}});
+    });
+});
+
+describe('FxTable — the row menu (77 SEL-M)', () => {
+    it('a pair with no provider is not offered Sync; one with a provider is', async () => {
+        // jsdom has no layout: a menu anchored on a ⋮ of no size closes at once, so each ⋮ is given a size
+        const manual = {...EUR_USD, slug: 'EUR-CHF', quote: 'CHF', manualOnly: true};
+        await mountTable([manual, EUR_USD]);
+        const kebabEURCHF = screen.getByTestId('row-actions-EUR-CHF');
+        vi.spyOn(kebabEURCHF, 'getBoundingClientRect').mockReturnValue(new DOMRect(10, 10, 24, 24));
+        await fireEvent.click(kebabEURCHF);
+        expect(within(await screen.findByTestId('context-menu')).queryByTestId('context-menu-action-sync')).toBeNull();
+        await fireEvent.keyDown(window, {key: 'Escape'});
+        await waitFor(() => expect(screen.queryByTestId('context-menu')).toBeNull());
+        const kebabEURUSD = screen.getByTestId('row-actions-EUR-USD');
+        vi.spyOn(kebabEURUSD, 'getBoundingClientRect').mockReturnValue(new DOMRect(10, 10, 24, 24));
+        await fireEvent.click(kebabEURUSD);
+        expect(within(await screen.findByTestId('context-menu')).getByTestId('context-menu-action-sync')).toBeInTheDocument();
     });
 });

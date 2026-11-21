@@ -313,8 +313,9 @@
             icon: Scale,
             label: () => $t(`${KEY}.balance`, {default: 'Balance to 100%'}),
             onClick: (row) => balance(row),
-            visible: (row) => targetable(row),
-            disabled: () => totalState === 'balanced' || totalState === 'unknown',
+            // At 100 % there is nothing to balance: not offered (77 SEL-M, Q-SEL-17). A field that is not a number counts 0 in
+            // the total and here alike, so nothing blocks it.
+            visible: (row) => targetable(row) && totalState !== 'balanced',
             testid: testId('target-balance', profile),
         },
         {

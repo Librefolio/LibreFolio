@@ -462,7 +462,8 @@
       "chooseTitle": "Choose the event",
       "chooseIntro": "That day the asset has {n} events of the right type. Which one does this transaction take?",
       "sourceAuto": "automatic",
-      "sourceManual": "entered by hand"
+      "sourceManual": "entered by hand",
+      "linkingBusy": "A link is in progress"
     },
     "docsHelp": {
       "list": "Every movement of the brokers you can access, newest first: purchases, sales, dividends, fees, transfers and cash. Your positions and performance are computed from them. Add, import, filter or edit them here."

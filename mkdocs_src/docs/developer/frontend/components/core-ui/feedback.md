@@ -110,5 +110,9 @@ A simple **animated spinner** for async loading states (`ui/feedback/LoadingSpin
   selection bar of a section head, 77 SEL-D2)
 - `showIf(trigger)` (absent by default): asked at the moment of opening, by every path; `false` opens nothing. The
   selection bar uses it to name an action only while its word is hidden
+- `anchor` (absent by default): an element to place the tooltip against, instead of the trigger. The tooltip goes beside
+  it (the asked side, then the other), level with the trigger; with no room on either side, above it, else below it, so
+  it never covers the anchor. The row menu passes itself: the reason of a disabled item never hides the other items,
+  even on a phone (77 SEL-M)
 
 **Used by**: Toolbar buttons, icon-only buttons, info badges, `DocsLink`.
