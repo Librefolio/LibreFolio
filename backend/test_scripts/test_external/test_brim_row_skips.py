@@ -94,10 +94,10 @@ NEW_VERSIONS = {
     "broker_revolut": "1.3.0",
     "broker_trading212": "1.2.0",
     "broker_etoro": "1.4.0",
-    "broker_traderepublic": "1.2.0",  # lane 73: the Transaction export
+    "broker_traderepublic": "1.3.0",  # lane 73: the Transaction export; 1.3.0 project 66 P2a: its charges are linked
     "broker_swissquote": "1.2.0",
     "broker_ibkr": "1.1.0",
-    "broker_fineco": "1.5.0",
+    "broker_fineco": "1.6.0",  # project 66 P2a: the commission is linked to its trade
 }
 
 
