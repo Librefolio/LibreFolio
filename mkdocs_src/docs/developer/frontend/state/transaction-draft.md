@@ -158,10 +158,20 @@ The tagged union structure of `PendingOp` simplifies complex composite operation
     stay. Two new rows merged are no such entry: they split as a **new** pair.
   - A **saved** pair is queued in `pendingSplits` as `{id_a, id_b}`; the backend splits it at
     commit. Meanwhile the partner op loses `pairedWith` and becomes a visible row next to its
-    former main row.
+    former main row. Each half keeps the pair's `fields.type` until its Form gives it its own;
+    the type it will have is `postSplitType` (66 C22d): the split's type for its side, or the
+    type the user chose in its Form. The Type cell («CASH_TRANSFER → DEPOSIT»), the half's Form
+    and **Link** (`bulkLinkSelection`'s `typeOf`) all read it, so an untouched `DEPOSIT` or
+    `WITHDRAWAL` half accepts charges at once, linked in the same batch (the backend splits
+    before it links); the Type cell shows the half's charges chip too. A split `TRANSFER` gives
+    two `ADJUSTMENT`, which are no parents.
   - A **new** pair is split locally: both ops lose their link and take the standalone types of
     `SPLIT_TYPE_MAP` (the client mirror of the backend's split rules, e.g. `WITHDRAWAL` and
     `DEPOSIT` for `FX_CONVERSION`).
+  - `splitTypes.ts` holds the one computation: `SPLIT_TYPE_MAP`, `splitHalfType(originalType,
+    fields)` (the sender — quantity for a `TRANSFER`, cash for the others, at or below zero —
+    takes the first type) and `postSplitType(op, pendingSplits)`. The Type cell, the Form, **Link**,
+    the issue rows and the local split of a new pair all call it.
 * **Promote** (`executePromote`) links two independent rows (e.g. a `WITHDRAWAL` and a `DEPOSIT`)
   into a pair of the matching type; both ops take the target type and collapse into one paired
   row, the receiving op becoming the hidden partner (`collapseIntoPaired`). Before the type
