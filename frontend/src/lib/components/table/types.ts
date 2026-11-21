@@ -453,6 +453,9 @@ export interface BulkAction<T> {
     /** Minimum number of rows the action must take, under which it is hidden (the rows it can take, `appliesTo`). */
     minSelection?: number;
 
+    /** The button's test id, when a table keeps one of its own (77 SEL-E: the Bulk's). Absent: `toolbar-action-<id>`. */
+    testid?: string;
+
     // ---- The rule of the selection panel (plan 77, SEL-A; `resolveSelectionAction`) ----
 
     /** The word shown where the bar has little room, when it is shorter than the label (the label stays its name). */
