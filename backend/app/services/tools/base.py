@@ -21,10 +21,12 @@ class ToolDefinitionError(ValueError):
 
 
 class ToolExecutionError(RuntimeError):
-    def __init__(self, code: ToolErrorCode, *, retryable: bool = False):
+    def __init__(self, code: ToolErrorCode, *, retryable: bool = False, reason: str | None = None):
         super().__init__(code)
         self.code = code
         self.retryable = retryable
+        # Where a ``worker_crashed`` was raised, one of the executor's ``CRASH_REASONS``: for the server log, never the wire.
+        self.reason = reason
 
 
 @dataclass(frozen=True, slots=True)
