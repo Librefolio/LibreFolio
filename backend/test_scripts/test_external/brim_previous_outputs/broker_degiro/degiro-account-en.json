@@ -1,0 +1,400 @@
+{
+  "format": "lf-brim-previous-output/1",
+  "comment": "Output of the plugin BEFORE its project-66 lot changed it (P2 contract §2.1). Never re-take it after the code change.",
+  "plugin_code": "broker_degiro",
+  "plugin_version": "2.1.0",
+  "source_head": "595738c0c",
+  "captured_on": "2026-11-21",
+  "sample": "broker_degiro/sample_reports/degiro-account-en.csv",
+  "sample_sha256": "67e6d49c832a691b1a74a0d9e08643f0184d771636e8e8cff7f6678e3f2331c0",
+  "extracted_assets": {
+    "2147483647": {
+      "extracted_symbol": null,
+      "extracted_isin": "US0378331005",
+      "extracted_name": "APPLE INC",
+      "notices": []
+    },
+    "2147483646": {
+      "extracted_symbol": null,
+      "extracted_isin": "IE00BK5BQT80",
+      "extracted_name": "VANGUARD FTSE ALL-WORLD UCITS ETF",
+      "notices": []
+    }
+  },
+  "transactions": [
+    {
+      "asset_id": null,
+      "type": "INTEREST",
+      "date": "2025-10-03",
+      "quantity": "0",
+      "cash": {
+        "code": "CZK",
+        "amount": "3.47"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "degiro"
+      ],
+      "description": "Flatex Interest Income",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": null,
+      "type": "INTEREST",
+      "date": "2025-09-22",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "3.00"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "degiro"
+      ],
+      "description": "DEGIRO rabat propagace",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": null,
+      "type": "INTEREST",
+      "date": "2025-09-22",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "0.75"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "degiro"
+      ],
+      "description": "DEGIRO courtesy",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": null,
+      "type": "FX_CONVERSION",
+      "date": "2025-09-16",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "3.49"
+      },
+      "link_uuid": "804140e0-b474-5b37-9be8-3e77c16f701f",
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "degiro"
+      ],
+      "description": "FX Credit / FX Debit",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": null,
+      "type": "FX_CONVERSION",
+      "date": "2025-09-16",
+      "quantity": "0",
+      "cash": {
+        "code": "USD",
+        "amount": "-4.08"
+      },
+      "link_uuid": "804140e0-b474-5b37-9be8-3e77c16f701f",
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "degiro"
+      ],
+      "description": "FX Credit / FX Debit",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483647,
+      "type": "TAX",
+      "date": "2025-09-15",
+      "quantity": "0",
+      "cash": {
+        "code": "USD",
+        "amount": "-0.72"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "degiro"
+      ],
+      "description": "Dividend Tax",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483647,
+      "type": "DIVIDEND",
+      "date": "2025-09-15",
+      "quantity": "0",
+      "cash": {
+        "code": "USD",
+        "amount": "4.80"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "degiro"
+      ],
+      "description": "Dividend",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": null,
+      "type": "FX_CONVERSION",
+      "date": "2025-09-08",
+      "quantity": "0",
+      "cash": {
+        "code": "USD",
+        "amount": "901.25"
+      },
+      "link_uuid": "7a618d5d-8d54-5a46-883f-8887c695db30",
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "degiro"
+      ],
+      "description": "FX Credit / FX Debit",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": null,
+      "type": "FX_CONVERSION",
+      "date": "2025-09-08",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "-770.16"
+      },
+      "link_uuid": "7a618d5d-8d54-5a46-883f-8887c695db30",
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "degiro"
+      ],
+      "description": "FX Credit / FX Debit",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483647,
+      "type": "FEE",
+      "date": "2025-09-08",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "-1.00"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "degiro"
+      ],
+      "description": "DEGIRO Transaction and/or third party fees",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483647,
+      "type": "BUY",
+      "date": "2025-09-08",
+      "quantity": "5",
+      "cash": {
+        "code": "USD",
+        "amount": "-901.25"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "degiro"
+      ],
+      "description": "Buy 5 APPLE INC@180,25 USD (US0378331005)",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483646,
+      "type": "FEE",
+      "date": "2025-08-25",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "-1.00"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "degiro"
+      ],
+      "description": "DEGIRO Transaction and/or third party fees",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483646,
+      "type": "SELL",
+      "date": "2025-08-25",
+      "quantity": "-3",
+      "cash": {
+        "code": "EUR",
+        "amount": "356.25"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "degiro"
+      ],
+      "description": "Sell 3 VANGUARD FTSE ALL-WORLD UCITS ETF@118,75 EUR (IE00BK5BQT80)",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483646,
+      "type": "FEE",
+      "date": "2025-08-04",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "-1.00"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "degiro"
+      ],
+      "description": "DEGIRO Transaction and/or third party fees",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483646,
+      "type": "BUY",
+      "date": "2025-08-04",
+      "quantity": "10",
+      "cash": {
+        "code": "EUR",
+        "amount": "-1124.00"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "degiro"
+      ],
+      "description": "Buy 10 VANGUARD FTSE ALL-WORLD UCITS ETF@112,40 EUR (IE00BK5BQT80)",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": null,
+      "type": "FEE",
+      "date": "2025-07-02",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "-2.50"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "degiro"
+      ],
+      "description": "DEGIRO Exchange Connection Fee 2025 (Nasdaq - NDQ)",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": null,
+      "type": "DEPOSIT",
+      "date": "2025-06-02",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "2500.00"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "degiro"
+      ],
+      "description": "SOFORT Deposit",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    }
+  ]
+}

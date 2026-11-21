@@ -417,6 +417,11 @@ def _decimal_hint(rows: Sequence[_Row]) -> Optional[str]:
     return "," if votes[","] > votes["."] else "."
 
 
+def _only(items: Sequence[TXCreateItem]) -> Optional[TXCreateItem]:
+    """The one item of ``items``, or ``None`` when there are none or several (a charge links only to a single candidate)."""
+    return items[0] if len(items) == 1 else None
+
+
 def _is_counter_leg(leg: _Row, other: _Row) -> bool:
     return bool(other.amount) and bool(other.currency) and other.currency != leg.currency and (other.amount > 0) != (leg.amount > 0) and not _TRADE_RE.match(other.description)
 
@@ -477,12 +482,15 @@ class _StatementReader:
         self.assets: Dict[int, BRIMExtractedAssetInfo] = {}
         self.asset_ids: Dict[str, int] = {}
         self.next_fake_id = FAKE_ASSET_ID_BASE
+        # Every row created, with the statement row it came from: the charges are linked once the whole file is read.
+        self.created: List[Tuple[_Row, TXCreateItem]] = []
 
     # -- output -----------------------------------------------------------------
 
     def run(self) -> BRIMParseOutput:
         for index, row in enumerate(self.rows):
             self._row(index, row)
+        self._link_charges()
         return BRIMParseOutput(transactions=self.transactions, warnings=self._notices(), validation_issues=self.validation_issues, extracted_assets=self.assets)
 
     def _notices(self) -> List[BRIMNotice]:
@@ -585,7 +593,7 @@ class _StatementReader:
         except (ValueError, ValidationError):
             self._flag("degiro_unknown_rows", row)  # not an ISO 4217 currency
             return
-        self.provider._create_transaction(
+        created = self.provider._create_transaction(
             row_num=row.line,
             transactions=self.transactions,
             validation_issues=self.validation_issues,
@@ -600,6 +608,45 @@ class _StatementReader:
             tags=list(_TAGS),
             link_uuid=link_uuid,
         )
+        if created is not None:
+            self.created.append((row, created))
+
+    # -- linked charges (project 66, P2b) ------------------------------------------------
+
+    def _link_charges(self) -> None:
+        """Link each charge to its one parent, after the whole file is read: a statement lists the costs of an order above
+        its trade, and the output keeps the file's order.
+
+        - A cost of an order (a FEE or a TAX with an ``Order Id``) → the one BUY/SELL of that order; never the currency
+          conversion of the same order. An order with several fills, or none, leaves its costs free.
+        - A tax with no ``Order Id`` (the withholding on a dividend) → the one DIVIDEND of its day and product; the time
+          decides only between several (``_dividend_of``). None, or still several, leaves it free.
+        """
+        trades: Dict[str, List[TXCreateItem]] = {}
+        dividends: Dict[Tuple[str, str], List[Tuple[_Row, TXCreateItem]]] = {}
+        for row, tx in self.created:
+            if tx.type in (TransactionType.BUY, TransactionType.SELL) and row.order_id:
+                trades.setdefault(row.order_id, []).append(tx)
+            elif tx.type == TransactionType.DIVIDEND and row.isin:
+                dividends.setdefault((row.cells[_DATE], row.isin), []).append((row, tx))
+        for row, tx in self.created:
+            if tx.type not in (TransactionType.FEE, TransactionType.TAX):
+                continue
+            if row.order_id:
+                parent = _only(trades.get(row.order_id, []))
+            elif tx.type == TransactionType.TAX and row.isin:
+                parent = self._dividend_of(row, dividends.get((row.cells[_DATE], row.isin), []))
+            else:
+                parent = None
+            if parent is not None:
+                self.provider._link_existing_charge(tx, parent, self.transactions, row_num=row.line)
+
+    @staticmethod
+    def _dividend_of(tax: _Row, candidates: Sequence[Tuple[_Row, TXCreateItem]]) -> Optional[TXCreateItem]:
+        """The one dividend of the tax's day and product; when there are several, the one at the tax's time."""
+        if len(candidates) > 1:
+            candidates = [(row, tx) for row, tx in candidates if row.cells[_TIME] == tax.cells[_TIME]]
+        return _only([tx for _, tx in candidates])
 
     def _asset_id(self, row: _Row) -> Optional[int]:
         """One fake asset id per ISIN (product name when there is none)."""
@@ -650,8 +697,9 @@ class DegiroBrokerProvider(BRIMProvider):
 
     @property
     def plugin_version(self) -> str:
-        """2.0.0: columns read by position in any language, amounts and currencies per row, FX pairs. 2.1.0: every note about rows left out asks for an issue (W-B86)."""
-        return "2.1.0"
+        """2.0.0: columns read by position in any language, amounts and currencies per row, FX pairs. 2.1.0: every note about rows left out asks for an issue (W-B86).
+        2.2.0: the costs of an order are linked to its trade, the withholding on a dividend to its dividend (project 66, P2b)."""
+        return "2.2.0"
 
     @property
     def docs_url(self) -> Optional[str]:
