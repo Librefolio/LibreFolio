@@ -90,7 +90,7 @@ ROW_SKIPS_PENDING = frozenset(
 # W-B87 block 1 (rows with an economic effect imported): Revolut 1.3.0, Trading 212 1.2.0, eToro 1.3.0, Swissquote 1.2.0 (their output now holds the new transactions); eToro 1.4.0 (lot W5-2c: the overnight refund is an INTEREST).
 NEW_VERSIONS = {
     "broker_credit_agricole": "2.1.0",  # W5-7: a report-set plugin (the securities and the account exports imported together); 2.1.0 project 66 P2b: its charges are linked
-    "broker_directa": "1.1.0",
+    "broker_directa": "1.2.0",  # project 66 P3: «Rit.provento etf» is a TAX, the charges are linked
     "broker_revolut": "1.3.0",
     "broker_trading212": "1.2.0",
     "broker_etoro": "1.4.0",
