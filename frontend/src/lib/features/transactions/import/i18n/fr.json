@@ -280,7 +280,6 @@
       "split": "Séparer",
       "mergeWith": "Fusionner avec…",
       "extract": "Retirer du groupe",
-      "noTargets": "Aucun autre titre",
       "actions": "Actions",
       "inspect": "Modifier l'actif",
       "noIsin": "sans ISIN",
@@ -577,6 +576,7 @@
       "preview_unreadable": "Le fichier semble endommagé ou ne correspond pas à son extension : l'aperçu est impossible."
     },
     "reviewPossibleSplitNote": "{n, plural, one {# ligne ressemble à un split : les actions nouvelles entrent à coût nul.} other {# lignes ressemblent à des splits : les actions nouvelles entrent à coût nul.}} Dans l'éditeur, vous pouvez lier ou créer l'événement SPLIT.",
-    "reviewPreFloorNote": "{n} lignes sélectionnées ont une date antérieure au 1er janvier 1900. Vérifiez l'année : c'est souvent une faute de frappe. Une confirmation vous sera demandée à l'enregistrement."
+    "reviewPreFloorNote": "{n} lignes sélectionnées ont une date antérieure au 1er janvier 1900. Vérifiez l'année : c'est souvent une faute de frappe. Une confirmation vous sera demandée à l'enregistrement.",
+    "viewDetailReading": "Le fichier est encore en cours de lecture"
   }
 }

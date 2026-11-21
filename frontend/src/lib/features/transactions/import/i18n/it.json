@@ -280,7 +280,6 @@
       "split": "Separa",
       "mergeWith": "Unisci con…",
       "extract": "Estrai dal gruppo",
-      "noTargets": "Nessun altro titolo",
       "actions": "Azioni",
       "inspect": "Modifica asset",
       "noIsin": "senza ISIN",
@@ -577,6 +576,7 @@
       "preview_unreadable": "Il file sembra danneggiato o non è quello che dice l'estensione: non si può mostrare l'anteprima."
     },
     "reviewPossibleSplitNote": "{n, plural, one {# riga sembra uno split: le azioni nuove entrano a costo zero.} other {# righe sembrano split: le azioni nuove entrano a costo zero.}} Nell'editor puoi collegare o creare l'evento SPLIT.",
-    "reviewPreFloorNote": "{n} righe selezionate hanno una data anteriore al 1° gennaio 1900. Controlla l'anno: spesso è un errore di battitura. Ti verrà chiesto di confermarle al salvataggio."
+    "reviewPreFloorNote": "{n} righe selezionate hanno una data anteriore al 1° gennaio 1900. Controlla l'anno: spesso è un errore di battitura. Ti verrà chiesto di confermarle al salvataggio.",
+    "viewDetailReading": "Il file è ancora in lettura"
   }
 }
