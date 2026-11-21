@@ -3440,10 +3440,12 @@ class TestFinecoSafeRows:
         assert (notice.context or {}).get("report_issue") is True and (notice.context or {}).get("count") == 1
         assert sorted(line for evidence in notice.evidence for line in evidence.row_numbers) == [_FINECO_FIRST_LINE], "the notice lists the skipped row's line"
 
-    def test_fineco_plugin_version_is_1_5_0(self):
-        """Red today: 1.4.0. Contract (Fineco left the beta, W-B92): the rows it leaves out are now the shared ``rows_not_recognized``
-        and ``rows_unreadable`` notices instead of plain strings, so the output for the same file changes and its version becomes 1.5.0."""
-        assert FinecoBrokerProvider().plugin_version == "1.5.0"
+    def test_fineco_plugin_version_is_at_least_1_5_0(self):
+        """Contract (Fineco left the beta, W-B92): the rows it leaves out are now the shared ``rows_not_recognized`` and
+        ``rows_unreadable`` notices instead of plain strings, so the output for the same file changed and its version became
+        1.5.0. Later versions keep it (1.6.0, project 66 P2a: the commission is linked to its trade; pinned in
+        ``test_brim_fineco.py`` and ``test_brim_row_skips.py``)."""
+        assert tuple(int(part) for part in FinecoBrokerProvider().plugin_version.split(".")) >= (1, 5, 0)
 
 
 # =============================================================================
