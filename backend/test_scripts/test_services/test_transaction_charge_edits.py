@@ -579,6 +579,25 @@ class TestRuleSixOnSavedRows:
 
     @pytest.mark.asyncio
     @COMMIT
+    async def test_deleting_the_charge_in_the_same_batch_lets_the_promote_pass(self, world, commit):
+        """66 C21 guard (§1.1): a charge «del» does not count as linked — the Bulk offers the merge of its parent, and
+        sends the delete of the charge and the promote in one batch. Rule 6 reads the charges after the batch's deletes."""
+        deposit_id = await _save(world, T.DEPOSIT, world.a_id, asset_id=None, quantity="0", amount="100")
+        withdrawal_id = await _save(world, T.WITHDRAWAL, world.b_id, asset_id=None, quantity="0", amount="-100")
+        fee_id = await _save_charge(world, parent_id=deposit_id, asset_id=None)
+        before = await _rows(world)
+        assert before[fee_id][2] == deposit_id, f"premise: the FEE is saved linked to the DEPOSIT: {before[fee_id]}"
+
+        response = await _batch(world, commit=commit, promotes=[{"id_a": deposit_id, "id_b": withdrawal_id}], deletes=[fee_id])
+
+        rows = await _assert_accepted(world, response, before, commit)
+        if commit:
+            assert fee_id not in rows, f"the deleted FEE must be gone: {rows.get(fee_id)}"
+            assert await _related_and_type(world, deposit_id) == (T.CASH_TRANSFER, withdrawal_id), "the DEPOSIT must be the CASH_TRANSFER leg paired with the WITHDRAWAL"
+            assert await _related_and_type(world, withdrawal_id) == (T.CASH_TRANSFER, deposit_id), "the WITHDRAWAL must be the CASH_TRANSFER leg paired with the DEPOSIT"
+
+    @pytest.mark.asyncio
+    @COMMIT
     @pytest.mark.parametrize("before_type,after_type", ((T.BUY, "SELL"), (T.DEPOSIT, "WITHDRAWAL")), ids=("buy-sell", "deposit-withdrawal"))
     async def test_a_type_swap_of_a_parent_keeps_its_charges(self, world, commit, before_type, after_type):
         if before_type is T.BUY:

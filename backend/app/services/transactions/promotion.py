@@ -6,13 +6,16 @@ from dataclasses import dataclass
 from decimal import Decimal
 from typing import Dict, List, Optional, Tuple
 
-from sqlalchemy import select
+from sqlalchemy import exists, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 
 from backend.app.db.models import Transaction, TransactionType
 from backend.app.schemas.transactions.promotion import TXPromoteSuggestCandidate, TXPromoteSuggestResponse
 from backend.app.schemas.transactions.type_metadata import TX_TYPE_METADATA, PairFieldConstraint
 from backend.app.utils.datetime_utils import shift_date
+
+_Charge = aliased(Transaction)
 
 
 @dataclass(frozen=True)
@@ -170,6 +173,9 @@ class TransactionPromotionMixin:
             stmt = select(Transaction).where(Transaction.type.in_(comp_types)).where(Transaction.related_transaction_id.is_(None)).where(Transaction.date >= lo).where(Transaction.date <= hi).where(Transaction.broker_id.in_(accessible))
             if input_positive_ids:
                 stmt = stmt.where(Transaction.id.notin_(input_positive_ids))
+            # 66 C21: a row with linked charges cannot be promoted (rule 6, `chargesBlockParentType`), so it is never offered.
+            # Only the candidates: the inputs are the editor's, which judges them on its pending state.
+            stmt = stmt.where(~exists(select(_Charge.id).where(_Charge.parent_transaction_id == Transaction.id)))
 
             rows = (await self.session.execute(stmt)).scalars().all()
 

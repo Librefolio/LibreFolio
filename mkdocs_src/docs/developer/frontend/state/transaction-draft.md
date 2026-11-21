@@ -158,10 +158,20 @@ The tagged union structure of `PendingOp` simplifies complex composite operation
     stay. Two new rows merged are no such entry: they split as a **new** pair.
   - A **saved** pair is queued in `pendingSplits` as `{id_a, id_b}`; the backend splits it at
     commit. Meanwhile the partner op loses `pairedWith` and becomes a visible row next to its
-    former main row.
+    former main row. Each half keeps the pair's `fields.type` until its Form gives it its own;
+    the type it will have is `postSplitType` (66 C22d): the split's type for its side, or the
+    type the user chose in its Form. The Type cell («CASH_TRANSFER → DEPOSIT»), the half's Form
+    and **Link** (`bulkLinkSelection`'s `typeOf`) all read it, so an untouched `DEPOSIT` or
+    `WITHDRAWAL` half accepts charges at once, linked in the same batch (the backend splits
+    before it links); the Type cell shows the half's charges chip too. A split `TRANSFER` gives
+    two `ADJUSTMENT`, which are no parents.
   - A **new** pair is split locally: both ops lose their link and take the standalone types of
     `SPLIT_TYPE_MAP` (the client mirror of the backend's split rules, e.g. `WITHDRAWAL` and
     `DEPOSIT` for `FX_CONVERSION`).
+  - `splitTypes.ts` holds the one computation: `SPLIT_TYPE_MAP`, `splitHalfType(originalType,
+    fields)` (the sender — quantity for a `TRANSFER`, cash for the others, at or below zero —
+    takes the first type) and `postSplitType(op, pendingSplits)`. The Type cell, the Form, **Link**,
+    the issue rows and the local split of a new pair all call it.
 * **Promote** (`executePromote`) links two independent rows (e.g. a `WITHDRAWAL` and a `DEPOSIT`)
   into a pair of the matching type; both ops take the target type and collapse into one paired
   row, the receiving op becoming the hidden partner (`collapseIntoPaired`). Before the type
@@ -220,6 +230,38 @@ The workspace looks for the two halves of a transfer or an exchange and offers t
   hold for every promote of the workspace: **Merge**, **Merge all**, and the selection toolbar's
   promote button (`selectedForPromote`, `promote-toolbar-confirm`), which also asks
   `cashAmountsCancel` of a cash transfer and `assetQuantitiesCancel` of an asset transfer.
+* **Rows with linked charges** (66 C21): a row that still holds linked charges is never a side of a promote — rule 6
+  of the backend (`chargesBlockParentType`) would refuse the save. `rowsWithLinkedCharges` (`bulkCharges.ts`) gives
+  the holders in one pass: a charge linked under the row, or a saved charge of it the workspace does not hold yet
+  (`charges_count` minus the saved charges of that row present anywhere in `ops`, so a charge moved away with
+  **Link** frees the row it left). `isSuggestable` and the standalone lists behind the banner leave them out;
+  `selectedForPromote` (66 C22) is `hidden`, `disabled` or `ok` (`PromoteSelection`), and a pair that only the charges
+  of a leg forbid draws the button off with the reason (`aria-disabled`, `data-reason="hasCharges"`, the Tooltip
+  `transactions.promote.chargesBlock`), as the Transactions page draws its `promote` action off
+  (`data-disabled-reason="hasCharges"`) when a row has `charges_count > 0`; `executePromote` refuses them as a defence (`tx.bulk.promote.refused.charges`, for a charge read
+  that lands while `PromoteMergeModal` is open), and `promote-suggest` never returns a saved candidate that is the
+  parent of a charge. A charge «del» or «unlink» frees its row; after the merge it is a row of its own, because
+  `isUnderParent` never puts a charge under a leg of a pair (rule 8). `resetRow` and a restore from «del»
+  (`applyDelete`) keep a charge «unlink» when its parent is «del» or a leg of a pair, saved or pending
+  (`keepUnlinkedFromUnfitParents`), and a half that a merge hides leaves the grid's selection, so **Reset selected**
+  never resets it alone.
+* **Leg of a pair** (66 C22): `isPairLeg(op, ops)` (`bulkCharges.ts`) is the one predicate — the hidden half names the
+  visible one (`pairedWith`), for a saved pair, a merge queued in `pendingPromotes` and two new rows merged alike; a
+  saved pair split here is none. `isUnderParent`, `keepUnlinkedFromUnfitParents` and the charge Form's **Link to a
+  transaction…** (`_parent_link` in `applyChargePayload`) read it: the Form's picker reads the database, where a row
+  merged in the workspace is not a pair yet, so a link to such a leg is refused (`tx.bulk.charge.link.refused.paired`,
+  the toast of the `paired` reason) and the charge's other values apply. `bulkLinkSelection`'s `pairIdOf` and the
+  parent Form's `related_transaction_id` keep their own lookup, because they need the partner's id.
+* **Resets and queued merges** (66 C22): a reset brings rows back as saved, and a merge queued in `pendingPromotes` is
+  not saved. `resetRows(tempIds)` (**Reset row** is `resetRows([tempId])`, **Reset selected** one call for the whole
+  selection) first undoes every queued merge that touches one of the rows (`undoPendingPromote`, the partner taken
+  before the undo), then resets them, so the order of the selection never changes the outcome. A split queued in
+  `pendingSplits` that touches one of the rows is undone the same way (66 C22b): the entry leaves the queue and both
+  halves are reset, so the pair the grid shows joined is never split by the save. A charge linked to a half while the
+  split was queued would now hang under a leg: `keepUnlinkedFromUnfitParents` also looks at the charges of the reset
+  rows, and undoes its link with `unlinkCharge` (66 C22c, below), with the `paired` toast. **Undo split** does the same
+  for the charges of its two halves (`tx.bulk.undo-split.charge.kept-unlinked`). **Reset all** undoes
+  every queued merge before it renames the rows, and empties `pendingPromotes` beside `pendingSplits`.
 * **The 💡 button** (`tx-bulk-suggest-import`, and the row action `suggest`) lists
   `importableSuggestions`: saved transactions that `POST /transactions/promote-suggest` proposes as
   the other half of a row, and that are not in the workspace yet. The search runs debounced on the
@@ -381,7 +423,15 @@ the pairs' code is untouched. The pure half lives in `bulk/bulkCharges.ts`:
   after every `collapsePairedOps`: an intent, a reset, the picker. A reset that regenerates the parent's `tempId`
   remaps its charges (`remapChargeOf`), so `chargeOf` never names a missing operation.
 - **The link that changes lives on the charge.** `parentUnlink` sends `parent_transaction_id: 0`; `parentLinkId` names
-  a saved parent absent from the workspace. A new charge typed in its parent's form carries `followsParent`: at batch
+  a saved parent absent from the workspace.
+- **Undoing a link: one rule** (66 C22c, `unlinkCharge` in `bulkCharges.ts`). Every path that unlinks a charge goes
+  through it: a reset or **Undo split** that makes its parent a leg again, a restore under a parent still «del»,
+  «unlink» in its own Form or in its parent's Form, «Keep» on a parent's delete, an intent's `unlinkIds`, a charge read
+  under a parent already «del». Undoing a link brings the charge back to what it was before that link. `parentUnlink`
+  cuts only a **saved** link: when the charge's saved parent is its owner, it keeps the owner and gets `parentUnlink`;
+  when it has a saved parent but another owner (unlinked from the saved one, then linked here), it gets `parentUnlink`
+  and goes back under its saved parent if the workspace holds it. A link made only here (no saved parent, or a new
+  charge) is dropped: the charge is back as saved, with no «unlink» badge and nothing to send about a parent. A new charge typed in its parent's form carries `followsParent`: at batch
   time it takes the parent's broker, asset and date.
 - **The payload.** `chargeParentFields` gives `parent_ref` (the parent's `tempId`, sent as its create's `ref`) or
   `parent_transaction_id`, merged in `collectCreate` / `collectUpdate`. So the three places that build a payload see
@@ -475,8 +525,8 @@ Inside the workspace, «Delete» on a row and «Delete selected» go through one
   the wait;
 - a parent whose read failed is skipped, and a warning toast (`transactions.bulk.deleteSkippedUnread`) says how many.
 
-`applyDeleteChoice` then applies the plan and the choice. With «Keep», saved charges get `parentUnlink`; a charge
-linked only here loses its local link; new charges become rows of their own, with the broker, asset and date they
+`applyDeleteChoice` then applies the plan and the choice. With «Keep», each charge goes through `unlinkCharge`: one
+saved under this parent gets `parentUnlink`; one linked only here loses its local link; new charges become rows of their own, with the broker, asset and date they
 followed. With «Delete all», saved charges are «del» and new ones leave. «Cancel» or Esc changes nothing and keeps the
 selection.
 

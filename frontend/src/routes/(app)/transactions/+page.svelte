@@ -393,8 +393,13 @@
         });
     });
 
+    /** 66 C22: a pair the linked charges of a row forbid (rule 6) is offered off, with the reason; the backend stays the
+     *  defence (`chargesBlockParentType`). The one place the off state is born: to drop it, return null here. */
+    let promoteChargesHolder = $derived(promoteMatch ? (selectedRows.find((row) => (row.charges_count ?? 0) > 0) ?? null) : null);
+    let promoteHint = $derived(promoteChargesHolder ? $_('transactions.promote.chargesBlock', {values: {type: $_(`transactions.types.${promoteChargesHolder.type}`) || promoteChargesHolder.type, ref: txRowRef(promoteChargesHolder.id, null, $_)}}) : '');
+
     function onPromotePair() {
-        if (selectedRows.length !== 2 || !promoteMatch) return;
+        if (selectedRows.length !== 2 || !promoteMatch || promoteChargesHolder) return;
         const a = selectedRows[0];
         const b = selectedRows[1];
         promoteTarget = {
@@ -454,13 +459,21 @@
     /**
      * 77 SEL-B: the bulk actions of the table's selection panel, through the rule of `resolveSelectionAction`. Edit and
      * Delete take the rows the user can edit (their number says how many); Clone takes every row. «Link as pair» and
-     * «Link the charges» are decided by the whole selection, as before: hidden when it is not theirs, the latter off with
-     * its reason (66 F6).
+     * «Link the charges» are decided by the whole selection, as before: hidden when it is not theirs, and off with
+     * their reason when the selection blocks them (66 C21: a row with charges; 66 F6).
      */
     let selectionActions = $derived<BulkAction<TXReadItem>[]>([
         {id: 'edit', icon: Pencil, label: () => $_('common.edit') || 'Edit', primary: true, appliesTo: (row) => txStoreCanEdit(row.id), onClick: (rows) => onEditBulk(rows)},
         {id: 'clone', icon: Copy, label: () => $_('transactions.actions.clone') || 'Clone', onClick: (rows) => onCloneBulk(rows)},
-        {id: 'promote', icon: Link2, label: () => `🔗 ${$_('transactions.actions.promotePair') || 'Link as pair'}`, pointless: () => !promoteMatch, onClick: () => onPromotePair()},
+        {
+            id: 'promote',
+            icon: Link2,
+            label: () => `🔗 ${$_('transactions.actions.promotePair') || 'Link as pair'}`,
+            pointless: () => !promoteMatch,
+            // 66 C21: a selected row with charges keeps «Link as pair» off, with its reason (rule 8: a pair leg has no charges).
+            blocked: () => (promoteChargesHolder ? {hint: () => promoteHint, reason: 'hasCharges'} : null),
+            onClick: () => onPromotePair(),
+        },
         {
             id: 'link-charges',
             icon: Link2,

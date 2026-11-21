@@ -492,7 +492,8 @@ as a row of its own; `n`: link (or relink) to the saved parent `n` — or `paren
   with their parents (same broker), and the deferred foreign key holds whatever the order.
 - A saved row a promote turns into a leg of a pair is refused while it keeps charges (`chargesBlockParentType`,
   `type`, `chargeIds`, on the promote): the promotion of a DEPOSIT or WITHDRAWAL with charges into a cash transfer. It
-  passes when the same batch unlinks them. Only a promote can take the role away: type swaps (BUY↔SELL,
+  passes when the same batch unlinks them. The clients never offer such a promote as available: the workspace and the
+  Transactions page draw it off with the reason (66 C22, `transaction-draft.md`); the refusal stays the defence. Only a promote can take the role away: type swaps (BUY↔SELL,
   DEPOSIT↔WITHDRAWAL, DIVIDEND↔INTEREST) keep a parent a parent, and a split leaves standalone rows.
 
 **Reading.** `TXReadItem` carries `parent_transaction_id` and `charges_count` (how many charges point at the row,

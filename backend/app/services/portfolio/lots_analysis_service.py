@@ -20,7 +20,22 @@ from backend.app.services.accounts.settings_service import get_effective_base_cu
 from backend.app.services.financial_math import fx_rates
 from backend.app.services.financial_math.average_cost import AverageCost, CostPosition, compute_average_costs, cost_movement_from_transaction
 from backend.app.services.financial_math.fifo.engine import run_fifo_lot_engine
-from backend.app.services.financial_math.fifo.models import EconomicAllocationGroup, EconomicEvent, FifoDataQualityIssue, FifoEngineResult, FifoEvent, FifoInputTransaction, FifoLot, FragmentInterval, LotClosure, LotMatchingMethod, ReferencePriceLookup, ReferencePriceResolution, fails_the_replay
+from backend.app.services.financial_math.fifo.models import (
+    EconomicAllocationGroup,
+    EconomicEvent,
+    FifoDataQualityIssue,
+    FifoEngineResult,
+    FifoEvent,
+    FifoInputTransaction,
+    FifoLot,
+    FragmentInterval,
+    LinkedParent,
+    LotClosure,
+    LotMatchingMethod,
+    ReferencePriceLookup,
+    ReferencePriceResolution,
+    fails_the_replay,
+)
 from backend.app.services.financial_math.lots.average_cost_lines import ALL_BROKERS, build_broker_wac_history, build_cumulative_wac_history
 from backend.app.services.financial_math.lots.change_days import DayRange, analysis_event_dates, history_steps, lot_change_days, price_candidate_days
 from backend.app.services.financial_math.lots.conversions import FxRateResolver, collect_fx_needs, collect_performance_fx_needs, convert_closure, needs_market_series, unconvertible_ids
@@ -54,6 +69,8 @@ _WARNING_ISSUE_CODES = {
     IssueCode.CURRENT_PRICE_ASSUMED_AT_COST,
     IssueCode.ASSET_INCOME_NO_ELIGIBLE_LOTS,
     IssueCode.ASSET_COST_NO_ELIGIBLE_LOTS,
+    IssueCode.ASSET_COST_LINKED_PARENT_AFTER_RANGE,
+    IssueCode.ASSET_COST_LINKED_INCOME_NO_ELIGIBLE_LOTS,
 }
 
 # The analyses a FAILED replay still answers (J-12): the average-cost lines come from the transactions, and the market
@@ -63,6 +80,8 @@ _REPLAY_FREE_ANALYSES = frozenset({LotAnalysisType.BROKER_WAC_HISTORY, LotAnalys
 _ORPHAN_ISSUE_CODES = {
     IssueCode.ASSET_INCOME_NO_ELIGIBLE_LOTS,
     IssueCode.ASSET_COST_NO_ELIGIBLE_LOTS,
+    IssueCode.ASSET_COST_LINKED_PARENT_AFTER_RANGE,
+    IssueCode.ASSET_COST_LINKED_INCOME_NO_ELIGIBLE_LOTS,
 }
 
 _CUSTODY_KINDS = {
@@ -379,11 +398,15 @@ class LotsAnalysisService:
                     target_currency=target_currency,
                 )
             if cost_transactions:
+                # Project 66 (M1b): the facts of the linked parents, read past the end too, so a charge whose trade
+                # lies after ``actual_to`` waits, orphan, instead of taking the ladder.
+                linked_parents = await self._load_linked_parents(cost_transactions, asset_id=asset_id, scope_broker_ids=scope_broker_ids)
                 cost_events_input = build_cost_economic_events(
                     cost_transactions=cost_transactions,
                     fx_resolver=fx_resolver,
                     asset_currency=asset.currency,
                     target_currency=target_currency,
+                    parents=linked_parents,
                 )
                 engine_transactions = build_engine_transactions(transactions, fx_resolver, asset.currency, target_currency)
                 unconvertible_trade_ids = unconvertible_ids([tx for tx in transactions if tx.type in (TransactionType.BUY, TransactionType.SELL)], fx_resolver, asset.currency)
@@ -1066,6 +1089,18 @@ class LotsAnalysisService:
         )
         return list((await self.db.execute(stmt)).scalars().all())
 
+    async def _load_linked_parents(self, cost_transactions: Sequence[Transaction], *, asset_id: int, scope_broker_ids: Sequence[int]) -> dict[int, LinkedParent]:
+        """Project 66 (M1b, M2b): the facts (date, type, broker) of the parents the charges are linked to, with no date
+        and no amount filter: the engine needs them for a parent after the end of the analysis (M1b) and for an income
+        of amount 0, which ``_load_income_transactions`` leaves out (M2b). One query, kept to the asset and the scope; a
+        parent outside them has no facts, so its charge takes the ladder."""
+        parent_ids = {tx.parent_transaction_id for tx in cost_transactions if tx.parent_transaction_id is not None}
+        if not parent_ids:
+            return {}
+        stmt = select(Transaction.id, Transaction.date, Transaction.type, Transaction.broker_id).where(Transaction.id.in_(parent_ids)).where(Transaction.asset_id == asset_id).where(Transaction.broker_id.in_(scope_broker_ids))
+        rows = (await self.db.execute(stmt)).all()
+        return {row.id: LinkedParent(date=row.date, type=str(getattr(row.type, "value", row.type)), broker_id=row.broker_id) for row in rows}
+
     async def _load_split_ratios(self, transactions: Sequence[Transaction]) -> dict[int, Decimal]:
         return {link.transaction_id: link.ratio for link in await load_split_links(self.db, transactions)}
 
@@ -1692,6 +1727,8 @@ def _message_key_for_issue(code: IssueCode) -> str:
         IssueCode.CURRENT_PRICE_ASSUMED_AT_COST: "dataQuality.currentPriceAssumedAtCost",
         IssueCode.ASSET_INCOME_NO_ELIGIBLE_LOTS: "dataQuality.assetIncomeNoEligibleLots",
         IssueCode.ASSET_COST_NO_ELIGIBLE_LOTS: "dataQuality.assetCostNoEligibleLots",
+        IssueCode.ASSET_COST_LINKED_PARENT_AFTER_RANGE: "dataQuality.assetCostLinkedParentAfterRange",
+        IssueCode.ASSET_COST_LINKED_INCOME_NO_ELIGIBLE_LOTS: "dataQuality.assetCostLinkedIncomeNoEligibleLots",
     }
     return mapping[code]
 

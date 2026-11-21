@@ -46,6 +46,8 @@
     "nonIsoReportCurrency": "This report converts to “{value}”, not an ISO currency code (it stands for {suggestion}) — choose {suggestion} as “Default Currency” in Settings › Preferences",
     "nonIsoReportCurrencyUnknown": "This report converts to “{value}”, not an ISO currency code — choose the “Default Currency” again in Settings › Preferences",
     "staleFx": "{count} exchange rate(s) are out of date, the oldest by {days} days — sync the rates to update the totals",
-    "staleFxAfterSync": "The provider has no newer rates for {pairs} yet: try again later."
+    "staleFxAfterSync": "The provider has no newer rates for {pairs} yet: try again later.",
+    "assetCostLinkedParentAfterRange": "{economic_type} of {target_amount} {target_currency} on {as_of_date} is linked to a transaction of {parent_date}, after the end of the analysis — left unallocated until the analysis reaches that date",
+    "assetCostLinkedIncomeNoEligibleLots": "{economic_type} of {target_amount} {target_currency} on {as_of_date} is linked to an income of {parent_date} that no lot earned — left unallocated"
   }
 }

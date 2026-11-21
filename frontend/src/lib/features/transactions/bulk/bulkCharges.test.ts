@@ -135,15 +135,16 @@ function draftByKey(drafts: readonly ChargeDraft[], key: string): ChargeDraft {
     return found[0];
 }
 
-/** The two dependencies `applyChargeDrafts` takes from the editor, as spies. Both return operations WITHOUT `chargeOf`
- *  and `followsParent`: setting them is the module's job, whatever the editor hands back. */
+/** The dependencies `applyChargeDrafts` takes from the editor: two spies, which return operations WITHOUT `chargeOf` and
+ *  `followsParent` (setting them is the module's job, whatever the editor hands back), and the store (`get`, required
+ *  since 66 C22c: `unlinkCharge` reads the saved parent). */
 function makeDeps() {
     const editOpFromTx = vi.fn((id: number): PendingOp | null => {
         const r = get(id);
         return r ? editOp(r, {tempId: `fresh-${id}`}) : null;
     });
     const newChargeOp = vi.fn((draft: ChargeDraft, parent: PendingOp): PendingOp => createOp(`made-${draft.key}`, {...parent.fields, type: draft.type, cash: draft.cash ? {...draft.cash} : null, description: draft.description, quantity: '0', tags: []}));
-    return {editOpFromTx, newChargeOp};
+    return {editOpFromTx, newChargeOp, get};
 }
 
 /** A deep copy, to prove an input was not mutated. */
@@ -1350,6 +1351,60 @@ describe('bulkLinkSelection — «paired» from the Bulk’s own pairs (rule 8)'
     });
 });
 
+/**
+ * 66 C22d: `bulkLinkSelection` reads each row's type through `typeOf` (the Bulk passes `postSplitType`: a half of a
+ * queued split reads the type the split gives it), for the mirror rows AND for the type the reason names
+ * (`params.type`, which the toolbar's hint shows). Without `typeOf` it reads `fields.type`, as before.
+ */
+describe('bulkLinkSelection — the type of a row read through typeOf (66 C22d)', () => {
+    type BulkLinkSelectionWithType = (rows: readonly PendingOp[], ops: readonly PendingOp[], g: (id: number) => TXReadItem | undefined, opts: LinkOpts, typeOf?: (op: PendingOp) => string) => BulkLinkSelection;
+    const withType: BulkLinkSelectionWithType = (rows, ops, g, opts, typeOf) => c2<BulkLinkSelectionWithType>('bulkLinkSelection')(rows, ops, g, opts, typeOf);
+
+    /** A saved CASH_TRANSFER pair split in this Bulk: the sender on 77 (−50), the receiver on 77 (+50); no `pairedWith`. */
+    const CT_W = row(560, 'CASH_TRANSFER', {related_transaction_id: 561, cash: {code: 'EUR', amount: '-50.000000'}, description: 'split sender'});
+    const CT_D = row(561, 'CASH_TRANSFER', {related_transaction_id: 560, cash: {code: 'EUR', amount: '50.000000'}, description: 'split receiver'});
+    const CT_STORE = new Map<number, TXReadItem>([CT_W, CT_D].map((r) => [r.id, r]));
+    const ctGet = (id: number): TXReadItem | undefined => CT_STORE.get(id) ?? get(id);
+    /** The post-split types, as `postSplitType` gives them; any other row keeps its own. */
+    const POST: Record<number, string> = {560: 'WITHDRAWAL', 561: 'DEPOSIT'};
+    const typeOf = (op: PendingOp): string => (op.op === 'edit' && POST[op.txId]) || op.fields.type;
+
+    it('without typeOf both halves read CASH_TRANSFER, no charge role: hidden', () => {
+        const w = editOp(CT_W);
+        const d = editOp(CT_D);
+        const fee = editOp(FEE_FREE);
+        expect(withType([w, d, fee], [w, d, fee], ctGet, LINK_OPTS)).toEqual({kind: 'hidden'});
+    });
+
+    it('with typeOf both halves are parents: off, twoParents, and params.type is the typeOf value of the second (DEPOSIT), not CASH_TRANSFER', () => {
+        const w = editOp(CT_W);
+        const d = editOp(CT_D);
+        const fee = editOp(FEE_FREE);
+        const result = withType([w, d, fee], [w, d, fee], ctGet, LINK_OPTS, typeOf);
+        expectOff(result, 'twoParents');
+        const params = (result as {params?: {op?: PendingOp; type?: string}}).params;
+        expect({op: params?.op?.tempId, type: params?.type}, 'the second parent, named by its post-split type').toEqual({op: 't-561', type: 'DEPOSIT'});
+    });
+
+    it('the order of the selection picks the second parent: receiver first → params names the sender, WITHDRAWAL', () => {
+        const w = editOp(CT_W);
+        const d = editOp(CT_D);
+        const fee = editOp(FEE_FREE);
+        const result = withType([d, w, fee], [w, d, fee], ctGet, LINK_OPTS, typeOf);
+        expectOff(result, 'twoParents');
+        const params = (result as {params?: {op?: PendingOp; type?: string}}).params;
+        expect({op: params?.op?.tempId, type: params?.type}).toEqual({op: 't-560', type: 'WITHDRAWAL'});
+    });
+
+    it('a half marked for deletion: off, deleted, and params.type is its typeOf value', () => {
+        const d = editOp(CT_D, {markedDelete: true});
+        const fee = editOp(FEE_FREE);
+        const result = withType([d, fee], [editOp(CT_W), d, fee], ctGet, LINK_OPTS, typeOf);
+        expectOff(result, 'deleted');
+        expect((result as {params?: {type?: string}}).params?.type).toBe('DEPOSIT');
+    });
+});
+
 describe('withoutRows — rows leaving the Bulk, and the new charges linked with «Link» (§21.3, §22.3)', () => {
     const withoutRows = (ops: readonly PendingOp[], ids: Iterable<string>): PendingOp[] => c2<(o: readonly PendingOp[], i: Iterable<string>) => PendingOp[]>('withoutRows')(ops, ids);
 
@@ -1400,5 +1455,264 @@ describe('withoutRows — rows leaving the Bulk, and the new charges linked with
         const kept = byTempId(out, 'n-linked');
         expect(kept.chargeOf).toBeUndefined();
         expect({broker_id: kept.fields.broker_id, asset_id: kept.fields.asset_id, date: kept.fields.date}, 'its own, not BUY_B’s 2026-10-05').toEqual({broker_id: 77, asset_id: 101, date: '2026-10-07'});
+    });
+});
+
+/**
+ * 66 C22 (contract 66-C22 §1.1, §2.1, §5.4): one predicate of «leg of a pair», `isPairLeg(op, ops)`, exported by
+ * `bulkCharges.ts`: `op.pairedWith !== undefined || ops.some((o) => o.pairedWith === op.tempId)`. A pair is the Bulk's,
+ * as the payload sends it: a saved pair loaded as such, a merge queued in this Bulk (two saved rows, or a saved and a new
+ * one: `collapseIntoPaired` hides one half with `pairedWith`), two new rows merged (`link_uuid`), the W4b placeholder of a
+ * half the user cannot read, a hidden half whose partner is not there. A saved pair split in this Bulk is no pair (both
+ * halves visible, no `pairedWith`), whatever the store's `related_transaction_id` still says.
+ *
+ * The same question is asked today in three places, which must agree with it on the same rows:
+ *   - `pairIdOf` inside `bulkLinkSelection` (its `!= null` is the mirror row's `related_transaction_id`, read by the
+ *     `paired` reason of `linkSelection`). The roles here make every non-charge type a parent, so no `hidden` outcome
+ *     comes before the `paired` check (a CASH_TRANSFER leg would otherwise hide «Link» first);
+ *   - `isUnderParent` (rule 8: a charge is never under a leg);
+ *   - TBM:712 (`opToTxLike`, the form's `related_transaction_id` of the visible row): component level, in
+ *     `TransactionBulkModal.test.ts`, describe «66 C22».
+ *
+ * RED until `bulkCharges.ts` exports `isPairLeg` (read through the namespace, `c2`): only the cases that call it fail.
+ * The `pairIdOf` and `isUnderParent` cases are guards, green before and after.
+ */
+describe('isPairLeg — the one predicate of «leg of a pair» (66 C22)', () => {
+    type IsPairLeg = (op: PendingOp, ops: readonly PendingOp[]) => boolean;
+    const isPairLeg: IsPairLeg = (op, ops) => c2<IsPairLeg>('isPairLeg')(op, ops);
+
+    /** Two saved rows, unpaired in the store: what a merge queued in this Bulk joins. */
+    const DEP_Q = row(550, 'DEPOSIT', {asset_id: null, cash: {code: 'EUR', amount: '100.000000'}, description: 'queued deposit'});
+    const WD_Q = row(551, 'WITHDRAWAL', {asset_id: null, broker_id: 88, cash: {code: 'EUR', amount: '-100.000000'}, description: 'queued withdrawal'});
+    /** A saved charge of DEP_Q: what an adoption on load reads (path 7). */
+    const FEE_Q = row(552, 'FEE', {asset_id: null, parent_transaction_id: 550, cash: {code: 'EUR', amount: '-1.000000'}, description: 'fee of the queued deposit'});
+    /** A saved pair, linked in the store. */
+    const DEP_S = row(560, 'DEPOSIT', {asset_id: null, related_transaction_id: 561, cash: {code: 'EUR', amount: '100.000000'}, description: 'saved paired deposit'});
+    const WD_S = row(561, 'WITHDRAWAL', {asset_id: null, broker_id: 88, related_transaction_id: 560, cash: {code: 'EUR', amount: '-100.000000'}, description: 'saved paired withdrawal'});
+    /** A free saved FEE on the legs' broker, no asset: the charge `bulkLinkSelection` is asked about. */
+    const FEE_C = row(570, 'FEE', {asset_id: null, cash: {code: 'EUR', amount: '-2.000000'}, description: 'free fee'});
+    const LEG_STORE = new Map<number, TXReadItem>([DEP_Q, WD_Q, FEE_Q, DEP_S, WD_S, FEE_C].map((r) => [r.id, r]));
+    const legGet = (id: number): TXReadItem | undefined => LEG_STORE.get(id) ?? get(id);
+
+    /** Every non-charge type a parent: no `hidden` of `linkSelection` comes before its `paired` reason. */
+    const EQ_OPTS = {roleOf: (type: string): 'charge' | 'parent' | null => (type === 'FEE' || type === 'TAX' ? 'charge' : 'parent'), canEdit: () => true};
+
+    const merged = (r: TXReadItem): DraftFields => ({...fieldsOf(r), type: 'CASH_TRANSFER' as DraftFields['type']});
+
+    /** A case: the operations of the Bulk, the legs (true) and the rows that are no leg (false), by tempId. */
+    type LegCase = {ops: PendingOp[]; legs: string[]; free: string[]};
+
+    const CASES: Array<[string, () => LegCase]> = [
+        ['a saved pair loaded as such (visible edit + hidden edit with pairedWith)', () => ({ops: [editOp(WD_S, {link_uuid: 's'}), editOp(DEP_S, {tempId: 'h-560', pairedWith: 't-561', link_uuid: 's'})], legs: ['t-561', 'h-560'], free: []})],
+        [
+            'a merge of two saved rows queued in this Bulk (the store still unpaired)',
+            () => ({
+                ops: [
+                    {...editOp(WD_Q), fields: merged(WD_Q)},
+                    {...editOp(DEP_Q, {pairedWith: 't-551'}), fields: merged(DEP_Q)},
+                ],
+                legs: ['t-551', 't-550'],
+                free: [],
+            }),
+        ],
+        ['a merge of a saved row and a new one queued in this Bulk', () => ({ops: [{...editOp(WD_Q), fields: merged(WD_Q)}, createOp('n-dep', merged(DEP_Q), {pairedWith: 't-551', link_uuid: 'mixed'})], legs: ['t-551', 'n-dep'], free: []})],
+        ['two new rows merged (shared link_uuid, not queued)', () => ({ops: [createOp('n-wd', merged(WD_Q), {link_uuid: 'nn'}), createOp('n-dep', merged(DEP_Q), {pairedWith: 'n-wd', link_uuid: 'nn'})], legs: ['n-wd', 'n-dep'], free: []})],
+        ['a saved pair split in this Bulk (both halves visible, no pairedWith; the store still linked)', () => ({ops: [editOp(WD_S), editOp(DEP_S)], legs: [], free: ['t-561', 't-560']})],
+        [
+            'W4b: a readable half and the placeholder of the half the user cannot read',
+            () => ({
+                ops: [editOp(WD_S, {link_uuid: 'w4b'}), {op: 'edit', txId: 9_560, markedDelete: false, tempId: 'ph-9560', createdSeq: 9_560, fields: {type: 'WITHDRAWAL', broker_id: 99, date: WD_S.date} as DraftFields, pairedWith: 't-561', link_uuid: 'w4b', inaccessible: true}],
+                legs: ['t-561', 'ph-9560'],
+                free: [],
+            }),
+        ],
+        ['a hidden half whose partner is not in the Bulk (pairedWith naming no operation)', () => ({ops: [editOp(DEP_Q, {pairedWith: 'gone'})], legs: ['t-550'], free: []})],
+        ['two lone rows, no pair', () => ({ops: [editOp(DEP_Q), editOp(WD_Q)], legs: [], free: ['t-550', 't-551']})],
+    ];
+
+    /** The case's operations with the free FEE beside them, and the FEE itself. */
+    function withFee(c: LegCase): {ops: PendingOp[]; fee: PendingOp} {
+        const fee = editOp(FEE_C);
+        return {ops: [...c.ops, fee], fee};
+    }
+
+    /** Whether `bulkLinkSelection` reads `op` as a leg (`pairIdOf(op) != null` → its mirror's `related_transaction_id`). */
+    function linkReadsPaired(op: PendingOp, ops: readonly PendingOp[], fee: PendingOp): boolean {
+        const result = bulkLinkSelection([op, fee], ops, legGet, EQ_OPTS);
+        return result.kind === 'disabled' && result.reason === 'paired';
+    }
+
+    it.each(CASES)('guard — pairIdOf != null (bulkLinkSelection «paired») on %s: exactly the legs', (_label, build) => {
+        const c = build();
+        const {ops, fee} = withFee(c);
+        for (const id of c.legs) expect(linkReadsPaired(byTempId(ops, id), ops, fee), `${id} is a leg`).toBe(true);
+        for (const id of c.free) expect(linkReadsPaired(byTempId(ops, id), ops, fee), `${id} is no leg`).toBe(false);
+    });
+
+    it.each(CASES)('isPairLeg on %s: true for the legs, false otherwise — and equal to pairIdOf != null on every row', (_label, build) => {
+        const c = build();
+        const {ops, fee} = withFee(c);
+        for (const id of c.legs) expect(isPairLeg(byTempId(ops, id), ops), `${id} is a leg`).toBe(true);
+        for (const id of c.free) expect(isPairLeg(byTempId(ops, id), ops), `${id} is no leg`).toBe(false);
+        expect(isPairLeg(fee, ops), 'the free FEE is no leg').toBe(false);
+        for (const op of ops) {
+            if (op === fee) continue;
+            expect(isPairLeg(op, ops), `${op.tempId}: isPairLeg and pairIdOf != null agree`).toBe(linkReadsPaired(op, ops, fee));
+        }
+    });
+
+    it('isPairLeg reads the operations as given: no input mutated', () => {
+        const c = CASES[1][1]();
+        const before = snapshot(c.ops);
+        for (const op of c.ops) isPairLeg(op, c.ops);
+        expect(c.ops).toEqual(before);
+    });
+
+    // Rule 8, unchanged by C22 (C21 put it in `isUnderParent`): a charge owned by a leg is never under it; owned by a row
+    // that is no leg, it is. The same rows as above.
+    it.each(CASES)('guard — isUnderParent (rule 8) on %s: a FEE with chargeOf a leg is not under it; with chargeOf a row that is no leg it is', (_label, build) => {
+        const c = build();
+        for (const id of c.legs) {
+            const fee = editOp(FEE_C, {chargeOf: id});
+            expect(isUnderParent(fee, [...c.ops, fee]), `chargeOf the leg ${id}`).toBe(false);
+        }
+        for (const id of c.free) {
+            const fee = editOp(FEE_C, {chargeOf: id});
+            expect(isUnderParent(fee, [...c.ops, fee]), `chargeOf ${id}, no leg`).toBe(true);
+        }
+    });
+
+    // Path 7 (§1.6): the adoption on load does not look at pairs, so a saved charge of a leg takes the leg as `chargeOf`;
+    // it is never drawn under it (rule 8). In the Bulk the adoption cannot even reach a leg: a row with charges not read
+    // is not offered for a merge (C21, `TransactionBulkModal.test.ts` «C21 §2.1: saved + saved, the DEPOSIT counts a
+    // charge still being read / whose read failed»).
+    it('guard, path 7 — a saved charge of a queued leg, adopted on load: chargeOf the leg, never under it', () => {
+        const legs = [
+            {...editOp(WD_Q), fields: merged(WD_Q)},
+            {...editOp(DEP_Q, {pairedWith: 't-551'}), fields: merged(DEP_Q)},
+        ];
+        const out = adoptCharges([...legs, editOp(FEE_Q)], legGet);
+        const fee = byTxId(out, FEE_Q.id);
+        expect(fee.chargeOf, 'the adoption names the saved parent, a leg').toBe('t-550');
+        expect(isUnderParent(fee, out), 'rule 8: never under a leg').toBe(false);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// 66 C22c — unlinkCharge: «unlink» only from a SAVED parent; a pending link is dropped
+// ---------------------------------------------------------------------------
+
+/**
+ * Consultant's decision (20/11, F7 contract §12.6 and F7-d): `parentUnlink` («scollega», `parent_transaction_id: 0`) is
+ * only for a charge cut from its SAVED parent. A link that is only pending — `chargeOf` a Bulk row that is not its saved
+ * parent, `parentLinkId`, or any link of a new charge (the `linkNew` test of `chargeDraftsFor`) — is undone by dropping it.
+ * `unlinkCharge(op, ops, get)` returns the charge's operation unlinked (assumed: the one operation, not the array); a flag
+ * that is off is absent (`without`), never `false`.
+ *
+ *   - saved parent == the current owner (`chargeOf` its edit row, or `parentLinkId` = it) → `parentUnlink: true`,
+ *     `chargeOf` kept;
+ *   - saved parent P present but another owner now → back to what it was BEFORE that link: unlinked from P
+ *     (`parentUnlink: true`), sitting under P when the Bulk holds P's edit row (`chargeOf` = P's tempId: the «unlink»
+ *     badge needs a `chargeOf`), with no `chargeOf` when P is not in the Bulk; `parentLinkId` and `followsParent`
+ *     dropped either way, and the payload sends 0 (lane correction, 21/11);
+ *   - no saved parent (a saved charge of nobody, or a create) → `chargeOf`, `parentLinkId`, `parentUnlink`,
+ *     `followsParent` and `byParentChoice` dropped; a create that followed its owner (`followsParent`) keeps the owner's
+ *     broker, asset and date it was following, as «Keep» does (`applyDeleteChoice`), every other field its own.
+ * The cells a model cannot hold are left out: a create has no saved parent, and a create row is never a saved parent.
+ *
+ * RED until `bulkCharges.ts` exports `unlinkCharge` (read through the namespace, `c2`): only these cases fail.
+ */
+describe('unlinkCharge — «unlink» only from a saved parent; a pending link is dropped (66 C22c)', () => {
+    type UnlinkCharge = (op: PendingOp, ops: readonly PendingOp[], get: (id: number) => TXReadItem | undefined) => PendingOp;
+    const unlinkCharge: UnlinkCharge = (op, ops, g) => c2<UnlinkCharge>('unlinkCharge')(op, ops, g);
+
+    type Expected = 'unlink-keep-owner' | 'unlink-under-saved' | 'unlink-saved-absent' | 'drop-all';
+    /** `fields`: the fields expected out, when they are not the charge's own. */
+    type Cell = {charge: PendingOp; ops: PendingOp[]; expected: Expected; fields?: DraftFields};
+
+    const newBuy = (): PendingOp => createOp('n-buy', newBuyFields());
+    /** A new FEE whose own broker, asset and date differ from every owner's, so that taking the owner's shows. */
+    const NEW_FEE_FIELDS: DraftFields = {...newBuyFields(), broker_id: 99, asset_id: 202, date: '2026-11-11', type: 'FEE' as DraftFields['type'], quantity: '0', cash: {code: 'EUR', amount: '1.000000'}, description: 'new fee'};
+    const newFee = (chargeOf: string, followsParent = true): PendingOp => createOp('n-fee', {...NEW_FEE_FIELDS}, followsParent ? {chargeOf, followsParent: true} : {chargeOf});
+    /** The new FEE's fields with the broker, asset and date of the owner it followed. */
+    const followed = (owner: DraftFields): DraftFields => ({...NEW_FEE_FIELDS, broker_id: owner.broker_id, asset_id: owner.asset_id, date: owner.date});
+
+    /** The charge among the operations of its case: its owner (when any), another parent, a new BUY. */
+    function cell(charge: PendingOp, others: PendingOp[], expected: Expected, fields?: DraftFields): Cell {
+        return {charge, ops: [...others, charge], expected, fields};
+    }
+
+    const CELLS: Array<[string, () => Cell]> = [
+        // Saved parent == the current owner.
+        ['saved parent == owner, chargeOf its edit row', () => cell(editOp(FEE_A, {chargeOf: 't-501'}), [editOp(BUY_A), editOp(BUY_B)], 'unlink-keep-owner')],
+        ['saved parent == owner, parentLinkId = it (the parent out of the Bulk)', () => cell(editOp(FEE_A, {parentLinkId: BUY_A.id}), [editOp(BUY_B)], 'unlink-keep-owner')],
+        // Saved parent present, another owner now; the saved parent's edit row in the Bulk.
+        ['saved parent present but another, chargeOf another edit row; the saved parent in the Bulk', () => cell(editOp(FEE_A, {chargeOf: 't-511'}), [editOp(BUY_A), editOp(BUY_B)], 'unlink-under-saved')],
+        ['saved parent present but another, chargeOf a create row; the saved parent in the Bulk', () => cell(editOp(FEE_A, {chargeOf: 'n-buy'}), [editOp(BUY_A), newBuy()], 'unlink-under-saved')],
+        ['saved parent present but another, parentLinkId another saved row; the saved parent in the Bulk', () => cell(editOp(FEE_A, {parentLinkId: BUY_B.id}), [editOp(BUY_A)], 'unlink-under-saved')],
+        // The same, the saved parent not in the Bulk.
+        ['saved parent present but another, chargeOf another edit row; the saved parent not in the Bulk', () => cell(editOp(FEE_A, {chargeOf: 't-511'}), [editOp(BUY_B)], 'unlink-saved-absent')],
+        ['saved parent present but another, chargeOf a create row; the saved parent not in the Bulk', () => cell(editOp(FEE_A, {chargeOf: 'n-buy'}), [newBuy()], 'unlink-saved-absent')],
+        ['saved parent present but another, parentLinkId another saved row; the saved parent not in the Bulk', () => cell(editOp(FEE_A, {parentLinkId: BUY_B.id}), [], 'unlink-saved-absent')],
+        // No saved parent.
+        ['no saved parent, chargeOf an edit row', () => cell(editOp(FEE_FREE, {chargeOf: 't-501'}), [editOp(BUY_A)], 'drop-all')],
+        ['no saved parent, chargeOf a create row', () => cell(editOp(FEE_FREE, {chargeOf: 'n-buy'}), [newBuy()], 'drop-all')],
+        ['no saved parent, parentLinkId a saved row', () => cell(editOp(FEE_FREE, {parentLinkId: BUY_B.id}), [editOp(BUY_A)], 'drop-all')],
+        ['no saved parent, chargeOf an edit row, set by a delete choice (byParentChoice)', () => cell({...editOp(FEE_FREE, {chargeOf: 't-501'}), byParentChoice: true} as PendingOp, [editOp(BUY_A)], 'drop-all')],
+        ['the charge is a create, chargeOf an edit row (followsParent): the owner’s broker, asset and date taken', () => cell(newFee('t-501'), [editOp(BUY_A)], 'drop-all', followed(fieldsOf(BUY_A)))],
+        ['the charge is a create, chargeOf a create row (followsParent): the owner’s broker, asset and date taken', () => cell(newFee('n-buy'), [newBuy()], 'drop-all', followed(newBuyFields()))],
+        ['the charge is a create, chargeOf an edit row, opened on its own (no followsParent): its own fields', () => cell(newFee('t-501', false), [editOp(BUY_A)], 'drop-all')],
+    ];
+
+    it.each(CELLS)('%s', (_label, build) => {
+        const {charge, ops, expected, fields} = build();
+        const out = unlinkCharge(charge, ops, get);
+        const flags = {chargeOf: out.chargeOf, parentLinkId: out.parentLinkId, parentUnlink: out.parentUnlink, followsParent: out.followsParent};
+        if (expected === 'unlink-keep-owner') {
+            expect(out.parentUnlink, 'unlinked from its saved parent').toBe(true);
+            expect(out.chargeOf, 'the owner kept').toBe(charge.chargeOf);
+            expect(chargeParentFields(out, ops, get), 'the payload unlinks it').toEqual({parent_transaction_id: 0});
+        } else if (expected === 'unlink-under-saved') {
+            expect(flags, 'back under its saved parent, unlinked from it; the pending link dropped').toEqual({chargeOf: `t-${BUY_A.id}`, parentLinkId: undefined, parentUnlink: true, followsParent: undefined});
+            expect(chargeParentFields(out, ops, get), 'the payload unlinks it from its saved parent').toEqual({parent_transaction_id: 0});
+        } else if (expected === 'unlink-saved-absent') {
+            expect(flags, 'unlinked from its saved parent, which the Bulk does not hold; the pending link dropped').toEqual({chargeOf: undefined, parentLinkId: undefined, parentUnlink: true, followsParent: undefined});
+            expect(chargeParentFields(out, ops, get), 'the payload unlinks it from its saved parent').toEqual({parent_transaction_id: 0});
+        } else {
+            expect({...flags, byParentChoice: (out as WithChoice).byParentChoice}, 'the pending link dropped, nothing else set').toEqual({chargeOf: undefined, parentLinkId: undefined, parentUnlink: undefined, followsParent: undefined, byParentChoice: undefined});
+            expect(chargeParentFields(out, ops, get), 'the payload says nothing about a parent').toBeNull();
+        }
+        expect({op: out.op, tempId: out.tempId, fields: out.fields}, 'the rest of the operation unchanged').toEqual({op: charge.op, tempId: charge.tempId, fields: fields ?? charge.fields});
+    });
+
+    // `applyChargeDrafts` with `deps.get`: FEE_A, saved under BUY_A, unlinked from it here and then linked to BUY_B (the
+    // link «Link» makes: `chargeOf` BUY_B, no `parentUnlink`). In BUY_B's Form its chip is `linkNew`; set to «unlink»,
+    // or left out by the Form (the «dropped» branch at the end), the link made here is undone back to what it was
+    // before it: unlinked from BUY_A, under BUY_A when the Bulk holds it; the payload sends 0.
+    it.each([
+        ['its linkNew chip set to «unlink»', 'unlink', true],
+        ['its linkNew chip left out by the Form', 'dropped', true],
+        ['its linkNew chip set to «unlink», BUY_A not in the Bulk', 'unlink', false],
+        ['its linkNew chip left out by the Form, BUY_A not in the Bulk', 'dropped', false],
+    ] as const)('applyChargeDrafts — FEE_A unlinked from its saved BUY_A, linked to BUY_B, then in BUY_B’s Form %s: unlinked from BUY_A again, payload 0', (_label, how, withA) => {
+        const ops = [...(withA ? [editOp(BUY_A)] : []), editOp(BUY_B), editOp(FEE_B, {chargeOf: 't-511'}), editOp(FEE_A, {chargeOf: 't-511'})];
+        const parent = byTxId(ops, BUY_B.id);
+        const drafts = chargeDraftsFor(parent, ops, get);
+        expect(draftByKey(drafts, `saved-${FEE_A.id}`).linkNew, 'premise: FEE_A is a link made here').toBe(true);
+        const answer = how === 'unlink' ? drafts.map((draft) => (draft.key === `saved-${FEE_A.id}` ? {...draft, state: 'unlink' as const} : draft)) : drafts.filter((draft) => draft.key !== `saved-${FEE_A.id}`);
+
+        const out = applyChargeDrafts(parent, ops, answer, makeDeps());
+
+        const fee = byTxId(out, FEE_A.id);
+        expect({chargeOf: fee.chargeOf, parentLinkId: fee.parentLinkId, parentUnlink: fee.parentUnlink}, 'unlinked from BUY_A, as before the link').toEqual({chargeOf: withA ? `t-${BUY_A.id}` : undefined, parentLinkId: undefined, parentUnlink: true});
+        expect(chargeParentFields(fee, out, get), 'the payload unlinks it from BUY_A').toEqual({parent_transaction_id: 0});
+        expect(byTxId(out, FEE_B.id), 'FEE_B, saved under BUY_B, untouched').toEqual(byTxId(ops, FEE_B.id));
+    });
+
+    it('reads its inputs as given: neither the charge nor the operations mutated', () => {
+        const {charge, ops} = CELLS[2][1]();
+        const before = snapshot({charge, ops});
+        unlinkCharge(charge, ops, get);
+        expect({charge, ops}).toEqual(before);
     });
 });

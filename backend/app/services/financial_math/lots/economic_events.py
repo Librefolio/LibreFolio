@@ -6,11 +6,11 @@ from collections import defaultdict
 from dataclasses import dataclass, field, replace
 from datetime import date as date_type
 from decimal import Decimal
-from typing import Sequence
+from typing import Mapping, Sequence
 
 from backend.app.db.models import Transaction, TransactionType
 from backend.app.schemas.portfolio.lots import EconomicAllocationGroupSchema, EconomicLotAllocationSchema, LotIncomeEventKind, LotIncomeEventSchema, TargetOperationAllocationSchema
-from backend.app.services.financial_math.fifo.models import EconomicAllocationGroup, EconomicEvent, FifoEngineResult, FifoInputTransaction
+from backend.app.services.financial_math.fifo.models import EconomicAllocationGroup, EconomicEvent, FifoEngineResult, FifoInputTransaction, LinkedParent
 from backend.app.services.financial_math.lots.conversions import FxRateResolver
 
 # FEE/TAX pools weighted by the controvalue of their trades: their split depends on the trades' rates.
@@ -87,14 +87,17 @@ def build_cost_economic_events(
     fx_resolver: FxRateResolver,
     asset_currency: str,
     target_currency: str,
+    parents: Mapping[int, LinkedParent] | None = None,
 ) -> list[EconomicEvent]:
     """Build target-value-aware FEE/TAX events for the engine economic stage.
 
     FX is resolved here (the service owns FX I/O): each event carries the native (negative)
     amount and the amount converted to ``target_currency`` at the transaction date. Pooling,
     matching (same-day/previous-day trades or income, holdings fallback) and orphan detection are
-    performed by the engine.
+    performed by the engine. ``parents`` (project 66, M1b) holds the facts of the linked parents the
+    service read: each charge carries its own, or ``None``.
     """
+    parent_facts = parents or {}
     events: list[EconomicEvent] = []
     for tx in cost_transactions:
         if tx.id is None or tx.asset_id is None or tx.amount is None:
@@ -112,6 +115,8 @@ def build_cost_economic_events(
                 native_currency=native_currency,
                 target_amount=target_amount,
                 target_currency=target_currency,
+                parent_transaction_id=tx.parent_transaction_id,
+                parent=parent_facts.get(tx.parent_transaction_id) if tx.parent_transaction_id is not None else None,
             )
         )
     return events

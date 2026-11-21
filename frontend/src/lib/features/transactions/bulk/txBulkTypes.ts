@@ -2,7 +2,7 @@
  * The types of TransactionBulkModal's state, shared by the modal and its section components
  * (features/transactions/bulk/). Cut from TransactionBulkModal.svelte (FE8a).
  */
-import type {TransactionTypeCode} from '$lib/features/transactions/transactionTypeStore';
+import type {TransactionTypeCode, findPromoteMatch} from '$lib/features/transactions/transactionTypeStore';
 import type {ImportTodo} from '$lib/features/transactions/txPayloadHelpers';
 
 /** Fields displayed & editable in the grid — pure data, no metadata. */
@@ -85,3 +85,7 @@ export type WacResultEntry = {
 /** Minimal suggest entry — all display data is read live from ops[].
  *  This is future-proof: if fields change in ops, suggestions auto-update. */
 export type SuggestEntry = {tempIdA: string; tempIdB: string; targetType: string; isDB?: boolean; dbCandidateId?: number};
+
+/** 66 C22: the merge button of the selection — absent, off with a reason (a leg still holds linked charges: rule 6), or on
+ *  with its match. `disabled` is born in one place only (`selectedForPromote`): dropping it means returning `hidden`. */
+export type PromoteSelection = {kind: 'hidden'} | {kind: 'disabled'; reason: 'hasCharges'; holder: PendingOp; targetLabel: string} | (NonNullable<ReturnType<typeof findPromoteMatch>> & {kind: 'ok'; opA: PendingOp; opB: PendingOp});

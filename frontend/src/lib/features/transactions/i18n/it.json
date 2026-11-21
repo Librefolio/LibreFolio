@@ -256,7 +256,8 @@
       "promoteSubtitle": "Seleziona la transazione di destinazione",
       "target": "Destinazione",
       "descriptionTooLong": "La descrizione unita supera i {max} caratteri: accorciala per confermare.",
-      "mergeAllLeftTooLong": "{count, plural, one {# coppia è rimasta} other {# coppie sono rimaste}} da unire a mano: la descrizione unita supererebbe i {max} caratteri."
+      "mergeAllLeftTooLong": "{count, plural, one {# coppia è rimasta} other {# coppie sono rimaste}} da unire a mano: la descrizione unita supererebbe i {max} caratteri.",
+      "chargesBlock": "{type} {ref} ha spese collegate: prima scollegale"
     },
     "validate": {
       "now": "Verifica ora",
