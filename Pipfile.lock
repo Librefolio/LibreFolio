@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "83ac0a26c273b3935917ca5b2e0fdca37bf120857b2b4eeeef19537437917951"
+            "sha256": "7ecfab26b2ec8c7aa540ec7a838f216a50fd7a8858d29798960aac9e0ab16ea1"
         },
         "pipfile-spec": 6,
         "requires": {
@@ -837,6 +837,10 @@
             "index": "pypi",
             "markers": "python_version >= '3.8'",
             "version": "==2.3.0"
+        },
+        "esma-registers": {
+            "git": "https://github.com/Librefolio/esma-registers.git",
+            "ref": "bbc9175c86649a9719f0b59d847da2796963bf93"
         },
         "et-xmlfile": {
             "hashes": [

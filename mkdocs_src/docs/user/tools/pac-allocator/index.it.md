@@ -191,7 +191,9 @@ Due azioni ti aiutano ad arrivarci:
     mantiene il totale esattamente a $100\%$. Per cambiare solo alcune righe,
     **Bilancia al 100%** su una riga dà a quell'asset ciò che manca, o toglie
     l'eccesso, e **Bilancia le righe selezionate al 100%** ridimensiona solo le
-    righe che spunti.
+    righe che spunti. Non compare quando il totale è già $100\%$, ed è spenta,
+    con il motivo, quando un obiettivo non è un numero o quando le righe non
+    spuntate fanno già $100\%$ o più.
 
 - **Copia la distribuzione attuale** legge quanto ciascuno di questi asset pesa
   oggi nei broker che spunti, contando solo questi asset e non la liquidità.

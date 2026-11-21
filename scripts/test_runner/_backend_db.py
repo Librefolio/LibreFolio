@@ -294,6 +294,16 @@ def db_migration_006_charge_links(verbose: bool = False, test_names: list = None
     return run_command(cmd, "Migration 006 charge links tests", verbose=verbose)
 
 
+def db_migration_006_broker_profile(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the broker operating profile step of 006_release_1_4_0_schema (project 67, P1), on temporary databases only."""
+    print_section("DB Test: Migration 006 — broker operating profile")
+    print_info("This test works on temporary databases only: the test database is not touched")
+    print_info("Testing: a 1.3 database gets brokers.operating_profile TEXT NULL and keeps every broker row; run again, nothing changes; a column already there; downgrade; models = migration")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_db/test_migration_006_broker_profile.py", test_names)
+    return run_command(cmd, "Migration 006 broker profile tests", verbose=verbose)
+
+
 def db_session_pragmas(verbose: bool = False, test_names: list = None) -> bool:
     """Test the pragmas every SQLAlchemy engine's connection gets (set_sqlite_pragma, H-51): trusted_schema off first, the schema reset last."""
     print_section("DB Test: Session Pragmas (trusted_schema off)")
@@ -360,6 +370,7 @@ def db_all(verbose: bool = False) -> bool:
         "migration-006-asset-profile",
         "migration-006-call-counters",
         "migration-006-charge-links",
+        "migration-006-broker-profile",
         "referential-integrity",
         "fx-rates",
         "brim",
@@ -491,6 +502,16 @@ Note: No backend server required. Tests operate directly on test DB.
         db_migration_006_charge_links,
         name="Migration 006 Charge Links",
         desc="006_release_1_4_0_schema, step charge_links (project 66, R1): transactions.parent_transaction_id INTEGER NULL with a self foreign key (NO ACTION, DEFERRABLE INITIALLY DEFERRED: a missing parent or a parent deleted under a child fails at commit, parent and child deleted together commit) and the partial index idx_transactions_parent searched by IN lookups; idx_transactions_related unchanged; a populated 1.3 database keeps its rows, every transaction without a parent; models = migration; downgrade and up again; the upgrade run again, finding the column without the index, and the downgrade finding it gone all complete; no redundant index",
+        prereq="None (temporary databases)",
+        isolation="pure",
+    )
+    # PURE: as migration-006-charge-links, every database is a private file under tmp_path, Alembic in-process on it alone.
+    add_test(
+        cat,
+        "migration-006-broker-profile",
+        db_migration_006_broker_profile,
+        name="Migration 006 Broker Operating Profile",
+        desc="006_release_1_4_0_schema, step «broker operating profile» (project 67, P1): a 1.3 database gets brokers.operating_profile TEXT NULL with every broker row kept; idempotent; a column already there; downgrade drops it and keeps the rows; models = migration",
         prereq="None (temporary databases)",
         isolation="pure",
     )

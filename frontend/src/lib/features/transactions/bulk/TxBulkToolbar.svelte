@@ -12,10 +12,9 @@
     import type {BulkLinkSelection} from './bulkCharges';
     import {txStoreCount} from '$lib/features/transactions/txStore.svelte';
     import {guideAnchor} from '$lib/features/onboarding/guideAnchors.svelte';
-    import type {PendingOp} from './txBulkTypes';
+    import type {PendingOp, PromoteSelection} from './txBulkTypes';
     import type DataTable from '$lib/components/table/DataTable.svelte';
     import type {importableSuggestions as importableFromResults} from '$lib/features/transactions/bulk/promoteSuggest';
-    import type {findPromoteMatch} from '$lib/features/transactions/transactionTypeStore';
 
     interface Props {
         bulkTableSelectedRows: PendingOp[];
@@ -24,7 +23,9 @@
         pendingSplits: {id_a: number; id_b: number; originalType: string}[];
         tableRef: DataTable<PendingOp> | undefined;
         importableSuggestions: ReturnType<typeof importableFromResults>;
-        selectedForPromote: (NonNullable<ReturnType<typeof findPromoteMatch>> & {opA: PendingOp; opB: PendingOp}) | null;
+        /** 66 C22: the merge button — absent, off with a reason (`promoteHint`), or on. */
+        selectedForPromote: PromoteSelection;
+        promoteHint: string;
         tableRefForToggle: never;
         visibleOps: PendingOp[];
         deriveStatus: (d: PendingOp) => 'new' | 'edited' | 'original' | 'delete';
@@ -38,7 +39,8 @@
         openPicker: () => void;
         openSuggestPicker: () => void;
         resetAll: () => void;
-        resetRow: (tempId: string) => void;
+        /** 66 C22 (§5.1): one reset of the whole selection, so its order never changes the outcome. */
+        resetRows: (tempIds: string[]) => void;
     }
 
     let {
@@ -49,6 +51,7 @@
         tableRef,
         importableSuggestions,
         selectedForPromote,
+        promoteHint,
         tableRefForToggle,
         visibleOps,
         deriveStatus,
@@ -61,9 +64,27 @@
         openPicker,
         openSuggestPicker,
         resetAll,
-        resetRow,
+        resetRows,
     }: Props = $props();
 </script>
+
+{#snippet promoteButton()}
+    {@const off = selectedForPromote.kind === 'disabled'}
+    <button
+        type="button"
+        class="inline-flex items-center gap-1 px-2 py-1 rounded text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 text-[11px] aria-disabled:opacity-50 aria-disabled:cursor-not-allowed"
+        onclick={() => {
+            if (selectedForPromote.kind === 'ok') handlePromoteSelected();
+        }}
+        aria-disabled={off ? 'true' : undefined}
+        aria-label={selectedForPromote.kind === 'disabled' ? `${$t('transactions.actions.promotePair')} — ${selectedForPromote.targetLabel}` : undefined}
+        data-reason={selectedForPromote.kind === 'disabled' ? selectedForPromote.reason : undefined}
+        data-testid="promote-toolbar-confirm"
+        title={off ? undefined : $t('transactions.actions.promotePair')}
+    >
+        <Link2 size={12} /> <span class="hidden sm:inline">🔗 {selectedForPromote.kind === 'hidden' ? '' : selectedForPromote.targetLabel}</span>
+    </button>
+{/snippet}
 
 {#snippet linkButton()}
     {@const off = linkState.kind === 'disabled'}
@@ -143,9 +164,7 @@
                     <button
                         type="button"
                         class="inline-flex items-center gap-1 px-2 py-1 rounded text-lf-secondary hover:bg-lf-hover text-[11px]"
-                        onclick={() => {
-                            for (const r of bulkTableSelectedRows) resetRow(r.tempId);
-                        }}
+                        onclick={() => resetRows(bulkTableSelectedRows.map((r) => r.tempId))}
                         title={$t('transactions.bulk.resetSelected') || 'Reset selected'}
                         data-testid="tx-bulk-reset-selected"
                     >
@@ -165,16 +184,13 @@
                 <button type="button" class="inline-flex items-center gap-1 px-2 py-1 rounded text-lf-danger hover:bg-lf-danger-soft text-[11px]" onclick={executeBulkDeleteOnSelected} title={$t('transactions.bulk.deleteSelected') || 'Delete selected'} data-testid="tx-bulk-delete-selected">
                     <Trash2 size={12} /> <span class="hidden sm:inline">{$t('common.delete') || 'Delete'}</span>
                 </button>
-                {#if selectedForPromote}
-                    <button
-                        type="button"
-                        class="inline-flex items-center gap-1 px-2 py-1 rounded text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 text-[11px]"
-                        onclick={handlePromoteSelected}
-                        data-testid="promote-toolbar-confirm"
-                        title={$t('transactions.actions.promotePair')}
-                    >
-                        <Link2 size={12} /> <span class="hidden sm:inline">🔗 {selectedForPromote.targetLabel}</span>
-                    </button>
+                {#if selectedForPromote.kind === 'disabled'}
+                    <!-- 66 C22: off with a reason (the F7-a pattern, as «Link»): `aria-disabled`, so the click and the tap open it. -->
+                    <Tooltip text={promoteHint} interactiveChild>
+                        {@render promoteButton()}
+                    </Tooltip>
+                {:else if selectedForPromote.kind === 'ok'}
+                    {@render promoteButton()}
                 {/if}
             </div>
         {/if}

@@ -1,7 +1,7 @@
 <script lang="ts" module>
     import type {DraftAsset, DraftBroker} from '../draft.svelte';
     import type {CurrencyDigits} from '../format';
-    import type {PacExactMoney, PacExactNumber, PacExactPrice, PacNumberAvailability, PacObjectiveUnit, PacOrderRow} from '../types';
+    import type {PlannerExactMoney, PlannerExactNumber, PlannerExactPrice, PlannerNumberAvailability, PlannerObjectiveUnit, PlannerOrderRow} from '../types';
 
     /**
      * R9.8: one cell of the result tables. The table picks the column, this component draws it,
@@ -11,14 +11,14 @@
         | {type: 'broker'; brokerId: string; label: string; broker: DraftBroker | null; currency?: string | null; testid?: string}
         | {type: 'contribution'; label: string; currency: string | null}
         | {type: 'asset'; assetId: string; label: string; asset: DraftAsset | null; sequence?: number; orderId?: string; testid?: string}
-        | {type: 'weight'; value: PacExactNumber | PacNumberAvailability}
-        | {type: 'bars'; target: PacExactNumber; final: PacNumberAvailability; scale: number}
+        | {type: 'weight'; value: PlannerExactNumber | PlannerNumberAvailability}
+        | {type: 'bars'; target: PlannerExactNumber; final: PlannerExactNumber | PlannerNumberAvailability; scale: number}
         | {type: 'money'; amount: string | null; currency: string; digits: CurrencyDigits; signed?: boolean; testid?: string}
-        | {type: 'exactMoney'; money: PacExactMoney; digits: CurrencyDigits; signed?: boolean; testid?: string}
-        | {type: 'price'; price: PacExactPrice; digits: CurrencyDigits}
-        | {type: 'instruction'; order: PacOrderRow; digits: CurrencyDigits; autoConversion?: boolean}
+        | {type: 'exactMoney'; money: PlannerExactMoney; digits: CurrencyDigits; signed?: boolean; testid?: string}
+        | {type: 'price'; price: PlannerExactPrice; digits: CurrencyDigits}
+        | {type: 'instruction'; order: PlannerOrderRow; digits: CurrencyDigits; autoConversion?: boolean}
         | {type: 'label'; text: string; sequence?: number; testid?: string; attrs?: Record<string, string>}
-        | {type: 'solver'; value: string | null; unit: PacObjectiveUnit; digits?: CurrencyDigits; testid?: string};
+        | {type: 'solver'; value: string | null; unit: PlannerObjectiveUnit; digits?: CurrencyDigits; testid?: string};
 </script>
 
 <script lang="ts">
@@ -32,6 +32,10 @@
     import {BADGE, ICON_BUBBLE, STEP_NUMBER} from '../ui';
     import {UNAVAILABLE_FALLBACKS, weightWidth} from './model';
     import {instructionText, priceText} from './text';
+    import {getPlannerProfile, testId} from '../profile';
+
+    /** Read once, while the component is created: the Tool's profile (F1 of project 67), the PAC's when none is set. */
+    const profile = getPlannerProfile();
 
     interface Props {
         cell: ResultCellContent;
@@ -87,8 +91,8 @@
     <span class="tabular-nums">{priceText(cell.price, $t, cell.digits)}</span>
 {:else if cell.type === 'instruction'}
     <span class="flex flex-wrap items-center gap-1.5">
-        <span class="font-medium text-lf-primary" data-testid="pac-planner-plan-instruction">{instructionText(cell.order, $t, cell.digits)}</span>
-        {#if cell.autoConversion}<span class={BADGE.info} data-testid="pac-planner-plan-order-auto-conversion">{$t(`${KEY}.plan.autoConversion`, {default: 'Automatic conversion'})}</span>{/if}
+        <span class="font-medium text-lf-primary" data-testid={testId('plan-instruction', profile)}>{instructionText(cell.order, $t, cell.digits)}</span>
+        {#if cell.autoConversion}<span class={BADGE.info} data-testid={testId('plan-order-auto-conversion', profile)}>{$t(`${KEY}.plan.autoConversion`, {default: 'Automatic conversion'})}</span>{/if}
     </span>
 {:else if cell.type === 'label'}
     <span class="flex min-w-0 items-center gap-2" data-testid={cell.testid} {...cell.attrs ?? {}}>

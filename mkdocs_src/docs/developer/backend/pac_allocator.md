@@ -124,7 +124,11 @@ representative scale (see the module header of `plugin.py`).
 and passes `window.timeout_ms / 1000` to the solver as its time budget, together with the executor's
 `checkpoint`. The 2 s reserve is a deliberate over-reserve for the exact replay and the report. An
 unexpected exception is logged by `_log_engine_failure` (exception class and code location only, never
-the message or amounts) and re-raised, so the platform answers `execution_failed`.
+the message or amounts) and re-raised, so the platform answers `execution_failed`. The one exception is
+`reason`, the message of a class in `MESSAGE_SAFE_ERRORS`, a closed list matched by exact type:
+`ExactReplayRejectedError`, `SolverStageError` and `SeededRunsFailedError`. Their messages name only
+rules, stages, Brokers' ids and currencies, and a test reads every place that raises them, so a new
+one enters the list only once it has been read.
 
 The generic transport (executor, worker process, codecs, `tools.py` routes) is described in
 [Tool plugins](../architecture/patterns/tool_plugins.en.md).
@@ -385,10 +389,10 @@ every default filled. The contract is at version `1.0.0`; the codecs are generat
 | `result_state` | `outcome` | Proof | Carries |
 |---|---|---|---|
 | `needs_input` / `invalid` / `unsupported` | n/a | none | `snapshot`, `issues` |
-| `ready_incumbent` | `incumbent_found` | `optimal_proven` or `not_proven` | `primary_solution` (`PacIncumbentSolution`: at least one order row) |
+| `ready_incumbent` | `incumbent_found` | `optimal_proven` or `not_proven` | `primary_solution` (`PacIncumbentSolution`: at least one step, an order, a deposit or a conversion) |
 | `ready_no_op` | `no_op` | `optimal_proven` or `not_proven` | `primary_solution` (`PacNoOpSolution`: every action list empty) |
 | `ready_infeasible` | `infeasible_proven` | `infeasibility_proven` | no solution |
-| `ready_no_incumbent` | `no_incumbent` | `not_proven` | no solution (a limit left none) |
+| `ready_no_incumbent` | `no_incumbent` | `not_proven` | no solution (a limit left none, or the only plan held was one the exact replay refuses) |
 
 Every ready result also carries `snapshot` (with the scenario fingerprint), `catalogs`, `provenance`, `scenario_basis`, `stop_reason`,
 `solver_evidence` and `issues`. A solution has `asset_rows`, `funding_actions`, `fx_actions`, `conversions`, `order_rows`,

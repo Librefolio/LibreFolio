@@ -650,3 +650,31 @@ def test_validation_error_sanitizes_real_custom_codes_and_redacts_custom_context
         private += (issue_code,)
 
     _assert_public_error(result, code="invalid_parameters", issues=[{"code": expected_code, "path": ["value"]}], count=1, private=private)
+
+
+# ---------------------------------------------------------------------------
+# Progress frames (lot V1 of project 67): small, bounded, from the child to the parent
+# ---------------------------------------------------------------------------
+
+
+def test_progress_frame_is_bounded():
+    """A progress frame carries the execution id, a phase and two optional integers, and has a small byte ceiling of its
+    own: a frame over it is refused before it reaches the pipe."""
+    execution_id = "e" * 32
+    frame = wire.encode_progress_frame(execution_id, "search", 2, 5)
+    assert len(frame) <= wire.PROGRESS_FRAME_MAX_BYTES <= 512
+    assert json.loads(frame) == {"kind": "progress", "execution_id": execution_id, "phase": "search", "step": 2, "total": 5}
+    assert json.loads(wire.encode_progress_frame(execution_id, "validate", None, None)) == {"kind": "progress", "execution_id": execution_id, "phase": "validate"}
+    with pytest.raises(ValueError):
+        wire.encode_progress_frame(execution_id, "x" * wire.PROGRESS_FRAME_MAX_BYTES, None, None)
+
+
+def test_log_frame_is_bounded():
+    """A worker's log frame (lot LOGS of project 67): the execution id, a logging level, the logger's name and the line, under
+    a byte ceiling of its own; a frame over it is refused before it reaches the pipe."""
+    execution_id = "e" * 32
+    frame = wire.encode_log_frame(execution_id, 20, "backend.app.services.pac_allocator.planner", '{"event": "Rebalancer seeded runs"}')
+    assert len(frame) <= wire.LOG_FRAME_MAX_BYTES
+    assert json.loads(frame) == {"kind": "log", "execution_id": execution_id, "level": 20, "logger": "backend.app.services.pac_allocator.planner", "message": '{"event": "Rebalancer seeded runs"}'}
+    with pytest.raises(ValueError):
+        wire.encode_log_frame(execution_id, 20, "x", "y" * wire.LOG_FRAME_MAX_BYTES)

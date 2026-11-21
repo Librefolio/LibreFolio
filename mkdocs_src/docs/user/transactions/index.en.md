@@ -72,17 +72,17 @@ A **Fee** or a **Tax** can be linked to the transaction it was paid for, and sta
 
 A dividend, an interest payment or an adjustment can be linked to the asset's **event** (the dividend the provider announced, a split…). The link is lost when [changing an asset's currency](../assets/create-edit.md#changing-the-currency) deletes the events it pointed to, and a dividend you booked before its event was downloaded never had one. **Relink events**, in the toolbar above the table, finds those transactions and proposes the event to link.
 
-The window lists your **dividends, interest and adjustments** that have an asset and no event, on the brokers where you are at least an Editor, newest first. Each row shows the asset, the date, the type and what was found:
+The window lists your **dividends, interest and adjustments** that have an asset and no event, on the brokers where you are at least an Editor, newest first. They are split into three groups, one table each; a group with no transaction is not shown. Each row shows the asset and its broker, the date, the transaction's movement and the event:
 
-| What you see | Meaning | What you can do |
-|--------------|---------|-----------------|
-| **One event that day** | Exactly one event of the same asset, on the same day, of the matching type | **Link** the row |
-| **No event that day** | The asset has no such event on that day | **Create event**: enter its value, then link the row; or, when the event is on another day, link it in the transaction (below) |
-| **N events that day** | More than one candidate | Nothing here: LibreFolio never guesses. Choose the right one in the transaction |
+| Group | Meaning | What you can do |
+|-------|---------|-----------------|
+| **With one event** | Exactly one event of the same asset, on the same day, of the matching type: the row shows its value | **Link** the row, or **Link all** the rows of the group |
+| **Without an event** | The asset has no such event on that day | **Create event** (or **Create all**): enter its value, then link the row; or, when the event is on another day, link it in the transaction (below) |
+| **Several events** | More than one candidate | **Choose event**: a small window lists them, each with its value and whether it is automatic or entered by hand; nothing is chosen until you pick one, then **Link** |
 
-**Link every row with one event** links all the rows of the first kind at once, in a single save: if any is refused, none is linked. Nothing is linked unless you click.
+Each row's action is also in the menu you open with a right-click on the row. **Link all** and **Create all** act on the rows the group's filters leave, and say how many; **Link all** links them in a single save: if any is refused, none is linked. Nothing is linked unless you click.
 
-To act on several rows, tick them: **Link selected** appears when at least one of them has its one event, **Create events** when at least one has none, and each acts only on the rows it fits. An action none of the selected rows can take is not shown.
+To act on some rows only, tick them in the first two groups: the bar above the tables shows **Link** and **Create event**, each with the number of rows it takes, and each acts only on the rows it fits. An action none of the selected rows can take is not shown. The linked rows leave the list and the selection; the other ticked rows stay ticked, so after **Link** the bar still offers **Create event** for the rest. When you scroll the window down, the bar moves into the bar at the bottom; **Esc** there clears the selection and leaves the window open.
 
 !!! info "The event must be on the same date"
 
@@ -98,7 +98,7 @@ To act on several rows, tick them: **Link selected** appears when at least one o
 
 The workspace is a grid of draft rows — marked **new**, **edit** or **del** — where you prepare changes before writing them:
 
-- **Add Row**, **Import** and **Reset All** sit above the grid. Ticking rows adds **Reset selected**, **Delete selected** and, for a matching pair, **🔗 Promote pair**.
+- **Add Row**, **Import** and **Reset All** sit above the grid. Ticking rows adds **Reset selected**, **Delete selected** and, for a matching pair, **🔗 Promote pair** — shown off, with the reason, when one of the two still has linked charges.
 - Rows are checked as you work: problems appear at the top under *Validation errors were found*, and a click takes you to the row. With many rows, automatic checking pauses — press **⚡ Validate now** before saving.
 - When two rows look like the two halves of one transfer or exchange, a green banner offers to **Merge** them — two new rows, two saved ones, or one of each. When it proposes more than one pair, **Merge all (N)** merges them in one go. Where the two rows of a pair have a different description or different tags, one choice applies to every pair: **All left** keeps the description and tags of the first row, as the banner lists it; **All right**, those of the second row; **Combine**, the default, keeps both descriptions and the tags of both rows. A description holds at most 500 characters, as on any transaction: with **Combine**, a pair whose two descriptions together would go past it is not merged, and a message says how many pairs were left — merge them one by one with **Merge**, where you can shorten the description.
 - When the other half is already saved but not in the workspace — a transfer whose first side you imported last month, say — the 💡 button, above the grid and in the row's menu, offers to add it: once it is in, the banner offers the pair.
@@ -126,6 +126,7 @@ After a save, a **Promote pair** or a **Split pair**, the Transactions page clea
 - **Grouped rows** — a transaction's charges sit under it in the grid: the chip **N charges** opens and closes the group, and each charge shows `↳`. They are saved with it, in the same **Save All**. The form's [Linked charges](form.md#linked-charges) section adds, links, unlinks and deletes them.
 - **Link** — tick one transaction and charges that are rows of their own (a charge under a transaction has no checkbox), then click **Link** above the grid. Rows not saved yet can be linked too: the window and the messages name a new row by its number, such as *row 3*. The link is written by **Save All**. A greyed-out **Link** says why on tap or with the keyboard; besides the reasons of the list, a row marked for deletion must be restored first.
 - **Delete** — **Mark for deletion** on a transaction with linked charges, or **Delete selected** with such a transaction among the rows, asks the same question as the list: **Keep the charges** or **Delete all**. **Restore** on the transaction brings back the charges that choice changed, also when the question was asked on the Transactions page or a broker's tab; a charge you deleted or unlinked yourself stays as you left it.
+- **Merging into a transfer or an exchange** — a transaction that still has linked charges cannot become half of a pair, so the workspace offers no merge for it: not in the suggestions or the 💡 search, and the selection toolbar's merge button is off — tap or hover it to see which transaction has charges. The Transactions page does the same with its **Promote pair** action. **Unlink** its charges first, or mark them for deletion; the offer comes back, and **Save All** saves both together. After the merge such a charge is a row of its own, and **Reset row** or **Restore** on it keeps it unlinked, saying why. A reset that touches a row of a merge not saved yet — **Reset row**, **Reset selected** or **Reset all** — undoes that merge too: a saved transaction comes back as saved, and a new one as a new row of its own. The same goes for a **Split pair** not saved yet: resetting either half brings the pair back as one row, nothing is split on save, and a charge you linked to a half in the meantime comes back as it was before you linked it, with a message saying why. **Undo split** does the same. Unlinking a charge you linked in the workspace only undoes that link: a charge that had no parent comes back with none, and nothing is sent for it.
 - **A transaction that leaves the workspace** (a new one deleted, or **Remove from batch**) takes along the new charges you added in its form, unless you opened and applied one on its own. A charge you joined to it with **Link** stays, as a row of its own.
 
 ---

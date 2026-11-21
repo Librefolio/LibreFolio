@@ -18,6 +18,7 @@ import {schemas} from '$lib/api/generated';
 const mocks = vi.hoisted(() => ({
     create: vi.fn(),
     update: vi.fn(),
+    read: vi.fn(),
     plugins: vi.fn(),
     merge: vi.fn(),
     loadIcon: vi.fn(),
@@ -29,6 +30,7 @@ vi.mock('$lib/api', () => ({
     zodiosApi: {
         create_brokers_api_v1_brokers_post: mocks.create,
         update_broker_api_v1_brokers__broker_id__patch: mocks.update,
+        get_broker_api_v1_brokers__broker_id__get: mocks.read,
         list_plugins_api_v1_brokers_import_plugins_get: mocks.plugins,
     },
     axiosInstance: {},
@@ -120,6 +122,9 @@ beforeEach(async () => {
     mocks.create.mockReset();
     mocks.update.mockReset();
     mocks.plugins.mockResolvedValue([]);
+    // An edit opening reads the broker for its operating profile (P2 of project 67): by default it has none.
+    mocks.read.mockReset();
+    mocks.read.mockImplementation(async ({params}: {params: {broker_id: number}}) => ({id: params.broker_id, name: 'read', operating_profile: null}));
     mocks.loadIcon.mockResolvedValue(undefined);
     mocks.notify.mockReset();
     previousSession = getClientSessionUserId();
@@ -557,5 +562,162 @@ describe('BrokerModal — edit refusals answered with HTTP 200', () => {
         expect(screen.queryByTestId('info-banner-error')).toBeNull();
         expect(mocks.toasts.error).not.toHaveBeenCalled();
         expect(callbacks.oncreated).not.toHaveBeenCalled();
+    });
+});
+
+describe('BrokerModal — the operating profile (P2 of project 67)', () => {
+    /*
+     * In edit mode the modal reads the broker (`GET /brokers/{id}`) and hands its operating profile to the shared panel,
+     * in a prop of its own (D8 b): `initialData` and the nine fields stay as they are. The PATCH carries
+     * `operating_profile` only when the panel is ready and changed: an edit of another field never sends it, so a profile
+     * cannot be overwritten by an opening that did not read it. Create mode shows no panel (D7).
+     */
+    const BROKER_ID = 8401;
+    const OTHER_ID = 8402;
+    const EDIT_DATA = {name: 'P2 profile desk', description: '', portal_url: '', icon_url: '', default_import_plugin: '', allow_cash_overdraft: false, allow_asset_shorting: false, is_active: true, opened_at: '2019-05-06'};
+    /**
+     * The broker exactly as `GET /brokers/{id}` serves it, dumped from the backend's `BRReadItem` (P1): every fee field
+     * written out, `conversion_mode: "manual"` always present (its default), `tax_regime` absent (an absent regime is
+     * served absent).
+     */
+    const SERVED_BROKER = {
+        id: 1,
+        name: 'x',
+        description: null,
+        portal_url: null,
+        icon_url: null,
+        default_import_plugin: null,
+        allow_cash_overdraft: false,
+        allow_asset_shorting: false,
+        is_active: true,
+        opened_at: null,
+        created_at: '2026-01-01T00:00:00Z',
+        updated_at: '2026-01-01T00:00:00Z',
+        user_role: null,
+        user_share_percentage: null,
+        operating_profile: {
+            profile_version: 1,
+            order_modes: [
+                {
+                    currency: 'EUR',
+                    capability: {kind: 'whole_quantity', capability_id: 'mode:EUR', quantity_unit: 'asset_unit', quantity_step: '1'},
+                    fees: [{fee_schedule_id: 'fee:EUR:buy', capability_id: 'mode:EUR', side: 'buy', fixed_fee: null, rate: '0.0019', variable_floor: null, variable_cap: {kind: 'none'}}],
+                },
+            ],
+            conversion_mode: 'manual',
+        },
+    } as const;
+    const STORED = SERVED_BROKER.operating_profile;
+    const ok = () => schemas.BRBulkUpdateResponse.parse({results: [{id: BROKER_ID, success: true}], success_count: 1, errors: []});
+
+    afterEach(() => {
+        mocks.update.mockReset();
+    });
+
+    async function openEdit(profile: unknown = STORED, brokerId = BROKER_ID) {
+        mocks.read.mockImplementation(async () => ({id: brokerId, name: EDIT_DATA.name, operating_profile: profile}));
+        const mounted = mountModal({mode: 'edit', brokerId, initialData: EDIT_DATA});
+        await waitFor(() => expect(screen.getByTestId('broker-operating-profile')).toHaveAttribute('data-state', 'ready'));
+        return mounted;
+    }
+
+    async function submitAndBody(): Promise<Record<string, unknown>> {
+        mocks.update.mockResolvedValueOnce(ok());
+        await fireEvent.click(screen.getByTestId('broker-form-submit'));
+        await waitFor(() => expect(mocks.update).toHaveBeenCalledTimes(1));
+        return mocks.update.mock.calls[0][0] as Record<string, unknown>;
+    }
+
+    it('the served broker parses through the generated broker schemas, alone and in a list', () => {
+        expect(() => schemas.BRReadItem.parse(SERVED_BROKER)).not.toThrow();
+        expect(() => schemas.BRListResponse.parse({items: [SERVED_BROKER]})).not.toThrow();
+    });
+
+    it('an edit that changes only the name sends no operating_profile', async () => {
+        await openEdit();
+        await fireEvent.input(screen.getByTestId('broker-name-input'), {target: {value: 'P2 renamed desk'}});
+        // The name typed before the profile's reading survives it: the profile travels in a prop of its own.
+        expect(screen.getByTestId('broker-name-input')).toHaveValue('P2 renamed desk');
+
+        const body = await submitAndBody();
+
+        expect(body.name).toBe('P2 renamed desk');
+        expect(body).not.toHaveProperty('operating_profile');
+    });
+
+    it('an edit of the section sends the whole document', async () => {
+        await openEdit();
+        await fireEvent.input(screen.getByTestId('broker-profile-mode-fee-rate'), {target: {value: '0.25'}});
+
+        const body = await submitAndBody();
+
+        const profile = schemas.BrokerOperatingProfile.parse(body.operating_profile);
+        expect(profile.order_modes?.[0].fees?.[0]).toMatchObject({side: 'buy', rate: '0.0025'});
+    });
+
+    it('clearing the section sends null', async () => {
+        await openEdit();
+        await fireEvent.click(screen.getByTestId('broker-profile-mode-remove'));
+
+        const body = await submitAndBody();
+
+        expect(body).toHaveProperty('operating_profile', null);
+    });
+
+    it('a failed read leaves the form usable and the profile untouched', async () => {
+        mocks.read.mockRejectedValue(new Error('synthetic read failure'));
+        mountModal({mode: 'edit', brokerId: BROKER_ID, initialData: EDIT_DATA});
+        await waitFor(() => expect(screen.getByTestId('broker-operating-profile')).toHaveAttribute('data-state', 'failed'));
+        expect(screen.queryByTestId('broker-profile')).toBeNull();
+        await fireEvent.input(screen.getByTestId('broker-name-input'), {target: {value: 'P2 still saved'}});
+
+        const body = await submitAndBody();
+
+        expect(body.name).toBe('P2 still saved');
+        expect(body).not.toHaveProperty('operating_profile');
+    });
+
+    it('a late read of another opening is ignored', async () => {
+        const first = deferred<unknown>();
+        mocks.read.mockImplementationOnce(() => first.promise);
+        const {view} = mountModal({mode: 'edit', brokerId: BROKER_ID, initialData: EDIT_DATA});
+        await view.rerender({isOpen: false});
+        mocks.read.mockImplementationOnce(async () => ({id: OTHER_ID, name: 'other', operating_profile: null}));
+        await view.rerender({isOpen: true, brokerId: OTHER_ID});
+        await waitFor(() => expect(screen.getByTestId('broker-operating-profile')).toHaveAttribute('data-state', 'ready'));
+
+        first.resolve({id: BROKER_ID, name: EDIT_DATA.name, operating_profile: STORED});
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(screen.queryAllByTestId('broker-profile-mode')).toHaveLength(0);
+    });
+
+    it('a profile field the backend would refuse stops the save, and says so', async () => {
+        await openEdit();
+        // «Add currency» leaves a rule without a currency: the backend would refuse the whole update.
+        await fireEvent.click(screen.getByTestId('broker-profile-mode-add'));
+
+        expect(screen.getByTestId('broker-form-submit')).toBeDisabled();
+        expect(screen.getByTestId('broker-operating-profile-problems')).toBeVisible();
+
+        await fireEvent.click(screen.getAllByTestId('broker-profile-mode-remove').at(-1) as HTMLElement);
+        expect(screen.getByTestId('broker-form-submit')).toBeEnabled();
+        expect(screen.queryByTestId('broker-operating-profile-problems')).toBeNull();
+    });
+
+    it('create mode shows no section and sends no key', async () => {
+        mountModal();
+        expect(screen.queryByTestId('broker-operating-profile')).toBeNull();
+        expect(mocks.read).not.toHaveBeenCalled();
+    });
+
+    it('changing the section asks before closing', async () => {
+        const {callbacks} = await openEdit();
+        // A big card is a radio inside a label: no text input, and still a change.
+        await fireEvent.click(screen.getAllByTestId('broker-profile-tax-regime-radio')[0]);
+        await fireEvent.click(screen.getByTestId('broker-modal-close'));
+
+        await waitFor(() => expect(screen.getByTestId('broker-modal-discard-confirm')).toBeVisible());
+        expect(callbacks.onclose).not.toHaveBeenCalled();
     });
 });

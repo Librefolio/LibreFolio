@@ -55,12 +55,7 @@
           "currenciesSeen": "Valute rilevate:"
         },
         "brokerEditor": {
-          "addCurrency": "Aggiungi valuta",
           "fee": "Commissione di acquisto",
-          "feeCap": "Massimo",
-          "feeFixed": "Parte fissa",
-          "feeFloor": "Minimo",
-          "feeRate": "Percentuale",
           "funding": "Liquidità utilizzabile da {name}",
           "fundingCap": "Massimo utilizzabile qui",
           "fundingCapHint": "Il massimo che il piano può prendere da questa fonte per gli acquisti qui. Vuoto = l’intero importo della fonte.",
@@ -71,20 +66,30 @@
           "sourceAmount": "sorgente {amount}",
           "step": "Incremento",
           "title": "Configura {name} · dati dello scenario (il Broker non viene modificato)",
-          "feeCapHelp": "La parte percentuale non supera mai questo importo. Vuoto = nessun massimo.",
-          "feeCapNone": "nessuno",
-          "feeFloorHelp": "La parte percentuale non scende mai sotto questo importo. 0 = nessun minimo.",
           "fundingCapAll": "tutto",
           "fundingHelp": "Gli acquisti su questo Broker si pagano con la sua liquidità e con ogni fonte in verde qui. All’inizio è tutto consentito: clicca una fonte per escluderla, clicca di nuovo per consentirla.",
-          "modesHelp": "Un blocco per ogni valuta in cui compri su questo Broker: un Asset quotato in quella valuta si compra con le sue regole. Trascina i blocchi nell’ordine che preferisci.",
-          "pickCurrency": "Valuta del nuovo blocco",
+          "modesHelp": "Un blocco per ogni valuta in cui compri su questo Broker: un Asset quotato in quella valuta si compra con le sue regole.",
           "priorityHelp": "Conta solo tra piani che si avvicinano ugualmente all’obiettivo: in quel caso il piano usa prima le fonti con il numero più basso. 0 = preferita.",
-          "feeFixedHelp": "Si paga su ogni acquisto, qualunque sia l’importo, in aggiunta alla parte percentuale. 0 = nessuna.",
-          "feeRateHelp": "La quota dell’importo acquistato, in percentuale: 0,19 significa 0,19%. Minimo e massimo limitano solo questa parte.",
-          "conversionManual": "Converti tu prima di comprare",
-          "conversionAutomatic": "Converte il Broker quando compri",
           "addedFor": "Modalità {currency} aggiunta per comprare {asset}, con valori di partenza: controlla tipo di ordine, incremento e commissioni, poi applica.",
-          "notYetSupported": "Non ancora supportati: regime fiscale, minusvalenze, commissioni di vendita."
+          "notYetSupported": "Non ancora supportati: regime fiscale, minusvalenze, commissioni di vendita.",
+          "fixBeforeApplying": "Alcuni campi non sono validi: correggi quelli in rosso per applicare.",
+          "profileSave": {
+            "button": "Salva nel broker",
+            "title": "Salvare in {name}?",
+            "intro": "Il broker è appena stato riletto. Conferma scrive queste modifiche; le altre valute e il regime fiscale restano come sono. Una commissione di vendita «uguale all’acquisto» segue quella di acquisto, anche in una valuta nuova.",
+            "created": "{currency}: nuova",
+            "updated": "{currency}: aggiornata",
+            "conversionManual": "Conversione di valuta: converti tu prima di comprare",
+            "conversionAutomatic": "Conversione di valuta: converte il Broker quando compri",
+            "nothing": "Il broker dice già questo: non c’è niente da salvare.",
+            "confirm": "Conferma",
+            "reading": "Lettura del broker…",
+            "readFailed": "Non è stato possibile leggere il broker: non è stato salvato niente.",
+            "refused": "Il broker non ha accettato la modifica: non è stato salvato niente.",
+            "saved": "Salvato nel broker.",
+            "writeFailed": "Il salvataggio non si è concluso: apri il broker per controllarlo.",
+            "writing": "Salvo nel broker…"
+          }
         },
         "brokers": {
           "addManual": "Broker manuale",
@@ -117,7 +122,8 @@
           "title": "Calcolo in corso",
           "refreshing": "Rilettura da LibreFolio dei dati copiati…",
           "elapsed": "In attesa da {elapsed} s su un massimo di {limit} s",
-          "barLabel": "Tempo di attesa"
+          "barLabel": "Tempo di attesa",
+          "phase": "{phase} ({index} di {total})"
         },
         "cash": {
           "custody": "Disponibile (custodia) {amount}",
@@ -234,7 +240,7 @@
           "allocation": {
             "asset_inactive_not_buyable": "L’Asset è inattivo: non può essere acquistato.",
             "asset_type_missing": "Manca il tipo di Asset.",
-            "broker_execution_profile_unsupported": "Il profilo di esecuzione di questo Broker non è supportato dallo strumento.",
+            "broker_execution_profile_unsupported": "Il conto di questo Broker non ha un profilo operativo, o ne ha uno senza modi d’ordine: compila i suoi modi d’ordine e le commissioni nello scenario.",
             "broker_inactive": "Il Broker è inattivo.",
             "capacity_unsupported": "Lo scenario supera le dimensioni supportate dallo strumento.",
             "cash_selection_invalid": "L’importo da usare non è valido per questa riga di cassa.",
@@ -255,7 +261,6 @@
             "fee_floor_exceeds_cap": "La commissione minima è più alta di quella massima.",
             "fee_rate_out_of_range": "L’aliquota della commissione è fuori intervallo.",
             "fee_schedule_missing": "Manca lo schema delle commissioni.",
-            "fiscal_currency_missing": "Manca la valuta fiscale.",
             "funding_cap_negative": "Il limite di funding non può essere negativo.",
             "fx_rate_missing": "Manca un tasso di cambio.",
             "fx_spread_rate_out_of_range": "Lo spread FX è fuori intervallo.",
@@ -284,8 +289,6 @@
             "provenance_stale_confirmed": "Il dato è più vecchio dell’età accettata ed è stato confermato comunque.",
             "quote_base_quantity_missing": "Manca la quantità a cui si riferisce il prezzo.",
             "reference_not_found": "Un riferimento punta a una riga che non esiste.",
-            "required_buy_sell_conflict": "Lo stesso Asset deve essere sia acquistato sia venduto.",
-            "required_min_notional_unfunded": "Gli ordini minimi obbligatori costano più della liquidità disponibile.",
             "route_priority_negative": "La priorità della route non può essere negativa.",
             "saved_fx_invalid": "Il tasso di cambio salvato non è valido.",
             "saved_fx_missing": "Manca il tasso di cambio salvato.",
@@ -293,31 +296,36 @@
             "target_total_not_one": "Gli obiettivi non sommano al 100%.",
             "target_weight_missing": "Manca un obiettivo.",
             "target_weight_out_of_range": "Un obiettivo deve essere tra 0 e 100%.",
-            "tax_netting_unsupported": "La compensazione fiscale non è supportata.",
             "valuation_currency_missing": "Manca la valuta di valutazione.",
             "wac_fx_missing": "Manca il tasso di cambio necessario per il costo medio.",
             "wac_missing": "Manca il costo medio.",
             "zero_selected_funding": "La liquidità selezionata è zero.",
             "fx_rate_inconsistent": "Questo tasso di cambio non è coerente con i tassi di {source_currency} e {destination_currency} rispetto a {valuation_currency}: convertire {source_currency} in {destination_currency} creerebbe valore. Allinea i tassi o imposta uno spread di conversione.",
-            "saved_fx_skipped": "Il tasso {pair} salvato del {skipped_date} non è valido ed è stato saltato: al suo posto è stato usato quello del {used_date}. Va corretto nell’editor del cambio {pair} (Modifica tassi); fino ad allora i risultati potrebbero essere lievemente approssimati."
+            "saved_fx_skipped": "Il tasso {pair} salvato del {skipped_date} non è valido ed è stato saltato: al suo posto è stato usato quello del {used_date}. Va corretto nell’editor del cambio {pair} (Modifica tassi); fino ad allora i risultati potrebbero essere lievemente approssimati.",
+            "bound_max_below_current": "Il massimo è sotto ciò che il piano già possiede e le vendite sono disattivate.",
+            "bound_min_above_max": "Il minimo è più alto del massimo.",
+            "bounds_min_sum_exceeds_reference": "I minimi sommano più del denaro che il piano può raggiungere.",
+            "bounds_unsatisfiable": "Nessun piano rispetta i minimi e i massimi impostati qui.",
+            "solver_numerical_error": "Il risolutore ha incontrato un errore numerico mentre affinava il piano: è mostrato il miglior piano trovato fin qui. È valido ed eseguibile; manca solo la prova che sia il migliore.",
+            "cash_limit_exceeded_by_rounding": "The plan ends this cash entry beyond its limit by {exceeded_by}, because every amount is rounded to the cent. The planner could not hold the plan exactly inside a band this narrow."
           },
           "pac_allocator": {
             "initial_holding_forbidden": "Questo strumento non accetta posizioni esistenti.",
-            "sell_forbidden": "Questo strumento non vende."
+            "sell_forbidden": "Questo strumento non vende.",
+            "cash_weight_unsupported": "Un peso sulla liquidità non è supportato nel PAC; imposta solo un minimo o un massimo."
           },
           "portfolio_rebalancer": {
-            "baseline_incumbent_missing": "Manca il piano di partenza per il confronto.",
             "carried_loss_negative": "La perdita riportata non può essere negativa.",
             "cost_basis_negative": "Il costo di carico non può essere negativo.",
             "holdings_missing": "Mancano le posizioni.",
             "nonpositive_current_portfolio": "Il portafoglio attuale non ha valore.",
             "sell_fee_missing": "Manca la commissione di vendita.",
             "sell_inventory_exceeded": "La vendita supera la quantità posseduta.",
-            "sell_irreducibility_unresolved": "Non è stato stabilito che nessuna vendita possa essere eliminata.",
-            "sell_to_idle_forbidden": "Non è ammesso vendere solo per lasciare il ricavato inutilizzato.",
             "tax_rate_missing": "Manca l’aliquota fiscale.",
             "tax_rate_out_of_range": "L’aliquota fiscale è fuori intervallo.",
-            "withholding_missing": "Manca la ritenuta fiscale."
+            "withholding_missing": "Manca la ritenuta fiscale.",
+            "tax_data_missing": "Manca un dato fiscale per una rotta di vendita.",
+            "tax_basket_unknown": "Un paniere fiscale è citato ma non dichiarato."
           }
         },
         "leave": {
@@ -379,7 +387,11 @@
           "route_priority": "Priorità di Broker e fonti",
           "shortfall": "Liquidità non investita",
           "split_asset_count": "Asset divisi fra più Broker",
-          "turnover": "Turnover"
+          "turnover": "Turnover",
+          "plan_score": "Score",
+          "target_distance": "Distance from the targets",
+          "wealth_loss": "Money lost",
+          "operation_count": "Fewer operations"
         },
         "origin": {
           "copied": "Copiato",
@@ -433,7 +445,13 @@
           "selectedNegative": "«Importo da usare» non può essere negativo.",
           "declaredNegative": "«Liquidità dichiarata» non può essere negativo.",
           "contributionAmountNegative": "L’importo del versamento non può essere negativo.",
-          "modeStepNotPositive": "Il passo d’ordine deve essere maggiore di zero."
+          "modeStepNotPositive": "Il passo d’ordine deve essere maggiore di zero.",
+          "limitInvalid": "Un limite non è un importo o una percentuale da 0 in su.",
+          "limitShareAboveHundred": "Un limite in percentuale non può superare il 100%.",
+          "limitMinAboveMax": "Il minimo supera il massimo.",
+          "limitShareMinimumsAboveHundred": "I minimi in percentuale sommano più del 100%: {assets}.",
+          "positionQuantityInvalid": "La quantità di una posizione è vuota, non è un numero o è sotto zero.",
+          "fidelityCustomMissing": "«Personalizzata»: scrivi quanto accetti di spendere per la riga di riferimento, una cifra maggiore di zero."
         },
         "removal": {
           "cash": "Riga di cassa {broker} · {currency}",
@@ -468,7 +486,7 @@
             "infeasible": "Infattibile con questi vincoli",
             "noIncumbent": "Nessun piano entro i limiti",
             "noOperation": "Nessuna operazione",
-            "notProven": "Ottimalità non dimostrata",
+            "notProven": "Ottimo locale",
             "optimalProven": "Ottimo dimostrato",
             "planAvailable": "Piano disponibile",
             "help": {
@@ -477,8 +495,11 @@
               "optimalProven": "Il solver ha dimostrato che non esiste un piano migliore, obiettivo per obiettivo nell’ordine scelto in Strategia, e il controllo esatto del piano torna con i suoi numeri. La prova vale entro il piccolo margine di calcolo del solver, che cresce con gli importi.",
               "completed": "Il solver ha concluso la ricerca da solo, senza raggiungere un limite.",
               "timeLimit": "Il solver ha raggiunto il limite di tempo prima di concludere la ricerca.",
-              "nodeLimit": "Il solver ha raggiunto il limite di nodi, il numero di tentativi che può fare, prima di concludere la ricerca."
-            }
+              "nodeLimit": "Il solver ha raggiunto il limite di nodi, il numero di tentativi che può fare, prima di concludere la ricerca.",
+              "margin": "Il piano migliore possibile dovrebbe essere al massimo {margin} migliore di questo: lo dicono i limiti del risolutore, che non sono una prova."
+            },
+            "notProvenWithin": "Ottimo locale (entro {margin})",
+            "noPlanNotProven": "Ottimalità non dimostrata"
           },
           "collapseAll": "Comprimi tutto",
           "detail": {
@@ -494,7 +515,7 @@
             "marginCost": "Costo del margine",
             "midPrice": "Prezzo mid",
             "midValue": "Valore mid",
-            "minimumFacts": "se attiva {ifActive} · obbligatorio {required}",
+            "minimumFacts": "se attiva {ifActive}",
             "minimums": "Minimi",
             "quantityEstimated": "{quantity} {count, plural, one {quota (stimata)} other {quote (stimate)}}",
             "quantityExact": "{quantity} {count, plural, one {quota (esatta)} other {quote (esatte)}}",
@@ -669,13 +690,17 @@
               "deposit": "Esegui il versamento «{source}» di {amount} sul Broker «{destination}»",
               "transfer": "Trasferisci {amount} da «{source}» al Broker «{destination}»",
               "cash": "Usa {amount} della liquidità disponibile sul Broker «{source}»"
-            }
+            },
+            "automaticConversionNote": "{brokers} converte la valuta a ogni acquisto. Il piano conta una sola conversione per coppia di valute: il broker può arrotondare ogni ordine per conto suo, con qualche centesimo di differenza per ordine."
           },
           "platform": {
             "draftIntact": "La bozza è intatta.",
             "retry": "Riprova",
             "title": "Calcolo non riuscito",
-            "reference": "Riferimento nel log del server:"
+            "reference": "Riferimento nel log del server:",
+            "copyRequest": "Copia la richiesta",
+            "copyRequestHint": "Copia i dati inviati per questo calcolo, importi compresi, da allegare a una segnalazione. Il server non conserva nulla.",
+            "copyRequestFailed": "Impossibile copiare la richiesta. Consenti l'accesso agli appunti e riprova."
           },
           "proof": {
             "absoluteGap": "Gap ass.",
@@ -689,7 +714,9 @@
             "proof": "Prova",
             "reasons": {
               "allocation": {
-                "exact_proof_not_established": "non è stata stabilita una prova esatta"
+                "exact_proof_not_established": "non è stata stabilita una prova esatta",
+                "proof_not_confirmed": "no second search confirmed the proof",
+                "limits_leave_no_rounding_room": "the limits leave no room for rounding"
               },
               "portfolio_rebalancer": {
                 "sell_irreducibility_unresolved": "non è stato stabilito che nessuna vendita possa essere eliminata"
@@ -718,7 +745,9 @@
               "dual": "Il limite che il solver ha dimostrato per questo stadio: nessuno dei piani cercati può fare meglio. Dal secondo stadio in poi ha cercato solo fra i piani buoni quanto quello scelto negli stadi sopra.",
               "absoluteGap": "Distanza fra i due valori. Un gap di 0 dimostra il valore migliore solo se lo stadio è terminato.",
               "relativeGap": "La stessa distanza, come frazione del valore."
-            }
+            },
+            "notConfirmed": "One search ended on this plan, but no second search confirmed it: it is the best plan found, not a proven one.",
+            "limitsLeaveNoRoundingRoom": "The limits leave no room for rounding, so the plan was found counting the rounding in its favour. It respects the limits once any top-up shown is added, but it is not proven to be the best."
           },
           "reasons": {
             "allocation": {
@@ -744,20 +773,25 @@
               "body": "Dimostrato: nessuna combinazione rispetta insieme tutti i vincoli rigidi.",
               "constraints": "Vincoli rigidi coinvolti (dalla richiesta; tetti e minimi mascherati con la privacy attiva):",
               "funding": "Liquidità raggiungibile: {amount}",
-              "minimum": "{asset} · {broker}: minimo obbligatorio {minimum}",
               "note": "L’interfaccia non sceglie quale vincolo allentare: li elenca. Nessun piano parziale viene mostrato come valido.",
-              "title": "Infattibile con questi vincoli"
+              "title": "Infattibile con questi vincoli",
+              "limitsTitle": "Nessuna soluzione con questi limiti",
+              "limitsBody": "Senza i limiti un piano esiste: sono loro a escluderlo. Rivedili:",
+              "limitMinimum": "minimo {value}",
+              "limitMaximum": "massimo {value}"
             },
             "limit": {
               "complete": "Il risultato qui sotto resta completo e consultabile.",
               "node": "Il solver si è fermato al limite di nodi con un piano valido. Potrebbe esisterne uno migliore.",
               "stages": "Stadi: {finished} terminati · {unfinished} non terminati · nessun gap certificato.",
-              "time": "Il solver si è fermato al limite di tempo con un piano valido. Potrebbe esisterne uno migliore."
+              "time": "Il solver si è fermato al limite di tempo con un piano valido. Potrebbe esisterne uno migliore.",
+              "solverError": "The solver stopped on a numerical error with a valid plan. A better one may exist."
             },
             "noIncumbent": {
               "body": "Il solver non ha trovato alcun piano prima del limite. Non è una prova che non esista un piano.",
               "tips": "Per ridurre la ricerca: meno Asset o route, tetti più stretti, passi più grandi.",
-              "title": "Nessun piano entro i limiti"
+              "title": "Nessun piano entro i limiti",
+              "completedBody": "The search ended without a plan that can be carried out within these limits. This is not a proof that no plan exists."
             },
             "noOp": {
               "body": "Con {amount} nessun acquisto rispetta i vincoli: il piano è non fare nulla.",
@@ -833,19 +867,17 @@
           "ordersIn": "Ordini in",
           "externalAccount": "Conto esterno",
           "noOrdersHint": "Il calcolo non invia ordini ai Broker.",
-          "factsToggle": "Dati del calcolo ({count})"
+          "factsToggle": "Dati del calcolo ({count})",
+          "limited": "{count, plural, =0 {} one { · # con un limite} other { · # con limiti}}"
         },
         "route": {
           "cap": "Acquisto massimo",
           "margin": "Margine sul prezzo",
           "minimumIfActive": "Acquisto minimo",
           "priority": "Priorità",
-          "requiredMinimum": "Acquisto obbligatorio",
           "modeLine": "{kind} · Incremento: {step} · Commissione di acquisto: {fee}",
           "minimumNone": "nessun minimo",
-          "requiredNone": "nessun obbligo",
-          "minimumHelp": "Se il piano compra qui, compra almeno questo. Vuoto = basta l’incremento del Broker. Utile quando un acquisto piccolo farebbe pesare troppo la commissione.",
-          "requiredHelp": "Il piano compra qui almeno questo, in ogni caso. Se le risorse non bastano, il piano diventa impossibile. Vuoto = nessun obbligo.",
+          "minimumHelp": "Vale solo se il piano compra su questa rotta: allora compra almeno questo. Vuoto = basta l’incremento del Broker. Utile quando un acquisto piccolo farebbe pesare troppo la commissione. Per obbligare un acquisto, imposta un minimo sull’obiettivo dell’Asset.",
           "capHelp": "Il massimo che il piano può comprare di questo Asset su questo Broker. Vuoto = nessun limite proprio: il piano non compra mai più della liquidità che può arrivare a questo Broker. Compilalo per fermare gli acquisti qui oltre una certa dimensione.",
           "priorityHelp": "Conta solo fra piani che arrivano ugualmente vicini all’obiettivo: fra questi, si preferisce comprare sui Broker con il numero più basso. Pesa più delle commissioni: per lasciar decidere il costo, lasciali tutti a 0. Tutti a 0 = nessuna preferenza.",
           "marginHelp": "Ogni acquisto è calcolato a prezzo × (1 + margine), per coprire un prezzo che sale prima dell’ordine. Esempio: 0,5% su 100 → 100,50. La differenza è una riserva per il rialzo: non conta come investito.",
@@ -936,7 +968,8 @@
           "toggle": "Sintesi",
           "total": "Totale (controllo)",
           "versions": "Backend/API {api} · UI {ui}",
-          "rates": "Tassi"
+          "rates": "Tassi",
+          "limits": "Con un limite"
         },
         "targets": {
           "copyDistribution": "Copia la distribuzione attuale",
@@ -951,7 +984,22 @@
           "balance": "Bilancia al 100%",
           "totalHelp": "Gli obiettivi dividono fra gli Asset il denaro che investi ora, cassa e versamenti compresi: per calcolare devono sommare esattamente il 100%. «Bilancia tutto» riscala ogni obiettivo mantenendo i loro rapporti (parti uguali se sono tutti a 0). Spunta alcune righe per riscalare solo quelle, con «Bilancia le righe selezionate al 100%». «Bilancia al 100%» su una riga dà a quell’Asset quanto manca, o toglie l’eccesso.",
           "balanceAll": "Bilancia tutto",
-          "balanceSelected": "Bilancia le righe selezionate al 100%"
+          "balanceSelected": "Bilancia le righe selezionate al 100%",
+          "limits": "Limiti",
+          "limitsHelp": "Minimo e massimo del valore di questo Asset alla fine del piano. Scrivi un importo nella valuta di valutazione (500) o una percentuale del totale del piano (35%): il totale è il denaro che investi ora. Campo vuoto = nessun limite.",
+          "limitMinimum": "min",
+          "limitMaximum": "max",
+          "limitMinimumLabel": "Minimo di {asset}",
+          "limitMaximumLabel": "Massimo di {asset}",
+          "limitsNote": "Limiti sul valore alla fine del piano. Scrivi un importo (500) o una percentuale del totale (35%). Campo vuoto = nessun limite.",
+          "limitsCheck": "Controlla i limiti",
+          "limitMinAboveMax": "Il minimo ({minimum}) supera il massimo ({maximum}).",
+          "limitsNoteTotal": "Limiti sul valore alla fine del piano. Scrivi un importo (500) o una percentuale (35%) del totale, il denaro che investi ora: {total}. Campo vuoto = nessun limite.",
+          "previewIncomplete": "Le cifre di oggi compaiono quando nessun campo della bozza è segnato in rosso, in nessun passo.",
+          "previewUnavailable": "Le cifre di oggi non sono disponibili ora; il calcolo non ne risente.",
+          "addCashHelp": "La cassa di un Broker in una valuta diventa una riga degli obiettivi con i soli limiti: quanto deve restare almeno, o al massimo, alla fine del piano. Non ha un obiettivo e non conta nel totale.",
+          "balanceNotNumber": "Un obiettivo non è un numero",
+          "balanceNoRoom": "Le righe non selezionate fanno già il 100 % o più: abbassale, o selezionale."
         },
         "toolErrors": {
           "cleanup_failed": "Il calcolo è terminato, ma la piattaforma non è riuscita a ripulire dopo di esso.",
@@ -987,7 +1035,9 @@
             "fx": "{count, plural, one {# tasso FX aggiornato} other {# tassi FX aggiornati}}",
             "cash": "{count, plural, one {# saldo aggiornato} other {# saldi aggiornati}}",
             "unchanged": "nessun valore è cambiato",
-            "missing": "Non trovati, resta il valore copiato: {names}."
+            "missing": "Non trovati, resta il valore copiato: {names}.",
+            "positions": "{count, plural, one {# posizione aggiornata} other {# posizioni aggiornate}}",
+            "positionsClosed": "{count, plural, one {# posizione chiusa} other {# posizioni chiuse}}"
           }
         },
         "ownedAssets": {
@@ -1024,6 +1074,13 @@
         "policyScope": {
           "proportional": "Solo acquisti: non vende nulla."
         }
+      },
+      "progress": {
+        "validate": "Controllo i dati",
+        "model": "Costruisco il modello",
+        "search": "Cerco il piano",
+        "verify": "Verifico i conti",
+        "report": "Preparo il risultato"
       }
     }
   }

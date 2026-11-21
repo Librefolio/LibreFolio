@@ -2,7 +2,9 @@
  * The words of an order mode (order type, increment, purchase fee) and of a funding source, shared
  * by the Broker card, the Broker editor and the Routing step, so they never describe one differently.
  *
- * Keys stay literal in this file: `dev.py i18n audit` resolves only same-file string literals.
+ * Keys stay literal in this file: `dev.py i18n audit` resolves only same-file string literals. A
+ * text that differs between the two Tools takes one of the forms `labels.ts` describes: two whole
+ * literal keys in a ternary, or a same-file conditional prefix whose group exists under both.
  */
 import {canonicalInput, decimalScale, decimalSign} from '$lib/utils/core/exactDecimal';
 import type {DraftMode, ModeKind} from './draft.svelte';

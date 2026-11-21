@@ -1,0 +1,221 @@
+{
+  "tools": {
+    "portfolioRebalancer": {
+      "progress": {
+        "validate": "Controllo i dati",
+        "model": "Costruisco il modello",
+        "search": "Cerco il piano",
+        "verify": "Verifico i conti",
+        "report": "Preparo il risultato"
+      },
+      "planner": {
+        "scenario": {
+          "intro": "Ribilanci un portafoglio che possiedi già: il calcolo parte dalle posizioni e dalla liquidità che porti nel piano, le conta, e avvicina l'insieme il più possibile ai pesi obiettivo. È una simulazione: nessun ordine viene inviato."
+        },
+        "leave": {
+          "title": "Uscire dal Ribilanciatore?"
+        },
+        "positions": {
+          "title": "Posizioni",
+          "help": "Quanto possiedi di questo Asset, Broker per Broker, come lo registra oggi LibreFolio. Il piano parte da queste quantità: puoi cambiarne una per simulare un portafoglio diverso; LibreFolio non viene modificato.",
+          "broker": "Broker",
+          "quantity": "Quantità",
+          "quantityHelp": "Le quote del piano: la tua parte di ciò che il Broker custodisce. Cambiala per pianificare su una quantità diversa.",
+          "quantityLabel": "Quantità di {asset} su {broker}",
+          "custody": "In custodia",
+          "custodyHelp": "Le quote che il Broker custodisce sul conto, e la tua quota del conto quando è condiviso.",
+          "share": "tua quota {share}"
+        },
+        "brokers": {
+          "cashOnly": "solo cassa",
+          "cashOnlyHint": "Qui nessun ordine: la sua cassa conta nel portafoglio, e il piano può spostarla sui Broker dove compra. Modificalo nel passo Liquidità.",
+          "positionsOnly": "solo posizioni",
+          "positionsOnlyHint": "Le sue posizioni contano nel portafoglio, ma il piano qui non compra né vende e non usa la sua cassa. Aggiungilo al piano per operare anche qui.",
+          "addToPlan": "Aggiungi al piano",
+          "addToPlanFailed": "Non è stato possibile leggere il Broker: non è stato aggiunto niente."
+        },
+        "targets": {
+          "cashEntry": "Cassa · {broker} · {currency}",
+          "otherCash": "Altra cassa",
+          "otherCashHelp": "Tutta la cassa senza un obiettivo suo: vale sempre 0 %, e il piano può usarla per comprare.",
+          "addCash": "Aggiungi una cassa",
+          "addCashHelp": "La cassa di un Broker in una valuta diventa una riga degli obiettivi, con obiettivo e limiti, come un Asset.",
+          "addCashNone": "Ogni Broker e valuta dello scenario ha già una sua cassa.",
+          "removeCash": "Togli la cassa",
+          "intro": "Come dividere il totale che entra nel piano, cassa compresa, in percentuale.",
+          "introTotal": "Come dividere il totale che entra nel piano ({total}), cassa compresa, in percentuale.",
+          "limitsNote": "Limiti sul valore alla fine del piano. Scrivi un importo (500) o una percentuale (35%) del totale che entra nel piano. Campo vuoto = nessun limite.",
+          "limitsNoteTotal": "Limiti sul valore alla fine del piano. Scrivi un importo (500) o una percentuale (35%) del totale che entra nel piano: {total}. Campo vuoto = nessun limite.",
+          "now": "Ora",
+          "nowHelp": "Il peso di oggi di questa riga sul totale che entra nel piano. Solo informativo: non è un obiettivo.",
+          "entry": "Voce",
+          "wire": "La quota del totale che entra nel piano che questa riga deve avere alla fine, in percentuale. Sono ammessi i decimali.",
+          "limitsHelp": "Minimo e massimo del valore di questa riga alla fine del piano. Scrivi un importo nella valuta di valutazione (500) o una percentuale del totale che entra nel piano (35%). Campo vuoto = nessun limite.",
+          "totalHelp": "Gli obiettivi dividono il totale che entra nel piano, posizioni e cassa comprese: per calcolare devono sommare esattamente 100%. «Bilancia tutto» riscala ogni obiettivo mantenendo le proporzioni (parti uguali se sono tutti 0). Spunta alcune righe per riscalare solo quelle. «Bilancia al 100%» su una riga le dà ciò che manca, o toglie l’eccesso.",
+          "nowLine": "ora {weight}"
+        },
+        "removal": {
+          "cashEntry": "Cassa degli obiettivi {broker} · {currency}"
+        },
+        "review": {
+          "brokers": "{operative, plural, one {# Broker} other {# Broker}}{external, plural, =0 {} one { · # conto esterno} other { · # conti esterni}}{held, plural, =0 {} one { · # solo con posizioni} other { · # solo con posizioni}}",
+          "assets": "{count, plural, one {# Asset} other {# Asset}}{positions, plural, =0 {} one { · # posizione} other { · # posizioni}}{missing, plural, =0 {} other { · # senza prezzo}}{stale, plural, =0 {} one { · # prezzo non di oggi} other { · # prezzi non di oggi}}",
+          "targets": "{count} di {total, plural, one {# voce} other {# voci}} con un obiettivo",
+          "strategy": "{strategy} · {fidelity}",
+          "kindPosition": "Posizione"
+        },
+        "summary": {
+          "positionsOnly": "Solo posizioni",
+          "entries": "Voci"
+        },
+        "strategy": {
+          "investOnly": "Investi soltanto",
+          "fidelity": {
+            "costAware": "Attento ai costi",
+            "balanced": "Bilanciato",
+            "faithful": "Fedele al target",
+            "targetFirst": "Target prima di tutto",
+            "custom": "Personalizzata"
+          },
+          "investOnlyHelp": "Usa la liquidità per comprare ciò che è sotto obiettivo. Non vende niente.",
+          "investAndSell": "Investi e vendi",
+          "investAndSellHelp": "Può anche vendere, per avvicinarsi di più all'obiettivo. Stima commissioni e tasse: serve il passo Fisco.",
+          "comingSoon": "in arrivo",
+          "fidelityTitle": "Fedeltà al target",
+          "fidelityLead": "Quanto vale, per te, rimettere a posto ciò che è fuori obiettivo.",
+          "fidelityHelp": "Per rimettere a posto i soldi fuori obiettivo il piano spende in commissioni al massimo quanto la tabella sotto accetta per quella cifra. Più alta è la fedeltà, più accetta di spendere.",
+          "fidelityNote": {
+            "costAware": "Si muove solo per scostamenti grandi.",
+            "balanced": "Una via di mezzo.",
+            "faithful": "Si muove anche per scostamenti piccoli.",
+            "targetFirst": "Paga qualsiasi costo pur di avvicinarsi."
+          },
+          "defaultBadge": "predefinito",
+          "customSentence": "Con {reference} nel posto sbagliato accetto di spendere fino a",
+          "customLabel": "Quanto accetti di spendere al massimo per la riga di riferimento",
+          "customInvalid": "Scrivi una cifra maggiore di zero.",
+          "table": {
+            "title": "Costo massimo accettabile",
+            "lead": "Quanto il piano può spendere al massimo, in commissioni e tasse, per rimettere a posto quei soldi. Se costa di più, li lascia dove sono.",
+            "leadTotal": "Le cifre valgono per il tuo totale di {total}.",
+            "misplaced": "Soldi nel posto sbagliato",
+            "reference": "riferimento",
+            "upTo": "fino a {amount}",
+            "costAwareShort": "Attento",
+            "faithfulShort": "Fedele",
+            "customShort": "Tua",
+            "targetFirst": "«Target prima di tutto» non ha un massimo: prima si avvicina il più possibile, poi sceglie la strada che costa meno.",
+            "incomplete": "Le cifre compaiono quando i campi in rosso sono completi.",
+            "unavailable": "Le cifre non sono disponibili ora; il calcolo non ne risente."
+          }
+        },
+        "result": {
+          "plan": {
+            "buysAt": "Acquisti su {broker}",
+            "sequenceHint": "Segui i numeri: prima i depositi, i trasferimenti e i cambi, nell’ordine indicato, poi gli acquisti."
+          },
+          "allocation": {
+            "beforeShare": "Quota oggi",
+            "beforeShareHelp": "La sua quota dell’intero portafoglio oggi, cassa compresa.",
+            "beforeValue": "Valore oggi",
+            "beforeValueHelp": "Quanto vale oggi la voce: le quote che hai al prezzo di quotazione, o la cassa.",
+            "targetShareHelp": "La quota che hai scelto per questa voce nel passo Obiettivi, sull’intero portafoglio.",
+            "targetValueHelp": "Quanto varrebbe la voce con esattamente la sua quota obiettivo dell’intero portafoglio di oggi.",
+            "finalShareHelp": "Il suo valore dopo il piano, come quota dell’intero portafoglio di oggi, cassa compresa. I soldi persi in commissioni e tasse contano nella riga del non investito.",
+            "finalValueHelp": "Quanto vale la voce dopo il piano: le quote che hai più quelle comprate, o la cassa rimasta.",
+            "boughtHelp": "Il valore di ciò che il piano compra di questo Asset, al prezzo di quotazione: senza commissioni né margine sul prezzo.",
+            "residualHelp": "Valore dopo il piano meno valore ideale: positivo se la voce finisce sopra la sua quota, negativo se sotto.",
+            "uninvested": "Non investito",
+            "uninvestedHelp": "Tutto ciò che non è né in un Asset né in una cassa con un suo obiettivo: oggi, e dopo il piano, quando conta anche i soldi persi in commissioni e tasse.",
+            "minimum": "Minimo",
+            "minimumHelp": "Il minimo che hai messo per questa voce nel passo Obiettivi: il suo valore dopo il piano non scende sotto.",
+            "maximum": "Massimo",
+            "maximumHelp": "Il massimo che hai messo per questa voce nel passo Obiettivi: il suo valore dopo il piano non sale sopra.",
+            "title": "Allocazione per voce"
+          },
+          "kpi": {
+            "valueToday": "Vale oggi",
+            "valueTodayHelp": "L’intero portafoglio oggi: gli Asset che hai, al prezzo di quotazione, più tutta la cassa e i versamenti scelti per il piano.",
+            "partsAssets": "Asset",
+            "partsCash": "Cassa",
+            "valueAfter": "Varrà dopo",
+            "valueAfterHelp": "L’intero portafoglio dopo il piano: gli Asset e la cassa che resta. È il valore di oggi meno i soldi persi.",
+            "valueAfterHeld": "in {assets, plural, one {# Asset} other {# Asset}} e {cash, plural, one {# cassa} other {# casse}}",
+            "moneyLost": "Soldi persi",
+            "moneyLostHelp": "Quanto ti costa il piano: commissioni, spread dei cambi, margini sul prezzo, tasse e arrotondamenti. Il valore di oggi meno questo è il valore dopo.",
+            "noLoss": "Nessuna perdita",
+            "foreignWithholding": "Ritenuta estera",
+            "largestDeviation": "Distanza massima dall’obiettivo",
+            "largestDeviationHelp": "Quanto è lontana dal suo obiettivo la voce più lontana, dopo e prima del piano, in punti percentuali: lo scarto fra la sua quota e la quota obiettivo. Contano gli Asset e le casse con un obiettivo; il non investito no.",
+            "points": "{value} punti",
+            "beforePoints": "prima: {value} punti",
+            "uninvestedShare": "{value} del totale",
+            "transfers": "{count, plural, one {# trasferimento} other {# trasferimenti}}",
+            "deviationItem": "{item}: {weight} contro {target}",
+            "beforePointsItem": "prima: {value} punti, {item} al {weight} contro {target}",
+            "cashItem": "Cassa {broker} {currency}"
+          },
+          "header": {
+            "score": "Punteggio {value}",
+            "scoreHelp": "Il punteggio che il piano rende minimo: λ × distanza/F + soldi persi. Qui λ {lambda}, distanza/F {distance}, soldi persi {lost}.",
+            "distance": "Distanza/F {value}",
+            "distanceHelp": "Quanto il portafoglio finisce lontano dai suoi obiettivi, in denaro: gli scarti al quadrato di ogni voce sull’intero portafoglio. «Target prima di tutto» la rende più piccola possibile, poi i soldi persi.",
+            "moneyLost": "Soldi persi {value}"
+          },
+          "ledger": {
+            "fields": {
+              "transfer_in": "Transfers in",
+              "transfer_out": "Transfers out"
+            },
+            "help": {
+              "transfer_in": "What arrives in this cash from another Broker of the plan.",
+              "transfer_out": "What leaves this cash for another Broker of the plan.",
+              "funding_in": "The deposits of your contributions into this cash.",
+              "funding_out": "Always 0 in the Rebalancer: money moves between Brokers as transfers, in their own columns.",
+              "alwaysZeroInvestOnly": "Always 0 with «Invest only»: the plan only buys."
+            }
+          },
+          "proof": {
+            "lambda": "λ {value}",
+            "tieBreaks": "Tie-breaks, among the plans as good on the objectives above",
+            "fixedOrder": "a fixed order of Assets and Brokers",
+            "sameData": "A search that ends by itself gives the same plan for the same data; one stopped by the time limit may give another.",
+            "help": {
+              "status": "Whether the solver closed this stage. Finished: it proved the best value. Unfinished: it stopped at the time limit, or, for a tie-break, its plan was set aside because it was no better, in exact arithmetic, on the objectives above. After a stage that stopped, the later ones only searched among plans as good as the one already found, so a gap of 0 there proves nothing."
+            }
+          },
+          "badges": {
+            "help": {
+              "optimalProven": "The solver proved that no plan has a better score (with «Target first»: a smaller distance from the targets, then less money lost), and the exact check of the plan matches its numbers. The tie-breaks after it may have stopped earlier: they only choose among plans just as good. The proof holds within the solver's small calculation margin, which grows with the amounts."
+            }
+          },
+          "states": {
+            "limit": {
+              "tieBreak": "The plan is proven the best on its objective; the limit stopped a tie-break, so an equally good plan may exist."
+            }
+          },
+          "exposure": {
+            "scope": "On the whole portfolio, cash included",
+            "legendNow": "grey: today",
+            "legendAfter": "coloured: after the plan",
+            "legendTarget": "your target",
+            "cash": "Cash",
+            "now": "Today",
+            "after": "After the plan",
+            "target": "Target",
+            "belowTarget": "After the plan: below the target",
+            "aboveTarget": "After the plan: above the target",
+            "onTarget": "After the plan: in line with the target",
+            "showAll": "Show all ({count})",
+            "showFewer": "Show fewer",
+            "title": "Exposures – today, after the plan, target",
+            "help": "How the whole portfolio, cash included, spreads by Asset type, sector and country: today, after the plan, and your target. The cash is the last row of each chart. The charts do not change the plan."
+          }
+        },
+        "objectives": {
+          "route_priority": "Route priority"
+        }
+      }
+    }
+  }
+}

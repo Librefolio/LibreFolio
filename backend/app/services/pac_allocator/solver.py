@@ -65,14 +65,18 @@ from __future__ import annotations
 
 import math
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from fractions import Fraction
 from typing import Literal
 
 from pyscipopt import Model
 
+from backend.app.logging_config import get_logger
 from backend.app.services.pac_allocator.compiler import CompiledProgram
-from backend.app.services.pac_allocator.evaluation.evaluator import evaluate_exact_candidate
+from backend.app.services.pac_allocator.constraints.pool import derive_transfer_quanta
+from backend.app.services.pac_allocator.evaluation.errors import ExactReplayRejectedError
+from backend.app.services.pac_allocator.evaluation.evaluator import cash_limit_overshoots, evaluate_exact_candidate, rounding_top_ups
+from backend.app.services.pac_allocator.evaluation.solver_view import solver_view_objectives
 from backend.app.services.pac_allocator.models import (
     CandidateActionVector,
     CandidateDecision,
@@ -80,6 +84,9 @@ from backend.app.services.pac_allocator.models import (
     check_budget,
 )
 from backend.app.services.pac_allocator.objectives import ObjectiveStage
+from backend.app.services.pac_allocator.progress import ProgressReporter, report_phase
+
+logger = get_logger(__name__)
 
 __all__ = [
     "DEFAULT_SOLVER_TIME_BUDGET_SECONDS",
@@ -132,7 +139,7 @@ STAGE_PIN_RELATIVE_SLACK = 1e-12
 # and every ``tie:*`` stage is one integer decision variable. These are pinned
 # at their exact rounded value, so the lexicographic contract is exact — not
 # merely tolerant — for that part of the cascade.
-_INTEGRAL_STAGE_CODES = frozenset({"route_priority", "active_order_rows"})
+_INTEGRAL_STAGE_CODES = frozenset({"route_priority", "active_order_rows", "operation_count"})
 _TIE_STAGE_PREFIX = "tie:"
 
 # A stage that ended on one of these ran out of its allowance rather than
@@ -184,6 +191,8 @@ _TAIL_MINIMUM_SECONDS = 0.05
 # weight, each evaluated in float, so its band widens by one tolerance per
 # term. Integral stages are compared exactly against the rounded bounds.
 _BOUND_CHECK_TOLERANCE = 1e-6
+#: The bound check's relative tolerance, public for the merge of the Rebalancer's seeded runs (``proof.seeded_runs_agree``).
+BOUND_CHECK_TOLERANCE = _BOUND_CHECK_TOLERANCE
 
 
 @dataclass(frozen=True, slots=True)
@@ -230,6 +239,14 @@ class SolverStageReport:
     scip_status: str
     solving_seconds: float
     nodes: int
+    # SCIP minimizes ``scale ×`` the view's objective (D2 of the step-2 plan of project 67): ``primal``, ``dual`` and
+    # ``absolute_gap`` above are in SCIP's units, and the report divides them by this to publish the objective's own unit.
+    scale: Fraction = Fraction(1)
+    # The stage is a tie-break of the Rebalancer (``ObjectiveStage.tie_break``): a named one or one of the canonical vector.
+    tie_break: bool = False
+    # D4: SCIP closed the stage, but its plan was worse in exact arithmetic on what precedes the tie-breaks, so the plan of
+    # the stage before stays the best one. Such a stage is reported ``unfinished``.
+    rejected: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -269,11 +286,15 @@ class SolverRunResult:
     wall_seconds: float
     finished_stage_count: int
     anomaly: str | None
+    #: R1-A of project 67: the ordinal of the stage that found ``candidate`` when it is the plan held for want of another,
+    #: which its exact replay refused (``_take_candidate``); None when the plan held is publishable, or there is none. The
+    #: planner answers «no plan» on it instead of raising. Internal: never on the wire.
+    held_unpublishable_at: int | None = None
     exact_replay_required: Literal[True] = True
 
 
 def _is_integral_stage(stage: ObjectiveStage) -> bool:
-    return stage.code in _INTEGRAL_STAGE_CODES or stage.code.startswith(_TIE_STAGE_PREFIX)
+    return stage.integral or stage.code in _INTEGRAL_STAGE_CODES or stage.code.startswith(_TIE_STAGE_PREFIX)
 
 
 def _objective_code(stage: ObjectiveStage) -> str:
@@ -316,10 +337,15 @@ def _extract_candidate(model: Model, program: CompiledProgram, sequence: int) ->
     ``evaluate_exact_candidate`` must be allowed to say so loudly rather than
     have it silently repaired here.
     """
+    quanta = {access.decision_id: round(model.getVal(program.variables.quanta[access.decision_id])) for access in program.view.decisions}
+    pool = program.variables.pool
+    if pool is not None:
+        # The Rebalancer's transfers are read off the cash rule's balances (lot CR of project 67): its lanes are zero in SCIP.
+        quanta |= derive_transfer_quanta(program.scenario.transfer_lanes, {cell: round(model.getVal(balance)) for cell, balance in pool.net.items()})
     return CandidateActionVector(
         view_id=program.view.view_id,
         candidate_id=f"solver:{program.view.view_id}:{sequence}",
-        decisions=tuple(CandidateDecision(decision_id=access.decision_id, quanta=round(model.getVal(program.variables.quanta[access.decision_id]))) for access in program.view.decisions),
+        decisions=tuple(CandidateDecision(decision_id=access.decision_id, quanta=quanta[access.decision_id]) for access in program.view.decisions),
     )
 
 
@@ -354,10 +380,12 @@ def _unfinished_report(stage: ObjectiveStage, ordinal: int, scope: Literal["glob
         scip_status=scip_status,
         solving_seconds=0.0,
         nodes=0,
+        scale=stage.scale,
+        tie_break=stage.tie_break,
     )
 
 
-def _apply_engine_settings(model: Model, time_budget_seconds: float, node_limit: int | None) -> list[SolverSetting]:
+def _apply_engine_settings(model: Model, time_budget_seconds: float, node_limit: int | None, *, product: str = "pac", seed: int | None = None) -> list[SolverSetting]:
     """Apply the settings that survive the whole run, and report only those.
 
     ``limits/time`` is deliberately **not** listed here: it is re-armed before
@@ -365,11 +393,25 @@ def _apply_engine_settings(model: Model, time_budget_seconds: float, node_limit:
     (`_stage_time_limit`), so a single value reported at the top would
     describe a configuration that was never executed. The overall budget is
     reported separately as ``time_budget``.
+
+    The Rebalancer also sets ``expr/pow/expandmaxexponent`` to 1 (row 6 of lot
+    CR, specification §16.8): SCIP never expands the square of its distance
+    back into products after simplifying. Without it, on G5 «one route» with
+    money continuous, 4 closures of 10 were «optimal» up to 0.98 € above a
+    plan of the same model; with it, 10 of 10 closed on the same value. The
+    PAC's settings do not change.
     """
     settings = [SolverSetting(name="time_budget", value=f"{time_budget_seconds:g}")]
     if node_limit is not None:
         model.setParam("limits/nodes", node_limit)
         settings.append(SolverSetting(name="limits/nodes", value=str(node_limit)))
+    if product == "rebalancer":
+        model.setParam("expr/pow/expandmaxexponent", 1)
+        settings.append(SolverSetting(name="expr/pow/expandmaxexponent", value="1"))
+    if seed is not None:
+        # Lot SEEDS of project 67: one of the Rebalancer's runs, its seed on record so the run can be replayed.
+        model.setParam("randomization/randomseedshift", seed)
+        settings.append(SolverSetting(name="randomization/randomseedshift", value=str(seed)))
     return settings
 
 
@@ -379,26 +421,34 @@ def solve_policy_program(
     time_budget_seconds: float = DEFAULT_SOLVER_TIME_BUDGET_SECONDS,
     node_limit: int | None = None,
     checkpoint: Checkpoint | None = None,
+    progress: ProgressReporter | None = None,
+    seed: int | None = None,
 ) -> SolverRunResult:
     """Run the lexicographic cascade over ``program`` and return a candidate.
+
+    ``seed`` sets SCIP's ``randomization/randomseedshift`` and publishes it among the settings (lot SEEDS of project 67);
+    None leaves SCIP's own, as the PAC does.
 
     The returned candidate is a *proposal*: it has not been checked in exact
     arithmetic and must be replayed through ``evaluate_exact_candidate``
     before any of it is published. Never raises on a solver outcome — a
     failed or limited search is data (``outcome``/``anomaly``), not an
-    exception.
+    exception. SCIP failing inside a stage is data too once a plan is held
+    (the stage reads ``solver_error``, with an anomaly); before any plan it
+    raises ``SolverStageError`` (lot CR of project 67).
     """
     model = program.model
-    settings = _apply_engine_settings(model, time_budget_seconds, node_limit)
+    settings = _apply_engine_settings(model, time_budget_seconds, node_limit, product=program.scenario.product, seed=seed)
     tolerances = _read_tolerances(model)
     started = time.monotonic()
 
-    reports, candidate, outcome, anomaly = _solve_stages(
+    reports, candidate, outcome, anomaly, held_unpublishable_at = _solve_stages(
         model=model,
         program=program,
         time_budget_seconds=time_budget_seconds,
         started=started,
         checkpoint=checkpoint,
+        progress=progress,
     )
 
     return SolverRunResult(
@@ -413,6 +463,7 @@ def solve_policy_program(
         wall_seconds=time.monotonic() - started,
         finished_stage_count=sum(1 for report in reports if report.status == "finished"),
         anomaly=anomaly,
+        held_unpublishable_at=held_unpublishable_at,
     )
 
 
@@ -450,11 +501,15 @@ class _Cascade:
     # The exact value of every stage on ``best``, in cascade order. ``None``
     # when there is no best plan yet, or when it failed its exact replay.
     best_values: tuple[Fraction, ...] | None = None
+    # The ordinal of the stage that found ``best`` when the replay refused it (held for want of another), else None.
+    held_unpublishable_at: int | None = None
     outcome: Literal["incumbent", "reported_infeasible", "no_incumbent"] = "no_incumbent"
     anomaly: str | None = None
     pending_pin: tuple[ObjectiveStage, float] | None = None
     # True from the first stage that stopped on a limit with a plan in hand.
     in_tail: bool = False
+    # D4: the ordinals of the tie-break stages whose plan was rejected by the exact comparison.
+    rejected: set[int] = field(default_factory=set)
 
     def flag(self, anomaly: str) -> None:
         """Keep the first anomaly: every later fact descends from it."""
@@ -486,15 +541,43 @@ def _exact_stage_values(cascade: _Cascade, candidate: CandidateActionVector) -> 
     outside its own box or its view — so it has no values to pin or compare
     with. A plan that merely breaks a rule is still valid here: the planner
     decides later whether rounding explains it. A named stage takes its
-    objective's exact value; a tie-break stage is the quanta of one decision,
-    which is all its expression is.
+    objective's exact value times the stage's scale, SCIP's own unit (D2 of the
+    step-2 plan of project 67): pins and bound checks compare like with like. A
+    tie-break stage is the quanta of one decision, which is all its expression is.
+    The Rebalancer's money objectives are taken «as the solver sees them»
+    (``evaluation.solver_view``): continuous, each posting less its reserve,
+    as SCIP's model has them; the published values stay the replay's.
     """
+    return _replay(cascade, candidate)[0]
+
+
+def _replay(cascade: _Cascade, candidate: CandidateActionVector) -> tuple[tuple[Fraction, ...] | None, bool]:
+    """``candidate``'s exact stage values (``_exact_stage_values``) and whether the plan can be published: its replay is
+    feasible, or only a rounding left cash short, which top-ups repair (``evaluator.rounding_top_ups``, the planner's own
+    rule). On the wide model (lot ZB) a cash limit missed by the plan's rounding, within its postings' reserves, is a note
+    the planner publishes, not a refusal (``evaluator.cash_limit_overshoots``). One replay serves both."""
     program = cascade.program
     evaluation = evaluate_exact_candidate(program.scenario, program.view, candidate, checkpoint=cascade.checkpoint)
     if not evaluation.candidate_valid:
-        return None
-    value_by_ref = {item.ref_id: item.value for item in evaluation.objectives}
-    value_by_code = {ref.code: value_by_ref[ref.ref_id] for ref in program.view.objectives}
+        return None, False
+    try:
+        # The wide model's plans may miss a cash limit by their rounding, a note the planner publishes (lot ZB, §16.16).
+        if program.outer:
+            cash_limit_overshoots(program.scenario, evaluation, rounding_top_ups(program.scenario, evaluation, tolerated=frozenset({"ENTRY_VALUE_WITHIN_LIMITS"})))
+        else:
+            rounding_top_ups(program.scenario, evaluation)
+    except ExactReplayRejectedError:
+        publishable = False
+    else:
+        publishable = True
+    return _stage_values(cascade, candidate, evaluation), publishable
+
+
+def _stage_values(cascade: _Cascade, candidate: CandidateActionVector, evaluation) -> tuple[Fraction, ...]:
+    program = cascade.program
+    # The Rebalancer's money stages as the solver sees them (row 6 of lot CR): SCIP's model keeps money continuous, each
+    # posting less its reserve, so pins, D4 and the bound check compare like with like. The PAC's are the replay's own.
+    value_by_code = solver_view_objectives(program.scenario, program.view, evaluation)
     quanta = {decision.decision_id: decision.quanta for decision in candidate.decisions}
     values = []
     for stage in program.objective_stages:
@@ -502,7 +585,7 @@ def _exact_stage_values(cascade: _Cascade, candidate: CandidateActionVector) -> 
             values.append(Fraction(quanta[stage.code.removeprefix(_TIE_STAGE_PREFIX)]))
         else:
             ratio = value_by_code[stage.code]
-            values.append(Fraction(ratio.numerator, ratio.denominator))
+            values.append(stage.scale * Fraction(ratio.numerator, ratio.denominator))
     return tuple(values)
 
 
@@ -514,17 +597,47 @@ def _take_candidate(cascade: _Cascade, candidate: CandidateActionVector, ordinal
     After that, a plan replaces the best one only if its exact stage values
     are no worse, compared one stage at a time in cascade order; a plan that
     fails its exact replay never does.
+
+    A plan the replay refuses, and that no rounding top-up repairs, never
+    replaces a plan already held, wherever it is found (the consultant's
+    «cashmax», lot CR of project 67: a tie-break's plan a cent above a cash
+    maximum became the best one, and the planner raised instead of publishing
+    the plan it held). It is flagged as an anomaly. Found first, it is held
+    without values, like a plan that fails its replay: any publishable plan
+    found later replaces it. The stage that found it is kept
+    (``held_unpublishable_at``): a cascade that ends on it is «no plan» for
+    the planner, never a failure (R1-A of project 67).
     """
-    values = _exact_stage_values(cascade, candidate)
-    if values is None:
+    values, publishable = _replay(cascade, candidate)
+    if values is None or not publishable:
         cascade.flag(f"the plan found at stage ordinal {ordinal} failed its exact replay")
-        if cascade.in_tail:
+        if cascade.in_tail or cascade.best is not None:
             return
+        values = None  # held for want of another, never a yardstick: any publishable plan replaces it
+        cascade.held_unpublishable_at = ordinal
     elif cascade.in_tail and cascade.best_values is not None and values > cascade.best_values:
         return
+    elif cascade.best_values is not None and _worse_before_tie_break(cascade.program.objective_stages, ordinal, values, cascade.best_values):
+        cascade.rejected.add(ordinal)
+        return
+    if values is not None:
+        cascade.held_unpublishable_at = None
     cascade.best = candidate
     cascade.best_values = values
     cascade.outcome = "incumbent"
+
+
+def _worse_before_tie_break(stages: tuple[ObjectiveStage, ...], ordinal: int, values: tuple[Fraction, ...], best: tuple[Fraction, ...]) -> bool:
+    """D4 (step-2 plan of project 67): a tie-break chooses only among plans no worse on what precedes it.
+
+    After its pin a tie-break stage may pick a plan whose objectives, within SCIP's tolerance of the pin, are a hair worse
+    in exact arithmetic. Such a plan never replaces the best one: the objectives before the tie-breaks are compared exactly,
+    in order. Stages that are not tie-breaks (all the PAC's) keep the rule of the cascade.
+    """
+    if not stages[ordinal - 1].tie_break:
+        return False
+    prefix = [index for index in range(ordinal - 1) if not stages[index].tie_break]
+    return tuple(values[index] for index in prefix) > tuple(best[index] for index in prefix)
 
 
 def _exact_pin_value(stage: ObjectiveStage, primal: float | None, exact: Fraction) -> float:
@@ -569,21 +682,51 @@ def _run_stage(model: Model, stage: ObjectiveStage, limit: float, retry_limit: f
     """
     model.setParam("limits/time", limit)
     model.setObjective(stage.expression, "minimize")
-    model.optimize()
+    if not _optimize(model, stage):
+        return _SOLVER_ERROR
     observation = _observe(model)
     if retry_limit is not None and observation.scip_status == "timelimit" and not observation.has_solution:
         check_budget(checkpoint)
         model.setParam("limits/time", retry_limit)
-        model.optimize()
+        if not _optimize(model, stage):
+            return _SOLVER_ERROR
         observation = _observe(model)
     return observation
+
+
+class SolverStageError(RuntimeError):
+    """SCIP failed inside a stage before the cascade held any plan: nothing to publish, a defect for the administrator."""
+
+
+# A stage SCIP could not finish because it failed inside (lot CR of project 67: G5 seed 5 met «unresolved numerical
+# troubles in LP» in a tie-break): no observation can be read off a model in that state.
+_SOLVER_ERROR = _StageObservation(scip_status="solver_error", has_solution=False, primal=None, dual=None, absolute_gap=None, relative_gap=None, solving_seconds=0.0, nodes=0)
+
+
+def _optimize(model: Model, stage: ObjectiveStage) -> bool:
+    """Run SCIP on the stage; ``False`` when SCIP itself failed (its LP solver, for one).
+
+    PySCIPOpt raises a bare ``Exception`` for any SCIP error code, so this is an isolation boundary: the failure is
+    logged once, here (its class and the stage, no traceback), and becomes data, as the module promises (``solve_policy_program`` never raises on a solver
+    outcome). The stage is then reported with the status ``solver_error``; ``_stop_anomaly`` flags it and the cascade
+    ends on the best plan so far, which the exact replay still referees. With no plan held yet there is nothing to keep:
+    ``_solve_stages`` raises ``SolverStageError``, and the run fails as it did before.
+    """
+    try:
+        model.optimize()
+    except Exception as exc:  # noqa: BLE001 - isolation boundary: any SCIP error code, see the docstring
+        # Class and stage only, as ``tool_plugins.pac_allocator.plugin._log_engine_failure`` logs: the worker never configures
+        # logging, and a rendered traceback could show local values (the user's amounts).
+        logger.warning("SCIP failed inside a planner stage; the cascade stops on the best plan so far", stage=stage.code, error_type=type(exc).__qualname__)
+        return False
+    return True
 
 
 def _scope(index: int) -> Literal["global", "incumbent_face"]:
     return "global" if index == 0 else "incumbent_face"
 
 
-def _stage_report(stage: ObjectiveStage, index: int, observation: _StageObservation, status: Literal["finished", "unfinished", "infeasible"]) -> SolverStageReport:
+def _stage_report(stage: ObjectiveStage, index: int, observation: _StageObservation, status: Literal["finished", "unfinished", "infeasible"], *, rejected: bool = False) -> SolverStageReport:
     return SolverStageReport(
         stage=stage.code,
         objective_code=_objective_code(stage),
@@ -598,6 +741,9 @@ def _stage_report(stage: ObjectiveStage, index: int, observation: _StageObservat
         scip_status=observation.scip_status,
         solving_seconds=observation.solving_seconds,
         nodes=observation.nodes,
+        scale=stage.scale,
+        tie_break=stage.tie_break,
+        rejected=rejected,
     )
 
 
@@ -643,7 +789,11 @@ def _close_stage(cascade: _Cascade, stage: ObjectiveStage, index: int, observati
     finished = not cascade.in_tail and observation.scip_status == "optimal" and observation.has_solution
     # Only the first, still-global stage can say anything about the scenario itself.
     verdict = index == 0 and observation.scip_status == "infeasible"
-    cascade.reports.append(_stage_report(stage, index, observation, "finished" if finished else "infeasible" if verdict else "unfinished"))
+    # D4: a tie-break whose plan the exact comparison rejected is reported unfinished; the cascade goes on as after a
+    # finished stage, pinned on the plan it kept.
+    rejected = finished and index + 1 in cascade.rejected
+    status = "unfinished" if rejected else "finished" if finished else "infeasible" if verdict else "unfinished"
+    cascade.reports.append(_stage_report(stage, index, observation, status, rejected=rejected))
     if verdict:
         # A verdict, not an interruption: no face exists for a later stage
         # to run on, so none is run and none is reported.
@@ -656,12 +806,13 @@ def _close_stage(cascade: _Cascade, stage: ObjectiveStage, index: int, observati
     return True
 
 
-def _outside_reported_bounds(report: SolverStageReport, value: Fraction, weight_count: int) -> bool:
-    if report.objective_code in _INTEGRAL_STAGE_CODES:
+def _outside_reported_bounds(report: SolverStageReport, value: Fraction, stage: ObjectiveStage) -> bool:
+    if _is_integral_stage(stage):
         below = report.dual is not None and value < math.ceil(report.dual - _BOUND_CHECK_TOLERANCE)
         above = report.primal is not None and value > round(report.primal)
         return below or above
-    extra = weight_count * _BOUND_CHECK_TOLERANCE if report.objective_code == "fixed_l2" else 0.0
+    # The band the stage declares from its quadratic rows (D3): today's `fixed_l2` declares one tolerance per target weight.
+    extra = stage.band
     below = report.dual is not None and value < Fraction(report.dual) - Fraction(_BOUND_CHECK_TOLERANCE * max(1.0, abs(report.dual)) + extra)
     above = report.primal is not None and value > Fraction(report.primal) + Fraction(_BOUND_CHECK_TOLERANCE * max(1.0, abs(report.primal)) + extra)
     return below or above
@@ -675,11 +826,11 @@ def _flag_contradicted_bounds(cascade: _Cascade) -> None:
     """
     if cascade.best is None or cascade.best_values is None:
         return
-    weight_count = len(cascade.program.scenario.target_weights)
+    stages = cascade.program.objective_stages
     for report in cascade.reports:
         if report.status != "finished" or report.stage.startswith(_TIE_STAGE_PREFIX):
             continue
-        if _outside_reported_bounds(report, cascade.best_values[report.ordinal - 1], weight_count):
+        if _outside_reported_bounds(report, cascade.best_values[report.ordinal - 1], stages[report.ordinal - 1]):
             cascade.flag(f"stage {report.stage!r} (ordinal {report.ordinal}): the exact value of the returned plan lies outside the bounds the solver reported")
             return
 
@@ -691,15 +842,21 @@ def _solve_stages(
     time_budget_seconds: float,
     started: float,
     checkpoint: Checkpoint | None,
-) -> tuple[list[SolverStageReport], CandidateActionVector | None, Literal["incumbent", "reported_infeasible", "no_incumbent"], str | None]:
+    progress: ProgressReporter | None = None,
+) -> tuple[list[SolverStageReport], CandidateActionVector | None, Literal["incumbent", "reported_infeasible", "no_incumbent"], str | None, int | None]:
     cascade = _Cascade(program=program, checkpoint=checkpoint, reports=[])
     reserve = stage_one_reserve_seconds(time_budget_seconds)
     stages = program.objective_stages
+    # V2 (project 67): the phase ``search`` counts the named stages only; the canonical vector is one stage per decision.
+    named_total = sum(1 for stage in stages if not stage.code.startswith(_TIE_STAGE_PREFIX))
 
     for index, stage in enumerate(stages):
         # Cooperative polling happens between stages only; it cannot preempt a
         # running optimize() (module docstring, Step3 §16.4 risk 1).
         check_budget(checkpoint)
+        # And so does the phase report (V2): between stages, never from inside SCIP.
+        if index < named_total:
+            report_phase(progress, "search", index + 1, named_total)
         remaining = time_budget_seconds - (time.monotonic() - started)
         if remaining <= 0.0:
             cascade.reports.append(_unfinished_report(stage, index + 1, _scope(index), "budget_exhausted"))
@@ -713,10 +870,14 @@ def _solve_stages(
 
         limit = _stage_time_limit(cascade, stage, index, remaining, reserve)
         observation = _run_stage(model, stage, limit, remaining if index == 0 and limit < remaining else None, checkpoint)
+        if observation is _SOLVER_ERROR and cascade.best is None:
+            # No plan to fall back on: the run fails as it did before (``execution_failed``), rather than reading as «no
+            # plan within the time limit», which would tell the user to raise a budget that is not the cause.
+            raise SolverStageError(f"SCIP failed inside stage {stage.code!r} before holding any plan")
         if observation.has_solution:
             _take_candidate(cascade, _extract_candidate(model, program, index + 1), index + 1)
         if not _close_stage(cascade, stage, index, observation):
             break
 
     _flag_contradicted_bounds(cascade)
-    return cascade.reports, cascade.best, cascade.outcome, cascade.anomaly
+    return cascade.reports, cascade.best, cascade.outcome, cascade.anomaly, cascade.held_unpublishable_at

@@ -2600,6 +2600,114 @@ async def test_an_orphan_pool_issue_states_its_amount_in_a_currency_it_is_known_
 
 
 # --------------------------------------------------------------------------- #
+# Project 66, M1b — a charge linked to a trade after the end of the analysis waits, orphan
+# --------------------------------------------------------------------------- #
+
+_AFTER_RANGE = "ASSET_COST_LINKED_PARENT_AFTER_RANGE"
+
+
+async def _second_broker(session, user: User) -> Broker:
+    """A second broker of this test's user, rolled back with the session."""
+    row = Broker(name=f"LotsBroker2_{uuid4().hex[:8]}")
+    session.add(row)
+    await session.flush()
+    session.add(BrokerUserAccess(broker_id=row.id, user_id=user.id, role="OWNER", share_percentage=Decimal("1")))
+    await session.flush()
+    return row
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("amount", "currency", "audit_target", "stated", "orphan_fees"),
+    [
+        pytest.param(Decimal("-9"), "VND", None, (Decimal("9"), "VND"), None, id="without-rate"),
+        pytest.param(Decimal("-8"), "USD", Decimal("6.4"), (Decimal("6.4"), "EUR"), Decimal("6.4"), id="converted"),
+    ],
+)
+async def test_a_fee_linked_to_a_buy_after_the_end_waits_and_states_its_amount_in_a_known_currency(session, test_user, asset, broker, amount, currency, audit_target, stated, orphan_fees):
+    """M1b on the database: lot A (2 Jun) is open; a FEE of 1 Jul is linked to BUY B of 3 Jul; the analysis ends on 2 Jul.
+
+    The trades loader stops at the end, so only the service's read of the parents (by id, in the scope) tells the engine
+    that BUY B is a trade after the end: the FEE waits in its own empty LINKED_TRADE group, nothing on lot A, with one
+    ASSET_COST_LINKED_PARENT_AFTER_RANGE warning. Like every orphan code, without a rate (VND) the issue states the
+    native amount in its own currency, and the target totals are withheld (None); with a rate (USD, 1.25 a euro) it keeps
+    the converted amount. Before M1b the FEE took OPEN_LOTS_FALLBACK onto lot A.
+    """
+    await _own_missing_rate(session, "VND", "EUR")
+    fee_date, end, parent_date = date(2025, 7, 1), date(2025, 7, 2), date(2025, 7, 3)
+    await _own_fx_rate(session, on=fee_date, base="EUR", quote="USD", rate=Decimal("1.25"))
+    lot_a = Transaction(broker_id=broker.id, asset_id=asset.id, type=TransactionType.BUY, date=date(2025, 6, 2), quantity=Decimal("10"), amount=Decimal("-1000"), currency="EUR")
+    lot_b = Transaction(broker_id=broker.id, asset_id=asset.id, type=TransactionType.BUY, date=parent_date, quantity=Decimal("10"), amount=Decimal("-1000"), currency="EUR")
+    session.add_all([lot_a, lot_b, PriceHistory(asset_id=asset.id, date=lot_a.date, close=Decimal("100"), currency="EUR", source_plugin_key="TEST")])
+    await session.flush()
+    fee = Transaction(broker_id=broker.id, asset_id=asset.id, type=TransactionType.FEE, date=fee_date, quantity=Decimal("0"), amount=amount, currency=currency, parent_transaction_id=lot_b.id)
+    session.add(fee)
+    await session.flush()
+
+    result = await _economic_analysis(session, test_user, asset, broker, end)
+
+    group = _group_of(result, fee.id)
+    assert (group.rule, group.source_transaction_ids, group.operation_allocations) == ("LINKED_TRADE", [fee.id], [])
+    assert (group.native_currency, group.native_pool_total, group.native_orphan, group.target_pool_total, group.target_orphan) == (currency, abs(amount), abs(amount), audit_target, audit_target)
+    assert result.lots is not None
+    lot = next(row for row in result.lots if row.lot_id == lot_a.id)
+    assert lot.allocated_fees == Decimal("0")
+    assert result.asset_orphan_fees == orphan_fees
+
+    assert result.data_quality is not None
+    issues = [issue for issue in result.data_quality.issues if issue.code == _AFTER_RANGE and issue.message_params.get("transaction_id") == fee.id]
+    assert len(issues) == 1, f"issues={result.data_quality.issues}"
+    assert (issues[0].severity, issues[0].message_i18n_key) == ("warning", "dataQuality.assetCostLinkedParentAfterRange")
+    params = issues[0].message_params
+    assert (params["economic_type"], params["as_of_date"], params["target_amount"], params["target_currency"]) == ("FEE", fee_date.isoformat(), *stated)
+    assert (params["parent_transaction_id"], params["parent_date"]) == (lot_b.id, parent_date.isoformat())
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("parent_in_scope", [pytest.param(False, id="scope-the-charges-broker"), pytest.param(True, id="scope-both-brokers")])
+async def test_a_fee_whose_parent_moved_to_another_broker_stays_on_the_ladder_and_is_never_named(session, test_user, asset, broker, parent_in_scope):
+    """Defence of rule 5 (M1b contract §7.2, §8.3): BUY B of 3 Jul sits at a second broker, as after an edit of its broker
+    once linked (written straight to the table: the link rules refuse it otherwise); the FEE of 1 Jul at the first broker
+    names it. The analysis ends on 2 Jul.
+
+    Scoped to the FEE's broker, the parents' read never sees BUY B; scoped to both, it reads it and the engine's broker
+    check refuses it. Either way the FEE takes its broker's ladder (OPEN_LOTS_FALLBACK onto lot A), and no issue names
+    BUY B or its date.
+    """
+    other = await _second_broker(session, test_user)
+    fee_date, end, parent_date = date(2025, 7, 1), date(2025, 7, 2), date(2025, 7, 3)
+    lot_a = Transaction(broker_id=broker.id, asset_id=asset.id, type=TransactionType.BUY, date=date(2025, 6, 2), quantity=Decimal("10"), amount=Decimal("-1000"), currency="EUR")
+    lot_b = Transaction(broker_id=other.id, asset_id=asset.id, type=TransactionType.BUY, date=parent_date, quantity=Decimal("10"), amount=Decimal("-1000"), currency="EUR")
+    session.add_all([lot_a, lot_b, PriceHistory(asset_id=asset.id, date=lot_a.date, close=Decimal("100"), currency="EUR", source_plugin_key="TEST")])
+    await session.flush()
+    fee = Transaction(broker_id=broker.id, asset_id=asset.id, type=TransactionType.FEE, date=fee_date, quantity=Decimal("0"), amount=Decimal("-5"), currency="EUR", parent_transaction_id=lot_b.id)
+    session.add(fee)
+    await session.flush()
+
+    result = await get_lots_analysis(
+        session=session,
+        user_id=test_user.id,
+        asset_id=asset.id,
+        broker_ids=[broker.id, other.id] if parent_in_scope else [broker.id],
+        date_from=None,
+        date_to=end,
+        target_currency="EUR",
+        selected_lot_ids=None,
+        requested_analyses=_ECONOMIC_ANALYSES,
+    )
+
+    group = _group_of(result, fee.id)
+    assert (group.rule, group.source_transaction_ids) == ("OPEN_LOTS_FALLBACK", [fee.id])
+    assert result.lots is not None
+    assert next(row for row in result.lots if row.lot_id == lot_a.id).allocated_fees == Decimal("5")
+    assert result.data_quality is not None
+    for issue in result.data_quality.issues:
+        assert issue.code != _AFTER_RANGE, issue
+        assert not {"parent_transaction_id", "parent_date"} & set(issue.message_params), issue
+        assert parent_date.isoformat() not in issue.message_params.values(), issue
+
+
+# --------------------------------------------------------------------------- #
 # CP-7a — developer's decision 26 (D-J1, option B): a lot realizes what the Dashboard realizes
 # --------------------------------------------------------------------------- #
 

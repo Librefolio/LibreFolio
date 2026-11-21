@@ -319,7 +319,9 @@
       "generateInterest": "Generate Coupon",
       "generateInterestHint": "Auto-generate coupon payout events at each maturation date. The interest accrued is paid out and the asset resets to initial value.",
       "interestTypeTooltip": "Determines how interest is calculated. Simple: interest on initial value only. Compound: interest accrues on accumulated interest too.",
-      "dayCountTooltip": "Convention for counting days in the interest period. ACT/365 and ACT/360 are the most common. Affects how daily interest is calculated."
+      "dayCountTooltip": "Convention for counting days in the interest period. ACT/365 and ACT/360 are the most common. Affects how daily interest is calculated.",
+      "mergeNotConsecutive": "Only consecutive periods can be merged: choose rows next to each other.",
+      "splitTooShort": "A period can be split only if it lasts at least 2 days"
     },
     "probe": {
       "history": "History",
@@ -405,10 +407,10 @@
       "addCountry": "Add country",
       "emptyHint": "No data — use +Add or Ask Provider",
       "balanceRow": "Balance to 100%",
-      "balanceSelected": "Balance selected rows",
       "deleteSelected": "Delete selected rows",
       "deleteConfirmMessage": "Delete {n} entries from this distribution?",
-      "weightPercent": "Weight %"
+      "weightPercent": "Weight %",
+      "balance": "Balance"
     },
     "showInactive": "Inactive",
     "edit": {

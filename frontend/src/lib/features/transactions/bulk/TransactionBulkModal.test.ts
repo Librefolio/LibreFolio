@@ -47,7 +47,7 @@ import {_} from '$lib/i18n';
 import {schemas} from '$lib/api/generated';
 import {currentLanguage} from '$lib/stores/app/language';
 import {ensureCurrenciesLoaded} from '$lib/stores/reference/currencyStore';
-import {ensureTypesLoaded, isTypesLoaded} from '$lib/features/transactions/transactionTypeStore';
+import {ensureTypesLoaded, getTypeRule, isTypesLoaded} from '$lib/features/transactions/transactionTypeStore';
 import {txStoreGet, txStoreInvalidate, txStoreSetAll} from '$lib/features/transactions/txStore.svelte';
 import {mergeBrokers, resetBrokerStore} from '$lib/stores/reference/brokerStore';
 import type {TransactionCreateItem} from '$lib/types';
@@ -170,6 +170,13 @@ const TRANSFER_CONSTRAINTS = [
     {field: 'quantity', relation: 'opposite'},
 ];
 
+/** CASH_TRANSFER's pair constraints, as TX_TYPE_METADATA declares them for `promote_from` and `pair_field_constraints`. */
+const CASH_TRANSFER_CONSTRAINTS = [
+    {field: 'cash_currency', relation: 'equal'},
+    {field: 'broker_id', relation: 'different'},
+    {field: 'cash_amount', relation: 'opposite'},
+];
+
 /** The types these cases use, shaped as the backend declares them (TX_TYPE_METADATA). */
 const TYPES_RESPONSE = schemas.TXTypesResponse.parse({
     transaction_types: [
@@ -235,6 +242,8 @@ const TYPES_RESPONSE = schemas.TXTypesResponse.parse({
             cash_sign: 'positive',
             event_compatible: false,
             swap_group: ['WITHDRAWAL'],
+            // 66 C21: a parent of linked charges, as TX_TYPE_METADATA declares it.
+            charge_role: 'parent',
         },
         {
             code: 'WITHDRAWAL',
@@ -250,6 +259,8 @@ const TYPES_RESPONSE = schemas.TXTypesResponse.parse({
             cash_sign: 'negative',
             event_compatible: false,
             swap_group: ['DEPOSIT'],
+            // 66 C21: a parent of linked charges, as TX_TYPE_METADATA declares it.
+            charge_role: 'parent',
         },
         {
             code: 'CASH_TRANSFER',
@@ -266,6 +277,9 @@ const TYPES_RESPONSE = schemas.TXTypesResponse.parse({
             event_compatible: false,
             pair_form_layout: 'transfer_cash',
             split_into: {from_type: 'WITHDRAWAL', to_type: 'DEPOSIT'},
+            // 66 C21: a WITHDRAWAL and a DEPOSIT on two brokers, same currency, amounts that cancel, as TX_TYPE_METADATA declares it.
+            promote_from: [{type_a: 'WITHDRAWAL', type_b: 'DEPOSIT', field_constraints: CASH_TRANSFER_CONSTRAINTS}],
+            pair_field_constraints: CASH_TRANSFER_CONSTRAINTS,
             swap_group: [],
         },
         {
@@ -3899,6 +3913,2416 @@ describe('TransactionBulkModal — 66 F7-c1: the charges grouped under their par
                 expect(headers, 'one column per row: the BUY and the two charges').toHaveLength(3);
                 expect(new Set(headers).size, `the three columns are told apart: ${JSON.stringify(headers)}`).toBe(3);
                 for (const header of headers) expect(header, 'no TX #0').not.toContain('#0');
+            });
+        });
+    });
+
+    /*
+     * 66 P1b — the names of an import hand-over become the Bulk's links (contract `66-P1b-contract.md` §1.3, corrected by
+     * §4.1 and §5). Within ONE hand-over (`onImportBatch`), a row carrying `ref` is a parent and a row naming it in
+     * `parent_ref` its charge (`chargeOf`), but only when the Bulk's own rule accepts the pair: `bulkLinkSelection([parent,
+     * …charges], ops, get, {roleOf, canEdit})` → `ok`; otherwise the charges stay free, as in P1a. No `followsParent`: an
+     * imported charge keeps its values and stays when its parent leaves. The groups start CLOSED (§5: the consultant's
+     * answer — 200 trades → 600 rows), the wizard's split legs included; a problem on a charge of a closed group is in
+     * the banner, and its jump opens the group (the C14 rule). The save goes through F7: `parent_ref` = the parent's `ref`.
+     *
+     * Today the hand-over drops `ref` and `parent_ref` (`txCreateItemToPendingOp`), so every case that needs a link is
+     * red; the cases about a link that must NOT form carry a positive premise in the same test (a pair of the same
+     * hand-over that does link), so none of them is green for the wrong reason.
+     *
+     * Broker 77 is the user's own (`canEdit`, as F7-d's «Link»). New rows are found by the description the test gave
+     * them; a parent's chip by the parent's `data-row-id`.
+     */
+    describe('66 P1b: an import hand-over brings its linked charges', () => {
+        const P1B_DATE = '2026-09-13';
+        type Handed = {tx: TransactionCreateItem; todos: unknown[]};
+
+        beforeEach(() => {
+            mergeBrokers([{id: 77, name: 'P1b broker', user_role: 'OWNER'}]);
+        });
+
+        afterEach(() => {
+            resetBrokerStore();
+        });
+
+        function importedParent(description: string, ref: string | null, over: Record<string, unknown> = {}): Handed {
+            const tx = {broker_id: 77, asset_id: 101, type: 'BUY', date: P1B_DATE, quantity: '1', cash: {code: 'EUR', amount: '-10'}, tags: [], description, ...(ref ? {ref} : {}), ...over};
+            return {tx: tx as unknown as TransactionCreateItem, todos: []};
+        }
+
+        function importedCharge(type: 'FEE' | 'TAX', description: string, parentRef: string | null, over: Record<string, unknown> = {}): Handed {
+            const tx = {broker_id: 77, asset_id: 101, type, date: P1B_DATE, quantity: '0', cash: {code: 'EUR', amount: '-1.5'}, tags: [], description, ...(parentRef ? {parent_ref: parentRef} : {}), ...over};
+            return {tx: tx as unknown as TransactionCreateItem, todos: []};
+        }
+
+        /** A new editor on the import intent; ends on its wizard open. */
+        async function openImportEditor(): Promise<ReturnType<typeof mountEditor>> {
+            const mounted = mountEditor({action: 'import'});
+            await waitFor(() => expect(wizardProbe().open, 'the import intent opens the wizard').toBe(true));
+            return mounted;
+        }
+
+        /** One hand-over of the wizard; ends on its first row on screen (a parent, which is never indented). */
+        async function handOver(batch: Handed[]): Promise<void> {
+            await (wizardProbe().onImportBatch as (creates: Handed[]) => Promise<void>)(batch);
+            await settle();
+            const first = String(batch[0].tx.description);
+            await waitFor(() =>
+                expect(
+                    gridRows().filter((row) => rowDescription(row) === first),
+                    `premise: ${first} is on screen`,
+                ).toHaveLength(1),
+            );
+        }
+
+        function rowIdOf(row: HTMLElement): string {
+            const id = row.getAttribute('data-row-id');
+            if (!id) throw new Error('the row publishes no data-row-id');
+            return id;
+        }
+
+        /** The chip of the parent described `description`, or null. */
+        function chipOf(description: string): HTMLElement | null {
+            return screen.queryByTestId(`tx-bulk-charges-toggle-${rowIdOf(gridRowDescribed(description))}`);
+        }
+
+        function theChipOf(description: string): HTMLElement {
+            const found = chipOf(description);
+            if (!found) throw new Error(`the row described ${JSON.stringify(description)} has no charges chip: no charge was linked to it`);
+            return found;
+        }
+
+        /** The rows on screen described `description` (0 when a closed group hides it). */
+        function rowsDescribed(description: string): HTMLElement[] {
+            return gridRows().filter((row) => rowDescription(row) === description);
+        }
+
+        async function openGroup(description: string): Promise<void> {
+            const chip = theChipOf(description);
+            if (chip.getAttribute('aria-expanded') !== 'true') {
+                await fireEvent.click(chip);
+                await settle();
+            }
+            expect(theChipOf(description)).toHaveAttribute('aria-expanded', 'true');
+        }
+
+        async function saveAll(): Promise<Payload> {
+            const {commitTransactions} = await api();
+            const commit = screen.getByTestId('tx-bulk-commit');
+            expect(commit, '«Save all» is on').not.toBeDisabled();
+            await fireEvent.click(commit);
+            await settle();
+            await waitFor(() => expect(commitTransactions, 'Save all committed').toHaveBeenCalledTimes(1));
+            return commitTransactions.mock.calls[0]?.[0] as Payload;
+        }
+
+        /** The one create of a body described `description`. */
+        function createDescribed(body: Payload, description: string): Record<string, unknown> {
+            const found = (body.creates ?? []).filter((create) => create.description === description);
+            expect(found, `one create described ${JSON.stringify(description)}`).toHaveLength(1);
+            return found[0];
+        }
+
+        /** A body's parent and charge, by description: the charge names the parent's `ref`, never by id. */
+        function expectLinkedInBody(body: Payload, where: string, parent: string, charge: string): void {
+            const parentCreate = createDescribed(body, parent);
+            const chargeCreate = createDescribed(body, charge);
+            expect(typeof parentCreate.ref, `${where}: ${parent} carries a ref`).toBe('string');
+            expect((parentCreate.ref as string).length, `${where}: a ref within 36 characters`).toBeLessThanOrEqual(36);
+            expect(chargeCreate.parent_ref, `${where}: ${charge} names ${parent} by its ref`).toBe(parentCreate.ref);
+            expect(chargeCreate, `${where}: a new parent is named by ref, never by id`).not.toHaveProperty('parent_transaction_id');
+        }
+
+        it('an imported BUY and its FEE become parent and charge: the group starts closed, the chip counts 1, opening it shows the FEE under the BUY', async () => {
+            await openImportEditor();
+            await handOver([importedParent('P1b buy', 'r1'), importedCharge('FEE', 'P1b fee', 'r1')]);
+
+            const chip = theChipOf('P1b buy');
+            expect(chip).toHaveAttribute('data-charges-count', '1');
+            expect(chip, 'closed: an import brings its charges closed (§5)').toHaveAttribute('aria-expanded', 'false');
+            expect(rowsDescribed('P1b fee'), 'a closed group shows no FEE row').toHaveLength(0);
+
+            await openGroup('P1b buy');
+
+            expect(chargeOfCell(gridRowDescribed('P1b fee')), 'the FEE sits under the BUY').toBe(rowIdOf(gridRowDescribed('P1b buy')));
+            expect(rowStatus(gridRowDescribed('P1b fee')), 'a new row').toBe('new');
+        });
+
+        it('the split legs of the wizard arrive as any imported charge: one closed group of two', async () => {
+            await openImportEditor();
+            const legs = {tags: ['split_leg']};
+            await handOver([importedParent('P1b split trade', 'n-split'), importedCharge('FEE', 'P1b split fee', 'n-split', legs), importedCharge('TAX', 'P1b split tax', 'n-split', {...legs, cash: {code: 'EUR', amount: '-0.5'}})]);
+
+            const chip = theChipOf('P1b split trade');
+            expect(chip).toHaveAttribute('data-charges-count', '2');
+            expect(chip).toHaveAttribute('aria-expanded', 'false');
+            expect(rowsDescribed('P1b split fee')).toHaveLength(0);
+            expect(rowsDescribed('P1b split tax')).toHaveLength(0);
+        });
+
+        it('«Validate now» and «Save all» send the FEE with parent_ref = the BUY’s ref', async () => {
+            await openImportEditor();
+            await handOver([importedParent('P1b buy', 'r1'), importedCharge('FEE', 'P1b fee', 'r1')]);
+
+            expectLinkedInBody(await validateNow(), 'validate', 'P1b buy', 'P1b fee');
+            expectLinkedInBody(await saveAll(), 'commit', 'P1b buy', 'P1b fee');
+        });
+
+        it('two hand-overs reusing r1 never cross; a third one’s lone FEE naming r1 joins neither', async () => {
+            await openImportEditor();
+            await handOver([importedParent('P1b buy A', 'r1'), importedCharge('FEE', 'P1b fee A', 'r1')]);
+            await handOver([importedParent('P1b buy B', 'r1', {date: '2026-09-14'}), importedCharge('FEE', 'P1b fee B', 'r1', {date: '2026-09-14'})]);
+            await handOver([importedCharge('FEE', 'P1b lone fee', 'r1', {date: '2026-09-15'})]);
+
+            expect(theChipOf('P1b buy A'), 'A holds its own FEE only').toHaveAttribute('data-charges-count', '1');
+            expect(theChipOf('P1b buy B'), 'B holds its own FEE only').toHaveAttribute('data-charges-count', '1');
+            await openGroup('P1b buy A');
+            await openGroup('P1b buy B');
+            expect(chargeOfCell(gridRowDescribed('P1b fee A'))).toBe(rowIdOf(gridRowDescribed('P1b buy A')));
+            expect(chargeOfCell(gridRowDescribed('P1b fee B'))).toBe(rowIdOf(gridRowDescribed('P1b buy B')));
+            expect(chargeOfCell(gridRowDescribed('P1b lone fee')), 'the names hold for one hand-over: the lone FEE is free').toBeNull();
+
+            const body = await validateNow();
+            expectLinkedInBody(body, 'validate', 'P1b buy A', 'P1b fee A');
+            expectLinkedInBody(body, 'validate', 'P1b buy B', 'P1b fee B');
+            expect(createDescribed(body, 'P1b buy A').ref, 'two parents, two refs').not.toBe(createDescribed(body, 'P1b buy B').ref);
+            expect(createDescribed(body, 'P1b lone fee'), 'the lone FEE names no parent').not.toHaveProperty('parent_ref');
+            expect(createDescribed(body, 'P1b lone fee')).not.toHaveProperty('parent_transaction_id');
+        });
+
+        it('a pair the Bulk’s rule refuses stays free — a parent retyped ADJUSTMENT, a FEE on another asset — while a valid pair of the same hand-over links', async () => {
+            await openImportEditor();
+            await handOver([
+                importedParent('P1b valid buy', 'r2'),
+                importedCharge('FEE', 'P1b valid fee', 'r2'),
+                importedParent('P1b adjustment', 'r1', {type: 'ADJUSTMENT', cash: null, date: '2026-09-14'}),
+                importedCharge('FEE', 'P1b fee of the adjustment', 'r1', {date: '2026-09-14'}),
+                importedParent('P1b other buy', 'r3', {date: '2026-09-15'}),
+                importedCharge('FEE', 'P1b fee on another asset', 'r3', {date: '2026-09-15', asset_id: 202}),
+            ]);
+
+            // Positive premise, in the same hand-over: the rule does link a valid pair.
+            expect(theChipOf('P1b valid buy'), 'premise: the valid pair links').toHaveAttribute('data-charges-count', '1');
+            expect(chipOf('P1b adjustment'), 'an ADJUSTMENT is no parent: no chip').toBeNull();
+            expect(chipOf('P1b other buy'), 'a FEE on another asset is not its charge: no chip').toBeNull();
+            for (const free of ['P1b fee of the adjustment', 'P1b fee on another asset']) {
+                expect(rowsDescribed(free), `${free}: a top-level row, on screen`).toHaveLength(1);
+                expect(chargeOfCell(gridRowDescribed(free)), `${free}: free`).toBeNull();
+            }
+
+            const body = await validateNow();
+            expectLinkedInBody(body, 'validate', 'P1b valid buy', 'P1b valid fee');
+            for (const free of ['P1b fee of the adjustment', 'P1b fee on another asset']) {
+                expect(createDescribed(body, free), `${free}: no parent_ref (the backend would refuse it)`).not.toHaveProperty('parent_ref');
+                expect(createDescribed(body, free)).not.toHaveProperty('parent_transaction_id');
+            }
+            expect(createDescribed(body, 'P1b adjustment').ref ?? null, 'nothing names the ADJUSTMENT: no ref').toBeNull();
+        });
+
+        // Coordinator's decision (20/11): the imported link is judged charge by charge, as the backend judges it — one
+        // invalid charge does not take the link away from the other charges of the same parent.
+        it('charge by charge: a FEE on another asset stays free, and does not take the link away from its sibling on the BUY’s asset', async () => {
+            await openImportEditor();
+            await handOver([importedParent('P1b buy', 'r1'), importedCharge('FEE', 'P1b fee on the asset', 'r1'), importedCharge('FEE', 'P1b fee on another asset', 'r1', {asset_id: 202})]);
+
+            expect(theChipOf('P1b buy'), 'the FEE on the BUY’s asset is linked: the chip counts it alone').toHaveAttribute('data-charges-count', '1');
+            expect(rowsDescribed('P1b fee on another asset'), 'the FEE on another asset is a top-level row, on screen').toHaveLength(1);
+            expect(chargeOfCell(gridRowDescribed('P1b fee on another asset')), 'free').toBeNull();
+            await openGroup('P1b buy');
+            expect(chargeOfCell(gridRowDescribed('P1b fee on the asset')), 'the FEE on the asset sits under the BUY').toBe(rowIdOf(gridRowDescribed('P1b buy')));
+
+            const body = await validateNow();
+            expectLinkedInBody(body, 'validate', 'P1b buy', 'P1b fee on the asset');
+            const other = createDescribed(body, 'P1b fee on another asset');
+            expect(other, 'the FEE on another asset names no parent').not.toHaveProperty('parent_ref');
+            expect(other).not.toHaveProperty('parent_transaction_id');
+            expect(other.asset_id, 'and keeps its own asset').toBe(202);
+        });
+
+        // §5, second half of the consultant's condition: a problem the import itself raised on a charge of a closed group.
+        // The banner of blocking todos names the FEE by the label derived from its parent (the entry's `#<label>`; the
+        // entry publishes no data-row-label, so its leading row number is read — data, not wording); its jump opens the
+        // group and lands on the FEE; «Save all» is off and says why (its title is the catalogue's blocker hint).
+        it('a blocking import todo on an imported FEE in its closed group: the banner names it <parent>·1, the jump opens the group, Save all is off with its reason', async () => {
+            const blocker = {field: 'description', severity: 'blocker' as const, reasonCode: 'p1b_probe_blocker', message: 'p1b probe blocker'};
+            await openImportEditor();
+            await handOver([importedParent('P1b buy', 'r1'), {...importedCharge('FEE', 'P1b fee', 'r1'), todos: [blocker]}]);
+            expect(theChipOf('P1b buy'), 'premise: the group is closed').toHaveAttribute('aria-expanded', 'false');
+            expect(rowsDescribed('P1b fee'), 'premise: the FEE is not on screen').toHaveLength(0);
+            const parentLabel = (gridRowDescribed('P1b buy').querySelector('[data-testid="tx-bulk-row-label"]')?.textContent ?? '').trim();
+
+            const commit = screen.getByTestId('tx-bulk-commit');
+            expect(commit, '«Save all» is off while a blocking todo stands').toBeDisabled();
+            expect(commit, 'and says why').toHaveAttribute('title', get(_)('importWizard.todoBlockerCommitHint'));
+
+            const banner = screen.getByTestId('tx-bulk-todo-blockers');
+            if (within(banner).queryAllByTestId('tx-bulk-todo-goto').length === 0) {
+                await fireEvent.click(within(banner).getByTestId('tx-bulk-todo-blockers-toggle'));
+                await settle();
+            }
+            const gotos = within(banner).getAllByTestId('tx-bulk-todo-goto');
+            expect(gotos, 'one entry: the one blocker this test handed over').toHaveLength(1);
+            expect((gotos[0].textContent ?? '').trim().startsWith(`#${parentLabel}·1`), `the entry names the FEE by its derived label #${parentLabel}·1: ${gotos[0].textContent}`).toBe(true);
+
+            await fireEvent.click(gotos[0]);
+            await settle();
+
+            expect(theChipOf('P1b buy'), 'the jump opens the group').toHaveAttribute('aria-expanded', 'true');
+            const fee = gridRowDescribed('P1b fee');
+            expect(rowIdOf(fee), 'the entry leads to the FEE').toBe(gotos[0].getAttribute('data-row-id'));
+            await waitFor(() => expect(fee, 'and the jump lands on it').toHaveAttribute('data-highlighted', 'true'));
+        });
+
+        it('no followsParent: the BUY leaves the batch, its imported FEE stays, free, with its own values', async () => {
+            await openImportEditor();
+            await handOver([importedParent('P1b buy', 'r1'), importedCharge('FEE', 'P1b fee', 'r1')]);
+            expect(theChipOf('P1b buy'), 'premise: linked').toHaveAttribute('data-charges-count', '1');
+
+            // A new row's «Delete» takes it out of the batch (`removeRow` → `withoutRows`).
+            await rowAction(gridRowDescribed('P1b buy'), 'mark-delete');
+
+            expect(rowsDescribed('P1b buy'), 'the BUY left the batch').toHaveLength(0);
+            expect(rowsDescribed('P1b fee'), 'the FEE stays, on screen').toHaveLength(1);
+            expect(chargeOfCell(gridRowDescribed('P1b fee')), 'as a top-level row').toBeNull();
+            const body = await validateNow();
+            expect(body.creates ?? []).toHaveLength(1);
+            const charge = createDescribed(body, 'P1b fee');
+            expect(charge, 'its own values').toMatchObject({broker_id: 77, asset_id: 101, date: P1B_DATE, cash: {code: 'EUR', amount: '-1.5'}});
+            expect(charge).not.toHaveProperty('parent_ref');
+        });
+
+        it('a refusal of an imported FEE in its closed group is in the banner with the derived label; the jump opens the group and goes to the FEE', async () => {
+            const {validateTransactions} = await api();
+            // The hand-over validates once by itself: the FEE's create is refused, at the index it holds in that body.
+            validateTransactions.mockImplementation((async (payload: Payload) => {
+                const index = (payload.creates ?? []).findIndex((create) => create.description === 'P1b fee');
+                const issues = index < 0 ? [] : [{operation: 'create', index, ref_id: null, error: 'refused by the test', code: 'p1bTestRefusal', params: null}];
+                return {committed: issues.length === 0, issues, rawResponse: {wac_results: []}};
+            }) as never);
+            await openImportEditor();
+            await handOver([importedParent('P1b buy', 'r1'), importedCharge('FEE', 'P1b fee', 'r1')]);
+            expect(theChipOf('P1b buy'), 'premise: the group is closed').toHaveAttribute('aria-expanded', 'false');
+            const parentLabel = (gridRowDescribed('P1b buy').querySelector('[data-testid="tx-bulk-row-label"]')?.textContent ?? '').trim();
+
+            const issue = await screen.findByTestId('tx-bulk-issue');
+            expect(issue, 'the issue names the FEE by the label derived from its parent').toHaveAttribute('data-row-label', `${parentLabel}·1`);
+
+            await fireEvent.click(issue);
+            await settle();
+
+            expect(theChipOf('P1b buy'), 'the jump opens the group').toHaveAttribute('aria-expanded', 'true');
+            await waitFor(() => expect(gridRowDescribed('P1b fee'), 'and lands on the FEE row').toHaveAttribute('data-highlighted', 'true'));
+        });
+    });
+
+    /*
+     * 66 C21 — no pair-promote for a row that still has linked charges (contract `66-C21-promote-contract.md` §1–§3,
+     * corrected by §4 and §5; the Transactions page and the disabled toolbar button are C22, not here).
+     *
+     * Rule 6 of the plan: a row with linked charges is refused as a leg of a pair until they are unlinked; nothing unlinks
+     * by itself (rule 5, D4). One predicate, `hasLinkedCharges(op)`: the charges still under it in the Bulk's pending
+     * state (`linkedChargesOf`: «del» and «scollega» do not count), or saved charges of it the Bulk does not hold yet
+     * (`charges_count` minus the saved charges of that parent present in `ops`, wherever they sit now — §4.3, so a charge
+     * moved A → B by «Collega» leaves A free). Every offer is cut at its source, on both legs: the database search
+     * (`isSuggestable`), the banner (`localSuggestions`, `editStandalone`, `mixedPromotePairs`) and so «Merge all», and the
+     * selection toolbar (`selectedForPromote` → `promote-toolbar-confirm`). `executePromote` refuses as a defence
+     * (`tx.bulk.promote.refused.charges`, an error toast). «Reset row» on a charge whose parent is a leg of a pair keeps it
+     * «scollega» (§5.2), with the `paired` reason of «Link» as its toast.
+     *
+     * Every "no offer" stands beside a positive control in the same editor: two clean pairs (70 and 90) that are offered,
+     * so an absence never passes because nothing was offered at all. The blocked pair is 50 EUR, a DEPOSIT on 77 and a
+     * WITHDRAWAL on 88 (CASH_TRANSFER: two brokers, one currency, amounts that cancel). The FEE has no asset (a DEPOSIT has
+     * none: `noAsset` / `otherAsset` would refuse the link). Rows are found by `#id` or by the description the test gave
+     * them; a payload row by its broker, type and amount; the search's inputs by id (saved) or by type, broker and amount
+     * (a new row's id is synthetic).
+     *
+     * Already covered, not repeated: a charge under a parent «del» keeps «unlink» on «Restore» (F7-c1, ««Restore» from the
+     * menu of a saved charge under a parent «del»»), and an indented charge offers no «Reset row» (F7-c1, «the menu of an
+     * indented row…»), so `resetRow` on it is reachable only through «Reset all». The «saved pair» half of §5.2 (a saved
+     * charge whose saved parent is a leg of a saved pair) is a state the backend refuses to save (rule 8,
+     * `row_is_paired`): not built here.
+     */
+    describe('66 C21: no pair-promote for a row that still has linked charges', () => {
+        const C21_DATE = '2026-10-05';
+        const CONTROL_AMOUNTS = [70, 90] as const;
+        type Side = 'DEPOSIT' | 'WITHDRAWAL';
+        /** A row of a case: saved by its id, new by the description the test gave it; broker, type and amount (a magnitude)
+         *  find it in a payload. */
+        type RowRef = {kind: 'saved' | 'new'; id: number | null; type: Side; broker: number; amount: number; description: string};
+        type PairRef = {dep: RowRef; wd: RowRef};
+        /** A case: the pair whose `charged` leg has linked charges, and the two clean pairs beside it. */
+        type Scenario = {blocked: PairRef; controls: PairRef[]; charged: Side};
+        type SuggestInput = {id: number; type: string; broker_id: number; amount: number | null};
+        type PromoteItem = {id_a?: number; id_b?: number; link_uuid_a?: string; link_uuid_b?: string};
+        type C21Payload = {creates?: Array<Record<string, unknown>>; updates?: Array<Record<string, unknown>>; deletes?: number[]; promotes?: PromoteItem[]};
+
+        beforeEach(() => {
+            // «Link» and the import's links read the user's right to edit both brokers.
+            mergeBrokers([
+                {id: 77, name: 'C21 broker A', user_role: 'OWNER'},
+                {id: 88, name: 'C21 broker B', user_role: 'OWNER'},
+            ]);
+        });
+
+        afterEach(() => {
+            resetBrokerStore();
+        });
+
+        /** A saved cash row of the case's day, no asset. */
+        function savedCash(id: number, type: Side | 'FEE', broker: number, amount: string, description: string, over: Partial<TXReadItem> = {}): TXReadItem {
+            return {
+                id,
+                broker_id: broker,
+                asset_id: null,
+                type,
+                date: C21_DATE,
+                quantity: '0',
+                cash: {code: 'EUR', amount},
+                related_transaction_id: null,
+                partner_broker_id: null,
+                parent_transaction_id: null,
+                tags: [],
+                description,
+                cost_basis_override: null,
+                asset_event_id: null,
+                charges_count: 0,
+                ...over,
+            } as TXReadItem;
+        }
+
+        function savedRef(tx: TXReadItem): RowRef {
+            return {kind: 'saved', id: tx.id, type: tx.type as Side, broker: tx.broker_id, amount: Math.abs(Number(tx.cash?.amount)), description: tx.description ?? ''};
+        }
+
+        function newRef(type: Side, broker: number, amount: number, description: string): RowRef {
+            return {kind: 'new', id: null, type, broker, amount, description};
+        }
+
+        function labelOf(ref: RowRef): string {
+            return ref.kind === 'saved' ? `saved ${ref.type} #${ref.id}` : `new ${ref.type} «${ref.description}»`;
+        }
+
+        function rowOf(ref: RowRef): HTMLElement {
+            return ref.kind === 'saved' ? gridRow(ref.id as number) : gridRowDescribed(ref.description);
+        }
+
+        /** The chip of a parent row, or null. */
+        function chipOfRow(row: HTMLElement): HTMLElement | null {
+            return screen.queryByTestId(`tx-bulk-charges-toggle-${row.getAttribute('data-row-id')}`);
+        }
+
+        /** Bring a row's checkbox to `on`, whatever state it is in. */
+        async function setTicked(row: HTMLElement, on: boolean): Promise<void> {
+            const box = rowCheckbox(row);
+            if (!box) throw new Error(`the row ${row.getAttribute('data-row-id')} has no checkbox`);
+            if ((box.getAttribute('data-state') === 'checked') !== on) {
+                await fireEvent.click(box);
+                await settle();
+            }
+            if (on) expect(rowCheckbox(row)).toHaveAttribute('data-state', 'checked');
+            else expect(rowCheckbox(row)).not.toHaveAttribute('data-state', 'checked');
+        }
+
+        /** Whether the selection toolbar offers to merge these two rows: both ticked, the toolbar read, both unticked. 66 C22:
+         *  a merge button drawn off (`aria-disabled`) is not an offer; off, it must say the C22 reason (`hasCharges`). */
+        async function toolbarOffers(a: RowRef, b: RowRef): Promise<boolean> {
+            await setTicked(rowOf(a), true);
+            await setTicked(rowOf(b), true);
+            expect(screen.queryByTestId('tx-bulk-delete-selected'), 'premise: the selection toolbar answers the selection').not.toBeNull();
+            const button = screen.queryByTestId('promote-toolbar-confirm');
+            const offered = button !== null && button.getAttribute('aria-disabled') !== 'true';
+            if (button !== null && !offered) expect(button, 'a merge button drawn off says why: hasCharges').toHaveAttribute('data-reason', 'hasCharges');
+            await setTicked(rowOf(a), false);
+            await setTicked(rowOf(b), false);
+            return offered;
+        }
+
+        /** How many pairs the banner lists (the editor's rows are all this case's own). */
+        function bannerItems(): number {
+            return document.querySelectorAll('[data-testid^="promote-suggest-item-"]').length;
+        }
+
+        const suggestMock = () => vi.mocked(zodiosApi.promote_suggest_api_v1_transactions_promote_suggest_post);
+
+        /** The inputs of every promote-suggest request so far. */
+        function suggestCalls(): SuggestInput[][] {
+            return suggestMock().mock.calls.map((call) => call[0] as unknown as SuggestInput[]);
+        }
+
+        function asks(input: SuggestInput, ref: RowRef): boolean {
+            if (ref.kind === 'saved') return input.id === ref.id;
+            return input.type === ref.type && input.broker_id === ref.broker && Math.abs(Number(input.amount)) === ref.amount;
+        }
+
+        /** The database search, debounced (500 ms): a poll with a deadline until it asks about `barrier`, then `blocked`
+         *  must be in no request. */
+        async function expectSearchSkips(blocked: RowRef, barrier: RowRef): Promise<void> {
+            await waitFor(
+                () =>
+                    expect(
+                        suggestCalls().some((inputs) => inputs.some((input) => asks(input, barrier))),
+                        `premise: the search asked about ${labelOf(barrier)}`,
+                    ).toBe(true),
+                {timeout: 3_000},
+            );
+            const asked = suggestCalls().filter((inputs) => inputs.some((input) => asks(input, blocked)));
+            expect.soft(asked.length, `C21: ${labelOf(blocked)} has linked charges, yet the Bulk sends it to promote-suggest (isSuggestable)`).toBe(0);
+        }
+
+        /** «Merge all» from the banner, with its default answer. */
+        async function mergeAll(): Promise<void> {
+            const button = screen.queryByTestId('promote-suggest-merge-all');
+            expect(button, 'premise: «Merge all» is offered (two clean pairs at least)').not.toBeNull();
+            await fireEvent.click(button!);
+            await settle();
+            await fireEvent.click(await screen.findByTestId('promote-all-confirm'));
+            await settle();
+        }
+
+        /** Whether a payload merges this row: a saved one named by a promote, a new one promoted locally (its create a
+         *  CASH_TRANSFER) or named by a promote through its link_uuid. */
+        function merged(ref: RowRef, body: C21Payload): boolean {
+            const promotes = body.promotes ?? [];
+            if (ref.kind === 'saved') return promotes.some((item) => item.id_a === ref.id || item.id_b === ref.id);
+            const create = (body.creates ?? []).find((item) => item.broker_id === ref.broker && Math.abs(Number((item.cash as {amount?: string} | null)?.amount)) === ref.amount && (item.type === ref.type || item.type === 'CASH_TRANSFER'));
+            if (!create) throw new Error(`no create of ${labelOf(ref)} in ${JSON.stringify(body.creates)}`);
+            const link = typeof create.link_uuid === 'string' ? create.link_uuid : null;
+            return create.type === 'CASH_TRANSFER' || (link !== null && promotes.some((item) => item.link_uuid_a === link || item.link_uuid_b === link));
+        }
+
+        /**
+         * The whole check of a case, on every surface, each C21 absence soft so one run names them all: the search, the
+         * banner, the toolbar (with a clean pair offered first), «Merge all» (the clean pairs merged, the blocked one not).
+         */
+        async function expectNoOffer(s: Scenario): Promise<void> {
+            const chargedLeg = s.charged === 'DEPOSIT' ? s.blocked.dep : s.blocked.wd;
+            const otherLeg = s.charged === 'DEPOSIT' ? s.blocked.wd : s.blocked.dep;
+
+            // 1. The database search: the charged leg is not asked about; the other leg is, it has no charge.
+            await expectSearchSkips(chargedLeg, otherLeg);
+
+            // 2. The banner: the clean pairs, and only them.
+            expect(screen.queryByTestId('promote-suggest-banner'), 'control: the banner offers the clean pairs').not.toBeNull();
+            expect.soft(bannerItems(), `C21: the banner lists the pair whose ${s.charged} has linked charges (expected only the ${s.controls.length} clean pairs)`).toBe(s.controls.length);
+
+            // 3. The selection toolbar.
+            expect(await toolbarOffers(s.controls[0].dep, s.controls[0].wd), 'control: the toolbar offers a clean pair').toBe(true);
+            expect.soft(await toolbarOffers(s.blocked.dep, s.blocked.wd), `C21: the selection toolbar offers to merge ${labelOf(s.blocked.dep)} and ${labelOf(s.blocked.wd)}, while the ${s.charged} has linked charges`).toBe(false);
+
+            // 4. «Merge all».
+            await mergeAll();
+            const body = (await validateNow()) as C21Payload;
+            for (const pair of s.controls) expect(merged(pair.dep, body) || merged(pair.wd, body), `control: «Merge all» merges the clean pair ${labelOf(pair.dep)} / ${labelOf(pair.wd)} — ${JSON.stringify(body)}`).toBe(true);
+            expect(merged(s.blocked.dep, body) || merged(s.blocked.wd, body), `C21: «Merge all» merges the pair whose ${s.charged} has linked charges — ${JSON.stringify(body)}`).toBe(false);
+        }
+
+        /** «+ Add row» and the row the Form pushes back; ends on the Form closed. */
+        async function addRow(payload: Record<string, unknown>): Promise<void> {
+            await fireEvent.click(screen.getByTestId('tx-bulk-add-row'));
+            await settle();
+            await waitFor(() => expect(formProbe().open, '«Add row» opens the Form').toBe(true));
+            await push(payload);
+        }
+
+        /** A cash row as the Form pushes it back: signed values (W-B65). */
+        function cashPayload(type: Side, broker: number, signedAmount: string, description: string, over: Record<string, unknown> = {}): Record<string, unknown> {
+            return {broker_id: broker, type, date: C21_DATE, quantity: '0', asset_id: null, cash: {code: 'EUR', amount: signedAmount}, tags: [], description, ...over};
+        }
+
+        /** A saved cash row pushed back unchanged by its Form, with `over` applied. */
+        function savedPayload(tx: TXReadItem, over: Record<string, unknown> = {}): Record<string, unknown> {
+            return cashPayload(tx.type as Side, tx.broker_id, tx.cash?.amount ?? '0', tx.description ?? '', over);
+        }
+
+        /** «scollega» of every charge of a saved parent, in its Form (`_charges` state `unlink`), `fee` applied to each. */
+        async function unlinkInParentForm(parent: TXReadItem, count: number, fee: Partial<ChargeDraft> = {}): Promise<void> {
+            await rowAction(gridRow(parent.id), 'edit-single');
+            await waitForParentForm(parent.id, count);
+            await push(savedPayload(parent, {_charges: handedDrafts().map((draft): ChargeDraft => ({...draft, ...fee, state: 'unlink'}))}));
+        }
+
+        // -------------------------------------------------------------------
+        // The cases of §2.1: one builder each, then `expectNoOffer`
+        // -------------------------------------------------------------------
+
+        /** New + new, the way an import brings them: the FEE named under the charged leg (`ref` / `parent_ref`). */
+        async function newNewScenario(charged: Side): Promise<Scenario> {
+            const item = (type: Side | 'FEE', broker: number, amount: string, description: string, extra: Record<string, unknown> = {}) => ({
+                tx: {broker_id: broker, asset_id: null, type, date: C21_DATE, quantity: '0', cash: {code: 'EUR', amount}, tags: [], description, ...extra} as unknown as TransactionCreateItem,
+                todos: [],
+            });
+            mountEditor({action: 'import'});
+            await waitFor(() => expect(wizardProbe().open, 'the import intent opens the wizard').toBe(true));
+            const chargedBroker = charged === 'DEPOSIT' ? 77 : 88;
+            const batch = [
+                item('DEPOSIT', 77, '50', 'C21 new deposit', charged === 'DEPOSIT' ? {ref: 'c21'} : {}),
+                item('WITHDRAWAL', 88, '-50', 'C21 new withdrawal', charged === 'WITHDRAWAL' ? {ref: 'c21'} : {}),
+                item('FEE', chargedBroker, '-1.5', 'C21 new fee', {parent_ref: 'c21'}),
+                ...CONTROL_AMOUNTS.flatMap((amount) => [item('DEPOSIT', 77, String(amount), `C21 control deposit ${amount}`), item('WITHDRAWAL', 88, `-${amount}`, `C21 control withdrawal ${amount}`)]),
+            ];
+            await (wizardProbe().onImportBatch as (creates: unknown[]) => Promise<void>)(batch);
+            await settle();
+            const chargedDescription = charged === 'DEPOSIT' ? 'C21 new deposit' : 'C21 new withdrawal';
+            await waitFor(() => expect(chipOfRow(gridRowDescribed(chargedDescription)), `premise: the FEE is linked under the new ${charged}`).toHaveAttribute('data-charges-count', '1'));
+            return {
+                charged,
+                blocked: {dep: newRef('DEPOSIT', 77, 50, 'C21 new deposit'), wd: newRef('WITHDRAWAL', 88, 50, 'C21 new withdrawal')},
+                controls: CONTROL_AMOUNTS.map((amount) => ({dep: newRef('DEPOSIT', 77, amount, `C21 control deposit ${amount}`), wd: newRef('WITHDRAWAL', 88, amount, `C21 control withdrawal ${amount}`)})),
+            };
+        }
+
+        /** The saved clean pairs of a case: a DEPOSIT on 77 and a WITHDRAWAL on 88 for each control amount. */
+        function savedControls(): TXReadItem[][] {
+            return CONTROL_AMOUNTS.map((amount, at) => [savedCash(92_111 + 2 * at, 'DEPOSIT', 77, `${amount}.000000`, `C21 control deposit ${amount}`), savedCash(92_112 + 2 * at, 'WITHDRAWAL', 88, `-${amount}.000000`, `C21 control withdrawal ${amount}`)]);
+        }
+
+        /**
+         * Saved + saved: the charged leg counts one charge, a FEE whose read is answered (the FEE under it), held (still
+         * reading) or failed (`charges_count` alone says it has one).
+         */
+        async function savedSavedScenario(charged: Side, read: 'answered' | 'held' | 'failed'): Promise<Scenario> {
+            const dep = savedCash(92_101, 'DEPOSIT', 77, '50.000000', 'C21 saved deposit', {charges_count: charged === 'DEPOSIT' ? 1 : 0});
+            const wd = savedCash(92_103, 'WITHDRAWAL', 88, '-50.000000', 'C21 saved withdrawal', {charges_count: charged === 'WITHDRAWAL' ? 1 : 0});
+            const parent = charged === 'DEPOSIT' ? dep : wd;
+            const fee = savedCash(92_102, 'FEE', parent.broker_id, '-1.500000', 'C21 saved fee', {parent_transaction_id: parent.id});
+            const controls = savedControls();
+            if (read === 'answered') answerChargesRead([fee]);
+            else if (read === 'held') holdChargesReads();
+            else readMock().mockRejectedValue(new Error('network down'));
+            txStoreSetAll([dep, wd, ...controls.flat()], []);
+            mountEditor({action: 'edit', txIds: [dep.id, wd.id, ...controls.flat().map((tx) => tx.id)]});
+            await waitFor(() => expect(rowsOf(wd.id), 'premise: the WITHDRAWAL is on screen').toHaveLength(1));
+            await waitFor(() => expect(readAskedFor(parent.id), `premise: the Bulk asked for the ${charged}’s charges`).toBe(true));
+            if (read === 'answered') await waitFor(() => expect(chipOfRow(gridRow(parent.id)), `premise: the FEE read sits under the ${charged}`).toHaveAttribute('data-charges-count', '1'));
+            if (read === 'held') expect(heldReads.length, 'premise: the read is still out').toBeGreaterThan(0);
+            if (read === 'failed') {
+                const toasts = await toastsMock();
+                await waitFor(() =>
+                    expect(
+                        toasts.show.mock.calls.some((call) => call[0] === 'error'),
+                        'premise: the read failed (its error toast)',
+                    ).toBe(true),
+                );
+                expect(chipOfRow(gridRow(parent.id)), 'premise: no charge of it is in the Bulk').toBeNull();
+            }
+            return {
+                charged,
+                blocked: {dep: savedRef(dep), wd: savedRef(wd)},
+                controls: controls.map(([d, w]) => ({dep: savedRef(d), wd: savedRef(w)})),
+            };
+        }
+
+        /** New + saved (`mixedPromotePairs`): saved DEPOSITs, new WITHDRAWALs typed in the Form. The charge is the saved
+         *  DEPOSIT's FEE (read), or a new FEE typed in the new WITHDRAWAL's charges. */
+        async function mixedScenario(charged: Side): Promise<Scenario> {
+            const dep = savedCash(92_101, 'DEPOSIT', 77, '50.000000', 'C21 saved deposit', {charges_count: charged === 'DEPOSIT' ? 1 : 0});
+            const fee = savedCash(92_102, 'FEE', 77, '-1.500000', 'C21 saved fee', {parent_transaction_id: dep.id});
+            const controlDeps = savedControls().map(([d]) => d);
+            answerChargesRead(charged === 'DEPOSIT' ? [fee] : []);
+            txStoreSetAll([dep, ...controlDeps], []);
+            mountEditor({action: 'edit', txIds: [dep.id, ...controlDeps.map((tx) => tx.id)]});
+            await waitFor(() => expect(rowsOf(dep.id), 'premise: the DEPOSIT is on screen').toHaveLength(1));
+            if (charged === 'DEPOSIT') await waitFor(() => expect(chipOfRow(gridRow(dep.id)), 'premise: the FEE read sits under the DEPOSIT').toHaveAttribute('data-charges-count', '1'));
+            const newFee: ChargeDraft = {key: 'new-1', id: null, type: 'FEE', cash: {amount: '1.500000', code: 'EUR'}, description: 'C21 new fee', original: null, state: 'linked'};
+            await addRow(cashPayload('WITHDRAWAL', 88, '-50.000000', 'C21 new withdrawal', charged === 'WITHDRAWAL' ? {_charges: [newFee]} : {}));
+            for (const amount of CONTROL_AMOUNTS) await addRow(cashPayload('WITHDRAWAL', 88, `-${amount}.000000`, `C21 control withdrawal ${amount}`));
+            if (charged === 'WITHDRAWAL') expect(chipOfRow(gridRowDescribed('C21 new withdrawal')), 'premise: the new FEE sits under the new WITHDRAWAL').toHaveAttribute('data-charges-count', '1');
+            return {
+                charged,
+                blocked: {dep: savedRef(dep), wd: newRef('WITHDRAWAL', 88, 50, 'C21 new withdrawal')},
+                controls: controlDeps.map((d) => ({dep: savedRef(d), wd: newRef('WITHDRAWAL', 88, Math.abs(Number(d.cash?.amount)), `C21 control withdrawal ${Math.abs(Number(d.cash?.amount))}`)})),
+            };
+        }
+
+        // Red today: no surface asks whether a leg has linked charges. Each case reports the search, the banner, the
+        // toolbar and «Merge all» together (soft), beside the clean pairs that must stay offered (hard).
+        it.each([
+            ['new + new, the FEE under the DEPOSIT', () => newNewScenario('DEPOSIT')],
+            ['new + new, the FEE under the WITHDRAWAL', () => newNewScenario('WITHDRAWAL')],
+            ['saved + saved, the FEE read under the DEPOSIT', () => savedSavedScenario('DEPOSIT', 'answered')],
+            ['saved + saved, the FEE read under the WITHDRAWAL', () => savedSavedScenario('WITHDRAWAL', 'answered')],
+            ['saved + saved, the DEPOSIT counts a charge still being read', () => savedSavedScenario('DEPOSIT', 'held')],
+            ['saved + saved, the DEPOSIT counts a charge whose read failed', () => savedSavedScenario('DEPOSIT', 'failed')],
+            ['new + saved, the FEE read under the saved DEPOSIT', () => mixedScenario('DEPOSIT')],
+            ['new + saved, a new FEE under the new WITHDRAWAL', () => mixedScenario('WITHDRAWAL')],
+        ] as const)('C21 §2.1: %s — no offer anywhere (search, banner, toolbar, «Merge all»); the clean pairs still offered', async (_label, build) => {
+            await expectNoOffer(await build());
+        });
+
+        // -------------------------------------------------------------------
+        // §4.3 — «Collega» A → B: the charge counts where it sits now
+        // -------------------------------------------------------------------
+
+        const A = savedCash(92_301, 'DEPOSIT', 77, '50.000000', 'C21 parent A', {charges_count: 1});
+        const FEE_A = savedCash(92_302, 'FEE', 77, '-1.500000', 'C21 fee of A', {parent_transaction_id: A.id});
+        const WD_A = savedCash(92_303, 'WITHDRAWAL', 88, '-50.000000', 'C21 counterpart of A');
+        /** A charge of A the server holds but A's count did not know of (saved meanwhile elsewhere): what a late read brings. */
+        const LATE_FEE_A = savedCash(92_304, 'FEE', 77, '-0.500000', 'C21 late fee of A', {parent_transaction_id: A.id});
+        const B = savedCash(92_311, 'DEPOSIT', 77, '60.000000', 'C21 parent B');
+        const WD_B = savedCash(92_312, 'WITHDRAWAL', 88, '-60.000000', 'C21 counterpart of B');
+
+        /** «Link» in the toolbar on these two rows, confirmed; ends on the panel closed. */
+        async function linkRows(parent: HTMLElement, charge: HTMLElement): Promise<void> {
+            await setTicked(parent, true);
+            await setTicked(charge, true);
+            const button = screen.queryByTestId('tx-bulk-link-charges');
+            expect(button, 'premise: the selection offers «Link»').not.toBeNull();
+            expect(button, 'premise: «Link» is on').not.toHaveAttribute('aria-disabled', 'true');
+            await fireEvent.click(button!);
+            await settle();
+            const content = await screen.findByTestId('tx-charges-modal-content');
+            await fireEvent.click(within(content).getByTestId('tx-charges-modal-confirm'));
+            await settle();
+            await waitFor(() => expect(screen.queryByTestId('tx-charges-modal-content'), 'the panel closed').toBeNull());
+        }
+
+        /** A with its FEE read, the FEE unlinked in A's Form, then linked to B by «Link» (F7-d §21.2). Ends on the FEE
+         *  under B; A's own count still says 1. */
+        async function openAtoB(): Promise<void> {
+            answerChargesRead([FEE_A]);
+            txStoreSetAll([A, WD_A, B, WD_B], []);
+            mountEditor({action: 'edit', txIds: [A.id, WD_A.id, B.id, WD_B.id]});
+            await waitFor(() => expect(rowsOf(WD_B.id), 'premise: the four rows are on screen').toHaveLength(1));
+            await waitFor(() => expect(chipOfRow(gridRow(A.id)), 'premise: A’s FEE read sits under A').toHaveAttribute('data-charges-count', '1'));
+            await unlinkInParentForm(A, 1);
+            expect(chargeState(gridRow(FEE_A.id)), 'premise: the FEE is unlinked from A').toBe('unlink');
+            await linkRows(gridRow(B.id), gridRow(FEE_A.id));
+            expect(chargeOfCell(gridRow(FEE_A.id)), 'premise: the FEE now sits under B').toBe(gridRow(B.id).getAttribute('data-row-id'));
+        }
+
+        // Red today on B (nothing refuses a leg with linked charges). The A half is a guard, green today: it fixes the
+        // predicate of §4.3 — A's saved charge is in the Bulk, under B, so A's count no longer blocks it.
+        it('C21 §4.3: «Collega» A → B — B, which now holds the FEE, is offered nothing; A is offered with its counterpart (guard)', async () => {
+            await openAtoB();
+
+            expect(await toolbarOffers(savedRef(A), savedRef(WD_A)), 'guard (§4.3): A’s only saved charge is in the Bulk, under B — A is free, its counterpart is offered').toBe(true);
+            expect.soft(bannerItems(), 'C21: the banner lists B’s pair too (expected A’s alone)').toBe(1);
+            expect(await toolbarOffers(savedRef(B), savedRef(WD_B)), 'C21: the toolbar offers to merge B, which holds a linked FEE').toBe(false);
+        });
+
+        // -------------------------------------------------------------------
+        // §2.2 — «scollega», then the offer comes back and the batch carries both
+        // -------------------------------------------------------------------
+
+        /** A DEPOSIT with its FEE and the WITHDRAWAL that cancels it, both legs with the same note (no merge dialog). */
+        const DEP = savedCash(92_401, 'DEPOSIT', 77, '50.000000', 'C21 transfer', {charges_count: 1});
+        const FEE_D = savedCash(92_402, 'FEE', 77, '-1.500000', 'C21 fee', {parent_transaction_id: DEP.id});
+        const WD = savedCash(92_403, 'WITHDRAWAL', 88, '-50.000000', 'C21 transfer');
+
+        async function openDepositWithFee(): Promise<void> {
+            answerChargesRead([FEE_D]);
+            txStoreSetAll([DEP, WD], []);
+            mountEditor({action: 'edit', txIds: [DEP.id, WD.id]});
+            await waitFor(() => expect(rowsOf(WD.id), 'premise: both rows are on screen').toHaveLength(1));
+            await waitFor(() => expect(chipOfRow(gridRow(DEP.id)), 'premise: the FEE read sits under the DEPOSIT').toHaveAttribute('data-charges-count', '1'));
+        }
+
+        /** The toolbar's merge of the DEPOSIT and the WITHDRAWAL (same notes: no dialog); ends on the pair one row. */
+        async function mergeFromToolbar(): Promise<void> {
+            await setTicked(gridRow(DEP.id), true);
+            await setTicked(gridRow(WD.id), true);
+            const confirm = screen.queryByTestId('promote-toolbar-confirm');
+            expect(confirm, 'the toolbar offers the merge').not.toBeNull();
+            await fireEvent.click(confirm!);
+            await settle();
+            expect(screen.queryByTestId('promote-merge-modal-content'), 'premise: same notes, no merge dialog').toBeNull();
+            const pairRows = gridRows().filter((row) => idCellText(row).includes(`#${DEP.id}`) || idCellText(row).includes(`#${WD.id}`));
+            expect(pairRows, 'premise: the pair is one row').toHaveLength(1);
+            const box = rowCheckbox(pairRows[0]);
+            if (box?.getAttribute('data-state') === 'checked') {
+                await fireEvent.click(box);
+                await settle();
+            }
+        }
+
+        /** «Save all», and the payload it committed. */
+        async function saveAll(): Promise<C21Payload> {
+            const {commitTransactions} = await api();
+            const commit = screen.getByTestId('tx-bulk-commit');
+            expect(commit, '«Save all» is on').not.toBeDisabled();
+            await fireEvent.click(commit);
+            await settle();
+            await waitFor(() => expect(commitTransactions, 'Save all committed').toHaveBeenCalledTimes(1));
+            return commitTransactions.mock.calls[0]?.[0] as C21Payload;
+        }
+
+        function promotedPairs(body: C21Payload): number[][] {
+            return (body.promotes ?? []).map((item) => [item.id_a ?? 0, item.id_b ?? 0].sort((x, y) => x - y));
+        }
+
+        // Red today on its first premise (soft): before the unlink the toolbar already offers the merge, and the unlink
+        // asks the search nothing new. The rest is the end state C21 must keep, green today: after «scollega» the merge
+        // is offered, and one batch carries the unlink and the promote (the backend accepts both, 66-R4-R5).
+        it('C21 §2.2: «scollega» on the FEE brings the offer back (the search asked again); merged, «Save all» sends the unlink and the promote in one batch', async () => {
+            await openDepositWithFee();
+            expect.soft(await toolbarOffers(savedRef(DEP), savedRef(WD)), 'C21: before the unlink, the toolbar already offers to merge the DEPOSIT that holds a linked FEE').toBe(false);
+            await waitFor(
+                () =>
+                    expect(
+                        suggestCalls().some((inputs) => inputs.some((input) => input.id === WD.id)),
+                        'premise: the search asked about the WITHDRAWAL',
+                    ).toBe(true),
+                {timeout: 3_000},
+            );
+            const callsBefore = suggestCalls().length;
+
+            await unlinkInParentForm(DEP, 1);
+
+            expect(chargeState(gridRow(FEE_D.id)), 'premise: the FEE is unlinked, a top-level row').toBe('unlink');
+            let askedAgain = true;
+            try {
+                await waitFor(
+                    () =>
+                        expect(
+                            suggestCalls()
+                                .slice(callsBefore)
+                                .some((inputs) => inputs.some((input) => input.id === DEP.id)),
+                        ).toBe(true),
+                    {timeout: 3_000},
+                );
+            } catch {
+                askedAgain = false;
+            }
+            expect.soft(askedAgain, 'C21: the unlink frees the DEPOSIT, and the search must be asked again about it').toBe(true);
+            expect(screen.queryByTestId('promote-suggest-banner'), 'the banner offers the pair again').not.toBeNull();
+            await mergeFromToolbar();
+
+            const body = await saveAll();
+            expect(
+                (body.updates ?? []).filter((update) => update.id === FEE_D.id),
+                'the FEE’s update is its unlink alone',
+            ).toEqual([{id: FEE_D.id, parent_transaction_id: 0}]);
+            expect(promotedPairs(body), 'one promote, the DEPOSIT and the WITHDRAWAL').toEqual([[DEP.id, WD.id].sort((x, y) => x - y)]);
+            expect(body.deletes ?? [], 'nothing deleted').toEqual([]);
+        });
+
+        // -------------------------------------------------------------------
+        // §4.4 — the defence in `executePromote`
+        // -------------------------------------------------------------------
+
+        // The one window (§4.4): the merge dialog open while a charges read lands. Reached through the UI: after A → B,
+        // A counts one saved charge and holds none under it, so opening A's Form reads A's charges again (held here); the
+        // user meanwhile merges A with its counterpart from the toolbar (different notes: the dialog opens); the read lands
+        // with a charge of A the Bulk did not have. Confirming must merge nothing. Red today: the merge goes through.
+        it('C21 §4.4: a charge read lands under A while the merge dialog is open — the confirmation merges nothing, notify tx.bulk.promote.refused.charges, an error toast', async () => {
+            await openAtoB();
+            holdChargesReads();
+            await rowAction(gridRow(A.id), 'edit-single');
+            const readOfA = heldReads.find((read) => read.parents.includes(A.id));
+            expect(readOfA, 'premise: opening A’s Form reads A’s charges again (A counts one, holds none under it)').toBeDefined();
+            expect(probe.form?.open ?? false, 'premise: the Form waits for that read').toBe(false);
+
+            await setTicked(gridRow(A.id), true);
+            await setTicked(gridRow(WD_A.id), true);
+            const confirm = screen.queryByTestId('promote-toolbar-confirm');
+            expect(confirm, 'premise: A, free since A → B, is offered with its counterpart').not.toBeNull();
+            await fireEvent.click(confirm!);
+            await settle();
+            expect(await screen.findByTestId('promote-merge-modal-content'), 'premise: different notes open the merge dialog').toBeInTheDocument();
+
+            readOfA!.resolve([LATE_FEE_A]);
+            await settle();
+            await waitFor(() => expect(chipOfRow(gridRow(A.id)), 'premise: the late charge sits under A').toHaveAttribute('data-charges-count', '1'));
+            expect(screen.queryByTestId('promote-merge-modal-content'), 'premise: the merge dialog is still open').not.toBeNull();
+
+            const since = eventSeq();
+            const toasts = await toastsMock();
+            toasts.show.mockClear();
+            await fireEvent.click(screen.getByTestId('promote-merge-confirm'));
+            await settle();
+
+            expect.soft(eventsSince(since, 'tx.bulk.promote.refused.charges'), 'C21: the refusal is published (notify tx.bulk.promote.refused.charges)').toHaveLength(1);
+            expect
+                .soft(
+                    toasts.show.mock.calls.some((call) => call[0] === 'error'),
+                    'C21: the refusal raises an error toast',
+                )
+                .toBe(true);
+            const body = (await validateNow()) as C21Payload;
+            expect(promotedPairs(body), `C21: A holds a linked charge, yet the dialog’s confirmation merged it — ${JSON.stringify(body.promotes)}`).toEqual([]);
+        });
+
+        // -------------------------------------------------------------------
+        // §5.2 — «Reset row» on a charge whose parent is now a leg of a pair keeps it «scollega»
+        // -------------------------------------------------------------------
+
+        /** The events of the app's ring buffer after `since` with this name (`notify`, the machine half). */
+        function eventsSince(since: number, name: string): Array<{name: string; detail?: Record<string, unknown>}> {
+            const lf = (window as unknown as {__lf?: {events?: Array<{seq: number; name: string; detail?: Record<string, unknown>}>}}).__lf;
+            return (lf?.events ?? []).filter((event) => event.seq > since && event.name === name);
+        }
+
+        function eventSeq(): number {
+            const lf = (window as unknown as {__lf?: {seq?: () => number}}).__lf;
+            return lf?.seq?.() ?? 0;
+        }
+
+        /** The state of a charge on screen: its badge, or why it has none. */
+        function chargeStateOf(id: number): string {
+            const rows = rowsOf(id);
+            if (rows.length === 0) return 'not on screen (back under its parent, linked)';
+            return chargeState(rows[0]) ?? 'no state badge (a linked top-level row)';
+        }
+
+        /** Every toast message raised so far, whatever its variant. */
+        async function toastMessages(): Promise<string[]> {
+            const toasts = await toastsMock();
+            return [...toasts.show.mock.calls.map((call) => String(call[1])), ...(['success', 'error', 'warning', 'info'] as const).flatMap((variant) => toasts[variant].mock.calls.map((call) => String(call[0])))];
+        }
+
+        /** The `paired` reason of «Link» (`transactions.chargesLink.reason.paired`), whatever row it names. */
+        function pairedReason(): RegExp {
+            const template = get(_)('transactions.chargesLink.reason.paired', {values: {type: '\u0001', ref: '\u0002'}});
+            const escaped = template.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            return new RegExp(escaped.replace('\u0001', '.+').replace('\u0002', '.+'));
+        }
+
+        // Red today: `resetRow` rebuilds the charge from the store (`editOpFromTx`), so it goes back under its parent —
+        // now the hidden leg of the pending pair — and the batch would link a charge to a pair (refused by the backend).
+        // The contract names no event for this notify (§5.2: the existing text only): the toast is asserted, by its key.
+        it.each([
+            ['the row’s «Reset row»', 'row'],
+            ['«Reset selected»', 'selected'],
+        ] as const)('C21 §5.2: %s on a FEE unlinked from a DEPOSIT now merged (pending): it stays «unlink», its note restored, the paired reason toasted; Save all sends the unlink and the promote', async (_label, how) => {
+            // Premise: the reason's pattern resolves the catalogue key and matches the text it renders.
+            const reason = pairedReason();
+            expect(reason.source, 'premise: the paired reason key resolves in the catalogue').not.toContain('chargesLink');
+            expect(get(_)('transactions.chargesLink.reason.paired', {values: {type: 'FEE', ref: '#1'}}), 'premise: the pattern matches the rendered reason').toMatch(reason);
+            await openDepositWithFee();
+            await unlinkInParentForm(DEP, 1, {description: 'C21 fee note changed'});
+            expect(chargeState(gridRow(FEE_D.id)), 'premise: the FEE is unlinked').toBe('unlink');
+            expect(rowDescription(gridRow(FEE_D.id)), 'premise: its note changed').toBe('C21 fee note changed');
+            await mergeFromToolbar();
+            expect(chargeStateOf(FEE_D.id), 'premise: after the merge the FEE is still unlinked, a top-level row').toBe('unlink');
+            const toasts = await toastsMock();
+            for (const variant of ['show', 'success', 'error', 'warning', 'info'] as const) toasts[variant].mockClear();
+
+            if (how === 'row') {
+                await rowAction(gridRow(FEE_D.id), 'reset');
+            } else {
+                await setTicked(gridRow(FEE_D.id), true);
+                const reset = screen.queryByTestId('tx-bulk-reset-selected');
+                expect(reset, 'premise: «Reset selected» is offered for the edited FEE').not.toBeNull();
+                expect(await clickCollectingErrors(reset!), '«Reset selected» throws nothing').toEqual([]);
+            }
+
+            expect(chargeStateOf(FEE_D.id), 'C21 §5.2: the reset gave the FEE back to its parent, a leg of the pending pair').toBe('unlink');
+            expect(rowDescription(gridRow(FEE_D.id)), 'the reset restores the other fields: the saved note').toBe('C21 fee');
+            const pattern = pairedReason();
+            expect(
+                (await toastMessages()).some((message) => pattern.test(message)),
+                `C21 §5.2: a toast with the paired reason of «Link» (${pattern}) — got ${JSON.stringify(await toastMessages())}`,
+            ).toBe(true);
+
+            const body = await saveAll();
+            expect(
+                (body.updates ?? []).filter((update) => update.id === FEE_D.id),
+                'the FEE’s update is its unlink alone',
+            ).toEqual([{id: FEE_D.id, parent_transaction_id: 0}]);
+            expect(promotedPairs(body), 'one promote, the DEPOSIT and the WITHDRAWAL').toEqual([[DEP.id, WD.id].sort((x, y) => x - y)]);
+        });
+
+        // -------------------------------------------------------------------
+        // §1.1 and §5.2 — the «del» door: a charge «del» does not count as linked; restoring it under a pair leg keeps
+        // it «scollega»
+        // -------------------------------------------------------------------
+
+        /** The DEPOSIT's group opened by its chip; ends on the FEE drawn under it, indented. */
+        async function openDepositGroup(): Promise<void> {
+            const chip = chipOfRow(gridRow(DEP.id));
+            expect(chip, 'premise: the DEPOSIT carries the chip of its FEE').not.toBeNull();
+            if (chip!.getAttribute('aria-expanded') !== 'true') {
+                await fireEvent.click(chip!);
+                await settle();
+            }
+            expect(chipOfRow(gridRow(DEP.id)), 'premise: the DEPOSIT’s group is open').toHaveAttribute('aria-expanded', 'true');
+            expect(rowsOf(FEE_D.id), 'premise: the FEE is drawn').toHaveLength(1);
+            expect(chargeOfCell(gridRow(FEE_D.id)), 'premise: the FEE is indented under the DEPOSIT').toBe(gridRow(DEP.id).getAttribute('data-row-id'));
+        }
+
+        /** The DEPOSIT with its FEE read, the FEE marked «del» from its own row menu (the DEPOSIT untouched). */
+        async function markFeeDeleted(): Promise<void> {
+            await openDepositWithFee();
+            await openDepositGroup();
+            await rowAction(gridRow(FEE_D.id), 'mark-delete');
+            expect(chargeState(gridRow(FEE_D.id)), 'premise: the FEE is marked «del»').toBe('del');
+            expect(rowStatus(gridRow(DEP.id)), 'premise: the DEPOSIT is untouched by the FEE’s «del»').toBe('original');
+        }
+
+        /** The FEE's rows on screen after the merge; when none is drawn, the pair row's chip (if it has one) is opened
+         *  first, so a row under a closed group is not taken for a vanished one. */
+        async function feeRowsAfterMerge(): Promise<HTMLElement[]> {
+            if (rowsOf(FEE_D.id).length > 0) return rowsOf(FEE_D.id);
+            const pairRow = gridRows().find((row) => idCellText(row).includes(`#${DEP.id}`) || idCellText(row).includes(`#${WD.id}`));
+            const chip = pairRow ? chipOfRow(pairRow) : null;
+            if (chip && chip.getAttribute('aria-expanded') !== 'true') {
+                await fireEvent.click(chip);
+                await settle();
+            }
+            return rowsOf(FEE_D.id);
+        }
+
+        // Guard (§1.1): a charge «del» does not count as linked, so its parent is offered and merged; the backend accepts
+        // the delete and the promote in one batch (`test_transaction_charge_edits.py`,
+        // `test_deleting_the_charge_in_the_same_batch_lets_the_promote_pass`).
+        it('C21 §1.1: the FEE marked «del» frees the DEPOSIT — the merge is offered (toolbar, banner) and done; «Save all» sends the FEE delete and the promote in one batch (guard)', async () => {
+            await openDepositWithFee();
+            await openDepositGroup();
+            expect(await toolbarOffers(savedRef(DEP), savedRef(WD)), 'premise: with the FEE linked, the toolbar offers no merge').toBe(false);
+
+            await rowAction(gridRow(FEE_D.id), 'mark-delete');
+            expect(chargeState(gridRow(FEE_D.id)), 'premise: the FEE is marked «del»').toBe('del');
+
+            expect(await toolbarOffers(savedRef(DEP), savedRef(WD)), 'C21 §1.1: a FEE «del» does not count as linked — the toolbar offers the merge').toBe(true);
+            expect(screen.queryByTestId('promote-suggest-banner'), 'C21 §1.1: the banner offers the pair').not.toBeNull();
+            expect(bannerItems(), 'C21 §1.1: the banner lists the DEPOSIT / WITHDRAWAL pair').toBe(1);
+            await mergeFromToolbar();
+
+            const body = await saveAll();
+            expect(body.deletes ?? [], 'the FEE alone is deleted').toEqual([FEE_D.id]);
+            expect(promotedPairs(body), 'one promote, the DEPOSIT and the WITHDRAWAL').toEqual([[DEP.id, WD.id].sort((x, y) => x - y)]);
+            expect(
+                (body.updates ?? []).filter((update) => update.id === FEE_D.id),
+                'no update of the deleted FEE',
+            ).toEqual([]);
+        });
+
+        // §1.1, after the merge: the FEE «del» keeps `chargeOf` the DEPOSIT, which may now be the hidden half of the pair.
+        // The user must still see the row they marked (to restore it, or to know it goes): top-level or under the pair row.
+        it('C21 §1.1: after the merge, the FEE «del» is still on screen (top-level or under the visible pair row), still «del»', async () => {
+            await markFeeDeleted();
+            await mergeFromToolbar();
+
+            const feeRows = await feeRowsAfterMerge();
+            const pairRow = gridRows().find((row) => idCellText(row).includes(`#${DEP.id}`) || idCellText(row).includes(`#${WD.id}`));
+            expect(feeRows, `C21 §1.1: the FEE «del» vanished from the grid after the merge (visible pair row ${pairRow ? idCellText(pairRow) : 'none'}, its chip ${pairRow && chipOfRow(pairRow) ? 'present' : 'absent'})`).toHaveLength(1);
+            expect(chargeState(feeRows[0]), 'the FEE is still marked «del»').toBe('del');
+            expect(rowStatus(feeRows[0]), 'its status cell says «delete»').toBe('delete');
+        });
+
+        // Red today on its premise, with the test above: after the merge the DEPOSIT is the hidden half of the pair and the
+        // FEE «del» is drawn nowhere, so its «Restore» door cannot be opened. Past that premise, a second red is predicted
+        // from the code, not observed: «Restore» goes through `setRowDeleted` → `applyDeleteChoice`, which sets
+        // `parentUnlink` on a restored charge only when its owner is «del» (a pair leg is not considered), so the FEE would
+        // be linked again under a leg of the pending pair (`keepUnlinkedFromUnfitParents` guards `resetRow` only), and the
+        // batch would promote a DEPOSIT that keeps a linked FEE (rule 6, refused by the backend).
+        it('C21 §5.2: the FEE «del», the DEPOSIT merged, then «Restore» on the FEE: it stays «unlink», the paired reason toasted; Save all sends the unlink and the promote', async () => {
+            // Premise: the reason's pattern resolves the catalogue key and matches the text it renders.
+            const reason = pairedReason();
+            expect(reason.source, 'premise: the paired reason key resolves in the catalogue').not.toContain('chargesLink');
+            await markFeeDeleted();
+            await mergeFromToolbar();
+            const feeRows = await feeRowsAfterMerge();
+            expect(feeRows, 'premise: the FEE «del» is reachable after the merge (its row menu is the «Restore» door)').toHaveLength(1);
+            const toasts = await toastsMock();
+            for (const variant of ['show', 'success', 'error', 'warning', 'info'] as const) toasts[variant].mockClear();
+
+            await rowAction(feeRows[0], 'mark-delete');
+
+            expect(chargeStateOf(FEE_D.id), 'C21 §5.2: «Restore» gave the FEE back to its parent, a leg of the pending pair').toBe('unlink');
+            expect(
+                (await toastMessages()).some((message) => reason.test(message)),
+                `C21 §5.2: a toast with the paired reason of «Link» (${reason}) — got ${JSON.stringify(await toastMessages())}`,
+            ).toBe(true);
+
+            const body = await saveAll();
+            expect(
+                (body.updates ?? []).filter((update) => update.id === FEE_D.id),
+                'C21 §5.2: the FEE’s update is its unlink alone',
+            ).toEqual([{id: FEE_D.id, parent_transaction_id: 0}]);
+            expect(promotedPairs(body), 'one promote, the DEPOSIT and the WITHDRAWAL').toEqual([[DEP.id, WD.id].sort((x, y) => x - y)]);
+            expect(body.deletes ?? [], 'nothing deleted: the FEE was restored').toEqual([]);
+        });
+
+        // ===================================================================
+        // 66 C22 — the merge off with its reason, one «leg of a pair», the resets with a queued merge
+        // ===================================================================
+
+        /**
+         * Contract `66-C22-contract.md` (§5 corrects §1–§4). Nested in C21 to reuse its fixtures and helpers.
+         *
+         *   - §1.2 / §2.2 the selection toolbar: when every check of today passes (two rows, no partner, no «del»,
+         *     `findPromoteMatch`, the exact cancel) but one row has linked charges, `promote-toolbar-confirm` is there,
+         *     `aria-disabled="true"`, `data-reason="hasCharges"`; a click or a tap opens its reason (the shared Tooltip,
+         *     `tooltip-content`, asserted on its state and on the catalogue key, never on a literal) and merges nothing.
+         *     After «scollega» it is on; two rows that make no pair have none, as today.
+         *   - §1.4 / §2.4 path 3: the charge's own Form, «Link to a transaction…» (`_parent_link`), naming a leg of a
+         *     merge queued here, is refused: no `chargeOf`, `notify` `tx.bulk.charge.link.refused.paired` (a warning
+         *     toast), the rest of the Form applied, the batch saves. A saved FEE (`patchRowFromForm`) and a new FEE
+         *     (`addRowFromForm`) both reach the one branch, `applyChargePayload` called by `handleFormPushed`.
+         *   - §1.5 / §2.5 / §5.1 path 5: a reset that touches a row of a queued merge undoes the merge first; «Reset
+         *     selected» undoes every queued merge among the chosen rows, then resets, whatever the order of the rows.
+         *   - §5.4 TBM:712 (`opToTxLike`, the Form's `related_transaction_id` of the visible row): not null exactly when
+         *     the row is a leg (`isPairLeg`, `bulkCharges.test.ts`). A guard.
+         *
+         * The selection's order is the order of the operations (`handleBulkTableSelectionChange` filters `ops`), never the
+         * order of the ticks; the operations follow the intent's `txIds` (`resolveInitialRows`), so the intent sets it.
+         * The payload witness of a reset is «Validate now» (`validateTransactions`): it sends the same `pendingPromotes` as
+         * «Save all», and a batch left with nothing to save makes «Save all» close the editor without a commit.
+         */
+        describe('66 C22: the merge off with its reason; «Link to a transaction» on a leg; the resets with a queued merge', () => {
+            /** A plain pair (no charge): a DEPOSIT on 77 and the WITHDRAWAL on 88 that cancels it, same notes. */
+            const D0 = savedCash(92_511, 'DEPOSIT', 77, '50.000000', 'C22 plain transfer');
+            const W0 = savedCash(92_513, 'WITHDRAWAL', 88, '-50.000000', 'C22 plain transfer');
+            /** A saved FEE of nobody, on the DEPOSIT's broker. */
+            const FREE = savedCash(92_512, 'FEE', 77, '-1.500000', 'C22 free fee');
+            /** Two WITHDRAWALs that make no pair with C21's DEP: amounts that do not cancel, the same broker. */
+            const W_OTHER = savedCash(92_504, 'WITHDRAWAL', 88, '-60.000000', 'C21 transfer');
+            const W_SAME = savedCash(92_505, 'WITHDRAWAL', 77, '-50.000000', 'C21 transfer');
+            /** A saved CASH_TRANSFER pair, linked in the store (W, the sender, is the visible half). */
+            const L_D = savedCash(92_521, 'DEPOSIT', 77, '50.000000', 'C22 linked', {type: 'CASH_TRANSFER', related_transaction_id: 92_522, partner_broker_id: 88});
+            const L_W = savedCash(92_522, 'WITHDRAWAL', 88, '-50.000000', 'C22 linked', {type: 'CASH_TRANSFER', related_transaction_id: 92_521, partner_broker_id: 77});
+
+            type FormItem = TXReadItem & {_charges?: ChargeDraft[]};
+
+            /** The merge button of the selection toolbar, or null. */
+            function promoteButton(): HTMLElement | null {
+                return screen.queryByTestId('promote-toolbar-confirm');
+            }
+
+            /** The new rows of the grid (status `new`). */
+            function newRows(): HTMLElement[] {
+                return gridRows().filter((row) => rowStatus(row) === 'new');
+            }
+
+            /** The grid rows that show either of these saved ids. */
+            function rowsShowing(...ids: number[]): HTMLElement[] {
+                return gridRows().filter((row) => ids.some((id) => idCellText(row).includes(`#${id}`)));
+            }
+
+            /** Untick every ticked row; ends on an empty selection. */
+            async function clearTicks(): Promise<void> {
+                for (const row of gridRows()) {
+                    const box = rowCheckbox(row);
+                    if (box?.getAttribute('data-state') === 'checked') {
+                        await fireEvent.click(box);
+                        await settle();
+                    }
+                }
+            }
+
+            /** The toolbar's merge of two rows with the same notes (no dialog); ends on nothing ticked. */
+            async function mergeSelected(a: HTMLElement, b: HTMLElement): Promise<void> {
+                await setTicked(a, true);
+                await setTicked(b, true);
+                const button = promoteButton();
+                expect(button, 'premise: the toolbar offers the merge').not.toBeNull();
+                expect(button, 'premise: the merge is on').not.toHaveAttribute('aria-disabled', 'true');
+                await fireEvent.click(button!);
+                await settle();
+                expect(screen.queryByTestId('promote-merge-modal-content'), 'premise: same notes, no merge dialog').toBeNull();
+                await clearTicks();
+            }
+
+            /** The `chargesBlock` reason (`transactions.promote.chargesBlock`) naming a row of this type, any ref. */
+            function chargesBlockReason(type: string): RegExp {
+                const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                const template = get(_)('transactions.promote.chargesBlock', {values: {type: '\u0001', ref: '\u0002'}});
+                expect(template, 'premise: the chargesBlock key resolves in the catalogue').not.toContain('transactions.promote');
+                const typeName = get(_)(`transactions.types.${type}`);
+                return new RegExp(escape(template).replace('\u0001', escape(typeName)).replace('\u0002', '.+'));
+            }
+
+            /** The promotes of a payload, as sorted id pairs. */
+            function promotesOf(body: C21Payload): number[][] {
+                return promotedPairs(body);
+            }
+
+            async function warningToasts(): Promise<unknown[][]> {
+                const toasts = await toastsMock();
+                return toasts.show.mock.calls.filter((call) => call[0] === 'warning');
+            }
+
+            async function clearToasts(): Promise<void> {
+                const toasts = await toastsMock();
+                for (const variant of ['show', 'success', 'error', 'warning', 'info'] as const) toasts[variant].mockClear();
+            }
+
+            // ---------------------------------------------------------------
+            // §2.2 — the merge button off, with its reason
+            // ---------------------------------------------------------------
+
+            /** C21's DEPOSIT and WITHDRAWAL, the DEPOSIT counting one charge whose read is held (never answered). */
+            async function openDepositWithHeldCharge(): Promise<void> {
+                holdChargesReads();
+                txStoreSetAll([DEP, WD], []);
+                mountEditor({action: 'edit', txIds: [DEP.id, WD.id]});
+                await waitFor(() => expect(rowsOf(WD.id), 'premise: both rows are on screen').toHaveLength(1));
+                await waitFor(() => expect(heldReads.length, 'premise: the read of the DEPOSIT’s charge is still out').toBeGreaterThan(0));
+            }
+
+            // Red today: with a linked charge `selectedForPromote` is null, so the button is not drawn at all (the first
+            // assertion). After C22 it is drawn off, with its reason, and a click or a tap only opens that reason.
+            it.each([
+                ['the FEE read under the DEPOSIT, a click', 'answered', 'click'],
+                ['the FEE read under the DEPOSIT, a tap', 'answered', 'tap'],
+                ['the DEPOSIT counting a charge still being read, a click', 'held', 'click'],
+            ] as const)('C22 §2.2: %s — promote-toolbar-confirm is there, aria-disabled, data-reason hasCharges; the reason opens; nothing merges', async (_label, read, how) => {
+                if (read === 'answered') await openDepositWithFee();
+                else await openDepositWithHeldCharge();
+                await setTicked(gridRow(DEP.id), true);
+                await setTicked(gridRow(WD.id), true);
+                expect(screen.queryByTestId('tx-bulk-delete-selected'), 'premise: the selection toolbar answers the selection').not.toBeNull();
+
+                const button = promoteButton();
+                expect(button, 'C22: the merge button is drawn, off, when a leg has linked charges (today it is absent)').not.toBeNull();
+                expect(button).toHaveAttribute('aria-disabled', 'true');
+                expect(button).toHaveAttribute('data-reason', 'hasCharges');
+                expect(screen.queryByTestId('tooltip-content'), 'premise: no reason open yet').toBeNull();
+
+                if (how === 'click') {
+                    await fireEvent.click(button!);
+                } else {
+                    await fireEvent.touchStart(button!);
+                    await fireEvent.touchEnd(button!);
+                    await fireEvent.click(button!);
+                }
+                await settle();
+
+                const reason = await screen.findByTestId('tooltip-content');
+                expect(reason, 'the reason is open').toBeInTheDocument();
+                expect(reason.textContent ?? '', 'the reason is chargesBlock, naming the DEPOSIT (the row holding the charge)').toMatch(chargesBlockReason('DEPOSIT'));
+                expect(screen.queryByTestId('promote-merge-modal-content'), 'no merge dialog').toBeNull();
+                expect(rowsShowing(DEP.id, WD.id), 'no merge: two rows, as before').toHaveLength(2);
+                // With the read held «Validate now» waits for it; the two rows are the witness there.
+                if (read === 'answered') {
+                    const body = (await validateNow()) as C21Payload;
+                    expect(body.promotes ?? [], 'no merge queued').toEqual([]);
+                }
+            });
+
+            // Guard, green today (C21 §2.2 reaches it too): after «scollega» on the FEE the button is on — no
+            // aria-disabled, no data-reason — and merges.
+            it('C22 §2.2 guard: «scollega» on the FEE — the button is on (no aria-disabled, no data-reason) and merges', async () => {
+                await openDepositWithFee();
+                await unlinkInParentForm(DEP, 1);
+                expect(chargeState(gridRow(FEE_D.id)), 'premise: the FEE is unlinked').toBe('unlink');
+                await setTicked(gridRow(DEP.id), true);
+                await setTicked(gridRow(WD.id), true);
+                const button = promoteButton();
+                expect(button, 'the merge is offered').not.toBeNull();
+                expect(button).not.toHaveAttribute('aria-disabled');
+                expect(button).not.toHaveAttribute('data-reason');
+                await fireEvent.click(button!);
+                await settle();
+                expect(rowsShowing(DEP.id, WD.id), 'merged: one row').toHaveLength(1);
+            });
+
+            // Guard, green today: rows that make no pair have no merge button, linked charge or not — the reason is shown
+            // only when every check of today passes but the charges (§1.2).
+            it.each([
+                ['amounts that do not cancel', W_OTHER],
+                ['the same broker', W_SAME],
+            ] as const)('C22 §2.2 guard: the DEPOSIT with its FEE and a WITHDRAWAL on %s — no merge button at all', async (_label, other) => {
+                answerChargesRead([FEE_D]);
+                txStoreSetAll([DEP, other], []);
+                mountEditor({action: 'edit', txIds: [DEP.id, other.id]});
+                await waitFor(() => expect(rowsOf(other.id), 'premise: both rows are on screen').toHaveLength(1));
+                await waitFor(() => expect(chipOfRow(gridRow(DEP.id)), 'premise: the FEE read sits under the DEPOSIT').toHaveAttribute('data-charges-count', '1'));
+                await setTicked(gridRow(DEP.id), true);
+                await setTicked(gridRow(other.id), true);
+                expect(screen.queryByTestId('tx-bulk-delete-selected'), 'premise: the selection toolbar answers the selection').not.toBeNull();
+                expect(promoteButton(), 'no pair: no merge button, on or off').toBeNull();
+            });
+
+            // ---------------------------------------------------------------
+            // §2.4 — path 3: «Link to a transaction…» in the charge's Form, naming a leg of a queued merge
+            // ---------------------------------------------------------------
+
+            /** D0, W0 and the free FEE; D0 and W0 merged from the toolbar (queued). Ends on the pair one row. */
+            async function openQueuedMergeWithFreeFee(): Promise<void> {
+                answerChargesRead([]);
+                txStoreSetAll([D0, W0, FREE], []);
+                mountEditor({action: 'edit', txIds: [D0.id, W0.id, FREE.id]});
+                await waitFor(() => expect(rowsOf(FREE.id), 'premise: the three rows are on screen').toHaveLength(1));
+                await mergeSelected(gridRow(D0.id), gridRow(W0.id));
+                expect(rowsShowing(D0.id, W0.id), 'premise: the merge is one row').toHaveLength(1);
+            }
+
+            /** The FEE's own Form, from its row menu; ends on the Form open on it. */
+            async function openFeeForm(): Promise<void> {
+                await rowAction(gridRow(FREE.id), 'edit-single');
+                await waitFor(() => {
+                    expect(formProbe().open, 'the FEE’s Form is open').toBe(true);
+                    expect((formProbe().items as FormItem[] | null)?.[0]?.id, 'on the FEE').toBe(FREE.id);
+                });
+            }
+
+            // Red today: TBM:3278 makes the picked row `chargeOf` without asking whether it is a leg, so the payload sends
+            // `parent_transaction_id` = the leg (rule 8, refused by the backend), and no refusal is published. The FEE
+            // staying a top-level row is a guard (rule 8 of `isUnderParent`, C21).
+            it.each([
+                ['the DEPOSIT (the hidden half)', 'dep'],
+                ['the WITHDRAWAL (the visible half)', 'wd'],
+            ] as const)('C22 §2.4: a saved FEE’s Form links it to %s of a queued merge — refused: no chargeOf, notify tx.bulk.charge.link.refused.paired, its note applied; the batch saves', async (_label, which) => {
+                const leg = which === 'dep' ? D0 : W0;
+                await openQueuedMergeWithFreeFee();
+                await openFeeForm();
+                const since = eventSeq();
+                await clearToasts();
+
+                await push(savedPayload(FREE, {description: 'C22 fee note changed', _parent_link: leg.id}));
+
+                expect.soft(eventsSince(since, 'tx.bulk.charge.link.refused.paired'), 'C22: the refusal is published (notify tx.bulk.charge.link.refused.paired)').toHaveLength(1);
+                expect.soft(await warningToasts(), 'C22: a warning toast says why').toHaveLength(1);
+                expect(rowsOf(FREE.id), 'guard: the FEE is a row of its own').toHaveLength(1);
+                expect(chargeOfCell(gridRow(FREE.id)), 'guard: not under the pair (rule 8)').toBeNull();
+                expect(rowDescription(gridRow(FREE.id)), 'the rest of the Form applies: the note').toBe('C22 fee note changed');
+
+                const validated = (await validateNow()) as C21Payload;
+                const feeUpdates = (validated.updates ?? []).filter((update) => update.id === FREE.id);
+                expect
+                    .soft(
+                        feeUpdates.filter((update) => 'parent_transaction_id' in update),
+                        `C22: the FEE is sent with a parent, a leg of the pair — ${JSON.stringify(feeUpdates)}`,
+                    )
+                    .toEqual([]);
+                expect(
+                    feeUpdates.some((update) => update.description === 'C22 fee note changed'),
+                    `the FEE’s note is sent — ${JSON.stringify(feeUpdates)}`,
+                ).toBe(true);
+                expect(promotesOf(validated), 'the merge stays queued').toEqual([[D0.id, W0.id].sort((x, y) => x - y)]);
+
+                const body = await saveAll();
+                expect(
+                    (body.updates ?? []).filter((update) => update.id === FREE.id && 'parent_transaction_id' in update),
+                    'C22: «Save all» sends no parent for the FEE',
+                ).toEqual([]);
+                expect(promotedPairs(body), 'one promote, the DEPOSIT and the WITHDRAWAL').toEqual([[D0.id, W0.id].sort((x, y) => x - y)]);
+            });
+
+            // Red today, as above, for a FEE born in its own Form («+ Add row»): `addRowFromForm`, then the same branch of
+            // `applyChargePayload` (`handleFormPushed` calls it after either). It must not become a create with a parent.
+            it('C22 §2.4: a new FEE from «+ Add row» linked to the DEPOSIT of a queued merge — refused: no parent in its create, the refusal published; the batch saves', async () => {
+                await openQueuedMergeWithFreeFee();
+                const since = eventSeq();
+                await clearToasts();
+
+                await addRow(cashPayload('FEE' as Side, 77, '-2.000000', 'C22 new fee', {_parent_link: D0.id}));
+
+                expect.soft(eventsSince(since, 'tx.bulk.charge.link.refused.paired'), 'C22: the refusal is published (notify tx.bulk.charge.link.refused.paired)').toHaveLength(1);
+                expect.soft(await warningToasts(), 'C22: a warning toast says why').toHaveLength(1);
+                expect(chargeOfCell(gridRowDescribed('C22 new fee')), 'guard: the new FEE is a row of its own (rule 8)').toBeNull();
+
+                const body = await saveAll();
+                const create = (body.creates ?? []).find((item) => item.description === 'C22 new fee');
+                expect(create, `the new FEE is created — ${JSON.stringify(body.creates)}`).toBeDefined();
+                expect({parent_transaction_id: create?.parent_transaction_id ?? null, parent_ref: create?.parent_ref ?? null}, `C22: the new FEE is created with no parent — ${JSON.stringify(create)}`).toEqual({parent_transaction_id: null, parent_ref: null});
+                expect(promotedPairs(body), 'one promote, the DEPOSIT and the WITHDRAWAL').toEqual([[D0.id, W0.id].sort((x, y) => x - y)]);
+            });
+
+            // Guard, green before and after: a row that is no leg is linked as today — the refusal is for legs only.
+            it('C22 §2.4 guard: before any merge, the FEE’s Form links it to the DEPOSIT — chargeOf, sent with the parent, no refusal', async () => {
+                answerChargesRead([]);
+                txStoreSetAll([D0, W0, FREE], []);
+                mountEditor({action: 'edit', txIds: [D0.id, W0.id, FREE.id]});
+                await waitFor(() => expect(rowsOf(FREE.id), 'premise: the three rows are on screen').toHaveLength(1));
+                await openFeeForm();
+                const since = eventSeq();
+
+                await push(savedPayload(FREE, {_parent_link: D0.id}));
+
+                expect(eventsSince(since, 'tx.bulk.charge.link.refused.paired'), 'no refusal').toHaveLength(0);
+                expect(chargeOfCell(gridRow(FREE.id)), 'the FEE sits under the DEPOSIT').toBe(gridRow(D0.id).getAttribute('data-row-id'));
+                const body = (await validateNow()) as C21Payload;
+                expect((body.updates ?? []).filter((update) => update.id === FREE.id)).toEqual([{id: FREE.id, parent_transaction_id: D0.id}]);
+            });
+
+            // ---------------------------------------------------------------
+            // §2.5 — path 5: a reset with a queued merge
+            // ---------------------------------------------------------------
+
+            type Mix = 'saved+saved' | 'saved+new';
+
+            /**
+             * A merge queued from the toolbar. Saved + saved: D0 and W0. Saved + new: the saved W0 and a new DEPOSIT typed
+             * in the Form (same note), so the saved row is the visible half — a create has no «Reset row». Ends on the pair
+             * one row, edited, its merge in the payload.
+             */
+            async function openQueued(mix: Mix): Promise<HTMLElement> {
+                answerChargesRead([]);
+                if (mix === 'saved+saved') {
+                    txStoreSetAll([D0, W0], []);
+                    mountEditor({action: 'edit', txIds: [D0.id, W0.id]});
+                    await waitFor(() => expect(rowsOf(W0.id), 'premise: both rows are on screen').toHaveLength(1));
+                    await mergeSelected(gridRow(D0.id), gridRow(W0.id));
+                } else {
+                    // Two saved rows (the FEE is no pair of anything): the editor opens no Form by itself.
+                    txStoreSetAll([W0, FREE], []);
+                    mountEditor({action: 'edit', txIds: [W0.id, FREE.id]});
+                    await waitFor(() => expect(rowsOf(FREE.id), 'premise: both rows are on screen').toHaveLength(1));
+                    await addRow(cashPayload('DEPOSIT', 77, '50.000000', 'C22 plain transfer'));
+                    expect(newRows(), 'premise: the new DEPOSIT is on screen').toHaveLength(1);
+                    await mergeSelected(gridRow(W0.id), newRows()[0]);
+                    expect(newRows(), 'premise: the new DEPOSIT is the hidden half').toHaveLength(0);
+                }
+                const pair = rowsShowing(D0.id, W0.id);
+                expect(pair, 'premise: the merge is one row').toHaveLength(1);
+                expect(idCellText(pair[0]), 'premise: the saved WITHDRAWAL (the sender) is the visible half').toContain(`#${W0.id}`);
+                expect(rowStatus(pair[0]), 'premise: the visible half is edited (its type), so the resets are offered').toBe('edited');
+                const queued = (await validateNow()) as C21Payload;
+                expect((queued.promotes ?? []).length, `premise: one merge queued — ${JSON.stringify(queued.promotes)}`).toBe(1);
+                return pair[0];
+            }
+
+            // Red today (the defect of 66-C22-mirror-audit row 5, reproduced): `resetAll` empties `pendingSplits` but not
+            // `pendingPromotes`, and `resetRow` resets both halves from the store but leaves the merge in the queue. The
+            // grid shows two rows of their own while the payload still merges them. In the mixed case the new half also
+            // stays hidden (`pairedWith` naming the saved half's old tempId). Expected (§1.5): the merge undone first, as
+            // «Split pair» does (`undoPendingPromote`), then the reset.
+            it.each([
+                ['saved + saved', 'Reset all', 'saved+saved', 'all'],
+                ['saved + saved', 'Reset row on the visible half', 'saved+saved', 'row'],
+                ['saved + new', 'Reset all', 'saved+new', 'all'],
+                ['saved + new', 'Reset row on the visible (saved) half', 'saved+new', 'row'],
+            ] as const)('C22 §2.5: %s merged, then «%s» — no merge left in the queue, both rows back on their own', async (_label, _door, mix, door) => {
+                const pairRow = await openQueued(mix);
+                if (door === 'all') {
+                    const reset = screen.queryByTestId('tx-bulk-reset-all');
+                    expect(reset, 'premise: «Reset all» is offered').not.toBeNull();
+                    expect(await clickCollectingErrors(reset!), '«Reset all» throws nothing').toEqual([]);
+                } else {
+                    await rowAction(pairRow, 'reset');
+                }
+
+                expect.soft(rowsOf(W0.id), 'the saved WITHDRAWAL is a row').toHaveLength(1);
+                expect.soft(rowStatus(gridRow(W0.id)), 'the saved WITHDRAWAL is back as saved').toBe('original');
+                if (mix === 'saved+saved') {
+                    expect.soft(rowsShowing(D0.id, W0.id), 'two rows of their own').toHaveLength(2);
+                    expect.soft(rowStatus(gridRow(D0.id)), 'the saved DEPOSIT is back as saved').toBe('original');
+                } else {
+                    expect.soft(newRows(), 'C22: the new DEPOSIT is visible again, a row of its own (today it stays hidden behind the reset half)').toHaveLength(1);
+                }
+                const body = (await validateNow()) as C21Payload;
+                expect.soft(body.promotes ?? [], `C22: the reset left a merge in the queue that the grid no longer shows — ${JSON.stringify(body.promotes)}`).toEqual([]);
+                if (mix === 'saved+new') {
+                    const create = (body.creates ?? []).find((item) => item.broker_id === 77 && item.type === 'DEPOSIT');
+                    expect.soft(create, `C22: the new DEPOSIT is created as a DEPOSIT, on its own — ${JSON.stringify(body.creates)}`).toBeDefined();
+                    expect.soft(create?.link_uuid ?? null, 'C22: the new DEPOSIT keeps no link of the undone merge').toBeNull();
+                }
+                expect(
+                    (body.updates ?? []).filter((update) => update.id === W0.id || update.id === D0.id),
+                    'no update of the saved rows: they are back as saved',
+                ).toEqual([]);
+            });
+
+            // ---------------------------------------------------------------
+            // §5.1 — «Reset selected» on the visible pair row and the FEE unlinked from the DEPOSIT, both orders
+            // ---------------------------------------------------------------
+
+            /** Where the FEE sits: under the DEPOSIT (indented in its open group, or counted by its chip while the group
+             *  is closed) and linked, or a description of where it is instead. */
+            function feeUnderDeposit(): string {
+                if (rowsOf(DEP.id).length !== 1) return `the DEPOSIT is not one row of its own (${rowsOf(DEP.id).length})`;
+                const depRow = gridRow(DEP.id);
+                const feeRows = rowsOf(FEE_D.id);
+                if (feeRows.length === 0) return chipOfRow(depRow)?.getAttribute('data-charges-count') === '1' ? 'under the DEPOSIT, linked' : 'not on screen, and not counted by the DEPOSIT’s chip';
+                const under = chargeOfCell(feeRows[0]) === depRow.getAttribute('data-row-id');
+                const state = chargeState(feeRows[0]);
+                return under && state === 'linked' ? 'under the DEPOSIT, linked' : `${under ? 'under the DEPOSIT' : 'a top-level row'}, state ${state ?? 'none'}`;
+            }
+
+            // Red today, differently in each order — evidence that the two orders are distinct:
+            //   - FEE first: `resetRow(FEE)` runs while the DEPOSIT is still a leg, so the FEE stays «unlink» and the
+            //     kept-unlinked notify fires (C21 §5.2); then the pair is reset and the merge stays queued;
+            //   - pair first: the pair is reset (the DEPOSIT no longer a leg), the FEE goes back under it, but the merge
+            //     stays queued: the batch would link a FEE to a leg (rule 8) and promote a parent with a charge (rule 6).
+            // After C22 (`resetRows`) the merges among the chosen rows are undone first: the same end state either way.
+            it.each([
+                ['the FEE before the pair in the operations', 'fee-first'],
+                ['the pair before the FEE in the operations', 'pair-first'],
+            ] as const)('C22 §5.1: «Reset selected» on the visible pair row and the FEE unlinked from its DEPOSIT, %s — the FEE back under the DEPOSIT, no merge queued, no pair notify', async (_label, order) => {
+                answerChargesRead([FEE_D]);
+                txStoreSetAll([DEP, WD, FEE_D], []);
+                // The selection is the operations' order (`handleBulkTableSelectionChange` filters `ops`), which follows
+                // the intent (`resolveInitialRows`); the FEE came with its parent, so it is adopted and nothing is read.
+                mountEditor({action: 'edit', txIds: order === 'fee-first' ? [FEE_D.id, DEP.id, WD.id] : [DEP.id, WD.id, FEE_D.id]});
+                await waitFor(() => expect(rowsOf(WD.id), 'premise: the rows are on screen').toHaveLength(1));
+                await waitFor(() => expect(chipOfRow(gridRow(DEP.id)), 'premise: the FEE sits under the DEPOSIT').toHaveAttribute('data-charges-count', '1'));
+                await unlinkInParentForm(DEP, 1);
+                expect(chargeState(gridRow(FEE_D.id)), 'premise: the FEE is unlinked, a top-level row').toBe('unlink');
+                await mergeSelected(gridRow(DEP.id), gridRow(WD.id));
+                const pair = rowsShowing(DEP.id, WD.id);
+                expect(pair, 'premise: the merge is one row').toHaveLength(1);
+
+                await setTicked(pair[0], true);
+                await setTicked(gridRow(FEE_D.id), true);
+                const reset = screen.queryByTestId('tx-bulk-reset-selected');
+                expect(reset, 'premise: «Reset selected» is offered').not.toBeNull();
+                const since = eventSeq();
+                await clearToasts();
+                expect(await clickCollectingErrors(reset!), '«Reset selected» throws nothing').toEqual([]);
+
+                expect.soft(eventsSince(since, 'tx.bulk.reset.charge.kept-unlinked'), 'C22: no «half of a pair» notify — the pair is undone before the FEE is reset').toHaveLength(0);
+                expect.soft(await warningToasts(), 'C22: no warning toast').toHaveLength(0);
+                expect.soft(rowsShowing(DEP.id, WD.id), 'the pair undone: two rows of their own').toHaveLength(2);
+                expect.soft(feeUnderDeposit(), 'C22: the FEE is back under the DEPOSIT, linked').toBe('under the DEPOSIT, linked');
+                const body = (await validateNow()) as C21Payload;
+                expect.soft(body.promotes ?? [], `C22: a merge is still queued — ${JSON.stringify(body.promotes)}`).toEqual([]);
+                expect
+                    .soft(
+                        (body.updates ?? []).filter((update) => update.id === FEE_D.id),
+                        'C22: the FEE is back as saved: no update',
+                    )
+                    .toEqual([]);
+            });
+
+            // ---------------------------------------------------------------
+            // §5.4 — TBM:712, the Form's related_transaction_id of the visible row: not null exactly on a leg (guard)
+            // ---------------------------------------------------------------
+
+            // Guard, green before and after: `opToTxLike` keeps its own computation (it needs the partner's id, or 0 for a
+            // new one); on the visible row its «not null» is `isPairLeg`. Read from the Form probe, by the row's own id.
+            it.each([
+                ['a saved pair loaded as such', 'loaded', true],
+                ['a merge queued in this Bulk', 'queued', true],
+                ['a saved pair split in this Bulk', 'split', false],
+                ['two lone rows', 'lone', false],
+            ] as const)('C22 §5.4 guard: %s — the Form’s related_transaction_id of the visible row is not null exactly on a leg (%s)', async (_label, state, leg) => {
+                answerChargesRead([]);
+                const [from, to] = state === 'loaded' || state === 'split' ? [L_W, L_D] : [W0, D0];
+                txStoreSetAll([from, to], []);
+                mountEditor({action: 'edit', txIds: [to.id, from.id]});
+                await waitFor(() => expect(rowsShowing(from.id, to.id).length, 'premise: the rows are on screen').toBeGreaterThan(0));
+                if (state === 'queued') await mergeSelected(gridRow(to.id), gridRow(from.id));
+                if (state === 'split') {
+                    const pair = rowsShowing(from.id, to.id);
+                    expect(pair, 'premise: the saved pair is one row').toHaveLength(1);
+                    await rowAction(pair[0], 'split');
+                }
+                const rows = rowsShowing(from.id, to.id);
+                expect(rows, 'premise: one row for a pair, two otherwise').toHaveLength(leg ? 1 : 2);
+                const visible = leg ? rows[0] : gridRow(from.id);
+                await rowAction(visible, 'edit-single');
+                await waitFor(() => expect(formProbe().open, 'the Form is open').toBe(true));
+                const item = ((formProbe().items as FormItem[] | null) ?? []).find((candidate) => candidate.id === from.id);
+                expect(item, `the Form holds the visible row #${from.id}`).toBeDefined();
+                expect(item!.related_transaction_id != null, `related_transaction_id = ${item!.related_transaction_id}`).toBe(leg);
+            });
+
+            // ---------------------------------------------------------------
+            // C22b — a reset after «Split pair» on a saved pair
+            // ---------------------------------------------------------------
+
+            type C22bPayload = C21Payload & {splits?: Array<{id_a: number; id_b: number}>};
+
+            /** The splits of a payload, as sorted id pairs. */
+            function splitsOf(body: C22bPayload): number[][] {
+                return (body.splits ?? []).map((split) => [split.id_a, split.id_b].sort((a, b) => a - b));
+            }
+
+            /** Whether a row's menu offers «Reset row»; the menu is closed again before returning. */
+            async function offersReset(row: HTMLElement): Promise<boolean> {
+                await openMenu(row);
+                expect(screen.getByTestId('context-menu-action-edit-single'), 'barrier: the menu is drawn').toBeInTheDocument();
+                const offered = screen.queryByTestId('context-menu-action-reset') !== null;
+                await fireEvent.keyDown(window, {key: 'Escape'});
+                await settle();
+                await waitFor(() => expect(screen.queryByTestId('context-menu'), 'the menu closed').toBeNull());
+                return offered;
+            }
+
+            /**
+             * The saved CASH_TRANSFER pair (L_W the sender, L_D the receiver) split with «Split pair», then the note of
+             * `edited` changed in its own Form — a split half that is not edited is `original`, and neither «Reset row»
+             * nor «Reset selected» is offered on an `original` row. The push is the row the Form was handed (its post-split
+             * type), only the note changed. Ends on two rows, the split queued, the edited half `edited`. `read` answers the
+             * charges read (C22c: a saved parent in `extra` with its saved FEE).
+             */
+            async function openSplitAndEdit(edited: TXReadItem, extra: readonly TXReadItem[] = [], read: TXReadItem[] = []): Promise<void> {
+                answerChargesRead(read);
+                txStoreSetAll([L_W, L_D, ...extra], []);
+                mountEditor({action: 'edit', txIds: [L_D.id, L_W.id, ...extra.map((tx) => tx.id)]});
+                await waitFor(() => expect(rowsShowing(L_W.id, L_D.id), 'premise: the saved pair is one row').toHaveLength(1));
+                for (const tx of extra) await waitFor(() => expect(rowsOf(tx.id), `premise: #${tx.id} is a row on screen`).toHaveLength(1));
+                const pair = rowsShowing(L_W.id, L_D.id)[0];
+                // The ID cell of a pair names the row's own id first, then its hidden partner's (`renderDualHtml`).
+                const ids = idCellText(pair);
+                expect(ids.indexOf(`#${L_W.id}`), `premise: the saved WITHDRAWAL (the sender) is the visible half — ${ids}`).toBeLessThan(ids.indexOf(`#${L_D.id}`));
+                expect(rowStatus(pair), 'premise: the pair is as saved').toBe('original');
+
+                await rowAction(pair, 'split');
+                expect(rowsShowing(L_W.id, L_D.id), 'premise: «Split pair» shows two rows').toHaveLength(2);
+                expect(rowsOf(L_W.id), 'premise: the WITHDRAWAL is a row of its own').toHaveLength(1);
+                expect(rowsOf(L_D.id), 'premise: the DEPOSIT is a row of its own').toHaveLength(1);
+                expect(screen.queryByTestId('split-queued-badge'), 'premise: the split is queued (badge)').not.toBeNull();
+                // The status cell of a split-queued half says `split` whatever its fields: «edited» is read from the menu.
+                expect(rowStatus(gridRow(L_W.id)), 'premise: the WITHDRAWAL is marked split').toBe('split');
+                expect(rowStatus(gridRow(L_D.id)), 'premise: the DEPOSIT is marked split').toBe('split');
+                const queued = (await validateNow()) as C22bPayload;
+                expect(splitsOf(queued), `premise: one split queued, the saved pair — ${JSON.stringify(queued.splits)}`).toEqual([[L_W.id, L_D.id].sort((a, b) => a - b)]);
+
+                await editHalfNote(edited, 'C22b note changed');
+            }
+
+            /**
+             * The note of a split half changed in its own Form: the push is the row the Form was handed (its post-split
+             * type), only the note changed. Ends on the half offering «Reset row», its note in the payload, the split
+             * still queued.
+             */
+            async function editHalfNote(half: TXReadItem, note: string): Promise<void> {
+                await rowAction(gridRow(half.id), 'edit-single');
+                await waitFor(() => expect(formProbe().open, 'premise: the Form of the half is open').toBe(true));
+                const item = ((formProbe().items as TXReadItem[] | null) ?? []).find((candidate) => candidate.id === half.id);
+                expect(item, `premise: the Form holds #${half.id}`).toBeDefined();
+                await push({broker_id: item!.broker_id, type: item!.type, date: item!.date, quantity: item!.quantity, asset_id: item!.asset_id, cash: item!.cash, tags: item!.tags ?? [], description: note});
+                expect(await offersReset(gridRow(half.id)), `premise: the edited half #${half.id} offers «Reset row»`).toBe(true);
+                const withEdit = (await validateNow()) as C22bPayload;
+                expect(
+                    (withEdit.updates ?? []).some((update) => update.id === half.id && update.description === note),
+                    `premise: the note change of #${half.id} is sent — ${JSON.stringify(withEdit.updates)}`,
+                ).toBe(true);
+                expect(splitsOf(withEdit), 'premise: the split is still queued').toHaveLength(1);
+            }
+
+            // Red today: `handleSplitRow` (case A) queues `{id_a, id_b}` in `pendingSplits`; «Reset row» and «Reset selected»
+            // reach `resetRows` → `resetOne`, which reads the row back from the store and `collapsePairedOps` joins the pair
+            // again, but the split stays queued — the grid shows one row while the payload still splits it. Only «Reset all»
+            // empties `pendingSplits`. Expected (C22, nothing queued that the grid does not show): the split undone.
+            it.each([
+                ['«Reset row» on the half visible before the split (the WITHDRAWAL)', 'row', 'sender'],
+                ['«Reset row» on the half the split made visible (the DEPOSIT)', 'row', 'receiver'],
+                ['both halves ticked, «Reset selected» (the DEPOSIT edited)', 'selected', 'receiver'],
+            ] as const)('C22b: a saved pair split, one half edited, then %s — no split queued, the pair one row as saved', async (_label, door, half) => {
+                const edited = half === 'sender' ? L_W : L_D;
+                await openSplitAndEdit(edited);
+                if (door === 'row') {
+                    await rowAction(gridRow(edited.id), 'reset');
+                } else {
+                    await setTicked(gridRow(L_W.id), true);
+                    await setTicked(gridRow(L_D.id), true);
+                    const reset = screen.queryByTestId('tx-bulk-reset-selected');
+                    expect(reset, 'premise: «Reset selected» is offered (one ticked half is edited)').not.toBeNull();
+                    expect(await clickCollectingErrors(reset!), '«Reset selected» throws nothing').toEqual([]);
+                }
+
+                const rows = rowsShowing(L_W.id, L_D.id);
+                expect.soft(rows, 'the pair is one row again').toHaveLength(1);
+                if (rows.length === 1) expect.soft(rowStatus(rows[0]), 'C22b: the pair is back as saved (today its status cell still says split)').toBe('original');
+                expect.soft(screen.queryByTestId('split-queued-badge'), 'C22b: no split badge — the grid shows no split').toBeNull();
+                const body = (await validateNow()) as C22bPayload;
+                expect.soft(splitsOf(body), `C22b: the reset left a split in the queue that the grid no longer shows — ${JSON.stringify(body.splits)}`).toEqual([]);
+                expect
+                    .soft(
+                        (body.updates ?? []).filter((update) => update.id === L_W.id || update.id === L_D.id),
+                        'no update of the saved halves: they are back as saved',
+                    )
+                    .toEqual([]);
+            });
+
+            // Green with `resetRows`' `undone` halves. Without them `resetOne` would reset only the chosen half (a split
+            // half has no `pairedWith` partner, so `getPartnerOp` finds none), then `collapsePairedOps` would join the
+            // pair again with the other half still holding its edit: its post-split type and its note would be sent as
+            // an update, on the visible half (WITHDRAWAL kept) or on the hidden one (DEPOSIT kept).
+            it.each([
+                ['the WITHDRAWAL', 'sender'],
+                ['the DEPOSIT', 'receiver'],
+            ] as const)('C22b: a saved pair split, both halves edited, «Reset row» on %s only — no split queued, the pair one row as saved, no update of either half', async (_label, half) => {
+                await openSplitAndEdit(L_W);
+                await editHalfNote(L_D, 'C22b other note changed');
+                expect(await offersReset(gridRow(L_W.id)), 'premise: the WITHDRAWAL still offers «Reset row»').toBe(true);
+                const both = (await validateNow()) as C22bPayload;
+                expect(
+                    (both.updates ?? []).filter((update) => update.id === L_W.id || update.id === L_D.id).map((update) => [update.id, update.description]),
+                    `premise: both halves are sent with their notes — ${JSON.stringify(both.updates)}`,
+                ).toEqual(
+                    expect.arrayContaining([
+                        [L_W.id, 'C22b note changed'],
+                        [L_D.id, 'C22b other note changed'],
+                    ]),
+                );
+                expect(splitsOf(both), 'premise: the split is still queued').toHaveLength(1);
+
+                await rowAction(gridRow(half === 'sender' ? L_W.id : L_D.id), 'reset');
+
+                const rows = rowsShowing(L_W.id, L_D.id);
+                expect.soft(rows, 'the pair is one row again').toHaveLength(1);
+                if (rows.length === 1) expect.soft(rowStatus(rows[0]), 'C22b: the pair is back as saved').toBe('original');
+                expect.soft(screen.queryByTestId('split-queued-badge'), 'C22b: no split badge').toBeNull();
+                const body = (await validateNow()) as C22bPayload;
+                expect.soft(splitsOf(body), `C22b: a split left in the queue — ${JSON.stringify(body.splits)}`).toEqual([]);
+                expect(
+                    (body.updates ?? []).filter((update) => update.id === L_W.id || update.id === L_D.id),
+                    'C22b: no update of either half: the other half was reset too, its post-split type and its note dropped',
+                ).toEqual([]);
+            });
+
+            /** How a charge row looks on screen: where it sits, its badge, its status; or how many rows show it. */
+            function lookOf(rows: HTMLElement[]): string {
+                if (rows.length !== 1) return `${rows.length} rows on screen`;
+                const under = chargeOfCell(rows[0]);
+                return [under === null ? 'top level' : `under ${under}`, `badge ${chargeState(rows[0]) ?? 'none'}`, `status ${rowStatus(rows[0]) ?? 'none'}`].join(', ');
+            }
+
+            /** A saved charge back exactly as saved with no saved parent: its own row, no badge, `original`. */
+            const AS_SAVED = 'top level, badge none, status original';
+
+            // A saved pair split here is no pair leg (`isPairLeg`, `pairIdOf`), so «Link» accepts a split half as a
+            // parent. A reset that undoes the split joins the pair again, whichever door undoes it: the charge must not
+            // stay linked to what is now a leg (rule 8) and no split may stay queued. 66 C22c (consultant, 20/11): the
+            // FEE — saved with no parent — was only linked here, so the link is dropped (`chargeOf`), never turned into
+            // an «unlink» (`parentUnlink` is for a charge cut from its SAVED parent): it comes back exactly as saved, a top
+            // level row with no badge, `original`, nothing sent. Both halves are reset by every door (`resetRows`'
+            // `undone` halves); in (b2) the DEPOSIT, the FEE's owner, is reset second.
+            // The DEPOSIT is edited first in every case: a saved split half keeps the pair's type (CASH_TRANSFER) until
+            // its Form hands it its own (`handleSplitRow`, case A), and a CASH_TRANSFER has no charge role, so «Link» is
+            // not offered on an untouched split half. (b2) then edits the WITHDRAWAL and resets from it.
+            // C22c flips this case's last C22b assertion: the FEE was expected «unlink» (C21 §5.2 applied as is); it is now
+            // expected back as saved, with no badge. Red today on that line: `keepUnlinkedFromUnfitParents` sets
+            // `parentUnlink` on it.
+            it.each([
+                ['«Reset row» on the DEPOSIT (the FEE’s owner)', 'row-deposit'],
+                ['the WITHDRAWAL edited too, «Reset row» on it (the half that does not own the FEE)', 'row-withdrawal'],
+                ['both halves ticked, «Reset selected»', 'selected'],
+            ] as const)('C22b: a saved FEE linked by «Link» to the split DEPOSIT, the DEPOSIT edited, then %s — no split queued, no update of the FEE, the FEE back as saved (no badge), one pair notify', async (_label, door) => {
+                await openSplitAndEdit(L_D, [FREE]);
+                await linkRows(gridRow(L_D.id), gridRow(FREE.id));
+                expect(chargeOfCell(gridRow(FREE.id)), 'premise: the FEE sits under the split DEPOSIT').toBe(gridRow(L_D.id).getAttribute('data-row-id'));
+                expect(await offersReset(gridRow(L_D.id)), 'premise: the DEPOSIT still offers «Reset row»').toBe(true);
+                if (door === 'row-withdrawal') await editHalfNote(L_W, 'C22b withdrawal note changed');
+                const linked = (await validateNow()) as C22bPayload;
+                expect(
+                    (linked.updates ?? []).filter((update) => update.id === FREE.id).map((update) => update.parent_transaction_id),
+                    `premise: the FEE is sent under the split DEPOSIT — ${JSON.stringify(linked.updates)}`,
+                ).toEqual([L_D.id]);
+                expect(splitsOf(linked), 'premise: the split is still queued').toHaveLength(1);
+
+                const since = eventSeq();
+                await clearToasts();
+                if (door !== 'selected') {
+                    await rowAction(gridRow(door === 'row-deposit' ? L_D.id : L_W.id), 'reset');
+                } else {
+                    // The selection is the two halves, nothing else: «Link» cleared its own (`confirmLinkPanel`), and the
+                    // FEE, now a charge row, has no checkbox.
+                    expect(rowCheckbox(gridRow(FREE.id)), 'premise: the linked FEE is a charge row, with no checkbox').toBeNull();
+                    await setTicked(gridRow(L_W.id), true);
+                    await setTicked(gridRow(L_D.id), true);
+                    const reset = screen.queryByTestId('tx-bulk-reset-selected');
+                    expect(reset, 'premise: «Reset selected» is offered (one ticked half is edited)').not.toBeNull();
+                    expect(await clickCollectingErrors(reset!), '«Reset selected» throws nothing').toEqual([]);
+                }
+
+                const body = (await validateNow()) as C22bPayload;
+                expect.soft(splitsOf(body), `C22b: a split left in the queue — ${JSON.stringify(body.splits)}`).toEqual([]);
+                expect.soft(rowsShowing(L_W.id, L_D.id), 'C22b: the pair is one row again').toHaveLength(1);
+                expect
+                    .soft(
+                        (body.updates ?? []).filter((update) => update.id === FREE.id && (update.parent_transaction_id === L_D.id || update.parent_transaction_id === L_W.id)),
+                        `C22b: the FEE is sent under a leg of the pair again (rule 8) — ${JSON.stringify(body.updates)}`,
+                    )
+                    .toEqual([]);
+                // The FEE has no saved parent: its «unlink» sends nothing, so no update of the FEE at all.
+                expect
+                    .soft(
+                        (body.updates ?? []).filter((update) => update.id === FREE.id),
+                        `C22b: an update of the FEE is sent — ${JSON.stringify(body.updates)}`,
+                    )
+                    .toEqual([]);
+                // C22c: the link was pending, so it is dropped: the FEE is back as saved (it was «unlink» in C22b). The
+                // pair is still named once, by the notify the reset raises today.
+                expect.soft(lookOf(rowsOf(FREE.id)), 'C22c: the FEE is back as saved — a top-level row, no «unlink» badge, original (today it stays «unlink»)').toBe(AS_SAVED);
+                expect.soft(eventsSince(since, 'tx.bulk.reset.charge.kept-unlinked'), 'C22b: exactly one «half of a pair» notify').toHaveLength(1);
+                expect.soft(screen.getByTestId('tx-bulk-commit'), 'C22c: nothing left to save — «Save all» off').toBeDisabled();
+            });
+
+            // ---------------------------------------------------------------
+            // C22c — «unlink» only from a SAVED parent; a pending link is undone by dropping it
+            // ---------------------------------------------------------------
+
+            /** A saved DEPOSIT out of the Bulk (in the store, not in the intent): the Form picker's `_parent_link` target. */
+            const OUTSIDE = savedCash(92_531, 'DEPOSIT', 77, '70.000000', 'C22c outside parent');
+
+            /** A charge's own Form, from its row menu; ends on the Form open on it. */
+            async function openOwnForm(tx: TXReadItem): Promise<void> {
+                await rowAction(gridRow(tx.id), 'edit-single');
+                await waitFor(() => {
+                    expect(formProbe().open, `the Form of #${tx.id} is open`).toBe(true);
+                    expect((formProbe().items as FormItem[] | null)?.[0]?.id, `on #${tx.id}`).toBe(tx.id);
+                });
+            }
+
+            /** A parent's group opened by its chip (a no-op when open); ends on the group open. */
+            async function openGroupOf(parent: TXReadItem): Promise<void> {
+                const chip = chipOfRow(gridRow(parent.id));
+                expect(chip, `premise: #${parent.id} carries the chip of its charges`).not.toBeNull();
+                if (chip!.getAttribute('aria-expanded') !== 'true') {
+                    await fireEvent.click(chip!);
+                    await settle();
+                }
+                expect(chipOfRow(gridRow(parent.id)), `premise: the group of #${parent.id} is open`).toHaveAttribute('aria-expanded', 'true');
+            }
+
+            /** The updates of a payload for one id. */
+            function updatesOf(body: C21Payload, id: number): Array<Record<string, unknown>> {
+                return (body.updates ?? []).filter((update) => update.id === id);
+            }
+
+            /** The lone DEPOSIT D0 (W0 is not loaded: no pair) and FREE, both as saved; ends on both rows on screen. */
+            async function openLoneDepositAndFree(): Promise<void> {
+                answerChargesRead([]);
+                txStoreSetAll([D0, FREE, OUTSIDE], []);
+                mountEditor({action: 'edit', txIds: [D0.id, FREE.id]});
+                await waitFor(() => expect(rowsOf(FREE.id), 'premise: both rows are on screen').toHaveLength(1));
+                expect(rowsOf(D0.id), 'premise: the DEPOSIT is a row').toHaveLength(1);
+                expect(lookOf(rowsOf(FREE.id)), 'premise: FREE as saved').toBe(AS_SAVED);
+            }
+
+            /** FREE linked to D0, pending: by «Link» in the toolbar, or by its Form's picker (`_parent_link`). Ends on FREE
+             *  under D0, sent with D0 as its parent. */
+            async function linkFreeToD0(how: 'link' | 'picker'): Promise<void> {
+                if (how === 'link') {
+                    await linkRows(gridRow(D0.id), gridRow(FREE.id));
+                } else {
+                    await openOwnForm(FREE);
+                    await push(savedPayload(FREE, {_parent_link: D0.id}));
+                }
+                expect(chargeOfCell(gridRow(FREE.id)), 'premise: FREE sits under D0').toBe(gridRow(D0.id).getAttribute('data-row-id'));
+                const linked = (await validateNow()) as C21Payload;
+                expect(updatesOf(linked, FREE.id), `premise: FREE is sent under D0 — ${JSON.stringify(linked.updates)}`).toEqual([{id: FREE.id, parent_transaction_id: D0.id}]);
+            }
+
+            // Case 4. Red today: `_parent_unlink` sets `parentUnlink` and keeps `chargeOf`, so FREE becomes a top-level row
+            // with the «unlink» badge, an unlink that changes nothing saved (nothing is sent). Expected: the pending link
+            // dropped, FREE exactly as saved, nothing to save.
+            it.each([
+                ['«Link» in the toolbar', 'link'],
+                ['its own Form’s picker (_parent_link)', 'picker'],
+            ] as const)('C22c: FREE linked to a saved lone DEPOSIT by %s, then «unlink» in FREE’s own Form — FREE back as saved: no badge, original, no update; «Save all» off', async (_label, how) => {
+                await openLoneDepositAndFree();
+                await linkFreeToD0(how);
+
+                await openOwnForm(FREE);
+                await push(savedPayload(FREE, {_parent_unlink: true}));
+
+                expect.soft(lookOf(rowsOf(FREE.id)), 'C22c: FREE is back as saved (today: the «unlink» badge, with nothing to unlink)').toBe(AS_SAVED);
+                const body = (await validateNow()) as C21Payload;
+                expect.soft(updatesOf(body, FREE.id), `C22c: no update of FREE — ${JSON.stringify(body.updates)}`).toEqual([]);
+                expect.soft(updatesOf(body, D0.id), 'the DEPOSIT is untouched').toEqual([]);
+                expect.soft(screen.getByTestId('tx-bulk-commit'), 'C22c: nothing left to save — «Save all» off').toBeDisabled();
+            });
+
+            // Coordinator's extra case: a pending link held as `parentLinkId` (the picker naming a saved row out of the
+            // Bulk), then «unlink» in the same Form. Expected: the pending link dropped, FREE as saved, nothing sent.
+            it('C22c: FREE’s Form picker links it to a saved DEPOSIT out of the Bulk (parentLinkId), then «unlink» in its Form — FREE back as saved: no badge, original, no update; «Save all» off', async () => {
+                await openLoneDepositAndFree();
+                await openOwnForm(FREE);
+                await push(savedPayload(FREE, {_parent_link: OUTSIDE.id}));
+                const linked = (await validateNow()) as C21Payload;
+                expect(updatesOf(linked, FREE.id), `premise: FREE is sent under the DEPOSIT out of the Bulk — ${JSON.stringify(linked.updates)}`).toEqual([{id: FREE.id, parent_transaction_id: OUTSIDE.id}]);
+
+                await openOwnForm(FREE);
+                await push(savedPayload(FREE, {_parent_unlink: true}));
+
+                expect.soft(lookOf(rowsOf(FREE.id)), 'C22c: FREE is back as saved').toBe(AS_SAVED);
+                const body = (await validateNow()) as C21Payload;
+                expect.soft(updatesOf(body, FREE.id), `C22c: no update of FREE — ${JSON.stringify(body.updates)}`).toEqual([]);
+                expect.soft(screen.getByTestId('tx-bulk-commit'), 'C22c: nothing left to save — «Save all» off').toBeDisabled();
+            });
+
+            // Case 3, `applyDeleteChoice` ~450 (`ownerStaysDeleted`). The brief's route («Keep charges» on the parent, then
+            // «Restore» FREE) cannot reach it: «Keep» already drops a pending link (~434, guard below) and leaves FREE not
+            // «del», so there is nothing to restore. Reached instead with FREE «del» while still under the DEPOSIT: «Delete
+            // all» on the DEPOSIT, or FREE «del» first and the DEPOSIT after. Red today: «Restore» sets `parentUnlink` (the
+            // «unlink» badge, nothing sent). Expected: the pending link dropped, FREE as saved; the DEPOSIT stays «del».
+            it.each([
+                ['«Delete all» on the DEPOSIT', 'all'],
+                ['FREE «del» first, then the DEPOSIT «del»', 'charge-first'],
+            ] as const)('C22c: FREE linked by «Link» to a saved lone DEPOSIT, both «del» (%s), then «Restore» on FREE alone — FREE back as saved, no update; the DEPOSIT stays «del»', async (_label, route) => {
+                await openLoneDepositAndFree();
+                await linkFreeToD0('link');
+                if (route === 'all') {
+                    await rowAction(gridRow(D0.id), 'mark-delete');
+                    const content = await screen.findByTestId('tx-charges-modal-content');
+                    await fireEvent.click(within(content).getByTestId('tx-charges-modal-all'));
+                    await settle();
+                    await waitFor(() => expect(screen.queryByTestId('tx-charges-modal-content'), 'the panel closed').toBeNull());
+                } else {
+                    await rowAction(gridRow(FREE.id), 'mark-delete');
+                    expect(chargeState(gridRow(FREE.id)), 'premise: FREE is «del»').toBe('del');
+                    await rowAction(gridRow(D0.id), 'mark-delete');
+                    expect(screen.queryByTestId('tx-charges-modal-content'), 'premise: no linked charge left, no panel').toBeNull();
+                }
+                expect(rowStatus(gridRow(D0.id)), 'premise: the DEPOSIT is «del»').toBe('delete');
+                expect(chargeState(gridRow(FREE.id)), 'premise: FREE is «del», under the DEPOSIT').toBe('del');
+
+                await rowAction(gridRow(FREE.id), 'mark-delete');
+
+                expect.soft(rowStatus(gridRow(D0.id)), 'the DEPOSIT stays «del»').toBe('delete');
+                expect.soft(lookOf(rowsOf(FREE.id)), 'C22c: FREE is back as saved (today: «unlink» under the DEPOSIT «del»)').toBe(AS_SAVED);
+                const body = (await validateNow()) as C21Payload;
+                expect.soft(updatesOf(body, FREE.id), `C22c: no update of FREE — ${JSON.stringify(body.updates)}`).toEqual([]);
+                expect.soft(body.deletes ?? [], 'the DEPOSIT alone is deleted').toEqual([D0.id]);
+            });
+
+            // Guard 5(b), green today (`applyDeleteChoice` ~434): «Keep charges» on a parent whose charge was only linked
+            // here drops the link. Its siblings: «a linkNew charge with «Keep» only loses the local link» (F7-c2, through
+            // the parent's Form) and `bulkCharges.test.ts` «a linkNew charge (linked here, saved under no parent): «keep»
+            // only drops the local link». This one goes through «Link» and asserts the whole as-saved look.
+            it('C22c guard: FREE linked by «Link» to a saved lone DEPOSIT, the DEPOSIT «del» with «Keep charges» — FREE back as saved, no update', async () => {
+                await openLoneDepositAndFree();
+                await linkFreeToD0('link');
+                await rowAction(gridRow(D0.id), 'mark-delete');
+                const content = await screen.findByTestId('tx-charges-modal-content');
+                await fireEvent.click(within(content).getByTestId('tx-charges-modal-keep'));
+                await settle();
+                await waitFor(() => expect(screen.queryByTestId('tx-charges-modal-content'), 'the panel closed').toBeNull());
+
+                expect(rowStatus(gridRow(D0.id)), 'the DEPOSIT is «del»').toBe('delete');
+                expect(lookOf(rowsOf(FREE.id)), 'FREE is back as saved').toBe(AS_SAVED);
+                const body = (await validateNow()) as C21Payload;
+                expect(updatesOf(body, FREE.id), `no update of FREE — ${JSON.stringify(body.updates)}`).toEqual([]);
+                expect(body.deletes ?? [], 'the DEPOSIT alone is deleted').toEqual([D0.id]);
+            });
+
+            // Guard 5(c), green today (`applyChargeDrafts`, `linkNew` + `unlink`): the parent's Form unlinking a chip linked
+            // only here drops the link. No other test of the Bulk reaches that branch.
+            it('C22c guard: FREE linked by «Link» to a saved lone DEPOSIT, then «unlink» on its chip in the DEPOSIT’s Form (linkNew) — FREE back as saved, no update; «Save all» off', async () => {
+                await openLoneDepositAndFree();
+                await linkFreeToD0('link');
+                await rowAction(gridRow(D0.id), 'edit-single');
+                await waitForParentForm(D0.id, 1);
+                expect(handedDrafts()[0], 'premise: FREE is handed as a link made here').toMatchObject({id: FREE.id, linkNew: true, state: 'linked'});
+
+                await push(savedPayload(D0, {_charges: handedDrafts().map((draft): ChargeDraft => ({...draft, state: 'unlink'}))}));
+
+                expect(lookOf(rowsOf(FREE.id)), 'FREE is back as saved').toBe(AS_SAVED);
+                const body = (await validateNow()) as C21Payload;
+                expect(updatesOf(body, FREE.id), `no update of FREE — ${JSON.stringify(body.updates)}`).toEqual([]);
+                expect(screen.getByTestId('tx-bulk-commit'), 'nothing left to save — «Save all» off').toBeDisabled();
+            });
+
+            // Guard 5(a), green today: a charge cut from its SAVED parent in its own Form is a real «unlink»: badge, and
+            // `parent_transaction_id: 0`. Only the Form side had a test (`TransactionFormModal.parent.test.ts`, «Bulk-hosted
+            // charge: Unlink marks it unlinked…»); this is the Bulk side.
+            it('C22c guard: FEE_D, saved under the DEPOSIT, «unlink» in its own Form — the «unlink» badge, and parent_transaction_id 0 sent', async () => {
+                await openDepositWithFee();
+                await openGroupOf(DEP);
+                await openOwnForm(FEE_D);
+
+                await push(savedPayload(FEE_D, {_parent_unlink: true}));
+
+                expect(chargeState(gridRow(FEE_D.id)), 'the FEE is «unlink»').toBe('unlink');
+                expect(chargeOfCell(gridRow(FEE_D.id)), 'a top-level row').toBeNull();
+                const body = (await validateNow()) as C21Payload;
+                expect(updatesOf(body, FEE_D.id)).toEqual([{id: FEE_D.id, parent_transaction_id: 0}]);
+            });
+
+            // -----------------------------------------------------------------
+            // C22c — «Undo split» and a reset with a charge linked to a split half
+            // -----------------------------------------------------------------
+
+            /** «Undo split» from this half's row menu; ends on the pair one row and no split queued. */
+            async function undoSplitFrom(half: TXReadItem): Promise<void> {
+                await rowAction(gridRow(half.id), 'undo-split');
+                expect(rowsShowing(L_W.id, L_D.id), '«Undo split» joins the pair again: one row').toHaveLength(1);
+            }
+
+            /** Warning toasts naming the `paired` reason of «Link». */
+            async function pairedToasts(): Promise<string[]> {
+                const pattern = pairedReason();
+                expect(pattern.source, 'premise: the paired reason key resolves in the catalogue').not.toContain('chargesLink');
+                return (await toastMessages()).filter((message) => pattern.test(message));
+            }
+
+            // Case 2. Red today: «Undo split» only drops the split and hides the partner again; FREE keeps `chargeOf` the
+            // DEPOSIT, now a leg — a top-level row (rule 8 of `isUnderParent`) that the payload still sends under the leg
+            // (`parent_transaction_id: 92521`, refused by the backend), and nothing is notified. Expected, as the reset
+            // (C22c): the pending link dropped, FREE as saved, one notify `tx.bulk.undo-split.charge.kept-unlinked` with the
+            // `paired` toast (no new key). The DEPOSIT's own edit stays: «Undo split» resets nothing.
+            it.each([
+                ['the DEPOSIT (FREE’s owner)', 'dep'],
+                ['the WITHDRAWAL', 'wd'],
+            ] as const)('C22c: FREE linked by «Link» to the split DEPOSIT, then «Undo split» on %s — FREE back as saved (no link to a leg, no badge, no update), no split, one undo-split notify with the paired toast', async (_label, which) => {
+                await openSplitAndEdit(L_D, [FREE]);
+                await linkRows(gridRow(L_D.id), gridRow(FREE.id));
+                expect(chargeOfCell(gridRow(FREE.id)), 'premise: FREE sits under the split DEPOSIT').toBe(gridRow(L_D.id).getAttribute('data-row-id'));
+                const since = eventSeq();
+                await clearToasts();
+
+                await undoSplitFrom(which === 'dep' ? L_D : L_W);
+
+                const body = (await validateNow()) as C22bPayload;
+                expect.soft(splitsOf(body), `C22c: «Undo split» left a split queued — ${JSON.stringify(body.splits)}`).toEqual([]);
+                expect
+                    .soft(
+                        updatesOf(body, FREE.id).filter((update) => update.parent_transaction_id === L_D.id || update.parent_transaction_id === L_W.id),
+                        `C22c: FREE is sent under a leg of the pair (rule 8) — ${JSON.stringify(body.updates)}`,
+                    )
+                    .toEqual([]);
+                expect.soft(updatesOf(body, FREE.id), `C22c: an update of FREE is sent — ${JSON.stringify(body.updates)}`).toEqual([]);
+                expect.soft(lookOf(rowsOf(FREE.id)), 'C22c: FREE is back as saved').toBe(AS_SAVED);
+                expect.soft(eventsSince(since, 'tx.bulk.undo-split.charge.kept-unlinked'), 'C22c: one notify tx.bulk.undo-split.charge.kept-unlinked').toHaveLength(1);
+                expect.soft(await pairedToasts(), 'C22c: one toast with the paired reason of «Link»').toHaveLength(1);
+            });
+
+            /** A saved DEPOSIT out of the pair, with its saved FEE: the charge whose SAVED parent is not the split half. */
+            const P = A;
+            const FEE_P = FEE_A;
+
+            /** The saved pair split, the DEPOSIT edited (`openSplitAndEdit`), P loaded with FEE_P read under it; FEE_P
+             *  «unlink» from P in its own Form. Ends on FEE_P a top-level row with the «unlink» badge. */
+            async function openSavedParentFeeUnlinked(): Promise<void> {
+                await openSplitAndEdit(L_D, [P], [FEE_P]);
+                await waitFor(() => expect(chipOfRow(gridRow(P.id)), 'premise: FEE_P is read under P').toHaveAttribute('data-charges-count', '1'));
+                await openGroupOf(P);
+                await openOwnForm(FEE_P);
+                await push(savedPayload(FEE_P, {_parent_unlink: true}));
+                expect(lookOf(rowsOf(FEE_P.id)), 'premise: FEE_P is «unlink» from P, a top-level row').toBe('top level, badge unlink, status edited');
+            }
+
+            /**
+             * The saved pair split, the DEPOSIT edited (`openSplitAndEdit`), P loaded with FEE_P read under it; FEE_P
+             * «unlink» from P in its own Form, then linked by «Link» to the split DEPOSIT. Ends on FEE_P under the split
+             * DEPOSIT, sent with it as its parent.
+             */
+            async function openSavedParentFeeLinkedToHalf(): Promise<void> {
+                await openSavedParentFeeUnlinked();
+                await linkRows(gridRow(L_D.id), gridRow(FEE_P.id));
+                expect(chargeOfCell(gridRow(FEE_P.id)), 'premise: FEE_P sits under the split DEPOSIT').toBe(gridRow(L_D.id).getAttribute('data-row-id'));
+                const linked = (await validateNow()) as C22bPayload;
+                expect(updatesOf(linked, FEE_P.id), `premise: FEE_P is sent under the split DEPOSIT — ${JSON.stringify(linked.updates)}`).toEqual([{id: FEE_P.id, parent_transaction_id: L_D.id}]);
+            }
+
+            // Consultant's default (a), 20/11: a FEE whose SAVED parent is P, unlinked from P, then linked to a split half
+            // and that half reset (or the split undone): the link to the leg goes, the unlink from P stays — the «unlink»
+            // badge is true here, and `parent_transaction_id: 0` is sent. The reset raises `tx.bulk.reset.charge.kept-unlinked`,
+            // «Undo split» `tx.bulk.undo-split.charge.kept-unlinked`, both with the `paired` toast.
+            it.each([
+                ['«Reset row» on the split DEPOSIT', 'reset'],
+                ['«Undo split» on the DEPOSIT', 'undo-dep'],
+                ['«Undo split» on the WITHDRAWAL', 'undo-wd'],
+            ] as const)('C22c: a FEE saved under P, «unlink» in its Form, «Link» to the split DEPOSIT, then %s — FEE «unlink» from P, parent_transaction_id 0, no link to a leg, one notify', async (_label, door) => {
+                await openSavedParentFeeLinkedToHalf();
+                const since = eventSeq();
+                await clearToasts();
+
+                if (door === 'reset') await rowAction(gridRow(L_D.id), 'reset');
+                else await undoSplitFrom(door === 'undo-dep' ? L_D : L_W);
+
+                const body = (await validateNow()) as C22bPayload;
+                expect.soft(splitsOf(body), `C22c: a split left in the queue — ${JSON.stringify(body.splits)}`).toEqual([]);
+                expect.soft(updatesOf(body, FEE_P.id), `C22c: FEE_P is sent unlinked from P, and only that — ${JSON.stringify(body.updates)}`).toEqual([{id: FEE_P.id, parent_transaction_id: 0}]);
+                expect.soft(lookOf(rowsOf(FEE_P.id)), 'C22c: FEE_P is a top-level row with the «unlink» badge').toBe(`top level, badge unlink, status edited`);
+                const event = door === 'reset' ? 'tx.bulk.reset.charge.kept-unlinked' : 'tx.bulk.undo-split.charge.kept-unlinked';
+                expect.soft(eventsSince(since, event), `C22c: one notify ${event}`).toHaveLength(1);
+                expect.soft(await pairedToasts(), 'C22c: one toast with the paired reason of «Link»').toHaveLength(1);
+            });
+
+            // Next to it, a distinct path, green today: «Reset row» on the FEE itself brings it back as saved — under P,
+            // linked, nothing sent; the split is untouched. Taken while the FEE is a top-level «unlink» row: once «Link»
+            // puts it under the split DEPOSIT it is an indented row, and an indented row's menu offers no «Reset row»
+            // (`!indentedIds.has`), nor has it a checkbox for «Reset selected».
+            it('C22c guard: a FEE saved under P, «unlink» in its Form, then «Reset row» on the FEE itself — back under P, linked, nothing sent for it; the split stays queued', async () => {
+                await openSavedParentFeeUnlinked();
+
+                await rowAction(gridRow(FEE_P.id), 'reset');
+
+                expect(lookOf(rowsOf(FEE_P.id)), 'FEE_P is back under P, linked, as saved').toBe(`under ${gridRow(P.id).getAttribute('data-row-id')}, badge linked, status original`);
+                const body = (await validateNow()) as C22bPayload;
+                expect(updatesOf(body, FEE_P.id), `nothing sent for FEE_P — ${JSON.stringify(body.updates)}`).toEqual([]);
+                expect(splitsOf(body), 'the split stays queued').toHaveLength(1);
+            });
+
+            // Coordinator's extra case: a NEW FEE born in the split DEPOSIT's Form (its charges section), then «Reset row»
+            // on that half or «Undo split». Expected: the new FEE stays a new row of its own, with no link to a leg (no
+            // `parent_transaction_id`, no `parent_ref` in its create) and no badge. Today: the reset sets `parentUnlink` on
+            // it (the «unlink» badge, nothing sent); «Undo split» keeps it `chargeOf` the leg, sent with the leg's id.
+            it.each([
+                ['«Reset row» on the DEPOSIT', 'reset'],
+                ['«Undo split» on the DEPOSIT', 'undo-dep'],
+                ['«Undo split» on the WITHDRAWAL', 'undo-wd'],
+            ] as const)('C22c: a new FEE born in the split DEPOSIT’s Form, then %s — a new row of its own, no badge, created with no parent', async (_label, door) => {
+                await openSplitAndEdit(L_D);
+                await rowAction(gridRow(L_D.id), 'edit-single');
+                await waitForParentForm(L_D.id, 0);
+                const item = formRow()!;
+                await push({broker_id: item.broker_id, type: item.type, date: item.date, quantity: item.quantity, asset_id: item.asset_id, cash: item.cash, tags: item.tags ?? [], description: 'C22b note changed', _charges: [newDraft('FEE', '2.000000', 'C22c new fee')]});
+                expect(chargeOfCell(gridRowDescribed('C22c new fee')), 'premise: the new FEE sits under the split DEPOSIT').toBe(gridRow(L_D.id).getAttribute('data-row-id'));
+
+                if (door === 'reset') await rowAction(gridRow(L_D.id), 'reset');
+                else await undoSplitFrom(door === 'undo-dep' ? L_D : L_W);
+
+                const fresh = gridRows().filter((row) => rowDescription(row) === 'C22c new fee');
+                expect.soft(lookOf(fresh), 'C22c: the new FEE is a new row of its own, no badge').toBe('top level, badge none, status new');
+                const body = (await validateNow()) as C22bPayload;
+                expect.soft(splitsOf(body), `C22c: a split left in the queue — ${JSON.stringify(body.splits)}`).toEqual([]);
+                const create = (body.creates ?? []).find((c) => c.description === 'C22c new fee');
+                expect(create, `the new FEE is created — ${JSON.stringify(body.creates)}`).toBeDefined();
+                expect.soft({parent_transaction_id: create?.parent_transaction_id ?? null, parent_ref: create?.parent_ref ?? null}, `C22c: the new FEE is created with no parent — ${JSON.stringify(create)}`).toEqual({parent_transaction_id: null, parent_ref: null});
+            });
+
+            /**
+             * The saved pair split, the DEPOSIT edited, then a new FEE typed in the split DEPOSIT's own Form (its charges
+             * section), the DEPOSIT pushed with `date`. Ends on the new FEE under the split DEPOSIT.
+             */
+            async function newFeeInSplitDeposit(date: string = C21_DATE): Promise<void> {
+                await openSplitAndEdit(L_D);
+                await rowAction(gridRow(L_D.id), 'edit-single');
+                await waitForParentForm(L_D.id, 0);
+                const item = formRow()!;
+                await push({broker_id: item.broker_id, type: item.type, date, quantity: item.quantity, asset_id: item.asset_id, cash: item.cash, tags: item.tags ?? [], description: 'C22b note changed', _charges: [newDraft('FEE', '2.000000', 'C22c new fee')]});
+                expect(chargeOfCell(gridRowDescribed('C22c new fee')), 'premise: the new FEE sits under the split DEPOSIT').toBe(gridRow(L_D.id).getAttribute('data-row-id'));
+            }
+
+            /** The one create of the new FEE in a payload. */
+            function newFeeCreate(body: C22bPayload): Record<string, unknown> | undefined {
+                const found = (body.creates ?? []).filter((c) => c.description === 'C22c new fee');
+                expect(found, `one create of the new FEE — ${JSON.stringify(body.creates)}`).toHaveLength(1);
+                return found[0];
+            }
+
+            // Final review, «Reset all»: it drops the half the split made visible (`addedBySplit`) and rebuilds the rest
+            // from the store, so the new FEE's owner (the split DEPOSIT's operation) is gone or a hidden leg again. The new
+            // FEE must name no leg and no vanished row: a new row of its own, created with no parent; no split queued.
+            // Note: a `chargeOf` naming a vanished operation has no DOM or payload trace of its own (`effectiveParentId`
+            // and `chargeParentFields` fall through to «no parent»); the row's place and its create are what is observable.
+            it('C22c: a new FEE born in the split DEPOSIT’s Form, then «Reset all» — a new row of its own, no badge, created with no parent; no split', async () => {
+                await newFeeInSplitDeposit();
+                const reset = screen.queryByTestId('tx-bulk-reset-all');
+                expect(reset, 'premise: «Reset all» is offered').not.toBeNull();
+                expect(await clickCollectingErrors(reset!), '«Reset all» throws nothing').toEqual([]);
+
+                expect.soft(rowsShowing(L_W.id, L_D.id), 'the pair is one row again').toHaveLength(1);
+                expect.soft(lookOf(gridRows().filter((row) => rowDescription(row) === 'C22c new fee')), 'C22c: the new FEE is a new row of its own, no badge').toBe('top level, badge none, status new');
+                const body = (await validateNow()) as C22bPayload;
+                expect.soft(splitsOf(body), `C22c: a split left in the queue — ${JSON.stringify(body.splits)}`).toEqual([]);
+                const create = newFeeCreate(body);
+                expect.soft({parent_transaction_id: create?.parent_transaction_id ?? null, parent_ref: create?.parent_ref ?? null}, `C22c: the new FEE is created with no parent — ${JSON.stringify(create)}`).toEqual({parent_transaction_id: null, parent_ref: null});
+                expect.soft(updatesOf(body, L_W.id).concat(updatesOf(body, L_D.id)), 'the saved halves are back as saved').toEqual([]);
+            });
+
+            // Final review, the discriminating date: a new FEE follows its parent's broker, asset and date (`followsParent`)
+            // until it leaves it. The split DEPOSIT's date is changed after the FEE was born; «Undo split» then cuts the FEE
+            // from what became a leg, and the FEE keeps the date it was following — the new one, not the one it was born
+            // with (`unlinkCharge` takes the owner's three fields, as «Keep» does).
+            it.each([
+                ['the DEPOSIT', 'dep'],
+                ['the WITHDRAWAL', 'wd'],
+            ] as const)('C22c: a new FEE born in the split DEPOSIT’s Form, the DEPOSIT’s date changed, then «Undo split» on %s — the FEE is created on the new date, with no parent', async (_label, which) => {
+                const NEW_DATE = '2026-10-09';
+                await newFeeInSplitDeposit();
+                await rowAction(gridRow(L_D.id), 'edit-single');
+                await waitForParentForm(L_D.id, 1);
+                const item = formRow()!;
+                await push({broker_id: item.broker_id, type: item.type, date: NEW_DATE, quantity: item.quantity, asset_id: item.asset_id, cash: item.cash, tags: item.tags ?? [], description: 'C22b note changed', _charges: handedDrafts()});
+                const followed = newFeeCreate((await validateNow()) as C22bPayload);
+                expect(followed?.date, 'premise: the new FEE follows the DEPOSIT’s new date').toBe(NEW_DATE);
+
+                await undoSplitFrom(which === 'dep' ? L_D : L_W);
+
+                const body = (await validateNow()) as C22bPayload;
+                const create = newFeeCreate(body);
+                expect.soft(create?.date, `C22c: the new FEE keeps the date it was following — ${JSON.stringify(create)}`).toBe(NEW_DATE);
+                expect.soft({parent_transaction_id: create?.parent_transaction_id ?? null, parent_ref: create?.parent_ref ?? null}, `C22c: the new FEE is created with no parent — ${JSON.stringify(create)}`).toEqual({parent_transaction_id: null, parent_ref: null});
+                expect.soft(lookOf(gridRows().filter((row) => rowDescription(row) === 'C22c new fee')), 'C22c: the new FEE is a new row of its own, no badge').toBe('top level, badge none, status new');
+            });
+
+            // ---------------------------------------------------------------
+            // C22d — «Link» reads the type the split will give a half
+            // ---------------------------------------------------------------
+
+            /**
+             * 66 C22d (FEE consultant, 21/11). «Split pair» on a saved pair (`handleSplitRow`, case A) queues the split and
+             * leaves each half's `fields.type` the pair's own (CASH_TRANSFER) until its Form hands it one. The Type cell
+             * already shows the type the split gives (CASH_TRANSFER → DEPOSIT), and the backend assigns it when it splits
+             * (`apply_splits`), checking the rules on the batch's final state (rule 7). «Link» must read that same type:
+             * one computation (`splitTypes.ts`, `postSplitType`) for the Type cell, the half's Form and the mirror rows of
+             * `bulkLinkSelection`. A type the user picked by hand wins; a split TRANSFER gives two ADJUSTMENT, which are no
+             * parents, so «Link» stays hidden. The Type cell's split branch also draws the chip of a half's charges.
+             */
+            describe('66 C22d: «Link» on a split half reads the type the split will give it', () => {
+                /** A saved FEE of nobody on the WITHDRAWAL's broker (88): FREE is on 77, and «Link» wants one broker. */
+                const FREE_88 = savedCash(92_541, 'FEE', 88, '-1.500000', 'C22d free fee on 88');
+                /** A saved TRANSFER pair of asset 101: the sender on 77 (quantity −5), the receiver on 88. */
+                const T_S = savedCash(92_551, 'DEPOSIT', 77, '0', 'C22d asset transfer', {type: 'TRANSFER', asset_id: 101, quantity: '-5.000000', cash: null, related_transaction_id: 92_552, partner_broker_id: 88});
+                const T_R = savedCash(92_552, 'DEPOSIT', 88, '0', 'C22d asset transfer', {type: 'TRANSFER', asset_id: 101, quantity: '5.000000', cash: null, related_transaction_id: 92_551, partner_broker_id: 77});
+
+                /** «Link» as the toolbar draws it for the ticked rows: `absent`, `off (<reason>)` or `on`. */
+                function linkOffer(): string {
+                    const button = screen.queryByTestId('tx-bulk-link-charges');
+                    if (!button) return 'absent';
+                    return button.getAttribute('aria-disabled') === 'true' ? `off (${button.getAttribute('data-reason') ?? 'no reason'})` : 'on';
+                }
+
+                /** What the chip in a row's Type cell counts, or `no chip`. */
+                function chipCount(row: HTMLElement): string {
+                    return chipOfRow(row)?.getAttribute('data-charges-count') ?? 'no chip';
+                }
+
+                /** The type a split half's Type cell says the split gives it: the slug of its last icon (`renderTypeHtml`,
+                 *  `/icons/transactions/<slug>.png`), never its translated label. */
+                function typeCellTarget(row: HTMLElement): string | null {
+                    const icons = row.querySelectorAll('td[data-column-id="type"] img');
+                    const src = icons[icons.length - 1]?.getAttribute('src') ?? '';
+                    return (src.match(/\/icons\/transactions\/([a-z-]+)\.png$/) ?? [])[1] ?? null;
+                }
+
+                /**
+                 * The saved pair `[sender, receiver]` split with «Split pair», neither half edited, `extra` loaded beside
+                 * it (no charge read). Ends on two rows, both `split`, the split queued, the receiver offering no
+                 * «Reset row» (untouched).
+                 */
+                async function openSplitUntouched(sender: TXReadItem, receiver: TXReadItem, extra: readonly TXReadItem[] = []): Promise<void> {
+                    answerChargesRead([]);
+                    txStoreSetAll([sender, receiver, ...extra], []);
+                    mountEditor({action: 'edit', txIds: [receiver.id, sender.id, ...extra.map((tx) => tx.id)]});
+                    await waitFor(() => expect(rowsShowing(sender.id, receiver.id), 'premise: the saved pair is one row').toHaveLength(1));
+                    for (const tx of extra) await waitFor(() => expect(rowsOf(tx.id), `premise: #${tx.id} is a row on screen`).toHaveLength(1));
+                    const pair = rowsShowing(sender.id, receiver.id)[0];
+                    expect(rowStatus(pair), 'premise: the pair is as saved').toBe('original');
+
+                    await rowAction(pair, 'split');
+                    expect(rowsOf(sender.id), 'premise: the sender is a row of its own').toHaveLength(1);
+                    expect(rowsOf(receiver.id), 'premise: the receiver is a row of its own').toHaveLength(1);
+                    expect(rowStatus(gridRow(sender.id)), 'premise: the sender is marked split').toBe('split');
+                    expect(rowStatus(gridRow(receiver.id)), 'premise: the receiver is marked split').toBe('split');
+                    expect(await offersReset(gridRow(receiver.id)), 'premise: the receiver is untouched (no «Reset row»)').toBe(false);
+                    const queued = (await validateNow()) as C22bPayload;
+                    expect(splitsOf(queued), `premise: one split queued, the saved pair — ${JSON.stringify(queued.splits)}`).toEqual([[sender.id, receiver.id].sort((a, b) => a - b)]);
+                }
+
+                // Case 1. Red today: the untouched DEPOSIT half still holds CASH_TRANSFER, no charge role, so the mirror
+                // row of `bulkLinkSelection` makes the selection `hidden`. Expected: the mirror reads DEPOSIT (the type the
+                // split gives the receiver), «Link» on, FREE under the half, and one batch holding the split and the link
+                // (the backend splits first, then checks rule 7 on the final state). The chip in the Type cell is the
+                // split branch's, which today returns before the chip.
+                it('C22d: the saved CASH_TRANSFER pair split, no edit, the DEPOSIT half + FREE ticked — «Link» on; FREE under the half; the split and FREE’s parent in one batch; the half’s chip counts 1', async () => {
+                    await openSplitUntouched(L_W, L_D, [FREE]);
+                    expect(typeCellTarget(gridRow(L_D.id)), 'premise: the Type cell says the split gives the DEPOSIT half DEPOSIT').toBe('deposit');
+                    await setTicked(gridRow(L_D.id), true);
+                    await setTicked(gridRow(FREE.id), true);
+                    expect(linkOffer(), 'C22d: «Link» reads the type the split gives the untouched half (DEPOSIT, a parent)').toBe('on');
+
+                    await linkRows(gridRow(L_D.id), gridRow(FREE.id));
+
+                    expect(chargeOfCell(gridRow(FREE.id)), 'C22d: FREE sits under the split DEPOSIT').toBe(gridRow(L_D.id).getAttribute('data-row-id'));
+                    const body = (await validateNow()) as C22bPayload;
+                    expect.soft(splitsOf(body), `C22d: the split is queued in the batch — ${JSON.stringify(body.splits)}`).toEqual([[L_W.id, L_D.id].sort((a, b) => a - b)]);
+                    expect.soft(updatesOf(body, FREE.id), `C22d: FREE is sent under the DEPOSIT half, in the same batch — ${JSON.stringify(body.updates)}`).toEqual([{id: FREE.id, parent_transaction_id: L_D.id}]);
+                    expect.soft(chipCount(gridRow(L_D.id)), 'C22d: the split DEPOSIT’s Type cell carries the chip of its charge').toBe('1');
+                });
+
+                // Case 2. WITHDRAWAL is a parent (`charge_role: "parent"`, `type_metadata.py`, and this file's
+                // TYPES_RESPONSE). Red today for the same reason as case 1. FREE is on 77 and the WITHDRAWAL on 88, so the
+                // brief's literal pairing gives «Link» off with `otherBroker` once the type is read; FREE_88 (on 88) is
+                // the one «Link» accepts. Both are asserted.
+                it('C22d: the saved CASH_TRANSFER pair split, no edit, the WITHDRAWAL half + a free FEE on its broker — «Link» on; the FEE under the half, in the split’s batch', async () => {
+                    expect(getTypeRule('WITHDRAWAL').chargeRole, 'premise: WITHDRAWAL is a parent type').toBe('parent');
+                    await openSplitUntouched(L_W, L_D, [FREE_88]);
+                    await setTicked(gridRow(L_W.id), true);
+                    await setTicked(gridRow(FREE_88.id), true);
+                    expect(linkOffer(), 'C22d: «Link» reads the type the split gives the untouched half (WITHDRAWAL, a parent)').toBe('on');
+
+                    await linkRows(gridRow(L_W.id), gridRow(FREE_88.id));
+
+                    expect(chargeOfCell(gridRow(FREE_88.id)), 'C22d: the FEE sits under the split WITHDRAWAL').toBe(gridRow(L_W.id).getAttribute('data-row-id'));
+                    const body = (await validateNow()) as C22bPayload;
+                    expect.soft(splitsOf(body), `C22d: the split is queued in the batch — ${JSON.stringify(body.splits)}`).toEqual([[L_W.id, L_D.id].sort((a, b) => a - b)]);
+                    expect.soft(updatesOf(body, FREE_88.id), `C22d: the FEE is sent under the WITHDRAWAL half — ${JSON.stringify(body.updates)}`).toEqual([{id: FREE_88.id, parent_transaction_id: L_W.id}]);
+                    expect.soft(chipCount(gridRow(L_W.id)), 'C22d: the split WITHDRAWAL’s Type cell carries the chip of its charge').toBe('1');
+                });
+
+                it('C22d: the saved CASH_TRANSFER pair split, no edit, the WITHDRAWAL half (broker 88) + FREE (broker 77) — «Link» drawn off with otherBroker', async () => {
+                    await openSplitUntouched(L_W, L_D, [FREE]);
+                    await setTicked(gridRow(L_W.id), true);
+                    await setTicked(gridRow(FREE.id), true);
+                    expect(linkOffer(), 'C22d: the WITHDRAWAL half is a parent, FREE on another broker').toBe('off (otherBroker)');
+                });
+
+                // Case 3, a guard, green today (the half still holds TRANSFER, no charge role) and after the fix (the split
+                // gives ADJUSTMENT, no charge role either). The presence barrier: in the same mount D0 (a lone DEPOSIT on
+                // 77) + FREE draw «Link» on; swapping D0 for the TRANSFER sender (77, the FEE's broker) takes it away.
+                it('C22d guard: a saved TRANSFER pair split, no edit — the sender half (ADJUSTMENT after the split) + FREE: no «Link»', async () => {
+                    await openSplitUntouched(T_S, T_R, [D0, FREE]);
+                    await setTicked(gridRow(D0.id), true);
+                    await setTicked(gridRow(FREE.id), true);
+                    expect(linkOffer(), 'barrier: a DEPOSIT + FREE draw «Link» on').toBe('on');
+                    await setTicked(gridRow(D0.id), false);
+                    await setTicked(gridRow(T_S.id), true);
+                    expect(rowCheckbox(gridRow(FREE.id)), 'premise: FREE still ticked').toHaveAttribute('data-state', 'checked');
+
+                    expect(linkOffer(), 'C22d: an ADJUSTMENT half is no parent — no «Link»').toBe('absent');
+                });
+
+                // Case 4. The real Form, on a saved row of the Bulk (`unlockImmutable`), offers the swap group of the type
+                // it was handed (`allowedTypes`, `getSwapGroup`): the DEPOSIT half may become a WITHDRAWAL. The Form pushes
+                // a WITHDRAWAL's cash signed (−50), and the editor holds a negative-rule cash as its magnitude (W-B65,
+                // `applyFormPayload` → `magnitudeForRule`): the half ends as WITHDRAWAL with cash +50. The sign rule
+                // (`postSplitTypeForForm`, the Type cell) reads +50 as the receiver, DEPOSIT, and overrides the user;
+                // the decision keeps the user's type. «Link» itself reads `fields.type` today, a parent either way, so it
+                // is on today and stays on (guard lines); the red lines are the Type cell and the Form handed again.
+                // An ADJUSTMENT half (a split TRANSFER) has no swap partner: not reachable there.
+                it('C22d: the DEPOSIT half turned WITHDRAWAL in its own Form — the Type cell and the Form read the user’s WITHDRAWAL; + FREE: «Link» on, FREE under it', async () => {
+                    await openSplitUntouched(L_W, L_D, [FREE]);
+                    await rowAction(gridRow(L_D.id), 'edit-single');
+                    await waitFor(() => expect(formProbe().open, 'premise: the Form of the DEPOSIT half is open').toBe(true));
+                    const item = ((formProbe().items as TXReadItem[] | null) ?? []).find((candidate) => candidate.id === L_D.id);
+                    expect(item?.type, 'premise: the Form is handed the type the split gives (DEPOSIT)').toBe('DEPOSIT');
+                    // What the real Form pushes for a WITHDRAWAL: its cash signed negative (`autoNegateCash`).
+                    await push({broker_id: item!.broker_id, type: 'WITHDRAWAL', date: item!.date, quantity: item!.quantity, asset_id: item!.asset_id, cash: {code: 'EUR', amount: '-50.000000'}, tags: item!.tags ?? [], description: item!.description});
+
+                    expect.soft(typeCellTarget(gridRow(L_D.id)), 'C22d: the Type cell shows the user’s type, not the one the sign gives').toBe('withdrawal');
+
+                    await setTicked(gridRow(L_D.id), true);
+                    await setTicked(gridRow(FREE.id), true);
+                    expect(linkOffer(), 'guard: the user’s WITHDRAWAL is a parent — «Link» on').toBe('on');
+                    await linkRows(gridRow(L_D.id), gridRow(FREE.id));
+                    expect(chargeOfCell(gridRow(FREE.id)), 'guard: FREE sits under the half').toBe(gridRow(L_D.id).getAttribute('data-row-id'));
+                    const body = (await validateNow()) as C22bPayload;
+                    expect(updatesOf(body, FREE.id), `guard: FREE is sent under the half — ${JSON.stringify(body.updates)}`).toEqual([{id: FREE.id, parent_transaction_id: L_D.id}]);
+
+                    await rowAction(gridRow(L_D.id), 'edit-single');
+                    await waitFor(() => expect(formProbe().open, 'the Form of the half is open again').toBe(true));
+                    const again = ((formProbe().items as TXReadItem[] | null) ?? []).find((candidate) => candidate.id === L_D.id);
+                    expect.soft(again?.type, 'C22d: the Form is handed the user’s type again (today the sign’s DEPOSIT)').toBe('WITHDRAWAL');
+                });
+
+                // The chip on the edited path (the C22b/C22c route: the DEPOSIT edited, so «Link» is on today). Red today on
+                // its own line: the Type cell's split branch returns before `chargesChipHtml`.
+                it('C22d: the split DEPOSIT edited, FREE linked to it by «Link» — the half’s Type cell carries the chip counting 1', async () => {
+                    await openSplitAndEdit(L_D, [FREE]);
+                    await linkRows(gridRow(L_D.id), gridRow(FREE.id));
+                    expect(chargeOfCell(gridRow(FREE.id)), 'premise: FREE sits under the split DEPOSIT').toBe(gridRow(L_D.id).getAttribute('data-row-id'));
+
+                    expect(chipCount(gridRow(L_D.id)), 'C22d: the split DEPOSIT’s Type cell carries the chip of its charge').toBe('1');
+                });
+
+                /**
+                 * What the batch makes of a saved half: the type and the cash the backend holds once it has split the pair
+                 * (`apply_splits` runs first and gives the sender, read on the saved sign, its type) and applied the half's
+                 * update (a type sent wins, a cash sent replaces the saved one), plus the splits queued.
+                 */
+                function savedOutcome(body: C22bPayload, half: TXReadItem, splitType: string): {type: string; cash: number; splits: number[][]} {
+                    const update = updatesOf(body, half.id)[0] ?? {};
+                    const cash = (update.cash as {amount?: string} | undefined)?.amount ?? half.cash?.amount;
+                    return {type: typeof update.type === 'string' ? update.type : splitType, cash: Number(cash), splits: splitsOf(body)};
+                }
+
+                // The common route of case 4: only the note of the WITHDRAWAL half changed in its Form. The Form pushes the
+                // type it was handed (WITHDRAWAL) with its cash signed (−50); the editor holds it as +50 (W-B65). The type
+                // the half holds is now WITHDRAWAL, its own: the Type cell and the Form must keep saying WITHDRAWAL.
+                //
+                // And what is SAVED, after a first and a second note edit. Before C22d the sign rule read the held +50 as the
+                // receiver and handed the Form DEPOSIT on the second opening: the Form pushed DEPOSIT +50, the editor held
+                // DEPOSIT +50, and the batch sent `{id: 92522, cash: +50, description}` (its type stripped, the split assigns
+                // it; measured on the old modal). Read from the backend's code, not run here: `apply_splits` splits first and
+                // `pair_sides` picks the sender on the saved amount (−50 → WITHDRAWAL), so the update writes +50 on a
+                // WITHDRAWAL, which rule 11 (`cash_sign: negative`, `cashSignNegative`) refuses. The half must keep cash −50
+                // and send no DEPOSIT.
+                it('C22d: the split WITHDRAWAL half, only its note edited in its Form, twice — the Type cell and the Form handed again still say WITHDRAWAL; the batch keeps it a WITHDRAWAL with cash −50', async () => {
+                    await openSplitUntouched(L_W, L_D);
+                    expect(typeCellTarget(gridRow(L_W.id)), 'premise: the Type cell says the split gives the WITHDRAWAL half WITHDRAWAL').toBe('withdrawal');
+                    await editHalfNote(L_W, 'C22d note a');
+                    const first = (await validateNow()) as C22bPayload;
+                    expect.soft(savedOutcome(first, L_W, 'WITHDRAWAL'), `C22d: after the first edit the half is saved a WITHDRAWAL, cash −50 — ${JSON.stringify(first.updates)}`).toEqual({type: 'WITHDRAWAL', cash: -50, splits: [[L_W.id, L_D.id].sort((a, b) => a - b)]});
+
+                    expect.soft(typeCellTarget(gridRow(L_W.id)), 'C22d: the Type cell still shows WITHDRAWAL after a note edit').toBe('withdrawal');
+                    await rowAction(gridRow(L_W.id), 'edit-single');
+                    await waitFor(() => expect(formProbe().open, 'the Form of the half is open again').toBe(true));
+                    const again = ((formProbe().items as TXReadItem[] | null) ?? []).find((candidate) => candidate.id === L_W.id);
+                    expect.soft(again?.type, 'C22d: the Form is handed WITHDRAWAL again').toBe('WITHDRAWAL');
+
+                    // The second edit: the Form pushes back what it was handed, only the note changed.
+                    await push({broker_id: again!.broker_id, type: again!.type, date: again!.date, quantity: again!.quantity, asset_id: again!.asset_id, cash: again!.cash, tags: again!.tags ?? [], description: 'C22d note b'});
+                    const second = (await validateNow()) as C22bPayload;
+                    expect(
+                        updatesOf(second, L_W.id).some((update) => update.description === 'C22d note b'),
+                        `premise: the second note is sent — ${JSON.stringify(second.updates)}`,
+                    ).toBe(true);
+                    expect.soft(savedOutcome(second, L_W, 'WITHDRAWAL'), `C22d: after the second edit the half is still saved a WITHDRAWAL, cash −50 — ${JSON.stringify(second.updates)}`).toEqual({type: 'WITHDRAWAL', cash: -50, splits: [[L_W.id, L_D.id].sort((a, b) => a - b)]});
+                    expect.soft(updatesOf(second, L_W.id), 'C22d: the update of the half is its note alone: no type (the split gives WITHDRAWAL), no cash (the saved −50 stays)').toEqual([{id: L_W.id, description: 'C22d note b'}]);
+                    expect.soft(typeCellTarget(gridRow(L_W.id)), 'C22d: the Type cell still shows WITHDRAWAL after the second edit').toBe('withdrawal');
+                });
+
+                // «Split pair» on a NEW pair is local (`handleSplitRow`, no backend split). Two shapes reach it: a visible
+                // create with its hidden create partner (case B, what the toolbar's merge of two new rows leaves), and two
+                // VISIBLE creates sharing a `link_uuid` with no `pairedWith` (case «legacy»). The legacy shape is built here
+                // by two single pushes carrying the same `link_uuid` (`addRowFromForm` keeps it); no flow of today's UI was
+                // found that leaves it (the merge, the import and the clone all hide the partner). Both now read the split
+                // row's side through `splitHalfType`. Guards: with a ±50 pair they are green before and after C22d; they
+                // pin that each row takes its type by its own sign and the link is dropped.
+
+                /** The creates of a payload as {description, type, cash, link_uuid}, sorted by description. */
+                function createsOf(body: C22bPayload): Array<{description: unknown; type: unknown; cash: number; link_uuid: unknown}> {
+                    return (body.creates ?? []).map((create) => ({description: create.description, type: create.type, cash: Number((create.cash as {amount?: string} | null)?.amount), link_uuid: create.link_uuid ?? null})).sort((a, b) => String(a.description).localeCompare(String(b.description)));
+                }
+
+                /** The editor on two saved rows (no Form opens by itself), ends on both on screen. */
+                async function openTwoSaved(): Promise<void> {
+                    answerChargesRead([]);
+                    txStoreSetAll([D0, FREE], []);
+                    mountEditor({action: 'edit', txIds: [D0.id, FREE.id]});
+                    await waitFor(() => expect(rowsOf(FREE.id), 'premise: both saved rows are on screen').toHaveLength(1));
+                }
+
+                it.each([
+                    ['the split row the sender (cash −50 on 88), the other +50 on 77', 'C22d legacy sender', '-50.000000', 88, 'C22d legacy receiver', '50.000000', 77],
+                    ['the split row the receiver (cash +50 on 77), the other −50 on 88', 'C22d legacy receiver', '50.000000', 77, 'C22d legacy sender', '-50.000000', 88],
+                ] as const)('C22d: a NEW CASH_TRANSFER pair of two visible rows sharing a link_uuid (case «legacy»), «Split pair» on %s — each row takes WITHDRAWAL / DEPOSIT by its sign, no link left', async (_label, mainNote, mainCash, mainBroker, otherNote, otherCash, otherBroker) => {
+                    await openTwoSaved();
+                    await addRow(cashPayload('DEPOSIT', mainBroker, mainCash, mainNote, {type: 'CASH_TRANSFER', link_uuid: 'c22d-legacy-pair'}));
+                    await addRow(cashPayload('DEPOSIT', otherBroker, otherCash, otherNote, {type: 'CASH_TRANSFER', link_uuid: 'c22d-legacy-pair'}));
+                    // The legacy shape: both rows visible (no hidden partner), both CASH_TRANSFER, one link.
+                    expect(typeCellTarget(gridRowDescribed(mainNote)), 'premise: the split row is a visible CASH_TRANSFER').toBe('cash-transfer');
+                    expect(typeCellTarget(gridRowDescribed(otherNote)), 'premise: its partner is a visible CASH_TRANSFER too').toBe('cash-transfer');
+                    const before = (await validateNow()) as C22bPayload;
+                    expect(
+                        createsOf(before).map((create) => create.link_uuid),
+                        `premise: both creates share the link — ${JSON.stringify(before.creates)}`,
+                    ).toEqual(['c22d-legacy-pair', 'c22d-legacy-pair']);
+
+                    await rowAction(gridRowDescribed(mainNote), 'split');
+
+                    expect.soft(typeCellTarget(gridRowDescribed('C22d legacy sender')), 'C22d: the sender row (−50) is a WITHDRAWAL').toBe('withdrawal');
+                    expect.soft(typeCellTarget(gridRowDescribed('C22d legacy receiver')), 'C22d: the receiver row (+50) is a DEPOSIT').toBe('deposit');
+                    const body = (await validateNow()) as C22bPayload;
+                    expect(createsOf(body), `C22d: two standalone creates, typed by their sign, no link — ${JSON.stringify(body.creates)}`).toEqual([
+                        {description: 'C22d legacy receiver', type: 'DEPOSIT', cash: 50, link_uuid: null},
+                        {description: 'C22d legacy sender', type: 'WITHDRAWAL', cash: -50, link_uuid: null},
+                    ]);
+                });
+
+                it('C22d: a NEW CASH_TRANSFER pair merged from two new rows (case B: the receiver a hidden partner), «Split pair» on its visible row — WITHDRAWAL −50 / DEPOSIT +50, no link left', async () => {
+                    await openTwoSaved();
+                    await addRow(cashPayload('DEPOSIT', 77, '50.000000', 'C22d new pair'));
+                    await addRow(cashPayload('WITHDRAWAL', 88, '-50.000000', 'C22d new pair'));
+                    const created = newRows();
+                    expect(created, 'premise: two new rows').toHaveLength(2);
+                    await mergeSelected(created[0], created[1]);
+                    const merged = newRows();
+                    expect(merged, 'premise: the merge is one visible row, its partner hidden').toHaveLength(1);
+                    expect(typeCellTarget(merged[0]), 'premise: the visible row is a CASH_TRANSFER').toBe('cash-transfer');
+
+                    await rowAction(merged[0], 'split');
+
+                    const rows = newRows();
+                    expect(rows, 'C22d: both halves are rows of their own').toHaveLength(2);
+                    expect.soft(rows.map((row) => typeCellTarget(row)).sort(), 'C22d: one WITHDRAWAL and one DEPOSIT').toEqual(['deposit', 'withdrawal']);
+                    const body = (await validateNow()) as C22bPayload;
+                    expect(
+                        createsOf(body)
+                            .map(({type, cash, link_uuid}) => ({type, cash, link_uuid}))
+                            .sort((a, b) => a.cash - b.cash),
+                        `C22d: two standalone creates, typed by their sign, no link — ${JSON.stringify(body.creates)}`,
+                    ).toEqual([
+                        {type: 'WITHDRAWAL', cash: -50, link_uuid: null},
+                        {type: 'DEPOSIT', cash: 50, link_uuid: null},
+                    ]);
+                });
+
+                // `twoParents`, on the two halves of the split: before C22d each mirror row read CASH_TRANSFER (no charge
+                // role) and «Link» was hidden; now both read their post-split type, two parents. The type the reason names
+                // (`params.type`) only reaches the screen inside the translated hint, so it is pinned on `bulkLinkSelection`
+                // in `bulkCharges.test.ts` (66 C22d, `typeOf`); here the reason, through `data-reason`.
+                it('C22d: the saved CASH_TRANSFER pair split, no edit, BOTH halves + FREE ticked — «Link» drawn off with twoParents', async () => {
+                    await openSplitUntouched(L_W, L_D, [FREE]);
+                    await setTicked(gridRow(L_D.id), true);
+                    await setTicked(gridRow(FREE.id), true);
+                    expect(linkOffer(), 'barrier: the DEPOSIT half + FREE draw «Link» on').toBe('on');
+                    await setTicked(gridRow(L_W.id), true);
+
+                    expect(linkOffer(), 'C22d: two halves, two parents (WITHDRAWAL and DEPOSIT) — «Link» off, twoParents').toBe('off (twoParents)');
+                });
             });
         });
     });

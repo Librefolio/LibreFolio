@@ -256,7 +256,8 @@
       "promoteSubtitle": "Sélectionnez la transaction de destination",
       "target": "Destination",
       "descriptionTooLong": "La description fusionnée dépasse {max} caractères : raccourcissez-la pour confirmer.",
-      "mergeAllLeftTooLong": "{count, plural, one {# paire est restée} other {# paires sont restées}} à fusionner à la main : la description fusionnée dépasserait {max} caractères."
+      "mergeAllLeftTooLong": "{count, plural, one {# paire est restée} other {# paires sont restées}} à fusionner à la main : la description fusionnée dépasserait {max} caractères.",
+      "chargesBlock": "{type} {ref} a des frais liés : déliez-les d'abord"
     },
     "validate": {
       "now": "Valider maintenant",
@@ -415,36 +416,55 @@
       "button": "Relier les événements",
       "buttonTitle": "Relier dividendes, intérêts et ajustements à l'événement de l'actif du même jour",
       "title": "Relier les événements",
-      "intro": "Dividendes, intérêts et ajustements sans événement de l'actif. Un événement n'est proposé que s'il est du même actif, du même jour et du type correspondant : un dividende crédité quelques jours après l'événement n'est pas proposé, et vous le reliez à la main dans la transaction.",
       "loading": "Recherche des transactions sans événement…",
       "loadError": "Impossible de lire les transactions sans événement.",
       "empty": "Chaque transaction qui peut avoir un événement de l'actif en a un.",
-      "statusUnique": "Un événement ce jour-là",
-      "statusNone": "Aucun événement ce jour-là",
-      "statusSeveral": "{n} événements ce jour-là : choisissez dans la transaction",
       "link": "Relier",
-      "linkAll": "Relier toutes les lignes avec un seul événement",
       "linkError": "Rien n'a été relié : le serveur a refusé la modification.",
       "close": "Fermer",
-      "colAsset": "Actif",
-      "colBroker": "Courtier",
-      "colEvent": "Événement",
-      "colStatus": "Statut",
       "colAction": "Action",
-      "status": {
-        "unique": "Un événement ce jour-là",
-        "none": "Aucun événement ce jour-là",
-        "several": "Plusieurs événements ce jour-là"
-      },
-      "linkSelected": "Lier la sélection",
-      "createSelected": "Créer les événements",
       "createOne": "Créer l'événement",
       "createTitle": "Créer les événements manquants",
       "createIntro": "Vérifiez le type et saisissez la valeur de chaque événement, dans la devise de l’actif. Les événements sont créés le jour de la transaction ; liez-les ensuite.",
       "createValue": "Valeur",
       "createServes": "{n} transactions",
       "createHint": "Saisissez pour chaque événement une valeur supérieure à 0, avec 6 décimales au plus.",
-      "createConfirm": "{n, plural, one {Créer # événement} many {Créer # événements} other {Créer # événements}}"
+      "createConfirm": "{n, plural, one {Créer # événement} many {Créer # événements} other {Créer # événements}}",
+      "introShort": "Transactions sans leur événement de l'actif. Seul un événement du même actif, du même jour et du bon type est proposé ; les autres, vous les choisissez.",
+      "selectionHint": "Sélectionnez des lignes pour n'agir que sur elles, ou utilisez «tout» dans chaque groupe.",
+      "group": {
+        "unique": {
+          "title": "Avec un événement · {n}",
+          "sub": "Le serveur a trouvé l'événement : il suffit de le relier."
+        },
+        "none": {
+          "title": "Sans événement · {n}",
+          "sub": "Ce jour-là, l'actif n'a pas cet événement : on le crée, puis on le relie."
+        },
+        "several": {
+          "title": "Plusieurs événements · {n}",
+          "sub": "Ce jour-là, il y a plusieurs événements du bon type : vous choisissez lequel."
+        }
+      },
+      "linkAllGroup": "Tout relier",
+      "createAllGroup": "Tout créer",
+      "createShort": "Créer",
+      "colTransaction": "Transaction",
+      "colMovement": "Mouvement",
+      "colEventFound": "Événement trouvé",
+      "colEventToCreate": "Événement à créer",
+      "colEventsThatDay": "Événements ce jour-là",
+      "toCreate": "à créer",
+      "toCreateChooseType": "à créer : choisissez le type",
+      "severalSub": "{n, plural, one {# événement} many {# événements} other {# événements}}, aucun n'est choisi tout seul",
+      "quantityUnits": "{n} parts",
+      "or": "ou",
+      "choose": "Choisir l'événement",
+      "chooseTitle": "Choisir l'événement",
+      "chooseIntro": "Ce jour-là, l'actif a {n} événements du bon type. Lequel cette transaction prend-elle ?",
+      "sourceAuto": "automatique",
+      "sourceManual": "saisi à la main",
+      "linkingBusy": "Une liaison est en cours"
     },
     "docsHelp": {
       "list": "Chaque mouvement des courtiers auxquels vous avez accès, du plus récent au plus ancien : achats, ventes, dividendes, frais, transferts et liquidités. Vos positions et votre performance en sont calculées. Ajoutez-les, importez-les, filtrez-les ou modifiez-les ici."

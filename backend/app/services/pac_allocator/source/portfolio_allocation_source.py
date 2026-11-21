@@ -26,7 +26,7 @@ from backend.app.services.pac_allocator.source.loaders import load_cash_by_broke
 from backend.app.services.pac_allocator.source.wac import build_planner_wac_contexts
 from backend.app.utils.datetime_utils import utcnow
 
-_PLANNER_SOURCE_REVISION = "1.0.0"
+_PLANNER_SOURCE_REVISION = "1.1.0"
 
 
 class PortfolioPlannerSourceAccessError(PermissionError):

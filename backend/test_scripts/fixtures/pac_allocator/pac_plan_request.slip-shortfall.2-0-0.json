@@ -1,0 +1,512 @@
+{
+  "operation": "plan",
+  "snapshot": {
+    "snapshot_id": "draft:1",
+    "draft_revision": 1,
+    "captured_at": "2026-11-19T10:25:49.329Z"
+  },
+  "as_of": "2026-11-19",
+  "valuation_currency": "EUR",
+  "provenance": [
+    {
+      "kind": "domain_copy",
+      "provenance_id": "copy:42/source:market-data",
+      "domain": "market_data",
+      "source_ref": "enc:assets_2bprice_5fhistory",
+      "captured_at": "2026-11-19T10:25:49.314Z"
+    },
+    {
+      "kind": "domain_copy",
+      "provenance_id": "copy:20/source:market-data",
+      "domain": "market_data",
+      "source_ref": "enc:assets_2bprice_5fhistory",
+      "captured_at": "2026-11-19T10:25:48.033Z"
+    },
+    {
+      "kind": "manual",
+      "provenance_id": "manual:asset:2/quote",
+      "label": "manual price",
+      "entered_at": "2026-11-19T10:25:48.003Z"
+    },
+    {
+      "kind": "manual",
+      "provenance_id": "manual:manual-asset:38/quote",
+      "label": "manual price",
+      "entered_at": "2026-11-19T10:25:48.184Z"
+    },
+    {
+      "kind": "manual",
+      "provenance_id": "manual:manual-asset:38/exposures",
+      "label": "manual exposures",
+      "entered_at": "2026-11-19T10:25:48.184Z"
+    },
+    {
+      "kind": "domain_copy",
+      "provenance_id": "copy:1/source:broker-domain",
+      "domain": "broker",
+      "source_ref": "enc:brokers_2bbroker_5fuser_5faccess_2btransactions",
+      "captured_at": "2026-11-19T10:25:45.762Z"
+    },
+    {
+      "kind": "manual",
+      "provenance_id": "manual:manual-broker:6",
+      "label": "manual broker",
+      "entered_at": "2026-11-19T10:25:46.448Z"
+    },
+    {
+      "kind": "domain_copy",
+      "provenance_id": "copy:9/source:broker-domain",
+      "domain": "broker",
+      "source_ref": "enc:brokers_2bbroker_5fuser_5faccess_2btransactions",
+      "captured_at": "2026-11-19T10:25:46.604Z"
+    },
+    {
+      "kind": "domain_copy",
+      "provenance_id": "copy:44/source:portfolio-ledger",
+      "domain": "portfolio",
+      "source_ref": "enc:transactions_2bbroker_5fuser_5faccess",
+      "captured_at": "2026-11-19T10:25:49.314Z"
+    },
+    {
+      "kind": "manual",
+      "provenance_id": "manual:manual-cash:7",
+      "label": "manual cash",
+      "entered_at": "2026-11-19T10:25:46.448Z"
+    },
+    {
+      "kind": "manual",
+      "provenance_id": "manual:contribution:4",
+      "label": "contribution",
+      "entered_at": "2026-11-19T10:25:46.133Z"
+    },
+    {
+      "kind": "manual",
+      "provenance_id": "manual:funding:5",
+      "label": "funding route",
+      "entered_at": "2026-11-19T10:25:46.133Z"
+    },
+    {
+      "kind": "manual",
+      "provenance_id": "manual:funding:8",
+      "label": "funding route",
+      "entered_at": "2026-11-19T10:25:46.448Z"
+    },
+    {
+      "kind": "manual",
+      "provenance_id": "manual:funding:12",
+      "label": "funding route",
+      "entered_at": "2026-11-19T10:25:46.719Z"
+    },
+    {
+      "kind": "manual",
+      "provenance_id": "manual:funding:13",
+      "label": "funding route",
+      "entered_at": "2026-11-19T10:25:46.719Z"
+    },
+    {
+      "kind": "manual",
+      "provenance_id": "manual:funding:14",
+      "label": "funding route",
+      "entered_at": "2026-11-19T10:25:46.719Z"
+    },
+    {
+      "kind": "manual",
+      "provenance_id": "manual:route:16",
+      "label": "order route",
+      "entered_at": "2026-11-19T10:25:48.002Z"
+    },
+    {
+      "kind": "manual",
+      "provenance_id": "manual:route:18",
+      "label": "order route",
+      "entered_at": "2026-11-19T10:25:48.003Z"
+    },
+    {
+      "kind": "manual",
+      "provenance_id": "manual:route:39",
+      "label": "order route",
+      "entered_at": "2026-11-19T10:25:48.302Z"
+    },
+    {
+      "kind": "manual",
+      "provenance_id": "manual:route:40",
+      "label": "order route",
+      "entered_at": "2026-11-19T10:25:48.302Z"
+    }
+  ],
+  "fx_rates": {
+    "EUR/USD": "1.1553627626"
+  },
+  "assets": [
+    {
+      "asset_id": "asset:1",
+      "identity": {
+        "kind": "domain_asset",
+        "source_asset_id": "1",
+        "name": "Apple Inc.",
+        "ticker": "AAPL",
+        "asset_class": "stock"
+      },
+      "quote": {
+        "amount": "287.822648553694",
+        "currency": "USD",
+        "quote_base_quantity": "1",
+        "provenance_id": "copy:42/source:market-data"
+      },
+      "exposures": [
+        {
+          "dimension": "asset_type",
+          "category_id": "STOCK",
+          "label": "STOCK",
+          "weight": "1",
+          "provenance_id": "copy:20/source:market-data"
+        },
+        {
+          "dimension": "sector",
+          "category_id": "Other",
+          "label": "Other",
+          "weight": "0.15",
+          "provenance_id": "copy:20/source:market-data"
+        },
+        {
+          "dimension": "sector",
+          "category_id": "Technology",
+          "label": "Technology",
+          "weight": "0.85",
+          "provenance_id": "copy:20/source:market-data"
+        },
+        {
+          "dimension": "geography",
+          "category_id": "USA",
+          "label": "USA",
+          "weight": "1",
+          "provenance_id": "copy:20/source:market-data"
+        }
+      ]
+    },
+    {
+      "asset_id": "asset:2",
+      "identity": {
+        "kind": "domain_asset",
+        "source_asset_id": "2",
+        "name": "Microsoft Corporation",
+        "ticker": "MSFT",
+        "asset_class": "stock"
+      },
+      "quote": {
+        "amount": "410",
+        "currency": "USD",
+        "quote_base_quantity": "1",
+        "provenance_id": "manual:asset:2/quote"
+      },
+      "exposures": [
+        {
+          "dimension": "asset_type",
+          "category_id": "STOCK",
+          "label": "STOCK",
+          "weight": "1",
+          "provenance_id": "copy:20/source:market-data"
+        },
+        {
+          "dimension": "sector",
+          "category_id": "Other",
+          "label": "Other",
+          "weight": "0.3",
+          "provenance_id": "copy:20/source:market-data"
+        },
+        {
+          "dimension": "sector",
+          "category_id": "Technology",
+          "label": "Technology",
+          "weight": "0.7",
+          "provenance_id": "copy:20/source:market-data"
+        },
+        {
+          "dimension": "geography",
+          "category_id": "USA",
+          "label": "USA",
+          "weight": "1",
+          "provenance_id": "copy:20/source:market-data"
+        }
+      ]
+    },
+    {
+      "asset_id": "manual-asset:38",
+      "identity": {
+        "kind": "manual_asset",
+        "name": "Global Bond ETF",
+        "ticker": null,
+        "asset_class": "etf"
+      },
+      "quote": {
+        "amount": "52.4",
+        "currency": "EUR",
+        "quote_base_quantity": "1",
+        "provenance_id": "manual:manual-asset:38/quote"
+      },
+      "exposures": [
+        {
+          "dimension": "asset_type",
+          "category_id": "ETF",
+          "label": "ETF",
+          "weight": "1",
+          "provenance_id": "manual:manual-asset:38/exposures"
+        }
+      ]
+    }
+  ],
+  "brokers": [
+    {
+      "broker_id": "broker:2",
+      "identity": {
+        "kind": "domain_broker",
+        "source_broker_id": "2",
+        "name": "DEGIRO",
+        "active": true
+      },
+      "provenance_id": "copy:1/source:broker-domain",
+      "conversion_mode": "automatic",
+      "capabilities": [
+        {
+          "kind": "monetary_amount",
+          "capability_id": "broker:2/mode:EUR",
+          "order_amount_step": {
+            "amount": "0.01",
+            "currency": "EUR"
+          }
+        }
+      ],
+      "fee_schedules": [
+        {
+          "fee_schedule_id": "broker:2/fee:EUR:buy",
+          "capability_id": "broker:2/mode:EUR",
+          "side": "buy",
+          "rate": "0.0019",
+          "variable_floor": {
+            "amount": "1.5",
+            "currency": "EUR"
+          },
+          "variable_cap": {
+            "kind": "amount",
+            "amount": {
+              "amount": "18",
+              "currency": "EUR"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "broker_id": "manual-broker:6",
+      "identity": {
+        "kind": "manual_broker",
+        "name": "Northwind Bank"
+      },
+      "provenance_id": "manual:manual-broker:6",
+      "conversion_mode": "manual"
+    },
+    {
+      "broker_id": "broker:1",
+      "identity": {
+        "kind": "domain_broker",
+        "source_broker_id": "1",
+        "name": "Interactive Brokers",
+        "active": true
+      },
+      "provenance_id": "copy:9/source:broker-domain",
+      "conversion_mode": "manual",
+      "capabilities": [
+        {
+          "kind": "whole_quantity",
+          "capability_id": "broker:1/mode:EUR",
+          "quantity_unit": "asset_unit",
+          "quantity_step": "1"
+        },
+        {
+          "kind": "whole_quantity",
+          "capability_id": "broker:1/mode:USD",
+          "quantity_unit": "asset_unit",
+          "quantity_step": "1"
+        }
+      ],
+      "fee_schedules": [
+        {
+          "fee_schedule_id": "broker:1/fee:USD:buy",
+          "capability_id": "broker:1/mode:USD",
+          "side": "buy",
+          "fixed_fee": {
+            "amount": "1",
+            "currency": "USD"
+          }
+        }
+      ]
+    }
+  ],
+  "existing_cash": [
+    {
+      "cash_id": "cash:broker:2:EUR",
+      "broker_id": "broker:2",
+      "available": {
+        "amount": "8200",
+        "currency": "EUR"
+      },
+      "selected": {
+        "amount": "2000",
+        "currency": "EUR"
+      },
+      "provenance_id": "copy:44/source:portfolio-ledger"
+    },
+    {
+      "cash_id": "manual-cash:7",
+      "broker_id": "manual-broker:6",
+      "available": {
+        "amount": "3000",
+        "currency": "USD"
+      },
+      "selected": {
+        "amount": "1200",
+        "currency": "USD"
+      },
+      "provenance_id": "manual:manual-cash:7"
+    }
+  ],
+  "contributions": [
+    {
+      "contribution_id": "contribution:4",
+      "label": "PAC",
+      "amount": {
+        "amount": "500",
+        "currency": "EUR"
+      },
+      "provenance_id": "manual:contribution:4"
+    }
+  ],
+  "funding_routes": [
+    {
+      "funding_route_id": "funding:broker:2/funding:5",
+      "source": {
+        "kind": "contribution",
+        "contribution_id": "contribution:4"
+      },
+      "broker_id": "broker:2",
+      "currency": "EUR",
+      "provenance_id": "manual:funding:5"
+    },
+    {
+      "funding_route_id": "funding:broker:2/funding:8",
+      "source": {
+        "kind": "existing_cash",
+        "cash_id": "manual-cash:7"
+      },
+      "broker_id": "broker:2",
+      "currency": "USD",
+      "provenance_id": "manual:funding:8"
+    },
+    {
+      "funding_route_id": "funding:broker:1/funding:12",
+      "source": {
+        "kind": "existing_cash",
+        "cash_id": "cash:broker:2:EUR"
+      },
+      "broker_id": "broker:1",
+      "currency": "EUR",
+      "provenance_id": "manual:funding:12"
+    },
+    {
+      "funding_route_id": "funding:broker:1/funding:13",
+      "source": {
+        "kind": "existing_cash",
+        "cash_id": "manual-cash:7"
+      },
+      "broker_id": "broker:1",
+      "currency": "USD",
+      "provenance_id": "manual:funding:13"
+    },
+    {
+      "funding_route_id": "funding:broker:1/funding:14",
+      "source": {
+        "kind": "contribution",
+        "contribution_id": "contribution:4"
+      },
+      "broker_id": "broker:1",
+      "currency": "EUR",
+      "provenance_id": "manual:funding:14"
+    }
+  ],
+  "target_weights": [
+    {
+      "asset_id": "asset:1",
+      "weight": "0.3",
+      "kind": "asset"
+    },
+    {
+      "asset_id": "asset:2",
+      "weight": "0.3",
+      "kind": "asset"
+    },
+    {
+      "asset_id": "manual-asset:38",
+      "weight": "0.4",
+      "kind": "asset"
+    }
+  ],
+  "order_routes": [
+    {
+      "route_id": "route:16",
+      "asset_id": "asset:1",
+      "broker_id": "broker:1",
+      "capability_id": "broker:1/mode:USD",
+      "side": "buy",
+      "fee_schedule_id": "broker:1/fee:USD:buy",
+      "provenance_id": "manual:route:16"
+    },
+    {
+      "route_id": "route:18",
+      "asset_id": "asset:2",
+      "broker_id": "broker:1",
+      "capability_id": "broker:1/mode:USD",
+      "side": "buy",
+      "cap": {
+        "kind": "quantity",
+        "quantity": "3",
+        "unit": "asset_unit"
+      },
+      "fee_schedule_id": "broker:1/fee:USD:buy",
+      "provenance_id": "manual:route:18"
+    },
+    {
+      "route_id": "route:39",
+      "asset_id": "manual-asset:38",
+      "broker_id": "broker:2",
+      "capability_id": "broker:2/mode:EUR",
+      "side": "buy",
+      "minimum_if_active": {
+        "kind": "monetary_amount",
+        "amount": {
+          "amount": "100",
+          "currency": "EUR"
+        }
+      },
+      "cap": {
+        "kind": "notional",
+        "amount": {
+          "amount": "2500",
+          "currency": "EUR"
+        }
+      },
+      "execution_margin_rate": "0.005",
+      "fee_schedule_id": "broker:2/fee:EUR:buy",
+      "provenance_id": "manual:route:39"
+    },
+    {
+      "route_id": "route:40",
+      "asset_id": "manual-asset:38",
+      "broker_id": "broker:1",
+      "capability_id": "broker:1/mode:EUR",
+      "side": "buy",
+      "priority": 1,
+      "provenance_id": "manual:route:40"
+    }
+  ],
+  "policy": "proportional"
+}

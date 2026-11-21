@@ -15,7 +15,7 @@ Measured on 19/11/2026:
 - Both tables from 02/01/2002. Table B is weekly (mostly Wednesday; every two weeks in 2002). Many table-A currencies
   were in table B before moving to A (PHP, CNY, BRL… on 2008-01-02, INR, ILS on 2011-07-27, CLP on 2011-08-31): for an
   A currency the provider also reads table B up to ``B_HISTORY_UNTIL``, so their history is weekly before the move.
-- XDR is in table A and is not served (an open question of lane 75).
+- XDR (the IMF's SDR) is in table A and is served (Q7 of lane 75).
 - No conflicting duplicate; A and B never disagree on a day both publish.
 - Scale changes under one code in table B: VES was redenominated (÷10⁶) on 01/10/2021 and the NBP switched on
   13/10/2021: older values are multiplied by 10⁶, as BCB does. SYP changed scale on 07/01/2026 (about 1:100, factor
@@ -50,8 +50,8 @@ ICON_URL = "https://nbp.pl/favicon.ico"
 #: An honest, constant User-Agent, the one BOE sends.
 USER_AGENT = "Mozilla/5.0 (compatible; LibreFolio/1.0; +https://github.com/librefolio)"
 
-#: Table A, daily (XDR is in it and is not served).
-A_CURRENCIES = tuple("AUD BRL CAD CHF CLP CNY CZK DKK EUR GBP HKD HUF IDR ILS INR ISK JPY KRW MXN MYR NOK NZD PHP RON SEK SGD THB TRY UAH USD ZAR".split())
+#: Table A, daily (the IMF's SDR, XDR, included).
+A_CURRENCIES = tuple("AUD BRL CAD CHF CLP CNY CZK DKK EUR GBP HKD HUF IDR ILS INR ISK JPY KRW MXN MYR NOK NZD PHP RON SEK SGD THB TRY UAH USD XDR ZAR".split())
 #: Table B, weekly.
 B_CURRENCIES = tuple(
     "AED AFN ALL AMD AOA ARS AWG AZN BAM BBD BDT BHD BIF BND BOB BSD BWP BYN BZD CDF COP CRC CUP CVE DJF DOP DZD EGP ERN ETB FJD GEL GHS GIP GMD GNF GTQ GYD HNL HTG "
@@ -73,10 +73,10 @@ class NBPProvider(FXRateProvider):
     """
     Narodowy Bank Polski FX rate provider.
 
-    Provides the NBP's average exchange rates of 147 currencies with PLN as base currency, PLN per unit: 31 daily
+    Provides the NBP's average exchange rates of 148 currencies with PLN as base currency, PLN per unit: 32 daily
     (table A) and 116 weekly (table B). Data source: the documented NBP API, 93 days per request.
 
-    Coverage: a fixed list, 147 currencies plus PLN.
+    Coverage: a fixed list, 148 currencies plus PLN.
     Update frequency: Polish business days (table A), weekly (table B).
     """
 
@@ -107,10 +107,10 @@ class NBPProvider(FXRateProvider):
     @property
     def description_i18n(self) -> dict[str, str]:
         return {
-            "en": "Narodowy Bank Polski — average exchange rates of 147 currencies against the Polish złoty (PLN): 31 daily, and 116 weekly, among them most currencies of Africa, Asia and Latin America. History from 2002. Source: Narodowy Bank Polski.",
-            "it": "Narodowy Bank Polski — tassi di cambio medi di 147 valute contro lo złoty polacco (PLN): 31 giornalieri e 116 settimanali, tra cui la maggior parte delle valute di Africa, Asia e America latina. Storia dal 2002. Fonte: Narodowy Bank Polski.",
-            "fr": "Narodowy Bank Polski — taux de change moyens de 147 devises contre le złoty polonais (PLN) : 31 quotidiens et 116 hebdomadaires, dont la plupart des devises d'Afrique, d'Asie et d'Amérique latine. Historique depuis 2002. Source : Narodowy Bank Polski.",
-            "es": "Narodowy Bank Polski — tipos de cambio medios de 147 monedas contra el esloti polaco (PLN): 31 diarios y 116 semanales, entre ellos la mayoría de las monedas de África, Asia y América Latina. Historial desde 2002. Fuente: Narodowy Bank Polski.",
+            "en": "Narodowy Bank Polski — average exchange rates of 148 currencies against the Polish złoty (PLN): 32 daily, and 116 weekly, among them most currencies of Africa, Asia and Latin America. History from 2002. Source: Narodowy Bank Polski.",
+            "it": "Narodowy Bank Polski — tassi di cambio medi di 148 valute contro lo złoty polacco (PLN): 32 giornalieri e 116 settimanali, tra cui la maggior parte delle valute di Africa, Asia e America latina. Storia dal 2002. Fonte: Narodowy Bank Polski.",
+            "fr": "Narodowy Bank Polski — taux de change moyens de 148 devises contre le złoty polonais (PLN) : 32 quotidiens et 116 hebdomadaires, dont la plupart des devises d'Afrique, d'Asie et d'Amérique latine. Historique depuis 2002. Source : Narodowy Bank Polski.",
+            "es": "Narodowy Bank Polski — tipos de cambio medios de 148 monedas contra el esloti polaco (PLN): 32 diarios y 116 semanales, entre ellos la mayoría de las monedas de África, Asia y América Latina. Historial desde 2002. Fuente: Narodowy Bank Polski.",
         }
 
     @property
@@ -140,7 +140,7 @@ class NBPProvider(FXRateProvider):
         return list(_CATALOGUE)
 
     async def get_supported_currencies(self) -> list[str]:
-        """The 147 currencies of tables A and B, plus PLN: no request."""
+        """The 148 currencies of tables A and B, plus PLN: no request."""
         return list(_CATALOGUE)
 
     async def fetch_rates(self, date_range: tuple[FXProviderStartDate, date], currencies: list[str], base_currency: str | None = None) -> dict[str, list[tuple[date, str, str, Decimal]]]:

@@ -28,8 +28,10 @@ from backend.app.services.pac_allocator import models as pac_models
 from backend.app.services.pac_allocator.evaluation import evaluator as EV
 from backend.app.services.pac_allocator.evaluation.errors import ExactEvaluatorError, ExactPolicyContractError, ExactScenarioContractError
 from backend.app.services.pac_allocator.evaluation.evaluator import build_exact_policy_view, evaluate_exact_candidate
-from backend.app.services.pac_allocator.evaluation.keys import asset_broker_key, exact_decision_id, fx_debit_key
-from backend.app.services.pac_allocator.evaluation.scenario import exact_scenario_fingerprint
+from backend.app.services.pac_allocator.evaluation.keys import asset_broker_key, exact_decision_id
+from backend.app.services.pac_allocator.evaluation.limits import limited_entries
+from backend.app.services.pac_allocator.evaluation.reachability import fx_decision_specs
+from backend.app.services.pac_allocator.evaluation.scenario import build_scenario_index, exact_scenario_fingerprint
 from backend.app.services.pac_allocator.ledger import (
     DuplicatePostingError,
     ExactLedgerError,
@@ -38,6 +40,7 @@ from backend.app.services.pac_allocator.ledger import (
     reconcile_broker_ledgers,
     rounded_money_posting,
 )
+from backend.app.services.pac_allocator.limits import check_maximum_below_current, check_minimum_above_maximum, check_minimums_exceed_reference, fixed_reference_of, trapped_cash_by_cell
 from backend.app.services.pac_allocator.models import (
     CandidateActionVector,
     CandidateDecision,
@@ -75,7 +78,9 @@ from backend.app.services.pac_allocator.models import (
     LedgerPostingFamily,
 )
 from backend.app.services.pac_allocator.normalize import normalize_planner_request
-from backend.app.services.pac_allocator.numeric import ExactRatio
+from backend.app.services.pac_allocator.numeric import ExactRatio, post_floor
+from backend.test_scripts.test_services import _reb_small_cases as cases
+from backend.test_scripts.test_services._pac_fx_decisions import fx_id, fx_spec
 
 R = ExactRatio
 ZERO = R(0)
@@ -210,7 +215,6 @@ def _order_route(
     fee_id: str,
     side: str,
     minimum: ExactRatio = ZERO,
-    required: ExactRatio = ZERO,
     cap: ExactRatio = R(100),
     margin: ExactRatio = ZERO,
     priority: int = 0,
@@ -226,7 +230,6 @@ def _order_route(
         fee_schedule_id=fee_id,
         side=side,
         minimum_if_active=_minimum(capability, minimum, currency),
-        required_minimum=_minimum(capability, required, currency),
         cap=ExactOrderCap(
             kind=cap_kind,
             value=cap,
@@ -327,6 +330,7 @@ def _scenario(
     currency_quantums: Iterable[tuple[str, ExactRatio]] = (("EUR", CENT),),
     target_weights: Iterable[ExactTargetWeight] | None = None,
     sell_context: ExactSellContext | None = None,
+    target_fidelity: pac_models.ExactTargetFidelity | None = None,
 ) -> ExactPlannerScenario:
     asset_rows = tuple(sorted(assets, key=lambda item: item.asset_id))
     targets = (
@@ -374,6 +378,8 @@ def _scenario(
         order_routes=tuple(sorted(order_routes, key=lambda item: item.route_id)),
         target_weights=targets,
         sell_context=sell_context,
+        # A Rebalancer scenario is «Balanced» unless the test names another fidelity (B1 of project 67).
+        target_fidelity=target_fidelity if target_fidelity is not None or product == "pac" else pac_models.BALANCED_FIDELITY,
     )
 
 
@@ -538,6 +544,7 @@ def _planner_request_with_whole_step(
             "funding_routes": [],
             "target_weights": [
                 {
+                    "kind": "asset",
                     "asset_id": "asset:a",
                     "weight": "1",
                 }
@@ -551,7 +558,6 @@ def _planner_request_with_whole_step(
                     "side": "buy",
                     "priority": 0,
                     "minimum_if_active": {"kind": "none"},
-                    "required_minimum": {"kind": "none"},
                     "cap": {
                         "kind": "quantity",
                         "quantity": "100",
@@ -581,7 +587,6 @@ def _pac_scenario(
     fee_floor: ExactRatio = ZERO,
     fee_cap: ExactRatio | None = None,
     minimum: ExactRatio = ZERO,
-    required: ExactRatio = ZERO,
     route_cap: ExactRatio = R(100),
     margin: ExactRatio = ZERO,
     priority: int = 7,
@@ -632,7 +637,6 @@ def _pac_scenario(
                 fee_id=fee.fee_schedule_id,
                 side="buy",
                 minimum=minimum,
-                required=required,
                 cap=route_cap,
                 margin=margin,
                 priority=priority,
@@ -641,6 +645,14 @@ def _pac_scenario(
         ),
         currency_quantums=((quote_currency, CENT),),
     )
+
+
+def _pac_scenario_with_asset_minimum(minimum: ExactRatio, **kwargs) -> ExactPlannerScenario:
+    """``_pac_scenario`` with a minimum, in EUR, on the final value of its one Asset (V5): the construction that makes a PAC
+    infeasible now that a route's «required minimum» is gone (M19). Doing nothing does not meet it, and a route cap below it
+    cannot either."""
+    scenario = _pac_scenario(**kwargs)
+    return replace(scenario, target_weights=(ExactTargetWeight("asset:a", ONE, minimum=pac_models.ExactLimit("amount", minimum)),))
 
 
 def _min_fragmentation_scenario(
@@ -803,7 +815,6 @@ def _invest_and_sell_scenario(
     monetary_sell: bool = False,
     sell_step: ExactRatio = ONE,
     sell_minimum: ExactRatio = ZERO,
-    sell_required: ExactRatio = ZERO,
     zero_domain_sell: bool = False,
 ) -> ExactPlannerScenario:
     buy_capability = _capability("capability:buy")
@@ -846,7 +857,6 @@ def _invest_and_sell_scenario(
             fee_id=sell_fee.fee_schedule_id,
             side="sell",
             minimum=sell_minimum,
-            required=sell_required,
             cap=sell_a_cap,
             priority=4,
         ),
@@ -1004,42 +1014,23 @@ def _integer_quanta(value: ExactRatio, quantum: ExactRatio = CENT) -> int:
     return scaled.numerator
 
 
-def _invest_only_baseline(
+def _sell_door(
     scenario: ExactPlannerScenario,
-    *,
-    buy_b_quanta: int = 2,
-) -> tuple[ExactPolicyView, CandidateActionVector]:
-    view = build_exact_policy_view(
-        scenario,
-        purpose="invest_only_baseline",
-        view_id="view:invest-only",
-    )
-    contribution = _by_id(
-        scenario.contributions,
-        "contribution_id",
-        "contribution:a",
-    )
-    candidate = _candidate(
-        view,
-        {
-            exact_decision_id("funding_transfer", "route:funding"): (_integer_quanta(contribution.amount.amount)),
-            exact_decision_id("buy_quantum", "route:buy:b"): buy_b_quanta,
-        },
-        candidate_id="candidate:invest-only",
-    )
-    return view, candidate
-
-
-def _sell_extension(
-    scenario: ExactPlannerScenario,
-    baseline: CandidateActionVector,
+    quanta: dict[str, int],
 ) -> ExactPolicyView:
-    return build_exact_policy_view(
-        scenario,
-        purpose="sell_extension",
-        baseline=baseline,
-        view_id="view:sell-extension",
-    )
+    """The way into a replay with an active sell while ``primary`` keeps sells disabled (B1, D6 of project 67).
+
+    A ``deployment`` view over a base that already holds ``quanta`` and the whole contribution: its sells are frozen at the
+    base, its buys start from it, and a candidate equal to the base replays the sell with every rule. C1 changes only this
+    body, to a ``primary`` view with the sells open; the expectations on the sale economy do not move.
+    """
+    primary = build_exact_policy_view(scenario, view_id="view:sell-door:decisions")
+    funding = {}
+    if any(item.contribution_id == "contribution:a" for item in scenario.contributions):
+        contribution = _by_id(scenario.contributions, "contribution_id", "contribution:a")
+        funding[exact_decision_id("funding_transfer", "route:funding")] = _integer_quanta(contribution.amount.amount)
+    base = _candidate(primary, {**funding, **quanta}, candidate_id="candidate:sell-door")
+    return build_exact_policy_view(scenario, purpose="deployment", baseline=base, view_id="view:sell-door")
 
 
 def _assert_invalid_candidate_has_no_replay(
@@ -1162,7 +1153,7 @@ def test_policy_view_exposes_complete_exact_vector_with_stable_ids() -> None:
 
     view = build_exact_policy_view(scenario)
 
-    fx_debit_id = exact_decision_id("fx_debit", fx_debit_key("route:buy:usd", "EUR"))
+    fx_debit_id = fx_id(scenario, source="EUR", destination="USD")
     expected = {
         exact_decision_id("funding_transfer", "route:funding:eur"),
         fx_debit_id,
@@ -1267,17 +1258,19 @@ def test_candidate_contract_conflicts_are_deterministic_and_skip_replay(
     expected_codes: tuple[str, ...],
 ) -> None:
     scenario = _invest_and_sell_scenario()
-    _baseline_view, baseline = _invest_only_baseline(scenario)
-    view = _sell_extension(scenario, baseline)
-    valid = _candidate(view, candidate_id=f"candidate:{case}")
     funding_id = exact_decision_id("funding_transfer", "route:funding")
     buy_b_id = exact_decision_id("buy_quantum", "route:buy:b")
     sell_b_id = exact_decision_id("sell_quantum", "route:sell:b")
+    # A disabled decision lives in ``primary`` (its sells, until C1); frozen and additive ones in ``deployment``.
+    view = build_exact_policy_view(scenario) if case == "disabled" else _sell_door(scenario, {buy_b_id: 2})
+    valid = _candidate(view, candidate_id=f"candidate:{case}")
     duplicate = _by_id(valid.decisions, "decision_id", buy_b_id)
     buy_access = _decision(view, buy_b_id)
     funding_access = _decision(view, funding_id)
-    assert buy_access.baseline_quanta > 0
-    assert funding_access.frozen_quanta is not None
+    if case != "disabled":
+        assert buy_access.baseline_quanta > 0
+        assert funding_access.frozen_quanta is not None
+    # The «disabled» case reads a primary view, where nothing is frozen or additive: its candidate is built apart.
     candidates = {
         "view-mismatch": replace(valid, view_id="view:other"),
         "missing": replace(
@@ -1324,23 +1317,18 @@ def test_candidate_contract_conflicts_are_deterministic_and_skip_replay(
             {buy_b_id: buy_access.upper_quanta + 1},
             candidate_id=valid.candidate_id,
         ),
-        "disabled": _candidate(
-            view,
-            {sell_b_id: 1},
-            candidate_id=valid.candidate_id,
-        ),
         "not-frozen": _candidate(
             view,
-            {funding_id: funding_access.frozen_quanta - 1},
+            {funding_id: (funding_access.frozen_quanta or 1) - 1},
             candidate_id=valid.candidate_id,
         ),
         "not-additive": _candidate(
             view,
-            {buy_b_id: buy_access.baseline_quanta - 1},
+            {buy_b_id: max(buy_access.baseline_quanta - 1, 0)},
             candidate_id=valid.candidate_id,
         ),
     }
-    candidate = candidates[case]
+    candidate = _candidate(view, {sell_b_id: 1}, candidate_id=valid.candidate_id) if case == "disabled" else candidates[case]
 
     evaluation = evaluate_exact_candidate(scenario, view, candidate)
 
@@ -1404,13 +1392,10 @@ def test_candidate_vector_rejects_noncanonical_order_before_replay() -> None:
             id="min-fragmentation-primary",
         ),
         pytest.param("invest-only-primary", id="invest-only-primary"),
-        pytest.param(
-            "invest-and-sell-baseline",
-            id="invest-and-sell-baseline",
-        ),
+        pytest.param("invest-and-sell-primary", id="invest-and-sell-primary"),
     ],
 )
-def test_primary_and_invest_only_policy_views_start_from_zero(
+def test_primary_policy_views_start_from_zero(
     case: str,
 ) -> None:
     if case == "proportional-primary":
@@ -1422,140 +1407,25 @@ def test_primary_and_invest_only_policy_views_start_from_zero(
     elif case == "invest-only-primary":
         scenario = _invest_only_scenario()
         view = build_exact_policy_view(scenario)
-    elif case == "invest-and-sell-baseline":
+    elif case == "invest-and-sell-primary":
         scenario = _invest_and_sell_scenario()
-        view = build_exact_policy_view(
-            scenario,
-            purpose="invest_only_baseline",
-        )
+        view = build_exact_policy_view(scenario)
     else:
         raise AssertionError(f"Unknown policy-view witness {case!r}")
 
     assert all(item.baseline_quanta == 0 for item in view.decisions)
     assert all(item.lower_quanta == 0 for item in view.decisions)
-    if view.purpose == "invest_only_baseline":
+    if view.policy == "invest_and_sell":
         assert all(item.mode == "disabled" for item in view.decisions if item.family == "sell_quantum")
-
-
-def test_invest_and_sell_requires_complete_exact_feasible_baseline() -> None:
-    scenario = _invest_and_sell_scenario()
-
-    with pytest.raises(
-        ExactPolicyContractError,
-        match="requires.*baseline",
-    ):
-        build_exact_policy_view(
-            scenario,
-            purpose="sell_extension",
-        )
-
-    baseline_view, _baseline = _invest_only_baseline(scenario)
-    infeasible = _candidate(
-        baseline_view,
-        {
-            exact_decision_id(
-                "funding_transfer",
-                "route:funding",
-            ): 2_000,
-            exact_decision_id("buy_quantum", "route:buy:b"): 3,
-        },
-        candidate_id="candidate:infeasible-baseline",
-    )
-    baseline_evaluation = evaluate_exact_candidate(
-        scenario,
-        baseline_view,
-        infeasible,
-    )
-    assert baseline_evaluation.candidate_valid is True
-    assert baseline_evaluation.feasible is False
-    assert "SPENDABLE_CASH_NONNEGATIVE" in (baseline_evaluation.conflict_codes)
-
-    with pytest.raises(
-        ExactPolicyContractError,
-        match="baseline is not exact-feasible",
-    ):
-        build_exact_policy_view(
-            scenario,
-            purpose="sell_extension",
-            baseline=infeasible,
-        )
-
-
-def test_sell_extension_freezes_flows_adds_buys_and_opens_only_eligible_sells() -> None:
-    scenario = _invest_and_sell_scenario()
-    baseline_view, baseline = _invest_only_baseline(scenario)
-    view = _sell_extension(scenario, baseline)
-
-    funding = _decision(
-        view,
-        exact_decision_id("funding_transfer", "route:funding"),
-    )
-    # NOTE: _invest_and_sell_scenario is 100% EUR-only under the redesign (no
-    # fx_rates declared), so it has no fx_debit decision to freeze/inspect
-    # here anymore -- the old assertion on a fabricated fx route id is gone.
-    buy_a = _decision(
-        view,
-        exact_decision_id("buy_quantum", "route:buy:a"),
-    )
-    buy_b = _decision(
-        view,
-        exact_decision_id("buy_quantum", "route:buy:b"),
-    )
-    sell_a = _decision(
-        view,
-        exact_decision_id("sell_quantum", "route:sell:a"),
-    )
-    sell_b = _decision(
-        view,
-        exact_decision_id("sell_quantum", "route:sell:b"),
-    )
-
-    assert (
-        funding.mode,
-        funding.frozen_quanta,
-        funding.baseline_quanta,
-    ) == ("frozen_exact", 2_000, 2_000)
-    assert (buy_a.mode, buy_a.lower_quanta) == ("additive_only", 0)
-    assert (buy_b.mode, buy_b.lower_quanta) == ("additive_only", 2)
-    assert sell_a.mode == "mutable"
-    assert sell_a.upper_quanta > 0
-    assert (
-        sell_b.mode,
-        sell_b.lower_quanta,
-        sell_b.upper_quanta,
-    ) == ("disabled", 0, 0)
-
-    frozen_buy_baseline = _candidate(
-        baseline_view,
-        {
-            exact_decision_id(
-                "funding_transfer",
-                "route:funding",
-            ): 2_000,
-            exact_decision_id("buy_quantum", "route:buy:a"): 1,
-        },
-        candidate_id="candidate:frozen-buy-overweight",
-    )
-    frozen_buy_view = _sell_extension(
-        scenario,
-        frozen_buy_baseline,
-    )
-    assert (
-        _decision(
-            frozen_buy_view,
-            exact_decision_id("sell_quantum", "route:sell:a"),
-        ).mode
-        == "disabled"
-    )
 
 
 def test_deployment_freezes_funding_fx_and_sell_but_keeps_buy_additive() -> None:
     scenario = _invest_and_sell_scenario()
-    _baseline_view, invest_only = _invest_only_baseline(scenario)
-    extension = _sell_extension(scenario, invest_only)
+    contribution = _by_id(scenario.contributions, "contribution_id", "contribution:a")
     primary = _candidate(
-        extension,
+        build_exact_policy_view(scenario),
         {
+            exact_decision_id("funding_transfer", "route:funding"): _integer_quanta(contribution.amount.amount),
             exact_decision_id("buy_quantum", "route:buy:b"): 4,
             exact_decision_id("sell_quantum", "route:sell:a"): 2,
         },
@@ -1585,54 +1455,22 @@ def test_deployment_freezes_funding_fx_and_sell_but_keeps_buy_additive() -> None
 
 
 @pytest.mark.parametrize(
-    "purpose",
+    "policy",
     [
-        pytest.param("sell_extension", id="sell-extension"),
-        pytest.param("deployment", id="deployment"),
+        pytest.param("proportional", id="pac"),
+        pytest.param("invest_and_sell", id="rebalancer"),
     ],
 )
 def test_baseline_dependent_default_view_ids_use_full_sha256(
-    purpose: str,
+    policy: str,
 ) -> None:
-    if purpose == "sell_extension":
-        scenario = _invest_and_sell_scenario()
-        baseline_view = build_exact_policy_view(
-            scenario,
-            purpose="invest_only_baseline",
-            view_id="view:invest-only",
-        )
-        funding_id = exact_decision_id(
-            "funding_transfer",
-            "route:funding",
-        )
-        buy_id = exact_decision_id("buy_quantum", "route:buy:b")
-        first = _candidate(
-            baseline_view,
-            {funding_id: 2_000, buy_id: 1},
-            candidate_id="candidate:first",
-        )
-        second = _candidate(
-            baseline_view,
-            {funding_id: 2_000, buy_id: 2},
-            candidate_id="candidate:second",
-        )
-    else:
-        scenario = _pac_scenario()
-        baseline_view = build_exact_policy_view(
-            scenario,
-            view_id="view:primary",
-        )
-        buy_id = exact_decision_id("buy_quantum", "route:buy:a")
-        first = _candidate(
-            baseline_view,
-            {buy_id: 0},
-            candidate_id="candidate:first",
-        )
-        second = _candidate(
-            baseline_view,
-            {buy_id: 1},
-            candidate_id="candidate:second",
-        )
+    """``deployment`` is the one purpose with a baseline: its default view ID ends with the full SHA-256 of that baseline."""
+    purpose = "deployment"
+    scenario = _pac_scenario() if policy == "proportional" else _invest_and_sell_scenario()
+    baseline_view = build_exact_policy_view(scenario, view_id="view:primary")
+    buy_id = exact_decision_id("buy_quantum", "route:buy:a")
+    first = _candidate(baseline_view, {buy_id: 0}, candidate_id="candidate:first")
+    second = _candidate(baseline_view, {buy_id: 1}, candidate_id="candidate:second")
 
     first_view = build_exact_policy_view(
         scenario,
@@ -1791,35 +1629,9 @@ def test_tampered_policy_metadata_is_rejected_with_typed_error(
         evaluate_exact_candidate(scenario, tampered, candidate)
 
 
-def test_tampered_sell_gate_metadata_is_rejected_with_typed_error() -> None:
-    scenario = _invest_and_sell_scenario()
-    _baseline_view, baseline = _invest_only_baseline(scenario)
-    view = _sell_extension(scenario, baseline)
-    gate = _by_id(
-        view.sell_gates,
-        "gate_id",
-        "sell-irreducibility:sell:route:sell:a",
-    )
-    tampered_gate = replace(gate, gate_id="sell-irreducibility:tampered")
-    tampered_view = replace(view, sell_gates=(tampered_gate,))
-
-    with pytest.raises(
-        ExactPolicyContractError,
-        match="SELL proof metadata",
-    ):
-        evaluate_exact_candidate(
-            scenario,
-            tampered_view,
-            _candidate(view),
-        )
-
-
 def test_total_tie_covers_every_decision_once_in_semantic_order() -> None:
     scenario = _invest_and_sell_scenario()
-    view = build_exact_policy_view(
-        scenario,
-        purpose="invest_only_baseline",
-    )
+    view = build_exact_policy_view(scenario)
     expected = (
         exact_decision_id("funding_transfer", "route:funding"),
         # NOTE: no fx_debit entry -- _invest_and_sell_scenario is 100%
@@ -2028,7 +1840,7 @@ def test_evaluation_tie_ids_and_quanta_align_with_policy_vector() -> None:
         # so a zero fx_debit avoids the confirmed
         # ExactFxEvaluation.route_id models.py bug entirely (no row is
         # ever produced for a zero-quanta pool currency).
-        exact_decision_id("fx_debit", fx_debit_key("route:buy:usd", "EUR")): 0,
+        fx_id(scenario, source="EUR", destination="USD"): 0,
         exact_decision_id("buy_quantum", "route:buy:usd"): 1,
     }
     evaluation = evaluate_exact_candidate(
@@ -2089,6 +1901,8 @@ def test_permuted_source_rows_canonicalize_to_identical_exact_results() -> None:
         pytest.param("funding_in", "credit", id="funding-in"),
         pytest.param("funding_out", "debit", id="funding-out"),
         pytest.param("fx_debit", "debit", id="fx-debit"),
+        pytest.param("transfer_in", "credit", id="transfer-in"),
+        pytest.param("transfer_out", "debit", id="transfer-out"),
     ],
 )
 def test_exact_flow_posting_families_have_zero_raw_delta(
@@ -2216,6 +2030,8 @@ def test_native_ledger_aggregates_all_columns_without_double_counting() -> None:
         ("funding-in", "funding_in", R(5)),
         ("funding-out", "funding_out", R(2)),
         ("fx-debit", "fx_debit", ONE),
+        ("transfer-in", "transfer_in", R(3)),
+        ("transfer-out", "transfer_out", R(2)),
     )
     rounded_specs = (
         ("fx-credit", "fx_credit", R(3)),
@@ -2265,10 +2081,11 @@ def test_native_ledger_aggregates_all_columns_without_double_counting() -> None:
     assert row.sell_fees == ONE
     assert row.broker_withheld_tax == ONE
     assert row.self_reserved_tax == ONE
+    assert (row.transfer_in, row.transfer_out) == (R(3), R(2))
     assert row.raw_rounding_delta == ZERO
     assert row.accounting_rounding_adjustment == ZERO
-    assert row.final_spendable == R(9)
-    assert row.final_physical == R(10)
+    assert row.final_spendable == R(10)
+    assert row.final_physical == R(11)
     assert row.final_physical == (row.final_spendable + row.self_reserved_tax)
 
 
@@ -2819,10 +2636,7 @@ def test_active_order_applies_fixed_and_bounded_variable_fee_once(
 def test_direct_fx_replay_preserves_direction_and_spread() -> None:
     scenario = _funding_fx_scenario()
     view = build_exact_policy_view(scenario)
-    fx_debit_id = exact_decision_id(
-        "fx_debit",
-        fx_debit_key("route:buy:usd", "EUR"),
-    )
+    fx_debit_id = fx_id(scenario, source="EUR", destination="USD")
     candidate = _candidate(
         view,
         {
@@ -2836,20 +2650,16 @@ def test_direct_fx_replay_preserves_direction_and_spread() -> None:
     )
 
     evaluation = evaluate_exact_candidate(scenario, view, candidate)
-    action = _by_id(
-        evaluation.fx,
-        "order_route_id",
-        "route:buy:usd",
-    )
+    (action,) = evaluation.fx
     debit = _by_id(
         evaluation.postings,
         "posting_id",
-        "fx-debit:route:buy:usd:EUR",
+        f"fx-debit:{fx_spec(scenario, source='EUR', destination='USD').key}",
     )
     credit = _by_id(
         evaluation.postings,
         "posting_id",
-        "fx-credit:route:buy:usd:EUR",
+        f"fx-credit:{fx_spec(scenario, source='EUR', destination='USD').key}",
     )
 
     assert action.source_currency == "EUR"
@@ -2923,10 +2733,7 @@ def _planning_rate_replay(cross_rate: ExactRatio) -> ExactEvaluation:
         _candidate(
             view,
             {
-                exact_decision_id(
-                    "fx_debit",
-                    fx_debit_key("route:buy:usd", "RON"),
-                ): 10_000,
+                fx_id(scenario, source="RON", destination="USD"): 10_000,
                 exact_decision_id("buy_quantum", "route:buy:usd"): 1,
             },
         ),
@@ -2944,7 +2751,7 @@ def test_fx_replay_plans_a_cross_rate_just_above_the_triangle_at_the_triangle() 
     the conversion loses nothing, where the user's rate would have gained.
     """
     evaluation = _planning_rate_replay(R(2_183_098_592, 10**10))
-    action = _by_id(evaluation.fx, "order_route_id", "route:buy:usd")
+    (action,) = evaluation.fx
 
     assert evaluation.feasible is True, evaluation.conflict_codes
     assert action.source_currency == "RON"
@@ -2969,7 +2776,7 @@ def test_fx_replay_keeps_a_cross_rate_below_the_triangle() -> None:
     """
     approved_rate = R(2_183_098_591, 10**10)
     evaluation = _planning_rate_replay(approved_rate)
-    action = _by_id(evaluation.fx, "order_route_id", "route:buy:usd")
+    (action,) = evaluation.fx
 
     assert evaluation.feasible is True, evaluation.conflict_codes
     assert action.approved_rate == approved_rate
@@ -2982,19 +2789,8 @@ def test_fx_replay_keeps_a_cross_rate_below_the_triangle() -> None:
     assert _pool_ledger(evaluation, "broker:a", "USD").final_spendable == ZERO
 
 
-def test_multi_source_buy_shares_a_cash_pool_across_two_buys() -> None:
-    """A single BUY (route:buy:1) draws from two currency pools (GBP and USD
-    existing cash) at the same Broker, each converting to its own EUR quote
-    currency via a distinct direct fx_rate. A second BUY (route:buy:2)
-    shares the same GBP pool. Asserts one ExactFxEvaluation per (route,
-    source currency) with spread applied once each, and that the shared GBP
-    ledger row nets the combined draw from both BUYs correctly
-    (SPENDABLE_CASH_NONNEGATIVE across combined postings -- already covered
-    by the existing ledger-level check, no separate constraint code needed).
-    A pure BUY-only (PAC) scenario is used deliberately: SELL requires the
-    invest_and_sell two-phase baseline/extension flow, which is orthogonal to
-    what this regression is about (multi-currency pool sharing).
-    """
+def _multi_source_buy_scenario() -> ExactPlannerScenario:
+    """One Broker with GBP and USD cash; route:buy:1 can convert both to EUR, route:buy:2 (the same Broker) shares GBP to EUR."""
     buy_capability = _capability("capability:buy")
     buy_fee = _fee("fee:buy", buy_capability.capability_id, "buy")
     broker = _broker("broker:hub", (buy_capability,), (buy_fee,))
@@ -3040,59 +2836,62 @@ def test_multi_source_buy_shares_a_cash_pool_across_two_buys() -> None:
         fx_spread_rate=R(1, 100),
         currency_quantums=(("EUR", CENT), ("GBP", CENT), ("USD", CENT)),
     )
+    return scenario
+
+
+def test_multi_source_buy_shares_a_cash_pool_across_two_buys() -> None:
+    """A single BUY (route:buy:1) draws from two currency pools (GBP and USD
+    existing cash) at the same Broker, each converting to its own EUR quote
+    currency via a distinct direct fx_rate. A second BUY (route:buy:2)
+    shares the same GBP pool. Asserts one ExactFxEvaluation per (Broker,
+    source, destination) -- since A2 the two buys share one GBP -> EUR
+    decision -- with spread applied once each, and that the shared GBP
+    ledger row nets the combined draw from both BUYs correctly
+    (SPENDABLE_CASH_NONNEGATIVE across combined postings -- already covered
+    by the existing ledger-level check, no separate constraint code needed).
+    A pure BUY-only (PAC) scenario is used deliberately: SELL requires the
+    invest_and_sell two-phase baseline/extension flow, which is orthogonal to
+    what this regression is about (multi-currency pool sharing).
+    """
+    scenario = _multi_source_buy_scenario()
     view = build_exact_policy_view(scenario)
     candidate = _candidate(
         view,
         {
-            # route:buy:1 (2 units @ EUR99 = EUR198): GBP50 -> EUR99 +
-            # USD25 -> EUR99, exactly covering its EUR198 cost.
-            exact_decision_id("fx_debit", fx_debit_key("route:buy:1", "GBP")): 5_000,
-            exact_decision_id("fx_debit", fx_debit_key("route:buy:1", "USD")): 2_500,
+            # route:buy:1 (2 units @ EUR99 = EUR198) and route:buy:2 (1 unit @
+            # EUR99) draw on the hub's one GBP -> EUR decision (A2: one per
+            # Broker and pair) and its one USD -> EUR decision: GBP100 ->
+            # EUR198 + USD25 -> EUR99 cover the EUR297 of the three units.
+            fx_id(scenario, source="GBP", destination="EUR"): 10_000,
+            fx_id(scenario, source="USD", destination="EUR"): 2_500,
             exact_decision_id("buy_quantum", "route:buy:1"): 2,
-            # route:buy:2 (1 unit @ EUR99): GBP50 -> EUR99, sharing the same
-            # GBP cash row already partly drawn by route:buy:1.
-            exact_decision_id("fx_debit", fx_debit_key("route:buy:2", "GBP")): 5_000,
             exact_decision_id("buy_quantum", "route:buy:2"): 1,
         },
     )
 
     evaluation = evaluate_exact_candidate(scenario, view, candidate)
 
-    fx_by_key = {(item.order_route_id, item.source_currency): item for item in evaluation.fx}
-    assert set(fx_by_key) == {
-        ("route:buy:1", "GBP"),
-        ("route:buy:1", "USD"),
-        ("route:buy:2", "GBP"),
-    }
+    fx_by_key = {(item.broker_id, item.source_currency, item.destination_currency): item for item in evaluation.fx}
+    assert set(fx_by_key) == {("broker:hub", "GBP", "EUR"), ("broker:hub", "USD", "EUR")}
 
     # GBP -> EUR: 1 GBP = 2 EUR official; effective = 2 * (1 - 1/100) = 99/50.
-    buy1_gbp = fx_by_key[("route:buy:1", "GBP")]
-    assert buy1_gbp.destination_currency == "EUR"
-    assert buy1_gbp.source_debit == R(50)
-    assert buy1_gbp.approved_rate == R(2)
-    assert buy1_gbp.effective_rate == R(99, 50)
-    assert buy1_gbp.exact_destination_credit == R(99)
-    assert buy1_gbp.posted_destination_credit == R(99)
-    assert buy1_gbp.spread_loss == R(1)
+    # The two buys' GBP50 + GBP50 are one conversion of GBP100: 99 + 99 EUR.
+    hub_gbp = fx_by_key[("broker:hub", "GBP", "EUR")]
+    assert hub_gbp.source_debit == R(100)
+    assert hub_gbp.approved_rate == R(2)
+    assert hub_gbp.effective_rate == R(99, 50)
+    assert hub_gbp.exact_destination_credit == R(198)
+    assert hub_gbp.posted_destination_credit == R(198)
+    assert hub_gbp.spread_loss == R(2)
 
     # USD -> EUR: 1 USD = 4 EUR official; effective = 4 * (1 - 1/100) = 99/25.
-    buy1_usd = fx_by_key[("route:buy:1", "USD")]
-    assert buy1_usd.destination_currency == "EUR"
-    assert buy1_usd.source_debit == R(25)
-    assert buy1_usd.approved_rate == R(4)
-    assert buy1_usd.effective_rate == R(99, 25)
-    assert buy1_usd.exact_destination_credit == R(99)
-    assert buy1_usd.posted_destination_credit == R(99)
-    assert buy1_usd.spread_loss == R(1)
-
-    buy2_gbp = fx_by_key[("route:buy:2", "GBP")]
-    assert buy2_gbp.destination_currency == "EUR"
-    assert buy2_gbp.source_debit == R(50)
-    assert buy2_gbp.approved_rate == R(2)
-    assert buy2_gbp.effective_rate == R(99, 50)
-    assert buy2_gbp.exact_destination_credit == R(99)
-    assert buy2_gbp.posted_destination_credit == R(99)
-    assert buy2_gbp.spread_loss == R(1)
+    hub_usd = fx_by_key[("broker:hub", "USD", "EUR")]
+    assert hub_usd.source_debit == R(25)
+    assert hub_usd.approved_rate == R(4)
+    assert hub_usd.effective_rate == R(99, 25)
+    assert hub_usd.exact_destination_credit == R(99)
+    assert hub_usd.posted_destination_credit == R(99)
+    assert hub_usd.spread_loss == R(1)
 
     ledger_rows = {(row.broker_id, row.currency): row for row in evaluation.ledgers}
     gbp_row = ledger_rows[("broker:hub", "GBP")]
@@ -3118,7 +2917,7 @@ def test_sell_never_converts_and_proceeds_stay_in_quote_currency() -> None:
     only a BUY may draw on a currency pool. The proceeds ledger posting
     lands in the Asset's own quote currency, untouched. A same-currency (USD)
     incremental BUY is included so the SELL genuinely funds it (satisfying
-    the invest_and_sell SELL_FUNDS_INCREMENTAL_BUY policy rule) while still
+    a buy of the plan) while still
     involving zero FX -- keeping the "SELL never converts" claim isolated
     from any cross-currency mechanics.
     """
@@ -3141,8 +2940,7 @@ def test_sell_never_converts_and_proceeds_stay_in_quote_currency() -> None:
         # a way that would zero out the sell-source's residual; with
         # fixed_reference == current_invested (no funding_routes here),
         # splitting the target three ways keeps asset:sell-only genuinely
-        # overweight (residual > 0), which is what unlocks it for the
-        # sell_extension phase.
+        # overweight (residual > 0).
         assets=(
             _asset("asset:sell-only", price=R(20), currency="USD"),
             _asset("asset:usd-buy-target", price=R(30), currency="USD"),
@@ -3182,28 +2980,10 @@ def test_sell_never_converts_and_proceeds_stay_in_quote_currency() -> None:
             unit_costs={"asset:sell-only": R(5)},
         ),
     )
-    # invest_and_sell scenarios are strictly two-phase: an all-zero
-    # invest_only_baseline (route:buy-usd stays at 0) followed by a
-    # sell_extension that unlocks the pre-existing "asset:sell-only" holding
-    # and additively increases the USD buy, funded entirely by the sell.
-    baseline_view = build_exact_policy_view(scenario, purpose="invest_only_baseline")
-    baseline_candidate = _candidate(baseline_view, {}, candidate_id="candidate:baseline")
-    view = build_exact_policy_view(
-        scenario,
-        purpose="sell_extension",
-        baseline=baseline_candidate,
-    )
-    evaluation = evaluate_exact_candidate(
-        scenario,
-        view,
-        _candidate(
-            view,
-            {
-                exact_decision_id("sell_quantum", "route:sell-only"): 2,
-                exact_decision_id("buy_quantum", "route:buy-usd"): 1,
-            },
-        ),
-    )
+    # The sell, and the USD buy it funds, reach the replay through the sale door (B1 of project 67).
+    quanta = {exact_decision_id("sell_quantum", "route:sell-only"): 2, exact_decision_id("buy_quantum", "route:buy-usd"): 1}
+    view = _sell_door(scenario, quanta)
+    evaluation = evaluate_exact_candidate(scenario, view, _candidate(view, quanta))
 
     assert evaluation.feasible is True
     assert evaluation.fx == ()
@@ -3365,15 +3145,9 @@ def test_sell_replay_uses_exact_wac_gain_tax_and_withholding_once(
         withholding_kind=withholding_kind,
         carried_loss=R(999),
     )
-    _baseline_view, baseline = _invest_only_baseline(scenario)
-    view = _sell_extension(scenario, baseline)
-    candidate = _candidate(
-        view,
-        {
-            exact_decision_id("buy_quantum", "route:buy:b"): 3,
-            exact_decision_id("sell_quantum", "route:sell:a"): 2,
-        },
-    )
+    quanta = {exact_decision_id("buy_quantum", "route:buy:b"): 3, exact_decision_id("sell_quantum", "route:sell:a"): 2}
+    view = _sell_door(scenario, quanta)
+    candidate = _candidate(view, quanta)
 
     evaluation = evaluate_exact_candidate(scenario, view, candidate)
     order = _by_id(evaluation.orders, "route_id", "route:sell:a")
@@ -3406,7 +3180,7 @@ def test_sell_replay_uses_exact_wac_gain_tax_and_withholding_once(
     assert tax_posting.posted_amount == R(7, 4)
     assert evaluation.costs is not None
     assert evaluation.costs.sell_fees == R(3)
-    assert _objective_map(view, evaluation)["explicit_cost"] == R(19, 4)
+    assert evaluation.costs.explicit_cost == R(19, 4)
     if withholding_kind == "broker_withheld":
         assert evaluation.costs.broker_withheld_tax == R(7, 4)
         assert evaluation.costs.self_reserved_tax == ZERO
@@ -3440,8 +3214,7 @@ def test_carried_loss_is_informational_and_does_not_offset_sell_tax() -> None:
             tax_rate=R(1, 4),
             carried_loss=carried_loss,
         )
-        _baseline_view, baseline = _invest_only_baseline(scenario)
-        view = _sell_extension(scenario, baseline)
+        view = _sell_door(scenario, {exact_decision_id("buy_quantum", "route:buy:b"): 3, exact_decision_id("sell_quantum", "route:sell:a"): 2})
         evaluations.append(
             evaluate_exact_candidate(
                 scenario,
@@ -3478,9 +3251,8 @@ def test_monetary_sell_uses_integer_quanta_without_hidden_requested_ceiling() ->
         monetary_sell=True,
         sell_step=R(2),
     )
-    _baseline_view, baseline = _invest_only_baseline(scenario)
-    view = _sell_extension(scenario, baseline)
     sell_id = exact_decision_id("sell_quantum", "route:sell:a")
+    view = _sell_door(scenario, {exact_decision_id("buy_quantum", "route:buy:b"): 3, sell_id: 8})
     access = _decision(view, sell_id)
 
     evaluation = evaluate_exact_candidate(
@@ -3538,8 +3310,7 @@ def test_monetary_sell_upper_bound_keeps_notional_cap_and_inventory_binding(
             for route in scenario.order_routes
         ),
     )
-    _baseline_view, baseline = _invest_only_baseline(scenario)
-    view = _sell_extension(scenario, baseline)
+    view = _sell_door(scenario, {})
     sell_id = exact_decision_id("sell_quantum", "route:sell:a")
     access = _decision(view, sell_id)
 
@@ -3553,9 +3324,10 @@ def test_monetary_sell_upper_bound_keeps_notional_cap_and_inventory_binding(
     )
 
     assert access.upper_quanta == expected_upper
+    # The door freezes the sell at the base (zero), so the candidate is also not frozen: both contract codes, no replay.
     _assert_invalid_candidate_has_no_replay(
         evaluation,
-        ("CANDIDATE_DECISION_OUT_OF_BOUNDS",),
+        ("CANDIDATE_DECISION_NOT_FROZEN", "CANDIDATE_DECISION_OUT_OF_BOUNDS"),
     )
 
 
@@ -3588,27 +3360,14 @@ def test_multiple_sell_routes_reconcile_shared_inventory(
             )
         ),
     )
-    _baseline_view, baseline = _invest_only_baseline(scenario)
-    view = _sell_extension(scenario, baseline)
+    quanta = {
+        exact_decision_id("buy_quantum", "route:buy:b"): 4,
+        exact_decision_id("sell_quantum", "route:sell:a"): first_quanta,
+        exact_decision_id("sell_quantum", "route:sell:a:second"): second_quanta,
+    }
+    view = _sell_door(scenario, quanta)
 
-    evaluation = evaluate_exact_candidate(
-        scenario,
-        view,
-        _candidate(
-            view,
-            {
-                exact_decision_id("buy_quantum", "route:buy:b"): 4,
-                exact_decision_id(
-                    "sell_quantum",
-                    "route:sell:a",
-                ): first_quanta,
-                exact_decision_id(
-                    "sell_quantum",
-                    "route:sell:a:second",
-                ): second_quanta,
-            },
-        ),
-    )
+    evaluation = evaluate_exact_candidate(scenario, view, _candidate(view, quanta))
     holding_rows = tuple(
         item
         for item in evaluation.holdings
@@ -3630,20 +3389,10 @@ def test_multiple_sell_routes_reconcile_shared_inventory(
 
 def test_buy_and_sell_same_asset_is_forbidden_even_when_cash_reconciles() -> None:
     scenario = _invest_and_sell_scenario()
-    _baseline_view, baseline = _invest_only_baseline(scenario)
-    view = _sell_extension(scenario, baseline)
+    quanta = {exact_decision_id("buy_quantum", "route:buy:a"): 1, exact_decision_id("sell_quantum", "route:sell:a"): 1}
+    view = _sell_door(scenario, quanta)
 
-    evaluation = evaluate_exact_candidate(
-        scenario,
-        view,
-        _candidate(
-            view,
-            {
-                exact_decision_id("buy_quantum", "route:buy:a"): 1,
-                exact_decision_id("sell_quantum", "route:sell:a"): 1,
-            },
-        ),
-    )
+    evaluation = evaluate_exact_candidate(scenario, view, _candidate(view, quanta))
 
     assert evaluation.candidate_valid is True
     assert "NO_ASSET_BUY_AND_SELL" in evaluation.conflict_codes
@@ -3651,11 +3400,10 @@ def test_buy_and_sell_same_asset_is_forbidden_even_when_cash_reconciles() -> Non
 
 
 @pytest.mark.parametrize(
-    ("minimum", "required", "cap", "quanta", "expected_code"),
+    ("minimum", "cap", "quanta", "expected_code"),
     [
         pytest.param(
             R(2),
-            ZERO,
             R(10),
             1,
             "ORDER_MIN_IF_ACTIVE",
@@ -3664,31 +3412,20 @@ def test_buy_and_sell_same_asset_is_forbidden_even_when_cash_reconciles() -> Non
         pytest.param(
             ZERO,
             R(3),
-            R(10),
-            2,
-            "ORDER_REQUIRED_MIN",
-            id="required-minimum",
-        ),
-        pytest.param(
-            ZERO,
-            ZERO,
-            R(3),
             3,
             None,
             id="cap-boundary",
         ),
     ],
 )
-def test_order_minimum_required_and_cap_contracts(
+def test_order_minimum_and_cap_contracts(
     minimum: ExactRatio,
-    required: ExactRatio,
     cap: ExactRatio,
     quanta: int,
     expected_code: str | None,
 ) -> None:
     scenario = _pac_scenario(
         minimum=minimum,
-        required=required,
         route_cap=cap,
     )
     view = build_exact_policy_view(scenario)
@@ -3704,52 +3441,32 @@ def test_order_minimum_required_and_cap_contracts(
     assert access.upper_quanta == cap.numerator // cap.denominator
     if expected_code is None:
         assert "ORDER_MIN_IF_ACTIVE" not in evaluation.conflict_codes
-        assert "ORDER_REQUIRED_MIN" not in evaluation.conflict_codes
         assert "ORDER_CAP" not in evaluation.conflict_codes
     else:
         assert expected_code in evaluation.conflict_codes
 
 
 @pytest.mark.parametrize(
-    ("minimum", "required", "constraint_code"),
+    ("minimum", "constraint_code"),
     [
         pytest.param(
             R(2),
-            ZERO,
             "ORDER_MIN_IF_ACTIVE",
             id="minimum-if-active",
-        ),
-        pytest.param(
-            ZERO,
-            R(3),
-            "ORDER_REQUIRED_MIN",
-            id="required-minimum",
         ),
     ],
 )
 def test_monetary_sell_enforces_native_minimums(
     minimum: ExactRatio,
-    required: ExactRatio,
     constraint_code: str,
 ) -> None:
     scenario = _invest_and_sell_scenario(
         monetary_sell=True,
         sell_minimum=minimum,
-        sell_required=required,
     )
-    _baseline_view, baseline = _invest_only_baseline(scenario)
-    view = _sell_extension(scenario, baseline)
-    evaluation = evaluate_exact_candidate(
-        scenario,
-        view,
-        _candidate(
-            view,
-            {
-                exact_decision_id("buy_quantum", "route:buy:b"): 3,
-                exact_decision_id("sell_quantum", "route:sell:a"): 1,
-            },
-        ),
-    )
+    quanta = {exact_decision_id("buy_quantum", "route:buy:b"): 3, exact_decision_id("sell_quantum", "route:sell:a"): 1}
+    view = _sell_door(scenario, quanta)
+    evaluation = evaluate_exact_candidate(scenario, view, _candidate(view, quanta))
     constraint = _by_id(
         evaluation.constraints,
         "ref_id",
@@ -3757,58 +3474,19 @@ def test_monetary_sell_enforces_native_minimums(
     )
 
     assert constraint.value == ONE
-    assert constraint.lower_bound == max(minimum, required)
+    assert constraint.lower_bound == minimum
     assert constraint.satisfied is False
     assert constraint_code in evaluation.conflict_codes
-
-
-def test_sell_required_minimum_is_neutral_in_baseline_and_hard_in_extension() -> None:
-    scenario = _invest_and_sell_scenario(sell_required=ONE)
-    baseline_view, baseline = _invest_only_baseline(scenario)
-    baseline_evaluation = evaluate_exact_candidate(
-        scenario,
-        baseline_view,
-        baseline,
-    )
-    assert baseline_evaluation.feasible is True
-    assert "ORDER_REQUIRED_MIN" not in baseline_evaluation.conflict_codes
-
-    extension = _sell_extension(scenario, baseline)
-    zero_sell = evaluate_exact_candidate(
-        scenario,
-        extension,
-        _candidate(extension),
-    )
-
-    assert "ORDER_REQUIRED_MIN" in zero_sell.conflict_codes
-    constraint = _by_id(
-        zero_sell.constraints,
-        "ref_id",
-        "constraint:order_required_min:route:sell:a",
-    )
-    assert constraint.value == ZERO
-    assert constraint.lower_bound == ONE
-    assert constraint.satisfied is False
 
 
 def test_active_sell_requires_strictly_positive_posted_net() -> None:
     scenario = _invest_and_sell_scenario(
         sell_fixed=R(10),
     )
-    _baseline_view, baseline = _invest_only_baseline(scenario)
-    view = _sell_extension(scenario, baseline)
+    quanta = {exact_decision_id("buy_quantum", "route:buy:b"): 3, exact_decision_id("sell_quantum", "route:sell:a"): 1}
+    view = _sell_door(scenario, quanta)
 
-    evaluation = evaluate_exact_candidate(
-        scenario,
-        view,
-        _candidate(
-            view,
-            {
-                exact_decision_id("buy_quantum", "route:buy:b"): 3,
-                exact_decision_id("sell_quantum", "route:sell:a"): 1,
-            },
-        ),
-    )
+    evaluation = evaluate_exact_candidate(scenario, view, _candidate(view, quanta))
     order = _by_id(evaluation.orders, "route_id", "route:sell:a")
 
     assert order.posted_cash_amount == R(10)
@@ -4150,10 +3828,7 @@ def test_posted_fee_can_make_native_cash_negative_and_raise_leverage_conflicts()
 def test_native_ledgers_and_accounting_identity_reconcile_all_fx_columns() -> None:
     scenario = _funding_fx_scenario()
     view = build_exact_policy_view(scenario)
-    fx_debit_id = exact_decision_id(
-        "fx_debit",
-        fx_debit_key("route:buy:usd", "EUR"),
-    )
+    fx_debit_id = fx_id(scenario, source="EUR", destination="USD")
     evaluation = evaluate_exact_candidate(
         scenario,
         view,
@@ -4208,26 +3883,14 @@ def test_native_ledgers_and_accounting_identity_reconcile_all_fx_columns() -> No
     assert abs(accounting.rounding_adjustment) <= accounting.rounding_bound
 
 
-def test_sell_extension_keeps_fixed_reference_and_reconciles_u_identity() -> None:
+def test_a_sell_keeps_fixed_reference_and_reconciles_u_identity() -> None:
     scenario = _invest_and_sell_scenario()
-    baseline_view, baseline = _invest_only_baseline(scenario)
-    baseline_result = evaluate_exact_candidate(
-        scenario,
-        baseline_view,
-        baseline,
-    )
-    extension = _sell_extension(scenario, baseline)
-    extension_result = evaluate_exact_candidate(
-        scenario,
-        extension,
-        _candidate(
-            extension,
-            {
-                exact_decision_id("buy_quantum", "route:buy:b"): 4,
-                exact_decision_id("sell_quantum", "route:sell:a"): 2,
-            },
-        ),
-    )
+    buy_only = {exact_decision_id("buy_quantum", "route:buy:b"): 2}
+    baseline = _sell_door(scenario, buy_only)
+    baseline_result = evaluate_exact_candidate(scenario, baseline, _candidate(baseline, buy_only))
+    with_sell = {exact_decision_id("buy_quantum", "route:buy:b"): 4, exact_decision_id("sell_quantum", "route:sell:a"): 2}
+    extension = _sell_door(scenario, with_sell)
+    extension_result = evaluate_exact_candidate(scenario, extension, _candidate(extension, with_sell))
 
     assert baseline_result.accounting is not None
     assert extension_result.accounting is not None
@@ -4237,172 +3900,6 @@ def test_sell_extension_keeps_fixed_reference_and_reconciles_u_identity() -> Non
     assert extension_result.accounting.shortfall == ZERO
     assert extension_result.accounting.identity_delta == ZERO
     assert extension_result.accounting.shortfall == (extension_result.accounting.free_cash + extension_result.accounting.physical_reserves + extension_result.accounting.economic_losses + extension_result.accounting.rounding_adjustment)
-
-
-def test_sell_extension_eligibility_and_gate_metadata_are_exact() -> None:
-    scenario = _invest_and_sell_scenario()
-    baseline_view, baseline = _invest_only_baseline(scenario)
-    baseline_result = evaluate_exact_candidate(
-        scenario,
-        baseline_view,
-        baseline,
-    )
-    view = _sell_extension(scenario, baseline)
-    asset_a = _by_id(
-        baseline_result.assets,
-        "asset_id",
-        "asset:a",
-    )
-    asset_b = _by_id(
-        baseline_result.assets,
-        "asset_id",
-        "asset:b",
-    )
-    gate = _by_id(
-        view.sell_gates,
-        "sell_decision_id",
-        exact_decision_id("sell_quantum", "route:sell:a"),
-    )
-
-    assert asset_a.residual == R(20)
-    assert asset_b.residual == R(-20)
-    assert (
-        _decision(
-            view,
-            exact_decision_id("sell_quantum", "route:sell:a"),
-        ).mode
-        == "mutable"
-    )
-    assert (
-        _decision(
-            view,
-            exact_decision_id("sell_quantum", "route:sell:b"),
-        ).mode
-        == "disabled"
-    )
-    assert gate.fixed_incremental_buy_decision_ids == (
-        exact_decision_id("buy_quantum", "route:buy:a"),
-        exact_decision_id("buy_quantum", "route:buy:b"),
-    )
-    # _invest_and_sell_scenario declares no fx_rates and a single broker, so
-    # no fx_debit decision exists at all here (unlike the old fixture, which
-    # had a broker-scoped fx_route present regardless of use).
-    assert gate.reopened_decision_ids == (exact_decision_id("funding_transfer", "route:funding"),)
-    assert gate.counterfactuals == (
-        "decrement_one_quantum",
-        "zero_row",
-    )
-    requirement = _by_id(
-        view.proof_requirements,
-        "requirement_id",
-        "proof:sell-irreducibility",
-    )
-    assert baseline_view.scenario_fingerprint == exact_scenario_fingerprint(scenario)
-    assert view.scenario_fingerprint == baseline_view.scenario_fingerprint
-    assert baseline_view.sell_gates == ()
-    assert baseline_view.proof_requirements == ()
-    assert view.proof_requirements == (requirement,)
-    assert requirement.allowed_sources == (
-        "deterministic_conflict",
-        "exhaustive_oracle",
-    )
-
-
-def test_sell_gates_exist_only_for_positive_eligible_domains() -> None:
-    scenario = _invest_and_sell_scenario(zero_domain_sell=True)
-    _baseline_view, baseline = _invest_only_baseline(scenario)
-    view = _sell_extension(scenario, baseline)
-    zero_id = exact_decision_id(
-        "sell_quantum",
-        "route:sell:a:zero-domain",
-    )
-
-    zero_access = _decision(view, zero_id)
-    assert zero_access.upper_quanta == 0
-    assert zero_id not in {gate.sell_decision_id for gate in view.sell_gates}
-    assert {gate.sell_decision_id for gate in view.sell_gates} == {
-        exact_decision_id("sell_quantum", "route:sell:a"),
-    }
-
-
-def test_reconstructed_sell_view_revalidates_embedded_baseline_economics() -> None:
-    scenario = _invest_and_sell_scenario()
-    _baseline_view, baseline = _invest_only_baseline(scenario)
-    view = _sell_extension(scenario, baseline)
-    buy_id = exact_decision_id("buy_quantum", "route:buy:b")
-    access = _decision(view, buy_id)
-    assert access.upper_quanta >= 3
-    changed = replace(
-        access,
-        baseline_quanta=3,
-        lower_quanta=3,
-    )
-    tampered = replace(
-        view,
-        decisions=tuple(changed if item.decision_id == buy_id else item for item in view.decisions),
-    )
-
-    with pytest.raises(
-        ExactPolicyContractError,
-        match="baseline is not exact-feasible",
-    ):
-        evaluate_exact_candidate(
-            scenario,
-            tampered,
-            _candidate(tampered),
-        )
-
-
-@pytest.mark.parametrize(
-    ("case", "expected_satisfied"),
-    [
-        pytest.param(
-            "missing-incremental-buy",
-            False,
-            id="missing-incremental-buy",
-        ),
-        pytest.param(
-            "unnecessary-sell",
-            False,
-            id="sell-zero-still-fundable",
-        ),
-        pytest.param(
-            "necessary-sell",
-            True,
-            id="sell-zero-unfundable",
-        ),
-    ],
-)
-def test_active_sell_requires_incremental_buy_and_unfundable_zero_sell_vector(
-    case: str,
-    expected_satisfied: bool,
-) -> None:
-    contribution = R(40) if case == "unnecessary-sell" else R(20)
-    scenario = _invest_and_sell_scenario(
-        contribution_amount=contribution,
-    )
-    _baseline_view, baseline = _invest_only_baseline(scenario)
-    view = _sell_extension(scenario, baseline)
-    values = {
-        exact_decision_id("sell_quantum", "route:sell:a"): 1,
-    }
-    if case != "missing-incremental-buy":
-        values[exact_decision_id("buy_quantum", "route:buy:b")] = 3
-
-    evaluation = evaluate_exact_candidate(
-        scenario,
-        view,
-        _candidate(view, values),
-    )
-    constraint = _by_id(
-        evaluation.constraints,
-        "ref_id",
-        "constraint:sell_funds_incremental_buy:global",
-    )
-
-    assert constraint.value == (ONE if expected_satisfied else ZERO)
-    assert constraint.satisfied is expected_satisfied
-    assert ("SELL_FUNDS_INCREMENTAL_BUY" in evaluation.conflict_codes) is (not expected_satisfied)
 
 
 def _objective_map(
@@ -4516,65 +4013,28 @@ def test_exact_objective_sequences_and_values(case: str) -> None:
                 },
             ),
         )
-        expected_codes = (
-            "fixed_l2",
-            "shortfall",
-            "turnover",
-            "explicit_cost",
-            "active_order_rows",
-        )
-        expected_values = {
-            "fixed_l2": R(800),
-            "shortfall": ZERO,
-            "turnover": R(20),
-            "explicit_cost": ZERO,
-            "active_order_rows": ONE,
-        }
+        # One score (B1 of project 67): F = 120, targets 60 and 60, final A 80 and B 40, nothing lost, so
+        # D = 20² + 20² = 800 and J = 800 / 120 at «Balanced». Then the tie-breaks: a deposit and an order, every
+        # route at priority zero.
+        expected_codes = ("plan_score", "operation_count", "route_priority")
+        expected_values = {"plan_score": R(20, 3), "operation_count": R(2), "route_priority": ZERO}
     else:
         scenario = _invest_and_sell_scenario()
-        _baseline_view, baseline = _invest_only_baseline(scenario)
-        extension = _sell_extension(scenario, baseline)
-        primary = _candidate(
-            extension,
-            {
-                exact_decision_id(
-                    "buy_quantum",
-                    "route:buy:b",
-                ): 4,
-                exact_decision_id(
-                    "sell_quantum",
-                    "route:sell:a",
-                ): 2,
-            },
-            candidate_id="candidate:primary",
-        )
+        contribution_quanta = _integer_quanta(_by_id(scenario.contributions, "contribution_id", "contribution:a").amount.amount)
         if case == "invest-and-sell":
-            view = extension
+            # ``primary`` serves invest_and_sell with its sells disabled (B1-1); the sells reach a replay through the door.
+            view = build_exact_policy_view(scenario)
             evaluation = evaluate_exact_candidate(
                 scenario,
                 view,
-                primary,
+                _candidate(view, {exact_decision_id("funding_transfer", "route:funding"): contribution_quanta, exact_decision_id("buy_quantum", "route:buy:b"): 2}),
             )
-            expected_codes = (
-                "fixed_l2",
-                "shortfall",
-                "turnover",
-                "explicit_cost",
-                "active_order_rows",
-            )
-            expected_values = {
-                "fixed_l2": ZERO,
-                "shortfall": ZERO,
-                "turnover": R(60),
-                "explicit_cost": ZERO,
-                "active_order_rows": R(2),
-            }
+            # The same score with the sells disabled: the same plan as invest-only, J = 800 / 120; the deposit has
+            # priority 1 and the route of B priority 3.
+            expected_codes = ("plan_score", "operation_count", "route_priority")
+            expected_values = {"plan_score": R(20, 3), "operation_count": R(2), "route_priority": R(4)}
         elif case == "deployment":
-            view = build_exact_policy_view(
-                scenario,
-                purpose="deployment",
-                baseline=primary,
-            )
+            view = _sell_door(scenario, {exact_decision_id("buy_quantum", "route:buy:b"): 4, exact_decision_id("sell_quantum", "route:sell:a"): 2})
             evaluation = evaluate_exact_candidate(
                 scenario,
                 view,
@@ -4756,10 +4216,7 @@ def test_cancellation_propagates_from_nontrivial_exact_loops(
                         "funding_transfer",
                         "route:funding:eur",
                     ): 15_000,
-                    exact_decision_id(
-                        "fx_debit",
-                        fx_debit_key("route:buy:usd", "EUR"),
-                    ): 100,
+                    fx_id(scenario, source="EUR", destination="USD"): 100,
                     exact_decision_id(
                         "buy_quantum",
                         "route:buy:usd",
@@ -4806,7 +4263,7 @@ _TIE_PRICE = R(33335, 1000)  # 3 x 33.335 = 100.005, a buy debit posted at its c
 _BUY_A = exact_decision_id("buy_quantum", "route:buy:a")
 _BUY_B = exact_decision_id("buy_quantum", "route:buy:b")
 _FUND_EUR = exact_decision_id("funding_transfer", "route:funding:eur")
-_FX_EUR_TO_USD = exact_decision_id("fx_debit", fx_debit_key("route:buy:usd", "EUR"))
+_FX_EUR_TO_USD = fx_id(_funding_fx_scenario(), source="EUR", destination="USD")
 _BUY_USD = exact_decision_id("buy_quantum", "route:buy:usd")
 
 
@@ -5243,3 +4700,876 @@ def test_exact_rounding_top_up_rejects_an_impossible_top_up(override: dict[str, 
 
     with pytest.raises(ValueError):
         pac_models.ExactRoundingTopUp(**{**_VALID_TOP_UP, **override})
+
+
+# ---------------------------------------------------------------------------
+# A2 (project 67): which FX decisions exist is one list, ``reachability.fx_decision_specs``
+# ---------------------------------------------------------------------------
+
+_FX_CONSTRAINT_CODES = frozenset({"FX_DEBIT_CREDIT_COUPLED", "FX_CREDIT_POSITIVE", "FX_NATIVE_QUANTUM", "FX_SOURCE_CASH"})
+
+
+@pytest.mark.parametrize(
+    "build",
+    [
+        pytest.param(_funding_fx_scenario, id="one-buy-one-pool"),
+        pytest.param(_multi_source_buy_scenario, id="two-buys-share-a-pool"),
+        pytest.param(lambda: _two_pool_scenario(R(10), R(10)), id="no-fx-at-all"),
+    ],
+)
+def test_fx_decisions_come_from_one_list_shared_by_view_and_replay(build) -> None:
+    """Step 1: the view's ``fx_debit`` decisions, the FX constraint refs and the FX evaluations of the replay all name the
+    entries of one list, and only them: no consumer derives an FX decision on its own."""
+    scenario = build()
+    specs = fx_decision_specs(scenario, build_scenario_index(scenario), None)
+    view = build_exact_policy_view(scenario)
+
+    assert len({spec.decision_id for spec in specs}) == len(specs)
+    assert sorted(spec.decision_id for spec in specs) == sorted(item.decision_id for item in view.decisions if item.family == "fx_debit")
+    fx_refs = [ref for ref in view.constraints if ref.code in _FX_CONSTRAINT_CODES]
+    assert {ref.ref_id for ref in fx_refs} == {f"constraint:{code.lower()}:{spec.key}" for spec in specs for code in _FX_CONSTRAINT_CODES}
+    assert all(ref.scope == next(spec.scope for spec in specs if ref.ref_id.endswith(f":{spec.key}")) for ref in fx_refs)
+
+    one_quantum_each = _candidate(view, {spec.decision_id: 1 for spec in specs})
+    evaluation = evaluate_exact_candidate(scenario, view, one_quantum_each)
+    assert {action.decision_id for action in evaluation.fx} <= {spec.decision_id for spec in specs}
+
+
+# ---------------------------------------------------------------------------
+# A2 step 7 (project 67): one FX decision per Broker and ordered currency pair
+# ---------------------------------------------------------------------------
+
+
+def _shared_pair_scenario(*, cap: ExactRatio = R(2)) -> ExactPlannerScenario:
+    """N1 in small: one Broker holding EUR, two USD Assets on two buy routes, so both routes need the one EUR to USD pair.
+
+    Whole-unit quanta make the floor of a credit visible: at 5/4 USD per EUR with a 10% spread, 4 EUR credit an exact 4.5 USD.
+    """
+    capability = _capability("capability:whole")
+    usd_fee = _fee("fee:buy:usd", capability.capability_id, "buy", currency="USD")
+    broker = _broker("broker:hub", (capability,), (usd_fee,))
+
+    def buy(route_id: str, asset_id: str) -> ExactOrderRoute:
+        return _order_route(route_id, broker_id=broker.broker_id, asset_id=asset_id, capability=capability, fee_id=usd_fee.fee_schedule_id, side="buy", cap=cap)
+
+    return _scenario(
+        "scenario:shared-pair",
+        product="pac",
+        policy="proportional",
+        assets=(_asset("asset:a", price=R(5), currency="USD"), _asset("asset:b", price=R(10), currency="USD")),
+        brokers=(broker,),
+        existing_cash=(_cash("cash:hub", broker.broker_id, R(20)),),
+        order_routes=(buy("route:buy:a", "asset:a"), buy("route:buy:b", "asset:b")),
+        fx_rates=(_fx_rate("EUR", "USD", R(5, 4)),),
+        fx_spread_rate=R(1, 10),
+        currency_quantums=(("EUR", ONE), ("USD", ONE)),
+    )
+
+
+def _reverse_order_pairs_scenario() -> ExactPlannerScenario:
+    """Two Brokers, each converting EUR to USD; route ids sort broker b's route first, the canonical order puts broker a first."""
+    capability = _capability("capability:whole")
+    usd_fee = _fee("fee:buy:usd", capability.capability_id, "buy", currency="USD")
+    brokers = (_broker("broker:a", (capability,), (usd_fee,)), _broker("broker:b", (capability,), (usd_fee,)))
+    return _scenario(
+        "scenario:reverse-order-pairs",
+        product="pac",
+        policy="proportional",
+        assets=(_asset("asset:a", price=R(5), currency="USD"),),
+        brokers=brokers,
+        existing_cash=(_cash("cash:a", "broker:a", R(20)), _cash("cash:b", "broker:b", R(20))),
+        order_routes=(
+            _order_route("route:1", broker_id="broker:b", asset_id="asset:a", capability=capability, fee_id=usd_fee.fee_schedule_id, side="buy", cap=R(2)),
+            _order_route("route:2", broker_id="broker:a", asset_id="asset:a", capability=capability, fee_id=usd_fee.fee_schedule_id, side="buy", cap=R(2)),
+        ),
+        fx_rates=(_fx_rate("EUR", "USD", R(5, 4)),),
+        currency_quantums=(("EUR", ONE), ("USD", ONE)),
+    )
+
+
+def test_fx_decisions_are_one_per_broker_and_ordered_pair() -> None:
+    """Two buy routes on one pair share one decision; a Broker with two source currencies has one decision per pair.
+
+    The decision is keyed by Broker, source and destination (``len(broker):broker:SRC:DST``), scoped to the Broker, and names the
+    first buy route of that Broker in the destination currency (canonical order) as the route the published action names until A4.
+    """
+    shared = fx_decision_specs(_shared_pair_scenario(), build_scenario_index(_shared_pair_scenario()), None)
+    assert [(spec.broker_id, spec.source_currency, spec.destination_currency) for spec in shared] == [("broker:hub", "EUR", "USD")]
+    (spec,) = shared
+    assert spec.key == "10:broker:hub:EUR:USD"
+    assert spec.decision_id == "fx:10:broker:hub:EUR:USD"
+    assert spec.scope == "broker"
+    assert {(ref.kind, ref.entity_id) for ref in spec.entity_refs} == {("broker", "broker:hub"), ("source_currency", "EUR"), ("destination_currency", "USD")}
+
+    multi = _multi_source_buy_scenario()
+    pairs = [(spec.broker_id, spec.source_currency, spec.destination_currency) for spec in fx_decision_specs(multi, build_scenario_index(multi), None)]
+    assert pairs == [("broker:hub", "GBP", "EUR"), ("broker:hub", "USD", "EUR")]
+
+
+def test_two_buys_on_one_pair_post_one_floored_credit() -> None:
+    """The rule of 09/10, on one decision: a pair posts the floor of its whole credit, never less than the floors of its parts.
+
+    8 EUR credit an exact 9 USD and post 9; split over the two routes as 4 + 4, each part would credit 4.5 and post 4, 8 in all.
+    """
+    scenario = _shared_pair_scenario()
+    view = build_exact_policy_view(scenario)
+    evaluation = evaluate_exact_candidate(scenario, view, _candidate(view, {fx_id(scenario, source="EUR", destination="USD"): 8}))
+
+    (action,) = evaluation.fx
+    assert (action.source_debit, action.exact_destination_credit, action.posted_destination_credit) == (R(8), R(9), R(9))
+    split_floors = 2 * post_floor(R(9, 2), ONE).posted
+    assert action.posted_destination_credit >= split_floors == R(8)
+
+
+def test_fx_evaluations_are_ordered_by_broker_source_destination() -> None:
+    """The canonical order of the FX evaluations is (Broker, source, destination), whatever the order of the routes."""
+    scenario = _reverse_order_pairs_scenario()
+    view = build_exact_policy_view(scenario)
+    values = {spec.decision_id: 4 for spec in fx_decision_specs(scenario, build_scenario_index(scenario), None)}
+    evaluation = evaluate_exact_candidate(scenario, view, _candidate(view, values))
+
+    assert [(item.broker_id, item.source_currency, item.destination_currency) for item in evaluation.fx] == [("broker:a", "EUR", "USD"), ("broker:b", "EUR", "USD")]
+
+
+# ---------------------------------------------------------------------------
+# A2 steps 9-11 (project 67): the transfer family between Brokers, at the exact level
+# ---------------------------------------------------------------------------
+
+
+def _transfer_lane_scenario(*, quantum: ExactRatio = CENT) -> ExactPlannerScenario:
+    """A PAC scenario with one transfer lane set by hand (D4 a: the normalizer never sets one in the PAC).
+
+    broker:a holds EUR100 and can buy the Asset (EUR10 a unit) at most 3 times, so its cash is reachable and the reference is
+    EUR100; broker:b holds nothing and can buy it at most 10 times. Reaching the target takes moving cash from a to b.
+    ``quantum`` is EUR's minor unit: a whole euro keeps the transfer's domain small enough for the exhaustive oracle. The lane
+    is added by ``_with_lane``.
+    """
+    capability_a = _capability("capability:a")
+    capability_b = _capability("capability:b")
+    fee_a = _fee("fee:buy:a", capability_a.capability_id, "buy")
+    fee_b = _fee("fee:buy:b", capability_b.capability_id, "buy")
+    return _scenario(
+        "scenario:transfer-lane",
+        product="pac",
+        policy="proportional",
+        assets=(_asset("asset:a", price=R(10)),),
+        brokers=(_broker("broker:a", (capability_a,), (fee_a,)), _broker("broker:b", (capability_b,), (fee_b,))),
+        existing_cash=(_cash("cash:a", "broker:a", R(100)),),
+        order_routes=(
+            _order_route("route:buy:a", broker_id="broker:a", asset_id="asset:a", capability=capability_a, fee_id=fee_a.fee_schedule_id, side="buy", cap=R(3)),
+            _order_route("route:buy:b", broker_id="broker:b", asset_id="asset:a", capability=capability_b, fee_id=fee_b.fee_schedule_id, side="buy", cap=R(10)),
+        ),
+        currency_quantums=(("EUR", quantum),),
+    )
+
+
+def _with_lane(scenario: ExactPlannerScenario, source: str, destination: str) -> ExactPlannerScenario:
+    return replace(scenario, transfer_lanes=(pac_models.ExactTransferLane(source_broker_id=source, destination_broker_id=destination, currency="EUR"),))
+
+
+def test_broker_transfer_posts_exact_in_and_out_and_keeps_the_total() -> None:
+    """Property P4: moving money between Brokers is free and keeps the total. One decision per lane, quantum the currency's
+    minor unit; two exact postings (out of the source cell, into the destination cell), and the scenario's wealth unchanged."""
+    scenario = _with_lane(_transfer_lane_scenario(), "broker:a", "broker:b")
+    view = build_exact_policy_view(scenario)
+    (transfer,) = [access for access in view.decisions if access.family == "broker_transfer"]
+    assert {(item.kind, item.entity_id) for item in transfer.entity_refs} == {("source_broker", "broker:a"), ("destination_broker", "broker:b"), ("currency", "EUR")}
+    assert transfer.decision_id == "transfer:8:broker:a8:broker:b:EUR"
+
+    idle = evaluate_exact_candidate(scenario, view, _candidate(view, {}))
+    moved = evaluate_exact_candidate(scenario, view, _candidate(view, {transfer.decision_id: 4_000}))
+
+    assert moved.feasible is True
+    postings = {(item.family, item.broker_id, item.currency): item for item in moved.postings if item.family in {"transfer_in", "transfer_out"}}
+    assert set(postings) == {("transfer_out", "broker:a", "EUR"), ("transfer_in", "broker:b", "EUR")}
+    assert all(item.posted_amount == item.exact_amount == R(40) for item in postings.values())
+    ledgers = {(row.broker_id, row.currency): row for row in moved.ledgers}
+    assert (ledgers[("broker:a", "EUR")].transfer_out, ledgers[("broker:a", "EUR")].final_spendable) == (R(40), R(60))
+    assert (ledgers[("broker:b", "EUR")].transfer_in, ledgers[("broker:b", "EUR")].final_spendable) == (R(40), R(40))
+    total = sum((row.final_spendable for row in moved.ledgers), ZERO)
+    assert total == sum((row.final_spendable for row in idle.ledgers), ZERO) == R(100)
+    assert moved.accounting.identity_delta == idle.accounting.identity_delta == ZERO
+    assert moved.accounting.fixed_reference == idle.accounting.fixed_reference
+
+
+def test_a_transfer_lane_to_the_same_broker_is_refused() -> None:
+    """A transfer moves money between two Brokers in one currency: a lane from a Broker to itself is not a scenario."""
+    looping = _with_lane(_transfer_lane_scenario(), "broker:a", "broker:a")
+    with pytest.raises(ExactScenarioContractError, match="same Broker"):
+        build_exact_policy_view(looping)
+
+
+# ---------------------------------------------------------------------------
+# A2 step 13 (project 67): V7, one direction per Broker and currency pair (T6 in PAC form)
+# ---------------------------------------------------------------------------
+
+
+def _two_way_scenario() -> ExactPlannerScenario:
+    """N2 in small: one Broker holding EUR4 and USD6, one EUR Asset and one USD Asset (4 each, at most 2 units).
+
+    Both directions of EUR/USD exist at the Broker: EUR to USD for the USD buy, USD to EUR for the EUR buy. Whole-unit
+    quanta keep the domains small enough for the exhaustive oracle.
+    """
+    capability = _capability("capability:whole")
+    eur_fee = _fee("fee:buy:eur", capability.capability_id, "buy")
+    usd_fee = _fee("fee:buy:usd", capability.capability_id, "buy", currency="USD")
+    broker = _broker("broker:hub", (capability,), (eur_fee, usd_fee))
+
+    def buy(route_id: str, asset_id: str, fee: ExactFeeSchedule) -> ExactOrderRoute:
+        return _order_route(route_id, broker_id=broker.broker_id, asset_id=asset_id, capability=capability, fee_id=fee.fee_schedule_id, side="buy", cap=R(2))
+
+    return _scenario(
+        "scenario:two-way",
+        product="pac",
+        policy="proportional",
+        assets=(_asset("asset:eur", price=R(4), currency="EUR"), _asset("asset:usd", price=R(4), currency="USD")),
+        brokers=(broker,),
+        existing_cash=(_cash("cash:eur", broker.broker_id, R(4)), _cash("cash:usd", broker.broker_id, R(6), currency="USD")),
+        order_routes=(buy("route:buy:eur", "asset:eur", eur_fee), buy("route:buy:usd", "asset:usd", usd_fee)),
+        fx_rates=(_fx_rate("EUR", "USD", R(5, 4)),),
+        fx_spread_rate=R(1, 100),
+        currency_quantums=(("EUR", ONE), ("USD", ONE)),
+    )
+
+
+def test_both_directions_of_a_pair_fail_the_exact_replay() -> None:
+    """V7 in the replay: converting EUR to USD and USD to EUR at one Broker in one plan is refused (one fact per Broker and
+    pair that has both directions); either direction alone is not."""
+    scenario = _two_way_scenario()
+    view = build_exact_policy_view(scenario)
+    to_usd = fx_id(scenario, source="EUR", destination="USD")
+    to_eur = fx_id(scenario, source="USD", destination="EUR")
+    fact_id = "constraint:fx_no_relay:10:broker:hub:EUR"
+
+    both = evaluate_exact_candidate(scenario, view, _candidate(view, {to_usd: 1, to_eur: 2}))
+    (fact,) = [item for item in both.constraints if item.ref_id == fact_id]
+    assert (fact.satisfied, both.feasible) == (False, False)
+
+    for one_way in ({to_usd: 1}, {to_eur: 2}, {}):
+        evaluation = evaluate_exact_candidate(scenario, view, _candidate(view, one_way))
+        (fact,) = [item for item in evaluation.constraints if item.ref_id == fact_id]
+        assert fact.satisfied is True, one_way
+        assert evaluation.feasible is True, one_way
+
+
+# ---------------------------------------------------------------------------
+# A3 step 1 (project 67): entry limits (V5) in the exact scenario
+# ---------------------------------------------------------------------------
+
+
+def test_entry_limits_default_to_absent_and_a_scenario_carries_them() -> None:
+    """Minimum and maximum of an Asset and of a cash cell are each absent, an amount (valuation currency) or a share of the
+    reference (D10, M17). Absent by default: every scenario built before A3 keeps its meaning."""
+    scenario = _two_pool_scenario(R(100), R(100))
+    assert all((item.minimum, item.maximum) == (None, None) for item in scenario.target_weights)
+    assert scenario.cash_entries == ()
+
+    limited = replace(
+        scenario,
+        target_weights=(replace(scenario.target_weights[0], minimum=pac_models.ExactLimit("amount", R(10)), maximum=pac_models.ExactLimit("share", R(1, 2))),),
+        cash_entries=(pac_models.ExactCashEntry(broker_id="broker:a", currency="EUR", minimum=None, maximum=pac_models.ExactLimit("amount", R(30))),),
+    )
+    assert limited.target_weights[0].maximum == pac_models.ExactLimit("share", R(1, 2))
+    assert limited.cash_entries[0].maximum.value == R(30)
+
+
+@pytest.mark.parametrize(
+    ("kind", "value"),
+    [
+        pytest.param("amount", R(-1), id="negative-amount"),
+        pytest.param("share", R(-1, 100), id="negative-share"),
+        pytest.param("share", R(101, 100), id="share-above-one"),
+        pytest.param("ratio", R(1, 2), id="unknown-kind"),
+    ],
+)
+def test_an_entry_limit_refuses_a_negative_value_a_share_above_one_and_an_unknown_kind(kind: str, value: ExactRatio) -> None:
+    with pytest.raises(ValueError):
+        pac_models.ExactLimit(kind, value)
+
+
+def test_a_cash_limit_names_a_known_broker_and_a_covered_currency_and_is_unique() -> None:
+    scenario = _two_pool_scenario(R(100), R(100))
+    limit = pac_models.ExactCashEntry(broker_id="broker:a", currency="EUR", minimum=None, maximum=pac_models.ExactLimit("amount", R(30)))
+
+    build_exact_policy_view(replace(scenario, cash_entries=(limit,)))  # known broker and currency: builds
+    with pytest.raises(ExactScenarioContractError, match="unknown Broker"):
+        build_exact_policy_view(replace(scenario, cash_entries=(replace(limit, broker_id="broker:zzz"),)))
+    with pytest.raises(ExactScenarioContractError, match="JPY"):
+        build_exact_policy_view(replace(scenario, cash_entries=(replace(limit, currency="JPY"),)))
+    with pytest.raises(ValueError, match="canonical sorted order|duplicate"):
+        replace(scenario, cash_entries=(limit, limit))
+    with pytest.raises(ValueError, match="needs a weight, a minimum or a maximum"):
+        pac_models.ExactCashEntry(broker_id="broker:a", currency="EUR", minimum=None, maximum=None)
+
+
+# ---------------------------------------------------------------------------
+# A3 step 2 (project 67): the three checks before the calculation, pure, naming the entries (T12)
+# ---------------------------------------------------------------------------
+
+_LIMIT_A = pac_models.ExactLimit
+
+
+def _limited_scenario(
+    *,
+    asset_a: tuple[pac_models.ExactLimit | None, pac_models.ExactLimit | None] = (None, None),
+    asset_b: tuple[pac_models.ExactLimit | None, pac_models.ExactLimit | None] = (None, None),
+    cash: tuple[pac_models.ExactCashEntry, ...] = (),
+) -> ExactPlannerScenario:
+    """Two Assets (50% each) bought at two Brokers holding EUR100 and EUR50: the reference of the plan is EUR150."""
+    base = _two_pool_scenario(R(100), R(50))
+    capability = _capability("capability:b2")
+    fee = _fee("fee:buy:b2", capability.capability_id, "buy")
+    broker_b = replace(base.brokers[1], capabilities=(*base.brokers[1].capabilities, capability), fee_schedules=(*base.brokers[1].fee_schedules, fee))
+    second_asset = _asset("asset:b", price=R(10))
+    route_b = _order_route("route:buy:asset-b", broker_id="broker:b", asset_id="asset:b", capability=capability, fee_id=fee.fee_schedule_id, side="buy")
+    weights = (
+        pac_models.ExactTargetWeight("asset:a", R(1, 2), minimum=asset_a[0], maximum=asset_a[1]),
+        pac_models.ExactTargetWeight("asset:b", R(1, 2), minimum=asset_b[0], maximum=asset_b[1]),
+    )
+    return replace(
+        base,
+        assets=tuple(sorted((*base.assets, second_asset), key=lambda item: item.asset_id)),
+        brokers=(base.brokers[0], broker_b),
+        order_routes=tuple(sorted((*base.order_routes, route_b), key=lambda item: item.route_id)),
+        target_weights=weights,
+        cash_entries=cash,
+    )
+
+
+def test_sum_of_minimums_above_the_reference_names_the_entries() -> None:
+    """T12: minimums of EUR100 and 60% of the reference (EUR90) add up to EUR190 > EUR150. The check names every entry with a
+    minimum, the Assets and the cash cells alike, on the base of D7: ``fixed_reference``."""
+    scenario = _limited_scenario(asset_a=(_LIMIT_A("amount", R(100)), None), asset_b=(_LIMIT_A("share", R(3, 5)), None))
+    reference = fixed_reference_of(scenario)
+    assert reference == R(150)
+
+    (problem,) = check_minimums_exceed_reference(scenario, reference)
+    assert problem.code == "bounds_min_sum_exceeds_reference"
+    assert [entry.key for entry in problem.entries] == ["asset:asset:a", "asset:asset:b"]
+
+    fine = _limited_scenario(asset_a=(_LIMIT_A("amount", R(100)), None), asset_b=(_LIMIT_A("share", R(1, 3)), None))
+    assert check_minimums_exceed_reference(fine, reference) == ()  # 100 + 50 = 150 is not above 150
+    cash_pushes_over = _limited_scenario(asset_a=(_LIMIT_A("amount", R(100)), None), cash=(pac_models.ExactCashEntry(broker_id="broker:a", currency="EUR", minimum=_LIMIT_A("amount", R(51)), maximum=None),))
+    (problem,) = check_minimums_exceed_reference(cash_pushes_over, reference)
+    assert [entry.key for entry in problem.entries] == ["asset:asset:a", "cash:broker:a:EUR"]
+
+
+def test_minimum_above_maximum_names_the_entry() -> None:
+    """Check 1: one problem per entry whose minimum exceeds its maximum, forms mixed: a share is resolved on the reference."""
+    scenario = _limited_scenario(
+        asset_a=(_LIMIT_A("amount", R(80)), _LIMIT_A("amount", R(70))),
+        asset_b=(_LIMIT_A("share", R(1, 2)), _LIMIT_A("amount", R(74))),
+        cash=(pac_models.ExactCashEntry(broker_id="broker:a", currency="EUR", minimum=_LIMIT_A("amount", R(10)), maximum=_LIMIT_A("amount", R(10))),),
+    )
+    problems = check_minimum_above_maximum(scenario, fixed_reference_of(scenario))
+    assert [(problem.code, [entry.key for entry in problem.entries]) for problem in problems] == [
+        ("bound_min_above_max", ["asset:asset:a"]),
+        ("bound_min_above_max", ["asset:asset:b"]),
+    ]  # asset b: 50% of EUR150 = 75 > 74; the cash cell's equal bounds are fine
+
+
+def test_asset_maximum_below_current_value_cannot_fire_in_a_pac() -> None:
+    """Check 3 needs a holding: a PAC has none (``ExactPlannerScenario`` refuses them), so the check names nothing there,
+    even with a maximum of zero. It fires in a scenario that holds the Asset and cannot sell it (block B)."""
+    scenario = _limited_scenario(asset_a=(None, _LIMIT_A("amount", R(0))))
+    assert check_maximum_below_current(scenario, build_scenario_index(scenario), fixed_reference_of(scenario)) == ()
+    with pytest.raises(ValueError, match="holdings"):
+        replace(scenario, holdings=(object(),))
+
+
+# ---------------------------------------------------------------------------
+# A3 step 3 (project 67): V5 in the exact replay (V10 was removed after the consultant's re-read)
+# ---------------------------------------------------------------------------
+
+
+def _limit_plan_scenario(
+    *,
+    weights: tuple[ExactRatio, ExactRatio] = (R(1, 2), R(1, 2)),
+    asset_a: tuple[pac_models.ExactLimit | None, pac_models.ExactLimit | None] = (None, None),
+    asset_b: tuple[pac_models.ExactLimit | None, pac_models.ExactLimit | None] = (None, None),
+    cash: tuple[pac_models.ExactCashEntry, ...] = (),
+) -> ExactPlannerScenario:
+    """One Broker holding EUR100, two EUR Assets at EUR10 a unit (at most 10 units each), whole-euro quanta: the reference is EUR100."""
+    capability = _capability("capability:whole")
+    fee = _fee("fee:buy", capability.capability_id, "buy")
+    broker = _broker("broker:hub", (capability,), (fee,))
+
+    def buy(asset_id: str) -> ExactOrderRoute:
+        return _order_route(f"route:buy:{asset_id[-1]}", broker_id=broker.broker_id, asset_id=asset_id, capability=capability, fee_id=fee.fee_schedule_id, side="buy", cap=R(10))
+
+    return replace(
+        _scenario(
+            "scenario:limit-plan",
+            product="pac",
+            policy="proportional",
+            assets=(_asset("asset:a", price=R(10)), _asset("asset:b", price=R(10))),
+            brokers=(broker,),
+            existing_cash=(_cash("cash:hub", broker.broker_id, R(100)),),
+            order_routes=(buy("asset:a"), buy("asset:b")),
+            currency_quantums=(("EUR", ONE),),
+        ),
+        target_weights=(
+            pac_models.ExactTargetWeight("asset:a", weights[0], minimum=asset_a[0], maximum=asset_a[1]),
+            pac_models.ExactTargetWeight("asset:b", weights[1], minimum=asset_b[0], maximum=asset_b[1]),
+        ),
+        cash_entries=cash,
+    )
+
+
+def _buys(scenario: ExactPlannerScenario, a: int = 0, b: int = 0) -> ExactEvaluation:
+    view = build_exact_policy_view(scenario)
+    return evaluate_exact_candidate(scenario, view, _candidate(view, {exact_decision_id("buy_quantum", "route:buy:a"): a, exact_decision_id("buy_quantum", "route:buy:b"): b}))
+
+
+def _failed(evaluation: ExactEvaluation) -> set[str]:
+    return {item.ref_id for item in evaluation.constraints if not item.satisfied}
+
+
+_CASH_MAX_40 = (pac_models.ExactCashEntry(broker_id="broker:hub", currency="EUR", minimum=None, maximum=pac_models.ExactLimit("amount", R(40))),)
+
+
+def test_cash_maximum_makes_the_plan_invest_the_excess() -> None:
+    """T11, PAC form, at the exact level: EUR100 of cash and a maximum of EUR40 on the cell. A plan that leaves more than 40 in
+    the cell fails V5; one that invests at least 60 passes."""
+    scenario = _limit_plan_scenario(cash=_CASH_MAX_40)
+    entry = "constraint:entry_value_within_limits:cash:broker:hub:EUR"
+
+    nothing = _buys(scenario)
+    assert entry in _failed(nothing)
+    assert nothing.feasible is False
+    five = _buys(scenario, a=3, b=2)  # invests 50: 50 left in the cell, one unit short
+    assert entry in _failed(five)
+    six = _buys(scenario, a=3, b=3)
+    assert entry not in _failed(six)
+    assert six.feasible is True
+
+
+def test_necessary_fees_are_not_uninvested_cash() -> None:
+    """A3 fix: EUR1000 of cash, an Asset at EUR99, a fixed fee of EUR3 and a cash maximum of EUR8. The honest plan buys 10 units,
+    pays EUR3 and leaves EUR7, inside the maximum. A rule «what is not invested is at most the sum of the maxima» (the old V10)
+    counted the fee as uninvested, saw 1000 - 990 = 10 > 8 and declared there was no solution."""
+    capability = _capability("capability:whole")
+    fee = _fee("fee:buy", capability.capability_id, "buy", fixed=R(3))
+    broker = _broker("broker:hub", (capability,), (fee,))
+    scenario = replace(
+        _scenario(
+            "scenario:fees-and-cash-maximum",
+            product="pac",
+            policy="proportional",
+            assets=(_asset("asset:a", price=R(99)),),
+            brokers=(broker,),
+            existing_cash=(_cash("cash:hub", broker.broker_id, R(1000)),),
+            order_routes=(_order_route("route:buy:a", broker_id=broker.broker_id, asset_id="asset:a", capability=capability, fee_id=fee.fee_schedule_id, side="buy", cap=R(20)),),
+            currency_quantums=(("EUR", ONE),),
+        ),
+        cash_entries=(pac_models.ExactCashEntry(broker_id=broker.broker_id, currency="EUR", minimum=None, maximum=pac_models.ExactLimit("amount", R(8))),),
+    )
+    view = build_exact_policy_view(scenario)
+    candidate = _candidate(view, {exact_decision_id("buy_quantum", "route:buy:a"): 10})
+    evaluation = evaluate_exact_candidate(scenario, view, candidate)
+    assert evaluation.feasible is True, evaluation.conflict_codes
+    assert [item.final_spendable for item in evaluation.ledgers] == [R(7)]
+
+
+def test_asset_maximum_caps_the_final_value() -> None:
+    scenario = _limit_plan_scenario(asset_a=(None, pac_models.ExactLimit("amount", R(30))))
+    ref = "constraint:entry_value_within_limits:asset:asset:a"
+    assert ref not in _failed(_buys(scenario, a=3, b=3))  # 30 is the maximum, not above it
+    assert ref in _failed(_buys(scenario, a=4, b=0))
+    (fact,) = [item for item in _buys(scenario, a=4).constraints if item.ref_id == ref]
+    assert (fact.value, fact.lower_bound, fact.upper_bound) == (R(40), None, R(30)), "the limits are published in the fact"
+
+
+def test_asset_minimum_forces_a_buy_at_zero_target() -> None:
+    """Absurdity n. 17: an Asset with a target of zero and a minimum of EUR20 is bought, not ignored; a share resolves on the
+    reference (a fifth of EUR100 is 20)."""
+    for minimum in (pac_models.ExactLimit("amount", R(20)), pac_models.ExactLimit("share", R(1, 5))):
+        scenario = _limit_plan_scenario(weights=(R(0), R(1)), asset_a=(minimum, None))
+        ref = "constraint:entry_value_within_limits:asset:asset:a"
+        assert ref in _failed(_buys(scenario, a=1, b=5)), minimum
+        assert ref not in _failed(_buys(scenario, a=2, b=5)), minimum
+
+
+def test_a_scenario_without_limits_has_no_limit_facts() -> None:
+    """Nothing is added to the view without limits: the replay of a limitless scenario is what it was in A2."""
+    scenario = _limit_plan_scenario()
+    view = build_exact_policy_view(scenario)
+    assert not [ref for ref in view.constraints if ref.code in {"ENTRY_VALUE_WITHIN_LIMITS"}]
+
+
+def test_limit_violation_is_never_a_rounding_top_up() -> None:
+    """D9: a plan the replay finds outside a limit is an error of the model, not a cash a rounding left short; no top-up
+    repairs it, however small the excess. The classifier raises instead of proposing cash."""
+    scenario = _limit_plan_scenario(asset_a=(None, pac_models.ExactLimit("amount", R(30))))
+    evaluation = _buys(scenario, a=4, b=0)  # one unit above the maximum: the smallest excess there is
+    assert evaluation.feasible is False
+    assert "ENTRY_VALUE_WITHIN_LIMITS" in evaluation.conflict_codes
+    with pytest.raises(ExactReplayRejectedError):
+        EV.rounding_top_ups(scenario, evaluation)
+
+
+# ---------------------------------------------------------------------------
+# A3 fix (consultant's re-read): V5 rows hold to the unit, not to SCIP's float tolerance
+# ---------------------------------------------------------------------------
+
+
+def _usd_by_amount_scenario(maximum: ExactRatio | None, *, minimum: ExactRatio | None = None) -> ExactPlannerScenario:
+    """One USD Asset (price 1) bought by amount (cents) at a Broker holding EUR1500, FX 1.085, one EUR limit on the Asset.
+
+    A cent of USD is worth 1/108.5 EUR, so reachable values are 100000/108.5 = 921.658986... EUR and its neighbours 0.0092
+    EUR apart. A limit less than a thousandth of a euro under one of them is inside SCIP's relative tolerance on a row near EUR1000.
+    """
+    capability = _capability("capability:amount", kind="monetary_amount", step=CENT)
+    fee = _fee("fee:buy:usd", capability.capability_id, "buy", currency="USD")
+    broker = _broker("broker:hub", (capability,), (fee,))
+    route = _order_route("route:buy:usd", broker_id=broker.broker_id, asset_id="asset:usd", capability=capability, fee_id=fee.fee_schedule_id, side="buy", cap=R(10_000), currency="USD")
+    base = _scenario(
+        "scenario:usd-by-amount",
+        product="pac",
+        policy="proportional",
+        assets=(_asset("asset:usd", price=ONE, currency="USD"),),
+        brokers=(broker,),
+        existing_cash=(_cash("cash:eur", broker.broker_id, R(1500)),),
+        order_routes=(route,),
+        fx_rates=(_fx_rate("EUR", "USD", R(1085, 1000)),),
+        currency_quantums=(("EUR", CENT), ("USD", CENT)),
+    )
+    (weight,) = base.target_weights
+    return replace(
+        base,
+        target_weights=(replace(weight, minimum=None if minimum is None else pac_models.ExactLimit("amount", minimum), maximum=None if maximum is None else pac_models.ExactLimit("amount", maximum)),),
+    )
+
+
+_CENTS_BOUGHT = 100_000
+_VALUE_OF_THOSE_CENTS = R(_CENTS_BOUGHT, 1085) * R(10)  # 100000 cents = 1000 USD = 921.658986... EUR
+_MAXIMUM_JUST_UNDER_IT = _VALUE_OF_THOSE_CENTS - R(4, 10_000)
+
+
+def _relay_scenario() -> ExactPlannerScenario:
+    """One Broker holding EUR2 and USD2; a USD Asset and a CHF Asset (2 each, at most 1 unit): EUR to USD and USD to CHF could chain."""
+    capability = _capability("capability:whole")
+    fees = tuple(_fee(f"fee:buy:{currency.lower()}", capability.capability_id, "buy", currency=currency) for currency in ("CHF", "USD"))
+    broker = _broker("broker:hub", (capability,), fees)
+    fee_by_currency = {"CHF": fees[0], "USD": fees[1]}
+
+    def buy(route_id: str, asset_id: str, currency: str) -> ExactOrderRoute:
+        return _order_route(route_id, broker_id=broker.broker_id, asset_id=asset_id, capability=capability, fee_id=fee_by_currency[currency].fee_schedule_id, side="buy", cap=R(1), currency=currency)
+
+    return _scenario(
+        "scenario:relay",
+        product="pac",
+        policy="proportional",
+        assets=(_asset("asset:chf", price=R(2), currency="CHF"), _asset("asset:usd", price=R(2), currency="USD")),
+        brokers=(broker,),
+        existing_cash=(_cash("cash:eur", broker.broker_id, R(2)), _cash("cash:usd", broker.broker_id, R(2), currency="USD")),
+        order_routes=(buy("route:buy:chf", "asset:chf", "CHF"), buy("route:buy:usd", "asset:usd", "USD")),
+        fx_rates=(_fx_rate("CHF", "EUR", ONE), _fx_rate("CHF", "USD", R(5, 4)), _fx_rate("EUR", "USD", R(5, 4))),
+        currency_quantums=(("CHF", ONE), ("EUR", ONE), ("USD", ONE)),
+    )
+
+
+def test_a_currency_that_receives_a_conversion_does_not_give_one() -> None:
+    """V7, widened: on a Broker a currency that receives a conversion gives none. EUR to USD followed by USD to CHF would
+    burn cash through a chain, and the engine never pays a buy through a chain (``buy_pool_currencies``); either step alone is
+    fine, and so is a currency that only gives (EUR to USD and EUR to CHF)."""
+    scenario = _relay_scenario()
+    view = build_exact_policy_view(scenario)
+    eur_usd = fx_id(scenario, source="EUR", destination="USD")
+    usd_chf = fx_id(scenario, source="USD", destination="CHF")
+    eur_chf = fx_id(scenario, source="EUR", destination="CHF")
+    relay = "constraint:fx_no_relay:10:broker:hub:USD"
+
+    chained = evaluate_exact_candidate(scenario, view, _candidate(view, {eur_usd: 2, usd_chf: 2}))
+    (fact,) = [item for item in chained.constraints if item.ref_id == relay]
+    assert (fact.satisfied, chained.feasible) == (False, False)
+    for allowed in ({eur_usd: 2}, {usd_chf: 2}, {eur_usd: 1, eur_chf: 1}):
+        evaluation = evaluate_exact_candidate(scenario, view, _candidate(view, allowed))
+        (fact,) = [item for item in evaluation.constraints if item.ref_id == relay]
+        assert fact.satisfied is True, allowed
+
+
+def test_sum_of_minimums_ignores_the_trapped_cash_of_a_cell() -> None:
+    """A3 fix: cash that reaches no buy is outside ``fixed_reference`` but sits in its cell, so it already honours that cell's
+    minimum. For each cash cell only the part of the minimum above its trapped cash counts: a check before the calculation
+    must never be stricter than reality."""
+    base = _limit_plan_scenario()
+    idle = _broker("broker:idle")
+    scenario = replace(
+        base,
+        brokers=tuple(sorted((*base.brokers, idle), key=lambda item: item.broker_id)),
+        existing_cash=(*base.existing_cash, _cash("cash:idle", "broker:idle", R(30))),
+        target_weights=(replace(base.target_weights[0], minimum=pac_models.ExactLimit("amount", R(100))), base.target_weights[1]),
+        cash_entries=(pac_models.ExactCashEntry(broker_id="broker:idle", currency="EUR", minimum=pac_models.ExactLimit("amount", R(30)), maximum=None),),
+    )
+    reference = fixed_reference_of(scenario)
+    trapped = trapped_cash_by_cell(scenario)
+    assert reference == R(100), "the idle broker's EUR30 reaches no buy: it is outside the reference"
+    assert trapped == {("broker:idle", "EUR"): R(30)}
+
+    assert check_minimums_exceed_reference(scenario, reference, trapped) == ()  # 100 for the Asset, and 30 already there
+    (problem,) = check_minimums_exceed_reference(scenario, reference)  # ignoring the trapped cash, 100 + 30 > 100
+    assert [entry.key for entry in problem.entries] == ["asset:asset:a", "cash:broker:idle:EUR"]
+    above = replace(scenario, cash_entries=(replace(scenario.cash_entries[0], minimum=pac_models.ExactLimit("amount", R(31))),))
+    (problem,) = check_minimums_exceed_reference(above, reference, trapped)  # one euro beyond the trapped 30 needs reachable money
+    assert [entry.key for entry in problem.entries] == ["asset:asset:a", "cash:broker:idle:EUR"]
+
+
+# ---------------------------------------------------------------------------
+# B1 (project 67): the single objective at the exact level, without the two phases
+# ---------------------------------------------------------------------------
+
+
+def test_primary_view_serves_invest_and_sell_with_sells_disabled() -> None:
+    """B1-1: ``primary`` serves every policy. On ``invest_and_sell`` its sells stay ``disabled`` until C1 opens them, it
+    starts from the zero vector, and doing nothing replays."""
+    scenario = _invest_and_sell_scenario()
+
+    view = build_exact_policy_view(scenario)
+
+    assert (view.purpose, view.policy) == ("primary", "invest_and_sell")
+    assert all(item.baseline_quanta == 0 and item.lower_quanta == 0 for item in view.decisions)
+    sells = [item for item in view.decisions if item.family == "sell_quantum"]
+    assert sells and all((item.mode, item.upper_quanta) == ("disabled", 0) for item in sells)
+    assert evaluate_exact_candidate(scenario, view, _candidate(view)).candidate_valid
+
+
+def _reb_view_and_candidate(scenario: ExactPlannerScenario, quanta: dict[str, int] | None = None) -> tuple[ExactPolicyView, CandidateActionVector]:
+    view = build_exact_policy_view(scenario)
+    return view, _candidate(view, quanta or {})
+
+
+def test_plan_accounts_reconcile_to_initial_minus_final_wealth() -> None:
+    """B1-6, specifica §5: ``F`` is what enters the plan (invested plus selected cash and contributions), ``W`` what it is worth
+    at the end (Assets plus spendable cash plus contributions left undeposited), ``C = F − W`` the money lost, and it is the
+    accounting identity the replay already checks: reserves plus losses plus rounding. ``N`` is ``F`` less the Assets and the
+    cash cells with a target. T4: buying 195 of B for a fee of 5 loses exactly 5."""
+    scenario = cases.t4()
+    for quanta, expected in (
+        ({}, {"F": R(10_000), "W": R(10_000), "C": ZERO, "N": R(200)}),
+        ({cases.buy_decision("asset:b"): 195}, {"F": R(10_000), "W": R(9_995), "C": R(5), "N": R(5)}),
+    ):
+        view, candidate = _reb_view_and_candidate(scenario, quanta)
+        accounting = evaluate_exact_candidate(scenario, view, candidate).accounting
+        assert {"F": accounting.initial_wealth, "W": accounting.final_wealth, "C": accounting.wealth_loss, "N": accounting.uninvested} == expected
+        assert accounting.wealth_loss == accounting.physical_reserves + accounting.economic_losses + accounting.rounding_adjustment + accounting.identity_delta
+
+
+def test_rebalancer_share_limits_resolve_against_initial_wealth() -> None:
+    """Specifica §15 n. 17: a share limit reads the Tool's reference, ``F`` in the Rebalancer. With cash that no route can spend
+    (here 1 000 EUR on a Broker without capabilities) ``F`` = 11 000 while ``fixed_reference`` = 10 000: a maximum of one half
+    on B is 5 500, not 5 000."""
+    base = cases.t4()
+    idle = replace(
+        base,
+        brokers=tuple(sorted((*base.brokers, replace(base.brokers[0], broker_id="broker:y", name="broker:y", capabilities=(), fee_schedules=())), key=lambda item: item.broker_id)),
+        existing_cash=tuple(sorted((*base.existing_cash, replace(base.existing_cash[0], cash_id="cash:y:eur", broker_id="broker:y", available=cases.money(R(1_000)), selected=cases.money(R(1_000)))), key=lambda item: item.cash_id)),
+        target_weights=tuple(replace(item, maximum=pac_models.ExactLimit("share", R(1, 2))) if item.asset_id == "asset:b" else item for item in base.target_weights),
+    )
+    view, candidate = _reb_view_and_candidate(idle)
+    evaluation = evaluate_exact_candidate(idle, view, candidate)
+
+    assert (evaluation.accounting.initial_wealth, evaluation.accounting.fixed_reference) == (R(11_000), R(10_000))
+    limit = _by_id(evaluation.constraints, "ref_id", "constraint:entry_value_within_limits:asset:asset:b")
+    assert limit.upper_bound == R(5_500)
+
+
+def test_pac_view_and_values_ignore_the_target_fidelity() -> None:
+    """B1-7: the PAC keeps its five objectives in today's order and never carries a fidelity; a PAC scenario that names one,
+    or a Rebalancer that names none, is refused at construction. ``λ`` must be positive."""
+    scenario = _pac_scenario()
+    view = build_exact_policy_view(scenario)
+    assert scenario.target_fidelity is None
+    assert tuple(ref.code for ref in view.objectives) == ("fixed_l2", "shortfall", "route_priority", "explicit_cost", "active_order_rows")
+
+    with pytest.raises(ValueError, match="fidelity"):
+        replace(scenario, target_fidelity=pac_models.ExactTargetFidelity(kind="weighted", distance_weight=ONE))
+    with pytest.raises(ValueError, match="fidelity"):
+        replace(_invest_only_scenario(), target_fidelity=None)
+    for kind, distance_weight in (("weighted", ZERO), ("weighted", None), ("target_first", ONE)):
+        with pytest.raises(ValueError):
+            pac_models.ExactTargetFidelity(kind=kind, distance_weight=distance_weight)
+
+
+def _t4_with_cash_target() -> ExactPlannerScenario:
+    """T4 with the weights of the plan's test 6: A 50 %, B 48 %, the Broker's EUR cash 2 %."""
+    return cases.t4(
+        weights_override={"asset:a": R(1, 2), "asset:b": R(12, 25)},
+        cash_entries=(pac_models.ExactCashEntry(broker_id=cases.BROKER, currency="EUR", minimum=None, maximum=None, weight=R(1, 50)),),
+    )
+
+
+def test_rebalancer_targets_read_initial_wealth_and_cash_cells_with_a_target_are_rows() -> None:
+    """B1-8, specifica §6.1: in the Rebalancer a target is ``w · F`` and a cash cell with a target is an entry of its own, with a
+    row like an Asset's; ``N`` leaves it out. T4 with A 50 %, B 48 %, cash 2 %: doing nothing hits every target (``N = 0``);
+    buying 195 of B leaves the cell empty, 200 under its target, and ``N`` = the 5 of fee."""
+    scenario = _t4_with_cash_target()
+    for quanta, cash_final, b_final, uninvested in (({}, R(200), R(4_800), ZERO), ({cases.buy_decision("asset:b"): 195}, ZERO, R(4_995), R(5))):
+        view, candidate = _reb_view_and_candidate(scenario, quanta)
+        evaluation = evaluate_exact_candidate(scenario, view, candidate)
+        (cash,) = evaluation.cash_targets
+        b = _by_id(evaluation.assets, "asset_id", "asset:b")
+        assert (cash.broker_id, cash.currency, cash.target_weight, cash.target_value) == (cases.BROKER, "EUR", R(1, 50), R(200))
+        assert (cash.final_value, cash.residual) == (cash_final, cash_final - R(200))
+        assert (b.target_value, b.final_value) == (R(4_800), b_final)
+        assert evaluation.accounting.uninvested == uninvested
+
+
+def test_a_cash_entry_with_only_a_weight_is_no_limit() -> None:
+    """A cash entry with a target and no minimum or maximum carries no limit: no ``ENTRY_VALUE_WITHIN_LIMITS`` fact, and a «no
+    solution» does not name it (M20)."""
+    scenario = _t4_with_cash_target()
+    view = build_exact_policy_view(scenario)
+    assert limited_entries(scenario) == ()
+    assert not [ref for ref in view.constraints if ref.code == "ENTRY_VALUE_WITHIN_LIMITS"]
+
+
+def test_pac_cash_entries_never_carry_a_weight() -> None:
+    with pytest.raises(ValueError, match="cash"):
+        replace(_pac_scenario(), cash_entries=(pac_models.ExactCashEntry(broker_id="broker:a", currency="EUR", minimum=None, maximum=None, weight=R(1, 2)),))
+
+
+_TARGET_FIRST = pac_models.ExactTargetFidelity(kind="target_first", distance_weight=None)
+
+
+def _reb_scores(build: Any, quanta: dict[str, int] | None = None, *, distance_weight: ExactRatio = ONE, **fields: Any) -> dict[str, ExactRatio]:
+    """``J`` under a weighted fidelity, and ``D`` and ``C`` under «Target first», for one candidate of one small case.
+
+    The two views of the Rebalancer (B1-9, B1-10): a weighted fidelity publishes ``plan_score`` alone, «Target first» the chain
+    ``target_distance`` then ``wealth_loss``. ``N`` comes from the accounting."""
+    scores: dict[str, ExactRatio] = {}
+    for fidelity in (pac_models.ExactTargetFidelity(kind="weighted", distance_weight=distance_weight), _TARGET_FIRST):
+        scenario = build(target_fidelity=fidelity, **fields)
+        view, candidate = _reb_view_and_candidate(scenario, quanta)
+        evaluation = evaluate_exact_candidate(scenario, view, candidate)
+        assert evaluation.feasible, evaluation.conflict_codes
+        scores |= _objective_map(view, evaluation)
+        scores["N"] = evaluation.accounting.uninvested
+    return {"D": scores["target_distance"], "N": scores["N"], "C": scores["wealth_loss"], "J": scores["plan_score"]}
+
+
+def test_rebalancer_views_publish_one_score_or_the_target_first_chain() -> None:
+    """B1-9, B1-10, B2-1: a weighted fidelity is one score, ``plan_score``; «Target first» is ``target_distance`` then
+    ``wealth_loss``. Both end with the tie-breaks of specifica §6.4: fewer operations, then the route priorities. No
+    ``turnover`` any more."""
+    weighted = build_exact_policy_view(cases.t4())
+    target_first = build_exact_policy_view(cases.t4(target_fidelity=_TARGET_FIRST))
+    tie_breaks = [("operation_count", "count"), ("route_priority", "ordinal_penalty")]
+    assert [(ref.code, ref.unit.kind) for ref in weighted.objectives] == [("plan_score", "valuation_money"), *tie_breaks]
+    assert [(ref.code, ref.unit.kind) for ref in target_first.objectives] == [("target_distance", "valuation_money_squared"), ("wealth_loss", "valuation_money"), *tie_breaks]
+
+
+def test_rebalancer_no_trade_scores_scaled_distance() -> None:
+    """T1: A 5 040, B 4 960, no cash. No operation: ``D`` = 40² + 40² = 3 200, nothing lost, ``J`` = 3 200 / 10 000."""
+    assert _reb_scores(cases.t1) == {"D": R(3_200), "N": ZERO, "C": ZERO, "J": R(8, 25)}
+
+
+def test_rebalancer_buy_beats_idle_cash_when_penalty_exceeds_fee() -> None:
+    """T4: A 5 000, B 4 800, cash 200. Buying 195 of B: ``N`` = 5 (the fee), ``D`` = 5² + 5² = 50, ``C`` = 5,
+    ``J`` = 50 / 10 000 + 5 = 1 001 / 200. Doing nothing: ``D`` = 200² + 200² = 80 000, ``J`` = 8."""
+    assert _reb_scores(cases.t4, {cases.buy_decision("asset:b"): 195}) == {"D": R(50), "N": R(5), "C": R(5), "J": R(1_001, 200)}
+    assert _reb_scores(cases.t4)["J"] == R(8)
+
+
+def test_rebalancer_idle_cash_wins_when_fee_exceeds_penalty() -> None:
+    """T5: A 5 000, B 4 900, cash 100. Doing nothing: ``D`` = 100² + 100² = 20 000, ``J`` = 2. Buying 95 of B: ``J`` = 1 001 / 200."""
+    assert _reb_scores(cases.t5) == {"D": R(20_000), "N": R(100), "C": ZERO, "J": R(2)}
+    assert _reb_scores(cases.t5, {cases.buy_decision("asset:b"): 95})["J"] == R(1_001, 200)
+
+
+def test_rebalancer_wasted_money_never_lowers_the_score() -> None:
+    """T6 (specifica §6.2), ``λ = 4``: one unit at 4 000, cash 6 000. Buying one unit: ``D`` = 2 000² + 2 000², ``J`` = 3 205.
+    Doing nothing: ``J`` = 28 800. The same plan plus a conversion that buys nothing (100 EUR into USD, which lands as 99 USD
+    and stays idle) keeps the same ``D`` and adds exactly what it loses, ``w = F − W`` of the extra (P1)."""
+    one_unit = {cases.buy_decision("asset:a"): 1}
+    four = R(4)
+    assert _reb_scores(cases.t6, one_unit, distance_weight=four) == {"D": R(8_000_000), "N": R(2_000), "C": R(5), "J": R(3_205)}
+    assert _reb_scores(cases.t6, distance_weight=four)["J"] == R(28_800)
+
+    honest = _reb_scores(cases.t6, one_unit, distance_weight=four, with_usd=True)
+    wasteful = _reb_scores(cases.t6, one_unit | {"fx:8:broker:x:EUR:USD": 10_000}, distance_weight=four, with_usd=True)
+    wasted = wasteful["C"] - honest["C"]
+    assert wasted == ONE  # 100 EUR became 99 USD, worth 99 EUR
+    assert (wasteful["D"], wasteful["J"]) == (honest["D"], honest["J"] + wasted)
+
+
+def test_target_first_puts_distance_before_lost_money() -> None:
+    """«Target first» on T5: buying 95 of B wins on the first objective (``D`` = 50 against 20 000), then pays ``C`` = 5."""
+    buy = _reb_scores(cases.t5, {cases.buy_decision("asset:b"): 95})
+    idle = _reb_scores(cases.t5)
+    assert (buy["D"], buy["C"]) == (R(50), R(5))
+    assert (buy["D"], buy["C"]) < (idle["D"], idle["C"])
+
+
+def test_rebalancer_cash_item_with_target_enters_the_distance() -> None:
+    """T4 with A 50 %, B 48 %, cash 2 %: doing nothing is on target, ``D`` = 0; buying 195 of B gives
+    ``D`` = 195² + 200² + 5² = 78 050 (B over its target, the cell under it, ``N`` = the fee)."""
+
+    def build(**fields: Any) -> ExactPlannerScenario:
+        return cases.t4(
+            weights_override={"asset:a": R(1, 2), "asset:b": R(12, 25)},
+            cash_entries=(pac_models.ExactCashEntry(broker_id=cases.BROKER, currency="EUR", minimum=None, maximum=None, weight=R(1, 50)),),
+            **fields,
+        )
+
+    assert _reb_scores(build)["D"] == ZERO
+    assert _reb_scores(build, {cases.buy_decision("asset:b"): 195})["D"] == R(78_050)
+
+
+def test_free_cash_moves_do_not_change_the_score() -> None:
+    """P4: moving cash for free between two Brokers changes neither ``D`` nor ``C``, so ``J`` stays. T4 plus a second Broker
+    and a free transfer lane: sending 100 EUR from ``broker:x`` to ``broker:y`` leaves the score as it was."""
+
+    def build(**fields: Any) -> ExactPlannerScenario:
+        base = cases.t4(**fields)
+        broker_y = replace(base.brokers[0], broker_id="broker:y", name="broker:y")
+        lane = pac_models.ExactTransferLane(source_broker_id=cases.BROKER, destination_broker_id="broker:y", currency="EUR")
+        return replace(base, brokers=tuple(sorted((*base.brokers, broker_y), key=lambda item: item.broker_id)), transfer_lanes=(lane,))
+
+    view = build_exact_policy_view(build())
+    (transfer_id,) = [item.decision_id for item in view.decisions if item.family == "broker_transfer"]
+    assert _reb_scores(build, {transfer_id: 10_000}) == _reb_scores(build)
+
+
+def test_rebalancer_with_nothing_to_plan_reports_nonempty_instead_of_dividing_by_zero() -> None:
+    """``J`` divides the distance by ``F``. A Rebalancer scenario worth nothing (no holding, no cash) has ``F`` = 0: the replay
+    still answers, with the ``REBALANCER_NONEMPTY`` conflict, and never raises."""
+    scenario = cases.scenario("empty", holdings={}, cash=ZERO, weights={"asset:a": R(1, 2), "asset:b": R(1, 2)})
+    view, candidate = _reb_view_and_candidate(scenario)
+    evaluation = evaluate_exact_candidate(scenario, view, candidate)
+    assert "REBALANCER_NONEMPTY" in evaluation.conflict_codes
+
+
+def test_rebalancer_nonempty_needs_only_a_current_portfolio() -> None:
+    """B1-11, specifica §15 n. 14: the Rebalancer needs something to rebalance, ``V⁰ > 0``, and nothing more. With a target on
+    cash a plan may end with nothing invested: selling every unit is admitted by this rule."""
+    scenario = _invest_and_sell_scenario()
+    everything = {exact_decision_id("sell_quantum", "route:sell:a"): 8, exact_decision_id("sell_quantum", "route:sell:b"): 2}
+    view = _sell_door(scenario, everything)
+
+    evaluation = evaluate_exact_candidate(scenario, view, _candidate(view, everything))
+
+    assert evaluation.accounting.final_invested == ZERO
+    assert "REBALANCER_NONEMPTY" not in evaluation.conflict_codes
+    fact = _by_id(evaluation.constraints, "ref_id", "constraint:rebalancer_nonempty:global")
+    assert (fact.value, fact.satisfied) == (evaluation.accounting.current_invested, True)
+
+
+def test_operation_count_counts_orders_conversions_transfers_and_deposits() -> None:
+    """B2-1, specifica §6.4: the first tie-break counts every operation of the plan: orders, conversions, transfers between
+    Brokers, deposits. T6 with its USD conversion and a free transfer lane: one unit bought, 100 EUR converted and 100 EUR
+    moved is three operations; doing nothing is none."""
+
+    def build(**fields: Any) -> ExactPlannerScenario:
+        base = cases.t6(with_usd=True, target_fidelity=pac_models.ExactTargetFidelity(kind="weighted", distance_weight=R(4)), **fields)
+        broker_y = replace(base.brokers[0], broker_id="broker:y", name="broker:y")
+        lane = pac_models.ExactTransferLane(source_broker_id=cases.BROKER, destination_broker_id="broker:y", currency="EUR")
+        return replace(base, brokers=tuple(sorted((*base.brokers, broker_y), key=lambda item: item.broker_id)), transfer_lanes=(lane,))
+
+    scenario = build()
+    view = build_exact_policy_view(scenario)
+    (transfer_id,) = [item.decision_id for item in view.decisions if item.family == "broker_transfer"]
+    for quanta, expected in (({}, ZERO), ({cases.buy_decision("asset:a"): 1, "fx:8:broker:x:EUR:USD": 10_000, transfer_id: 10_000}, R(3))):
+        evaluation = evaluate_exact_candidate(scenario, view, _candidate(view, quanta))
+        assert evaluation.feasible, evaluation.conflict_codes
+        assert _objective_map(view, evaluation)["operation_count"] == expected

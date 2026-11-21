@@ -337,7 +337,11 @@ def configure_logging(log_level: str = "INFO", enable_file_logging: bool = True)
     # Configure standard logging
     logging.basicConfig(format="%(message)s", handlers=handlers, level=numeric_level, force=True)
 
-    # Configure structlog processors
+    _configure_structlog(cache_logger_on_first_use=True)
+
+
+def _configure_structlog(*, cache_logger_on_first_use: bool) -> None:
+    """The one structured-line format: a JSON object per line, secrets masked, rendered before the standard handlers."""
     processors = [
         structlog.contextvars.merge_contextvars,
         structlog.stdlib.add_logger_name,
@@ -351,15 +355,30 @@ def configure_logging(log_level: str = "INFO", enable_file_logging: bool = True)
         structlog.processors.UnicodeDecoder(),
         structlog.processors.JSONRenderer(),
     ]
-
-    # Configure structlog
     structlog.configure(
         processors=processors,
         wrapper_class=LibreFolioBoundLogger,
         context_class=dict,
         logger_factory=structlog.stdlib.LoggerFactory(),
-        cache_logger_on_first_use=True,
+        cache_logger_on_first_use=cache_logger_on_first_use,
     )
+
+
+def configure_child_logging(handler: logging.Handler, level: int) -> None:
+    """Route a child process's lines to ``handler`` alone, at ``level`` (lot LOGS of project 67).
+
+    A process started with ``spawn`` (a Tool's worker) never runs ``configure_logging``: without this its INFO lines are lost
+    and its warnings reach only stderr. Here every line, structured or a library's, becomes one rendered line in the same
+    format as the server's, masked like the server's (``SecretMaskingFilter`` on the handler), and goes to ``handler``,
+    which carries it to the parent. The child opens no file: the server's log keeps one writer.
+    """
+    root = logging.getLogger()
+    for existing in root.handlers[:]:
+        root.removeHandler(existing)
+    handler.addFilter(_SECRET_MASKING_FILTER)
+    root.addHandler(handler)
+    root.setLevel(level)
+    _configure_structlog(cache_logger_on_first_use=False)
 
 
 def client_log_level(log_level: str) -> Literal["error", "debug"]:

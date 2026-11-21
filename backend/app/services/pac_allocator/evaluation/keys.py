@@ -19,6 +19,7 @@ _DECISION_PREFIX: dict[DecisionFamily, str] = {
     "fx_debit": "fx",
     "buy_quantum": "buy",
     "sell_quantum": "sell",
+    "broker_transfer": "transfer",
 }
 
 
@@ -39,8 +40,21 @@ def source_key(kind: str, source_id: str) -> tuple[str, str]:
     return kind, source_id
 
 
-def fx_debit_key(route_id: str, currency: str) -> str:
-    return f"{route_id}:{currency}"
+def fx_debit_key(broker_id: str, source_currency: str, destination_currency: str) -> str:
+    """The key of the one FX decision of a Broker and an ordered currency pair (A2, project 67).
+
+    The Broker id is free-form and may contain ``:``, so it is length-prefixed as in ``asset_broker_key``; currency codes are
+    three letters and need no prefix.
+    """
+    return f"{len(broker_id)}:{broker_id}:{source_currency}:{destination_currency}"
+
+
+def broker_transfer_key(source_broker_id: str, destination_broker_id: str, currency: str) -> str:
+    """The key of the transfer decision of a lane: from a Broker to another, in one currency (A2, project 67).
+
+    Both Broker ids are free-form and may contain ``:``, so each is length-prefixed as in ``asset_broker_key``.
+    """
+    return f"{len(source_broker_id)}:{source_broker_id}{len(destination_broker_id)}:{destination_broker_id}:{currency}"
 
 
 def asset_broker_key(asset_id: str, broker_id: str) -> str:

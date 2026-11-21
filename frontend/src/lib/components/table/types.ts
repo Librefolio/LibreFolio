@@ -160,7 +160,9 @@ export interface HtmlCell {
 }
 
 /**
- * Editable select cell — renders an inline <select> dropdown.
+ * Editable select cell — renders the project's `SimpleSelect` inline (`DataTableCellContent.svelte`), never a native
+ * `<select>`: a choice inside a table cell follows the selector rule (M5). For a selector with search or another shape,
+ * use a `custom` cell with the project's component, as `TargetInputCell` does.
  * Used for identifier type, sector/country selection in distribution editors, etc.
  */
 export interface EditableSelectCell {
@@ -375,7 +377,7 @@ export type FooterCells<T> = Record<string, FooterCellContent> | ((rows: T[], se
  *
  * @typeParam T - The row data type
  */
-export interface RowAction<T> extends Omit<ContextMenuItem, 'id' | 'label' | 'disabled' | 'title' | 'testid' | 'iconClass' | 'labelClass'> {
+export interface RowAction<T> extends Omit<ContextMenuItem, 'id' | 'label' | 'disabled' | 'blocked' | 'title' | 'testid' | 'iconClass' | 'labelClass'> {
     /** Unique action identifier */
     id: string;
 
@@ -391,7 +393,13 @@ export interface RowAction<T> extends Omit<ContextMenuItem, 'id' | 'label' | 'di
     /** Conditionally show/hide action */
     visible?: (row: T) => boolean;
 
-    /** Disable action conditionally */
+    /**
+     * Why the action is blocked on this row, or null when it is not (77 SEL-M, Q-SEL-12): then it is off, reachable, and
+     * the row menu says why. An action that makes no sense on a row is not off: it is hidden, with `visible`.
+     */
+    blocked?: (row: T) => SelectionActionBlock | null;
+
+    /** The old form: off with no reason. New actions use `blocked`; this goes once its last users move. */
     disabled?: (row: T) => boolean;
 
     /** Dynamic CSS class for the icon (e.g. 'animate-spin' when loading) */

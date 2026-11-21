@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+import json
+import logging
 import multiprocessing
 import os
 import select
@@ -10,11 +12,12 @@ import struct
 import threading
 import time
 import uuid
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from contextlib import ExitStack
 from dataclasses import dataclass, field
 from multiprocessing.connection import Connection
 
+import structlog
 from pydantic import ValidationError
 
 from backend.app.logging_config import get_logger
@@ -24,6 +27,7 @@ from backend.app.schemas.tools import (
     ToolComputeBatchResponse,
     ToolComputeFailure,
     ToolComputeItem,
+    ToolComputeProgress,
     ToolComputeResult,
     ToolComputeSuccess,
     ToolError,
@@ -41,14 +45,31 @@ from backend.app.services.tools.catalog import effective_operation
 from backend.app.services.tools.process_tree import OwnedProcessTree
 from backend.app.services.tools.registry import ToolPluginRegistry, ToolRegistrySnapshot
 from backend.app.services.tools.resources import ToolResourceController
-from backend.app.services.tools.wire import decode_json, encode_json, plain_json_object
-from backend.app.services.tools.worker import PipeCancellation, ToolWorkerJob, execute_tool_job
+from backend.app.services.tools.wire import LOG_FRAME_MAX_BYTES, MAX_SAFE_JSON_INTEGER, PROGRESS_FRAME_MAX_BYTES, decode_json, encode_json, plain_json_object
+from backend.app.services.tools.worker import CHILD_LOG_FRAME_CAP, PipeCancellation, ToolWorkerJob, execute_tool_job
 
 logger = get_logger(__name__)
 
 # A crashed worker's pipe closes a moment before the process can be reaped, longer under load: the most the parent waits
 # to read its exit status. ``join`` returns as soon as the worker exits, so only a worker still alive waits it all.
 _EXIT_GRACE_SECONDS = 0.5
+#: The most progress messages one item hands to its listener (lot V1 of project 67); past it they are dropped.
+TOOL_PROGRESS_MESSAGE_CAP = 50
+_PROGRESS_KEYS = frozenset({"kind", "execution_id", "phase"})
+_PROGRESS_OPTIONAL_KEYS = frozenset({"step", "total"})
+#: The most worker log lines the parent writes for one job (lot LOGS of project 67): the child's cap and its count line.
+TOOL_LOG_LINE_CAP = CHILD_LOG_FRAME_CAP + 1
+_LOG_KEYS = frozenset({"kind", "execution_id", "level", "logger", "message"})
+_LOG_LEVELS = frozenset({5, logging.DEBUG, logging.INFO, logging.WARNING, logging.ERROR, logging.CRITICAL})
+#: The keys of a child's rendered line that the parent's own processors write again, or that structlog reads as commands
+#: (``positional_args`` would be formatted into the event). The keys the parent's context binds (``request_id``) are
+#: dropped too, at each line: the child never overrides them.
+_CHILD_LINE_OWN_KEYS = frozenset({"event", "level", "logger", "timestamp", "exc_info", "stack_info", "positional_args"})
+
+#: What the executor calls with each accepted progress message, in the event loop of ``compute``.
+type ToolProgressListener = Callable[[ToolComputeProgress], None]
+#: The I/O owner's side of it: phase, step, total of an accepted frame.
+type _ProgressForward = Callable[[str, int | None, int | None], None]
 
 
 def _crashed_exit_code(job: _OwnedJob) -> int | None:
@@ -121,6 +142,10 @@ class _OwnedJob:
     io_task: asyncio.Task[_Outcome] | None = None
     quarantined: bool = False
     metrics: ToolItemMetrics = field(default_factory=ToolItemMetrics)
+    progress_phases: tuple[str, ...] = ()
+    on_progress: _ProgressForward | None = None
+    progress_seen: set[tuple[str, int | None, int | None]] = field(default_factory=set)
+    log_lines: int = 0
 
 
 @dataclass(slots=True)
@@ -197,6 +222,56 @@ def _accept_result(frame: dict[str, object], job: _OwnedJob) -> tuple[object, To
     return None, ToolError.model_validate(frame["error"])
 
 
+def _progress_integer(value: object) -> bool:
+    return value is None or (type(value) is int and 1 <= value <= MAX_SAFE_JSON_INTEGER)
+
+
+def _accept_progress(frame: dict[str, object], job: _OwnedJob) -> None:
+    """A child's progress frame after ``ready`` (lot V1 of project 67): forwarded when its phase is declared, its shape is
+    exact, it is new and under the cap; otherwise dropped. A dropped frame is never a crash (contract §10)."""
+    keys = set(frame)
+    phase, step, total = frame.get("phase"), frame.get("step"), frame.get("total")
+    if not _PROGRESS_KEYS <= keys <= _PROGRESS_KEYS | _PROGRESS_OPTIONAL_KEYS or phase not in job.progress_phases:
+        return
+    if not _progress_integer(step) or not _progress_integer(total) or (total is not None and (step is None or step > total)):
+        return
+    if len(encode_json(frame, max_depth=1)) > PROGRESS_FRAME_MAX_BYTES:
+        return
+    key = (phase, step, total)
+    if key in job.progress_seen or len(job.progress_seen) >= TOOL_PROGRESS_MESSAGE_CAP:
+        return
+    job.progress_seen.add(key)
+    if job.on_progress is not None:
+        job.on_progress(phase, step, total)
+
+
+def _accept_log(frame: dict[str, object], job: _OwnedJob) -> None:
+    """A child's log line after ``ready`` (lot LOGS of project 67): written to the server's log as one of its own lines, at
+    the child's level, with ``worker`` and the job's ``execution_id`` (the request's id comes from this thread's context).
+    A structured line keeps its fields; a library's plain line is its text. A malformed frame, or one past the cap, is
+    dropped, never a crash."""
+    level, name, message = frame.get("level"), frame.get("logger"), frame.get("message")
+    if set(frame) != _LOG_KEYS or type(level) is not int or level not in _LOG_LEVELS:
+        return
+    if not isinstance(name, str) or not 0 < len(name) <= 200 or not isinstance(message, str) or len(message) > LOG_FRAME_MAX_BYTES:
+        return
+    if job.log_lines >= TOOL_LOG_LINE_CAP:
+        return
+    job.log_lines += 1
+    event, fields = message, {}
+    try:
+        rendered = json.loads(message)
+    except ValueError:  # a parsing probe: a library's plain line is not JSON, and is written as text
+        rendered = None
+    if isinstance(rendered, dict) and isinstance(rendered.get("event"), str):
+        event = rendered["event"]
+        bound = structlog.contextvars.get_contextvars()
+        fields = {key: value for key, value in rendered.items() if key not in _CHILD_LINE_OWN_KEYS and key not in bound}
+        if isinstance(rendered.get("timestamp"), str):
+            fields["worker_at"] = rendered["timestamp"]
+    get_logger(name).log(level, event, **{**fields, "worker": "tool", "worker_logger": name, "execution_id": job.spec.execution_id})
+
+
 def _wait_result(response: Connection, cancellation: Connection, job: _OwnedJob) -> tuple[object, ToolError | None]:
     ready = False
     while True:
@@ -215,6 +290,10 @@ def _wait_result(response: Connection, cancellation: Connection, job: _OwnedJob)
             if time.monotonic() >= job.spec.hard_deadline:
                 raise ToolExecutionError("execution_timeout", retryable=True)
             return result
+        elif frame.get("kind") == "progress" and ready:
+            _accept_progress(frame, job)
+        elif frame.get("kind") == "log" and ready:
+            _accept_log(frame, job)
         else:
             raise ToolExecutionError("worker_crashed")
 
@@ -292,6 +371,27 @@ def _run_owned_job(
     if error is not None and error.code == "worker_crashed":
         _log_worker_crash(job)
     return _Outcome(value, error, job.metrics, cleaned)
+
+
+def _progress_forward(correlation_id: str, admitted_at: float, listener: ToolProgressListener) -> _ProgressForward:
+    """The I/O owner's thread hands an accepted message to the listener in the event loop; the loop also receives the
+    item's outcome after it, so every message arrives before its result. A listener's failure never reaches the job."""
+    loop = asyncio.get_running_loop()
+
+    def deliver(event: ToolComputeProgress) -> None:
+        try:
+            listener(event)
+        except Exception as exc:  # isolation boundary: a progress listener never fails the calculation
+            logger.warning("Tool progress listener failed", correlation_id=correlation_id, phase=event.phase, exc_info=exc)
+
+    def forward(phase: str, step: int | None, total: int | None) -> None:
+        event = ToolComputeProgress(kind="progress", correlation_id=correlation_id, phase=phase, step=step, total=total, elapsed_ms=_milliseconds(admitted_at))
+        try:
+            loop.call_soon_threadsafe(deliver, event)
+        except RuntimeError:
+            pass  # the loop is closing: nobody is listening any more
+
+    return forward
 
 
 class ToolExecutor:
@@ -428,7 +528,16 @@ class ToolExecutor:
                     job.quarantined = True
             raise
 
-    async def _run_item(self, item: ToolComputeItem, snapshot: ToolRegistrySnapshot, ticket: _ItemTicket, admitted_at: float, request_deadline: float, bound: BoundSettings | None = None) -> ToolComputeResult:
+    async def _run_item(
+        self,
+        item: ToolComputeItem,
+        snapshot: ToolRegistrySnapshot,
+        ticket: _ItemTicket,
+        admitted_at: float,
+        request_deadline: float,
+        bound: BoundSettings | None = None,
+        on_progress: ToolProgressListener | None = None,
+    ) -> ToolComputeResult:
         job: _OwnedJob | None = None
         lane: int | None = None
         queued = False
@@ -451,7 +560,7 @@ class ToolExecutor:
                 queued = False
             if time.monotonic() >= queue_deadline:
                 raise ToolExecutionError("queue_timeout", retryable=True)
-            job = self._start_job(item, operation, parameters, ticket.principal_key, lane, admitted_at, request_deadline, bound)
+            job = self._start_job(item, operation, parameters, ticket.principal_key, lane, admitted_at, request_deadline, bound, on_progress)
             ticket.job = job
             outcome = await self._await_job(job)
             identity = _identity(item, job.spec.execution_id, outcome.metrics)
@@ -484,6 +593,7 @@ class ToolExecutor:
         admitted_at: float,
         request_deadline: float,
         bound: BoundSettings | None = None,
+        on_progress: ToolProgressListener | None = None,
     ) -> _OwnedJob:
         with self._lock:
             if self._closed:
@@ -508,15 +618,36 @@ class ToolExecutor:
             engine_timeout_ms=operation.engine_timeout_ms,
             memory_limit_bytes=operation.memory_limit_bytes,
             settings=bound,
+            log_level=logging.getLogger().getEffectiveLevel(),
         )
-        job = _OwnedJob(spec, principal_key, lane, admitted_at, granted_at, operation.cleanup_timeout_ms, metrics=ToolItemMetrics(queue_wait_ms=_milliseconds(admitted_at)))
+        job = _OwnedJob(
+            spec,
+            principal_key,
+            lane,
+            admitted_at,
+            granted_at,
+            operation.cleanup_timeout_ms,
+            metrics=ToolItemMetrics(queue_wait_ms=_milliseconds(admitted_at)),
+            progress_phases=operation.progress_phases,
+            on_progress=_progress_forward(item.correlation_id, admitted_at, on_progress) if on_progress is not None else None,
+        )
         with self._lock:
             self._jobs[spec.execution_id] = job
         job.io_task = asyncio.create_task(asyncio.to_thread(_run_owned_job, job, self.registry_class, None, self.resource_controller))
         job.io_task.add_done_callback(lambda task: self._job_finished(job, task))
         return job
 
-    async def compute(self, batch: ToolComputeBatchRequest, *, principal_key: str, request_started: float | None = None, settings: Mapping[str, BoundSettings] | None = None) -> ToolComputeBatchResponse:
+    async def compute(
+        self,
+        batch: ToolComputeBatchRequest,
+        *,
+        principal_key: str,
+        request_started: float | None = None,
+        settings: Mapping[str, BoundSettings] | None = None,
+        on_progress: ToolProgressListener | None = None,
+    ) -> ToolComputeBatchResponse:
+        """Run every item; ``on_progress`` receives, in this event loop, the accepted progress messages of every item,
+        each before its item's result."""
         started = time.monotonic() if request_started is None else request_started
         snapshot = await asyncio.to_thread(self.registry_class.get_snapshot)
         admitted_at = self._admit(principal_key, len(batch.items))
@@ -524,7 +655,7 @@ class ToolExecutor:
         tasks: list[asyncio.Task[ToolComputeResult]] = []
         for item in batch.items:
             ticket = _ItemTicket(principal_key)
-            task = asyncio.create_task(self._run_item(item, snapshot, ticket, admitted_at, deadline, settings.get(item.tool_code) if settings else None))
+            task = asyncio.create_task(self._run_item(item, snapshot, ticket, admitted_at, deadline, settings.get(item.tool_code) if settings else None, on_progress))
             with self._lock:
                 self._items[task] = ticket
             task.add_done_callback(self._item_finished)

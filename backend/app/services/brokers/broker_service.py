@@ -23,6 +23,7 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import List, Literal, Optional, Union
 
+import structlog
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -33,6 +34,7 @@ from backend.app.db.models import (
     UserRole,
 )
 from backend.app.db.session import begin_writes
+from backend.app.schemas.broker_profile import OperatingProfileTooLarge, operating_profile_text
 from backend.app.schemas.brokers import (
     BRBulkCreateResponse,
     BRBulkDeleteResponse,
@@ -51,6 +53,8 @@ from backend.app.services.brokers.access import BrokerAccessMixin
 from backend.app.services.transactions.transaction_batch_context import BalanceValidationError
 from backend.app.services.transactions.transaction_service import TransactionService
 from backend.app.utils.datetime_utils import today_date, utcnow
+
+logger = structlog.get_logger(__name__)
 
 BROKER_NAME_RECOVERY = "To resolve this, rename the existing broker or choose a different name for the broker you are adding."
 
@@ -293,6 +297,9 @@ class BrokerService(BrokerAccessMixin):
                 return None
 
         item = BRReadItem.model_validate(broker)
+        if broker.operating_profile and item.operating_profile is None:
+            # Tolerant read (P1 of project 67): the stored text stays where it is, and the broker reads as having no profile.
+            logger.warning("The stored broker operating profile cannot be read: none is used", broker_id=broker_id)
         # Populate user_role if we know the user
         effective_user = user_id if as_user_id is None else (None if skip_access_check else int(as_user_id))
         if effective_user is not None:
@@ -353,6 +360,17 @@ class BrokerService(BrokerAccessMixin):
 
                 validation_triggered = False
 
+                # D5 (P1 of project 67): the key absent keeps the profile; an object replaces it whole; null clears it.
+                # Checked before any field is applied, so a refused profile leaves the whole item unwritten.
+                profile_given = "operating_profile" in item.model_fields_set
+                profile_text: Optional[str] = None
+                if profile_given and item.operating_profile is not None:
+                    try:
+                        profile_text = operating_profile_text(item.operating_profile)
+                    except OperatingProfileTooLarge as error:
+                        results.append(BRUpdateResult(id=broker_id, success=False, error=str(error)))
+                        continue
+
                 # Check if disabling overdraft/shorting
                 if item.allow_cash_overdraft is False and broker.allow_cash_overdraft:
                     validation_triggered = True
@@ -400,6 +418,9 @@ class BrokerService(BrokerAccessMixin):
 
                 if item.allow_asset_shorting is not None:
                     broker.allow_asset_shorting = item.allow_asset_shorting
+
+                if profile_given:
+                    broker.operating_profile = profile_text
 
                 broker.updated_at = utcnow()
 

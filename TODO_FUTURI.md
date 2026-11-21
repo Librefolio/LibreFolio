@@ -7,60 +7,49 @@ lavori già decisi per la 1.4 stanno nel journal, `Release_2/Phase_2/ATTIVITA_IN
 
 # Asset e dati di mercato
 
-## 🧬 Profilo dei dati dell'asset — composizione, costi, obbligazioni, esposizione e nuove fonti
+## 🧬 Profilo dei dati dell'asset — quello che resta dopo la 1.4
 
-**Data aggiunta**: 18 Ottobre 2026 · **Status**: 📋 FUTURO — da progettare · **Priorità**: 🔼 Medio-alta
+**Data aggiunta**: 18 Ottobre 2026, ridotta il 20 Novembre 2026 · **Status**: 📋 FUTURO — da progettare ·
+**Priorità**: 🔼 Medio-alta
 **Origine**: fusione di F16 (feedback Giuseppe + Alfy, 07/08/2026), F-MC-3 (feedback utente 08/09/2026), le voci
 C-86 e C-87 del backlog (utente C, chat del 04/09), due note sciolte (extraETF, aziende) e le richieste GitHub
-#50, #51 e #52 di @Xgialippo (17/10/2026). Skill di riferimento: `asset-plugin`.
+#50, #51 e #52 di @Xgialippo (17/10/2026). Ridotta alla chiusura della corsia 68 (journal,
+`Release_2/Phase_2/68_assetProfile/plan-phase02AssetProfile.prompt.md`, §11 «Fuori dal piano», r.778–792, e r.766).
+Skill di riferimento: `enricher-plugin`, `asset-plugin`.
 
-### Perché un punto solo
+### Cosa c'è già (1.4, corsia 68)
 
-Più utenti chiedono informazioni diverse sugli stessi asset: il TER, la composizione degli ETF per azienda, i dati
-delle obbligazioni, la valuta base e l'esposizione valutaria. Aggiungerle una colonna alla volta non scala: serve
-un'architettura unica, pensata bene prima di scrivere codice.
+Il profilo dell'asset: un elenco chiuso di voci (costi, il fondo, la società, l'obbligazione, paesi e settori), ognuna
+con la sua fonte, la sua data e la sua storia. Le leggono ogni settimana gli arricchitori (justETF, Borsa Italiana,
+Yahoo, il registro ESMA), e la pagina dell'asset le mostra nella scheda «Profilo». Il TER di ogni ETF c'è (#51); il
+**TER medio del portafoglio è scartato** (giro 28 del piano), non rinviato.
 
-### Direzione (da progettare)
+### Cosa resta
 
-- **Un profilo per asset**, fatto di due cose:
-  - **fatti tipizzati**, ciascuno con fonte, data di riferimento e data di lettura: TER, emittente, dimensione del
-    fondo, replica, copertura valutaria, valuta del fondo, domicilio, indice replicato, data di lancio, frequenza di
-    distribuzione; per le obbligazioni cedola, scadenza, rendimento a scadenza (YTM) e duration (ex C-87: cambiano
-    nel tempo e vanno salvati con la loro data; da decidere se leggerli da un provider o calcolarli in
-    `backend/app/services/financial_math/`);
-  - **distribuzioni**: paesi, settori, valute, aziende, classi di attivo. Il modello esiste già per paesi e settori
-    (`FAGeographicArea`, `FASectorArea`): va esteso, con la data e una quota «Sconosciuta».
-- **Ogni plugin dichiara** quali fatti e distribuzioni sa fornire. Una **libreria interna di arricchimento** (l'idea
-  di F16: usata dai plugin dei prezzi, invece di un plugin a parte) li unifica e ne conserva la provenienza.
-- **Le aggregazioni sul portafoglio le calcola il backend**: TER medio pesato sul valore (#51), esposizione per
-  azienda (#50), esposizione valutaria vera.
-- **Identità delle aziende** (per l'esposizione per azienda): «Apple» e «Apple SRL» devono risultare la stessa
-  azienda → identificatori univoci (ISIN per le quotate), normalizzazione dei nomi, regole di confronto e intervento
-  manuale per i casi ambigui.
-- **Valuta base ed esposizione valutaria** (ex F-MC-3):
+- **Esposizione per azienda sul portafoglio** (#50) e le **prime posizioni dei fondi**, che oggi non si salvano (I2
+  del piano). Serve l'**identità delle aziende**: «Apple» e «Apple SRL» devono risultare la stessa azienda →
+  identificatori univoci (ISIN per le quotate), normalizzazione dei nomi, regole di confronto e intervento manuale per
+  i casi ambigui.
+- **Valuta base ed esposizione valutaria** (ex F-MC-3). La valuta del fondo ora è una voce del profilo
+  (`fund_currency`), ma:
   - valuta di quotazione, valuta base dello strumento ed esposizione economica sottostante non sono la stessa cosa.
     Un ETF sul Giappone non implica valuta base JPY né esposizione JPY pura: posizioni, classe di quote e coperture
     valutarie cambiano il risultato;
-  - una colonna per la valuta base SOLO con semantica e fonte chiare; per l'esposizione effettiva serve una
-    distribuzione valutaria look-through, con data, copertura e quota «Sconosciuta», non un codice dedotto dalla
-    geografia;
+  - per l'esposizione effettiva serve una distribuzione valutaria look-through, con data, copertura e quota
+    «Sconosciuta», non un codice dedotto dalla geografia;
   - grafico in Dashboard con metodo e denominatore dichiarati, cassa e posizioni trattate in modo coerente, dati
     incompleti visibili, nessuna falsa precisione. Prima un disegno ASCII e la decisione del developer, poi una
     revisione su esempi sintetici multi-valuta e coperti;
   - **la variazione non realizzata** (developer, 12/10/2026, voce 23): oggi il tooltip dei KPI della Dashboard
     (`period_unrealized_breakdown`, `KpiSection.svelte`) separa, valuta per valuta, l'effetto dell'asset da quello del
-    cambio, ma ragiona solo sulla valuta di quotazione. Con la valuta base dovrà usare anche lei: con il cambio dalla
-    valuta di quotazione a quella base, se la coppia è configurata, si vedrà quanta parte del movimento viene dal
-    cambio e quanta dall'asset.
-- **UI**: nella pagina dell'asset i fatti e le distribuzioni con fonte e data; nella Dashboard il TER del portafoglio
-  e le esposizioni, con il metodo dichiarato.
-
-### Prime idee d'uso dei dati in comune
-
-- **TER del portafoglio** (GitHub #51, @Xgialippo, 17/10/2026): il TER di ogni ETF in tabella, e il **TER medio del
-  portafoglio pesato sul valore delle posizioni**. È il primo esempio di come usare i dati del profilo: un fatto
-  per asset, aggregato sul portafoglio dal backend. Risposta all'utente il 18/10: arriva dopo aver ragionato bene e
-  creato l'ambiente centralizzato delle informazioni degli asset.
+    cambio, ma ragiona solo sulla valuta di quotazione. Con la valuta base dovrà usare anche lei.
+- **Altre aggregazioni sul portafoglio**, con lo stesso principio: un fatto per asset, pesato sul valore delle
+  posizioni (o raggruppato), con la quota dei dati mancanti dichiarata. Candidati: rendimento a scadenza e duration
+  medi delle obbligazioni; esposizioni per emittente del fondo, per tipo di replica, per domicilio, per copertura
+  valutaria, per politica di distribuzione. Le calcola il backend.
+- **Rendimento e duration calcolati da noi** invece che letti dalle fonti (ex C-87), in
+  `backend/app/services/financial_math/`.
+- **Il calendario di cedole e dividendi attesi** (journal, `68_assetProfile/calendario-cedole-PROF.md`).
 - **Portafoglio diviso per obiettivi** (GitHub #52, @Xgialippo, 17/10/2026; qui dal 22/10, decisione del developer):
   raggruppare gli asset per obiettivo («i pilastri di Coletti»: fondo emergenze, pensione…), con sottogruppi o tag, e
   filtrare la Dashboard per gruppo. Oggi la Dashboard si filtra solo per broker. Si lega all'idea dei «Portafogli»,
@@ -68,60 +57,36 @@ un'architettura unica, pensata bene prima di scrivere codice.
   senza risposta: un asset sta in un solo obiettivo o si divide (a quote o a lotti)? gruppi di broker, di asset o
   tutti e due? cosa vedere per ogni portafoglio (Dashboard filtrata, KPI e allocazione propri, allocazione obiettivo
   per il PAC)? Registro: `PROSSIMI_LAVORI.md`, #52.
-- **Lo stesso principio, da applicare ad altre voci una volta identificate**: un fatto per asset, pesato sul valore
-  delle posizioni (o raggruppato), con la quota dei dati mancanti dichiarata. Candidati da valutare quando si progetta:
-  - per le obbligazioni, il rendimento a scadenza e la duration medi del portafoglio;
-  - le esposizioni per emittente del fondo, per tipo di replica, per domicilio, per copertura valutaria, per politica
-    di distribuzione;
-  - le distribuzioni (paesi, settori, valute, aziende) già aggregate sul portafoglio, invece che asset per asset.
-- **Gate**: fonte e aggiornamento dei metadati, normalizzazione, dati mancanti visibili, FX; colonne o tabelle nuove
-  solo con migrazioni Alembic incrementali.
+- **Documenti attaccati all'asset** (il KID) e **note personali**.
+- **Nuove fonti e aiuti**:
+  - **GLEIF**: nome e paese dell'emittente, dal LEI che il profilo già salva (`issuer_lei`);
+  - **FinanceDatabase** e **OpenFIGI**, come aiuto alla ricerca dell'identificativo;
+  - **i file degli emittenti caricati dall'utente**;
+  - **extraETF**: anche la distribuzione valutaria, che si sposa con la valuta base del fondo;
+  - **Investing.com** e **TradingView**: nessuna API ufficiale, e i termini vietano la lettura automatica anche agli
+    abbonati. **Bassa priorità**, salvo che portino titoli, o meglio classi di titoli, che le fonti di oggi non coprono;
+  - **fornitori a pagamento con la chiave dell'utente**: EODHD Fundamentals, Financial Modeling Prep, Finnworlds;
+    Morningstar o LSEG a livello aziendale;
+  - **Interactive Brokers** (ex C-86): prezzo corrente e storico letti con le API e la chiave dell'utente; serve un
+    account per le prove. Dettagli: `Release_2/Phase_0/38_postReleaseBacklog/feedback-early-user-C-20261014.md`,
+    voce 4.
+  - L'arricchitore **CoinGecko** non è qui: è in `PENDING_IDEA_JOBS_1.4.md` (J-2), da decidere per la fine della 1.4.
+- **Le tre correzioni alla nostra libreria justETF** («se serviranno le faremo»): la voce «coperto dal cambio», le
+  righe «UCITS compliance» e «Fund Structure», il caso «ISIN sconosciuto» (`68_assetProfile/prove/prove-arricchitori-PROF.md`,
+  r.714). Quando si faranno, si fanno nella libreria (sub-repo), non nel plugin.
 
-### Dati estraibili oggi (verificati il 18/10/2026)
+### Licenze
 
-- **justETF** (`justetf_scraping.get_etf_overview`, tipo `EtfOverview`): `isin`, `name`, `description`, `index`,
-  `investment_focus`, `fund_size_eur`, `ter`, `replication`, `legal_structure`, `strategy_risk`, `sustainability`,
-  `fund_currency`, `currency_hedged`, `volatility_1y`, `inception_date`, `distribution_policy`,
-  `distribution_frequency`, `fund_domicile`, `fund_provider`, `top_holdings`, `holdings_date`, `countries`,
-  `sectors`. Il plugin oggi usa solo `description`, `ter` (come testo nella descrizione), `distribution_policy`,
-  `countries` e `sectors`.
-- **Yahoo** (`yfinance` 1.7.0, `Ticker(...).funds_data`): `top_holdings` (prime 10 con peso), `sector_weightings`,
-  `asset_classes`, `bond_holdings`, `bond_ratings`, `fund_operations` (con il TER, «Annual Report Expense Ratio»),
-  `fund_overview` (emittente, categoria, tipo legale), `description`. Non dà la ripartizione per paese. Provato su
-  VOO, SWDA.MI, VWCE.DE, CSPX.L, IWDA.AS, EUNL.DE: prime 10 e settori per tutti, TER per 5 su 6 (manca VWCE.DE).
-  La parte che LibreFolio già supporta va subito nel plugin: vedi
-  `LibreFolio_developer_journal/Release_2/Phase_1/PROSSIMI_LAVORI.md`, #50.
-- **Borsa Italiana**: da verificare quali dati del profilo espone oltre al prezzo.
-- **Cataloghi e identificativi** (idea F16): ESMA FIRDS
-  (`https://registers.esma.europa.eu/publication/searchRegister?core=esma_registers_firds_files`, file «full»
-  dell'ultima settimana) e OpenFIGI per arricchire gli ISIN. Twelve Data sarebbe ideale ma è a pagamento.
-
-### Possibili prossime fonti
-
-- **extraETF**: anche la distribuzione valutaria, che si sposa con la valuta base del fondo.
-- **Investing.com** e **TradingView**: nessuna API ufficiale, e i termini vietano la lettura automatica anche agli
-  abbonati. Un plugin a scraping è possibile ma fragile. **Bassa priorità**, salvo che portino titoli, o meglio classi
-  di titoli, che Yahoo, justETF e Borsa Italiana non coprono.
-- **Fornitori a pagamento con la chiave dell'utente**: EODHD Fundamentals, Financial Modeling Prep, Finnworlds;
-  Morningstar o LSEG a livello aziendale. Danno TER e posizioni dei fondi per ISIN, con un contratto che lo permette.
-  Le impostazioni dei plugin con segreti per utente o per istanza ci sono già (1.3, migrazione 007).
-- **Interactive Brokers** (ex C-86): prezzo corrente e storico letti con le API e la chiave dell'utente; serve un
-  account per le prove. Dettagli:
-  `LibreFolio_developer_journal/Release_2/Phase_0/38_postReleaseBacklog/feedback-early-user-C-20261014.md`, voce 4.
-
-### Licenze e uso commerciale
-
-- justETF (AGB §3.1: niente «programmi per l'interrogazione automatica dei prezzi»), Borsa Italiana/Euronext e Yahoo
-  limitano l'uso automatico dei loro dati.
-- In self-hosted ogni istanza interroga per il suo utente, a basso volume e senza ridistribuire: rischio basso, tollerato
-  nei fatti.
+justETF (AGB §3.1), Borsa Italiana/Euronext e Yahoo limitano l'uso automatico dei loro dati. In self-hosted ogni istanza
+interroga per il suo utente, a basso volume e senza ridistribuire: rischio basso, tollerato nei fatti. Per il cloud a
+pagamento vedi `RESIDUO_CLOUD.md`.
 
 ### Collegamenti
 
+- Piano della 1.4: `Release_2/Phase_2/68_assetProfile/plan-phase02AssetProfile.prompt.md`.
 - Piano in pausa: `LibreFolio_developer_journal/Release_2/phases/06_betaTestingReportAndFixing/plan-phase00AssetIdentityAndIdentifiers.prompt.md`
   (identità asset, identificativi).
 - `LibreFolio_developer_journal/Release_2/Phase_1/PROSSIMI_LAVORI.md` (#50, #51, #52).
-- Backlog `BACKLOG_POST_1.2.md`: C-86, C-87, spostate qui.
 - «💱 Settlement multicurrency ed esposizione»: F-MC-1 e F-MC-2 restano lì.
 
 ## 🔀 Split e prezzi rettificati dai fornitori (MF-SPL1, 23/10/2026)
@@ -216,6 +181,16 @@ coincidano: con le frequenze separate il valore sulle card può divergere dalla 
 giorno dopo una cedola, a metà ciclo, fra due date di prezzo, e il caso BTP (prezzi DAILY, cedola ANNUAL).
 
 **Stima**: circa un giorno, più i test.
+
+## 💱 Provider FX della Banca di Russia (CBR, lotto L9 sospeso)
+
+**Data aggiunta**: 20 Novembre 2026 · **Status**: ⏸️ SOSPESO (decisione D4 del developer, 16/11/2026) · **Priorità**: ⏬ Bassa
+**Origine**: corsia 75, ondata 1 (journal, `Release_2/Phase_2/75_fxCentralBanks/plan-phase02FxCentralBanks.prompt.md`,
+sezione «In attesa», lotto L9, r.273). Finora parcheggiato solo nel piano.
+
+«Niente Russia per ora»: il plugin CBR (`cbr.ru`, storia dal 01/01/1998, ~1,5 giorni) è descritto nel piano, pronto se la
+decisione cambia. Intanto il RUB arriva da altre banche che lo pubblicano ancora, senza contattare `cbr.ru`: BNR, RBI e
+SARB, entrati con la Q3 (b) dell'ondata 2 (19/11/2026). ECB, Norges Bank, Bank of Canada e Banca d'Italia l'hanno sospeso.
 
 # Transazioni e import
 
@@ -489,35 +464,20 @@ Una modalità di visualizzazione **logaritmica**, soprattutto sulle percentuali.
 Sulle percentuali il logaritmo non si applica ai rendimenti negativi: va applicato al fattore di
 crescita (1 + r). Decidere su quali grafici offrirla (Crescita, prezzo dell'asset, confronto).
 
+**Un caso in più: l'Omega mobile** (corsia 70, 17/11/2026; journal, `Release_2/Phase_2/70_riskNext/plan-phase02RiskNext.prompt.md`,
+r.343–348). Il rapporto vive intorno a 1, ma con la finestra di 30 giorni e molti giorni a rendimento zero fa picchi
+veri e rari (fino a 32 e 56 nelle prove). Il consulente non li taglia: oggi la pagina utente dice di fissare la scala
+dell'asse per guardare la zona vicina a 1. Un asse logaritmico renderebbe leggibili insieme la zona intorno a 1 e i picchi.
+
 ---
 
 # Analisi del rischio
 
-## 🔴 La simulazione risponde alla finestra, non al portafoglio — e non si annuncia
+## ✅ La simulazione risponde alla finestra, non al portafoglio — superata (1.4, RN-06/RN-16)
 
-**Misurato il 21/09/2026** · **Priorità**: Medio-alta. Non blocca il rilascio: L4 è dietro il banner beta, che cade quando si
-chiude questa voce (`L4WhatIf.svelte`).
-
-**Il fatto.** Stesso asset, stesso orizzonte (365 giorni), stesso motore: cambia solo la finestra.
-
-| Finestra | Mediana | Probabilità di perdita |
-|---|---:|---:|
-| 95 giorni | +1 400,4 % | 0,01 % |
-| 365 giorni | −39,1 % | 70,74 % |
-
-**La causa.** La matematica è giusta: su sei finestre la mediana sta fra 1,009 e 1,016 volte l'estrapolazione ingenua. Il
-bootstrap ripesca ogni osservazione `orizzonte / n_osservazioni` volte: con 93 osservazioni su 365 giorni assume che quel
-trimestre duri quattro volte tanto. Non dipende dai dati finti: chi tiene crypto e sceglie «3M» riceve questo.
-
-**⚠️ Il denominatore è gonfiato.** La preparazione delle serie riporta i prezzi in avanti, quindi `n_observations` conta giorni di
-calendario, e 540 giorni restituiscono le stesse 360 osservazioni di 365. Chiedere più storia può ridare in silenzio la stessa
-storia.
-
-**Il lavoro.** Decidere cosa fare quando l'orizzonte supera la finestra: rifiutare, avvisare, o lasciar fare dichiarando
-l'incertezza. Una soglia ovvia non esiste (a 1,00× Bitcoin dà comunque +100 %): la monotonia è il dato, la soglia è una scelta.
-L'incertezza della deriva è già mostrata accanto alla banda; resta da decidere se serve anche la guardia.
-
-**Stima**: circa un giorno per un avviso quando l'orizzonte supera la storia usata, 4 lingue comprese.
+**Misurata il 21/09/2026, superata il 20/11/2026.** Nella 1.4 (corsia 70) la simulazione legge la sua storia, non il
+periodo della pagina, e la dichiara (RN-16, RN-16b); il banner beta è tolto (RN-06); il «denominatore gonfiato» non c'è più,
+perché il calendario conta le quotazioni vere (journal, `Release_2/Phase_2/70_riskNext/plan-phase02RiskNext.prompt.md`, r.20–21).
 
 ## Avanzamento della simulazione Monte Carlo — si può fare, e si sa già dove è difficile
 
@@ -981,6 +941,24 @@ consumati.
 
 Due di questi passavano un gate esistente: non basta chiedersi se un controllo c'è, ma da che parte guarda.
 
+## 📏 Coverage E2E: i conteggi persi alle navigazioni piene (corsia 71, 20/11/2026)
+
+**Data aggiunta**: 20 Novembre 2026 · **Status**: 📋 FUTURO — la prima cosa da fare per l'85 % del frontend ·
+**Priorità**: 🔽 Bassa finché la percentuale del frontend non diventa un obiettivo
+**Origine**: corsia 71, passo 3, «Rischi e punti aperti» punto 1 (journal,
+`Release_2/Phase_2/71_openDecisions/plan-phase02Step3Coverage.prompt.md`, r.473–481); decisione D11 (b) dell'11/11.
+
+`window.__coverage__` vive nel documento: una navigazione piena (`page.goto`, anche quella di `login()`) riparte da zero,
+e la fixture legge i contatori una volta sola, alla fine. Così i colpi di una pagina prima della sua ultima navigazione
+piena non si contano: il numero E2E è un po' più basso del vero, di quanto non è misurato. Il limite è già scritto nella
+pagina developer `mkdocs_src/docs/developer/test-walkthrough/coverage-model.md` (riquadro «Counts before a full
+navigation are lost»), che dice anche «the first thing to fix the day the frontend's percentage becomes a target».
+
+Il disegno, per allora: `context.addInitScript` + `context.exposeBinding` (lo schema di `cspViolations` in
+`frontend/e2e/fixtures/playwright.ts`) che a `pagehide` manda i contatori del documento che se ne va, con «leggi e
+azzera» contro il doppio conteggio; test `JCS-10` (due documenti di fila, conteggi di entrambi). Circa 3 ore. Da provare
+prima: che una chiamata di binding fatta a `pagehide` arrivi sempre a Node.
+
 ## Il generatore di dati di prova non onora i bersagli `end_price`, e lo scarto è sistematico
 
 **Misurato il 18/09/2026** · **Priorità**: Media, non blocca nulla.
@@ -1022,6 +1000,36 @@ cosa da analizzare a bassissima priorità».
 Il database tiene i prezzi a 12 decimali. PEPE (3,5e-6) resta con 7 cifre significative, con un errore sotto 0,001 € su
 un miliardo di monete; una moneta sotto 1e-12 diventerebbe 0 e sarebbe scartata, sotto ~1e-9 perde precisione. Idea
 (P2c, ~0,5 giorni): un parametro «prezzo per N unità», come i pence di Yahoo, solo per le monete sotto ~1e-9.
+
+**Aggiornamento del 20/11/2026.** Il developer: «si ok prevediamolo e documentiamolo per quando servirà ma attendiamo a
+farlo». Il lotto è deciso nella forma, non nei tempi:
+
+- **Quando parte**: appena qualcuno tiene una moneta sotto ~1e-9 € (oggi salvata con 4 cifre o meno; sotto 1e-12 € come 0).
+- **Cosa fa**: un parametro `price_per` del plugin CoinGecko (1, 1 000, 1 000 000, 1 000 000 000; predefinito 1). Il plugin
+  moltiplica prezzo corrente e storia per quel numero, e `suggest_quote_base()` restituisce lo stesso numero, così la
+  finestra dell'asset propone la quote base giusta: il meccanismo che c'è già per i GBp di Yahoo. Esempio: «prezzo per
+  1 000 000» salva 3,514249 invece di 0,000003514249, e il valore resta quantità ÷ 1 000 000 × prezzo.
+- **Dettagli**: il lotto P2c nel piano della corsia 76 (journal, `Release_2/Phase_2/76_cryptoPrices/`).
+
+## 🖼️ Le icone dei provider servite da LibreFolio (corsia 76, 20/11/2026)
+
+**Data aggiunta**: 20 Novembre 2026 · **Status**: 📋 FUTURO · **Priorità**: 🔽 Medio-bassa
+**Origine**: domanda 4 delle decisioni aperte della corsia 76; il developer: «non è un idea da scartare, ma ogni tanto
+dovrebbe aggiornare le icone, o meglio verificare se sono cambiate, ma non la farei ora».
+
+Oggi le icone dei provider (i favicon di Yahoo, justETF, CoinGecko, delle banche centrali) e i loghi delle monete sono
+indirizzi dei siti delle fonti: ogni browser che li mostra chiede a quei siti. Idea: LibreFolio le scarica, ne tiene una
+copia e le serve lui, dallo stesso indirizzo dell'istanza.
+
+- **Cosa risolverebbe**: la privacy verso i siti delle fonti; i siti che vietano di mostrare le loro icone altrove
+  (`Cross-Origin-Resource-Policy: same-origin`, come Banca d'Italia, oggi servita da una copia fissa); e la copia di
+  Banca d'Italia stessa, che non si aggiorna mai.
+- **Il punto del developer**: ogni tanto verificare se un'icona è cambiata (per esempio confrontandone l'impronta), e
+  sostituire la copia solo allora.
+- **Cosa costa**: lo scaricamento, una cache, i limiti di dimensione e di formato, e una protezione dagli indirizzi
+  malevoli (SSRF: l'indirizzo di un'icona lo dà un plugin).
+- **Dettagli**: il piano della corsia 76 (journal, `Release_2/Phase_2/76_cryptoPrices/`, le decisioni del 20/11) e il
+  triage delle icone a puzzle (journal, `76_cryptoPrices/notes/icons-triage/`).
 
 ## 🔍 Da approfondire: XERJ, ricerca locale per gli agenti
 

@@ -24,7 +24,7 @@
     import type {ColumnDef, DataRow, RowStatus} from './DataEditorTypes';
     import DataTable from '$lib/components/table/DataTable.svelte';
     import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
-    import type {ColumnDef as DTColumnDef, RowAction as DTRowAction} from '$lib/components/table/types';
+    import type {BulkAction, ColumnDef as DTColumnDef, RowAction as DTRowAction} from '$lib/components/table/types';
     import SingleDatePicker from '$lib/components/ui/date/SingleDatePicker.svelte';
     import {CurrencySearchSelect} from '$lib/components/ui/select';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
@@ -76,7 +76,6 @@
     let importModalOpen = $state(false);
     let exportModalOpen = $state(false);
     let dataTableRef: DataTable<DataRow> | undefined = $state(undefined);
-    let selectedIds: string[] = $state([]);
     let hideStale = $state(false);
 
     // =========================================================================
@@ -538,8 +537,8 @@
     // Bulk selection handler (for DataTable selection)
     // =========================================================================
 
-    function handleBulkDelete(selectedIds: string[]) {
-        for (const rowId of selectedIds) {
+    function handleBulkDelete(rowIds: string[]) {
+        for (const rowId of rowIds) {
             const row = rows.find((r) => r.rowId === rowId);
             if (row && row.status !== 'deleted') {
                 row.status = 'deleted';
@@ -548,6 +547,24 @@
         rows = [...rows];
         emitDirty();
     }
+
+    /**
+     * The selection bar's action (77 SEL-D2, designer's choice (b)): «Delete» marks the ticked rows deleted, with their
+     * number. A row already deleted is not taken again, so the number says what will change.
+     */
+    const bulkActions: BulkAction<DataRow>[] = [
+        {
+            id: 'delete',
+            icon: Trash2,
+            label: () => $t('common.delete'),
+            variant: 'danger',
+            appliesTo: (row) => row.status !== 'deleted',
+            onClick: (chosen) => {
+                handleBulkDelete(chosen.map((row) => row.rowId));
+                dataTableRef?.clearSelection();
+            },
+        },
+    ];
 
     // =========================================================================
     // Import
@@ -628,7 +645,7 @@
 <!-- ========================================================================= -->
 
 <div class="bg-lf-card text-lf-primary rounded-xl shadow-sm shadow-lf-shadow-card border border-lf-subtle" data-testid="data-editor-root">
-    <div class="flex flex-wrap items-center justify-between gap-2 px-4 py-2 border-b border-lf-subtle">
+    <div class="flex flex-wrap items-center justify-between gap-2 px-4 py-2 border-b border-lf-subtle" data-testid="data-editor-tools">
         <!-- Left: actions -->
         <div class="flex items-center gap-2">
             {#if !isReadonly}
@@ -649,7 +666,7 @@
             {/if}
         </div>
 
-        <!-- Right: Selection bar + Counters + Stale toggle + Column visibility -->
+        <!-- Right: Counters + Stale toggle + Column visibility (the selection bar sits at the top of the table, 77 SEL-D2) -->
         <div class="flex items-center gap-3 text-xs text-lf-muted">
             {#if hasStaleRows}
                 <div class="flex items-center gap-1.5" data-testid="data-editor-stale-toggle">
@@ -682,33 +699,6 @@
             {#if appendedCount > 0}
                 <span class="text-lf-success">{$t('dataEditor.counter.appended', {values: {n: appendedCount}})}</span>
             {/if}
-            {#if selectedIds.length > 0}
-                <button
-                    type="button"
-                    class="flex items-center gap-1.5 px-2 py-1 rounded-md bg-lf-selected text-lf-link font-medium hover:bg-lf-checked/20 hover:text-lf-primary transition-colors"
-                    onclick={() => {
-                        dataTableRef?.clearSelection();
-                        selectedIds = [];
-                    }}
-                    title={$t('common.clearSelection')}
-                >
-                    {selectedIds.length}
-                    {$t('common.selected')} <span class="opacity-60">×</span>
-                </button>
-                <button
-                    type="button"
-                    class="flex items-center justify-center w-7 h-7 rounded-md bg-lf-danger-soft text-lf-danger hover:bg-lf-danger-line transition-colors"
-                    onclick={() => {
-                        handleBulkDelete(selectedIds);
-                        dataTableRef?.clearSelection();
-                        selectedIds = [];
-                    }}
-                    title={$t('common.deleteSelected')}
-                    data-testid="data-editor-bulk-delete"
-                >
-                    <Trash2 size={14} />
-                </button>
-            {/if}
             <ColumnVisibilityToggle tableRef={dataTableRef} />
         </div>
     </div>
@@ -734,7 +724,8 @@
             getRowClass={rowBgClass}
             getRowId={(r) => r.rowId}
             getRowStyle={rowStyleFn}
-            onSelectionChange={(ids) => (selectedIds = ids)}
+            {bulkActions}
+            selectionPanel={true}
             pageSizeOptions={[10, 25, 50, 100, 0]}
             rowActions={dtRowActions}
             storageKey="data-editor"

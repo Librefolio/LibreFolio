@@ -3,7 +3,7 @@
 Lane 75, wave 2 (plan ``plan-phase02FxCentralBanksOndata2.prompt.md``). Shape of the real API, measured on 19/11/2026:
 
 - ``GET /api/exchangerates/tables/{A|B}/{from}/{to}/?format=json`` answers a JSON list of tables, oldest first; table A is
-  daily (31 currencies), table B weekly (116). A request spans at most 93 days (HTTP 400 beyond). A range with no table is
+  daily (32 codes with the SDR, XDR), table B weekly (116). A request spans at most 93 days (HTTP 400 beyond). A range with no table is
   answered with HTTP 404 and the text ``Brak danych``.
 - A currency can move between tables: before 2011-09-01 the A currencies were published in table B.
 - Old tables carry ``country`` and ``symbol`` where new ones carry ``currency``; only ``code`` and ``mid`` are read.
@@ -36,7 +36,7 @@ SPAN_2005 = (date(2005, 1, 3), date(2005, 1, 31))
 FULL_WINDOW = (date(2026, 1, 1), date(2026, 4, 3))  # exactly 93 days
 TWO_WINDOWS = (date(2026, 1, 1), date(2026, 4, 4))  # 94 days: 93 + 1
 
-A_CODES = "AUD BRL CAD CHF CLP CNY CZK DKK EUR GBP HKD HUF IDR ILS INR ISK JPY KRW MXN MYR NOK NZD PHP RON SEK SGD THB TRY UAH USD ZAR".split()  # fmt: skip
+A_CODES = "AUD BRL CAD CHF CLP CNY CZK DKK EUR GBP HKD HUF IDR ILS INR ISK JPY KRW MXN MYR NOK NZD PHP RON SEK SGD THB TRY UAH USD XDR ZAR".split()  # fmt: skip
 B_CODES = (
     "AED AFN ALL AMD AOA ARS AWG AZN BAM BBD BDT BHD BIF BND BOB BSD BWP BYN BZD CDF COP CRC CUP CVE DJF DOP DZD EGP ERN ETB "
     "FJD GEL GHS GIP GMD GNF GTQ GYD HNL HTG IQD IRR JMD JOD KES KGS KHR KMF KWD KZT LAK LBP LKR LRD LSL LYD MAD MDL MGA MKD "
@@ -110,7 +110,7 @@ def test_nbp_identity_and_constants():
     assert nbp_mod.SERIES_FROM == {"SYP": date(2026, 1, 7)}
     assert nbp_mod.VES_NEW_FROM == date(2021, 10, 13)
     assert nbp_mod.VES_FACTOR == Decimal(10**6)
-    assert list(nbp_mod.A_CURRENCIES) == A_CODES and len(nbp_mod.A_CURRENCIES) == 31
+    assert list(nbp_mod.A_CURRENCIES) == A_CODES and len(nbp_mod.A_CURRENCIES) == 32 and "XDR" in nbp_mod.A_CURRENCIES
     assert list(nbp_mod.B_CURRENCIES) == B_CODES and len(nbp_mod.B_CURRENCIES) == 116
 
 
@@ -127,7 +127,7 @@ async def test_nbp_catalogue_is_both_tables_plus_pln_without_a_request(monkeypat
     currencies = await NBPProvider().get_supported_currencies()
 
     assert currencies == sorted([*A_CODES, *B_CODES, "PLN"])
-    assert "XDR" not in currencies
+    assert "XDR" in currencies and len(currencies) == 148 + 1
     assert NBPProvider().fallback_currencies == currencies
     assert asked == []
 
@@ -157,7 +157,8 @@ async def test_nbp_other_base_currency_is_refused(monkeypatch: pytest.MonkeyPatc
         pytest.param(["KES"], SPAN_2005, {"B"}, id="b-currency-in-2005-only-b"),
         pytest.param(["USD"], (date(2011, 8, 31), date(2011, 9, 30)), {"A", "B"}, id="start-on-the-last-b-day"),
         pytest.param(["USD"], (date(2011, 9, 1), date(2011, 9, 30)), {"A"}, id="start-after-the-last-b-day"),
-        pytest.param(["USD", "XDR"], SPAN_2026, {"A"}, id="unserved-ignored"),
+        pytest.param(["USD", "XAU"], SPAN_2026, {"A"}, id="unserved-ignored"),
+        pytest.param(["XDR"], SPAN_2026, {"A"}, id="xdr-only-a"),
     ],
 )
 @pytest.mark.asyncio
@@ -251,7 +252,7 @@ async def test_nbp_a_404_with_no_data_means_no_table_and_the_next_window_is_stil
     ("span", "currencies", "expected"),
     [
         pytest.param(SPAN_2026, ["PLN"], {}, id="pln-only"),
-        pytest.param(SPAN_2026, ["XDR"], {"XDR": []}, id="xdr-not-served"),
+        pytest.param(SPAN_2026, ["XAU"], {"XAU": []}, id="xau-not-served"),
         pytest.param(SPAN_2026, ["XYZ"], {"XYZ": []}, id="outside-the-catalogue"),
         pytest.param((date(2026, 1, 30), date(2026, 1, 5)), ["USD"], {"USD": []}, id="inverted-range"),
         pytest.param((date(2001, 1, 1), date(2001, 12, 31)), ["USD"], {"USD": []}, id="end-before-first-day"),
@@ -270,11 +271,21 @@ async def test_nbp_every_asked_currency_but_pln_is_a_key(monkeypatch: pytest.Mon
     """PLN is no key; served currencies the tables do not hold that day (EUR, KES) are keys with ``[]``."""
     _route(monkeypatch, nbp_mod, _serve(a=_list(_table("2026-01-05", USD="4.0")), b=_list()))
 
-    rates = await NBPProvider().fetch_rates(SPAN_2026, ["PLN", "EUR", "KES", "USD", "XDR"])
+    rates = await NBPProvider().fetch_rates(SPAN_2026, ["PLN", "EUR", "KES", "USD", "XAU"])
 
-    assert set(rates) == {"EUR", "KES", "USD", "XDR"}
-    assert rates["EUR"] == [] and rates["KES"] == [] and rates["XDR"] == []
+    assert set(rates) == {"EUR", "KES", "USD", "XAU"}
+    assert rates["EUR"] == [] and rates["KES"] == [] and rates["XAU"] == []
     assert len(rates["USD"]) == 1
+
+
+@pytest.mark.asyncio
+async def test_nbp_sdr_is_served_from_table_a(monkeypatch: pytest.MonkeyPatch):
+    """XDR (table A) comes back as zloty per SDR."""
+    _route(monkeypatch, nbp_mod, _serve(a=_list(_table("2026-01-05", XDR="5.4103"))))
+
+    rates = await NBPProvider().fetch_rates(SPAN_2026, ["XDR"])
+
+    assert rates["XDR"] == [(date(2026, 1, 5), "XDR", "PLN", Decimal("5.4103"))]
 
 
 # ── Values ───────────────────────────────────────────────────────────────────────

@@ -18,8 +18,8 @@
  * `component-unit`).
  */
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
-import {mount, unmount, flushSync} from 'svelte';
-import {cleanup, fireEvent, render, screen, within} from '$test/component';
+import {createRawSnippet, mount, unmount, flushSync} from 'svelte';
+import {cleanup, fireEvent, render, screen, waitFor, within} from '$test/component';
 import Tooltip from './Tooltip.svelte';
 
 /**
@@ -210,5 +210,113 @@ describe('Tooltip — no callback survives destroy (K step 14, item 1)', () => {
             if (component) void unmount(component);
             target.remove();
         }
+    });
+});
+
+/**
+ * An icon-only button names itself through its tooltip: the keyboard must reach that name as the pointer does (77
+ * SEL-D2, the compact bar in a section head). `openOnFocus` opens the tooltip at once when the focus arrives from the
+ * keyboard, and closes it when the focus leaves; without the prop nothing changes for the other callers.
+ */
+describe('Tooltip — opens on keyboard focus with openOnFocus (77 SEL-D2)', () => {
+    const child = createRawSnippet(() => ({render: () => '<button type="button" data-testid="probe-btn">Go</button>'}));
+
+    it('the focus on the child opens it at once; leaving closes it', async () => {
+        render(Tooltip, {props: {text: 'Delete', interactiveChild: true, openOnFocus: true, children: child}});
+        const button = screen.getByTestId('probe-btn');
+        button.focus();
+        expect((await screen.findByTestId('tooltip-content')).textContent?.trim()).toBe('Delete');
+        button.blur();
+        await waitFor(() => expect(screen.queryByTestId('tooltip-content')).toBeNull());
+    });
+
+    it('a press that moves no focus (Safari does not focus a clicked button) leaves the next keyboard focus free', async () => {
+        render(Tooltip, {props: {text: 'Delete', interactiveChild: true, openOnFocus: true, children: child}});
+        const button = screen.getByTestId('probe-btn');
+        await fireEvent.pointerDown(button);
+        await fireEvent.pointerUp(button);
+        button.focus();
+        expect((await screen.findByTestId('tooltip-content')).textContent?.trim()).toBe('Delete');
+    });
+
+    it('without the prop the focus opens nothing', async () => {
+        render(Tooltip, {props: {text: 'Delete', interactiveChild: true, children: child}});
+        screen.getByTestId('probe-btn').focus();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        expect(screen.queryByTestId('tooltip-content')).toBeNull();
+    });
+});
+
+/**
+ * `showIf` (77 SEL-D2): a tooltip that names an icon is noise once the name is in view beside it. The caller decides at
+ * the moment of opening, from the trigger: `false` opens nothing, by any path; absent, nothing changes.
+ */
+describe('Tooltip — showIf decides at the moment of opening (77 SEL-D2)', () => {
+    const child = createRawSnippet(() => ({render: () => '<button type="button" data-testid="probe-btn">Go</button>'}));
+
+    it('false: neither the focus nor Enter opens it; true: they do', async () => {
+        let allowed = false;
+        const showIf = vi.fn<(trigger: HTMLElement) => boolean>(() => allowed);
+        render(Tooltip, {props: {text: 'Delete', interactiveChild: true, openOnFocus: true, showIf, children: child}});
+        const button = screen.getByTestId('probe-btn');
+        button.focus();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        expect(screen.queryByTestId('tooltip-content')).toBeNull();
+        expect(showIf).toHaveBeenCalled();
+        expect(showIf.mock.calls[0][0]).toBeInstanceOf(HTMLElement);
+        button.blur();
+        allowed = true;
+        button.focus();
+        expect(await screen.findByTestId('tooltip-content')).toBeInTheDocument();
+    });
+});
+
+/**
+ * `anchor` (77 SEL-M): the reason of a disabled item of a row menu is placed against the whole menu, never over its
+ * items. With an anchor the tooltip measures the anchor's box: beside it (right, then left), else above it, else below;
+ * beside it, it stays level with its own trigger. jsdom has no layout: the boxes are given.
+ */
+describe('Tooltip — an anchor other than the trigger (77 SEL-M)', () => {
+    const child = createRawSnippet(() => ({render: () => '<button type="button" data-testid="probe-btn">Sync</button>'}));
+    type Box = {left: number; top: number; width: number; height: number};
+    const rect = ({left, top, width, height}: Box) => ({left, top, width, height, right: left + width, bottom: top + height, x: left, y: top, toJSON: () => ({})}) as DOMRect;
+
+    function place(trigger: Box, anchorBox: Box): HTMLElement {
+        const anchor = document.createElement('div');
+        anchor.dataset.testid = 'probe-anchor';
+        document.body.appendChild(anchor);
+        vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+            if (this.dataset.testid === 'probe-anchor') return rect(anchorBox);
+            if (this.dataset.testid === 'probe-wrap') return rect(trigger);
+            if (this.dataset.testid === 'tooltip-content') return rect({left: 0, top: 0, width: 150, height: 40});
+            return rect({left: 0, top: 0, width: 0, height: 0});
+        });
+        return anchor;
+    }
+
+    afterEach(() => {
+        vi.restoreAllMocks();
+        document.querySelector('[data-testid="probe-anchor"]')?.remove();
+    });
+
+    it('no room on the right of the anchor: on its left, level with the trigger', async () => {
+        // A 1024 × 768 page; the menu at 700–1000, its item at 710–990, 200–230
+        const anchor = place({left: 710, top: 200, width: 280, height: 30}, {left: 700, top: 100, width: 300, height: 300});
+        render(Tooltip, {props: {text: 'Inactive', position: 'right', interactiveChild: true, testId: 'probe-wrap', anchor, children: child}});
+        await fireEvent.click(screen.getByTestId('probe-btn'));
+        const tip = await screen.findByTestId('tooltip-content');
+        // 700 − 8 − 150 = 542 (beside the menu, not beside the item at 552); 215 − 20 = 195
+        await waitFor(() => expect(tip.style.left).toBe('542px'));
+        expect(tip.style.top).toBe('195px');
+    });
+
+    it('no room on either side: above the anchor, never over it', async () => {
+        const anchor = place({left: 20, top: 400, width: 980, height: 30}, {left: 10, top: 300, width: 1000, height: 200});
+        render(Tooltip, {props: {text: 'Inactive', position: 'right', interactiveChild: true, testId: 'probe-wrap', anchor, children: child}});
+        await fireEvent.click(screen.getByTestId('probe-btn'));
+        const tip = await screen.findByTestId('tooltip-content');
+        // 300 − 8 − 40 = 252, centred on the menu: 510 − 75 = 435
+        await waitFor(() => expect(tip.style.top).toBe('252px'));
+        expect(tip.style.left).toBe('435px');
     });
 });

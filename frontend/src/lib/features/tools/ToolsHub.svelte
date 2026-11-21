@@ -223,12 +223,18 @@
                         data-testid={`tool-card-${descriptor.tool_code}`}
                         data-interface-state={entry.interfaceState}
                     >
-                        <div class="flex items-start gap-3">
-                            <Icon size={22} class="shrink-0 text-lf-link" aria-hidden="true" />
-                            <h2 class="min-w-0 flex-1 break-words font-semibold text-lf-primary">{toolName(descriptor, $t)}</h2>
+                        <!--
+                          The documentation link stays beside the title, its label under its icon (G5-5 and G6 of project 67,
+                          mockup s1). The title wraps at words, never inside one: it does not shrink below its longest word.
+                        -->
+                        <div class="flex items-start justify-between gap-2" data-testid="tool-card-header">
+                            <div class="flex flex-1 items-start gap-2.5">
+                                <Icon size={22} class="shrink-0 text-lf-link" aria-hidden="true" />
+                                <h2 class="break-normal font-semibold text-lf-primary">{toolName(descriptor, $t)}</h2>
+                            </div>
                             {#if documentation}
                                 <span class="relative z-20 shrink-0">
-                                    <DocsLink path={documentation} label={$t('common.documentation')} labelDisplay="responsive" icon="book" size={18} testId={`tool-docs-${descriptor.tool_code}`} />
+                                    <DocsLink path={documentation} label={$t('common.documentation')} icon="book" size={18} testId={`tool-docs-${descriptor.tool_code}`} />
                                 </span>
                             {:else}
                                 <span class="relative z-20 shrink-0 text-xs text-lf-muted" data-testid="tool-docs-unavailable">

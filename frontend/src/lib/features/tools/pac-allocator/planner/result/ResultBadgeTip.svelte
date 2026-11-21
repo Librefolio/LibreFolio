@@ -15,6 +15,7 @@
     let {badge}: Props = $props();
 </script>
 
-<Tooltip text={$t(badge.help.key, {default: badge.help.fallback})} maxWidth="320px">
-    <span class={BADGE[badge.tone]}>{$t(badge.key, {default: badge.fallback})}</span>
+<!-- Lot MG: a value of the badge (its margin) in its text, and a line after the help (what the margin is). -->
+<Tooltip text={[$t(badge.help.key, {default: badge.help.fallback, values: badge.help.values}), ...(badge.help.extra ? [$t(badge.help.extra.key, {default: badge.help.extra.fallback, values: badge.help.extra.values})] : [])].join(' ')} maxWidth="320px">
+    <span class={BADGE[badge.tone]}>{$t(badge.key, {default: badge.fallback, values: badge.values})}</span>
 </Tooltip>

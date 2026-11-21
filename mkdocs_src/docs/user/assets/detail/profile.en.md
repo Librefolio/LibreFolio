@@ -38,13 +38,14 @@ The profile also feeds other parts of LibreFolio: the Dashboard's allocation cha
 
 ## 🔌 Enrichers: where the data comes from {: #enrichers }
 
-An **enricher** is a source that reads an asset's profile from a website. LibreFolio ships three:
+An **enricher** is a source that reads an asset's profile from a website or a public register. LibreFolio ships four:
 
 | Enricher | Typically reads |
 |---|---|
 | [justETF](../providers/justetf.md) | ETFs and ETCs: description, annual cost, fund size, countries, sectors, the fund's structure (index, management company, replication, income treatment, domicile, currency) |
 | [Yahoo Finance](../providers/yahoo-finance.md) | Shares: description, sector, industry, country, market capitalisation. Funds: description, annual cost, management company, inception date, sectors |
 | [Borsa Italiana](../providers/borsa-italiana.md) | Bonds: coupons, maturity, yields, modified duration, issuer, description, countries, sectors. Shares: sector. Funds: currency, inception date, management fee |
+| ESMA (FIRDS) | Any instrument traded on a European market, from the official register of the European Securities and Markets Authority: the issuer's LEI and the legal form; for a bond its maturity, the type of coupon, a fixed coupon and whether a State guarantees it; for a fund whether it accumulates or distributes. It comes after the other sources, filling what they leave empty |
 
 An asset can have several enrichers, **in order**: the order is their priority. For each item, the first enricher in
 the list that gives a value wins it; if that source does not answer, the item goes to the next one.
@@ -166,7 +167,7 @@ form, which saves them with the asset.
 ### 📜 Latest changes {: #latest-changes }
 
 The **Latest changes** panel, at the bottom of the tab, is closed at first: click its title to open it. It lists the
-asset's latest changes, newest first, twenty per page:
+asset's latest changes, newest first, twenty per page (the pages are in the bar at the bottom of the table):
 
 - **When** — the day of the change;
 - **Data** — the item;
@@ -183,7 +184,8 @@ their [history](#data-history).
 </div>
 
 **Forget** removes a change as if it had never been made: the item goes back to the value it had before. Use it on one
-row (its menu) or on the rows you select (**Forget 2 changes**). LibreFolio asks first, as it cannot be undone.
+row (its menu) or on the rows you select: the bar above the table shows **Forget** with the number of rows. LibreFolio
+asks first, as it cannot be undone.
 
 ### 🕘 History of the data {: #data-history }
 

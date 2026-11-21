@@ -256,7 +256,8 @@
       "promoteSubtitle": "Seleziona la transazione di destinazione",
       "target": "Destinazione",
       "descriptionTooLong": "La descrizione unita supera i {max} caratteri: accorciala per confermare.",
-      "mergeAllLeftTooLong": "{count, plural, one {# coppia è rimasta} other {# coppie sono rimaste}} da unire a mano: la descrizione unita supererebbe i {max} caratteri."
+      "mergeAllLeftTooLong": "{count, plural, one {# coppia è rimasta} other {# coppie sono rimaste}} da unire a mano: la descrizione unita supererebbe i {max} caratteri.",
+      "chargesBlock": "{type} {ref} ha spese collegate: prima scollegale"
     },
     "validate": {
       "now": "Verifica ora",
@@ -415,36 +416,55 @@
       "button": "Ricollega eventi",
       "buttonTitle": "Collega dividendi, interessi e rettifiche all'evento dell'asset dello stesso giorno",
       "title": "Ricollega eventi",
-      "intro": "Dividendi, interessi e rettifiche senza un evento dell'asset. Un evento è proposto solo se è dello stesso asset, nello stesso giorno e di tipo corrispondente: un dividendo accreditato qualche giorno dopo l'evento non è proposto, e lo colleghi a mano nella transazione.",
       "loading": "Cerco le transazioni senza evento…",
       "loadError": "Impossibile leggere le transazioni senza evento.",
       "empty": "Ogni transazione che può avere un evento dell'asset ce l'ha.",
-      "statusUnique": "Un evento in quel giorno",
-      "statusNone": "Nessun evento in quel giorno",
-      "statusSeveral": "{n} eventi in quel giorno: scegli nella transazione",
       "link": "Collega",
-      "linkAll": "Collega tutte le righe con un solo evento",
       "linkError": "Non è stato collegato nulla: il server ha rifiutato la modifica.",
       "close": "Chiudi",
-      "colAsset": "Asset",
-      "colBroker": "Broker",
-      "colEvent": "Evento",
-      "colStatus": "Stato",
       "colAction": "Azione",
-      "status": {
-        "unique": "Un evento quel giorno",
-        "none": "Nessun evento quel giorno",
-        "several": "Più eventi quel giorno"
-      },
-      "linkSelected": "Collega i selezionati",
-      "createSelected": "Crea gli eventi",
       "createOne": "Crea evento",
       "createTitle": "Crea gli eventi mancanti",
       "createIntro": "Controlla il tipo e inserisci il valore di ogni evento, nella valuta dell’asset. Gli eventi sono creati nel giorno della transazione; poi collegali.",
       "createValue": "Valore",
       "createServes": "{n} transazioni",
       "createHint": "Inserisci per ogni evento un valore maggiore di 0, con al massimo 6 decimali.",
-      "createConfirm": "{n, plural, one {Crea # evento} other {Crea # eventi}}"
+      "createConfirm": "{n, plural, one {Crea # evento} other {Crea # eventi}}",
+      "introShort": "Transazioni senza il loro evento dell'asset. Si propone solo un evento dello stesso asset, dello stesso giorno e del tipo giusto; gli altri li scegli tu.",
+      "selectionHint": "Seleziona le righe per agire solo su quelle, oppure usa «tutte» di ogni gruppo.",
+      "group": {
+        "unique": {
+          "title": "Con un evento · {n}",
+          "sub": "Il server ha trovato l'evento: basta collegarlo."
+        },
+        "none": {
+          "title": "Senza evento · {n}",
+          "sub": "Quel giorno l'asset non ha l'evento: si crea, poi si collega."
+        },
+        "several": {
+          "title": "Più eventi · {n}",
+          "sub": "Quel giorno ci sono più eventi del tipo giusto: scegli tu quale."
+        }
+      },
+      "linkAllGroup": "Collega tutte",
+      "createAllGroup": "Crea tutti",
+      "createShort": "Crea",
+      "colTransaction": "Transazione",
+      "colMovement": "Movimento",
+      "colEventFound": "Evento trovato",
+      "colEventToCreate": "Evento da creare",
+      "colEventsThatDay": "Eventi quel giorno",
+      "toCreate": "da creare",
+      "toCreateChooseType": "da creare: scegli il tipo",
+      "severalSub": "{n, plural, one {# evento} other {# eventi}}, nessuno si sceglie da solo",
+      "quantityUnits": "{n} quote",
+      "or": "o",
+      "choose": "Scegli evento",
+      "chooseTitle": "Scegli l'evento",
+      "chooseIntro": "Quel giorno l'asset ha {n} eventi del tipo giusto. Quale prende questa transazione?",
+      "sourceAuto": "automatico",
+      "sourceManual": "inserito a mano",
+      "linkingBusy": "Un collegamento è in corso"
     },
     "docsHelp": {
       "list": "Ogni movimento dei broker a cui hai accesso, dal più recente: acquisti, vendite, dividendi, commissioni, trasferimenti e liquidità. Le tue posizioni e il rendimento si calcolano a partire da questi. Qui li aggiungi, importi, filtri o modifichi."

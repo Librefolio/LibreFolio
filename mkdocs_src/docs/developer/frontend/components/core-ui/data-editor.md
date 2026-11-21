@@ -32,7 +32,8 @@ An **inline tabular editor** for structured data (add, edit, delete rows).
   for those keys, so a new event moves to a day that holds only an event of another type
   (`takenDates`; the move itself is checked the same way)
 - Delete row: the row is only marked deleted, and its **Undo** action restores a deleted or edited
-  row and removes a new one; selected rows can be deleted together. Nothing is written until the
+  row and removes a new one; selected rows can be deleted together, through the table's selection panel
+  (77 SEL-D2: the bar at the top of the table, inside the box that scrolls; «Delete» skips the rows already deleted). Nothing is written until the
   owner saves
 - Validation per cell with error highlighting
 - Toolbar counters: *N modified*, *N deleted*, *N new*

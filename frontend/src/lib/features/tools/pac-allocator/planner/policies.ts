@@ -6,18 +6,19 @@
  */
 import type {z} from 'zod';
 import {toolContractMap} from '$lib/api/tool-contract-map.generated';
-import {PLANNER_CONTRACT_VERSION, PLANNER_TOOL_CODE} from './defaults';
+import {PAC_PLANNER_PROFILE, type PlannerProfile} from './profile';
 
-export function contractPolicies(): string[] {
-    const field = toolContractMap[PLANNER_TOOL_CODE][PLANNER_CONTRACT_VERSION].input.shape.policy as z.ZodTypeAny;
+/** The strategies the profile's Tool accepts, read from its compiled contract; the PAC's when no profile is given. */
+export function contractPolicies(profile: PlannerProfile = PAC_PLANNER_PROFILE): string[] {
+    const field = toolContractMap[profile.toolCode][profile.contractVersion].input.shape.policy as z.ZodTypeAny;
     const def = field._def as {typeName?: string; value?: unknown; values?: unknown};
     if (def.typeName === 'ZodLiteral' && typeof def.value === 'string') return [def.value];
     if (def.typeName === 'ZodEnum' && Array.isArray(def.values)) return def.values.filter((value): value is string => typeof value === 'string');
     return [];
 }
 
-export function defaultPolicy(): string {
-    const policies = contractPolicies();
+export function defaultPolicy(profile: PlannerProfile = PAC_PLANNER_PROFILE): string {
+    const policies = contractPolicies(profile);
     return policies.length === 1 ? policies[0] : '';
 }
 
@@ -40,7 +41,31 @@ export const OBJECTIVE_FALLBACKS: Readonly<Record<string, string>> = {
     active_order_rows: 'Number of orders',
     incremental_order_rows: 'Additional orders',
     route_priority: 'Broker and source priority',
+    plan_score: 'Score',
+    target_distance: 'Distance from the targets',
+    wealth_loss: 'Money lost',
+    operation_count: 'Fewer operations',
 };
+
+/**
+ * The Rebalancer's tie-breaks (B2 and D4 of project 67): the stages after its objective, which only choose among plans no
+ * worse on the objectives above, then a fixed order of Assets and Brokers. The engine publishes them as stages like the
+ * objective, without a flag, so the codes are named here. The PAC's cascade has none: each of its stages is an objective.
+ */
+export const REBALANCER_TIE_BREAKS: readonly string[] = ['operation_count', 'route_priority'];
+
+export function isTieBreak(code: string, text: 'pac' | 'rebalancer'): boolean {
+    return text === 'rebalancer' && REBALANCER_TIE_BREAKS.includes(code);
+}
+
+/** The Rebalancer's names that differ from the PAC's: it has no cash sources, so its priority is the routes' alone. */
+const REBALANCER_OBJECTIVE_NAMES: Readonly<Record<string, string>> = {route_priority: 'Route priority'};
+
+/** An objective's name: its catalogue key, and its English default. */
+export function objectiveNameKey(code: string, text: 'pac' | 'rebalancer'): {key: string; fallback: string} {
+    if (text === 'rebalancer' && code in REBALANCER_OBJECTIVE_NAMES) return {key: `tools.portfolioRebalancer.planner.objectives.${code}`, fallback: REBALANCER_OBJECTIVE_NAMES[code]};
+    return {key: `tools.pacAllocator.planner.objectives.${code}`, fallback: OBJECTIVE_FALLBACKS[code] ?? code};
+}
 
 /** The one-line explanation of each objective (`objectiveHelp.<code>`), in Strategy. */
 export const OBJECTIVE_HELP_FALLBACKS: Readonly<Record<string, string>> = {

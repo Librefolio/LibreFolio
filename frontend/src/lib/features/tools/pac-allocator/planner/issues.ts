@@ -10,7 +10,7 @@ import {formatPlannerMoneyPlain, formatPlannerPlainDecimal} from './format';
 import {type PlannerDraft} from './draft.svelte';
 import type {RequestIdMap} from './request';
 import type {PlannerSource, SourceIssue} from './source';
-import type {PacIssue, PlannerStep} from './types';
+import type {PlannerIssue, PlannerStep} from './types';
 
 export const TOOL_ERROR_KEY_PREFIX = 'tools.pacAllocator.planner.toolErrors';
 
@@ -28,12 +28,13 @@ export interface PresentedIssue {
     values: Record<string, string>;
 }
 
-type AnyIssue = PacIssue | SourceIssue;
+type AnyIssue = PlannerIssue | SourceIssue;
 type AnyPath = AnyIssue['path'];
 
 const SECTION_STEPS: Record<string, PlannerStep | null> = {
     input: 'scenario',
-    holdings: 'scenario',
+    // The user's positions are edited in the Assets step (F3a of project 67).
+    holdings: 'assets',
     assets: 'assets',
     brokers: 'brokers',
     cash: 'liquidity',
@@ -85,7 +86,18 @@ export function entityLabel(draft: PlannerDraft, entity: {kind: string; id: stri
             return draft.broker(entity.id)?.name ?? entity.id;
         case 'cash': {
             const cash = draft.cashRow(entity.id);
-            return cash ? `${draft.broker(cash.brokerKey)?.name ?? cash.brokerKey} · ${cash.currency}` : entity.id;
+            if (cash) return `${draft.broker(cash.brokerKey)?.name ?? cash.brokerKey} · ${cash.currency}`;
+            // A target entry for a cash cell is named «<broker id>:CURRENCY» (contract 2.0.0); the broker id has its own
+            // colon (`broker:1`), so the currency is what follows the last one.
+            const cut = entity.id.lastIndexOf(':');
+            const broker = cut > 0 ? draft.broker(entity.id.slice(0, cut)) : undefined;
+            return broker ? `${broker.name} · ${entity.id.slice(cut + 1)}` : entity.id;
+        }
+        case 'holding': {
+            // A position of the Rebalancer (F3a of project 67): its Broker need not be among the scenario's Brokers.
+            const position = draft.data.positions.find((item) => item.key === entity.id);
+            if (!position) return entity.id;
+            return `${draft.asset(position.assetKey)?.name ?? position.assetKey} · ${draft.broker(position.brokerKey)?.name ?? position.brokerName}`;
         }
         case 'contribution':
             return draft.contribution(entity.id)?.label || entity.id;
@@ -156,7 +168,7 @@ export function presentIssue(issue: AnyIssue, draft: PlannerDraft, ids?: Request
     };
 }
 
-export function presentIssues(issues: readonly PacIssue[], draft: PlannerDraft, ids?: RequestIdMap): PresentedIssue[] {
+export function presentIssues(issues: readonly PlannerIssue[], draft: PlannerDraft, ids?: RequestIdMap): PresentedIssue[] {
     return dedupe(issues.map((issue) => presentIssue(issue, draft, ids)));
 }
 

@@ -16,6 +16,7 @@
     import {getClientSessionGeneration, isClientSessionCurrent} from '$lib/stores/app/clientSession';
     import {guideAnchor} from '$lib/features/onboarding/guideAnchors.svelte';
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
+    import {toDraft, type OperatingProfileDocument, type ProfileDraft} from './profile/brokerOperatingProfile';
 
     interface Props {
         isOpen?: boolean;
@@ -47,6 +48,12 @@
     let error: string | null = $state(null);
     let formTouched = $state(false);
     let showDiscardConfirm = $state(false);
+    /**
+     * The broker's operating profile (P2 of project 67, D8 b): read here at an edit opening, handed to the form in a prop of
+     * its own (never through `initialData`), and sent back only when the panel changed it.
+     */
+    let profileDraft = $state.raw<ProfileDraft | null>(null);
+    let profileState = $state<'idle' | 'loading' | 'ready' | 'failed'>('idle');
     let openingContext: string | null = null;
     let openingEpoch = 0;
     let alive = true;
@@ -61,7 +68,26 @@
         formTouched = false;
         showDiscardConfirm = false;
         loading = false;
+        profileDraft = null;
+        profileState = 'idle';
+        if (isOpen && mode === 'edit' && brokerId && !tourPreview) void readProfile(brokerId, openingEpoch);
     });
+
+    /** Reads the broker for its operating profile; an answer for another opening, or another account session, is dropped. */
+    async function readProfile(id: number, epoch: number): Promise<void> {
+        const sessionGeneration = getClientSessionGeneration();
+        const isCurrent = () => alive && epoch === openingEpoch && isClientSessionCurrent(sessionGeneration);
+        profileState = 'loading';
+        try {
+            const broker = (await zodiosApi.get_broker_api_v1_brokers__broker_id__get({params: {broker_id: id}})) as {operating_profile?: OperatingProfileDocument | null};
+            if (!isCurrent()) return;
+            profileDraft = toDraft(broker.operating_profile ?? null);
+            profileState = 'ready';
+        } catch {
+            // The form stays usable; the profile is neither shown nor sent, so the stored one stays as it is.
+            if (isCurrent()) profileState = 'failed';
+        }
+    }
 
     onDestroy(() => {
         alive = false;
@@ -101,6 +127,7 @@
             is_active: boolean;
             opened_at?: string;
             initial_balances?: Array<{code: string; amount: number}>;
+            operating_profile?: OperatingProfileDocument | null;
         }>,
     ) {
         if (tourPreview) return;
@@ -167,6 +194,8 @@
                                 allow_asset_shorting: event.detail.allow_asset_shorting,
                                 is_active: event.detail.is_active,
                                 opened_at: event.detail.opened_at || null,
+                                // Only when the panel changed it (D5): the key absent keeps the stored profile.
+                                ...('operating_profile' in event.detail ? {operating_profile: event.detail.operating_profile as never} : {}),
                             },
                             {params: {broker_id: brokerId}},
                         ),
@@ -256,7 +285,7 @@
         <!-- Form (scrollable area with sticky footer inside) -->
         <div class="overflow-y-auto flex-1 min-h-0 scrollbar-hidden">
             <div class="p-4 pb-0">
-                <BrokerForm {initialData} {loading} {mode} {tourPreview} on:cancel={handleClose} on:submit={handleSubmit} />
+                <BrokerForm {initialData} {loading} {mode} {tourPreview} operatingProfile={profileDraft} operatingProfileState={profileState} on:cancel={handleClose} on:submit={handleSubmit} on:profilechange={handleFormChange} />
             </div>
         </div>
     </div>

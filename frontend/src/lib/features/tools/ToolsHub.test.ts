@@ -35,7 +35,7 @@ const descriptor = {
     name_i18n_key: null,
     operations: [{operation: 'analyze'}],
     output_schema: {},
-    ui: {kind: 'custom', component_key: 'pac-allocator', version: '1.0.0'},
+    ui: {kind: 'custom', component_key: 'pac-allocator', version: '2.0.0'},
 } as const;
 
 const catalog = {
@@ -127,6 +127,10 @@ describe('ToolsHub', () => {
         // The only button in the card is the independent documentation action:
         // opening the tool itself is the full-card link, not a second visible button.
         expect(within(card).getAllByRole('button')).toEqual([documentation]);
+        // R1-C of project 67 (the developer, 20/11): the icon alone, no label under it; its name stays for a screen reader.
+        expect(documentation.textContent?.trim()).toBe('');
+        expect(documentation).toHaveAttribute('aria-label');
+        expect(documentation.getAttribute('aria-label')).not.toBe('');
         await fireEvent.click(documentation);
         expect(openWindow).toHaveBeenCalledTimes(1);
 
@@ -142,8 +146,6 @@ describe('ToolsHub', () => {
         const refreshLabel = refresh.getAttribute('aria-label');
         expect(refreshLabel).toBeTruthy();
         expect(refresh.textContent).toContain(refreshLabel);
-        expect(documentation.getAttribute('aria-label')).toBeTruthy();
-        expect(documentation.textContent).toContain(documentation.getAttribute('aria-label'));
     });
 
     it('never exposes the card link when renderer preload fails', async () => {

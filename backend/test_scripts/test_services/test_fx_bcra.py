@@ -34,7 +34,7 @@ BASE_URL = "https://api.bcra.gob.ar/estadisticascambiarias/v1.0"
 RANGE = (date(2026, 11, 16), date(2026, 11, 19))
 ISO_CODES = [
     "AUD", "AWG", "BOB", "BRL", "CAD", "CHF", "CLP", "CNY", "COP", "CZK", "DKK", "EUR", "GBP", "HKD", "ILS", "INR",
-    "JPY", "MXN", "NIO", "NOK", "NZD", "PEN", "PYG", "RSD", "RUB", "SEK", "SGD", "TRY", "USD", "UYU", "VND", "ZAR",
+    "JPY", "MXN", "NIO", "NOK", "NZD", "PEN", "PYG", "RSD", "RUB", "SEK", "SGD", "TRY", "USD", "UYU", "VND", "XDR", "ZAR",
 ]  # fmt: skip
 
 
@@ -109,12 +109,13 @@ def test_bcra_pause_between_requests_is_a_third_of_a_second_by_default(monkeypat
 
 def test_bcra_codes_table():
     codes = bcra_mod.CODES
-    assert sorted(codes) == ISO_CODES and len(codes) == 32
+    assert sorted(codes) == ISO_CODES and len(codes) == 33
+    assert codes["XDR"] == ("XDR", Decimal(1))
     assert codes["USD"] == ("REF", Decimal(1))
     assert codes["MXN"] == ("MXP", Decimal(1))
     assert codes["VND"] == ("VND", Decimal(1000))
     assert all(codes[c] == (c, Decimal(1)) for c in ISO_CODES if c not in ("USD", "MXN", "VND"))
-    for absent in ("XDR", "XAU", "XAG", "CNH", "VEB", "ATS", "DEM", "ESP", "ITL", "ARS"):
+    for absent in ("XAU", "XAG", "CNH", "VEB", "ATS", "DEM", "ESP", "ITL", "ARS"):
         assert absent not in codes
 
 
@@ -166,6 +167,16 @@ async def test_bcra_small_value_keeps_every_digit(monkeypatch: pytest.MonkeyPatc
     rates = await BCRAProvider().fetch_rates(RANGE, ["EUR"])
 
     assert str(rates["EUR"][0][3]) == "0.000487"
+
+
+@pytest.mark.asyncio
+async def test_bcra_sdr_is_pesos_per_unit(monkeypatch: pytest.MonkeyPatch):
+    """XDR is a series like any other: ``2103.9547`` pesos per SDR."""
+    _route(monkeypatch, bcra_mod, _by_code({"XDR": _body(_day("2026-11-19", _rec("XDR", "2103.9547")))}))
+
+    rates = await BCRAProvider().fetch_rates(RANGE, ["XDR"])
+
+    assert rates["XDR"] == [(date(2026, 11, 19), "XDR", "ARS", Decimal("2103.9547"))]
 
 
 @pytest.mark.asyncio
@@ -272,9 +283,9 @@ async def test_bcra_every_asked_currency_is_a_key_and_ars_is_none(monkeypatch: p
 async def test_bcra_a_currency_outside_the_codes_is_empty_and_not_asked(monkeypatch: pytest.MonkeyPatch):
     asked = _route(monkeypatch, bcra_mod, _by_code({"REF": USD_BODY}))
 
-    rates = await BCRAProvider().fetch_rates(RANGE, ["XDR", "USD"])
+    rates = await BCRAProvider().fetch_rates(RANGE, ["XAU", "USD"])
 
-    assert rates["XDR"] == [] and len(rates["USD"]) == 3
+    assert rates["XAU"] == [] and len(rates["USD"]) == 3
     assert [_code_of(r) for r in asked] == ["REF"]
 
 
@@ -282,7 +293,7 @@ async def test_bcra_a_currency_outside_the_codes_is_empty_and_not_asked(monkeypa
     ("window", "currencies"),
     [
         pytest.param(RANGE, ["ARS"], id="ars-only"),
-        pytest.param(RANGE, ["XDR", "XAU"], id="outside-codes"),
+        pytest.param(RANGE, ["XAG", "XAU"], id="outside-codes"),
         pytest.param((date(2026, 11, 19), date(2026, 11, 16)), ["USD"], id="start-after-end"),
         pytest.param((date(1999, 1, 1), date(2002, 3, 3)), ["USD"], id="end-before-first-day"),
     ],

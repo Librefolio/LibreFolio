@@ -4,22 +4,26 @@
     import type {ColumnDef, FooterCellContent} from '$lib/components/table/types';
     import type {PlannerDraft} from '../draft.svelte';
     import {formatExactMoneyPlain, type CurrencyDigits} from '../format';
-    import type {PacAccounting, PacAssetRow} from '../types';
+    import type {PlannerAccounting, PlannerAssetRow} from '../types';
     import ResultCell, {type ResultCellContent} from './ResultCell.svelte';
     import {weightScale, type ResultNames} from './model';
     import {withHelpCues} from '../shared/columnHelp';
     import TableColumns from '../shared/TableColumns.svelte';
+    import {getPlannerProfile, storageKey, testId} from '../profile';
+
+    /** Read once, while the component is created: the Tool's profile (F1 of project 67), the PAC's when none is set. */
+    const profile = getPlannerProfile();
 
     interface Props {
-        rows: readonly PacAssetRow[];
-        accounting: PacAccounting;
+        rows: readonly PlannerAssetRow[];
+        accounting: PlannerAccounting;
         names: ResultNames;
         digits: CurrencyDigits;
         draft: PlannerDraft;
     }
 
     let {rows, accounting, names, digits, draft}: Props = $props();
-    let table = $state<DataTable<PacAssetRow>>();
+    let table = $state<DataTable<PlannerAssetRow>>();
 
     const KEY = 'tools.pacAllocator.planner.result.assets';
     const data = $derived([...rows]);
@@ -27,8 +31,8 @@
     const assetLabel = (id: string) => [names.ticker(id), names.asset(id)].filter((part) => part).join(' ');
     const cell = (content: ResultCellContent) => ({type: 'custom' as const, component: ResultCell, props: {cell: content}});
 
-    const columns = $derived.by((): ColumnDef<PacAssetRow>[] =>
-        withHelpCues<PacAssetRow>([
+    const columns = $derived.by((): ColumnDef<PlannerAssetRow>[] =>
+        withHelpCues<PlannerAssetRow>([
             {
                 id: 'asset',
                 header: () => $t(`${KEY}.asset`, {default: 'Asset'}),
@@ -37,7 +41,7 @@
                 filterable: false,
                 pinned: 'left',
                 minWidth: 180,
-                cell: (row) => cell({type: 'asset', assetId: row.asset_id, label: assetLabel(row.asset_id), asset: draft.asset(row.asset_id) ?? null, testid: 'pac-planner-assets-row'}),
+                cell: (row) => cell({type: 'asset', assetId: row.asset_id, label: assetLabel(row.asset_id), asset: draft.asset(row.asset_id) ?? null, testid: testId('assets-row', profile)}),
             },
             {
                 id: 'target',
@@ -114,7 +118,7 @@
                 filterable: false,
                 align: 'right',
                 minWidth: 150,
-                cell: (row) => cell({type: 'exactMoney', money: row.residual, digits, signed: true, testid: 'pac-planner-assets-residual'}),
+                cell: (row) => cell({type: 'exactMoney', money: row.residual, digits, signed: true, testid: testId('assets-residual', profile)}),
             },
             {
                 id: 'buyMid',
@@ -142,21 +146,21 @@
     });
 </script>
 
-<div class="space-y-2" data-testid="pac-planner-assets-table">
+<div class="space-y-2" data-testid={testId('assets-table', profile)}>
     <div class="flex flex-wrap items-center gap-2">
-        <p class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-lf-secondary" data-testid="pac-planner-assets-legend">
+        <p class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-lf-secondary" data-testid={testId('assets-legend', profile)}>
             <span class="flex items-center gap-1.5"><span class="h-2 w-4 rounded-full bg-lf-secondary" aria-hidden="true"></span>{$t(`${KEY}.targetShare`, {default: 'Target share'})}</span>
             <!-- colour: closest role, to review: the final-share bar fill was the brand green as a data colour; bg-lf-checked (the visible accent green on the panel track), alt bg-lf-action -->
             <span class="flex items-center gap-1.5"><span class="h-2 w-4 rounded-full bg-lf-checked" aria-hidden="true"></span>{$t(`${KEY}.finalShare`, {default: 'Final share'})}</span>
         </p>
-        <TableColumns {table} testid="pac-planner-assets-columns" />
+        <TableColumns {table} testid={testId('assets-columns', profile)} />
     </div>
     <DataTable
         bind:this={table}
         {data}
         {columns}
         getRowId={(row) => row.asset_id}
-        storageKey="pac-planner-result-assets"
+        storageKey={storageKey('result-assets', profile)}
         enableSorting={false}
         enableSelection={false}
         selectionMode="none"

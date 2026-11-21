@@ -319,7 +319,9 @@
       "generateInterest": "Genera Cedola",
       "generateInterestHint": "Genera automaticamente eventi di stacco cedola ad ogni data di maturazione. L'interesse maturato viene staccato e l'asset torna al valore iniziale.",
       "interestTypeTooltip": "Determina come viene calcolato l'interesse. Semplice: solo sul valore iniziale. Composto: l'interesse matura anche sugli interessi accumulati.",
-      "dayCountTooltip": "Convenzione per il conteggio dei giorni nel periodo di interesse. ACT/365 e ACT/360 sono le più comuni. Influenza il calcolo dell'interesse giornaliero."
+      "dayCountTooltip": "Convenzione per il conteggio dei giorni nel periodo di interesse. ACT/365 e ACT/360 sono le più comuni. Influenza il calcolo dell'interesse giornaliero.",
+      "mergeNotConsecutive": "Si uniscono solo periodi uno dopo l'altro: scegli righe vicine.",
+      "splitTooShort": "Un periodo si divide solo se dura almeno 2 giorni"
     },
     "probe": {
       "history": "Storico",
@@ -405,10 +407,10 @@
       "addCountry": "Aggiungi paese",
       "emptyHint": "Nessun dato — usa +Aggiungi o Chiedi al Provider",
       "balanceRow": "Bilancia al 100%",
-      "balanceSelected": "Bilancia righe selezionate",
       "deleteSelected": "Elimina righe selezionate",
       "deleteConfirmMessage": "Eliminare {n} voci da questa distribuzione?",
-      "weightPercent": "Peso %"
+      "weightPercent": "Peso %",
+      "balance": "Bilancia"
     },
     "showInactive": "Inattivi",
     "edit": {

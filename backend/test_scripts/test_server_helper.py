@@ -24,6 +24,7 @@ This is achieved by:
 3. No subprocess complexity needed
 """
 
+import copy
 import os
 import threading
 import time
@@ -35,6 +36,24 @@ import uvicorn
 # Import settings to get TEST_PORT
 from backend.app.config import PROJECT_ROOT, TEST_LANE_HEADER, Settings
 from scripts.cli_base import ensure_test_lane_id
+
+#: The Rebalancer's three run seeds on the test server (lot SEEDS of project 67): ``scripts/cli_base.py`` sets them for the
+#: lane (``LIBREFOLIO_PLANNER_SEEDS``, 11,22,33). An API test that compares the server with the planner in process passes
+#: them to the planner, which in a pytest process otherwise runs once (``conftest.single_planner_run``).
+TEST_SERVER_PLANNER_SEEDS = (11, 22, 33)
+
+
+def without_time_limits(plan: dict) -> dict:
+    """A planner result as the wire dumps it, with the value of every stage's time-limit setting dropped: the only
+    clock-dependent figure it publishes. The wide model is solved with the time the prudent one left (lot ZB), and on a
+    machine with fewer usable CPUs than runs a later run has the time left (lot SEEDS-c of project 67)."""
+    plan = copy.deepcopy(plan)
+    for stage in plan["solver_evidence"]["stages"]:
+        for setting in stage.get("settings", []):
+            if setting.get("name") == "time_budget":
+                setting.pop("value", None)
+    return plan
+
 
 # Get settings
 _settings = Settings()

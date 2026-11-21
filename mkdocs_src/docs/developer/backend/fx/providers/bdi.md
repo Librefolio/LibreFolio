@@ -8,7 +8,7 @@
 | **API Format** | JSON (`Accept: application/json`), one time series per request, one request per currency |
 | **API Key** | Not required |
 | **Terms** | Site © Banca d'Italia ([copyright](https://www.bancaditalia.it/footer/copyright/index.html)); the rates are indicative, not a benchmark under Regulation (EU) 2016/1011 |
-| **Currencies** | Discovered at runtime by `get_supported_currencies()`: on 2026-11-16, 149 plus EUR. `GET /fx/providers` caches the list for 24 h (`backend/app/services/fx/catalog.py`) |
+| **Currencies** | Discovered at runtime by `get_supported_currencies()`: on 2026-11-16, 149 plus EUR; with the SDR (`XDR`) served since 2026-11-20, 150 plus EUR. `GET /fx/providers` caches the list for 24 h (`backend/app/services/fx/catalog.py`) |
 | **Update Frequency** | Daily, Italian business days |
 | **Historical Data** | From 1999-01-04, the first day of the euro series |
 | **API Docs** | [Operating instructions (PDF)](https://tassidicambio.bancaditalia.it/terzevalute-wf-ui-web/assets/files/Operating_Instructions.pdf), [exchange rates portal](https://www.bancaditalia.it/compiti/operazioni-cambi/portale-tassi/index.html) |
@@ -75,7 +75,7 @@ series are kept.
 
 ### 💰 Supported Currencies
 
-On 2026-11-16, 149 currencies plus EUR (`FALLBACK_CURRENCIES`):
+On 2026-11-16, 149 currencies plus EUR; since 2026-11-20 `FALLBACK_CURRENCIES` also holds `XDR`, 150 plus EUR:
 
 AED, AFN, ALL, AMD, AOA, ARS, AUD, AWG, AZN, BAM, BBD, BDT, BHD, BIF, BMD, BND, BOB, BRL, BSD, BTN, BWP, BZD, CAD, CDF,
 CHF, CLP, CNY, COP, CRC, CUP, CVE, CZK, DJF, DKK, DOP, DZD, EGP, ERN, ETB, EUR, FJD, FKP, GBP, GEL, GHS, GIP, GMD, GNF,
@@ -83,9 +83,12 @@ GTQ, GYD, HKD, HNL, HTG, HUF, IDR, ILS, INR, IQD, ISK, JMD, JOD, JPY, KES, KGS, 
 LKR, LRD, LSL, LYD, MAD, MDL, MGA, MKD, MMK, MNT, MOP, MRU, MUR, MVR, MWK, MXN, MYR, MZN, NAD, NGN, NIO, NOK, NPR, NZD,
 OMR, PAB, PEN, PGK, PHP, PKR, PLN, PYG, QAR, RON, RSD, RWF, SAR, SBD, SCR, SDG, SEK, SGD, SHP, SLE, SOS, SRD, SSP, STN,
 SVC, SYP, SZL, THB, TJS, TMT, TND, TOP, TRY, TTD, TWD, TZS, UAH, UGX, USD, UYU, UZS, VES, VND, VUV, WST, XAF, XCD, XCG,
-XOF, XPF, YER, ZAR, ZMW, ZWG.
+XDR, XOF, XPF, YER, ZAR, ZMW, ZWG.
 
-116 of them are not in the ECB provider's list (`FALLBACK_CURRENCIES` in `backend/app/services/fx_providers/ecb/plugin.py`),
+`XDR` is the IMF's special drawing right (SDR): the IMF's unit of account, a basket of USD, EUR, CNY, JPY and GBP, not a
+commodity. It has the same convention `C` as the other currencies: 0.817625 XDR per 1 EUR on 2026-11-19.
+
+117 of them are not in the ECB provider's list (`FALLBACK_CURRENCIES` in `backend/app/services/fx_providers/ecb/plugin.py`),
 among them NGN, KES, GHS, EGP, VND, PKR, DOP and UGX: BDI reaches them in one step to the euro, with no chain of routes.
 
 #### 📋 The catalogue rule
@@ -95,7 +98,7 @@ country, so a currency shared by several countries (XOF, XAF, USD…) repeats. O
 The plugin keeps:
 
 - **Rows with a rate**: a row whose `eurRate` is «N.A.» (a suspended currency), empty or no positive number is dropped.
-- **Currencies only** (`NOT_CURRENCIES`): the IMF's SDR, `XDR`, is dropped.
+- **The SDR is served**: `XDR` stays in the catalogue, in the bank's convention and unit like any other currency.
 - **EUR**, the base, is always added.
 
 A `latestRates` answer without the list raises `FXServiceError` («Banca d'Italia catalogue has no latestRates list

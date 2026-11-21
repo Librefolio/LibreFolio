@@ -32,6 +32,8 @@ export interface ChargeDraftDeps {
     editOpFromTx: (id: number) => PendingOp | null;
     /** A create for a new charge typed in the parent's form. */
     newChargeOp: (draft: ChargeDraft, parent: PendingOp) => PendingOp;
+    /** 66 C22c: the store, for `unlinkCharge` (a link made here undone back to what it was before it). */
+    get: StoreGet;
 }
 
 function isChargeType(type: string): type is ChargeType {
@@ -59,12 +61,42 @@ export interface ChargeLinkRow {
     markedDelete?: boolean;
     chargeOf?: string;
     parentUnlink?: boolean;
+    /** The visible half this hidden half of a pair names (the Bulk's pairs). */
+    pairedWith?: string;
 }
 
 /** The parent operation `op` names, if present. */
 function ownerOf<R extends ChargeLinkRow>(op: R, ops: readonly R[]): R | undefined {
     if (op.chargeOf === undefined) return undefined;
     return ops.find((other) => other.tempId === op.chargeOf && other !== op);
+}
+
+/**
+ * 66 C22c: a charge's link undone — the one rule of every path that unlinks a charge (a reset or «Undo split» that makes
+ * its parent a leg again, a restore under a parent still «del», «unlink» in its Form or in its parent's Form, «Keep» on
+ * a parent's delete). Undoing a link brings the charge back to what it was before that link; `parentUnlink` («unlink»,
+ * which sends `parent_transaction_id: 0`) cuts only a SAVED link:
+ *   - its saved parent is its current owner (`chargeOf`, or `parentLinkId` naming it) → `parentUnlink`, the owner kept;
+ *   - it has a saved parent, but another owner now (unlinked from the saved one, then linked here: «Link» refuses a
+ *     charge that still has a parent) → `parentUnlink`, the link made here dropped: unlinked from its saved parent, as
+ *     before that link — under that parent again when the Bulk holds it, as it was;
+ *   - no saved parent (a link made only in this Bulk, or a new charge) → the link dropped and nothing else: the charge
+ *     is back as saved, with no «unlink» badge and nothing to send about a parent (F7 §12.6, F7-d). A new charge that
+ *     followed its parent keeps the parent's broker, asset and date as its own, as «Keep» on a parent's delete does.
+ * Pure: returns a new operation.
+ */
+export function unlinkCharge(op: PendingOp, ops: readonly PendingOp[], get: StoreGet): PendingOp {
+    const saved = savedParentId(op, get);
+    const owner = ownerOf(op, ops);
+    if (saved === null) {
+        const own = without(op, 'chargeOf', 'parentLinkId', 'parentUnlink', 'followsParent', 'byParentChoice');
+        if (op.op !== 'create' || !op.followsParent || !owner) return own;
+        const {broker_id, asset_id, date} = owner.fields;
+        return {...own, fields: {...own.fields, broker_id, asset_id, date}} as PendingOp;
+    }
+    const savedOwner = owner?.op === 'edit' && owner.txId === saved ? owner : ops.find((other) => other !== op && other.op === 'edit' && other.txId === saved);
+    const unlinked = {...without(op, 'chargeOf', 'parentLinkId', 'followsParent'), parentUnlink: true} as PendingOp;
+    return savedOwner ? ({...unlinked, chargeOf: savedOwner.tempId} as PendingOp) : unlinked;
 }
 
 /**
@@ -96,11 +128,21 @@ export function remapChargeOf(ops: readonly PendingOp[], fromTempId: string, toT
     return ops.map((op) => (op.chargeOf === fromTempId ? {...op, chargeOf: toTempId} : op));
 }
 
+/** 66 C22: the one predicate of «leg of a pair» (rule 8: a leg is neither a parent nor a charge). Every merge of the Bulk —
+ *  a saved pair loaded, a merge queued for the save (`pendingPromotes`), two new rows merged — goes through
+ *  `collapseIntoPaired`, which names the visible half on the hidden one (`pairedWith`); a saved pair split here loses it.
+ *  A hidden half whose partner is missing (a W4b placeholder) is still a leg. */
+export function isPairLeg<R extends {tempId: string; pairedWith?: string}>(op: R, ops: readonly R[]): boolean {
+    return op.pairedWith !== undefined || ops.some((other) => other.pairedWith === op.tempId);
+}
+
 /** The one predicate of «sits under its parent» (§11.7): owned by a present parent and linked to it, or unlinked from a
- *  parent marked for deletion (the state it keeps under it). */
+ *  parent marked for deletion (the state it keeps under it). 66 C21: never under a leg of a pair (rule 8: a leg is no
+ *  parent) — a charge «del» or unlinked of a row merged here is a row of its own, never hidden with the leg. */
 export function isUnderParent<R extends ChargeLinkRow>(op: R, ops: readonly R[]): boolean {
     const owner = ownerOf(op, ops);
     if (!owner) return false;
+    if (isPairLeg(owner, ops)) return false;
     if (!op.parentUnlink) return true;
     return owner.op === 'edit' && owner.markedDelete === true;
 }
@@ -217,7 +259,7 @@ export function applyChargeDrafts(parent: PendingOp, ops: readonly PendingOp[], 
             // Never linked to this parent: unlinking it undoes the link made here, nothing more.
             if (at >= 0) {
                 handled.add(out[at].tempId);
-                if (out[at].chargeOf === parent.tempId) out[at] = without(out[at], 'chargeOf');
+                if (out[at].chargeOf === parent.tempId) out[at] = unlinkCharge(out[at], out, deps.get);
             }
             continue;
         }
@@ -233,6 +275,7 @@ export function applyChargeDrafts(parent: PendingOp, ops: readonly PendingOp[], 
         if (draft.state === 'delete') {
             out[at] = {...without(valued, 'parentUnlink', 'parentLinkId'), chargeOf: parent.tempId, markedDelete: true} as PendingOp;
         } else if (draft.state === 'unlink') {
+            // Not a `linkNew`: this parent is the charge's saved one, so «unlink» cuts a saved link (`unlinkCharge`'s first case).
             out[at] = {...without(valued, 'parentLinkId'), chargeOf: parent.tempId, markedDelete: false, parentUnlink: true} as PendingOp;
         } else {
             out[at] = {...without(valued, 'parentUnlink', 'parentLinkId'), chargeOf: parent.tempId, markedDelete: false} as PendingOp;
@@ -244,7 +287,7 @@ export function applyChargeDrafts(parent: PendingOp, ops: readonly PendingOp[], 
         if (op.chargeOf !== parent.tempId || handled.has(op.tempId) || op === parent) return [op];
         if (op.op === 'create') return [];
         if (!isChargeType(op.fields.type)) return [op];
-        return [without(op, 'chargeOf')];
+        return [unlinkCharge(op, out, deps.get)];
     });
 }
 
@@ -303,6 +346,31 @@ export interface BulkDeletePlan {
 /** The charges still linked to a parent (§17.1): under it, not «del», not unlinked; new ones included; in ops order. */
 export function linkedChargesOf(parent: PendingOp, ops: readonly PendingOp[]): PendingOp[] {
     return ops.filter((op) => op !== parent && op.chargeOf === parent.tempId && !op.parentUnlink && !(op.op === 'edit' && op.markedDelete) && isUnderParent(op, ops));
+}
+
+/**
+ * 66 C21: the rows (by `tempId`) that still hold linked charges, so no pair-promote may take them (rule 6): a charge
+ * linked under them (`linkedChargesOf`), or a saved charge of theirs the Bulk does not hold yet — the saved count minus
+ * the saved charges of that row held here, wherever they sit now (a charge moved to another parent with «Link» is held,
+ * so the row it left is free). One pass over `ops`.
+ */
+export function rowsWithLinkedCharges(ops: readonly PendingOp[], get: StoreGet): Set<string> {
+    const byTempId = new Map(ops.map((op) => [op.tempId, op]));
+    const heldBySavedParent = new Map<number, number>();
+    for (const op of ops) {
+        const parentId = savedParentId(op, get);
+        if (parentId !== null) heldBySavedParent.set(parentId, (heldBySavedParent.get(parentId) ?? 0) + 1);
+    }
+    const result = new Set<string>();
+    for (const op of ops) {
+        // `isUnderParent` holds here: the owner is present and the link not dropped.
+        if (op.chargeOf !== undefined && !op.parentUnlink && !(op.op === 'edit' && op.markedDelete)) {
+            const owner = byTempId.get(op.chargeOf);
+            if (owner && owner !== op) result.add(owner.tempId);
+        }
+        if (op.op === 'edit' && !op.inaccessible && (get(op.txId)?.charges_count ?? 0) > (heldBySavedParent.get(op.txId) ?? 0)) result.add(op.tempId);
+    }
+    return result;
 }
 
 /**
@@ -394,9 +462,9 @@ export function applyDeleteChoice(ops: readonly PendingOp[], plan: BulkDeletePla
             if (choice === 'all') {
                 replaced.set(charge.tempId, {...without(charge, 'parentUnlink'), markedDelete: true, byParentChoice: true} as PendingOp);
             } else if (savedParentId(charge, get) !== parent.txId) {
-                replaced.set(charge.tempId, without(charge, 'chargeOf'));
+                replaced.set(charge.tempId, unlinkCharge(charge, ops, get));
             } else {
-                replaced.set(charge.tempId, {...charge, parentUnlink: true, byParentChoice: true});
+                replaced.set(charge.tempId, {...unlinkCharge(charge, ops, get), byParentChoice: true});
             }
         }
     }
@@ -410,7 +478,7 @@ export function applyDeleteChoice(ops: readonly PendingOp[], plan: BulkDeletePla
         }
         const owner = op.chargeOf !== undefined ? ops.find((o) => o.tempId === op.chargeOf) : undefined;
         const ownerStaysDeleted = owner?.op === 'edit' && owner.markedDelete && !restored.has(owner.tempId);
-        replaced.set(tempId, ownerStaysDeleted ? ({...op, markedDelete: false, parentUnlink: true} as PendingOp) : {...op, markedDelete: false});
+        replaced.set(tempId, ownerStaysDeleted ? unlinkCharge({...op, markedDelete: false} as PendingOp, ops, get) : {...op, markedDelete: false});
         for (const charge of ops) {
             if (charge.chargeOf !== tempId || !charge.byParentChoice || charge.op !== 'edit' || replaced.has(charge.tempId)) continue;
             replaced.set(charge.tempId, {...without(charge, 'parentUnlink', 'byParentChoice'), markedDelete: false} as PendingOp);
@@ -444,7 +512,7 @@ export type BulkLinkSelection = {kind: 'hidden'} | {kind: 'disabled'; reason: Bu
  * Every `hidden` outcome of `linkSelection` wins; then a selected row marked for deletion turns «Link» off (`deleted`:
  * the backend refuses a deleted parent, and linking a deleted charge means nothing); then the page's reasons.
  */
-export function bulkLinkSelection(rows: readonly PendingOp[], ops: readonly PendingOp[], get: StoreGet, opts: LinkOptions): BulkLinkSelection {
+export function bulkLinkSelection(rows: readonly PendingOp[], ops: readonly PendingOp[], get: StoreGet, opts: LinkOptions, typeOf: (op: PendingOp) => string = (op) => op.fields.type): BulkLinkSelection {
     const synthetic = new Map<string, number>();
     for (const op of [...ops, ...rows]) if (!synthetic.has(op.tempId)) synthetic.set(op.tempId, -(synthetic.size + 1));
     const mirrorId = (op: PendingOp): number => (op.op === 'edit' ? op.txId : synthetic.get(op.tempId)!);
@@ -471,7 +539,7 @@ export function bulkLinkSelection(rows: readonly PendingOp[], ops: readonly Pend
             id: mirrorId(op),
             broker_id: op.fields.broker_id,
             asset_id: op.fields.asset_id ?? null,
-            type: op.fields.type,
+            type: typeOf(op),
             date: op.fields.date,
             related_transaction_id: pairIdOf(op),
             parent_transaction_id: parentIdOf(op),
@@ -482,10 +550,10 @@ export function bulkLinkSelection(rows: readonly PendingOp[], ops: readonly Pend
     const result = linkSelection(mirrors, opts);
     if (result.kind === 'hidden') return result;
     const deleted = rows.find((op) => op.op === 'edit' && op.markedDelete);
-    if (deleted) return {kind: 'disabled', reason: 'deleted', params: {op: deleted, type: deleted.fields.type}};
+    if (deleted) return {kind: 'disabled', reason: 'deleted', params: {op: deleted, type: typeOf(deleted)}};
     if (result.kind === 'disabled') {
         const op = rows[mirrors.findIndex((m) => m.id === result.params.id)] ?? rows[0];
-        return {kind: 'disabled', reason: result.reason, params: {op, type: op.fields.type}};
+        return {kind: 'disabled', reason: result.reason, params: {op, type: typeOf(op)}};
     }
     return {kind: 'ok', parent: byMirror.get(result.parent)!, charges: result.charges.map((c) => byMirror.get(c)!)};
 }

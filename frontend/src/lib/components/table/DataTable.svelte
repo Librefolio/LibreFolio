@@ -19,9 +19,8 @@
     import {Ban, Check, Filter} from 'lucide-svelte';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import DataTablePagination from './DataTablePagination.svelte';
-    import DataTableToolbar from './DataTableToolbar.svelte';
+    import SelectionPanel from './SelectionPanel.svelte';
     import {selectionToolbarActions} from './selectionActions';
-    import {watchInView} from './selectionDock';
     import DataTableColumnHeader from './DataTableColumnHeader.svelte';
     import DataTableCellContent from './DataTableCellContent.svelte';
     import ConfirmModal from '$lib/components/ui/modals/ConfirmModal.svelte';
@@ -137,8 +136,14 @@
          * that pass `bulkActions` today without drawing them stay as they are until their lot.
          */
         selectionPanel?: boolean;
-        /** The words of the top bar while nothing is selected; absent: the shared hint. */
+        /** The words of the top bar while nothing is selected; absent: the shared hint (in a section head: none). */
         selectionHint?: string;
+        /**
+         * 77 SEL-D (Q-SEL-8): a section's head — its title and its own buttons — drawn by the table in place of the bar
+         * at the top, with the bar placed where the head renders the snippet it is given. Drawn also when the selection
+         * or the panel is off (then with no bar), so the section keeps one head.
+         */
+        selectionHead?: Snippet<[Snippet]>;
         /**
          * 77 SEL-B: the caller's pager, for a table whose pages are cut outside it (`enablePagination` off: the
          * transactions grouped with their charges). The table hosts it where its own pager would be — in the dock, under
@@ -197,6 +202,7 @@
         opensPage,
         selectionPanel = false,
         selectionHint,
+        selectionHead,
         pager: externalPager,
     }: Props = $props();
 
@@ -447,15 +453,6 @@
     let panelOn = $derived(selectionPanel && effectiveSelectionMode === 'multi');
     /** The actions to draw, each with the rows it takes (the count chip and the numbers come from the same rows). */
     let panelActions = $derived(panelOn ? selectionToolbarActions(bulkActions, selectedRows, handleBulkAction) : []);
-    /** The slot of the top bar, always drawn while the panel is on: what the watcher observes. */
-    let selectionTopEl = $state<HTMLDivElement | null>(null);
-    let selectionTopInView = $state(true);
-    $effect(() => {
-        if (!selectionTopEl) return;
-        return watchInView(selectionTopEl, (inView) => (selectionTopInView = inView));
-    });
-    /** The actions are in one place at a time: at the top while it is in view, in the dock otherwise. */
-    let dockHasActions = $derived(panelOn && selectedRows.length > 0 && !selectionTopInView);
     /** Whether the table draws its pager: enabled, and more rows than the smallest page (or `alwaysShowPagination`). */
     let showPagination = $derived(!!externalPager || (enablePagination && filteredData.length > 0 && (alwaysShowPagination || filteredData.length > Math.min(...pageSizeOptions.filter((x) => x > 0)))));
     let computedFooterCells = $derived.by<Record<string, FooterCellContent>>(() => {
@@ -640,6 +637,8 @@
 
     // Row action handlers
     function handleRowAction(action: RowAction<T>, row: T) {
+        // A blocked action runs on no path (77 SEL-M): its item only says why.
+        if (action.blocked?.(row)) return;
         if (action.requireConfirm) {
             pendingRowAction = {action, row};
             showRowActionModal = true;
@@ -654,17 +653,21 @@
     }
 
     function rowActionsToMenuItems(actions: RowAction<T>[], row: T): ContextMenuItem[] {
-        return actions.map((action) => ({
-            id: action.id,
-            label: typeof action.label === 'function' ? action.label(row) : action.label,
-            icon: action.icon,
-            variant: action.variant,
-            disabled: action.disabled?.(row) ?? false,
-            title: typeof action.title === 'function' ? action.title(row) : action.title,
-            testid: typeof action.testid === 'function' ? action.testid(row) : action.testid,
-            iconClass: action.iconClass?.(row),
-            labelClass: typeof action.labelClass === 'function' ? action.labelClass(row) : action.labelClass,
-        }));
+        return actions.map((action) => {
+            const block = action.blocked?.(row) ?? null;
+            return {
+                id: action.id,
+                label: typeof action.label === 'function' ? action.label(row) : action.label,
+                icon: action.icon,
+                variant: action.variant,
+                blocked: block ? {hint: typeof block.hint === 'function' ? block.hint() : block.hint, reason: block.reason} : undefined,
+                disabled: action.disabled?.(row) ?? false,
+                title: typeof action.title === 'function' ? action.title(row) : action.title,
+                testid: typeof action.testid === 'function' ? action.testid(row) : action.testid,
+                iconClass: action.iconClass?.(row),
+                labelClass: typeof action.labelClass === 'function' ? action.labelClass(row) : action.labelClass,
+            };
+        });
     }
 
     function openRowActionsMenu(row: T, button: HTMLButtonElement): void {
@@ -1036,270 +1039,265 @@
 </script>
 
 <div class="datatable-container" bind:this={containerEl}>
-    {#if panelOn}
-        <!-- 77 SEL-A: the bar at the top. Its slot stays (and keeps its height) while the actions are down in the dock. -->
-        <div class="dt-selection-top" bind:this={selectionTopEl} data-testid="dt-selection-top" data-in-view={selectionTopInView ? 'true' : 'false'}>
-            {#if selectedRows.length === 0 || selectionTopInView}
-                <DataTableToolbar variant="top" selectedCount={selectedRows.length} bulkActions={panelActions} onClearSelection={clearAllSelection} hint={selectionHint} />
-            {/if}
-        </div>
-    {/if}
-    <!-- Table -->
-    <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div
-        class="table-wrapper"
-        data-testid="dt-scroll"
-        onkeydown={() => {
-            highlightedRowId = null;
-        }}
-    >
-        <table class="datatable {tableLayout === 'auto' ? 'layout-auto' : ''}">
-            <thead class={stickyHeader ? 'sticky-header' : undefined}>
-                <tr>
-                    <!-- Selection column (multi mode: checkboxes, single mode: no column header) -->
-                    {#if effectiveSelectionMode === 'multi'}
-                        <th class="th-fixed th-select" style="width: {selectionColumnWidth};" data-testid="dt-select-header">
-                            <div class="flex items-center justify-center gap-1">
-                                <!-- data-state publishes the tri-state of the header checkbox so it can be
-                                     observed without reading the icon's CSS class. -->
-                                <button type="button" class="checkbox-btn" data-testid="dt-select-all" data-state={isAllPageSelected ? 'checked' : isSomePageSelected ? 'partial' : 'unchecked'} onclick={toggleAllPageRows}>
-                                    {#if isAllPageSelected}
-                                        <Check size={16} class="check-icon checked" />
-                                    {:else if isSomePageSelected}
-                                        <Check size={16} class="check-icon partial" />
-                                    {:else}
-                                        <span class="check-box"></span>
-                                    {/if}
-                                </button>
-                                <button
-                                    type="button"
-                                    class="filter-btn"
-                                    class:active={showSelectedOnly}
-                                    data-testid="dt-show-selected-only"
-                                    data-state={showSelectedOnly ? 'on' : 'off'}
-                                    onclick={() => {
-                                        showSelectedOnly = !showSelectedOnly;
-                                    }}
-                                    title="Show selected only"
-                                >
-                                    <Filter size={12} />
-                                </button>
-                            </div>
-                        </th>
-                    {/if}
-
-                    <!-- Data columns -->
-                    {#each visibleColumns as column}
-                        {@const isSorted = sortState?.columnId === column.id}
-                        {@const sortDir = isSorted ? sortState?.direction : null}
-                        {@const hasFilter = columnFilters[column.id] !== undefined}
-                        <th
-                            class="th-data"
-                            data-testid="dt-header-{column.id}"
-                            data-sort={sortDir ?? 'none'}
-                            class:sortable={column.sortable !== false && enableSorting}
-                            class:th-fixed={column.pinned != null}
-                            class:th-pinned-right={column.pinned === 'right'}
-                            style="width: {columnWidths[column.id] || column.width || 150}px; min-width: {columnMinWidth(column)}px;{column.pinned === 'left' ? ' left: 0;' : column.pinned === 'right' ? ' right: 0;' : ''}{column.align ? ` text-align: ${column.align};` : ''}"
-                        >
-                            <DataTableColumnHeader
-                                {column}
-                                {sortDir}
-                                {hasFilter}
-                                {enableSorting}
-                                {enableColumnFilters}
-                                {enableColumnResize}
-                                {resizing}
-                                {columnFilters}
-                                {data}
-                                {boundaryData}
-                                bind:openFilterColumnId
-                                {toggleSort}
-                                {applyColumnFilter}
-                                {startResize}
-                                {handleHeaderTooltipGestureClick}
-                                {handleHeaderTooltipDblClick}
-                                {handleHeaderTooltipKeydown}
-                                {handleHeaderTooltipTouchStart}
-                                {cancelHeaderTooltipLongPress}
-                            />
-                        </th>
-                    {/each}
-
-                    <!-- Actions column -->
-                    {#if showActionsColumn}
-                        <th class="{stickyActions ? 'th-fixed' : ''} th-actions" style="width: {actionsColumnWidth};" data-testid="dt-actions-header">
-                            {resolvedActionsLabel}
-                        </th>
-                    {/if}
-                </tr>
-            </thead>
-            <tbody>
-                {#if isLoading}
+    <!-- The table: drawn inside the selection panel when it is on (77 SEL-A; the panel is its own component since SEL-C). -->
+    {#snippet tableBody()}
+        <!-- Table -->
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <div
+            class="table-wrapper"
+            data-testid="dt-scroll"
+            onkeydown={() => {
+                highlightedRowId = null;
+            }}
+        >
+            <table class="datatable {tableLayout === 'auto' ? 'layout-auto' : ''}">
+                <thead class={stickyHeader ? 'sticky-header' : undefined}>
                     <tr>
-                        <td colspan={visibleColumns.length + (effectiveSelectionMode === 'multi' ? 1 : 0) + (showActionsColumn ? 1 : 0)} class="td-loading" data-testid="dt-loading">
-                            <div class="loading-spinner"></div>
-                            <span>{$t('common.loading') || 'Loading...'}</span>
-                        </td>
-                    </tr>
-                {:else if paginatedData.length === 0}
-                    <tr>
-                        <td colspan={visibleColumns.length + (effectiveSelectionMode === 'multi' ? 1 : 0) + (showActionsColumn ? 1 : 0)} class="td-empty" data-testid="dt-empty">
-                            {emptyMessage || $t('common.noData') || 'No data available'}
-                        </td>
-                    </tr>
-                {:else}
-                    {#each paginatedData as row}
-                        {@const rowId = getRowId(row)}
-                        {@const isSelected = rowSelection[rowId]}
-                        {@const visibleRowActions = getVisibleRowActions(row)}
-                        <tr
-                            data-row-id={rowId}
-                            data-selected={isSelected ? 'true' : 'false'}
-                            data-highlighted={rowId === highlightedRowId ? 'true' : 'false'}
-                            class="{isSelected ? 'selected' : ''} {effectiveSelectionMode === 'single' || onRowClick ? 'clickable' : ''} {rowId === highlightedRowId ? 'highlighted' : ''} {getRowClass?.(row) ?? ''}"
-                            style={getRowStyle?.(row) ?? ''}
-                            onclick={() => {
-                                if (isRowSelectable && !isRowSelectable(row)) return;
-                                highlightedRowId = null;
-                                handleRowClick(row);
-                            }}
-                            ondblclick={() => {
-                                if (isRowSelectable && !isRowSelectable(row)) return;
-                                handleRowDoubleClick(row);
-                            }}
-                            onauxclick={(e) => {
-                                if (e.button === 1 && getRowHref) {
-                                    const href = getRowHref(row);
-                                    if (href) window.open(href, '_blank');
-                                }
-                            }}
-                            oncontextmenu={(e) => {
-                                if (enableContextMenu && visibleRowActions.length > 0) {
-                                    e.preventDefault();
-                                    contextMenuRow = row;
-                                    contextMenuAnchor = null;
-                                    contextMenuPos = {x: e.clientX, y: e.clientY};
-                                    return;
-                                }
-                                // No custom context menu configured — still suppress the
-                                // browser's native one when this is a touch-originated
-                                // long-press we're already handling ourselves (selection
-                                // toggle or view-row fallback), so it doesn't pop up over
-                                // our own action on mobile. Genuine desktop mouse
-                                // right-clicks (touchActive false) are left untouched.
-                                if (touchActive && (enableTouchSelection || onRowDoubleClick)) {
-                                    e.preventDefault();
-                                }
-                            }}
-                            ontouchstart={(e) => handleTouchStart(row, e)}
-                            ontouchend={handleTouchEnd}
-                            ontouchmove={handleTouchMove}
-                        >
-                            <!-- Selection cell (multi mode only - shows checkboxes) -->
-                            {#if effectiveSelectionMode === 'multi'}
-                                <td class="td-fixed td-select" data-testid="dt-select-cell-{rowId}">
-                                    <div class="flex items-center justify-center gap-1">
-                                        {#if !isRowSelectable || isRowSelectable(row)}
-                                            <button
-                                                type="button"
-                                                class="checkbox-btn"
-                                                data-testid="dt-row-checkbox-{rowId}"
-                                                data-state={isSelected ? 'checked' : 'unchecked'}
-                                                onclick={(e) => {
-                                                    e.stopPropagation();
-                                                    toggleRowSelection(rowId);
-                                                }}
-                                            >
-                                                {#if isSelected}
-                                                    <Check size={16} class="check-icon checked" />
-                                                {:else}
-                                                    <span class="check-box"></span>
-                                                {/if}
-                                            </button>
+                        <!-- Selection column (multi mode: checkboxes, single mode: no column header) -->
+                        {#if effectiveSelectionMode === 'multi'}
+                            <th class="th-fixed th-select" style="width: {selectionColumnWidth};" data-testid="dt-select-header">
+                                <div class="flex items-center justify-center gap-1">
+                                    <!-- data-state publishes the tri-state of the header checkbox so it can be
+                                         observed without reading the icon's CSS class. -->
+                                    <button type="button" class="checkbox-btn" data-testid="dt-select-all" data-state={isAllPageSelected ? 'checked' : isSomePageSelected ? 'partial' : 'unchecked'} onclick={toggleAllPageRows}>
+                                        {#if isAllPageSelected}
+                                            <Check size={16} class="check-icon checked" />
+                                        {:else if isSomePageSelected}
+                                            <Check size={16} class="check-icon partial" />
                                         {:else}
-                                            {@const dTooltip = disabledRowTooltip?.(row) ?? null}
-                                            {#if dTooltip}
-                                                <Tooltip html={dTooltip} position="right" maxWidth="280px">
-                                                    <span class="disabled-select-icon"><Ban size={16} /></span>
-                                                </Tooltip>
-                                            {:else}
-                                                <div style="width:28px"></div>
-                                            {/if}
+                                            <span class="check-box"></span>
                                         {/if}
-                                        <!-- Invisible spacer matching filter button width for alignment -->
-                                        <div class="invisible" style="width:20px" aria-hidden="true"></div>
-                                    </div>
-                                </td>
-                            {/if}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        class="filter-btn"
+                                        class:active={showSelectedOnly}
+                                        data-testid="dt-show-selected-only"
+                                        data-state={showSelectedOnly ? 'on' : 'off'}
+                                        onclick={() => {
+                                            showSelectedOnly = !showSelectedOnly;
+                                        }}
+                                        title="Show selected only"
+                                    >
+                                        <Filter size={12} />
+                                    </button>
+                                </div>
+                            </th>
+                        {/if}
 
-                            <!-- Data cells -->
+                        <!-- Data columns -->
+                        {#each visibleColumns as column}
+                            {@const isSorted = sortState?.columnId === column.id}
+                            {@const sortDir = isSorted ? sortState?.direction : null}
+                            {@const hasFilter = columnFilters[column.id] !== undefined}
+                            <th
+                                class="th-data"
+                                data-testid="dt-header-{column.id}"
+                                data-sort={sortDir ?? 'none'}
+                                class:sortable={column.sortable !== false && enableSorting}
+                                class:th-fixed={column.pinned != null}
+                                class:th-pinned-right={column.pinned === 'right'}
+                                style="width: {columnWidths[column.id] || column.width || 150}px; min-width: {columnMinWidth(column)}px;{column.pinned === 'left' ? ' left: 0;' : column.pinned === 'right' ? ' right: 0;' : ''}{column.align ? ` text-align: ${column.align};` : ''}"
+                            >
+                                <DataTableColumnHeader
+                                    {column}
+                                    {sortDir}
+                                    {hasFilter}
+                                    {enableSorting}
+                                    {enableColumnFilters}
+                                    {enableColumnResize}
+                                    {resizing}
+                                    {columnFilters}
+                                    {data}
+                                    {boundaryData}
+                                    bind:openFilterColumnId
+                                    {toggleSort}
+                                    {applyColumnFilter}
+                                    {startResize}
+                                    {handleHeaderTooltipGestureClick}
+                                    {handleHeaderTooltipDblClick}
+                                    {handleHeaderTooltipKeydown}
+                                    {handleHeaderTooltipTouchStart}
+                                    {cancelHeaderTooltipLongPress}
+                                />
+                            </th>
+                        {/each}
+
+                        <!-- Actions column -->
+                        {#if showActionsColumn}
+                            <th class="{stickyActions ? 'th-fixed' : ''} th-actions" style="width: {actionsColumnWidth};" data-testid="dt-actions-header">
+                                {resolvedActionsLabel}
+                            </th>
+                        {/if}
+                    </tr>
+                </thead>
+                <tbody>
+                    {#if isLoading}
+                        <tr>
+                            <td colspan={visibleColumns.length + (effectiveSelectionMode === 'multi' ? 1 : 0) + (showActionsColumn ? 1 : 0)} class="td-loading" data-testid="dt-loading">
+                                <div class="loading-spinner"></div>
+                                <span>{$t('common.loading') || 'Loading...'}</span>
+                            </td>
+                        </tr>
+                    {:else if paginatedData.length === 0}
+                        <tr>
+                            <td colspan={visibleColumns.length + (effectiveSelectionMode === 'multi' ? 1 : 0) + (showActionsColumn ? 1 : 0)} class="td-empty" data-testid="dt-empty">
+                                {emptyMessage || $t('common.noData') || 'No data available'}
+                            </td>
+                        </tr>
+                    {:else}
+                        {#each paginatedData as row}
+                            {@const rowId = getRowId(row)}
+                            {@const isSelected = rowSelection[rowId]}
+                            {@const visibleRowActions = getVisibleRowActions(row)}
+                            <tr
+                                data-row-id={rowId}
+                                data-selected={isSelected ? 'true' : 'false'}
+                                data-highlighted={rowId === highlightedRowId ? 'true' : 'false'}
+                                class="{isSelected ? 'selected' : ''} {effectiveSelectionMode === 'single' || onRowClick ? 'clickable' : ''} {rowId === highlightedRowId ? 'highlighted' : ''} {getRowClass?.(row) ?? ''}"
+                                style={getRowStyle?.(row) ?? ''}
+                                onclick={() => {
+                                    if (isRowSelectable && !isRowSelectable(row)) return;
+                                    highlightedRowId = null;
+                                    handleRowClick(row);
+                                }}
+                                ondblclick={() => {
+                                    if (isRowSelectable && !isRowSelectable(row)) return;
+                                    handleRowDoubleClick(row);
+                                }}
+                                onauxclick={(e) => {
+                                    if (e.button === 1 && getRowHref) {
+                                        const href = getRowHref(row);
+                                        if (href) window.open(href, '_blank');
+                                    }
+                                }}
+                                oncontextmenu={(e) => {
+                                    if (enableContextMenu && visibleRowActions.length > 0) {
+                                        e.preventDefault();
+                                        contextMenuRow = row;
+                                        contextMenuAnchor = null;
+                                        contextMenuPos = {x: e.clientX, y: e.clientY};
+                                        return;
+                                    }
+                                    // No custom context menu configured — still suppress the
+                                    // browser's native one when this is a touch-originated
+                                    // long-press we're already handling ourselves (selection
+                                    // toggle or view-row fallback), so it doesn't pop up over
+                                    // our own action on mobile. Genuine desktop mouse
+                                    // right-clicks (touchActive false) are left untouched.
+                                    if (touchActive && (enableTouchSelection || onRowDoubleClick)) {
+                                        e.preventDefault();
+                                    }
+                                }}
+                                ontouchstart={(e) => handleTouchStart(row, e)}
+                                ontouchend={handleTouchEnd}
+                                ontouchmove={handleTouchMove}
+                            >
+                                <!-- Selection cell (multi mode only - shows checkboxes) -->
+                                {#if effectiveSelectionMode === 'multi'}
+                                    <td class="td-fixed td-select" data-testid="dt-select-cell-{rowId}">
+                                        <div class="flex items-center justify-center gap-1">
+                                            {#if !isRowSelectable || isRowSelectable(row)}
+                                                <button
+                                                    type="button"
+                                                    class="checkbox-btn"
+                                                    data-testid="dt-row-checkbox-{rowId}"
+                                                    data-state={isSelected ? 'checked' : 'unchecked'}
+                                                    onclick={(e) => {
+                                                        e.stopPropagation();
+                                                        toggleRowSelection(rowId);
+                                                    }}
+                                                >
+                                                    {#if isSelected}
+                                                        <Check size={16} class="check-icon checked" />
+                                                    {:else}
+                                                        <span class="check-box"></span>
+                                                    {/if}
+                                                </button>
+                                            {:else}
+                                                {@const dTooltip = disabledRowTooltip?.(row) ?? null}
+                                                {#if dTooltip}
+                                                    <Tooltip html={dTooltip} position="right" maxWidth="280px">
+                                                        <span class="disabled-select-icon"><Ban size={16} /></span>
+                                                    </Tooltip>
+                                                {:else}
+                                                    <div style="width:28px"></div>
+                                                {/if}
+                                            {/if}
+                                            <!-- Invisible spacer matching filter button width for alignment -->
+                                            <div class="invisible" style="width:20px" aria-hidden="true"></div>
+                                        </div>
+                                    </td>
+                                {/if}
+
+                                <!-- Data cells -->
+                                {#each visibleColumns as column}
+                                    {@const cellContent = column.cell(row)}
+                                    <td
+                                        class="td-data"
+                                        class:td-fixed={column.pinned != null}
+                                        class:td-pinned-right={column.pinned === 'right'}
+                                        style="{column.pinned === 'left' ? 'left: 0;' : column.pinned === 'right' ? 'right: 0;' : ''}{column.align ? ` text-align: ${column.align};` : ''}"
+                                        data-column-id={column.id}
+                                    >
+                                        <DataTableCellContent {cellContent} />
+                                    </td>
+                                {/each}
+
+                                <!-- Actions cell -->
+                                {#if showActionsColumn}
+                                    <td class="{stickyActions ? 'td-fixed' : ''} td-actions" data-testid="dt-actions-cell-{rowId}">
+                                        <div class="actions-row">
+                                            {#if visibleRowActions.length > 0}
+                                                <button
+                                                    type="button"
+                                                    class="row-actions-btn"
+                                                    data-testid="row-actions-{rowId}"
+                                                    aria-label={resolvedActionsLabel}
+                                                    title={resolvedActionsLabel}
+                                                    onclick={(e) => {
+                                                        e.preventDefault();
+                                                        e.stopPropagation();
+                                                        openRowActionsMenu(row, e.currentTarget);
+                                                    }}
+                                                >
+                                                    ⋮
+                                                </button>
+                                            {/if}
+                                        </div>
+                                    </td>
+                                {/if}
+                            </tr>
+                        {/each}
+                    {/if}
+                </tbody>
+                {#if hasFooterCells && !isLoading && footerSourceRows.length > 0}
+                    <tfoot>
+                        <tr>
+                            {#if effectiveSelectionMode === 'multi'}
+                                <td class="td-fixed td-select td-footer"></td>
+                            {/if}
                             {#each visibleColumns as column}
-                                {@const cellContent = column.cell(row)}
+                                {@const footerContent = computedFooterCells[column.id] ?? ''}
                                 <td
-                                    class="td-data"
+                                    class="td-data td-footer"
+                                    data-testid="dt-footer-{column.id}"
                                     class:td-fixed={column.pinned != null}
                                     class:td-pinned-right={column.pinned === 'right'}
                                     style="{column.pinned === 'left' ? 'left: 0;' : column.pinned === 'right' ? 'right: 0;' : ''}{column.align ? ` text-align: ${column.align};` : ''}"
-                                    data-column-id={column.id}
                                 >
-                                    <DataTableCellContent {cellContent} />
+                                    <DataTableCellContent cellContent={footerContent} />
                                 </td>
                             {/each}
-
-                            <!-- Actions cell -->
                             {#if showActionsColumn}
-                                <td class="{stickyActions ? 'td-fixed' : ''} td-actions" data-testid="dt-actions-cell-{rowId}">
-                                    <div class="actions-row">
-                                        {#if visibleRowActions.length > 0}
-                                            <button
-                                                type="button"
-                                                class="row-actions-btn"
-                                                data-testid="row-actions-{rowId}"
-                                                aria-label={resolvedActionsLabel}
-                                                title={resolvedActionsLabel}
-                                                onclick={(e) => {
-                                                    e.preventDefault();
-                                                    e.stopPropagation();
-                                                    openRowActionsMenu(row, e.currentTarget);
-                                                }}
-                                            >
-                                                ⋮
-                                            </button>
-                                        {/if}
-                                    </div>
-                                </td>
+                                <td class="{stickyActions ? 'td-fixed' : ''} td-actions td-footer"></td>
                             {/if}
                         </tr>
-                    {/each}
+                    </tfoot>
                 {/if}
-            </tbody>
-            {#if hasFooterCells && !isLoading && footerSourceRows.length > 0}
-                <tfoot>
-                    <tr>
-                        {#if effectiveSelectionMode === 'multi'}
-                            <td class="td-fixed td-select td-footer"></td>
-                        {/if}
-                        {#each visibleColumns as column}
-                            {@const footerContent = computedFooterCells[column.id] ?? ''}
-                            <td
-                                class="td-data td-footer"
-                                data-testid="dt-footer-{column.id}"
-                                class:td-fixed={column.pinned != null}
-                                class:td-pinned-right={column.pinned === 'right'}
-                                style="{column.pinned === 'left' ? 'left: 0;' : column.pinned === 'right' ? 'right: 0;' : ''}{column.align ? ` text-align: ${column.align};` : ''}"
-                            >
-                                <DataTableCellContent cellContent={footerContent} />
-                            </td>
-                        {/each}
-                        {#if showActionsColumn}
-                            <td class="{stickyActions ? 'td-fixed' : ''} td-actions td-footer"></td>
-                        {/if}
-                    </tr>
-                </tfoot>
-            {/if}
-        </table>
-    </div>
+            </table>
+        </div>
+    {/snippet}
 
     <!-- Pagination - show only when enabled and items exceed smallest page size (or alwaysShowPagination) -->
     {#snippet pager(docked: boolean)}
@@ -1318,23 +1316,19 @@
             />
         {/if}
     {/snippet}
+    {#snippet noBar()}{/snippet}
     {#if panelOn}
-        <!-- 77 SEL-A: the dock. The actions come down into it while the top of the table is out of view; the pager is the
-             same instance in both states (only its `docked` changes). Without either, nothing is drawn. -->
-        {#if showPagination || dockHasActions}
-            <div class="dt-dock-wrap" class:active={dockHasActions} data-testid="dt-dock" data-actions={dockHasActions ? 'true' : 'false'}>
-                <div class="dt-dock" class:active={dockHasActions}>
-                    {#if dockHasActions}
-                        <DataTableToolbar variant="dock" selectedCount={selectedRows.length} bulkActions={panelActions} onClearSelection={clearAllSelection} />
-                    {/if}
-                    {#if showPagination}
-                        {@render pager(dockHasActions)}
-                    {/if}
-                </div>
-            </div>
+        <SelectionPanel actions={panelActions} selectedCount={selectedRows.length} hint={selectionHint} onClearSelection={clearAllSelection} pager={showPagination ? pager : undefined} head={selectionHead}>
+            {@render tableBody()}
+        </SelectionPanel>
+    {:else}
+        {#if selectionHead}
+            {@render selectionHead(noBar)}
         {/if}
-    {:else if showPagination}
-        {@render pager(false)}
+        {@render tableBody()}
+        {#if showPagination}
+            {@render pager(false)}
+        {/if}
     {/if}
 </div>
 
@@ -1368,69 +1362,6 @@
 />
 
 <style>
-    /* ===== 77 SEL-A: the selection panel ===== */
-    .dt-selection-top {
-        min-height: 2rem;
-        margin-bottom: 0.5rem;
-    }
-
-    /* Without actions the dock adds nothing: the pager keeps its own sticky balloon, as without the panel. */
-    .dt-dock-wrap:not(.active) {
-        display: contents;
-    }
-
-    .dt-dock-wrap:not(.active) > .dt-dock {
-        display: contents;
-    }
-
-    /* With the actions it is the balloon: sticky at the bottom (lifted by `--lf-pager-lift` above a page's fixed panel,
-       as the pager), the actions row on top, the pager under it. */
-    .dt-dock-wrap.active {
-        position: sticky;
-        bottom: calc(1rem + var(--lf-pager-lift, 0px));
-        z-index: 30;
-        display: flex;
-        justify-content: center;
-        padding: 0.5rem 0;
-        pointer-events: none;
-    }
-
-    .dt-dock.active {
-        display: flex;
-        flex-direction: column;
-        align-items: stretch;
-        max-width: calc(100vw - 2rem);
-        pointer-events: auto;
-        background: var(--lf-surface-card);
-        border: 1px solid var(--lf-border-raised);
-        border-radius: 16px;
-        box-shadow: 0 10px 30px -8px var(--lf-shadow-raised);
-        animation: dt-dock-rise 0.16s ease-out;
-    }
-
-    @keyframes dt-dock-rise {
-        from {
-            transform: translateY(12px);
-            opacity: 0;
-        }
-        to {
-            transform: translateY(0);
-            opacity: 1;
-        }
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-        .dt-dock.active {
-            animation: none;
-        }
-    }
-
-    @media (max-width: 480px) {
-        .dt-dock-wrap.active {
-            bottom: calc(0.5rem + var(--lf-pager-lift, 0px));
-        }
-    }
-
     .datatable-container {
         width: 100%;
         position: relative;

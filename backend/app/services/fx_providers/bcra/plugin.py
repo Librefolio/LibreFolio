@@ -19,8 +19,9 @@ Measured on 19/11/2026:
 - **The other currencies** are the bank's ``tipoCotizacion``, ARS per unit, which the bank builds on its «USD» row
   times the currency's parity to the dollar (``tipoPase``), not on REF. The «USD» row and REF differ by up to 14.9% in
   2002, 6.4% in 2018, 5.7% in 2023, 4.1% in 2025, under 1% in most other years. To be reviewed with the developer.
-- Non-ISO codes: ``REF`` → USD, ``MXP`` → MXN, ``VND`` per 1 000 units. Not served: XDR (an open question of lane 75),
-  XAU and XAG (no ARS value), CNH (not ISO), VEB (three redenominations under one code), the legacy ATS, DEM, ESP, ITL.
+- Non-ISO codes: ``REF`` → USD, ``MXP`` → MXN, ``VND`` per 1 000 units. XDR (``DEG``, the IMF's SDR) is served like
+  the other currencies (Q7 of lane 75). Not served: XAU and XAG (no ARS value), CNH (not ISO), VEB (three
+  redenominations under one code), the legacy ATS, DEM, ESP, ITL.
 - Duplicates: a date can carry two records (``count`` counts records, not dates); five REF days have two different
   values (2017-09-06: 17.2183 and 37.6917): such a day is dropped.
 - Values have six decimals: small ones are coarse in the early years (COP 0.00106 ARS in 2003).
@@ -63,6 +64,7 @@ CODES: dict[str, tuple[str, Decimal]] = {
     "USD": ("REF", _ONE),
     "MXN": ("MXP", _ONE),
     "VND": ("VND", Decimal(1000)),
+    "XDR": ("XDR", _ONE),
     **{code: (code, _ONE) for code in ["AUD", "AWG", "BOB", "BRL", "CAD", "CHF", "CLP", "CNY", "COP", "CZK", "DKK", "EUR", "GBP", "HKD", "ILS", "INR", "JPY", "NIO", "NOK", "NZD", "PEN", "PYG", "RSD", "RUB", "SEK", "SGD", "TRY", "UYU", "ZAR"]},
 }
 
@@ -102,10 +104,10 @@ class BCRAProvider(FXRateProvider):
     """
     Banco Central de la República Argentina FX rate provider.
 
-    Provides the BCRA's daily exchange rates of 32 currencies with ARS as base currency, ARS per unit; USD is the
+    Provides the BCRA's daily exchange rates of 33 currencies with ARS as base currency, ARS per unit; USD is the
     Comunicación A 3500 reference rate. Data source: the documented «Estadísticas Cambiarias v1.0» API.
 
-    Coverage: a fixed code map, 32 currencies plus ARS.
+    Coverage: a fixed code map, 33 currencies plus ARS.
     Update frequency: Argentine business days.
     """
 
@@ -138,10 +140,10 @@ class BCRAProvider(FXRateProvider):
     @property
     def description_i18n(self) -> dict[str, str]:
         return {
-            "en": "Banco Central de la República Argentina — daily exchange rates of 32 currencies against the Argentine peso (ARS); the US dollar is the official reference rate (Comunicación A 3500). Argentine business days, history from 2002. Source: Banco Central de la República Argentina.",
-            "it": "Banco Central de la República Argentina — tassi di cambio giornalieri di 32 valute contro il peso argentino (ARS); il dollaro USA è il tasso di riferimento ufficiale (Comunicación A 3500). Giorni lavorativi argentini, storia dal 2002. Fonte: Banco Central de la República Argentina.",
-            "fr": "Banco Central de la República Argentina — taux de change quotidiens de 32 devises contre le peso argentin (ARS) ; le dollar américain est le taux de référence officiel (Comunicación A 3500). Jours ouvrables argentins, historique depuis 2002. Source : Banco Central de la República Argentina.",
-            "es": "Banco Central de la República Argentina — tipos de cambio diarios de 32 monedas contra el peso argentino (ARS); el dólar estadounidense es el tipo de cambio de referencia oficial (Comunicación A 3500). Días hábiles argentinos, historial desde 2002. Fuente: Banco Central de la República Argentina.",
+            "en": "Banco Central de la República Argentina — daily exchange rates of 33 currencies against the Argentine peso (ARS); the US dollar is the official reference rate (Comunicación A 3500). Argentine business days, history from 2002. Source: Banco Central de la República Argentina.",
+            "it": "Banco Central de la República Argentina — tassi di cambio giornalieri di 33 valute contro il peso argentino (ARS); il dollaro USA è il tasso di riferimento ufficiale (Comunicación A 3500). Giorni lavorativi argentini, storia dal 2002. Fonte: Banco Central de la República Argentina.",
+            "fr": "Banco Central de la República Argentina — taux de change quotidiens de 33 devises contre le peso argentin (ARS) ; le dollar américain est le taux de référence officiel (Comunicación A 3500). Jours ouvrables argentins, historique depuis 2002. Source : Banco Central de la República Argentina.",
+            "es": "Banco Central de la República Argentina — tipos de cambio diarios de 33 monedas contra el peso argentino (ARS); el dólar estadounidense es el tipo de cambio de referencia oficial (Comunicación A 3500). Días hábiles argentinos, historial desde 2002. Fuente: Banco Central de la República Argentina.",
         }
 
     @property

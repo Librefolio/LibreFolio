@@ -18,6 +18,7 @@ import {Link2, Plus, Trash2} from 'lucide-svelte';
 import {fireEvent, render, screen, setupI18n, waitFor} from '$test/component';
 import DataTable from './DataTable.svelte';
 import ExternalPagerFixture from '$test/harness/DataTableExternalPagerHarness.svelte';
+import SectionHeadFixture from '$test/harness/DataTableSectionHeadHarness.svelte';
 import type {BulkAction, ColumnDef} from './types';
 
 interface Row {
@@ -241,5 +242,108 @@ describe('an external pager (77 SEL-B)', () => {
         await waitFor(() => expect(screen.getByTestId('dt-dock')).toHaveAttribute('data-actions', 'true'));
         expect(screen.getByTestId('data-table-pagination')).toBe(pager);
         expect(pager).toHaveAttribute('data-docked', 'true');
+    });
+});
+
+/**
+ * 77 SEL-D (Q-SEL-8): a table inside a section (a form, a window) puts its bar in the section's head, beside the title
+ * and the section's own buttons. The head is the caller's (`selectionHead`), drawn by the table even when the selection
+ * is off, so the section keeps one head. While nothing is selected the head stays as it was: no hint, unless the caller
+ * gives one. The table watches the whole head: when it leaves the view, the actions come down into the dock.
+ */
+describe('the bar in a section head (77 SEL-D)', () => {
+    const within = (testId: string, inner: string) => screen.getByTestId(testId).querySelector(`[data-testid="${inner}"]`);
+
+    it('with a selection the bar sits in the head, between the title and the section’s button', async () => {
+        const {list} = actions();
+        render(SectionHeadFixture, {props: {rows: rowsOf(4), bulkActions: list as never}});
+        await tick('r1');
+        const bar = within('section-head', 'selection-toolbar');
+        expect(bar).not.toBeNull();
+        expect(bar).toHaveAttribute('data-variant', 'top');
+        expect(screen.getAllByTestId('selection-toolbar')).toHaveLength(1);
+        const order = [...screen.getByTestId('section-head').querySelectorAll('[data-testid]')].map((el) => el.getAttribute('data-testid'));
+        expect(order.indexOf('section-title')).toBeLessThan(order.indexOf('selection-toolbar'));
+        expect(order.indexOf('selection-toolbar')).toBeLessThan(order.indexOf('section-add'));
+    });
+
+    it('nothing selected: the head as it was, with no hint', () => {
+        const {list} = actions();
+        render(SectionHeadFixture, {props: {rows: rowsOf(4), bulkActions: list as never}});
+        expect(screen.getByTestId('section-title')).toBeInTheDocument();
+        expect(screen.getByTestId('section-add')).toBeInTheDocument();
+        expect(screen.queryByTestId('selection-toolbar-hint')).toBeNull();
+        expect(screen.queryByTestId('selection-toolbar')).toBeNull();
+    });
+
+    it('nothing selected, with the caller’s hint: the hint sits in the head', () => {
+        const {list} = actions();
+        render(SectionHeadFixture, {props: {rows: rowsOf(4), bulkActions: list as never, selectionHint: 'Tick the rows'}});
+        expect(within('section-head', 'selection-toolbar-hint')?.textContent?.trim()).toBe('Tick the rows');
+    });
+
+    it('the selection off (read only): the head is still drawn, without a bar', () => {
+        const {list} = actions();
+        render(SectionHeadFixture, {props: {rows: rowsOf(4), bulkActions: list as never, enableSelection: false}});
+        expect(screen.getByTestId('section-title')).toBeInTheDocument();
+        expect(screen.getByTestId('section-add')).toBeInTheDocument();
+        expect(screen.queryByTestId('dt-row-checkbox-r1')).toBeNull();
+        expect(screen.queryByTestId('dt-selection-top')).toBeNull();
+    });
+
+    it('the panel off: the head is still drawn', () => {
+        const {list} = actions();
+        render(SectionHeadFixture, {props: {rows: rowsOf(4), bulkActions: list as never, selectionPanel: false}});
+        expect(screen.getByTestId('section-head')).toBeInTheDocument();
+    });
+
+    it('watches the whole head; out of view, the actions come down into the dock above the same pager', async () => {
+        const {list} = actions();
+        render(SectionHeadFixture, {props: {rows: rowsOf(8), bulkActions: list as never, enablePagination: true}});
+        const top = screen.getByTestId('dt-selection-top');
+        expect(top.contains(screen.getByTestId('section-head'))).toBe(true);
+        expect(observers.some((observer) => observer.targets.includes(top))).toBe(true);
+        await tick('r1');
+        const pagination = screen.getByTestId('data-table-pagination');
+        setTopInView(false);
+        await waitFor(() => expect(screen.getByTestId('dt-dock')).toHaveAttribute('data-actions', 'true'));
+        expect(screen.getAllByTestId('selection-toolbar')).toHaveLength(1);
+        expect(screen.getByTestId('selection-toolbar')).toHaveAttribute('data-variant', 'dock');
+        expect(within('section-head', 'selection-toolbar')).toBeNull();
+        expect(screen.getByTestId('data-table-pagination')).toBe(pagination);
+    });
+
+    it('in a head the bar takes the compact form when the head is narrow; each action names its number and opens its name on focus (77 SEL-D2)', async () => {
+        const {list} = actions();
+        render(SectionHeadFixture, {props: {rows: rowsOf(4), bulkActions: list as never}});
+        await tick('r1');
+        // The compact form is a container query on the head (`dt-head`): only a browser measures it (e2e
+        // `asset-profile-edit`, the head's height with and without a selection). Here, the bar says it is in a head.
+        expect(within('section-head', 'selection-toolbar')).toHaveAttribute('data-in-head', 'true');
+        const link = screen.getByTestId('toolbar-action-link');
+        expect(link).toHaveAttribute('aria-label', 'Link, 1');
+        expect(screen.queryByTestId('tooltip-content')).toBeNull();
+        link.focus();
+        expect((await screen.findByTestId('tooltip-content')).textContent?.trim()).toBe('Link');
+        link.blur();
+        await waitFor(() => expect(screen.queryByTestId('tooltip-content')).toBeNull());
+    });
+
+    it('a bar at the top of a table, not in a head, keeps its own form', async () => {
+        const {list} = actions();
+        mount(rowsOf(4), {bulkActions: list, selectionPanel: true});
+        await tick('r1');
+        expect(screen.getByTestId('selection-toolbar')).not.toHaveAttribute('data-in-head');
+    });
+
+    it('the count button in the head clears the ticks of the table', async () => {
+        const {list} = actions();
+        render(SectionHeadFixture, {props: {rows: rowsOf(4), bulkActions: list as never}});
+        await tick('r1');
+        await tick('r2');
+        await fireEvent.click(screen.getByTestId('selection-toolbar-clear'));
+        expect(screen.getByTestId('dt-row-checkbox-r1')).toHaveAttribute('data-state', 'unchecked');
+        expect(screen.getByTestId('dt-row-checkbox-r2')).toHaveAttribute('data-state', 'unchecked');
+        expect(screen.queryByTestId('selection-toolbar')).toBeNull();
     });
 });

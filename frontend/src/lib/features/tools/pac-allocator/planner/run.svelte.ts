@@ -8,14 +8,14 @@
 import {runTool} from '../../client';
 import {ToolClientError, assertToolAccount, type CompatibleToolDescriptor, type ToolBatchMetrics, type ToolItemMetrics} from '../../contracts';
 import {notify} from '$lib/stores/app/notify.svelte';
-import {PLANNER_CONTRACT_VERSION, PLANNER_TOOL_CODE} from './defaults';
+import {PAC_PLANNER_PROFILE, type PlannerProfile} from './profile';
 import type {BuiltRequest} from './request';
-import type {PacPlannerResult} from './types';
+import type {PlannerResult, PlannerContractVersion, PlannerToolCode} from './types';
 
-type PlannerDescriptor = CompatibleToolDescriptor<typeof PLANNER_TOOL_CODE, typeof PLANNER_CONTRACT_VERSION>;
+export type PlannerDescriptor = CompatibleToolDescriptor<PlannerToolCode, PlannerContractVersion>;
 
 export type RunOutcome =
-    | {kind: 'result'; built: BuiltRequest; result: PacPlannerResult; metrics: ToolItemMetrics; batch: ToolBatchMetrics; executionId: string | null}
+    | {kind: 'result'; built: BuiltRequest; result: PlannerResult; metrics: ToolItemMetrics; batch: ToolBatchMetrics; executionId: string | null}
     | {kind: 'tool_error'; built: BuiltRequest; error: {code: string; retryable: boolean; issue_count: number}; metrics: ToolItemMetrics; batch: ToolBatchMetrics; executionId: string | null}
     | {kind: 'client_error'; built: BuiltRequest; error: ToolClientError};
 
@@ -26,14 +26,22 @@ export class PlannerRun {
     outcome = $state.raw<RunOutcome | null>(null);
     /** Set when the user stopped waiting; cleared by the next run. */
     stopped = $state(false);
+    /**
+     * The phase the calculation last reported (V3 of project 67), as the service names it; `null` before the first message,
+     * once the answer is in, and for a Tool that reports none. Only the current run's messages count.
+     */
+    progress = $state<string | null>(null);
 
     #descriptor: () => PlannerDescriptor;
+    /** The Tool this run is for (F1 of project 67): its correlation prefix and its event names. */
+    #profile: PlannerProfile;
     #controller: AbortController | null = null;
     #sequence = 0;
 
-    /** A getter: the renderer props are read when a run starts, never captured. */
-    constructor(descriptor: () => PlannerDescriptor) {
+    /** A getter: the renderer props are read when a run starts, never captured. The PAC when no profile is given. */
+    constructor(descriptor: () => PlannerDescriptor, profile: PlannerProfile = PAC_PLANNER_PROFILE) {
         this.#descriptor = descriptor;
+        this.#profile = profile;
     }
 
     get running(): boolean {
@@ -58,22 +66,26 @@ export class PlannerRun {
         this.#controller = controller;
         this.busy = built;
         this.stopped = false;
+        this.progress = null;
         try {
-            const item = await runTool(PLANNER_TOOL_CODE, PLANNER_CONTRACT_VERSION, {
+            const item = await runTool(this.#profile.toolCode, this.#profile.contractVersion, {
                 descriptor: this.#descriptor(),
-                correlationId: `pac-rev-${built.revision}-${sequence}`,
+                correlationId: `${this.#profile.correlationPrefix}-${built.revision}-${sequence}`,
                 parameters: built.request,
                 signal: controller.signal,
+                onProgress: (event) => {
+                    if (sequence === this.#sequence) this.progress = event.phase;
+                },
             });
             if (!this.#current(sequence, accountGeneration)) return;
             if (item.status === 'success') {
-                const result = item.result as PacPlannerResult;
+                const result = item.result as PlannerResult;
                 this.outcome = {kind: 'result', built, result, metrics: item.metrics, batch: item.batch.metrics, executionId: item.execution_id ?? null};
                 // Signal for specs and diagnostics: states and counts only, never an amount.
-                notify({name: 'tool.pac-plan.completed', detail: {resultState: result.result_state, revision: built.revision, issues: result.issues.length}});
+                notify({name: this.#profile.events.completed, detail: {resultState: result.result_state, revision: built.revision, issues: result.issues.length}});
             } else {
                 this.outcome = {kind: 'tool_error', built, error: item.error, metrics: item.metrics, batch: item.batch.metrics, executionId: item.execution_id ?? null};
-                notify({name: 'tool.pac-plan.failed', detail: {code: item.error.code, retryable: item.error.retryable, revision: built.revision}});
+                notify({name: this.#profile.events.failed, detail: {code: item.error.code, retryable: item.error.retryable, revision: built.revision}});
             }
         } catch (caught) {
             if (!this.#current(sequence, accountGeneration)) return;
@@ -85,10 +97,11 @@ export class PlannerRun {
             // A session change tears the renderer down; nothing to show.
             if (error.kind === 'session' || error.kind === 'authentication') return;
             this.outcome = {kind: 'client_error', built, error};
-            notify({name: 'tool.pac-plan.failed', detail: {kind: error.kind, code: error.code, revision: built.revision}});
+            notify({name: this.#profile.events.failed, detail: {kind: error.kind, code: error.code, revision: built.revision}});
         } finally {
             if (sequence === this.#sequence) {
                 this.busy = null;
+                this.progress = null;
                 this.#controller = null;
             }
         }
@@ -107,5 +120,6 @@ export class PlannerRun {
         this.#controller?.abort();
         this.#controller = null;
         this.busy = null;
+        this.progress = null;
     }
 }

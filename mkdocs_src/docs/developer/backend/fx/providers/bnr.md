@@ -8,7 +8,7 @@
 | **API Format** | XML (`DataSet` → `Body` → `Cube date=…` → `Rate currency=… multiplier=…`) |
 | **API Key** | Not required |
 | **Terms** | ❔ The «Disclaimer & Copyright» page renders its text with a script: no terms could be read. Developer decision D1: offered for a self-hosted instance |
-| **Currencies** | A fixed list: 38 currencies plus RON |
+| **Currencies** | A fixed list: 39 currencies plus RON |
 | **Update Frequency** | Romanian business days |
 | **Historical Data** | From 2005-01-03 (`FIRST_DAY` 2005-01-01: the first year file) |
 
@@ -54,7 +54,8 @@ date, no conflicting duplicate (a day with two different values would be dropped
 | HKD IDR ILS ISK MYR PHP SGD | 2024-09-23 |
 
 - **Former currencies** are served for their history, as ECB does: BGN, HRK, SKK.
-- **Not served**: XAU (gold, RON per gram) and XDR (an open question of lane 75, Q7).
+- **The SDR is served**: XDR, the IMF's unit of account (a basket of USD, EUR, CNY, JPY and GBP), 6.5306 RON per 1 XDR.
+- **Not served**: XAU (gold, RON per gram).
 - **Missing values** are written `-` (1 093 cells, mostly BGN, RUB and SKK in 2007): skipped.
 - **The RUB rate** is the BNR's own (Q3 (b)), not the Central Bank of Russia's: the note says so.
 - **Jumps above 10%** are real market moves: CHF on 2015-01-15, EGP in 2016, RUB in 2014 and 2022, TRY in 2018 and
@@ -98,7 +99,7 @@ knowing, not limits that mislead.
 ### 🧪 Tests
 
 `backend/test_scripts/test_services/test_fx_bnr.py` pins the ten-day file and when it is enough, the year files that
-replace it, the pauses, the multiplier, the three namespaces, XAU and XDR left out, the skipped values, the duplicates,
+replace it, the pauses, the multiplier, the three namespaces, XAU left out, the skipped values, the duplicates,
 the missing year, every answer that is not the BNR's XML, the 429, the HTTP errors and the network failures, all with
 synthetic files written by hand (no network, no DB, no server). It is registered among the provider error paths:
 

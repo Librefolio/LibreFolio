@@ -119,24 +119,28 @@
     <div class="pagination-balloon">
         <!-- Row 1: Page size + label + total (groups together on mobile) -->
         <div class="pagination-row-top">
-            <div bind:this={dropdownRef} class="page-size-selector">
-                <button class="page-size-btn" onclick={() => (showDropdown = !showDropdown)} type="button" data-testid="pagination-size-trigger" aria-expanded={showDropdown}>
-                    <span>{formatPageSize(getDisplayPageSize())}</span>
-                    <ChevronDown size={14} />
-                </button>
-                {#if showDropdown}
-                    <div class="page-size-dropdown" bind:this={dropdownPanel} style:left={`${dropdownPosition.left}px`} style:top={`${dropdownPosition.top}px`} data-testid="pagination-size-menu">
-                        {#each pageSizeOptions as size}
-                            <button type="button" class="dropdown-option" class:selected={getDisplayPageSize() === size} onclick={() => selectPageSize(size)} data-testid={`pagination-size-option-${size}`}>
-                                {formatPageSize(size)}
-                            </button>
-                        {/each}
-                    </div>
-                {/if}
-                <span class="page-size-label">{$t('table.perPage') || 'per page'}</span>
-            </div>
-            <div class="divider desktop-only"></div>
-            <div class="total-info"><span class="total-text">{totalItems} {$t('table.items') || 'items'}</span></div>
+            <!-- 77 SEL-D1: with a single page size there is nothing to choose (Q-SEL-17): no selector, the total stays. -->
+            {#if pageSizeOptions.length > 1}
+                <div bind:this={dropdownRef} class="page-size-selector">
+                    <button class="page-size-btn" onclick={() => (showDropdown = !showDropdown)} type="button" data-testid="pagination-size-trigger" aria-expanded={showDropdown} aria-label="{formatPageSize(getDisplayPageSize())} {$t('table.perPage') || 'per page'}">
+                        <span>{formatPageSize(getDisplayPageSize())}</span>
+                        <ChevronDown size={14} />
+                    </button>
+                    {#if showDropdown}
+                        <div class="page-size-dropdown" bind:this={dropdownPanel} style:left={`${dropdownPosition.left}px`} style:top={`${dropdownPosition.top}px`} data-testid="pagination-size-menu">
+                            {#each pageSizeOptions as size}
+                                <button type="button" class="dropdown-option" class:selected={getDisplayPageSize() === size} onclick={() => selectPageSize(size)} data-testid={`pagination-size-option-${size}`}>
+                                    {formatPageSize(size)}
+                                </button>
+                            {/each}
+                        </div>
+                    {/if}
+                    <!-- 77 SEL-D2: below 480 px the words leave; the trigger's name keeps them. -->
+                    <span class="page-size-label" aria-hidden="true">{$t('table.perPage') || 'per page'}</span>
+                </div>
+                <div class="divider desktop-only"></div>
+            {/if}
+            <div class="total-info" data-testid="pagination-total"><span class="total-text">{totalItems} {$t('table.items') || 'items'}</span></div>
         </div>
 
         <!-- Row 2: Page navigation -->
@@ -405,8 +409,20 @@
         }
     }
 
-    /* Mobile */
+    /* Mobile. 77 SEL-D2: the words «per page» leave, and the balloon is a row that wraps by itself: with few pages the
+       size, the total and the pages share one line; with many, the pages go below, as before. */
     @media (max-width: 480px) {
+        .pagination-balloon {
+            flex-direction: row;
+            flex-wrap: wrap;
+            justify-content: center;
+            column-gap: 0.75rem;
+        }
+
+        .page-size-label {
+            display: none;
+        }
+
         .pagination-container {
             bottom: calc(0.5rem + var(--lf-pager-lift, 0px));
             padding: 0.5rem;

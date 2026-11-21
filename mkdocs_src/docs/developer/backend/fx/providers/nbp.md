@@ -8,7 +8,7 @@
 | **API Format** | JSON, **documented** ([NBP Web API](https://api.nbp.pl/en.html)) |
 | **API Key** | Not required |
 | **Terms** | The API documentation reads «All rights reserved»; the instructions page is behind an anti-bot wall. Developer decision D1: offered for a self-hosted instance |
-| **Currencies** | 147: table A, 31 daily; table B, 116 weekly (D3) |
+| **Currencies** | 148: table A, 32 daily; table B, 116 weekly (D3) |
 | **Update Frequency** | Polish business days (A); weekly, usually Wednesday (B) |
 | **Historical Data** | From 2002-01-02 |
 
@@ -29,7 +29,7 @@ The provider (`backend/app/services/fx_providers/nbp/plugin.py`) reads whole tab
 - **No table in a window** answers 404 «Brak danych» (no data): no rows, the next window goes on. Any other 404 is an
   error.
 - **Start date**: `"min"`, and any start before 2002-01-02, keeps from `FIRST_DAY`. PLN alone, or only currencies
-  outside the 147, makes no request.
+  outside the 148, makes no request.
 - **Base currency**: `fetch_rates()` with a `base_currency` other than PLN (or None) raises `ValueError`.
 
 ### ↔️ Direction and Unit
@@ -43,7 +43,7 @@ Each rate is returned under its table's `effectiveDate`. Measured on 2026-11-19:
 since 2002, no conflicting duplicate, and A and B never disagree on a day both publish (2002–2011); equal values are
 kept once. Table B was published every two weeks in 2002, then weekly.
 
-- **XDR** is in table A and is not served (an open question of lane 75, Q7).
+- **XDR** (the IMF's special drawing right, a basket of USD, EUR, CNY, JPY and GBP) is in table A and is served: 5.4103 PLN per 1 XDR.
 - **VES**: the bolívar was redenominated (÷10⁶) on 2021-10-01; the NBP published the new scale from 2021-10-13
   (`VES_NEW_FROM`). Older values are multiplied by `VES_FACTOR` (10⁶), as BCB does: 0.95 on 2021-10-06, 0.9538 on
   2021-10-13.

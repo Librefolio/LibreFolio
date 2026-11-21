@@ -6,7 +6,7 @@ from typing import Annotated, Literal, Union
 
 from pydantic import Field, model_validator
 
-from backend.app.schemas.pac_allocator.base import AllocationStrictModel, CurrencyCode, NotProvenReasonCode, PlannerFixedDecimal, PlannerId, PlannerLabel, PlannerLongLabel, PlannerNonNegativeDecimal, PlannerPositiveInteger
+from backend.app.schemas.pac_allocator.base import AllocationStrictModel, CurrencyCode, NotProvenReasonCode, PlannerFixedDecimal, PlannerId, PlannerLabel, PlannerLongLabel, PlannerNonNegativeDecimal, PlannerPositiveDecimal, PlannerPositiveInteger
 from backend.app.schemas.pac_allocator.exact import fixed_fraction
 
 
@@ -40,13 +40,17 @@ type NumericObjectiveUnit = Annotated[
 ObjectiveCode = Literal[
     "fixed_l2",
     "shortfall",
-    "turnover",
     "explicit_cost",
     "incremental_cost",
     "split_asset_count",
     "active_order_rows",
     "incremental_order_rows",
     "route_priority",
+    # Rebalancer: one score (J = lambda * D / F + (F - W)) with its three parts, and the number of operations (decisioni §2).
+    "plan_score",
+    "target_distance",
+    "wealth_loss",
+    "operation_count",
 ]
 ObjectiveSense = Literal["min", "max"]
 
@@ -55,22 +59,25 @@ _ObjectiveSignDomain = Literal["signed", "nonnegative", "nonnegative_integer"]
 OBJECTIVE_SIGN_DOMAINS: dict[ObjectiveCode, _ObjectiveSignDomain] = {
     "fixed_l2": "nonnegative",
     "shortfall": "signed",
-    "turnover": "nonnegative",
     "explicit_cost": "nonnegative",
     "incremental_cost": "nonnegative",
     "split_asset_count": "nonnegative_integer",
     "active_order_rows": "nonnegative_integer",
     "incremental_order_rows": "nonnegative_integer",
     "route_priority": "nonnegative_integer",
+    "plan_score": "nonnegative",
+    "target_distance": "nonnegative",
+    "wealth_loss": "nonnegative",
+    "operation_count": "nonnegative_integer",
 }
 
 
 def objective_unit_kind(code: ObjectiveCode) -> str:
-    if code == "fixed_l2":
+    if code in {"fixed_l2", "target_distance"}:
         return "valuation_money_squared"
-    if code in {"shortfall", "turnover", "explicit_cost", "incremental_cost"}:
+    if code in {"shortfall", "explicit_cost", "incremental_cost", "plan_score", "wealth_loss"}:
         return "valuation_money"
-    if code in {"split_asset_count", "active_order_rows", "incremental_order_rows"}:
+    if code in {"split_asset_count", "active_order_rows", "incremental_order_rows", "operation_count"}:
         return "count"
     return "ordinal_penalty"
 
@@ -149,13 +156,11 @@ class ReportedFloatingSolverEvidence(AllocationStrictModel):
         if ordinals != sorted(ordinals) or len(ordinals) != len(set(ordinals)) or len(codes) != len(set(codes)):
             raise ValueError("Solver stages must have unique codes and ascending ordinals")
         statuses = [stage.status for stage in self.stages]
-        if "infeasible" in statuses:
-            # Nothing runs after an infeasible first stage, so nothing is reported after it.
-            if len(statuses) != 1:
-                raise ValueError("An infeasible solver stage must be the only reported stage")
-            return self
-        if statuses != sorted(statuses, key={"finished": 0, "unfinished": 1}.__getitem__):
-            raise ValueError("Finished solver stages must precede unfinished stages")
+        # Nothing runs after an infeasible first stage, so nothing is reported after it.
+        if "infeasible" in statuses and len(statuses) != 1:
+            raise ValueError("An infeasible solver stage must be the only reported stage")
+        # «Finished before unfinished» is checked by the ready result, which knows the Rebalancer's rejected tie-breaks
+        # (``results._validate_stage_order``, lot CR of project 67).
         return self
 
 
@@ -185,9 +190,26 @@ class OptimalProvenProof(AllocationStrictModel):
     tie_break_closed: Literal[True]
 
 
+class ProofMargin(AllocationStrictModel):
+    """Lot MG of project 67: how far below the published plan the best plan can still be, by the solver's bounds, in the
+    valuation currency, rounded up to its minor unit (never zero)."""
+
+    amount: PlannerPositiveDecimal
+    currency: CurrencyCode
+
+
 class NotProvenProof(AllocationStrictModel):
     kind: Literal["not_proven"]
     reason_code: NotProvenReasonCode
+    #: The Rebalancer's margin (lot MG): V − the second-highest usable first-stage bound of its runs. None without two usable
+    #: bounds, for a plan of the wide model, and wherever no plan is published.
+    margin: ProofMargin | None = None
+
+    @model_validator(mode="after")
+    def validate_margin(self) -> NotProvenProof:
+        if self.margin is not None and self.reason_code == "allocation.limits_leave_no_rounding_room":
+            raise ValueError("A plan of the wide model carries no margin: its bounds belong to another model")
+        return self
 
 
 class InfeasibilityProvenProof(AllocationStrictModel):
@@ -204,5 +226,22 @@ class InfeasibilityProvenProof(AllocationStrictModel):
 
 type ReadyPlanProof = Annotated[
     Union[OptimalProvenProof, NotProvenProof],
+    Field(discriminator="kind"),
+]
+
+
+class RebalancerOptimalProvenProof(AllocationStrictModel):
+    """The Rebalancer's «optimal proven» (specifica §15 n. 10): about ``J``, or the «Target first» chain. Its tie-breaks, the
+    named ones and the fixed-order canonical vector, stand on one level (§6.4) and may stay open: the witness names the
+    stages that closed, and ``score.tie_breaks`` says how each tie-break ended. It has no ``tie_break_closed``; the PAC's
+    ``OptimalProvenProof`` keeps it (B3 of project 67)."""
+
+    kind: Literal["optimal_proven"]
+    proof_source: Literal["solver_status"]
+    witness: SolverStatusWitness
+
+
+type RebalancerReadyPlanProof = Annotated[
+    Union[RebalancerOptimalProvenProof, NotProvenProof],
     Field(discriminator="kind"),
 ]

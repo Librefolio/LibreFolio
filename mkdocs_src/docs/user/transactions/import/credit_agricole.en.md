@@ -143,7 +143,7 @@ The same step shows a **Starting point** — the cash and the positions at the b
 
 - **Some rows ask for your help** in the **Corrections** step of the wizard ([how it works](how-to.md#only-when-needed)):
     - trades without a quantity, and fund redemptions: pick the type, the security and the quantity;
-    - trades whose amount may include accrued interest and commissions: add them under **Separate the price from the charges?**, from your contract note (*nota informativa*);
+    - trades whose amount may include accrued interest and commissions: add them under **Separate the price from the charges?**, from your contract note (*nota informativa*). Each one becomes a **Fee** or a **Tax** (accrued interest is a **Fee**) [linked to the trade](../form.md#linked-charges), waiting under it in the editor behind the **N charges** chip;
     - charges that name no security: assign them, or keep them on the account.
 - **Securities are matched by name.** The securities export gives no ISIN: match each security in the **Resolve Assets** panel of [Review](how-to.md#review).
 - **Amounts as written**, in the currency of each row, with no conversion. Dates are the operation dates.

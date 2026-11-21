@@ -24,6 +24,7 @@ def front_tx_unit(verbose: bool = False, ui: bool = False, headed: bool = False,
         "src/lib/features/transactions/bulk/bulkDisplay.test.ts",
         "src/lib/features/transactions/import/importReportSets.test.ts",
         "src/lib/features/transactions/import/importPairs.test.ts",
+        "src/lib/features/transactions/import/importChargeNames.test.ts",
         "src/lib/features/transactions/bulk/promoteSuggest.test.ts",
         "src/lib/features/transactions/bulk/costCellState.test.ts",
         "src/lib/features/transactions/import/defaultPluginCheck.test.ts",
@@ -41,8 +42,10 @@ def front_tx_unit(verbose: bool = False, ui: bool = False, headed: bool = False,
         "src/lib/features/transactions/import/importNotices.test.ts",
         "src/lib/features/transactions/import/NoticeCounts.test.ts",
         "src/lib/features/transactions/import/AnalyzeStep.test.ts",
+        "src/lib/features/transactions/import/UploadStep.test.ts",
         "src/lib/features/transactions/bulk/bulkTodos.test.ts",
         "src/lib/features/transactions/bulk/bulkCharges.test.ts",
+        "src/lib/features/transactions/bulk/splitTypes.test.ts",
         "src/lib/features/transactions/bulk/selectionGuards.test.ts",
         "src/lib/features/transactions/bulk/PossibleSplitRow.test.ts",
         "src/lib/features/transactions/bulk/TxBulkBanners.possibleSplit.test.ts",
@@ -281,6 +284,42 @@ def front_tx_bulk_charges_link(verbose: bool = False, ui: bool = False, headed: 
     if not _ensure_test_users():
         return False
     return _run_playwright("transactions/tx-bulk-charges-link.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
+def front_tx_bulk_promote_charges(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """No pair-promote for a leg that still has linked charges; «scollega» then merge, saved in one batch (project 66, C21)."""
+    print_section("Frontend TX Bulk Promote Charges Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("transactions/tx-bulk-promote-charges.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
+def front_tx_promote_charges_off(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """«Link as pair» on the Transactions page, off with its reason when a leg has linked charges (project 66, C22)."""
+    print_section("Frontend TX Promote Charges Off Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("transactions/tx-promote-charges-off.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
+def front_tx_import_charge_links(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """The linked charges a plugin names (ref / parent_ref) through the import wizard to the Bulk and the save (project 66, P1b)."""
+    print_section("Frontend TX Import Charge Links Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("transactions/tx-import-charge-links.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
 def front_tx_crud_full(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
@@ -856,6 +895,30 @@ def populate_registry(registry: dict) -> None:
         name="TX Bulk Charges Link Tests",
         desc="Project 66 F7-d: in the Bulk, «Link» a new BUY + new FEE and a saved BUY + saved free FEE (also by tap on a phone), saved and read back by id; «Open» from a FEE's form to its parent absent from the Bulk adds the parent",
         tests="transactions/tx-bulk-charges-link.spec.ts",
+    )
+    add_test(
+        cat,
+        "tx-bulk-promote-charges",
+        front_tx_bulk_promote_charges,
+        name="TX Bulk Promote Charges Tests",
+        desc="Project 66 C21, on a disposable account with two brokers: a saved DEPOSIT with a linked FEE and the saved WITHDRAWAL that cancels it — the Bulk offers no merge while the FEE is linked; «scollega» in the DEPOSIT's Form brings the banner's offer back (the search asked again); merged and saved in one batch (unlink + promote): the server holds the CASH_TRANSFER pair and the FEE with no parent",
+        tests="transactions/tx-bulk-promote-charges.spec.ts",
+    )
+    add_test(
+        cat,
+        "tx-promote-charges-off",
+        front_tx_promote_charges_off,
+        name="TX Promote Charges Off Tests",
+        desc="Project 66 C22, on a disposable account with two brokers: a saved DEPOSIT with a linked FEE and the saved WITHDRAWAL that cancels it — on the Transactions page «Link as pair» is off (aria-disabled, data-disabled-reason hasCharges), a click opens its reason naming the DEPOSIT and no dialog; without a charge it is on and opens the confirmation",
+        tests="transactions/tx-promote-charges-off.spec.ts",
+    )
+    add_test(
+        cat,
+        "tx-import-charge-links",
+        front_tx_import_charge_links,
+        name="TX Import Charge Links Tests",
+        desc="Project 66 P1b: a generic CSV BUY + FEE named by ref / parent_ref (added on the wire) imported through the wizard: the FEE arrives under the BUY and is saved linked; with the BUY or the FEE already saved (a duplicate, unticked) the other is saved alone, nothing refused — read back by broker",
+        tests="transactions/tx-import-charge-links.spec.ts",
     )
     add_test(cat, "tx-crud-full", front_tx_crud_full, name="TX CRUD Full Lifecycle Tests", desc="Full CRUD lifecycle: standalone, paired, split, promote, bulk, suggest, cash sign", tests="transactions/tx-crud-full.spec.ts")
     add_test(cat, "tx-commit-all-types", front_tx_commit_all_types, name="TX Commit All Types Tests", desc="End-to-end commit for every TX type: standalone + paired create, edit, delete", tests="transactions/tx-commit-all-types.spec.ts")

@@ -55,12 +55,7 @@
           "currenciesSeen": "Currencies seen:"
         },
         "brokerEditor": {
-          "addCurrency": "Add currency",
           "fee": "Purchase fee",
-          "feeCap": "Maximum",
-          "feeFixed": "Fixed part",
-          "feeFloor": "Minimum",
-          "feeRate": "Percentage",
           "funding": "Liquidity {name} may use",
           "fundingCap": "Maximum usable here",
           "fundingCapHint": "The most the plan may take from this source for purchases here. Empty = the whole amount of the source.",
@@ -71,20 +66,30 @@
           "sourceAmount": "source {amount}",
           "step": "Increment",
           "title": "Configure {name} · scenario data (the Broker is not changed)",
-          "feeCapHelp": "The percentage part is never above this amount. Empty = no maximum.",
-          "feeCapNone": "none",
-          "feeFloorHelp": "The percentage part is never below this amount. 0 = no minimum.",
           "fundingCapAll": "all",
           "fundingHelp": "Purchases on this Broker can be paid with its own cash and with every source in green here. Everything starts allowed: click a source to exclude it, click again to allow it.",
-          "modesHelp": "One block for each currency you buy in at this Broker: an Asset priced in that currency is bought with its rules. Drag the blocks into the order you prefer.",
-          "pickCurrency": "Currency of the new block",
+          "modesHelp": "One block for each currency you buy in at this Broker: an Asset priced in that currency is bought with its rules.",
           "priorityHelp": "It counts only between plans that get equally close to the target: then the plan uses first the sources with the lowest number. 0 = preferred.",
-          "feeFixedHelp": "Paid on every purchase, whatever the amount, on top of the percentage part. 0 = none.",
-          "feeRateHelp": "The share of the amount bought, in percent: 0.19 means 0.19%. Minimum and maximum limit this part only.",
-          "conversionManual": "You convert before buying",
-          "conversionAutomatic": "The Broker converts when you buy",
           "addedFor": "{currency} mode added to buy {asset}, with starting values: check order type, increment and fees, then apply.",
-          "notYetSupported": "Not supported yet: tax regime, losses, sell fees."
+          "notYetSupported": "Not supported yet: tax regime, losses, sell fees.",
+          "fixBeforeApplying": "Some fields are not valid: fix the ones in red to apply.",
+          "profileSave": {
+            "button": "Save to the broker",
+            "title": "Save to {name}?",
+            "intro": "The broker has just been read again. Confirm writes these changes; its other currencies and its tax regime stay as they are. A sale fee set «same as the purchase» follows the purchase fee, also in a new currency.",
+            "created": "{currency}: new",
+            "updated": "{currency}: updated",
+            "conversionManual": "Currency conversion: you convert before buying",
+            "conversionAutomatic": "Currency conversion: the Broker converts when you buy",
+            "nothing": "The broker already says this: there is nothing to save.",
+            "confirm": "Confirm",
+            "reading": "Reading the broker…",
+            "readFailed": "The broker could not be read: nothing was saved.",
+            "refused": "The broker did not accept the change: nothing was saved.",
+            "saved": "Saved to the broker.",
+            "writeFailed": "The save did not complete: open the broker to check it.",
+            "writing": "Saving to the broker…"
+          }
         },
         "brokers": {
           "addManual": "Manual Broker",
@@ -117,7 +122,8 @@
           "title": "Calculation in progress",
           "refreshing": "Reading the copied data again from LibreFolio…",
           "elapsed": "Waiting {elapsed} s of at most {limit} s",
-          "barLabel": "Time waited"
+          "barLabel": "Time waited",
+          "phase": "{phase} ({index} of {total})"
         },
         "cash": {
           "custody": "Available (custody) {amount}",
@@ -234,7 +240,7 @@
           "allocation": {
             "asset_inactive_not_buyable": "The Asset is inactive: it cannot be bought.",
             "asset_type_missing": "The Asset type is missing.",
-            "broker_execution_profile_unsupported": "This Broker's execution profile is not supported by the Tool.",
+            "broker_execution_profile_unsupported": "This Broker's account has no operating profile, or one without order modes: fill in its order modes and fees in the scenario.",
             "broker_inactive": "The Broker is inactive.",
             "capacity_unsupported": "The scenario exceeds the size the Tool supports.",
             "cash_selection_invalid": "The amount to use is not valid for this cash row.",
@@ -255,7 +261,6 @@
             "fee_floor_exceeds_cap": "The minimum fee is higher than the maximum fee.",
             "fee_rate_out_of_range": "The fee rate is out of range.",
             "fee_schedule_missing": "The fee schedule is missing.",
-            "fiscal_currency_missing": "The fiscal currency is missing.",
             "funding_cap_negative": "The funding limit cannot be negative.",
             "fx_rate_missing": "An exchange rate is missing.",
             "fx_spread_rate_out_of_range": "The FX spread is out of range.",
@@ -284,8 +289,6 @@
             "provenance_stale_confirmed": "The data is older than the accepted age and was confirmed anyway.",
             "quote_base_quantity_missing": "The quantity the price refers to is missing.",
             "reference_not_found": "A reference points to a row that does not exist.",
-            "required_buy_sell_conflict": "The same Asset is required to be both bought and sold.",
-            "required_min_notional_unfunded": "The required minimum orders cost more than the available liquidity.",
             "route_priority_negative": "The route priority cannot be negative.",
             "saved_fx_invalid": "The saved exchange rate is not valid.",
             "saved_fx_missing": "The saved exchange rate is missing.",
@@ -293,31 +296,36 @@
             "target_total_not_one": "The targets do not sum to 100%.",
             "target_weight_missing": "A target is missing.",
             "target_weight_out_of_range": "A target must be between 0 and 100%.",
-            "tax_netting_unsupported": "Tax netting is not supported.",
             "valuation_currency_missing": "The valuation currency is missing.",
             "wac_fx_missing": "The exchange rate needed for the average cost is missing.",
             "wac_missing": "The average cost is missing.",
             "zero_selected_funding": "The selected liquidity is zero.",
             "fx_rate_inconsistent": "This exchange rate does not match the {source_currency} and {destination_currency} rates against {valuation_currency}: converting {source_currency} into {destination_currency} would create value. Align the rates or set a conversion spread.",
-            "saved_fx_skipped": "The saved {pair} rate of {skipped_date} is not valid and was skipped: the rate of {used_date} was used instead. Correct it in the {pair} exchange rate editor (Edit Rates); until then the results may be slightly approximate."
+            "saved_fx_skipped": "The saved {pair} rate of {skipped_date} is not valid and was skipped: the rate of {used_date} was used instead. Correct it in the {pair} exchange rate editor (Edit Rates); until then the results may be slightly approximate.",
+            "bound_max_below_current": "The maximum is below what the plan already holds and sales are off.",
+            "bound_min_above_max": "The minimum is higher than the maximum.",
+            "bounds_min_sum_exceeds_reference": "The minimums add up to more than the money the plan can reach.",
+            "bounds_unsatisfiable": "No plan meets the minimums and maximums set here.",
+            "solver_numerical_error": "The solver hit a numerical error while refining the plan: the best plan found so far is shown. It is valid and can be carried out; only its optimality is not proven.",
+            "cash_limit_exceeded_by_rounding": "The plan ends this cash entry beyond its limit by {exceeded_by}, because every amount is rounded to the cent. The planner could not hold the plan exactly inside a band this narrow."
           },
           "pac_allocator": {
             "initial_holding_forbidden": "This Tool does not accept existing holdings.",
-            "sell_forbidden": "This Tool does not sell."
+            "sell_forbidden": "This Tool does not sell.",
+            "cash_weight_unsupported": "A weight on cash is not supported in the PAC; set only a minimum or a maximum."
           },
           "portfolio_rebalancer": {
-            "baseline_incumbent_missing": "The starting plan for the comparison is missing.",
             "carried_loss_negative": "The carried loss cannot be negative.",
             "cost_basis_negative": "The cost basis cannot be negative.",
             "holdings_missing": "The holdings are missing.",
             "nonpositive_current_portfolio": "The current portfolio has no value.",
             "sell_fee_missing": "The sale fee is missing.",
             "sell_inventory_exceeded": "The sale exceeds the quantity held.",
-            "sell_irreducibility_unresolved": "It was not established that no sale can be removed.",
-            "sell_to_idle_forbidden": "Selling only to leave the proceeds idle is not allowed.",
             "tax_rate_missing": "The tax rate is missing.",
             "tax_rate_out_of_range": "The tax rate is out of range.",
-            "withholding_missing": "The tax withholding is missing."
+            "withholding_missing": "The tax withholding is missing.",
+            "tax_data_missing": "A tax fact is missing for a sale route.",
+            "tax_basket_unknown": "A tax basket is cited but not declared."
           }
         },
         "leave": {
@@ -379,7 +387,11 @@
           "route_priority": "Broker and source priority",
           "shortfall": "Uninvested money",
           "split_asset_count": "Assets split across Brokers",
-          "turnover": "Turnover"
+          "turnover": "Turnover",
+          "plan_score": "Score",
+          "target_distance": "Distance from the targets",
+          "wealth_loss": "Money lost",
+          "operation_count": "Fewer operations"
         },
         "origin": {
           "copied": "Copied",
@@ -433,7 +445,13 @@
           "selectedNegative": "'Amount to use' cannot be negative.",
           "declaredNegative": "'Declared liquidity' cannot be negative.",
           "contributionAmountNegative": "The contribution amount cannot be negative.",
-          "modeStepNotPositive": "The order step must be greater than zero."
+          "modeStepNotPositive": "The order step must be greater than zero.",
+          "limitInvalid": "A limit is not an amount or a percentage from 0.",
+          "limitShareAboveHundred": "A limit in percent cannot be above 100%.",
+          "limitMinAboveMax": "The minimum is above the maximum.",
+          "limitShareMinimumsAboveHundred": "The minimums in percent add up to more than 100%: {assets}.",
+          "positionQuantityInvalid": "A position quantity is empty, not a number or below zero.",
+          "fidelityCustomMissing": "«Custom»: write how much you accept to spend for the reference row, a figure above zero."
         },
         "removal": {
           "cash": "Cash row {broker} · {currency}",
@@ -468,7 +486,7 @@
             "infeasible": "Infeasible with these constraints",
             "noIncumbent": "No plan within the limits",
             "noOperation": "No operation",
-            "notProven": "Optimality not proven",
+            "notProven": "Local optimum",
             "optimalProven": "Proven optimal",
             "planAvailable": "Plan available",
             "help": {
@@ -477,8 +495,11 @@
               "optimalProven": "The solver proved that no better plan exists, objective by objective in the order chosen in Strategy, and the exact check of the plan matches its numbers. The proof holds within the solver's small calculation margin, which grows with the amounts.",
               "completed": "The solver ended its search by itself, without reaching a limit.",
               "timeLimit": "The solver reached its time limit before ending the search.",
-              "nodeLimit": "The solver reached its node limit, the number of attempts it may make, before ending the search."
-            }
+              "nodeLimit": "The solver reached its node limit, the number of attempts it may make, before ending the search.",
+              "margin": "The best possible plan should be at most {margin} better than this one: the solver's own bounds say so, and they are not a proof."
+            },
+            "notProvenWithin": "Local optimum (within {margin})",
+            "noPlanNotProven": "Optimality not proven"
           },
           "collapseAll": "Collapse all",
           "detail": {
@@ -494,7 +515,7 @@
             "marginCost": "Margin cost",
             "midPrice": "Mid price",
             "midValue": "Mid value",
-            "minimumFacts": "if active {ifActive} · required {required}",
+            "minimumFacts": "if active {ifActive}",
             "minimums": "Minimums",
             "quantityEstimated": "{quantity} {count, plural, one {unit} other {units}} (estimated)",
             "quantityExact": "{quantity} {count, plural, one {unit} other {units}} (exact)",
@@ -593,7 +614,7 @@
               "timeHelp": "The time the backend spent computing the plan. The total also counts the wait in the queue, the start of the worker and the checks on input and output.",
               "total": "total {value}",
               "budget": "Time allowed",
-              "budgetHelp": "The longest the optimizer may search for each objective. When it runs out, the best plan found so far is kept and the result says it is not proven optimal.",
+              "budgetHelp": "The longest the optimizer may search for each objective. When it runs out before the plan is proven, the best plan found so far is kept and marked «Local optimum».",
               "objectives": "Objectives closed",
               "objectivesHelp": "The objectives are optimized one after the other. An objective is closed when the optimizer proved that nothing better exists for it; the others stopped at a limit.",
               "objectivesValue": "{closed} of {total}",
@@ -669,13 +690,17 @@
               "deposit": "Make the deposit “{source}” of {amount} to the Broker “{destination}”",
               "transfer": "Transfer {amount} from “{source}” to the Broker “{destination}”",
               "cash": "Use {amount} of the cash available on the Broker “{source}”"
-            }
+            },
+            "automaticConversionNote": "{brokers} convert currency at each purchase. The plan counts one conversion per currency pair; the broker may round each order separately, so a few cents per order may differ."
           },
           "platform": {
             "draftIntact": "The draft is intact.",
             "retry": "Retry",
             "title": "Calculation failed",
-            "reference": "Reference in the server log:"
+            "reference": "Reference in the server log:",
+            "copyRequest": "Copy the request",
+            "copyRequestHint": "Copies the data sent for this calculation, amounts included, so you can attach it to a report. Nothing is kept on the server.",
+            "copyRequestFailed": "Could not copy the request. Allow clipboard access and try again."
           },
           "proof": {
             "absoluteGap": "Abs. gap",
@@ -689,7 +714,9 @@
             "proof": "Proof",
             "reasons": {
               "allocation": {
-                "exact_proof_not_established": "an exact proof was not established"
+                "exact_proof_not_established": "an exact proof was not established",
+                "proof_not_confirmed": "no second search confirmed the proof",
+                "limits_leave_no_rounding_room": "the limits leave no room for rounding"
               },
               "portfolio_rebalancer": {
                 "sell_irreducibility_unresolved": "it was not established that no sale can be removed"
@@ -718,7 +745,9 @@
               "dual": "The bound the solver proved for this stage: none of the plans it searched can do better. From the second stage on, it searched only among plans as good as the chosen one on the stages above.",
               "absoluteGap": "Distance between the two values. A gap of 0 proves the best value only when the stage is finished.",
               "relativeGap": "The same distance, as a fraction of the value."
-            }
+            },
+            "notConfirmed": "One search ended on this plan, but no second search confirmed it: it is the best plan found, not a proven one.",
+            "limitsLeaveNoRoundingRoom": "The limits leave no room for rounding, so the plan was found counting the rounding in its favour. It respects the limits once any top-up shown is added, but it is not proven to be the best."
           },
           "reasons": {
             "allocation": {
@@ -744,20 +773,25 @@
               "body": "Proven: no combination meets every hard constraint together.",
               "constraints": "Hard constraints involved (from the request; caps and minimums masked with privacy on):",
               "funding": "Liquidity reachable: {amount}",
-              "minimum": "{asset} · {broker}: required minimum {minimum}",
               "note": "The interface does not choose which constraint to relax: it lists them. No partial plan is shown as valid.",
-              "title": "Infeasible with these constraints"
+              "title": "Infeasible with these constraints",
+              "limitsTitle": "No solution with these limits",
+              "limitsBody": "Without the limits a plan exists: they are what rule it out. Review them:",
+              "limitMinimum": "minimum {value}",
+              "limitMaximum": "maximum {value}"
             },
             "limit": {
               "complete": "The result below stays complete and can be consulted.",
               "node": "The solver stopped at the node limit with a valid plan. A better one may exist.",
               "stages": "Stages: {finished} finished · {unfinished} unfinished · no certified gap.",
-              "time": "The solver stopped at the time limit with a valid plan. A better one may exist."
+              "time": "The solver stopped at the time limit with a valid plan. A better one may exist.",
+              "solverError": "The solver stopped on a numerical error with a valid plan. A better one may exist."
             },
             "noIncumbent": {
               "body": "The solver found no plan before the limit. This is not a proof that no plan exists.",
               "tips": "To reduce the search: fewer Assets or routes, tighter caps, larger steps.",
-              "title": "No plan within the limits"
+              "title": "No plan within the limits",
+              "completedBody": "The search ended without a plan that can be carried out within these limits. This is not a proof that no plan exists."
             },
             "noOp": {
               "body": "With {amount} no purchase meets the constraints: the plan is to do nothing.",
@@ -833,19 +867,17 @@
           "ordersIn": "Orders in",
           "externalAccount": "External account",
           "noOrdersHint": "The calculation sends no order to the Brokers.",
-          "factsToggle": "Calculation data ({count})"
+          "factsToggle": "Calculation data ({count})",
+          "limited": "{count, plural, =0 {} one { · # with a limit} other { · # with limits}}"
         },
         "route": {
           "cap": "Maximum purchase",
           "margin": "Price margin",
           "minimumIfActive": "Minimum purchase",
           "priority": "Priority",
-          "requiredMinimum": "Required purchase",
           "modeLine": "{kind} · Increment: {step} · Purchase fee: {fee}",
           "minimumNone": "no minimum",
-          "requiredNone": "no obligation",
-          "minimumHelp": "If the plan buys here, it buys at least this much. Empty = the Broker increment is enough. Useful when a small purchase would make the fee weigh too much.",
-          "requiredHelp": "The plan buys at least this much here, whatever happens. If the resources are not enough, the plan becomes impossible. Empty = no obligation.",
+          "minimumHelp": "Applies only if the plan buys on this route: it then buys at least this much. Empty = the Broker increment is enough. Useful when a small purchase would make the fee weigh too much. To oblige a purchase, set a minimum on the Asset’s target.",
           "capHelp": "The most the plan may buy of this Asset on this Broker. Empty = no limit of its own: the plan never buys more than the liquidity that can reach this Broker. Fill it to stop purchases here beyond a given size.",
           "priorityHelp": "It counts only between plans that get equally close to the target: among them, buying on the Brokers with the lowest number is preferred. It weighs more than the fees: to let the cost decide, leave them all at 0. All at 0 = no preference.",
           "marginHelp": "Each purchase is counted at price × (1 + margin), to cover a price that rises before the order. Example: 0.5% on 100 → 100.50. The difference is a reserve for the rise: it does not count as invested.",
@@ -936,7 +968,8 @@
           "toggle": "Summary",
           "total": "Total (control)",
           "versions": "Backend/API {api} · UI {ui}",
-          "rates": "Rates"
+          "rates": "Rates",
+          "limits": "With a limit"
         },
         "targets": {
           "copyDistribution": "Copy current distribution",
@@ -951,7 +984,22 @@
           "balance": "Balance to 100%",
           "totalHelp": "The targets split among the Assets the money you invest now, cash and contributions included: to calculate, they must add up to exactly 100%. «Balance all» rescales every target keeping their ratios (equal parts if they are all 0). Tick some rows to rescale only those, with «Balance the selected rows to 100%». «Balance to 100%» on a row gives that Asset what is missing, or takes away the excess.",
           "balanceAll": "Balance all",
-          "balanceSelected": "Balance the selected rows to 100%"
+          "balanceSelected": "Balance the selected rows to 100%",
+          "limits": "Limits",
+          "limitsHelp": "Minimum and maximum of this Asset's value at the end of the plan. Write an amount in the valuation currency (500) or a percentage of the plan's total (35%): the total is the money you invest now. Empty field = no limit.",
+          "limitMinimum": "min",
+          "limitMaximum": "max",
+          "limitMinimumLabel": "Minimum of {asset}",
+          "limitMaximumLabel": "Maximum of {asset}",
+          "limitsNote": "Limits on the value at the end of the plan. Write an amount (500) or a percentage of the total (35%). Empty field = no limit.",
+          "limitsCheck": "Check the limits",
+          "limitMinAboveMax": "The minimum ({minimum}) is above the maximum ({maximum}).",
+          "limitsNoteTotal": "Limits on the value at the end of the plan. Write an amount (500) or a percentage (35%) of the total, the money you invest now: {total}. Empty field = no limit.",
+          "previewIncomplete": "Today's figures appear once no field of the draft is marked in red, on any step.",
+          "previewUnavailable": "Today's figures are not available right now; the calculation is not affected.",
+          "addCashHelp": "A Broker's cash in one currency becomes a row of the targets with limits only: how much must stay at least, or at most, at the end of the plan. It has no target and does not count in the total.",
+          "balanceNotNumber": "A target is not a number",
+          "balanceNoRoom": "The rows not selected already add up to 100% or more: lower them, or select them too."
         },
         "toolErrors": {
           "cleanup_failed": "The calculation finished, but the platform could not clean up after it.",
@@ -987,7 +1035,9 @@
             "fx": "{count, plural, one {# FX rate updated} other {# FX rates updated}}",
             "cash": "{count, plural, one {# balance updated} other {# balances updated}}",
             "unchanged": "no value changed",
-            "missing": "Not found, the copied value stays: {names}."
+            "missing": "Not found, the copied value stays: {names}.",
+            "positions": "{count, plural, one {# position updated} other {# positions updated}}",
+            "positionsClosed": "{count, plural, one {# position closed} other {# positions closed}}"
           }
         },
         "ownedAssets": {
@@ -1024,6 +1074,13 @@
         "policyScope": {
           "proportional": "Purchases only: it sells nothing."
         }
+      },
+      "progress": {
+        "validate": "Checking the data",
+        "model": "Building the model",
+        "search": "Searching for the plan",
+        "verify": "Verifying the figures",
+        "report": "Preparing the result"
       }
     }
   }

@@ -93,15 +93,19 @@ export const PAC_SCENARIO = {
     degiroFee: {floor: '1.5', ratePercent: '0.19', cap: '18'},
     microsoftManualPrice: '410',
     manualAsset: {name: 'Global Bond ETF', price: '52.4'},
-    /** DEGIRO's route to the Manual Asset: every limit filled, so the shot shows each one with a value. */
-    bondOnDegiro: {minimum: '100', required: '300', cap: '2500', marginPercent: '0.5'},
+    /** DEGIRO's route to the Manual Asset: every limit filled (the minimum if active and the cap), so the shot shows each one with a value. */
+    bondOnDegiro: {minimum: '100', cap: '2500', marginPercent: '0.5'},
     /** The same Asset on Interactive Brokers, less preferred: the plan buys it on DEGIRO. */
     bondOnIbPriority: '1',
-    appleRequiredOnIb: '2',
     microsoftCapOnIb: '3',
     targets: {apple: '30', microsoft: '30', bond: '40'},
     /** The Review is shot with the target total at 90%: one field still to complete. */
     incompleteBondTarget: '30',
+    /**
+     * The result's two market data typed by hand ({@link pinPacMarketData}), at values the engine proved optimal in repeated
+     * runs (checked on 20/11/2026: Apple 280 $ with EUR/USD 1.12). A data pin, not part of the story the shots tell.
+     */
+    resultMarketData: {applePrice: '280', eurUsd: '1.12'},
 } as const;
 
 /** Database ids of what the draft copies, found by name — never assumed from the populate order. */
@@ -137,13 +141,16 @@ const CALCULATION_TIMEOUT = 75_000;
 /**
  * The Tool platform admits one batch per user at a time (backend services/tools/executor.py, `_admit`: a second batch of the same
  * user is refused, 429 `queue_full`). The gallery's projects calculate as the same `TEST_ADMIN`, in parallel workers, so one
- * calculation at a time per lane: a lock file in the lane's data directory (playwright.config.ts exports it), taken before the
- * click and released when the planner is no longer busy. The wait for it is a calculation's budget plus a margin. The name
- * carries the Playwright runner's pid, the parent of every worker of this run: a file left by an earlier, killed run never
- * blocks this one, and no lock is ever taken over.
+ * Tool batch at a time per lane: a lock file in the lane's data directory (playwright.config.ts exports it). A batch is a
+ * calculation, and also the scenario preview the page sends by itself, 600 ms after every edit of the draft and after every
+ * plan (preview.svelte.ts; lot 0c of project 67: a preview of one project met the other's calculation, 429). So the lock
+ * covers every section that edits the draft or calculates, until the page's own preview has landed
+ * ({@link withToolBatches}). The name carries the Playwright runner's pid, the parent of every worker of this run: a file left
+ * by an earlier, killed run never blocks this one, and no lock is ever taken over. The wait covers the other workers'
+ * sections, a whole draft each, queued.
  */
 const TOOL_BATCH_LOCK = path.join(process.env.LIBREFOLIO_TEST_DATA_DIR ?? '.', `.gallery-tool-batch.${process.ppid}.lock`);
-const TOOL_BATCH_LOCK_WAIT = CALCULATION_TIMEOUT + 15_000;
+const TOOL_BATCH_LOCK_WAIT = 3 * CALCULATION_TIMEOUT;
 const TOOL_BATCH_LOCK_POLL = 200;
 /**
  * The result's Exposures: the world map, read once per page — a static file of the app (`/data/world.json`, about 1 MB), no
@@ -333,6 +340,10 @@ async function editBroker(page: Page, brokerKey: string, configure: (editor: Loc
  * nothing left to complete. Every step is visited, so the step list marks them all; the FX step reads its rate (Auto).
  */
 export async function buildPacDraft(page: Page, ids: PacIds): Promise<PacDraft> {
+    return withToolBatches(page, () => buildPacDraftSteps(page, ids));
+}
+
+async function buildPacDraftSteps(page: Page, ids: PacIds): Promise<PacDraft> {
     const s = PAC_SCENARIO;
     const keys = {
         ib: `broker:${ids.brokers.ib}`,
@@ -484,12 +495,10 @@ export async function buildPacDraft(page: Page, ids: PacIds): Promise<PacDraft> 
     await expect(bondOnDegiro).toHaveAttribute('data-enabled', 'true');
     await expect(bondOnDegiro).toHaveAttribute('data-ready', 'true');
     await typeValue(bondOnDegiro.getByTestId('pac-planner-route-minimum-if-active'), s.bondOnDegiro.minimum);
-    await typeValue(bondOnDegiro.getByTestId('pac-planner-route-required-minimum'), s.bondOnDegiro.required);
     await typeValue(bondOnDegiro.getByTestId('pac-planner-route-cap'), s.bondOnDegiro.cap);
     await typeValue(bondOnDegiro.getByTestId('pac-planner-route-margin'), s.bondOnDegiro.marginPercent);
     await expect(bondOnDegiro.getByTestId('pac-planner-route-priority-field')).toBeVisible();
     await typeValue(routeCard(page, keys.bond, keys.ib).getByTestId('pac-planner-route-priority'), s.bondOnIbPriority);
-    await typeValue(routeCard(page, keys.apple, keys.ib).getByTestId('pac-planner-route-required-minimum'), s.appleRequiredOnIb);
     await typeValue(routeCard(page, keys.microsoft, keys.ib).getByTestId('pac-planner-route-cap'), s.microsoftCapOnIb);
 
     // Targets: 30 / 30 / 40.
@@ -512,6 +521,35 @@ export async function buildPacDraft(page: Page, ids: PacIds): Promise<PacDraft> 
     await expect(review.getByTestId('pac-planner-review-problems'), 'the draft is not complete').toHaveCount(0);
     await expect(review.getByTestId('pac-planner-calculate')).toBeEnabled();
     return {ids, keys};
+}
+
+/**
+ * The result's data pin (coordinator, 20/11/2026): Apple's price and EUR/USD typed by hand, for the «PAC allocator result»
+ * shots only. The two are the draft's only market data copied from LibreFolio (DEGIRO's cash is copied too, but the plan
+ * spends the amount typed), and the mock data draw them up to the day of the populate (`populate_mock_data.py`,
+ * `date.today()`). On some days the PAC's chain of pinned objectives slips inside
+ * SCIP's tolerance and the result is «not proven» (known defect GPAC-b; its test is lot 0b,
+ * `test_pac_planner_solver.py::test_a_pinned_objective_never_slips`; its repair is SLIP, the PAC's objective function).
+ * Typed here, the result is the same every day. When SLIP lands, decide whether this pin can go.
+ */
+export async function pinPacMarketData(page: Page, draft: PacDraft): Promise<void> {
+    await withToolBatches(page, () => pinPacMarketDataSteps(page, draft));
+}
+
+async function pinPacMarketDataSteps(page: Page, draft: PacDraft): Promise<void> {
+    const pinned = PAC_SCENARIO.resultMarketData;
+    await goToPacStep(page, 'assets');
+    const apple = assetCard(page, draft.keys.apple);
+    await apple.getByTestId('pac-planner-asset-price-mode-manual').click();
+    await expect(apple).toHaveAttribute('data-price-mode', 'manual');
+    await typeValue(apple.getByTestId('pac-planner-asset-price-input'), pinned.applePrice);
+
+    await goToPacStep(page, 'fx');
+    const pair = page.getByTestId('pac-planner-fx').locator('[data-testid="pac-planner-fx-pair"][data-pair="EUR/USD"]');
+    await pair.getByTestId('pac-planner-fx-mode-manual').click();
+    await expect(pair).toHaveAttribute('data-mode', 'manual');
+    await typeValue(pair.getByTestId('pac-planner-fx-rate'), pinned.eurUsd);
+    await expect(pair).toHaveAttribute('data-rate', 'set');
 }
 
 // ---------------------------------------------------------------------------
@@ -723,16 +761,18 @@ export async function framePacRouting(page: Page, draft: PacDraft): Promise<Loca
     const bond = routeCard(page, draft.keys.bond, draft.keys.degiro);
     await expect(bond.getByTestId('pac-planner-route-fields')).toBeVisible();
     await expect(bond.getByTestId('pac-planner-route-priority-field')).toBeVisible();
-    await expect(bond.getByTestId('pac-planner-route-required-minimum')).toHaveValue(PAC_SCENARIO.bondOnDegiro.required);
+    await expect(bond.getByTestId('pac-planner-route-minimum-if-active')).toHaveValue(PAC_SCENARIO.bondOnDegiro.minimum);
     await framePacBlock(page, {first: step, last: degiro, fallback: degiro});
     return step;
 }
 
 /** Bring the target total to 90%, so the Review has one field still to complete; {@link framePacTargets} puts it back. */
 export async function leavePacTargetsIncomplete(page: Page, draft: PacDraft): Promise<void> {
-    await goToPacStep(page, 'targets');
-    await typeValue(targetInput(page, draft.keys.bond), PAC_SCENARIO.incompleteBondTarget);
-    await expect(page.getByTestId('pac-planner-targets-control')).toHaveAttribute('data-state', 'missing');
+    await withToolBatches(page, async () => {
+        await goToPacStep(page, 'targets');
+        await typeValue(targetInput(page, draft.keys.bond), PAC_SCENARIO.incompleteBondTarget);
+        await expect(page.getByTestId('pac-planner-targets-control')).toHaveAttribute('data-state', 'missing');
+    });
 }
 
 /**
@@ -799,11 +839,14 @@ async function scrollBackToFirstColumn(field: Locator): Promise<void> {
 export async function framePacTargets(page: Page, draft: PacDraft): Promise<Locator> {
     const step = await goToPacStep(page, 'targets');
     const bond = targetInput(page, draft.keys.bond);
-    await typeValue(bond, PAC_SCENARIO.targets.bond);
     // `fill` focuses the field and scrolls it into view, sideways too inside the table's own scroller (on a phone the table is
     // wider than the screen); the shot wants the table at rest from its first column, with no focus ring. So the focus goes,
-    // the table goes back to its start, and the spec's settle (settlePacShot: motion, stillness) runs after both.
-    await bond.blur();
+    // the table goes back to its start, and the spec's settle (settlePacShot: motion, stillness) runs after both. The edit and
+    // the blur that may commit it are one Tool batch section.
+    await withToolBatches(page, async () => {
+        await typeValue(bond, PAC_SCENARIO.targets.bond);
+        await bond.blur();
+    });
     await scrollBackToFirstColumn(bond);
     await expect(bond, 'the bond target changed when its field let the focus go').toHaveValue(PAC_SCENARIO.targets.bond);
     const control = page.getByTestId('pac-planner-targets-control');
@@ -824,6 +867,8 @@ export async function framePacTargets(page: Page, draft: PacDraft): Promise<Loca
  * for whoever reads it, waited for by polling and removed when `work` ends, whatever its outcome.
  */
 async function withToolBatchLock<T>(work: () => Promise<T>): Promise<T> {
+    // Re-entrant within a worker: a section inside another (a calculation inside a whole draft) keeps the lock it holds.
+    if (toolBatchLockDepth > 0) return nested(work);
     const deadline = Date.now() + TOOL_BATCH_LOCK_WAIT;
     for (;;) {
         try {
@@ -838,16 +883,45 @@ async function withToolBatchLock<T>(work: () => Promise<T>): Promise<T> {
         }
     }
     try {
-        return await work();
+        return await nested(work);
     } finally {
         rmSync(TOOL_BATCH_LOCK, {force: true});
     }
 }
 
+/** How deep this worker is inside {@link withToolBatchLock}: one file per lock, whatever the nesting. */
+let toolBatchLockDepth = 0;
+
+async function nested<T>(work: () => Promise<T>): Promise<T> {
+    toolBatchLockDepth += 1;
+    try {
+        return await work();
+    } finally {
+        toolBatchLockDepth -= 1;
+    }
+}
+
+/**
+ * Run `work`, a section that edits the draft or calculates, under the lane's Tool batch lock, and release it only once the
+ * page's own scenario preview has landed with its numbers: the planner's `data-preview` reads `ready` (PlannerShell.svelte;
+ * `waiting` while one is scheduled or on its way, `error` when refused). A preview is scheduled 600 ms after the last edit
+ * and once more after a plan, so a section that ended without waiting for it would leave a batch on its way after the
+ * release. Every section of the gallery's drafts ends `ready`, the 90% target total included (seen on 20/11/2026): a
+ * refused preview fails here instead of reaching a shot.
+ */
+async function withToolBatches<T>(page: Page, work: () => Promise<T>): Promise<T> {
+    return withToolBatchLock(async () => {
+        const result = await work();
+        await expect(page.getByTestId('pac-planner'), "the page's own preview did not land, or was refused").toHaveAttribute('data-preview', 'ready', {timeout: READ_TIMEOUT});
+        return result;
+    });
+}
+
 /**
  * Calculate the complete draft from its Review and end on a plan: the copied facts read again and nothing missing from them,
  * the result current (not stale), state `ready_incumbent`. A no-op, an infeasible draft or a tool error fails here, named.
- * The click and the wait run under the lane's Tool batch lock: the other project calculates as the same user.
+ * The click and the wait run under the lane's Tool batch lock, until the preview the page sends after the plan has landed:
+ * the other project calculates as the same user.
  */
 export async function calculatePacPlan(page: Page): Promise<Locator> {
     const review = (await goToPacStep(page, 'review')).getByTestId('pac-planner-review');
@@ -855,7 +929,7 @@ export async function calculatePacPlan(page: Page): Promise<Locator> {
     const calculate = review.getByTestId('pac-planner-calculate');
     await expect(calculate).toBeEnabled();
     const planner = page.getByTestId('pac-planner');
-    await withToolBatchLock(async () => {
+    await withToolBatches(page, async () => {
         await calculate.click();
         await expect(planner).toHaveAttribute('data-view', 'result');
         await expect(planner, 'the calculation is still running').toHaveAttribute('data-busy', 'false', {timeout: CALCULATION_TIMEOUT});

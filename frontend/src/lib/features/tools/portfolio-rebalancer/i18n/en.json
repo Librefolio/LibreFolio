@@ -1,0 +1,221 @@
+{
+  "tools": {
+    "portfolioRebalancer": {
+      "progress": {
+        "validate": "Checking the data",
+        "model": "Building the model",
+        "search": "Searching for the plan",
+        "verify": "Verifying the figures",
+        "report": "Preparing the result"
+      },
+      "planner": {
+        "scenario": {
+          "intro": "You rebalance a portfolio you already hold: the calculation starts from the positions and the cash you bring into the plan, counts them, and moves the whole as close as possible to the target weights. It is a simulation: no order is sent."
+        },
+        "leave": {
+          "title": "Leave the portfolio rebalancer?"
+        },
+        "positions": {
+          "title": "Positions",
+          "help": "What you hold of this Asset, Broker by Broker, as LibreFolio records it today. The plan starts from these quantities: you can change one to simulate a different portfolio; LibreFolio is not changed.",
+          "broker": "Broker",
+          "quantity": "Quantity",
+          "quantityHelp": "The units of the plan: your part of what the Broker holds. Change it to plan on a different quantity.",
+          "quantityLabel": "Quantity of {asset} at {broker}",
+          "custody": "In custody",
+          "custodyHelp": "The units the Broker holds on the account, and your share of the account when it is shared.",
+          "share": "your share {share}"
+        },
+        "brokers": {
+          "cashOnly": "cash only",
+          "cashOnlyHint": "No order here: its cash counts in the portfolio, and the plan can move it to the Brokers where it buys. Edit it in the Liquidity step.",
+          "positionsOnly": "positions only",
+          "positionsOnlyHint": "Its positions count in the portfolio, but the plan buys and sells nothing here and does not use its cash. Add it to the plan to trade here too.",
+          "addToPlan": "Add to the plan",
+          "addToPlanFailed": "The Broker could not be read: nothing was added."
+        },
+        "targets": {
+          "cashEntry": "Cash · {broker} · {currency}",
+          "otherCash": "Other cash",
+          "otherCashHelp": "All the cash without a target of its own: it always counts 0 %, and the plan can use it to buy.",
+          "addCash": "Add a cash entry",
+          "addCashHelp": "A Broker's cash in one currency becomes a row of the targets, with a target and limits, like an Asset.",
+          "addCashNone": "Every Broker and currency of the scenario already has a cash entry.",
+          "removeCash": "Remove the cash entry",
+          "intro": "How to split the total that enters the plan, cash included, in percent.",
+          "introTotal": "How to split the total that enters the plan ({total}), cash included, in percent.",
+          "limitsNote": "Limits on the value at the end of the plan. Write an amount (500) or a percentage (35%) of the total that enters the plan. Empty field = no limit.",
+          "limitsNoteTotal": "Limits on the value at the end of the plan. Write an amount (500) or a percentage (35%) of the total that enters the plan: {total}. Empty field = no limit.",
+          "now": "Now",
+          "nowHelp": "Today's weight of this row on the total that enters the plan. Information only: it is not a target.",
+          "entry": "Entry",
+          "wire": "The share of the total that enters the plan this row should have at the end, in percent. Decimals are allowed.",
+          "limitsHelp": "Minimum and maximum of this row's value at the end of the plan. Write an amount in the valuation currency (500) or a percentage of the total that enters the plan (35%). Empty field = no limit.",
+          "totalHelp": "The targets split the total that enters the plan, positions and cash included: to calculate, they must add up to exactly 100%. «Balance all» rescales every target keeping their ratios (equal parts if they are all 0). Tick some rows to rescale only those. «Balance to 100%» on a row gives it what is missing, or takes away the excess.",
+          "nowLine": "now {weight}"
+        },
+        "removal": {
+          "cashEntry": "Cash entry of the targets {broker} · {currency}"
+        },
+        "review": {
+          "brokers": "{operative, plural, one {# Broker} other {# Brokers}}{external, plural, =0 {} one { · # external account} other { · # external accounts}}{held, plural, =0 {} one { · # with positions only} other { · # with positions only}}",
+          "assets": "{count, plural, one {# Asset} other {# Assets}}{positions, plural, =0 {} one { · # position} other { · # positions}}{missing, plural, =0 {} other { · # without a price}}{stale, plural, =0 {} one { · # price not of today} other { · # prices not of today}}",
+          "targets": "{count} of {total, plural, one {# entry} other {# entries}} with a target",
+          "strategy": "{strategy} · {fidelity}",
+          "kindPosition": "Position"
+        },
+        "summary": {
+          "positionsOnly": "Positions only",
+          "entries": "Entries"
+        },
+        "strategy": {
+          "investOnly": "Invest only",
+          "fidelity": {
+            "costAware": "Cost-aware",
+            "balanced": "Balanced",
+            "faithful": "Faithful to the target",
+            "targetFirst": "Target first",
+            "custom": "Custom"
+          },
+          "investOnlyHelp": "It uses the cash to buy what is below target. It sells nothing.",
+          "investAndSell": "Invest and sell",
+          "investAndSellHelp": "It can also sell, to get closer to the target. It estimates fees and taxes: it needs the Tax step.",
+          "comingSoon": "coming soon",
+          "fidelityTitle": "Target fidelity",
+          "fidelityLead": "How much putting back what is off target is worth to you.",
+          "fidelityHelp": "The plan spends on fees, to put back money that is off target, at most what the table below accepts for that amount. The higher the fidelity, the more it accepts to spend.",
+          "fidelityNote": {
+            "costAware": "It moves only for large deviations.",
+            "balanced": "A middle way.",
+            "faithful": "It moves for small deviations too.",
+            "targetFirst": "It pays any cost to get closer."
+          },
+          "defaultBadge": "default",
+          "customSentence": "With {reference} in the wrong place I accept to spend up to",
+          "customLabel": "The most you accept to spend for the reference row",
+          "customInvalid": "Write a figure above zero.",
+          "table": {
+            "title": "Maximum acceptable cost",
+            "lead": "The most the plan may spend, in fees and taxes, to put that money back. If it costs more, it leaves it where it is.",
+            "leadTotal": "The figures hold for your total of {total}.",
+            "misplaced": "Money in the wrong place",
+            "reference": "reference",
+            "upTo": "up to {amount}",
+            "costAwareShort": "Cost-aware",
+            "faithfulShort": "Faithful",
+            "customShort": "Yours",
+            "targetFirst": "«Target first» has no maximum: it first gets as close as it can, then picks the way that costs least.",
+            "incomplete": "The figures appear once the fields marked in red are complete.",
+            "unavailable": "The figures are not available right now; the calculation is not affected."
+          }
+        },
+        "result": {
+          "plan": {
+            "buysAt": "Purchases on {broker}",
+            "sequenceHint": "Follow the numbers: first the deposits, transfers and currency exchanges, in the order shown, then the purchases."
+          },
+          "allocation": {
+            "beforeShare": "Share today",
+            "beforeShareHelp": "Its share of the whole portfolio today, cash included.",
+            "beforeValue": "Value today",
+            "beforeValueHelp": "What the entry is worth today: the units you hold at the quote price, or the cash.",
+            "targetShareHelp": "The share you chose for this entry in the Targets step, of the whole portfolio.",
+            "targetValueHelp": "What the entry would be worth with exactly its target share of the whole portfolio today.",
+            "finalShareHelp": "Its value after the plan, as a share of the whole portfolio today, cash included. The money lost to fees and taxes counts in the uninvested row.",
+            "finalValueHelp": "What the entry is worth after the plan: the units you hold plus the ones bought, or the cash left.",
+            "boughtHelp": "The value of what the plan buys of this Asset, at the quote price: without fees or price margin.",
+            "residualHelp": "Value after the plan minus ideal value: positive if the entry ends above its share, negative if below.",
+            "uninvested": "Uninvested",
+            "uninvestedHelp": "Everything that is neither in an Asset nor in a cash with a target of its own: today, and after the plan, when it also counts the money lost to fees and taxes.",
+            "minimum": "Minimum",
+            "minimumHelp": "The minimum you set for this entry in the Targets step: its value after the plan does not go below it.",
+            "maximum": "Maximum",
+            "maximumHelp": "The maximum you set for this entry in the Targets step: its value after the plan does not go above it.",
+            "title": "Allocation per entry"
+          },
+          "kpi": {
+            "valueToday": "Worth today",
+            "valueTodayHelp": "The whole portfolio today: the Assets you hold at their quote price, plus every cash and contribution chosen for the plan.",
+            "partsAssets": "Assets",
+            "partsCash": "Cash",
+            "valueAfter": "Worth after",
+            "valueAfterHelp": "The whole portfolio after the plan: the Assets and the cash left. It is today’s value less the money lost.",
+            "valueAfterHeld": "in {assets, plural, one {# Asset} other {# Assets}} and {cash, plural, one {# cash} other {# cash entries}}",
+            "moneyLost": "Money lost",
+            "moneyLostHelp": "What the plan costs you: fees, currency exchange spreads, price margins, taxes and rounding. Today’s value less this is the value after.",
+            "noLoss": "Nothing lost",
+            "foreignWithholding": "Foreign withholding tax",
+            "largestDeviation": "Largest gap from target",
+            "largestDeviationHelp": "How far the entry furthest from its target is, after and before the plan, in percentage points: the gap between its share and its target share. Assets and cash with a target count; the uninvested does not.",
+            "points": "{value} points",
+            "beforePoints": "before: {value} points",
+            "uninvestedShare": "{value} of the total",
+            "transfers": "{count, plural, one {# transfer} other {# transfers}}",
+            "deviationItem": "{item}: {weight} against {target}",
+            "beforePointsItem": "before: {value} points, {item} at {weight} against {target}",
+            "cashItem": "Cash {broker} {currency}"
+          },
+          "header": {
+            "score": "Score {value}",
+            "scoreHelp": "The score the plan minimizes: λ × distance/F + money lost. Here λ {lambda}, distance/F {distance}, money lost {lost}.",
+            "distance": "Distance/F {value}",
+            "distanceHelp": "How far the portfolio ends from its targets, in money: the squared gaps of every entry over the whole portfolio. «Target first» makes it as small as it can, then the money lost.",
+            "moneyLost": "Money lost {value}"
+          },
+          "ledger": {
+            "fields": {
+              "transfer_in": "Transfers in",
+              "transfer_out": "Transfers out"
+            },
+            "help": {
+              "transfer_in": "What arrives in this cash from another Broker of the plan.",
+              "transfer_out": "What leaves this cash for another Broker of the plan.",
+              "funding_in": "The deposits of your contributions into this cash.",
+              "funding_out": "Always 0 in the Rebalancer: money moves between Brokers as transfers, in their own columns.",
+              "alwaysZeroInvestOnly": "Always 0 with «Invest only»: the plan only buys."
+            }
+          },
+          "proof": {
+            "lambda": "λ {value}",
+            "tieBreaks": "Tie-breaks, among the plans as good on the objectives above",
+            "fixedOrder": "a fixed order of Assets and Brokers",
+            "sameData": "A search that ends by itself gives the same plan for the same data; one stopped by the time limit may give another.",
+            "help": {
+              "status": "Whether the solver closed this stage. Finished: it proved the best value. Unfinished: it stopped at the time limit, or, for a tie-break, its plan was set aside because it was no better, in exact arithmetic, on the objectives above. After a stage that stopped, the later ones only searched among plans as good as the one already found, so a gap of 0 there proves nothing."
+            }
+          },
+          "badges": {
+            "help": {
+              "optimalProven": "The solver proved that no plan has a better score (with «Target first»: a smaller distance from the targets, then less money lost), and the exact check of the plan matches its numbers. The tie-breaks after it may have stopped earlier: they only choose among plans just as good. The proof holds within the solver's small calculation margin, which grows with the amounts."
+            }
+          },
+          "states": {
+            "limit": {
+              "tieBreak": "The plan is proven the best on its objective; the limit stopped a tie-break, so an equally good plan may exist."
+            }
+          },
+          "exposure": {
+            "scope": "On the whole portfolio, cash included",
+            "legendNow": "grey: today",
+            "legendAfter": "coloured: after the plan",
+            "legendTarget": "your target",
+            "cash": "Cash",
+            "now": "Today",
+            "after": "After the plan",
+            "target": "Target",
+            "belowTarget": "After the plan: below the target",
+            "aboveTarget": "After the plan: above the target",
+            "onTarget": "After the plan: in line with the target",
+            "showAll": "Show all ({count})",
+            "showFewer": "Show fewer",
+            "title": "Exposures – today, after the plan, target",
+            "help": "How the whole portfolio, cash included, spreads by Asset type, sector and country: today, after the plan, and your target. The cash is the last row of each chart. The charts do not change the plan."
+          }
+        },
+        "objectives": {
+          "route_priority": "Route priority"
+        }
+      }
+    }
+  }
+}

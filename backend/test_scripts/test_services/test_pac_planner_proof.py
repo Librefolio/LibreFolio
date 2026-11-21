@@ -62,7 +62,8 @@ from backend.app.services.pac_allocator.proof import (
     conclude_with_solver,
 )
 from backend.app.services.pac_allocator.solver import SolverRunResult, SolverStageReport, solve_policy_program
-from backend.test_scripts.test_services.test_pac_planner_evaluator import R, _candidate, _pac_scenario
+from backend.test_scripts.test_services import _reb_small_cases as cases
+from backend.test_scripts.test_services.test_pac_planner_evaluator import R, _candidate, _pac_scenario_with_asset_minimum
 from backend.test_scripts.test_services.test_pac_planner_oracle import _two_asset_pac_scenario
 
 # The one legitimate reach into a module-private. A *valid* sealed witness can
@@ -90,6 +91,14 @@ _PUBLIC_API = (
     "SolverStatusWitnessFacts",
     "UnprovenConclusion",
     "conclude_with_solver",
+    # Lot SEEDS of project 67: the merge of the Rebalancer's seeded runs, which may only downgrade, and its two reasons.
+    "PROOF_NOT_CONFIRMED_REASON",
+    "SeededRunVote",
+    "SeededVerdict",
+    "WIDE_MODEL_REASON",
+    "merge_seeded_runs",
+    "seeded_margin",
+    "seeded_runs_agree",
 )
 
 # The shape of a real anomaly: the solver's own message for an unexpected status.
@@ -173,8 +182,8 @@ def perfect_run() -> _Run:
 
 @pytest.fixture(scope="module")
 def infeasible_run() -> _Run:
-    """A required minimum of 50 on a route capped at 10: SCIP closes the first, global stage infeasible."""
-    run = _real_run(_pac_scenario(required=R(50), route_cap=R(10)))
+    """A minimum of EUR50 on an Asset whose route is capped at 3 units of EUR10 (EUR100 of cash, so the planner's checks pass): SCIP closes the first, global stage infeasible."""
+    run = _real_run(_pac_scenario_with_asset_minimum(R(50), route_cap=R(3)))
     result = run.result
     assert (result.outcome, result.anomaly, result.candidate) == ("reported_infeasible", None, None)
     assert [(stage.ordinal, stage.scope, stage.status, stage.scip_status) for stage in result.stages] == [(1, "global", "infeasible", "infeasible")]
@@ -204,13 +213,15 @@ def test_not_proven_reason_is_the_single_phase_one_wire_code() -> None:
 
 def test_public_surface_is_exactly_the_solver_status_api() -> None:
     """`proof.py` exports today's API and nothing more, and
-    `conclude_with_solver` is its only public callable: there is no second
-    road to a proof.
+    `conclude_with_solver` is its only public callable that can conclude a
+    proof: there is no second road to one. The merge of the Rebalancer's
+    seeded runs (lot SEEDS) reads the runs' own conclusions and may only
+    downgrade them; `seeded_runs_agree` compares two values; `seeded_margin` reads a plan's margin (lot MG).
     """
     assert sorted(proof.__all__) == sorted(_PUBLIC_API)
     assert all(hasattr(proof, name) for name in proof.__all__)
     public_functions = {name for name, obj in inspect.getmembers(proof, inspect.isfunction) if obj.__module__ == proof.__name__ and not name.startswith("_")}
-    assert public_functions == {"conclude_with_solver"}
+    assert public_functions == {"conclude_with_solver", "merge_seeded_runs", "seeded_margin", "seeded_runs_agree"}
 
 
 # --------------------------------------------------------------------------
@@ -457,7 +468,7 @@ def test_infeasible_verdict_alongside_a_candidate_is_not_proven(infeasible_run: 
 _MISNAMED_OBJECTIVES = (
     pytest.param("perfect_run", lambda codes: tuple(reversed(codes)), "SCIP closed the stages", id="optimal_codes_reordered"),
     pytest.param("perfect_run", lambda codes: codes[:-1], "SCIP closed the stages", id="optimal_codes_missing_one"),
-    pytest.param("perfect_run", lambda codes: (*codes, "turnover"), "SCIP closed the stages", id="optimal_codes_with_an_extra"),
+    pytest.param("perfect_run", lambda codes: (*codes, "wealth_loss"), "SCIP closed the stages", id="optimal_codes_with_an_extra"),
     pytest.param("infeasible_run", lambda codes: (*codes[1:], codes[0]), "infeasible, but the first objective is", id="infeasible_first_code_differs"),
     pytest.param("infeasible_run", lambda codes: (), "infeasible, but the first objective is None", id="infeasible_no_objective_codes"),
 )
@@ -481,3 +492,44 @@ def test_objective_codes_disagreeing_with_scip_stages_are_a_forgery(request: pyt
     with pytest.raises(ProofForgeryError, match=reason) as raised:
         conclude_with_solver(run.result, objective_codes=codes, published=published)
     assert type(raised.value) is ProofForgeryError
+
+
+# --------------------------------------------------------------------------
+# D4 (the B2 review of project 67): the Rebalancer's named tie-breaks may stay open
+# --------------------------------------------------------------------------
+
+
+@pytest.fixture(scope="module")
+def rebalancer_run() -> _Run:
+    """T4 (specifica §11) closed at every stage: the score, the two named tie-breaks, the canonical vector."""
+    run = _real_run(cases.t4())
+    assert run.objective_codes == ("plan_score", "operation_count", "route_priority")
+    assert all(stage.status == "finished" for stage in run.result.stages), run.result.stages
+    return run
+
+
+@pytest.mark.parametrize("opening", [pytest.param({"status": "unfinished", "rejected": True}, id="rejected"), pytest.param({"status": "unfinished", "scip_status": "timelimit"}, id="cut-by-a-limit")])
+def test_open_named_tie_break_keeps_the_rebalancer_optimum(rebalancer_run: _Run, opening: dict[str, object]) -> None:
+    """A named tie-break left open, by the exact comparison (D4) or by a limit, keeps ``optimal_proven``: the proof is about
+    ``J``. The witness names the stages that closed."""
+    variant = _with_stage(rebalancer_run.result, "route_priority", **opening)
+    conclusion = conclude_with_solver(variant, objective_codes=rebalancer_run.objective_codes, published=variant.candidate)
+    assert isinstance(conclusion, OptimalProvenConclusion), conclusion
+    assert conclusion.witness.objective_codes == ("plan_score", "operation_count")
+
+
+def test_open_score_stage_downgrades_the_rebalancer(rebalancer_run: _Run) -> None:
+    """The score stage open: ``not_proven`` — the proof is about ``J``."""
+    variant = _with_stage(rebalancer_run.result, "plan_score", status="unfinished", scip_status="timelimit")
+    conclusion = conclude_with_solver(variant, objective_codes=rebalancer_run.objective_codes, published=variant.candidate)
+    assert isinstance(conclusion, UnprovenConclusion)
+
+
+def test_open_canonical_vector_keeps_the_rebalancer_optimum(rebalancer_run: _Run) -> None:
+    """The canonical vector is the fixed-order tie-break, on the same level as the named ones (specifica §6.4, the
+    consultant's answer to the B3 checkpoint): one of its stages open keeps ``optimal_proven``, the witness unchanged."""
+    stage_id = next(stage.stage for stage in rebalancer_run.result.stages if _is_tie(stage))
+    variant = _with_stage(rebalancer_run.result, stage_id, status="unfinished", scip_status="timelimit")
+    conclusion = conclude_with_solver(variant, objective_codes=rebalancer_run.objective_codes, published=variant.candidate)
+    assert isinstance(conclusion, OptimalProvenConclusion)
+    assert conclusion.witness.objective_codes == rebalancer_run.objective_codes

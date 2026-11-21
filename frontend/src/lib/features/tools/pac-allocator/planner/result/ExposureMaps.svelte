@@ -49,18 +49,25 @@
     import {chartNeutrals, GEO_MAP_COLORS} from '$lib/theme/chartTheme';
     import {GEO_CHOROPLETH_SCALE} from '$lib/theme/chartPalettes';
     import {isDarkTheme, onChartColorsChange, onThemeClassChange} from '$lib/theme/themeMode';
+    import {getPlannerProfile, testId} from '../profile';
+
+    /** Read once, while the component is created: the Tool's profile (F1 of project 67), the PAC's when none is set. */
+    const profile = getPlannerProfile();
     const KEY = 'tools.pacAllocator.planner.result';
 
     interface Props {
         rows: readonly MapWeightRow[];
+        /** The two maps' names, when the Tool calls them otherwise: the Rebalancer's «Target» and «After the plan», where
+         * «actual» would read as today. The PAC's «ideal» and «actual» when absent. */
+        titles?: {target: string; final: string};
     }
 
-    let {rows}: Props = $props();
+    let {rows, titles}: Props = $props();
 
     type Side = 'target' | 'final';
     type MapView = {zoom?: number; center?: (number | string)[]};
     const SIDES: readonly Side[] = ['target', 'final'];
-    const SERIES_ID = 'pac-planner-exposure-map';
+    const SERIES_ID = testId('exposure-map', profile);
     /** The colours of the portfolio map (`GeographyMap`), so one weight reads the same on both pages. */
     const SCALE = GEO_CHOROPLETH_SCALE;
 
@@ -94,7 +101,7 @@
         const widest = Math.ceil(Math.max(0, ...values));
         return widest > 0 ? widest : 100;
     });
-    const text = $derived(exposureTooltipText($t));
+    const text = $derived(titles ? {...exposureTooltipText($t), ...titles} : exposureTooltipText($t));
     const colours = $derived(dark ? SCALE.dark : SCALE.light);
 
     onMount(() => {
@@ -190,7 +197,7 @@
         if (!chart) {
             chart = echarts.init(element, CHART_INIT_THEME, chartInitOptions(element));
             charts[side] = chart;
-            attachChartReady(chart, element, `pac-planner-exposure-map-${side}`);
+            attachChartReady(chart, element, testId(`exposure-map-${side}`, profile));
             follow(side, chart);
             touchCleanups[side] = touchPan(side, element);
         }
@@ -259,7 +266,7 @@
     }
 </script>
 
-<div data-testid="pac-planner-exposures-maps" data-state={failed ? 'failed' : geoNames ? 'ready' : 'loading'}>
+<div data-testid={testId('exposures-maps', profile)} data-state={failed ? 'failed' : geoNames ? 'ready' : 'loading'}>
     {#if failed}
         <p class={HINT}>{$t(`${KEY}.exposures.mapUnavailable`, {default: 'The map could not be loaded: the weights are listed here.'})}</p>
     {:else if showMaps}
@@ -269,20 +276,24 @@
                     <figcaption class="text-xs font-semibold uppercase tracking-wide text-lf-muted">
                         {side === 'target' ? text.target : text.final}
                     </figcaption>
-                    <div bind:this={containers[side]} class="mt-1 h-52 w-full sm:h-60" data-testid="pac-planner-exposures-map" data-side={side} aria-hidden="true"></div>
+                    <div bind:this={containers[side]} class="mt-1 h-52 w-full sm:h-60" data-testid={testId('exposures-map', profile)} data-side={side} aria-hidden="true"></div>
                 </figure>
             {/each}
         </div>
-        <div class="mt-2 flex flex-wrap items-center gap-2 text-xs text-lf-muted" data-testid="pac-planner-exposures-scale">
+        <div class="mt-2 flex flex-wrap items-center gap-2 text-xs text-lf-muted" data-testid={testId('exposures-scale', profile)}>
             <span>{$t(`${KEY}.exposures.scale`, {default: 'Colour scale'})}</span>
             <span class="tabular-nums">{formatPlannerPercentUnits('0', 0)}</span>
             <span class="h-2 w-32 rounded-sm" style:background="linear-gradient(to right, {colours.join(', ')})" aria-hidden="true"></span>
             <span class="tabular-nums">{formatPlannerPercentUnits(String(scaleMax), 0)}</span>
-            <HelpTip label={$t(`${KEY}.exposures.scale`, {default: 'Colour scale'})} help={$t(`${KEY}.exposures.scaleHelp`, {default: 'One scale for both maps: the same colour is the same weight. Point at a country, or tap it, to see its two weights.'})} testid="pac-planner-exposures-scale-help" />
+            <HelpTip
+                label={$t(`${KEY}.exposures.scale`, {default: 'Colour scale'})}
+                help={$t(`${KEY}.exposures.scaleHelp`, {default: 'One scale for both maps: the same colour is the same weight. Point at a country, or tap it, to see its two weights.'})}
+                testid={testId('exposures-scale-help', profile)}
+            />
         </div>
     {/if}
     {#if offMap.length > 0}
-        <p class="mt-2 {HINT}" data-testid="pac-planner-exposures-off-map">
+        <p class="mt-2 {HINT}" data-testid={testId('exposures-off-map', profile)}>
             {#if !failed && showMaps}<span class="font-medium">{$t(`${KEY}.exposures.offMap`, {default: 'Not on the map'})}:</span>{' '}{/if}
             {#each offMap as row, index (row.id)}{index > 0 ? ' · ' : ''}{row.label} {formatExactPercent(row.target)} → {afterText(row)}{/each}
         </p>

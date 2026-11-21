@@ -1,4 +1,4 @@
-"""Tool adapter for the PAC planner v2.
+"""Tool adapter for the planner v2: the PAC and the Rebalancer.
 
 The P1 ``analyze`` services (``pac_allocator`` and ``portfolio_rebalancer``)
 were removed on 2026-09-21 by developer decision: they were never released,
@@ -7,11 +7,20 @@ prototype a non-goal. What replaces them is ``operation="plan"``, backed by
 ``plan_pac_allocation`` — SCIP, whose own status is the proof (D-X1), with
 every published number replayed in exact arithmetic.
 
-**The Rebalancer has no service here yet.** Its v2 policies (``invest_only``,
-``invest_and_sell``) and the SELL verifier do not exist, so registering a
-Rebalancer service would mean shipping a tool with nothing behind it. It comes
-back when those exist — which is the next piece of work, because PAC is the
-special case of the Rebalancer with an all-zero starting allocation.
+**The Rebalancer is the second service** (B3 of project 67):
+``portfolio_rebalancer``, ``operation="plan"``, backed by ``plan_rebalancing``
+— the same engine, the same proof, the same replay, the same operation policy.
+Until C1 it plans «Invest only»: its request refuses «Invest and sell» and any
+sale route at the schema, which the platform answers ``invalid_parameters``.
+
+**Both services also answer ``operation="preview"``** (B4 of project 67): the
+numbers the screen shows before the calculation, read with the normalizer and
+one exact replay (``pac_allocator/preview.py``). No optimizer, no engine window,
+no phases; the platform's short default deadlines.
+
+**``plan`` reports its phases** (V2 of project 67): ``validate``, ``model``,
+``search`` («n of m» over the named stages), ``verify``, ``report``, declared on
+the operation and handed to the engine as ``context.report_progress``.
 
 Timeout envelope: only one number is a product decision — ``engine_timeout_ms``,
 the solver's own budget, set to 30 s by the developer. Every other value is
@@ -38,20 +47,21 @@ is ever needed it has to be taken from the job budget.
 > constraints. Do not treat this number as validated.
 """
 
-import traceback
-from pathlib import Path
-
 from pydantic import BaseModel
 
 from backend.app.logging_config import get_logger
-from backend.app.schemas.pac_allocator.request import PacPlannerRequest
-from backend.app.schemas.pac_allocator.results import PacPlannerResult
+from backend.app.schemas.pac_allocator.preview import PacToolOutput, RebalancerToolOutput
+from backend.app.schemas.pac_allocator.request import PacPlannerRequest, RebalancerPlannerRequest
 from backend.app.schemas.tools import (
     ToolDocumentation,
     ToolOperationPolicy,
     ToolUIDescriptor,
 )
-from backend.app.services.pac_allocator.planner import plan_pac_allocation
+from backend.app.services.pac_allocator.evaluation.errors import ExactReplayRejectedError
+from backend.app.services.pac_allocator.planner import SeededRunsFailedError, plan_pac_allocation, plan_rebalancing
+from backend.app.services.pac_allocator.preview import preview_pac_allocation, preview_rebalancing
+from backend.app.services.pac_allocator.progress import PLANNER_PHASES
+from backend.app.services.pac_allocator.solver import SolverStageError
 from backend.app.services.platform.provider_registry import register_plugin
 from backend.app.services.tools.base import (
     ToolExecutionContext,
@@ -60,15 +70,17 @@ from backend.app.services.tools.base import (
     ToolService,
 )
 from backend.app.services.tools.registry import ToolPluginRegistry
+from backend.app.utils.runtime.errors import code_site
 
 logger = get_logger(__name__)
 
 _PLAN_RESULT_BYTES = 512 * 1024
 
-# LibreFolio's own code, told apart from libraries in a failure site; paths are
-# shown from the repository root, library files by name only.
-_BACKEND_ROOT = Path(__file__).resolve().parents[4]
-_REPO_ROOT = _BACKEND_ROOT.parent
+#: The engine failures whose message the log carries, as ``reason`` (R1-B of project 67, the developer's rule of 20/11/2026).
+#: A closed list, matched by exact type: a class enters only once every place that raises it has been read, and its
+#: messages are fixed words, identifiers and closed codes, never an amount or a name. ``test_pac_planner_tool_api.py``
+#: keeps that reading true: it scans every raise of each listed class. Every other failure keeps the rule below.
+MESSAGE_SAFE_ERRORS: frozenset[type[Exception]] = frozenset({ExactReplayRejectedError, SolverStageError, SeededRunsFailedError})
 
 # Time reserved *after* the solver returns, for the exact replay and the report.
 # Re-measured on 2026-10-06 (step S5 of
@@ -79,7 +91,7 @@ _REPO_ROOT = _BACKEND_ROOT.parent
 # rather than only here, because an accurate comment ages without announcing it.
 _POST_ENGINE_RESERVE_MS = 2_000
 
-_PLAN_POLICY = (
+_OPERATION_POLICIES = (
     ToolOperationPolicy(
         operation="plan",
         pure=True,
@@ -94,14 +106,21 @@ _PLAN_POLICY = (
         cleanup_timeout_ms=5_000,
         request_timeout_ms=59_000,
         client_timeout_ms=65_000,
+        # The engine's phases, in order (V2 of project 67): the stream route forwards them, the waiting panel shows them.
+        progress_phases=PLANNER_PHASES,
+    ),
+    # The scenario preview (B4 of project 67): the normalizer and one exact replay, no optimizer, so no engine window is
+    # claimed and the platform's short defaults hold. Its answer has one row per target entry, smaller than the entry in the
+    # request, so the plan's result cap holds it for any request the parameter cap admits.
+    ToolOperationPolicy(
+        operation="preview",
+        pure=True,
+        deterministic=True,
+        deduplication="none",
+        max_parameter_bytes=262_144,
+        max_result_bytes=_PLAN_RESULT_BYTES,
     ),
 )
-
-
-def _frame_text(frame: traceback.FrameSummary) -> str:
-    path = Path(frame.filename).resolve()
-    shown = path.relative_to(_REPO_ROOT).as_posix() if path.is_relative_to(_BACKEND_ROOT) else path.name
-    return f"{shown}:{frame.lineno}:{frame.name}"
 
 
 def _log_engine_failure(exc: Exception, execution_id: str) -> None:
@@ -115,27 +134,21 @@ def _log_engine_failure(exc: Exception, execution_id: str) -> None:
     the at most two LibreFolio frames that called it, nearest first, and
     ``raised_in`` the library frame below it, if any.
 
-    The worker is a spawn child that never calls ``configure_logging``: the
-    line reaches the server's stderr (console, ``docker logs``), not
-    ``librefolio.log``.
+    The one exception is ``reason``: the message of a class in
+    ``MESSAGE_SAFE_ERRORS``, matched by exact type, whose every message was
+    read and names no amount (R1-B of project 67).
+
+    The worker sends its lines to the server, which writes them in
+    ``librefolio.log`` with the request's id (lot LOGS of project 67).
     """
-    frames = traceback.extract_tb(exc.__traceback__)
-    own = [frame for frame in frames if Path(frame.filename).resolve().is_relative_to(_BACKEND_ROOT)]
-    site: dict[str, str | list[str]] = {}
-    if own:
-        site["where"] = _frame_text(own[-1])
-        callers = [_frame_text(frame) for frame in reversed(own[-3:-1])]
-        if callers:
-            site["callers"] = callers
-    if frames and (not own or own[-1] is not frames[-1]):
-        site["raised_in"] = _frame_text(frames[-1])
-    logger.error("PAC planner engine failure", error_type=type(exc).__qualname__, execution_id=execution_id, **site)
+    reason = {"reason": str(exc)} if type(exc) in MESSAGE_SAFE_ERRORS else {}
+    logger.error("PAC planner engine failure", error_type=type(exc).__qualname__, execution_id=execution_id, **reason, **code_site(exc))
 
 
 @register_plugin(ToolPluginRegistry)
 class PacAllocatorTool(ToolPlugin):
-    contract_version = "1.0.0"
-    implementation_version = "1.0.0"
+    contract_version = "2.0.0"
+    implementation_version = "2.0.0"
 
     services = (
         ToolService(
@@ -149,15 +162,37 @@ class PacAllocatorTool(ToolPlugin):
             ui=ToolUIDescriptor(
                 kind="custom",
                 component_key="pac-allocator",
-                version="1.0.0",
+                version="2.0.0",
             ),
             documentation=ToolDocumentation(
                 path="user/tools/pac-allocator/",
                 version="1.0.0",
             ),
-            operations=_PLAN_POLICY,
+            operations=_OPERATION_POLICIES,
             input_type=PacPlannerRequest,
-            output_type=PacPlannerResult,
+            output_type=PacToolOutput,
+        ),
+        ToolService(
+            tool_code="portfolio_rebalancer",
+            name="Portfolio rebalancer",
+            description="Bring an already invested portfolio towards its targets: it buys and, if you allow it, sells, estimating fees and taxes. It places no orders.",
+            name_i18n_key="tools.portfolioRebalancer.name",
+            description_i18n_key="tools.portfolioRebalancer.description",
+            category="allocation",
+            icon_key="scale",
+            ui=ToolUIDescriptor(
+                kind="custom",
+                component_key="portfolio-rebalancer",
+                version="1.0.0",
+            ),
+            documentation=ToolDocumentation(
+                path="user/tools/portfolio-rebalancer/",
+                version="1.0.0",
+            ),
+            # The same policy as the PAC: the same engine window, the same reserve, the same zero margin (module docstring).
+            operations=_OPERATION_POLICIES,
+            input_type=RebalancerPlannerRequest,
+            output_type=RebalancerToolOutput,
         ),
     )
 
@@ -166,10 +201,27 @@ class PacAllocatorTool(ToolPlugin):
         tool_code: str,
         parameters: BaseModel,
         context: ToolExecutionContext,
-    ) -> PacPlannerResult:
+    ) -> BaseModel:
         # Dispatch on tool_code *and* the declared operation, never on the
         # shape of the parameters.
-        if tool_code == "pac_allocator" and isinstance(parameters, PacPlannerRequest) and parameters.operation == "plan":
+        services = {
+            "pac_allocator": (PacPlannerRequest, plan_pac_allocation, preview_pac_allocation),
+            "portfolio_rebalancer": (RebalancerPlannerRequest, plan_rebalancing, preview_rebalancing),
+        }
+        request_type, plan, preview = services.get(tool_code, (None, None, None))
+        if request_type is None or not isinstance(parameters, request_type):
+            raise ToolExecutionError("invalid_parameters")
+        if parameters.operation == "preview":
+            # No optimizer, so no engine window and no phases: the normalizer and one exact replay (B4 of project 67). A
+            # failure is logged like the plan's: the class and the code location, never the amounts.
+            try:
+                return preview(parameters, checkpoint=context.checkpoint)
+            except ToolExecutionError:
+                raise
+            except Exception as exc:
+                _log_engine_failure(exc, context.execution_id)
+                raise
+        if parameters.operation == "plan":
             # The engine window is the product decision this module's header
             # calls the only one: claiming it is what makes `engine_timeout_ms`
             # reach SCIP instead of leaving the solver on its own 3.5 s default.
@@ -192,14 +244,22 @@ class PacAllocatorTool(ToolPlugin):
             # reserve: at most 2.8 ms for a 28.5 KB result.
             window = context.claim_engine_window(post_engine_reserve_ms=_POST_ENGINE_RESERVE_MS)
             try:
-                return plan_pac_allocation(
+                return plan(
                     parameters,
                     checkpoint=context.checkpoint,
                     solver_time_budget_seconds=window.timeout_ms / 1000,
+                    # A pipe write per phase and per named stage of the search, never a datum of the scenario: no cost
+                    # inside the engine window worth a reserve.
+                    progress=context.report_progress,
                 )
             except ToolExecutionError:
                 # A platform code (time or cancellation limit): not a failure of the engine.
                 raise
+            except SeededRunsFailedError as exc:
+                # Lot SEEDS-b of project 67: none of the Rebalancer's three runs answered (they crashed or overran, or a
+                # lone «impossible» the contract cannot publish as «no plan»). The same request may answer on a retry.
+                _log_engine_failure(exc, context.execution_id)
+                raise ToolExecutionError("execution_failed", retryable=True) from exc
             except Exception as exc:
                 _log_engine_failure(exc, context.execution_id)
                 raise

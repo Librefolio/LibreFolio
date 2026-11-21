@@ -870,6 +870,7 @@ def test_operation_policy_preserves_ordinary_defaults_and_generic_limits():
         "request_timeout_ms": 20_000,
         "client_timeout_ms": 25_000,
         "memory_limit_bytes": 1_073_741_824,
+        "progress_phases": [],
     }
 
 

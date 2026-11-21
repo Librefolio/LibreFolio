@@ -17,7 +17,7 @@
     import {CircleAlert, CircleCheck, PiggyBank} from 'lucide-svelte';
     import {t} from '$lib/i18n';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
-    import {formatPlannerDate, formatPlannerFxRate, formatPlannerMoneyPlain, formatPlannerPlainDecimal, formatPlannerPricePlain, plannerPlainDecimalCount} from '../format';
+    import {formatPlannerDate, formatPlannerFxRate, formatPlannerMoneyPlain, formatPlannerPlainDecimal, formatPlannerPricePlain, formatPlannerQuantity, plannerPlainDecimalCount} from '../format';
     import {STEP_FALLBACKS, stepKey} from '../labels';
     import {factOriginState} from '../review';
     import {ICON_BUBBLE} from '../ui';
@@ -26,6 +26,10 @@
     import MarqueeName from './MarqueeName.svelte';
     import OriginBadge from './OriginBadge.svelte';
     import PlannerBrokerIcon from './PlannerBrokerIcon.svelte';
+    import {getPlannerProfile, testId} from '../profile';
+
+    /** Read once, while the component is created: the Tool's profile (F1 of project 67), the PAC's when none is set. */
+    const profile = getPlannerProfile();
 
     interface Props {
         cell: ReviewCellContent;
@@ -37,7 +41,7 @@
 </script>
 
 {#if cell.type === 'step'}
-    <span class="flex items-center gap-2 font-medium text-lf-primary" data-testid="pac-planner-review-section" data-step={cell.step} data-blocked={cell.blocked ? 'true' : 'false'}>
+    <span class="flex items-center gap-2 font-medium text-lf-primary" data-testid={testId('review-section', profile)} data-step={cell.step} data-blocked={cell.blocked ? 'true' : 'false'}>
         {#if cell.blocked}
             <CircleAlert class="h-4 w-4 shrink-0 text-lf-warning" aria-hidden="true" />
         {:else}
@@ -55,7 +59,7 @@
 {:else if cell.type === 'entity'}
     {@const fact = cell.fact}
     {@const subject = fact.subject}
-    <span class="flex min-w-0 items-center gap-2" data-testid="pac-planner-review-fact" data-kind={fact.kind} data-origin={factOriginState(fact)} data-stale={fact.stale ? 'true' : 'false'}>
+    <span class="flex min-w-0 items-center gap-2" data-testid={testId('review-fact', profile)} data-kind={fact.kind} data-origin={factOriginState(fact)} data-stale={fact.stale ? 'true' : 'false'}>
         {#if subject.type === 'broker' || subject.type === 'cash'}
             <PlannerBrokerIcon broker={cell.broker} size={24} />
             <MarqueeName text={fact.entity} />
@@ -64,7 +68,7 @@
             <span class={ICON_BUBBLE} style="width: 24px; height: 24px;"><PiggyBank class="h-3.5 w-3.5" aria-hidden="true" /></span>
             <MarqueeName text={fact.entity} />
             <CurrencyCode code={subject.currency} />
-        {:else if subject.type === 'asset'}
+        {:else if subject.type === 'asset' || subject.type === 'position'}
             <AssetNameCell label={fact.entity} iconUrl={cell.asset?.iconUrl ?? null} assetType={cell.asset?.assetClass ? cell.asset.assetClass.toUpperCase() : null} />
         {:else}
             <span class="flex items-center gap-1.5 font-medium text-lf-primary">
@@ -93,6 +97,8 @@
             })}
         {:else if value.kind === 'rate'}
             {formatPlannerFxRate(value.rate)}
+        {:else if value.kind === 'quantity'}
+            <span class="font-mono">{formatPlannerQuantity(value.quantity)}</span>
         {:else if value.fundingOnly}
             {$t(`${KEY}.externalAccount`, {default: 'External account'})}
         {:else if value.currencies.length > 0}
@@ -110,7 +116,7 @@
             <span class="text-lf-secondary">{$t(`${KEY}.origin.librefolio`, {default: 'LibreFolio'})}</span>
             {#if fact.stale && fact.referenceDate}
                 <Tooltip text={$t(`${KEY}.staleTitle`, {default: 'Not of today: the calculation uses the latest value LibreFolio has.'})} position="top" maxWidth="280px">
-                    <span class="text-lf-warning" data-testid="pac-planner-review-fact-stale">{formatPlannerDate(fact.referenceDate)}</span>
+                    <span class="text-lf-warning" data-testid={testId('review-fact-stale', profile)}>{formatPlannerDate(fact.referenceDate)}</span>
                 </Tooltip>
             {/if}
         {:else if originState === 'manual'}

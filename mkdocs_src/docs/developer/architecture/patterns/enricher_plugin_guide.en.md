@@ -588,6 +588,7 @@ The real plugins are the best reference:
 | `backend/app/services/enricher_providers/justetf/plugin.py` | ETFs and ETCs, by ISIN | A library call per page; `source_dates` for countries and sectors (the holdings date); a search over the site's full list; a sector table of the source's own words |
 | `backend/app/services/enricher_providers/yahoo_finance/plugin.py` (code `yfinance`) | Shares first, funds second, by ticker | `keys` used to skip a call; no ISIN returned by `recognize` |
 | `backend/app/services/enricher_providers/borsa_italiana/plugin.py` | Bonds, funds, Milan shares, by ISIN or internal fund code | `params_schema` with `x-i18n-key` labels; the binding's `language`; one library session per read; `management_fee`, not `ter`; `annual_coupon_rate` from `financial_math` |
+| `backend/app/services/enricher_providers/esma/plugin.py` | Every instrument a European market trades, by ISIN, after the sources of each type | Our library `esma-registers` (ESMA's FIRDS register, one call per ISIN); the CFI code read as `legal_form`, a bond's `coupon_type` and `issuer_type`, a fund's `distribution_policy`; the LEI handed to the cascade; a register's «fixed rate» written as `coupon_rate` only when the CFI says fixed |
 | `backend/app/services/enricher_providers/mockenrich/plugin.py` | Test only | Fixed answers for every outcome (`MOCK_NOT_FOUND`, `MOCK_ERROR`, `MOCK_RATE_LIMITED`), no network |
 
 ---
@@ -661,7 +662,7 @@ sets the variable until the administrator lists it.
 | `./dev.py test services enricher-refresh` | Read, cache, merge and save; unanswered bindings, `RATE_LIMITED`; the `confirmed` map |
 | `./dev.py test services asset-profile-freshness` | «Now» not up to date: the confirmation, the 30 days, the voices that never age |
 | `./dev.py test services scheduler-profile-read` | The weekly job: its round, the held voices, the one retry |
-| `./dev.py test services enricher-justetf`, `enricher-borsa-italiana`, `enricher-yahoo` | Each shipped plugin against recorded pages (fixtures under `backend/test_scripts/test_services/fixtures/`), no network |
+| `./dev.py test services enricher-justetf`, `enricher-borsa-italiana`, `enricher-yahoo`, `enricher-esma` | Each shipped plugin against recorded pages (fixtures under `backend/test_scripts/test_services/fixtures/`), no network |
 | `./dev.py test services enricher-enabled` | `LIBREFOLIO_ENRICHERS_ENABLED` |
 | `./dev.py test services enricher-call-limits` | The call limits at the read boundary |
 | `./dev.py test api assets-enrichers` | The routes, driven by `mockenrich` |

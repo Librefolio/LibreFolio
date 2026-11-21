@@ -492,7 +492,8 @@ as a row of its own; `n`: link (or relink) to the saved parent `n` — or `paren
   with their parents (same broker), and the deferred foreign key holds whatever the order.
 - A saved row a promote turns into a leg of a pair is refused while it keeps charges (`chargesBlockParentType`,
   `type`, `chargeIds`, on the promote): the promotion of a DEPOSIT or WITHDRAWAL with charges into a cash transfer. It
-  passes when the same batch unlinks them. Only a promote can take the role away: type swaps (BUY↔SELL,
+  passes when the same batch unlinks them. The clients never offer such a promote as available: the workspace and the
+  Transactions page draw it off with the reason (66 C22, `transaction-draft.md`); the refusal stays the defence. Only a promote can take the role away: type swaps (BUY↔SELL,
   DEPOSIT↔WITHDRAWAL, DIVIDEND↔INTEREST) keep a parent a parent, and a split leaves standalone rows.
 
 **Reading.** `TXReadItem` carries `parent_transaction_id` and `charges_count` (how many charges point at the row,
@@ -565,6 +566,13 @@ with `linkReconciliation()`, which sends **one** `POST /transactions/commit` wit
 `updates: [{id, asset_event_id}]` (`commitTransactions()` of `txCommitApi.ts`). The commit is atomic like every
 batch: any issue and nothing is linked, and the rows are not retried with fewer. With nothing to link there is
 no request. On success the page reloads its transactions softly (`onlinked`).
+
+The window draws one `DataTable` per status (`unique`, `none`, `several`; an empty group is not drawn) inside one
+`SelectionPanel` (`lib/components/table/`), so the two tables with checkboxes share one selection bar and one dock.
+Each row's action sits in a column pinned on the right and in the row menu. A `several` row is never guessed: «Choose
+event» opens `EventReconciliationChooseModal.svelte` on the row's `candidates`, and `linkChosenEvent()` links the one
+picked through the same single commit (an id that is not among the candidates sends nothing). Event values go through
+`eventValueHtml()` (`formatCurrencyAmountHtml`, `public`; a SPLIT is a bare ratio).
 
 Tests: `backend/test_scripts/test_api/test_event_reconciliation_api.py`
 (`./dev.py test api event-reconciliation`); in the frontend `eventReconciliation.test.ts` and

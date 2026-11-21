@@ -10,12 +10,14 @@
 import {compareDecimal, sumControlPercentages, remainingControlPercentage, canonicalInput} from '$lib/utils/core/exactDecimal';
 import {DEFAULT_EXECUTION_MARGIN_PERCENT, DEFAULT_FEE, DEFAULT_FUNDING_PRIORITY, DEFAULT_FX_SPREAD_PERCENT, DEFAULT_QUANTITY_STEP, DEFAULT_ROUTE_PRIORITY, defaultAsOf} from './defaults';
 import {canonicalPair, type ExposureDimension, type SourceProvenance} from './source';
-import {PLANNER_STEPS, type PlannerStep} from './types';
+import {PAC_PLANNER_PROFILE, type PlannerProfile} from './profile';
+import type {DraftLimits, LimitSide} from './limits';
+import type {PlannerStep} from './types';
 
 export type {ExposureDimension};
 
 export type FactOrigin = 'copied' | 'manual';
-export type CopyKind = 'liquidity' | 'brokers' | 'prices' | 'classifications' | 'fx' | 'distribution';
+export type CopyKind = 'liquidity' | 'brokers' | 'prices' | 'classifications' | 'fx' | 'distribution' | 'positions';
 export type ModeKind = 'whole_quantity' | 'monetary_amount';
 
 export const EXPOSURE_DIMENSIONS: readonly ExposureDimension[] = ['asset_type', 'sector', 'geography'];
@@ -78,6 +80,14 @@ export interface DraftBroker {
     enteredAt: string;
     modes: DraftMode[];
     conversionMode: ConversionMode;
+    /**
+     * P3 of project 67 (D12, the model of `copiedPrice`): the modes and the conversion mode as the account's operating
+     * profile gave them at the last copy. A re-copy updates these, never `modes` and `conversionMode`, which are the
+     * user's; «Restore» puts them back. `copiedModes` is `null` when the profile has no order mode (D11: the default
+     * modes, as without a profile); both are `null` when the Broker was never copied with a profile.
+     */
+    copiedModes: DraftMode[] | null;
+    copiedConversionMode: ConversionMode | null;
     funding: DraftFunding[];
 }
 
@@ -153,7 +163,6 @@ export interface DraftRoute {
     priority: string;
     /** Empty = no minimum; the unit follows the Broker mode. */
     minimumIfActive: string;
-    requiredMinimum: string;
     /** Empty = no cap of its own: the order stays bounded by the money that can reach it. */
     cap: string;
     marginPercent: string;
@@ -176,6 +185,55 @@ export interface DraftFx {
 /** Why the backend needs a pair: to value the portfolio, to convert cash at a buy, or both. */
 export type FxPurpose = 'valuation' | 'conversion' | 'both';
 
+/**
+ * One position of the user, an Asset at a Broker (F3a of project 67): the Rebalancer's. Copied from the source with its
+ * custody quantity and the user's share, which are facts, and the planning quantity, proposed from the user's part and
+ * the user's to change (`planning_quantity` of the request). The model of `copiedPrice`: `copiedQuantity` is what the copy
+ * proposed, so an edit reads «modified» and a re-copy updates the copy only.
+ */
+export interface DraftPosition {
+    key: string;
+    assetKey: string;
+    brokerKey: string;
+    sourceBrokerId: number;
+    /** The Broker's name and icon as the copy saw them: the Broker need not be in the scenario's Brokers. */
+    brokerName: string;
+    brokerIconUrl: string | null;
+    custody: string;
+    ownershipShare: string;
+    /** The user's role on the account, as the copy saw it (OWNER, EDITOR, VIEWER): the share's badge (R1-D of project 67). */
+    accessRole: string | null;
+    quantity: string;
+    copiedQuantity: string;
+    stamp: CopyRef;
+    enteredAt: string;
+}
+
+/**
+ * A cash entry of the targets (F3a of project 67, contract §5.2): a Broker's cash in one currency, with a target and the
+ * limits of F2. Its target and limits live in `targets` and `limits` under the entry's own key, as an Asset's do.
+ */
+export interface DraftCashEntry {
+    key: string;
+    brokerKey: string;
+    currency: string;
+    enteredAt: string;
+}
+
+/**
+ * The Rebalancer's target fidelity (§7.3, M29): one of three levels, a custom λ (the preview turns the user's figure in
+ * money into it; the draft keeps λ), or «Target first». «Balanced» by default.
+ */
+export type DraftFidelity = {kind: 'level'; level: 'cost_aware' | 'balanced' | 'faithful'} | {kind: 'custom'; lambda: string} | {kind: 'target_first'};
+
+/** A row of the targets table: an Asset, or a cash entry. */
+export type TargetRow = {kind: 'asset'; key: string; asset: DraftAsset} | {kind: 'cash'; key: string; entry: DraftCashEntry};
+
+/** The key of the cash entry of `brokerKey` in `currency`. */
+export function cashEntryKey(brokerKey: string, currency: string): string {
+    return `cash-entry:${brokerKey}:${currency}`;
+}
+
 export interface DraftData {
     asOf: string;
     valuationCurrency: string;
@@ -185,8 +243,16 @@ export interface DraftData {
     cash: DraftCash[];
     contributions: DraftContribution[];
     assets: DraftAsset[];
+    /** The user's positions (the Rebalancer's; always empty for the PAC). */
+    positions: DraftPosition[];
+    /** The cash entries of the targets, in the order they were added (none for the PAC in F3a). */
+    cashEntries: DraftCashEntry[];
+    /** The Rebalancer's target fidelity (unused by the PAC). */
+    fidelity: DraftFidelity;
     routes: Record<string, DraftRoute>;
     targets: Record<string, string>;
+    /** Minimum and maximum of each Asset's final value, as typed (F2 of project 67); an Asset with no limit has no entry. */
+    limits: Record<string, DraftLimits>;
     fxRates: DraftFx[];
     copies: Record<string, CopyRecord>;
 }
@@ -197,6 +263,8 @@ export interface RemovalImpact {
     cash: DraftCash[];
     funding: {broker: DraftBroker; funding: DraftFunding}[];
     target: boolean;
+    /** The cash entries of the targets that go too (F3a of project 67): those of a removed Broker. */
+    cashEntries?: DraftCashEntry[];
 }
 
 export function routeKey(assetKey: string, brokerKey: string): string {
@@ -241,6 +309,34 @@ export function priceIsCopied(asset: DraftAsset): boolean {
     return !asset.priceManual && asset.priceStamp !== null && asset.copiedPrice !== null && samePrice(asset.price, asset.copiedPrice);
 }
 
+function canonicalText(text: string): string {
+    return canonicalInput(text) ?? text.trim();
+}
+
+/** What a mode means, without its key: the same value written another way («0.190», «0.19») is the same mode. */
+function modeSignature(mode: DraftMode): string {
+    return JSON.stringify([mode.currency, mode.kind, canonicalText(mode.step), canonicalText(mode.fixedFee), canonicalText(mode.ratePercent), canonicalText(mode.floor), canonicalText(mode.cap)]);
+}
+
+/** Two lists of modes with the same meaning, in any order. */
+export function sameModes(left: readonly DraftMode[], right: readonly DraftMode[]): boolean {
+    const a = left.map(modeSignature).sort();
+    const b = right.map(modeSignature).sort();
+    return a.length === b.length && a.every((item, index) => item === b[index]);
+}
+
+/** P3 (D12): a Broker copied with a profile whose modes or conversion mode the user changed since. */
+export function brokerModesModified(broker: DraftBroker): boolean {
+    const modes = broker.copiedModes !== null && !sameModes(broker.modes, broker.copiedModes);
+    const conversion = broker.copiedConversionMode !== null && broker.conversionMode !== broker.copiedConversionMode;
+    return modes || conversion;
+}
+
+/** A position whose planning quantity is still the one the copy proposed (`0.0` and `0` are the same quantity). */
+export function positionIsCopied(position: DraftPosition): boolean {
+    return canonicalText(position.quantity) === canonicalText(position.copiedQuantity);
+}
+
 /** A rate still equal to its copy (same rule as `priceIsCopied`). */
 export function rateIsCopied(fx: DraftFx): boolean {
     if (fx.manual || fx.stamp === null || fx.copiedRate === null) return false;
@@ -270,8 +366,12 @@ function emptyData(valuationCurrency: string): DraftData {
         cash: [],
         contributions: [],
         assets: [],
+        positions: [],
+        cashEntries: [],
+        fidelity: {kind: 'level', level: 'balanced'},
         routes: {},
         targets: {},
+        limits: {},
         fxRates: [],
         copies: {},
     };
@@ -345,7 +445,11 @@ export class PlannerDraft {
             .map((entry) => entry.asset);
     });
 
-    constructor(valuationCurrency = '', policy = '') {
+    /** The Tool this draft is for (F1 of project 67): its steps, its test ids. The PAC when none is given. */
+    readonly profile: PlannerProfile;
+
+    constructor(valuationCurrency = '', policy = '', profile: PlannerProfile = PAC_PLANNER_PROFILE) {
+        this.profile = profile;
         this.data = emptyData(valuationCurrency);
         this.data.policy = policy;
     }
@@ -437,6 +541,8 @@ export class PlannerDraft {
             enteredAt,
             modes: [],
             conversionMode: 'manual',
+            copiedModes: null,
+            copiedConversionMode: null,
             funding: [],
         };
         const cash: DraftCash = {
@@ -461,6 +567,7 @@ export class PlannerDraft {
         this.data.cash = this.data.cash.filter((item) => item.key !== key);
         this.dropFundingFrom({kind: 'cash', cashKey: key});
         this.forgetLiquidityEntry(liquidityEntryKey('cash', key));
+        this.pruneCashEntries();
     }
 
     reorderLiquidity(keys: readonly string[]): void {
@@ -491,9 +598,11 @@ export class PlannerDraft {
 
     /**
      * Every operative Broker may use every liquidity source unless the user says otherwise: a source
-     * without an entry gets one, enabled. An entry the user switched off stays off.
+     * without an entry gets one, enabled. An entry the user switched off stays off. A Tool that declares no
+     * funding routes (the Rebalancer, `profile.fundingRoutes`) keeps no entry at all.
      */
     syncFunding(): void {
+        if (!this.profile.fundingRoutes) return;
         for (const broker of this.data.brokers) {
             if (broker.fundingOnly) continue;
             for (const source of this.fundingCandidates(broker.key)) {
@@ -534,6 +643,8 @@ export class PlannerDraft {
             enteredAt: nowTimestamp(),
             modes: this.defaultModes([]),
             conversionMode: 'manual',
+            copiedModes: null,
+            copiedConversionMode: null,
             funding: [],
         };
         this.data.brokers.push(broker);
@@ -546,20 +657,23 @@ export class PlannerDraft {
         if (index < 0) return;
         this.data.brokers[index] = next;
         this.syncRoutes();
+        this.pruneCashEntries();
     }
 
     brokerRemovalImpact(key: string): RemovalImpact {
         const cash = this.data.cash.filter((item) => item.brokerKey === key);
         const cashKeys = new Set(cash.map((item) => item.key));
         const funding = this.data.brokers.flatMap((broker) => (broker.key === key ? [] : broker.funding.filter((item) => item.source.kind === 'cash' && cashKeys.has(item.source.cashKey)).map((item) => ({broker, funding: item}))));
-        return {routes: Object.values(this.data.routes).filter((route) => route.brokerKey === key), cash, funding, target: false};
+        return {routes: Object.values(this.data.routes).filter((route) => route.brokerKey === key), cash, funding, target: false, cashEntries: this.data.cashEntries.filter((item) => item.brokerKey === key)};
     }
 
     removeBroker(key: string): void {
+        for (const entry of this.data.cashEntries.filter((item) => item.brokerKey === key)) this.removeCashEntry(entry.key);
         const impact = this.brokerRemovalImpact(key);
         for (const cash of impact.cash) this.removeCash(cash.key);
         this.data.brokers = this.data.brokers.filter((item) => item.key !== key);
         this.syncRoutes();
+        this.pruneCashEntries();
     }
 
     // -- assets ------------------------------------------------------------
@@ -582,9 +696,31 @@ export class PlannerDraft {
 
     removeAsset(key: string): void {
         this.data.assets = this.data.assets.filter((item) => item.key !== key);
+        this.data.positions = this.data.positions.filter((item) => item.assetKey !== key);
         delete this.data.targets[key];
+        delete this.data.limits[key];
         if (this.assetOrder.includes(key)) this.assetOrder = this.assetOrder.filter((item) => item !== key);
         this.syncRoutes();
+    }
+
+    /**
+     * The Brokers that hold a position of the scenario and are not among its Brokers (Q-F3a-5b): «positions only». Their
+     * positions count in the portfolio; the plan neither buys nor sells there until the user adds them to the plan.
+     */
+    readonly positionOnlyBrokers = $derived.by((): {brokerKey: string; sourceBrokerId: number; name: string; iconUrl: string | null}[] => {
+        const seen = new Set(this.data.brokers.map((broker) => broker.key));
+        const found: {brokerKey: string; sourceBrokerId: number; name: string; iconUrl: string | null}[] = [];
+        for (const position of this.data.positions) {
+            if (seen.has(position.brokerKey) || !this.asset(position.assetKey)) continue;
+            seen.add(position.brokerKey);
+            found.push({brokerKey: position.brokerKey, sourceBrokerId: position.sourceBrokerId, name: position.brokerName, iconUrl: position.brokerIconUrl});
+        }
+        return found;
+    });
+
+    /** The Asset's positions, as the live `$state` proxies, in the order they were copied. */
+    positionsOf(assetKey: string): DraftPosition[] {
+        return this.data.positions.filter((item) => item.assetKey === assetKey);
     }
 
     reorderAssets(keys: readonly string[]): void {
@@ -609,7 +745,6 @@ export class PlannerDraft {
                         enabled: true,
                         priority: DEFAULT_ROUTE_PRIORITY,
                         minimumIfActive: '',
-                        requiredMinimum: '',
                         cap: '',
                         marginPercent: DEFAULT_EXECUTION_MARGIN_PERCENT,
                         enteredAt: nowTimestamp(),
@@ -630,12 +765,69 @@ export class PlannerDraft {
 
     // -- targets (control percentages only, Q-C0-2) --------------------------
 
+    /** The rows of the targets table: the Assets in their order, then the cash entries a Tool with targets on cash has. */
+    readonly targetRows = $derived.by((): TargetRow[] => [...this.orderedAssets.map((asset): TargetRow => ({kind: 'asset', key: asset.key, asset})), ...(this.profile.cashEntries === 'none' ? [] : this.data.cashEntries.map((entry): TargetRow => ({kind: 'cash', key: entry.key, entry})))]);
+
+    /** The control total: the targets of the Assets and, where a cash entry has a target (`full`), of the cash entries. */
     readonly targetTotal = $derived.by(() => {
-        const values = this.data.assets.map((asset) => canonicalInput(this.data.targets[asset.key] ?? '') ?? '0');
-        return sumControlPercentages(values);
+        const keys = [...this.data.assets.map((asset) => asset.key), ...(this.profile.cashEntries === 'full' ? this.data.cashEntries.map((entry) => entry.key) : [])];
+        return sumControlPercentages(keys.map((key) => canonicalInput(this.data.targets[key] ?? '') ?? '0'));
     });
 
+    /**
+     * The Broker × currency pairs a cash entry can name, in the Brokers' order: the cash rows of the Liquidity step and the
+     * currencies an operative Broker buys in, without the pairs already an entry. None for a Tool without cash entries.
+     */
+    readonly cashEntryChoices = $derived.by((): {brokerKey: string; currency: string}[] => {
+        if (this.profile.cashEntries === 'none') return [];
+        const taken = new Set(this.data.cashEntries.map((entry) => entry.key));
+        return this.data.brokers.flatMap((broker) => {
+            const currencies = new Set([...this.data.cash.filter((cash) => cash.brokerKey === broker.key).map((cash) => cash.currency), ...(broker.fundingOnly ? [] : broker.modes.map((mode) => mode.currency))]);
+            return [...currencies]
+                .filter((currency) => /^[A-Z]{3}$/.test(currency) && !taken.has(cashEntryKey(broker.key, currency)))
+                .sort()
+                .map((currency) => ({brokerKey: broker.key, currency}));
+        });
+    });
+
+    /** Adds the cash entry of `brokerKey` in `currency`, or returns the one already there. */
+    addCashEntry(brokerKey: string, currency: string): DraftCashEntry {
+        const key = cashEntryKey(brokerKey, currency);
+        const existing = this.data.cashEntries.find((item) => item.key === key);
+        if (existing) return existing;
+        this.data.cashEntries.push({key, brokerKey, currency, enteredAt: nowTimestamp()});
+        return this.data.cashEntries[this.data.cashEntries.length - 1];
+    }
+
+    /**
+     * Removes the cash entries whose Broker × currency pair left the scenario: the Broker is gone, or it has neither a cash
+     * row nor (operative) an order mode in that currency any more. An entry never outlives the pair it names.
+     */
+    private pruneCashEntries(): void {
+        for (const entry of [...this.data.cashEntries]) {
+            const broker = this.broker(entry.brokerKey);
+            const cash = this.data.cash.some((item) => item.brokerKey === entry.brokerKey && item.currency === entry.currency);
+            const mode = broker !== undefined && !broker.fundingOnly && broker.modes.some((item) => item.currency === entry.currency);
+            if (!broker || !(cash || mode)) this.removeCashEntry(entry.key);
+        }
+    }
+
+    /** Removes a cash entry with its target and limits. */
+    removeCashEntry(key: string): void {
+        this.data.cashEntries = this.data.cashEntries.filter((item) => item.key !== key);
+        delete this.data.targets[key];
+        delete this.data.limits[key];
+    }
+
     readonly targetRemaining = $derived(this.targetTotal === null ? null : remainingControlPercentage(this.targetTotal));
+
+    /** Writes one limit as typed; an entry left with two empty fields is removed, so no limit leaves no trace. */
+    setLimit(assetKey: string, side: LimitSide, text: string): void {
+        const current = this.data.limits[assetKey] ?? {minimum: '', maximum: ''};
+        const next = {...current, [side]: text};
+        if (next.minimum.trim() === '' && next.maximum.trim() === '') delete this.data.limits[assetKey];
+        else this.data.limits[assetKey] = next;
+    }
 
     // -- FX ------------------------------------------------------------------
 
@@ -697,7 +889,7 @@ export class PlannerDraft {
     }
 
     /** The wizard steps on screen: FX only when a rate is needed. */
-    readonly visibleSteps: readonly PlannerStep[] = $derived(PLANNER_STEPS.filter((step) => step !== 'fx' || this.fxNeeded));
+    readonly visibleSteps: readonly PlannerStep[] = $derived.by(() => this.profile.steps.filter((step) => step !== 'fx' || this.fxNeeded));
 
     ensureFx(pair: string): DraftFx {
         const existing = this.fx(pair);
@@ -759,6 +951,14 @@ export class PlannerDraft {
                 if (age !== null && age > 0) stale += 1;
             } else if (fx.stamp) modified += 1;
             else manual += 1;
+        }
+        // The Rebalancer's positions the request carries (the Review lists the same): copied until the quantity changes.
+        if (this.profile.positions) {
+            for (const position of this.data.positions) {
+                if (!this.asset(position.assetKey)) continue;
+                if (positionIsCopied(position)) copied += 1;
+                else modified += 1;
+            }
         }
         return {copied, manual, modified, stale};
     });

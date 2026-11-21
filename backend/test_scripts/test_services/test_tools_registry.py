@@ -22,7 +22,9 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, computed_fie
 from pydantic.dataclasses import dataclass as pydantic_dataclass
 
 from backend.app.schemas.tools import ToolDiscoveryFailure, ToolDocumentation, ToolOperationPolicy, ToolPlatformPolicy, ToolUIDescriptor
+from backend.app.services.pac_allocator.progress import PLANNER_PHASES
 from backend.app.services.platform.provider_registry import AbstractPluginRegistry, register_plugin
+from backend.app.services.tool_plugins.pac_allocator.plugin import PacAllocatorTool
 from backend.app.services.tools.base import ToolDefinitionError, ToolPlugin, ToolService
 from backend.app.services.tools.catalog import effective_catalog_entries, effective_operation, get_tool_catalog
 from backend.app.services.tools.registry import ToolPluginRegistry, build_tool_definition
@@ -1227,6 +1229,7 @@ def test_effective_policy_only_lowers_limits_and_reserves_output_time():
         "request_timeout_ms": 59_000,
         "client_timeout_ms": 65_000,
         "memory_limit_bytes": 1_073_741_824,
+        "progress_phases": [],
     }
     assert declared.model_dump() == original
 
@@ -1298,9 +1301,9 @@ def test_registered_pac_allocator_service_is_the_v2_planner_card():
     # The i18n key is the card's contract: the frontend catalogues own the text.
     assert descriptor.name_i18n_key == "tools.pacAllocator.name"
     assert descriptor.description_i18n_key == "tools.pacAllocator.description"
-    assert descriptor.ui.model_dump(mode="json") == {"kind": "custom", "component_key": "pac-allocator", "version": "1.0.0"}
-    assert (descriptor.contract_version, descriptor.implementation_version) == ("1.0.0", "1.0.0")
-    assert [policy.operation for policy in descriptor.operations] == ["plan"]
+    assert descriptor.ui.model_dump(mode="json") == {"kind": "custom", "component_key": "pac-allocator", "version": "2.0.0"}
+    assert (descriptor.contract_version, descriptor.implementation_version) == ("2.0.0", "2.0.0")
+    assert [policy.operation for policy in descriptor.operations] == ["plan", "preview"]
 
     # The English fallback is shown whenever a catalogue misses the key: it must
     # describe the planner, not the deleted prototype.
@@ -1313,3 +1316,81 @@ def test_registered_pac_allocator_service_is_the_v2_planner_card():
     served = next(item for item in catalog.items if item.tool_code == "pac_allocator")
     assert (served.description, served.description_i18n_key, served.ui) == (descriptor.description, descriptor.description_i18n_key, descriptor.ui)
     assert "pac_allocator" not in {item.tool_code for item in catalog.unavailable}
+
+
+def test_both_services_declare_plan_and_preview():
+    """B4 test 13 (contract §11): each planner service answers ``plan`` and ``preview``; the preview claims no engine window
+    of its own (the platform's short defaults) and returns a small result; both services share the two policies."""
+    pac = ToolPluginRegistry.get_definition("pac_allocator").descriptor
+    rebalancer = ToolPluginRegistry.get_definition("portfolio_rebalancer").descriptor
+    for descriptor in (pac, rebalancer):
+        policies = {policy.operation: policy for policy in descriptor.operations}
+        assert list(policies) == ["plan", "preview"]
+        assert policies["preview"].engine_timeout_ms < policies["plan"].engine_timeout_ms
+        assert policies["preview"].request_timeout_ms < policies["plan"].request_timeout_ms
+        assert policies["preview"].max_result_bytes <= policies["plan"].max_result_bytes
+    assert pac.operations == rebalancer.operations
+
+
+def test_registered_portfolio_rebalancer_service_is_published():
+    """B3 test 12 (D9, U3 of project 67): the Rebalancer is the plugin's second service, ``plan`` only, with its own card,
+    component and page, and the catalog serves it."""
+    definition = ToolPluginRegistry.get_definition("portfolio_rebalancer")
+    assert definition is not None, "portfolio_rebalancer is not published by the application registry"
+    descriptor = definition.descriptor
+
+    assert (descriptor.name_i18n_key, descriptor.description_i18n_key) == ("tools.portfolioRebalancer.name", "tools.portfolioRebalancer.description")
+    assert descriptor.ui.model_dump(mode="json") == {"kind": "custom", "component_key": "portfolio-rebalancer", "version": "1.0.0"}
+    assert descriptor.documentation is not None and descriptor.documentation.path == "user/tools/portfolio-rebalancer/"
+    assert (descriptor.contract_version, descriptor.implementation_version) == ("2.0.0", "2.0.0")
+    assert [policy.operation for policy in descriptor.operations] == ["plan", "preview"]
+    assert descriptor.icon_key == "scale" and descriptor.name == "Portfolio rebalancer"
+    assert [wording for wording in P1_PROTOTYPE_WORDING if wording in descriptor.description.casefold()] == []
+
+    pac = ToolPluginRegistry.get_definition("pac_allocator").descriptor
+    # The same operation policy as the PAC: the same engine window and the same zero margin.
+    assert descriptor.operations == pac.operations
+
+    catalog = get_tool_catalog(ToolPlatformPolicy())
+    served = next(item for item in catalog.items if item.tool_code == "portfolio_rebalancer")
+    assert (served.description, served.description_i18n_key, served.ui) == (descriptor.description, descriptor.description_i18n_key, descriptor.ui)
+    assert "portfolio_rebalancer" not in {item.tool_code for item in catalog.unavailable}
+
+
+# ---------------------------------------------------------------------------
+# Progress phases (lot V1 of project 67): declared on the operation, in order
+# ---------------------------------------------------------------------------
+
+
+def test_progress_phases_are_declared_in_order(plugin_factory):
+    """An operation publishes its progress phases in the declared order, through the effective catalog policy too; a
+    repeated or malformed name, or too many phases, is refused at declaration."""
+    phases = ("validate", "model", "search", "verify", "report")
+    plugin = plugin_factory(operations=(ToolOperationPolicy(operation="inspect", progress_phases=phases),))
+    definition = _build(plugin)
+    (policy,) = definition.descriptor.operations
+    assert policy.progress_phases == phases
+    assert effective_operation(policy, ToolPlatformPolicy()).progress_phases == phases
+    assert policy.model_dump(mode="json")["progress_phases"] == list(phases)
+    assert ToolOperationPolicy(operation="inspect").progress_phases == ()
+
+    for refused in (("search", "search"), ("Search",), ("search phase",), ("x" * 33,), ("",), tuple(f"p{index}" for index in range(17))):
+        with pytest.raises(ValidationError):
+            ToolOperationPolicy(operation="inspect", progress_phases=refused)
+
+
+def test_progress_phases_do_not_move_the_schema_fingerprint(plugin_factory):
+    """The schema fingerprint reads the schemas and the operation names: the same service with phases, without, or with
+    other phases has one fingerprint."""
+    fingerprints = {_build(plugin_factory(operations=(ToolOperationPolicy(operation="inspect", progress_phases=phases),))).descriptor.schema_fingerprint for phases in ((), ("validate", "search"), ("validate", "model", "search", "verify", "report"))}
+    assert len(fingerprints) == 1
+
+
+def test_planner_services_declare_their_progress_phases():
+    """V2 test 7 (project 67): both planner services declare the five phases, in order, on ``plan``; ``preview`` runs no
+    optimizer and declares none. The phases are the engine's own list."""
+    assert PLANNER_PHASES == ("validate", "model", "search", "verify", "report")
+    for service in PacAllocatorTool.services:
+        definition = build_tool_definition(PacAllocatorTool, service)
+        phases = {policy.operation: policy.progress_phases for policy in definition.descriptor.operations}
+        assert phases == {"plan": PLANNER_PHASES, "preview": ()}, service.tool_code
