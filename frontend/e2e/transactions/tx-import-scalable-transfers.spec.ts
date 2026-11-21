@@ -45,6 +45,12 @@
  * by its merge dialog: the joined text holds the exporter id of each leg — file data, not a translation. The merged
  * pair is then read from the editor (`tx-bulk-date[data-partner-date]`), from the commit request, and from the API.
  *
+ * Linked charges (project 66, P2a). The Scalable plugins link the tax withheld on an interest row to that INTEREST
+ * (`ref` / `parent_ref`); the overnight sample holds such groups. The editor receives them linked and closed (P1b), so
+ * a group is one top-level row with its «N charges» chip: the editor shows the rows handed over minus the linked
+ * charges, and the database search skips a row that holds linked charges (66 C21). Both counts are read from the
+ * parse, never written; the chip of each INTEREST, the TAX's `parent_ref` in the commit and its saved parent are asserted.
+ *
  * Key data-testids: tx-import-button · import-wizard-stepper [aria-current="step"][data-step-id] ·
  * import-wizard-step1 / file-uploader / file-input / import-wizard-upload-more / search-select-option-<brokerId> /
  * import-wizard-next · import-broker-mismatch-modal · import-wizard-step2 [data-busy] /
@@ -111,7 +117,7 @@ const QUIET_DAY = '2026-03-02';
 
 type HttpResponse = {ok(): boolean; status(): number; text(): Promise<string>; json(): Promise<unknown>};
 type Cash = {code: string; amount: string | number};
-type ParsedTx = {type: string; date: string; asset_id?: number | null; cash?: Cash | null; description?: string | null};
+type ParsedTx = {type: string; date: string; asset_id?: number | null; cash?: Cash | null; description?: string | null; ref?: string | null; parent_ref?: string | null};
 /** The parse response (`BRIMParseResponse`), its transactions typed as far as this spec reads them. */
 type ParseBody = Omit<ParseResponse, 'transactions'> & {transactions: ParsedTx[]};
 type UploadedInfo = {file_id: string; filename: string; target_broker_id: number | null; compatible_plugins?: string[] | null};
@@ -123,10 +129,12 @@ type Owned = {user: DisposableUser | null; brokerIds: number[]};
 /** One input of `POST /transactions/promote-suggest`, as the editor sends it. */
 type SuggestInput = {id: number; type: string; broker_id: number; date: string};
 type SuggestAnswer = {results: Record<string, Array<{id: number}>>};
-type StagedCreate = {broker_id?: number; type?: string; date?: string; cash?: Cash | null; description?: string | null; link_uuid?: string | null};
+type StagedCreate = {broker_id?: number; type?: string; date?: string; cash?: Cash | null; description?: string | null; link_uuid?: string | null; ref?: string | null; parent_ref?: string | null};
 type CommitPayload = {creates?: StagedCreate[]; updates?: unknown[]; deletes?: number[]; promotes?: Array<Record<string, unknown>>};
 type CommitResult = {committed: boolean; issues?: unknown[]; results?: Array<{operation: string; index?: number; ids?: number[]}>};
-type SavedTx = {id: number; broker_id: number; type: string; date: string; cash?: Cash | null; description?: string | null; related_transaction_id?: number | null};
+type SavedTx = {id: number; broker_id: number; type: string; date: string; cash?: Cash | null; description?: string | null; related_transaction_id?: number | null; parent_transaction_id?: number | null};
+/** A charge the plugin linked to a row of the same file (66 P2a): the charge, and the row its `parent_ref` names. */
+type ChargeLink = {charge: ParsedTx; parent: ParsedTx};
 /** One leg of an internal transfer, as its plugin parses it. */
 type Leg = {account: Account; type: 'WITHDRAWAL' | 'DEPOSIT'; day: string; amount: number; description: string};
 type Transfer = {day: string; amount: number; out: Leg; in: Leg};
@@ -177,6 +185,67 @@ function transferJoinedBy(transfers: readonly Transfer[], joined: string): Trans
     const found = transfers.filter((transfer) => JSON.stringify([transfer.out.description, transfer.in.description].sort()) === lines);
     expect(found, `the merge joins the two legs of one internal transfer; the joined text: ${JSON.stringify(joined)}`).toHaveLength(1);
     return found[0];
+}
+
+/**
+ * The charges of `rows` linked to another row of `rows` (66 P2a): a `parent_ref` naming the `ref` of exactly one other
+ * row, as the editor links them (P1b: a name carried by two rows links nothing). `rows` are the handed-over rows of ONE
+ * file: the wizard renews the names per file.
+ */
+function chargeLinksIn(rows: readonly ParsedTx[]): ChargeLink[] {
+    const byRef = new Map<string, ParsedTx[]>();
+    for (const tx of rows) if (tx.ref) byRef.set(tx.ref, [...(byRef.get(tx.ref) ?? []), tx]);
+    return rows.flatMap((charge) => {
+        const named = charge.parent_ref ? (byRef.get(charge.parent_ref) ?? []) : [];
+        return named.length === 1 && named[0] !== charge ? [{charge, parent: named[0]}] : [];
+    });
+}
+
+/**
+ * The linked charges among the cash rows of the files handed over, file by file. Premise: the overnight sample links
+ * the tax withheld on its interest to that INTEREST — every link here is a TAX under an INTEREST.
+ */
+function chargeLinksOf(parsed: Partial<Record<Account, ParseBody>>): ChargeLink[] {
+    const links = (Object.keys(parsed) as Account[]).flatMap((account) => chargeLinksIn(cashRows(parsed[account]!)));
+    if (parsed.overnight) {
+        expect(chargeLinksIn(cashRows(parsed.overnight)).length, `premise: ${ACCOUNTS.overnight.sample} links the tax withheld on an interest to that INTEREST (66 P2a)`).toBeGreaterThan(0);
+    }
+    expect(
+        links.map((link) => [link.parent.type, link.charge.type]),
+        'premise: each linked charge is a TAX under its INTEREST',
+    ).toEqual(links.map(() => ['INTEREST', 'TAX']));
+    return links;
+}
+
+/**
+ * What the editor shows of `handed` rows holding `links`: `top` rows, each linked charge folded under its parent
+ * (66 F7-c1), and `asked` rows asked to the database search, which skips a row holding linked charges (66 C21).
+ */
+function editorCounts(handed: number, links: readonly ChargeLink[]): {top: number; asked: number} {
+    return {top: handed - links.length, asked: handed - new Set(links.map((link) => link.parent)).size};
+}
+
+/** The one row of `rows` described as `tx` is: the descriptions carry the exporter id. */
+function describedAs<T extends {description?: string | null}>(rows: readonly T[], tx: ParsedTx, where: string): T {
+    const found = rows.filter((row) => row.description === tx.description);
+    expect(found, `${where}: one ${tx.type} described ${JSON.stringify(tx.description)}`).toHaveLength(1);
+    return found[0];
+}
+
+/** The commit names each linked charge's parent: the charge's `parent_ref` is its parent's `ref` (66 P1b). */
+function expectChargesCommittedLinked(creates: readonly StagedCreate[], links: readonly ChargeLink[]): void {
+    for (const {charge, parent} of links) {
+        const ref = describedAs(creates, parent, 'the commit').ref;
+        expect(ref, `the ${parent.type} of ${parent.date} goes with a name`).toBeTruthy();
+        expect(describedAs(creates, charge, 'the commit').parent_ref, `its ${charge.type} goes naming it`).toBe(ref);
+    }
+}
+
+/** The API: each linked charge is saved under its parent. */
+function expectChargesSavedLinked(saved: readonly SavedTx[], links: readonly ChargeLink[]): void {
+    for (const {charge, parent} of links) {
+        expect(describedAs(saved, charge, 'the API').parent_transaction_id ?? null, `the ${charge.type} of ${charge.date} is saved linked to its ${parent.type}`).toBe(describedAs(saved, parent, 'the API').id);
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -494,6 +563,20 @@ async function editorRowOn(page: Page, day: string): Promise<Locator> {
     return page.getByTestId('tx-bulk-body').locator(`tbody tr[data-row-id="${rowId}"]`);
 }
 
+/**
+ * Each parent of `links` is one top-level row whose chip counts its linked charges, closed: an import brings its
+ * charges closed (66 P1b), so they are not rows of the grid.
+ */
+async function expectChargesFolded(page: Page, links: readonly ChargeLink[]): Promise<void> {
+    for (const parent of new Set(links.map((link) => link.parent))) {
+        const count = links.filter((link) => link.parent === parent).length;
+        const rowId = await (await editorRowOn(page, parent.date)).getAttribute('data-row-id');
+        const chip = page.getByTestId(`tx-bulk-charges-toggle-${rowId}`);
+        await expect(chip, `the ${parent.type} of ${parent.date} holds its ${count} linked charge(s) under its chip`).toHaveAttribute('data-charges-count', String(count), {timeout: UI_TIMEOUT});
+        await expect(chip, 'closed: an import brings its charges closed').toHaveAttribute('aria-expanded', 'false');
+    }
+}
+
 /** Open the actions menu of an editor row (its ⋮); return the menu. */
 async function openRowMenu(page: Page, row: Locator): Promise<Locator> {
     const rowId = await row.getAttribute('data-row-id');
@@ -566,9 +649,10 @@ function isCommitRequest(sent: Request): boolean {
  * S1's first half, for the tests that start from its editor: a disposable account with its two brokers, both exports
  * staged on their own brokers in one wizard run, parsed with their brokers' plugins, only their cash rows handed to the
  * editor. Returns once the editor holds them, the database has proposed nothing (nothing is saved) and the banner
- * proposes the two internal transfers, whose legs stand apart.
+ * proposes the two internal transfers, whose legs stand apart. `topCount` is the editor's top-level rows: the
+ * `cashCount` handed over minus the linked charges folded under their parent (`links`).
  */
-async function importBothExportsToEditor(page: Page, request: APIRequestContext, owned: Owned, tag: string): Promise<{brokers: Brokers; parsed: Record<Account, ParseBody>; transfers: Transfer[]; cashCount: number}> {
+async function importBothExportsToEditor(page: Page, request: APIRequestContext, owned: Owned, tag: string): Promise<{brokers: Brokers; parsed: Record<Account, ParseBody>; transfers: Transfer[]; cashCount: number; topCount: number; links: ChargeLink[]}> {
     const brokers = await startOnOwnAccount(page, request, owned, tag);
     await goToTransactions(page);
     const step1 = await openImportWizard(page);
@@ -590,6 +674,8 @@ async function importBothExportsToEditor(page: Page, request: APIRequestContext,
     }
     const transfers = transfersIn(parsed);
     const cashCount = cashRows(parsed.broker).length + cashRows(parsed.overnight).length;
+    const links = chargeLinksOf(parsed);
+    const topCount = editorCounts(cashCount, links).top;
 
     const step4 = await continueToStep(page, [parsed.broker, parsed.overnight], 'review');
     await selectOnlyCashRows(page, step4, cashCount);
@@ -597,14 +683,15 @@ async function importBothExportsToEditor(page: Page, request: APIRequestContext,
     const suggestAnswer = promoteSuggestAsking(page, allLegs);
     await importToEditor(page);
 
-    await expect(editorRows(page), `the editor holds the ${cashCount} rows handed over`).toHaveCount(cashCount, {timeout: UI_TIMEOUT});
+    await expect(editorRows(page), `the editor holds the ${cashCount} rows handed over, the ${links.length} linked charges folded: ${topCount} rows`).toHaveCount(topCount, {timeout: UI_TIMEOUT});
+    await expectChargesFolded(page, links);
     for (const transfer of transfers) {
         await expect(dateCells(page, transfer.day, ''), `the two legs of the ${transfer.day} transfer are two standalone rows`).toHaveCount(2);
     }
     const answer = await jsonFrom<SuggestAnswer>(await suggestAnswer, 'the database search for the new rows');
     expect(Object.values(answer.results).flat(), 'nothing of the account is saved yet: the database proposes nothing').toEqual([]);
     await expect(bannerItems(page), 'the banner proposes exactly the two internal transfers').toHaveCount(2, {timeout: UI_TIMEOUT});
-    return {brokers, parsed, transfers, cashCount};
+    return {brokers, parsed, transfers, cashCount, topCount, links};
 }
 
 // ---------------------------------------------------------------------------
@@ -650,6 +737,8 @@ test.describe('Import Wizard + bulk editor — Scalable internal transfers merge
         }
         const transfers = transfersIn(parsed);
         const cashCount = cashRows(parsed.broker).length + cashRows(parsed.overnight).length;
+        const links = chargeLinksOf(parsed);
+        const counts = editorCounts(cashCount, links);
 
         // ③ Review: only the rows without an instrument (nothing to resolve), then Import. The editor asks the
         // database about the new rows, under negative ids.
@@ -659,14 +748,16 @@ test.describe('Import Wizard + bulk editor — Scalable internal transfers merge
         const suggestAnswer = promoteSuggestAsking(page, allLegs);
         await importToEditor(page);
 
-        // ④ The editor holds the cash rows of both files; each transfer's two legs stand apart.
-        await expect(editorRows(page), `the editor holds the ${cashCount} rows handed over`).toHaveCount(cashCount, {timeout: UI_TIMEOUT});
+        // ④ The editor holds the cash rows of both files, each linked charge folded under its parent; each transfer's
+        // two legs stand apart.
+        await expect(editorRows(page), `the editor holds the ${cashCount} rows handed over, the ${links.length} linked charges folded: ${counts.top} rows`).toHaveCount(counts.top, {timeout: UI_TIMEOUT});
+        await expectChargesFolded(page, links);
         for (const transfer of transfers) {
             await expect(dateCells(page, transfer.day, ''), `the two legs of the ${transfer.day} transfer are two standalone rows`).toHaveCount(2);
         }
         const suggest = await suggestAnswer;
         const asked = suggest.request().postDataJSON() as SuggestInput[];
-        expect(asked, 'every new row with a type, a broker, a date and an amount is asked to the database').toHaveLength(cashCount);
+        expect(asked, 'every new row with a type, a broker, a date and an amount is asked to the database, but a parent of linked charges').toHaveLength(counts.asked);
         expect(
             asked.every((input) => input.id < 0),
             'new rows are asked under negative ids',
@@ -684,7 +775,7 @@ test.describe('Import Wizard + bulk editor — Scalable internal transfers merge
         await page.getByTestId('promote-merge-desc-input').press('Escape');
         await expect(page.getByTestId('promote-merge-confirm'), 'the dialog is cancelled').toBeHidden({timeout: UI_TIMEOUT});
         await expect(items, 'a cancelled merge changes nothing').toHaveCount(2);
-        await expect(editorRows(page)).toHaveCount(cashCount);
+        await expect(editorRows(page)).toHaveCount(counts.top);
 
         const joined = await openMergeOf(page, 0);
         const merged = transferJoinedBy(transfers, joined);
@@ -695,7 +786,7 @@ test.describe('Import Wizard + bulk editor — Scalable internal transfers merge
         // ⑥ The dialog accepted with the joined text: the two legs become one paired row, the other proposal remains.
         await page.getByTestId('promote-merge-confirm').click();
         await expect(page.getByTestId('promote-merge-confirm'), 'the merge is accepted').toBeHidden({timeout: UI_TIMEOUT});
-        await expect(editorRows(page), 'the two legs of the merged transfer are one row').toHaveCount(cashCount - 1, {timeout: UI_TIMEOUT});
+        await expect(editorRows(page), 'the two legs of the merged transfer are one row').toHaveCount(counts.top - 1, {timeout: UI_TIMEOUT});
         await expect(dateCells(page, merged.day, merged.day), `the ${merged.day} legs are paired`).toHaveCount(1);
         await expect(dateCells(page, kept.day, ''), `the ${kept.day} legs still stand apart`).toHaveCount(2);
         await expect(items, 'the other transfer is still proposed').toHaveCount(1);
@@ -705,6 +796,7 @@ test.describe('Import Wizard + bulk editor — Scalable internal transfers merge
         const {payload} = await saveAll(page);
         const creates = payload.creates ?? [];
         expect(creates, `the ${cashCount} rows are created`).toHaveLength(cashCount);
+        expectChargesCommittedLinked(creates, links);
         expect(payload.promotes ?? [], 'two new rows are merged in the editor itself: no promote').toEqual([]);
         const pair = creates.filter((create) => create.type === 'CASH_TRANSFER');
         const sortLegs = <T extends {broker_id?: number}>(legs: T[]) => [...legs].sort((a, b) => (a.broker_id ?? 0) - (b.broker_id ?? 0));
@@ -730,6 +822,7 @@ test.describe('Import Wizard + bulk editor — Scalable internal transfers merge
         for (const account of Object.keys(ACCOUNTS) as Account[]) {
             expect(saved[account], `every cash row of the ${ACCOUNTS[account].label} is saved on its broker`).toHaveLength(cashRows(parsed[account]).length);
         }
+        expectChargesSavedLinked([...saved.broker, ...saved.overnight], links);
         const legsOn = (leg: Leg, day: string) => saved[leg.account].filter((tx) => tx.date === day);
         expect(legsOn(merged.out, merged.day), `one transaction on ${merged.day} on the paying broker`).toHaveLength(1);
         expect(legsOn(merged.in, merged.day), `one transaction on ${merged.day} on the receiving broker`).toHaveLength(1);
@@ -764,6 +857,8 @@ test.describe('Import Wizard + bulk editor — Scalable internal transfers merge
         const transfers = transfersIn(parsed);
         const rowCount = parsed.overnight.transactions.length;
         expect(cashRows(parsed.overnight), 'premise: the overnight account’s export holds cash rows only').toHaveLength(rowCount);
+        const links = chargeLinksOf({overnight: parsed.overnight});
+        const counts = editorCounts(rowCount, links);
         const quietRows = parsed.overnight.transactions.filter((tx) => tx.date === QUIET_DAY);
         expect(
             quietRows.map((tx) => tx.type),
@@ -790,12 +885,13 @@ test.describe('Import Wizard + bulk editor — Scalable internal transfers merge
         const freshLegs = [june.fresh, april.fresh].map((leg) => ({brokerId: brokers.overnight.id, date: leg.day, type: leg.type}));
         const suggestAnswer = promoteSuggestAsking(page, freshLegs);
         await importToEditor(page);
-        await expect(editorRows(page), `the editor holds the ${rowCount} rows handed over`).toHaveCount(rowCount, {timeout: UI_TIMEOUT});
+        await expect(editorRows(page), `the editor holds the ${rowCount} rows handed over, the ${links.length} linked charges folded: ${counts.top} rows`).toHaveCount(counts.top, {timeout: UI_TIMEOUT});
+        await expectChargesFolded(page, links);
 
         // ④ The database proposes, for each new transfer leg, its saved other side — and nothing for any other row.
         const suggest = await suggestAnswer;
         const asked = suggest.request().postDataJSON() as SuggestInput[];
-        expect(asked, 'every new row is asked').toHaveLength(rowCount);
+        expect(asked, 'every new row is asked, but a parent of linked charges').toHaveLength(counts.asked);
         expect(
             asked.every((input) => input.id < 0),
             'new rows are asked under negative ids',
@@ -832,7 +928,7 @@ test.describe('Import Wizard + bulk editor — Scalable internal transfers merge
         await expect(add).toBeEnabled({timeout: UI_TIMEOUT});
         await add.click();
         await expect(picker, 'the picker closes on Add').toBeHidden({timeout: UI_TIMEOUT});
-        await expect(editorRows(page), 'the saved side joins the editor').toHaveCount(rowCount + 1, {timeout: UI_TIMEOUT});
+        await expect(editorRows(page), 'the saved side joins the editor').toHaveCount(counts.top + 1, {timeout: UI_TIMEOUT});
         await expect(dateCells(page, june.fresh.day, ''), `the new and the saved ${june.fresh.day} legs stand apart`).toHaveCount(2);
 
         // ⑦ The banner proposes the new + saved pair; its dialog joins the two texts; accepted.
@@ -842,7 +938,7 @@ test.describe('Import Wizard + bulk editor — Scalable internal transfers merge
         expect(transferJoinedBy(transfers, joined).day, 'the proposal is the June transfer: the new leg and its saved side').toBe(june.fresh.day);
         await page.getByTestId('promote-merge-confirm').click();
         await expect(page.getByTestId('promote-merge-confirm'), 'the merge is accepted').toBeHidden({timeout: UI_TIMEOUT});
-        await expect(editorRows(page), 'the two June legs are one row').toHaveCount(rowCount, {timeout: UI_TIMEOUT});
+        await expect(editorRows(page), 'the two June legs are one row').toHaveCount(counts.top, {timeout: UI_TIMEOUT});
         await expect(dateCells(page, june.fresh.day, june.fresh.day), 'the June legs are paired').toHaveCount(1);
         await expect(items, 'nothing else to merge in the editor').toHaveCount(0);
         await expect(page.getByTestId('tx-bulk-suggest-import'), 'the April leg still offers its saved side').toBeVisible();
@@ -851,6 +947,7 @@ test.describe('Import Wizard + bulk editor — Scalable internal transfers merge
         const {payload} = await saveAll(page);
         const creates = payload.creates ?? [];
         expect(creates, `the ${rowCount} new rows are created`).toHaveLength(rowCount);
+        expectChargesCommittedLinked(creates, links);
         const newLeg = creates.filter((create) => create.date === june.fresh.day);
         expect(newLeg, 'one new June leg').toHaveLength(1);
         expect({broker_id: newLeg[0].broker_id, type: newLeg[0].type, amount: amountOf(newLeg[0].cash), description: newLeg[0].description}, 'the new leg goes with its own type — the backend promotes it from the two source types — and the joined text').toEqual({
@@ -867,6 +964,7 @@ test.describe('Import Wizard + bulk editor — Scalable internal transfers merge
         const onBroker = await transactionsOn(page, brokers.broker.id);
         const onOvernight = await transactionsOn(page, brokers.overnight.id);
         expect(onOvernight, 'every row of the import is saved on the overnight account’s broker').toHaveLength(rowCount);
+        expectChargesSavedLinked(onOvernight, links);
         const newJune = onOvernight.filter((tx) => tx.date === june.fresh.day);
         expect(newJune, 'one June transaction on the overnight account’s broker').toHaveLength(1);
         expect(savedFacts(onBroker.find((tx) => tx.id === savedJuneId)), 'the saved leg: a CASH_TRANSFER linked to the new one, with the joined text').toEqual({
@@ -885,7 +983,7 @@ test.describe('Import Wizard + bulk editor — Scalable internal transfers merge
 
     test('S3: Save with the banner never touched asks about the suggestions first — «Show the suggestions» closes the question, and the next Save saves', async ({page, request}, testInfo) => {
         test.setTimeout(180_000);
-        const {brokers, parsed, transfers, cashCount} = await importBothExportsToEditor(page, request, owned, `scs3_${testInfo.project.name}`);
+        const {brokers, parsed, transfers, cashCount, topCount, links} = await importBothExportsToEditor(page, request, owned, `scs3_${testInfo.project.name}`);
         const root = page.getByTestId('tx-bulk-modal-root');
         await expect(page.getByTestId('tx-bulk-suggest-import'), 'nothing saved to propose: the banner is the only suggestion, and nobody has touched it').toHaveCount(0);
 
@@ -913,7 +1011,7 @@ test.describe('Import Wizard + bulk editor — Scalable internal transfers merge
             await expect(page.getByTestId('tx-bulk-unseen-suggestions'), '«Show the suggestions» closes the question').toHaveCount(0, {timeout: UI_TIMEOUT});
             await expect(page.getByTestId('tx-bulk-modal'), 'the editor stays open').toBeVisible();
             await expect(bannerItems(page), 'the two proposals are still there: showing them merges nothing').toHaveCount(2);
-            await expect(editorRows(page), 'every row is still its own').toHaveCount(cashCount);
+            await expect(editorRows(page), 'every row is still its own').toHaveCount(topCount);
             await expect(page.getByTestId('tx-picker-modal'), 'nothing saved to pick from: the banner is what is shown, no picker').toHaveCount(0);
             expect(commitsSent, '«Show the suggestions» saves nothing').toEqual([]);
         } finally {
@@ -925,6 +1023,7 @@ test.describe('Import Wizard + bulk editor — Scalable internal transfers merge
         const {payload} = await saveAll(page);
         const creates = payload.creates ?? [];
         expect(creates, `the ${cashCount} rows are created`).toHaveLength(cashCount);
+        expectChargesCommittedLinked(creates, links);
         expect(
             creates.filter((create) => create.type === 'CASH_TRANSFER'),
             'shown, not merged: no Cash Transfer',
@@ -936,6 +1035,7 @@ test.describe('Import Wizard + bulk editor — Scalable internal transfers merge
         for (const account of Object.keys(ACCOUNTS) as Account[]) {
             expect(saved[account], `every cash row of the ${ACCOUNTS[account].label} is saved on its broker`).toHaveLength(cashRows(parsed[account]).length);
         }
+        expectChargesSavedLinked([...saved.broker, ...saved.overnight], links);
         for (const transfer of transfers) {
             const legs = [...saved[transfer.out.account].filter((tx) => tx.date === transfer.day), ...saved[transfer.in.account].filter((tx) => tx.date === transfer.day)];
             expect(legs.map((tx) => [tx.type, tx.related_transaction_id ?? null]).sort(), `the ${transfer.day} transfer is saved as imported: a withdrawal and a deposit, unlinked`).toEqual([
@@ -947,7 +1047,7 @@ test.describe('Import Wizard + bulk editor — Scalable internal transfers merge
 
     test('S4: «Merge all» with the left row’s text merges every proposed transfer, saved as linked Cash Transfers', async ({page, request}, testInfo) => {
         test.setTimeout(180_000);
-        const {brokers, parsed, transfers, cashCount} = await importBothExportsToEditor(page, request, owned, `scs4_${testInfo.project.name}`);
+        const {brokers, parsed, transfers, cashCount, topCount, links: chargeLinks} = await importBothExportsToEditor(page, request, owned, `scs4_${testInfo.project.name}`);
 
         // ① The left text of each proposal, read from the app: a proposal's merge dialog joins the texts of its two rows
         // in the banner's order, one per line — the left row's first. (The banner and «Merge all» put the paying row
@@ -964,7 +1064,7 @@ test.describe('Import Wizard + bulk editor — Scalable internal transfers merge
         }
         expect([...leftTextOf.keys()].sort(), 'the two proposals are the two internal transfers').toEqual(TRANSFERS.map((transfer) => transfer.day).sort());
         await expect(bannerItems(page), 'cancelled dialogs merge nothing').toHaveCount(2);
-        await expect(editorRows(page)).toHaveCount(cashCount);
+        await expect(editorRows(page)).toHaveCount(topCount);
 
         // ② «Merge all»: offered because the banner proposes more than one pair; combining both texts is the default.
         const mergeAll = page.getByTestId('promote-suggest-merge-all');
@@ -983,13 +1083,14 @@ test.describe('Import Wizard + bulk editor — Scalable internal transfers merge
         for (const transfer of transfers) {
             await expect(dateCells(page, transfer.day, transfer.day), `the ${transfer.day} legs are paired`).toHaveCount(1, {timeout: UI_TIMEOUT});
         }
-        await expect(editorRows(page), 'the two legs of each transfer are one row').toHaveCount(cashCount - transfers.length);
+        await expect(editorRows(page), 'the two legs of each transfer are one row').toHaveCount(topCount - transfers.length);
         await expect(page.getByTestId('promote-suggest-banner'), 'every proposal is merged: the banner is gone').toHaveCount(0);
 
         // ④ Save: each transfer goes as two CASH_TRANSFER legs under one link, both with the left row's text.
         const {payload} = await saveAll(page);
         const creates = payload.creates ?? [];
         expect(creates, `the ${cashCount} rows are created`).toHaveLength(cashCount);
+        expectChargesCommittedLinked(creates, chargeLinks);
         expect(payload.promotes ?? [], 'new rows are merged in the editor itself: no promote').toEqual([]);
         expect(
             creates.filter((create) => create.type === 'CASH_TRANSFER'),
@@ -1015,6 +1116,7 @@ test.describe('Import Wizard + bulk editor — Scalable internal transfers merge
         for (const account of Object.keys(ACCOUNTS) as Account[]) {
             expect(saved[account], `every cash row of the ${ACCOUNTS[account].label} is saved on its broker`).toHaveLength(cashRows(parsed[account]).length);
         }
+        expectChargesSavedLinked([...saved.broker, ...saved.overnight], chargeLinks);
         for (const transfer of transfers) {
             const outLegs = saved[transfer.out.account].filter((tx) => tx.date === transfer.day);
             const inLegs = saved[transfer.in.account].filter((tx) => tx.date === transfer.day);
