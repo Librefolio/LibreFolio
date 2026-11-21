@@ -183,6 +183,7 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 - Editor de transacciones: «Restablecer fila», «Restablecer seleccionados» y «Restablecer todo» ahora también deshacen una fusión en transferencia o en cambio aún no guardada. Antes, la fusión quedaba en cola sin verse y «Guardar todo» la enviaba igualmente; una transacción nueva de esa fusión podía quedar fuera del guardado.
 - Editor de transacciones: «Restablecer fila» y «Restablecer seleccionados» sobre una mitad de un par guardado, dividido y aún no guardado, ahora también deshacen la división. Antes, el par volvía a una sola fila pero la división quedaba en cola, y «Guardar todo» lo dividía igualmente.
 - Editor de transacciones: tras «Separar par» en una transferencia guardada, editar dos veces la mitad de retirada ya no la convierte en un depósito con importe positivo, lo que hacía fallar «Guardar todo».
+- Asignador PAC: en un servidor con carga, un cálculo ya terminado podía aparecer como fallido, «El proceso de cálculo se detuvo inesperadamente.». Ahora su resultado se lee.
 
 ### ⚠️ Cambios incompatibles
 

@@ -183,6 +183,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Transactions editor: «Reset row», «Reset selected» and «Reset All» now also undo a merge into a transfer or an exchange that was not saved yet. Before, the merge stayed queued without showing, and «Save All» sent it anyway; a new transaction in such a merge could be left out of the save.
 - Transactions editor: «Reset row» and «Reset selected» on a half of a saved pair split and not saved yet now undo the split too. Before, the pair came back as one row but the split stayed queued, and «Save All» split it anyway.
 - Transactions editor: after «Split pair» on a saved transfer, editing the withdrawal half twice no longer turns it into a deposit with a positive amount, which made «Save All» fail.
+- PAC allocator: on a busy server, a calculation that had finished could be shown as failed, «The calculation process stopped unexpectedly.». Its result is now read.
 
 ### ⚠️ Breaking changes
 
