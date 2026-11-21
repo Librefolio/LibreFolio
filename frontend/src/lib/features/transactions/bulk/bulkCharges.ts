@@ -512,7 +512,7 @@ export type BulkLinkSelection = {kind: 'hidden'} | {kind: 'disabled'; reason: Bu
  * Every `hidden` outcome of `linkSelection` wins; then a selected row marked for deletion turns «Link» off (`deleted`:
  * the backend refuses a deleted parent, and linking a deleted charge means nothing); then the page's reasons.
  */
-export function bulkLinkSelection(rows: readonly PendingOp[], ops: readonly PendingOp[], get: StoreGet, opts: LinkOptions): BulkLinkSelection {
+export function bulkLinkSelection(rows: readonly PendingOp[], ops: readonly PendingOp[], get: StoreGet, opts: LinkOptions, typeOf: (op: PendingOp) => string = (op) => op.fields.type): BulkLinkSelection {
     const synthetic = new Map<string, number>();
     for (const op of [...ops, ...rows]) if (!synthetic.has(op.tempId)) synthetic.set(op.tempId, -(synthetic.size + 1));
     const mirrorId = (op: PendingOp): number => (op.op === 'edit' ? op.txId : synthetic.get(op.tempId)!);
@@ -539,7 +539,7 @@ export function bulkLinkSelection(rows: readonly PendingOp[], ops: readonly Pend
             id: mirrorId(op),
             broker_id: op.fields.broker_id,
             asset_id: op.fields.asset_id ?? null,
-            type: op.fields.type,
+            type: typeOf(op),
             date: op.fields.date,
             related_transaction_id: pairIdOf(op),
             parent_transaction_id: parentIdOf(op),
@@ -550,10 +550,10 @@ export function bulkLinkSelection(rows: readonly PendingOp[], ops: readonly Pend
     const result = linkSelection(mirrors, opts);
     if (result.kind === 'hidden') return result;
     const deleted = rows.find((op) => op.op === 'edit' && op.markedDelete);
-    if (deleted) return {kind: 'disabled', reason: 'deleted', params: {op: deleted, type: deleted.fields.type}};
+    if (deleted) return {kind: 'disabled', reason: 'deleted', params: {op: deleted, type: typeOf(deleted)}};
     if (result.kind === 'disabled') {
         const op = rows[mirrors.findIndex((m) => m.id === result.params.id)] ?? rows[0];
-        return {kind: 'disabled', reason: result.reason, params: {op, type: op.fields.type}};
+        return {kind: 'disabled', reason: result.reason, params: {op, type: typeOf(op)}};
     }
     return {kind: 'ok', parent: byMirror.get(result.parent)!, charges: result.charges.map((c) => byMirror.get(c)!)};
 }

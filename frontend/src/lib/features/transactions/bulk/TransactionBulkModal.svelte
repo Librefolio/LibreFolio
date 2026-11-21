@@ -112,6 +112,7 @@
         type BulkDeletePlan,
         type ChargesUnread,
     } from './bulkCharges';
+    import {SPLIT_TYPE_MAP, splitHalfType, postSplitType} from './splitTypes';
     import {txRowRef} from '../chargeLinkRules';
     import {canEditBroker} from '$lib/stores/reference/brokerStore';
     import TxChargesActionModal from '../TxChargesActionModal.svelte';
@@ -156,13 +157,6 @@
     let {open, intent, availableTags = [], defaultBrokerId, onClose, onCommitted}: Props = $props();
 
     const AUTO_VALIDATE_THRESHOLD = 50;
-
-    /** Client-side mirror of backend SPLIT_TYPE_MAP. */
-    const SPLIT_TYPE_MAP: Record<string, [string, string]> = {
-        TRANSFER: ['ADJUSTMENT', 'ADJUSTMENT'],
-        CASH_TRANSFER: ['WITHDRAWAL', 'DEPOSIT'],
-        FX_CONVERSION: ['WITHDRAWAL', 'DEPOSIT'],
-    };
 
     // =========================================================================
     // Helpers
@@ -682,17 +676,9 @@
     }
     void addRow;
 
+    /** 66 C22d: the type a half of a queued split will have (`postSplitType`, the one computation). */
     function postSplitTypeForForm(d: PendingOp): string {
-        if (d.op !== 'edit' || !splitTxIdsSet.has(d.txId)) return d.fields.type;
-        const splitEntry = pendingSplits.find((s) => s.id_a === d.txId || s.id_b === d.txId);
-        const origType = splitEntry?.originalType ?? d.fields.type;
-        const splitTypes = SPLIT_TYPE_MAP[origType];
-        if (!splitTypes) return d.fields.type;
-
-        const qty = Number(d.fields.quantity ?? 0);
-        const cashAmt = Number(d.fields.cash?.amount ?? 0);
-        const isSender = origType === 'TRANSFER' ? qty < 0 || qty === 0 : cashAmt < 0 || cashAmt === 0;
-        return (isSender ? splitTypes[0] : splitTypes[1]) as string;
+        return postSplitType(d, pendingSplits);
     }
 
     /** Convert a PendingOp to a TXReadItem-shaped object so it can be fed back to
@@ -1056,8 +1042,9 @@
 
     /** A row as the panel shows it: the editor's values, signed as the ledger holds them. */
     function panelItem(op: PendingOp, parentTxId?: number): TXReadItem {
-        const item = opToTxLike(op);
-        const {signedQty, signedCash} = applySignRules(item.quantity, item.cash, getTypeRule(op.fields.type));
+        // 66 C22d: a half of a queued split is shown with the type the split gives it (`postSplitType`).
+        const item = opToTxLikeForForm(op);
+        const {signedQty, signedCash} = applySignRules(item.quantity, item.cash, getTypeRule(item.type));
         return {...item, quantity: signedQty, cash: signedCash, ...(parentTxId !== undefined ? {parent_transaction_id: parentTxId} : {})};
     }
 
@@ -1408,14 +1395,13 @@
         } else if (row.op === 'create' && partnerOp) {
             // Case B/C: New paired (partner is a hidden create op) → local split
             const splitTypes = SPLIT_TYPE_MAP[row.fields.type];
-            if (!splitTypes) return;
+            const rowType = splitHalfType(row.fields.type, row.fields);
+            if (!splitTypes || !rowType) return;
             const [fromType, toType] = splitTypes;
-            const cashAmt = Number(row.fields.cash?.amount ?? 0);
-            const qty = Number(row.fields.quantity ?? 0);
-            const isFrom = row.fields.type === 'TRANSFER' ? qty < 0 || qty === 0 : cashAmt < 0 || cashAmt === 0;
+            const isFrom = rowType === fromType;
 
             // Main row → standalone type
-            row.fields.type = (isFrom ? fromType : toType) as TransactionTypeCode;
+            row.fields.type = rowType as TransactionTypeCode;
             row.link_uuid = null;
 
             // Partner → standalone type, becomes visible
@@ -1430,12 +1416,11 @@
             if (partner) {
                 partner.promoteFromType = null;
                 const splitTypes = SPLIT_TYPE_MAP[row.fields.type];
-                if (!splitTypes) return;
+                const rowType = splitHalfType(row.fields.type, row.fields);
+                if (!splitTypes || !rowType) return;
                 const [fromType, toType] = splitTypes;
-                const cashAmt = Number(row.fields.cash?.amount ?? 0);
-                const qty = Number(row.fields.quantity ?? 0);
-                const isFrom = row.fields.type === 'TRANSFER' ? qty < 0 : cashAmt < 0;
-                row.fields.type = (isFrom ? fromType : toType) as TransactionTypeCode;
+                const isFrom = rowType === fromType;
+                row.fields.type = rowType as TransactionTypeCode;
                 partner.fields.type = (isFrom ? toType : fromType) as TransactionTypeCode;
                 row.link_uuid = null;
                 partner.link_uuid = null;
@@ -1665,11 +1650,8 @@
             const ordinaryAfter = deleted.has(op.tempId) ? null : toIssueRow(op, fields);
             let atomicFallback = before;
             if (before && operationKeys.some((key) => key.startsWith('split:'))) {
-                const types = SPLIT_TYPE_MAP[before.fields.type];
-                if (types) {
-                    const sender = Number(before.fields.quantity) < 0 || Number(before.fields.cash?.amount ?? 0) < 0;
-                    atomicFallback = toIssueRow(op, {...before.fields, type: types[sender ? 0 : 1]});
-                }
+                const type = splitHalfType(before.fields.type, before.fields);
+                if (type) atomicFallback = toIssueRow(op, {...before.fields, type: type as TransactionTypeCode});
             }
             return {before, after: atomic ? toIssueRow(op, op.fields) : ordinaryAfter, ordinaryAfter, atomicFallback, draft, operationKeys};
         });
@@ -2199,17 +2181,14 @@
                         // BUG-C4: use originalType from pendingSplits (fields.type may have been edited)
                         const splitEntry = pendingSplits.find((s) => s.id_a === (row as any).txId || s.id_b === (row as any).txId);
                         const origType = splitEntry?.originalType ?? row.fields.type;
-                        const splitTypes = SPLIT_TYPE_MAP[origType];
-                        if (splitTypes) {
-                            const qty = Number(row.fields.quantity ?? 0);
-                            const cashAmt = Number(row.fields.cash?.amount ?? 0);
-                            const isSender = origType === 'TRANSFER' ? qty < 0 || qty === 0 : cashAmt < 0 || cashAmt === 0;
-                            const targetType = isSender ? splitTypes[0] : splitTypes[1];
+                        if (SPLIT_TYPE_MAP[origType]) {
+                            // 66 C22d: the type the split gives this half (`postSplitType`, the one computation), or the
+                            // user's own; its charges chip under it, as on any parent.
+                            const targetType = postSplitType(row, pendingSplits);
                             const origSlug = origType.toLowerCase().replace(/_/g, '-');
-                            return {
-                                type: 'html',
-                                html: `<span class="inline-flex items-center gap-1 text-[11px]"><img src="/icons/transactions/${origSlug}.png" alt="" style="width:1.5rem;height:1.5rem" class="object-contain shrink-0" data-hide-on-error="display"/> <span class="text-lf-muted">→</span> ${renderTypeHtml(targetType)}</span>`,
-                            };
+                            const transition = `<span class="inline-flex items-center gap-1 text-[11px]"><img src="/icons/transactions/${origSlug}.png" alt="" style="width:1.5rem;height:1.5rem" class="object-contain shrink-0" data-hide-on-error="display"/> <span class="text-lf-muted">→</span> ${renderTypeHtml(targetType)}</span>`;
+                            const splitChip = chargesChipHtml(row);
+                            return {type: 'html', html: splitChip ? `<div class="flex flex-col items-start gap-1" style="white-space:normal">${transition}${splitChip}</div>` : transition};
                         }
                         return {type: 'html', html: `<span class="text-[11px]">${renderTypeHtml(row.fields.type)} → <span class="text-purple-600 dark:text-purple-400">✂️ ADJUSTMENT</span></span>`};
                     }
@@ -2917,7 +2896,7 @@
             // Charge by charge, as the backend judges a link (66 P1b §6.1): one charge that breaks a rule (another
             // asset) stays free and never takes the link away from its siblings.
             const valid = own.filter((charge) => {
-                const state = bulkLinkSelection([current(parent), current(charge)], result, txStoreGet, {roleOf: (type) => getTypeRule(type).chargeRole, canEdit: (brokerId) => canEditBroker(brokerId)});
+                const state = bulkLinkSelection([current(parent), current(charge)], result, txStoreGet, {roleOf: (type) => getTypeRule(type).chargeRole, canEdit: (brokerId) => canEditBroker(brokerId)}, (op) => postSplitType(op, pendingSplits));
                 // The parent must be the row that carried the name: the rule picks the parent by type.
                 return state.kind === 'ok' && state.parent.tempId === parent.tempId;
             });
@@ -4184,7 +4163,7 @@
     /** What «Link» does with the selection, on the rows as they are now (`bulkLinkSelection`). */
     let bulkLinkState = $derived.by(() => {
         const selected = bulkTableSelectedRows.map((row) => ops.find((op) => op.tempId === row.tempId)).filter((op): op is PendingOp => op !== undefined);
-        return bulkLinkSelection(selected, ops, txStoreGet, {roleOf: (type) => getTypeRule(type).chargeRole, canEdit: (brokerId) => canEditBroker(brokerId)});
+        return bulkLinkSelection(selected, ops, txStoreGet, {roleOf: (type) => getTypeRule(type).chargeRole, canEdit: (brokerId) => canEditBroker(brokerId)}, (op) => postSplitType(op, pendingSplits));
     });
     /** Why «Link» is off, naming the row by its reference (`bulkRowRef`). */
     let bulkLinkHint = $derived(bulkLinkState.kind === 'disabled' ? $t(`transactions.chargesLink.reason.${bulkLinkState.reason}`, {values: {type: $t(`transactions.types.${bulkLinkState.params.type}`) || bulkLinkState.params.type, ref: bulkRowRef(bulkLinkState.params.op)}}) : '');
