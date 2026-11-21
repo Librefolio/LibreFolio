@@ -169,7 +169,10 @@ def _read_exact(connection: Connection, size: int, job: _OwnedJob) -> bytes:
         if not readable:
             if job.tree is not None:
                 job.tree.observe_memory_limit()
-                if job.tree.process.exitcode is not None:
+                # The worker may have written its last frames and exited after the empty poll (GPAC-d of project 67, a
+                # busy machine): look at the pipe once more. This look is final, as an exited worker writes nothing more:
+                # the exit is read first and the pipe second, an order that must not be swapped.
+                if job.tree.process.exitcode is not None and not select.select([descriptor], [], [], 0)[0]:
                     raise ToolExecutionError("worker_crashed")
             continue
         chunk = os.read(descriptor, size - len(chunks))
