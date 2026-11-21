@@ -201,6 +201,8 @@ export interface DraftPosition {
     brokerIconUrl: string | null;
     custody: string;
     ownershipShare: string;
+    /** The user's role on the account, as the copy saw it (OWNER, EDITOR, VIEWER): the share's badge (R1-D of project 67). */
+    accessRole: string | null;
     quantity: string;
     copiedQuantity: string;
     stamp: CopyRef;

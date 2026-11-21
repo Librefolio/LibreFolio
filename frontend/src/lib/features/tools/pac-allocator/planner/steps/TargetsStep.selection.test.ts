@@ -21,6 +21,7 @@ import {cleanup, fireEvent, render, screen, setupI18n, waitFor, within} from '$t
 import {t} from '$lib/i18n';
 import ProfileHarness from '../../__tests__/ProfileHarness.svelte';
 import {PlannerDraft, type DraftAsset} from '../draft.svelte';
+import {PlannerPreview, type PreviewReady} from '../preview.svelte';
 import {PAC_PLANNER_PROFILE, REBALANCER_PLANNER_PROFILE} from '../profile';
 import TargetsStep from './TargetsStep.svelte';
 
@@ -62,6 +63,29 @@ function mount(targets: [string, string, string]): PlannerDraft {
     render(ProfileHarness, {props: {profile: PAC_PLANNER_PROFILE, child: TargetsStep, childProps: {draft, accountGeneration: 0}}});
     flushSync();
     return draft;
+}
+
+/** A ready preview where «Other cash» is worth something today: the Rebalancer shows that row only then (R1-C of project 67). */
+function otherCashWorthToday(): PlannerPreview {
+    const preview = new PlannerPreview({call: vi.fn(), blocked: () => false});
+    preview.state = 'ready';
+    preview.numbers = otherCashWorth('50');
+    return preview;
+}
+
+/** The preview's figures with «Other cash» worth `amount` today. */
+function otherCashWorth(amount: string): PreviewReady {
+    const money = {value: {kind: 'finite_decimal' as const, value: amount}, currency: 'EUR'};
+    return {
+        operation: 'preview',
+        result_state: 'preview_ready',
+        availability: 'ready',
+        valuation_currency: 'EUR',
+        total: money,
+        issues: [],
+        limit_problems: [],
+        items: [{kind: 'other_cash', value: money, weight: {kind: 'finite_decimal', value: '0.1'}}],
+    };
 }
 
 const tick = (key: string) => fireEvent.click(screen.getByTestId(`dt-row-checkbox-${key}`));
@@ -108,7 +132,7 @@ describe('the targets table on the selection panel (77 SEL-D3)', () => {
         draft.addManualAccount({name: 'Bank probe', currency: 'CHF', available: '100', selected: '50'});
         draft.addAsset(asset('asset:a', 'ETF a'));
         draft.data.targets['asset:a'] = '50';
-        render(ProfileHarness, {props: {profile: REBALANCER_PLANNER_PROFILE, child: TargetsStep, childProps: {draft, accountGeneration: 0}}});
+        render(ProfileHarness, {props: {profile: REBALANCER_PLANNER_PROFILE, child: TargetsStep, childProps: {draft, accountGeneration: 0, preview: otherCashWorthToday()}}});
         flushSync();
 
         await tick('other-cash');
@@ -116,6 +140,56 @@ describe('the targets table on the selection panel (77 SEL-D3)', () => {
         await tick('asset:a');
         const bar = screen.getByTestId('selection-toolbar');
         expect(within(bar).getByTestId('toolbar-action-balance-selected-count').textContent?.trim()).toBe('1');
+    });
+
+    it('a ticked «Other cash» that leaves the table is forgotten: not counted, and it does not come back ticked (R1-C)', async () => {
+        const draft = new PlannerDraft('EUR', 'proportional', REBALANCER_PLANNER_PROFILE);
+        draft.addManualBroker('Broker probe');
+        draft.addManualAccount({name: 'Bank probe', currency: 'CHF', available: '100', selected: '50'});
+        draft.addAsset(asset('asset:a', 'ETF a'));
+        draft.data.targets['asset:a'] = '50';
+        const preview = otherCashWorthToday();
+        render(ProfileHarness, {props: {profile: REBALANCER_PLANNER_PROFILE, child: TargetsStep, childProps: {draft, accountGeneration: 0, preview}}});
+        flushSync();
+
+        await tick('other-cash');
+        await tick('asset:a');
+        expect(screen.getByTestId('selection-toolbar')).toHaveAttribute('data-selected-count', '2');
+
+        // A later preview says «Other cash» is worth 0 today: the row leaves the table, and the selection forgets it.
+        preview.numbers = otherCashWorth('0');
+        flushSync();
+        expect(screen.queryByTestId('dt-row-checkbox-other-cash')).toBeNull();
+        await waitFor(() => expect(screen.getByTestId('selection-toolbar')).toHaveAttribute('data-selected-count', '1'));
+        expect(within(screen.getByTestId('selection-toolbar')).getByTestId('toolbar-action-balance-selected-count').textContent?.trim()).toBe('1');
+
+        // It is worth something again: the row is back, not ticked.
+        preview.numbers = otherCashWorth('50');
+        flushSync();
+        await waitFor(() => expect(screen.getByTestId('dt-row-checkbox-other-cash')).toBeInTheDocument());
+        expect(screen.getByTestId('dt-row-checkbox-other-cash')).toHaveAttribute('data-state', 'unchecked');
+        expect(screen.getByTestId('selection-toolbar')).toHaveAttribute('data-selected-count', '1');
+    });
+
+    it('a tick cleared from the bar before «Other cash» leaves stays cleared when it comes back', async () => {
+        const draft = new PlannerDraft('EUR', 'proportional', REBALANCER_PLANNER_PROFILE);
+        draft.addManualBroker('Broker probe');
+        draft.addManualAccount({name: 'Bank probe', currency: 'CHF', available: '100', selected: '50'});
+        draft.addAsset(asset('asset:a', 'ETF a'));
+        draft.data.targets['asset:a'] = '50';
+        const preview = otherCashWorthToday();
+        render(ProfileHarness, {props: {profile: REBALANCER_PLANNER_PROFILE, child: TargetsStep, childProps: {draft, accountGeneration: 0, preview}}});
+        flushSync();
+
+        await tick('other-cash');
+        await fireEvent.click(screen.getByTestId('selection-toolbar-clear'));
+        await waitFor(() => expect(screen.queryByTestId('selection-toolbar')).toBeNull());
+        preview.numbers = otherCashWorth('0');
+        flushSync();
+        preview.numbers = otherCashWorth('50');
+        flushSync();
+        await waitFor(() => expect(screen.getByTestId('dt-row-checkbox-other-cash')).toHaveAttribute('data-state', 'unchecked'));
+        expect(screen.queryByTestId('selection-toolbar')).toBeNull();
     });
 
     it('with the total at 100 % there is nothing to balance: the action is not offered', async () => {

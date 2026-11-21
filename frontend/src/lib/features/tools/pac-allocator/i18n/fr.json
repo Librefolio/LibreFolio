@@ -87,7 +87,8 @@
             "readFailed": "Le courtier n’a pas pu être lu : rien n’a été enregistré.",
             "refused": "Le courtier n’a pas accepté le changement : rien n’a été enregistré.",
             "saved": "Enregistré dans le courtier.",
-            "writeFailed": "L’enregistrement n’a pas abouti : ouvrez le courtier pour le vérifier."
+            "writeFailed": "L’enregistrement n’a pas abouti : ouvrez le courtier pour le vérifier.",
+            "writing": "Enregistrement dans le courtier…"
           }
         },
         "brokers": {
@@ -696,7 +697,10 @@
             "draftIntact": "Le brouillon est intact.",
             "retry": "Réessayer",
             "title": "Échec du calcul",
-            "reference": "Référence dans le journal du serveur :"
+            "reference": "Référence dans le journal du serveur :",
+            "copyRequest": "Copier la requête",
+            "copyRequestHint": "Copie les données envoyées pour ce calcul, montants compris, à joindre à un signalement. Le serveur ne conserve rien.",
+            "copyRequestFailed": "Impossible de copier la requête. Autorisez l'accès au presse-papiers et réessayez."
           },
           "proof": {
             "absoluteGap": "Écart abs.",

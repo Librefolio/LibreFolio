@@ -812,3 +812,123 @@ def _roundtrip(result) -> None:
     from backend.app.schemas.pac_allocator.preview import REBALANCER_TOOL_OUTPUT_ADAPTER  # noqa: PLC0415
 
     assert REBALANCER_TOOL_OUTPUT_ADAPTER.validate_json(REBALANCER_TOOL_OUTPUT_ADAPTER.dump_json(result), strict=True) == result
+
+
+# ---------------------------------------------------------------------------
+# R1-A of project 67: a plan the exact replay refuses, held for want of another, is «no plan», never a failure
+# ---------------------------------------------------------------------------
+
+
+def _short_case(product: str):
+    """A scenario, its product and a plan that leaves the cash short far beyond any rounding. The PAC (the review's
+    failure): one Asset at 10 €, 100 € of cash and a fixed 5 € fee, 10 units (the most its box allows): 105 €. The
+    Rebalancer: T4 with B in whole units at 9.995 €, 30 units (299.85 €) against 200 € of cash."""
+    from backend.app.services.pac_allocator import planner  # noqa: PLC0415
+    from backend.test_scripts.test_services.test_pac_planner_evaluator import _pac_scenario  # noqa: PLC0415
+
+    if product == "pac":
+        scenario = _pac_scenario(route_cap=R(1000), fixed_fee=R(5))
+        return scenario, planner._PAC, lambda view: {access.decision_id: 10 for access in view.decisions}
+    scenario = cases.scenario("t4-short", holdings={"asset:a": R(5000), "asset:b": R(4800)}, cash=R(200), weights={"asset:a": cases.HALF, "asset:b": cases.HALF}, prices={"asset:b": R(1999, 200)}, whole_units=frozenset({"asset:b"}))
+    return scenario, planner._rebalancer_product(None), lambda _view: {cases.buy_decision("asset:b"): 30}
+
+
+def _held_refused_search(monkeypatch, *, stage_one: str, quanta):
+    """``planner._search`` replaced by the search the review's failure had: its one plan, held for want of another, leaves
+    the cash short, and the replay refuses it; stage 1 ``unfinished`` at its time limit, or ``finished`` (the prudent model's
+    own optimum). The solver says so (``held_unpublishable_at``); the rest of the run is real."""
+    from dataclasses import replace  # noqa: PLC0415
+
+    from backend.app.services.pac_allocator import planner  # noqa: PLC0415
+
+    real_search = planner._search
+
+    def search(scenario, view, **kwargs):
+        real = real_search(scenario, view, **kwargs)
+        refused = _candidate(view, quanta(view))
+        stage = replace(real.solver.stages[0], status=stage_one, scip_status="timelimit" if stage_one == "unfinished" else "optimal")
+        run = replace(real.solver, outcome="incumbent", candidate=refused, stages=(stage,), anomaly="the plan found at stage ordinal 1 failed its exact replay", held_unpublishable_at=1)
+        return planner._Search(candidate=refused, solver=run, program=real.program)
+
+    monkeypatch.setattr(planner, "_search", search)
+    return planner
+
+
+def test_the_solver_says_when_the_plan_it_holds_is_the_refused_one(monkeypatch) -> None:
+    """A real search whose every plan the replay refuses (``_replay`` replaced), stopped after its first node: the plan it
+    returns is the first one found, held for want of another, and the result says so."""
+    from backend.app.services.pac_allocator import solver as solver_module  # noqa: PLC0415
+
+    scenario = cases.t4()
+    view = build_exact_policy_view(scenario)
+    monkeypatch.setattr(solver_module, "_replay", lambda _cascade, _candidate: (None, False))
+    result = solve_policy_program(compile_policy_program(scenario, view), time_budget_seconds=30.0, node_limit=1)
+    assert result.outcome == "incumbent" and result.candidate is not None
+    assert result.held_unpublishable_at == 1
+    assert "failed its exact replay" in (result.anomaly or "")
+
+
+def test_a_plan_found_publishable_is_not_flagged_as_refused() -> None:
+    result = solve_policy_program(compile_policy_program(cases.t4(), build_exact_policy_view(cases.t4())), time_budget_seconds=30.0)
+    assert result.outcome == "incumbent" and result.held_unpublishable_at is None
+
+
+@pytest.mark.parametrize("product", ["pac", "rebalancer"])
+@pytest.mark.parametrize(("stage_one", "stop", "level"), [("unfinished", "time_limit", "warning"), ("finished", "completed", "error")])
+def test_a_refused_plan_held_at_the_end_of_the_cascade_is_no_plan_not_a_failure(monkeypatch, product: str, stage_one: str, stop: str, level: str) -> None:
+    """The review's failure (R1 §1, «execution_failed»): the cascade ends holding only the refused plan, and the planner
+    answers «no plan», as the wide model already does, with one log line naming the class, the stage and the broker and
+    currency the replay names. An ERROR when stage 1 closed: then it is the prudent model's own optimum that the replay
+    refuses."""
+    from structlog.testing import capture_logs  # noqa: PLC0415
+
+    scenario, product_of, quanta = _short_case(product)
+    planner = _held_refused_search(monkeypatch, stage_one=stage_one, quanta=quanta)
+    with capture_logs() as lines:
+        outcome = planner._single_run(scenario, build_exact_policy_view(scenario), (), None, 5, product_of, None)
+    result = outcome.report.result
+    assert (result.result_state, result.outcome, result.proof.kind, result.stop_reason) == ("ready_no_incumbent", "no_incumbent", "not_proven", stop)
+    assert outcome.origin == "none" and outcome.bound is None and outcome.refused is True
+    (line,) = [line for line in lines if line["event"] == planner.REFUSED_PLAN_EVENT]
+    assert line["log_level"] == level and line["error_type"] == "ExactReplayRejectedError" and line["stage_ordinal"] == 1
+    assert "/EUR short beyond its rounded postings" in line["reason"] and not any(digit in line["reason"].split("/")[-1] for digit in "0123456789")
+
+
+def test_a_refused_plan_the_solver_did_not_hold_still_raises(monkeypatch) -> None:
+    """Only the solver's own signal turns a refusal into «no plan»: any other replay refusal on the prudent model is a
+    defect of the search and still raises (the consultant's condition (a))."""
+    from dataclasses import replace  # noqa: PLC0415
+
+    from backend.app.services.pac_allocator.evaluation.errors import ExactReplayRejectedError  # noqa: PLC0415
+
+    scenario, product_of, quanta = _short_case("pac")
+    planner = _held_refused_search(monkeypatch, stage_one="unfinished", quanta=quanta)
+    held = planner._search
+
+    def unflagged(scenario, view, **kwargs):
+        search = held(scenario, view, **kwargs)
+        return planner._Search(candidate=search.candidate, solver=replace(search.solver, held_unpublishable_at=None), program=search.program)
+
+    monkeypatch.setattr(planner, "_search", unflagged)
+    with pytest.raises(ExactReplayRejectedError):
+        planner._single_run(scenario, build_exact_policy_view(scenario), (), None, 5, product_of, None)
+
+
+def test_a_pac_plan_that_only_moves_cash_is_a_plan() -> None:
+    """Contract §6.8 (the developer, 20/11/2026: «è un piano valido, anche se inutile»): the consultant's case L1, the
+    gallery's 2.0.0 request with a maximum of zero on every Asset and a minimum of 1 000 € on broker:1's EUR cash. Nothing
+    can be bought, and the limit asks for a deposit: a plan of deposits or conversions alone, published as a plan. Before:
+    the PAC's incumbent required an order (``order_rows`` at least one), ``ValidationError``, «execution_failed»."""
+    from backend.app.schemas.pac_allocator.preview import PAC_TOOL_OUTPUT_ADAPTER  # noqa: PLC0415
+    from backend.app.schemas.pac_allocator.request import PacPlannerRequest  # noqa: PLC0415
+    from backend.app.services.pac_allocator import planner  # noqa: PLC0415
+
+    request = json.loads((G5_REQUEST.parent / "pac_plan_request.slip-shortfall.2-0-0.json").read_text(encoding="utf-8"))
+    for target in request["target_weights"]:
+        target["maximum"] = {"kind": "amount", "amount": {"amount": "0", "currency": "EUR"}}
+    request["target_weights"].append({"kind": "cash", "broker_id": "broker:1", "currency": "EUR", "weight": "0", "minimum": {"kind": "amount", "amount": {"amount": "1000", "currency": "EUR"}}})
+    result = planner.plan_pac_allocation(PacPlannerRequest.model_validate(request), checkpoint=lambda: None, solver_time_budget_seconds=30)
+    assert (result.result_state, result.outcome) == ("ready_incumbent", "incumbent_found")
+    solution = result.primary_solution
+    assert solution.order_rows == [] and (solution.funding_actions or solution.conversions)
+    assert PAC_TOOL_OUTPUT_ADAPTER.validate_json(PAC_TOOL_OUTPUT_ADAPTER.dump_json(result), strict=True) == result

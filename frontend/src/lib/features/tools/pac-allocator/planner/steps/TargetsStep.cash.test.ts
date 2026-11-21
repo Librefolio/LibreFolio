@@ -19,6 +19,7 @@ vi.mock('$lib/api', () => ({
 import {cleanup, fireEvent, render, screen, setupI18n, within} from '$test/component';
 import ProfileHarness from '../../__tests__/ProfileHarness.svelte';
 import {PlannerDraft, cashEntryKey, type DraftAsset} from '../draft.svelte';
+import {PlannerPreview, type PreviewReady} from '../preview.svelte';
 import {PAC_PLANNER_PROFILE, REBALANCER_PLANNER_PROFILE, type PlannerProfile} from '../profile';
 import TargetsStep from './TargetsStep.svelte';
 
@@ -57,9 +58,28 @@ function scenario(profile: PlannerProfile) {
     return {draft, brokerKey: broker.key};
 }
 
-function mount(profile: PlannerProfile | null, draft: PlannerDraft): void {
-    render(ProfileHarness, {props: {profile, child: TargetsStep, childProps: {draft, accountGeneration: 0}}});
+function mount(profile: PlannerProfile | null, draft: PlannerDraft, preview: PlannerPreview | null = null): void {
+    render(ProfileHarness, {props: {profile, child: TargetsStep, childProps: {draft, accountGeneration: 0, preview}}});
     flushSync();
+}
+
+/** A ready preview where «Other cash» is worth something today: the row is shown only then (R1-C of project 67). */
+function otherCashWorthToday(): PlannerPreview {
+    const money = {value: {kind: 'finite_decimal' as const, value: '50'}, currency: 'EUR'};
+    const numbers: PreviewReady = {
+        operation: 'preview',
+        result_state: 'preview_ready',
+        availability: 'ready',
+        valuation_currency: 'EUR',
+        total: money,
+        issues: [],
+        limit_problems: [],
+        items: [{kind: 'other_cash', value: money, weight: {kind: 'finite_decimal', value: '0.1'}}],
+    };
+    const preview = new PlannerPreview({call: vi.fn(), blocked: () => false});
+    preview.state = 'ready';
+    preview.numbers = numbers;
+    return preview;
 }
 
 describe('the targets table and the cash entries', () => {
@@ -113,9 +133,9 @@ describe('the targets table and the cash entries', () => {
         expect(screen.getAllByTestId('rebalancer-planner-target-input')).toHaveLength(1);
     });
 
-    it('«Other cash» is a fixed row at 0 % while some cash has no entry', () => {
+    it('«Other cash» is a fixed row at 0 % while some cash has no entry and is worth something today', () => {
         const {draft} = scenario(REBALANCER_PLANNER_PROFILE);
-        mount(REBALANCER_PLANNER_PROFILE, draft);
+        mount(REBALANCER_PLANNER_PROFILE, draft, otherCashWorthToday());
 
         expect(screen.getByTestId('rebalancer-planner-target-other-cash')).toBeTruthy();
         // Only the Asset is editable: one target field, one limits cell.

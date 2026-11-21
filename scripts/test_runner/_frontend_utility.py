@@ -742,6 +742,7 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/features/tools/pac-allocator/planner/result/OutcomeHeader.rebalancer.test.ts",
             "src/lib/features/tools/pac-allocator/planner/profileContext.test.ts",
             "src/lib/features/tools/pac-allocator/planner/result/BusyPanel.test.ts",
+            "src/lib/features/tools/pac-allocator/planner/result/ToolErrorPanel.test.ts",
             "src/lib/features/tools/pac-allocator/planner/result/AutomaticConversionNote.test.ts",
             "src/lib/features/tools/pac-allocator/planner/shared/amountSentence.test.ts",
             "src/lib/features/tools/pac-allocator/planner/shared/BrokerTile.test.ts",

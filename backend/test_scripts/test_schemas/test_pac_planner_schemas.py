@@ -4072,11 +4072,12 @@ def test_distinct_deployment_rejects_identity_count_coverage_and_arithmetic_erro
 # allocation.cash_limit_exceeded_by_rounding, and ``completed`` among a ready_no_incumbent's stops.
 # Lot SEEDS (project 67) moves both: two not-proven reasons in the shared NotProvenReasonCode.
 # The largest deviation's item (X14, project 67) moves the Rebalancer's alone: two references on its score.
+# R1-A (project 67, contract §6.8) moves the PAC's alone: a plan needs a step, not an order (``order_rows`` loses its minimum).
 PLANNER_FULL_SCHEMA_FINGERPRINT_CASES = (
     pytest.param(
         PAC_PLAN_INPUT_ADAPTER,
         PAC_PLAN_OUTPUT_ADAPTER,
-        "40cefd05cc85e671327f74a72932ef083a98f1695f5f6b6fd81167cb7720412e",
+        "eb63086212b8199ddbed3c9d7e40d891bb45ddb8777d0425980271b2faf16e83",
         id="pac",
     ),
     pytest.param(
@@ -4522,6 +4523,15 @@ def test_rebalancer_result_rejects_an_inconsistent_plan(build: PayloadFactory, m
     _reject_because(REBALANCER_PLAN_OUTPUT_ADAPTER, build(), message)
 
 
+def test_pac_incumbent_needs_a_step_not_an_order() -> None:
+    """Contract §6.8 (20/11/2026): a PAC plan has at least one step, an order, a deposit or a conversion, as the
+    Rebalancer's (§6.3); none of the lists is required alone. A plan with no step at all is a no-op solution."""
+    payload = _pac_incumbent_result()
+    for section in ("funding_actions", "conversions", "order_rows"):
+        payload["primary_solution"][section] = []
+    _reject_because(PAC_PLAN_OUTPUT_ADAPTER, payload, "A PAC plan with no step is a no-op solution")
+
+
 def test_rebalancer_no_op_publishes_no_transfer() -> None:
     """A plan of transfers alone is not «no operation» (contract §6.3): a no-op solution has none."""
     payload = _rebalancer_no_op_result()
@@ -4673,8 +4683,9 @@ def test_open_canonical_vector_keeps_the_proof_and_reads_as_a_limit() -> None:
 # Lots SE and ZB of project 67 move both: a closed issue code each; ZB also ``completed`` among a ready_no_incumbent's stops.
 # Lot SEEDS of project 67 moves both: two not-proven reasons in the shared NotProvenReasonCode.
 # The largest deviation's item (X14, project 67) moves the Rebalancer's alone: two references on its score.
+# R1-A (project 67, contract §6.8) moves the PAC's alone: a plan needs a step, not an order (``order_rows`` loses its minimum).
 TOOL_SCHEMA_FINGERPRINT_CASES = (
-    pytest.param("pac_allocator", PAC_TOOL_INPUT_ADAPTER, PAC_TOOL_OUTPUT_ADAPTER, "3d505ed01a9481999ae44d0de81db4bc6ca2127d871fdf54b73bf0e71138824c", id="pac"),
+    pytest.param("pac_allocator", PAC_TOOL_INPUT_ADAPTER, PAC_TOOL_OUTPUT_ADAPTER, "87437b7ed0926abfc074f79884bac1a85b8044eab723e7ef6b9556219c2da290", id="pac"),
     pytest.param("portfolio_rebalancer", REBALANCER_TOOL_INPUT_ADAPTER, REBALANCER_TOOL_OUTPUT_ADAPTER, "df1026811263f11b5c63bc91a86631366a2a47fc8ba4c8b24885a671265d33bb", id="rebalancer"),
 )
 

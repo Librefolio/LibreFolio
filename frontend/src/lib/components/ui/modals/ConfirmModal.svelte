@@ -9,6 +9,7 @@
   - Uses ModalBase for consistent modal behavior
 -->
 <script lang="ts">
+    import type {Snippet} from 'svelte';
     import {t} from '$lib/i18n';
     import {AlertTriangle, Check, ChevronDown, ChevronUp, X, XCircle} from 'lucide-svelte';
     import {fade} from 'svelte/transition';
@@ -56,9 +57,11 @@
          * them apart is the localized text — which the project forbids as a selector.
          */
         testId?: string;
+        /** Optional content under the message, always open: what the user must read before confirming (a list of changes). */
+        details?: Snippet;
     }
 
-    let {open, title, message, description = '', descriptionItalic = false, items = [], itemsLabel = '', confirmText = $t('common.confirm'), cancelText = $t('common.cancel'), danger = false, warning = false, onConfirm, onCancel, zIndex = 60, results = [], testId = ''}: Props = $props();
+    let {open, title, message, description = '', descriptionItalic = false, items = [], itemsLabel = '', confirmText = $t('common.confirm'), cancelText = $t('common.cancel'), danger = false, warning = false, onConfirm, onCancel, zIndex = 60, results = [], testId = '', details}: Props = $props();
 
     // Auto-show items if there's only 1 (no need for toggle)
     let showItems = $state(false);
@@ -108,6 +111,9 @@
             <p class="message" data-testid="confirm-modal-message">{message}</p>
             {#if description}
                 <p class="description" class:italic={descriptionItalic}>{description}</p>
+            {/if}
+            {#if details}
+                {@render details()}
             {/if}
 
             {#if items.length > 0}

@@ -1,7 +1,8 @@
 <!--
   An Asset's positions, Broker by Broker (F3a of project 67, the Rebalancer, mockup screen 9): the project's `DataTable`,
   under the Asset's card. The quantity is the user's to change (`PositionQuantityCell`); the units in custody and the
-  user's share of a shared account are facts of the copy. Quantities are personal: masked in privacy mode
+  user's share of a shared account are facts of the copy; the share is the Broker page's badge beside the Broker's name, with
+  the user's role (R1-D of project 67). Quantities are personal: masked in privacy mode
   (`formatPlannerQuantity`), the quantity field included (it shows the masked quantity until privacy is off). The average purchase price and the columns that need prices come with F3b and F4a.
 -->
 <script lang="ts">
@@ -13,6 +14,7 @@
     import type {DraftPosition, PlannerDraft} from '../draft.svelte';
     import {formatPlannerPercentUnits, formatPlannerQuantity} from '../format';
     import HelpTip from '../shared/HelpTip.svelte';
+    import PositionBrokerCell from '../shared/PositionBrokerCell.svelte';
     import PositionQuantityCell from '../shared/PositionQuantityCell.svelte';
     import {withHelpCues} from '../shared/columnHelp';
     import {getPlannerProfile, storageKey, testId} from '../profile';
@@ -32,11 +34,10 @@
     const phone = new MediaQuery('max-width: 768px');
     const positions = $derived(draft.positionsOf(assetKey));
 
-    function custodyText(position: DraftPosition): string {
-        const custody = formatPlannerQuantity(position.custody);
-        if (compareDecimal(position.ownershipShare, '1') !== -1) return custody;
-        const share = formatPlannerPercentUnits(fractionToPercent(position.ownershipShare));
-        return `${custody} · ${$t(`${KEY}.share`, {values: {share}})}`;
+    /** The user's share of a shared account, as shown; null for a whole account (its badge is not drawn). */
+    function shareText(position: DraftPosition): string | null {
+        if (compareDecimal(position.ownershipShare, '1') !== -1) return null;
+        return formatPlannerPercentUnits(fractionToPercent(position.ownershipShare));
     }
 
     const columns = $derived.by((): ColumnDef<DraftPosition>[] =>
@@ -44,12 +45,15 @@
             {
                 id: 'broker',
                 header: () => $t(`${KEY}.broker`),
-                type: 'text',
+                type: 'custom',
                 sortable: false,
                 filterable: false,
                 minWidth: phone.current ? 90 : 160,
                 getValue: (position) => position.brokerName,
-                cell: (position) => position.brokerName,
+                cell: (position) => {
+                    const share = shareText(position);
+                    return {type: 'custom', component: PositionBrokerCell, props: {name: position.brokerName, positionKey: position.key, role: position.accessRole, share, shareTitle: share === null ? '' : $t(`${KEY}.share`, {values: {share}})}};
+                },
             },
             {
                 id: 'quantity',
@@ -73,8 +77,8 @@
                 align: 'right',
                 minWidth: 120,
                 hiddenByDefault: phone.current,
-                getValue: (position) => custodyText(position),
-                cell: (position) => custodyText(position),
+                getValue: (position) => formatPlannerQuantity(position.custody),
+                cell: (position) => formatPlannerQuantity(position.custody),
             },
         ]),
     );

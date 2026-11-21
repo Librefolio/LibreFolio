@@ -234,7 +234,7 @@
                             </div>
                             {#if documentation}
                                 <span class="relative z-20 shrink-0">
-                                    <DocsLink path={documentation} label={$t('common.documentation')} labelDisplay="stacked" icon="book" size={18} testId={`tool-docs-${descriptor.tool_code}`} />
+                                    <DocsLink path={documentation} label={$t('common.documentation')} icon="book" size={18} testId={`tool-docs-${descriptor.tool_code}`} />
                                 </span>
                             {:else}
                                 <span class="relative z-20 shrink-0 text-xs text-lf-muted" data-testid="tool-docs-unavailable">

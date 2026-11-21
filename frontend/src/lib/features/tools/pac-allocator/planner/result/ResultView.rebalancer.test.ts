@@ -263,7 +263,7 @@ describe('the Rebalancer exposures', () => {
         for (const name of ['Real Estate', 'Consumer Discretionary', 'Energy']) expect(drawn, name).toContain(categoryColor('sector', name, false));
     });
 
-    it('are three bullet charts, the legend once, no bars and no maps', async () => {
+    it('are three bullet charts, the legend once, no bars; the countries also on the two maps, under their bullets', async () => {
         mounted(browser);
         const section = screen.getAllByTestId('rebalancer-planner-result-section').find((item) => item.getAttribute('data-section') === 'exposures');
         await fireEvent.click(section?.querySelector('[data-testid="rebalancer-planner-result-section-toggle"]') as HTMLElement);
@@ -272,7 +272,18 @@ describe('the Rebalancer exposures', () => {
         const exposures = screen.getByTestId('rebalancer-planner-exposures');
         expect([...exposures.querySelectorAll('[data-testid="rebalancer-planner-exposures-bullets"]')].map((chart) => chart.getAttribute('data-dimension'))).toEqual(['asset_type', 'sector', 'geography']);
         expect(exposures.querySelectorAll('[data-testid="rebalancer-planner-exposures-legend"]')).toHaveLength(1);
-        expect(exposures.querySelectorAll('[data-testid="rebalancer-planner-exposures-bars"], [data-testid^="rebalancer-planner-exposures-map"]')).toHaveLength(0);
+        expect(exposures.querySelectorAll('[data-testid="rebalancer-planner-exposures-bars"]')).toHaveLength(0);
+        // R1-C/D of project 67 (the developer, 20/11: «per l'area geografica mi aspettavo comunque la mappa doppia … sotto a
+        // questo a proiettile»): the two maps, target and after the plan, in the geography block only, after its bullets.
+        const maps = [...exposures.querySelectorAll('[data-testid="rebalancer-planner-exposures-maps"]')];
+        expect(maps).toHaveLength(1);
+        const geography = exposures.querySelector('[data-testid="rebalancer-planner-exposures-dimension"][data-dimension="geography"]') as HTMLElement;
+        expect(geography.contains(maps[0])).toBe(true);
+        const bullets = geography.querySelector('[data-testid="rebalancer-planner-exposures-bullets"]') as HTMLElement;
+        expect(bullets.compareDocumentPosition(maps[0]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+        // The cash is no place: it stays in the bullets, never in the maps nor in their list of what is not on them.
+        const offMap = geography.querySelector('[data-testid="rebalancer-planner-exposures-off-map"]');
+        expect(offMap?.textContent ?? '').not.toContain('Cash');
         expect(exposures.querySelectorAll('[data-testid="rebalancer-planner-exposures-row"]')).toHaveLength(browser.result.primary_solution.exposure_rows.length);
     });
 });

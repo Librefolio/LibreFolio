@@ -561,6 +561,20 @@
         return warnings.map((w) => escapeHtml(w)).join('<br/><br/>');
     }
 
+    /**
+     * The providers legend (R1-C of project 67, the developer, 20/11): a plain click on an entry only shows or hides its
+     * tooltip, a double click opens the provider's guide. The entry stays a link, so the keyboard (Enter: a click with no
+     * pointer, `detail` 0), a click with a modifier key, a middle click and the long press of a phone keep opening it.
+     */
+    function keepClickForTooltip(event: MouseEvent): void {
+        if (event.detail > 0 && event.button === 0 && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey) event.preventDefault();
+    }
+
+    function openProviderGuide(event: MouseEvent, href: string): void {
+        event.preventDefault();
+        window.open(href, '_blank', 'noopener,noreferrer');
+    }
+
     /** Build HTML tooltip for provider legend badge (name + desc + optional warning) */
     function legendTooltipHtml(prov: ProviderInfo): string {
         const desc = getProviderDescription(prov);
@@ -717,11 +731,16 @@
                             {#each usedProviders as prov}
                                 {@const provColor = getProviderColor(prov.code)}
                                 {@const provWarning = getProviderWarning(prov.code)}
-                                <Tooltip html={legendTooltipHtml(prov)} position="top">
+                                {@const guide = prov.docs_url ?? '/mkdocs/user/fx/providers/'}
+                                <Tooltip html={legendTooltipHtml(prov)} position="top" interactiveChild openOnFocus>
                                     <a
-                                        href={prov.docs_url ?? '/mkdocs/user/fx/providers/'}
+                                        href={guide}
                                         target="_blank"
                                         rel="noopener noreferrer"
+                                        data-testid="fx-provider-legend-item"
+                                        data-provider={prov.code}
+                                        onclick={keepClickForTooltip}
+                                        ondblclick={(event) => openProviderGuide(event, guide)}
                                         class="inline-flex items-center gap-1 px-1.5 py-1 rounded border transition-all cursor-pointer hover:shadow-sm"
                                         style="background: {provColor.bg}; border-color: {provColor.border}"
                                     >

@@ -48,6 +48,7 @@ from typing import Any, Literal
 from backend.app.logging_config import get_logger
 from backend.app.services.pac_allocator.models import Checkpoint, check_budget
 from backend.app.services.pac_allocator.progress import ProgressReporter, report_phase
+from backend.app.utils.runtime.errors import code_site
 
 __all__ = ["RUN_COUNT", "SeedRun", "SeedRunMode", "cpu_count_usable", "fresh_seeds", "run_seeds", "usable_cpus"]
 
@@ -192,7 +193,9 @@ def _run_here(task: SeedTask, seed: int, checkpoint: Checkpoint | None, progress
     except Exception as exc:  # an isolation boundary: a run that fails is a run with no result, never a failed request
         if checkpoint is not None:
             check_budget(checkpoint)  # a cancellation or the request's own deadline is the caller's, not the run's
-        logger.warning("Planner run failed", seed=seed, error_type=type(exc).__name__, exc_info=exc)
+        # The class and the code site, never ``exc_info``: a rendered traceback ends with the message, which can carry the
+        # user's amounts (the LOGS rule; R1-B2 of project 67).
+        logger.warning("Planner run failed", seed=seed, error_type=type(exc).__name__, **code_site(exc))
         return SeedRun(seed=seed, failure=type(exc).__name__, seconds=time.monotonic() - started)
 
 
@@ -208,7 +211,9 @@ def _child(task: SeedTask, seed: int, connection: Connection, budget: float) -> 
         result = task(seed, forward, budget)
         connection.send(("result", result, time.monotonic() - started))
     except Exception as exc:  # an isolation boundary: the parent counts it as a run with no result
-        logger.warning("Planner run failed", seed=seed, error_type=type(exc).__name__, exc_info=exc)
+        # The class and the code site, never ``exc_info``: a rendered traceback ends with the message, which can carry the
+        # user's amounts (the LOGS rule; R1-B2 of project 67).
+        logger.warning("Planner run failed", seed=seed, error_type=type(exc).__name__, **code_site(exc))
         connection.send(("failure", type(exc).__name__, time.monotonic() - started))
     finally:
         connection.close()

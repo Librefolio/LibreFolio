@@ -57,9 +57,11 @@ from backend.app.schemas.tools import (
     ToolOperationPolicy,
     ToolUIDescriptor,
 )
+from backend.app.services.pac_allocator.evaluation.errors import ExactReplayRejectedError
 from backend.app.services.pac_allocator.planner import SeededRunsFailedError, plan_pac_allocation, plan_rebalancing
 from backend.app.services.pac_allocator.preview import preview_pac_allocation, preview_rebalancing
 from backend.app.services.pac_allocator.progress import PLANNER_PHASES
+from backend.app.services.pac_allocator.solver import SolverStageError
 from backend.app.services.platform.provider_registry import register_plugin
 from backend.app.services.tools.base import (
     ToolExecutionContext,
@@ -73,6 +75,12 @@ from backend.app.utils.runtime.errors import code_site
 logger = get_logger(__name__)
 
 _PLAN_RESULT_BYTES = 512 * 1024
+
+#: The engine failures whose message the log carries, as ``reason`` (R1-B of project 67, the developer's rule of 20/11/2026).
+#: A closed list, matched by exact type: a class enters only once every place that raises it has been read, and its
+#: messages are fixed words, identifiers and closed codes, never an amount or a name. ``test_pac_planner_tool_api.py``
+#: keeps that reading true: it scans every raise of each listed class. Every other failure keeps the rule below.
+MESSAGE_SAFE_ERRORS: frozenset[type[Exception]] = frozenset({ExactReplayRejectedError, SolverStageError, SeededRunsFailedError})
 
 # Time reserved *after* the solver returns, for the exact replay and the report.
 # Re-measured on 2026-10-06 (step S5 of
@@ -126,10 +134,15 @@ def _log_engine_failure(exc: Exception, execution_id: str) -> None:
     the at most two LibreFolio frames that called it, nearest first, and
     ``raised_in`` the library frame below it, if any.
 
+    The one exception is ``reason``: the message of a class in
+    ``MESSAGE_SAFE_ERRORS``, matched by exact type, whose every message was
+    read and names no amount (R1-B of project 67).
+
     The worker sends its lines to the server, which writes them in
     ``librefolio.log`` with the request's id (lot LOGS of project 67).
     """
-    logger.error("PAC planner engine failure", error_type=type(exc).__qualname__, execution_id=execution_id, **code_site(exc))
+    reason = {"reason": str(exc)} if type(exc) in MESSAGE_SAFE_ERRORS else {}
+    logger.error("PAC planner engine failure", error_type=type(exc).__qualname__, execution_id=execution_id, **reason, **code_site(exc))
 
 
 @register_plugin(ToolPluginRegistry)

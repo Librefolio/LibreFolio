@@ -175,6 +175,59 @@ describe('FxProviderSelect', () => {
         expect(within(picker).getByTestId('fx-route-unusable')).not.toHaveTextContent('MANUAL');
     });
 
+    describe('the providers legend: a click shows the tooltip, a double click opens the guide (R1-C of project 67)', () => {
+        /** The legend entry of a provider, in the open picker. */
+        async function legendItem(code: string): Promise<HTMLElement> {
+            graphReturns([DIRECT], [{...ECB, docs_url: '/mkdocs/user/fx/providers/ecb/'}, FED, BOE, MANUAL]);
+            await setupI18n();
+            mount();
+            await settled();
+            const picker = await openPicker();
+            const item = within(picker)
+                .getAllByTestId('fx-provider-legend-item')
+                .find((candidate) => candidate.getAttribute('data-provider') === code);
+            if (!item) throw new Error(`no legend entry for ${code}`);
+            return item;
+        }
+
+        it('a click only shows the tooltip: nothing opens, the link does not navigate', async () => {
+            const open = vi.spyOn(window, 'open').mockReturnValue(null);
+            const item = await legendItem('ECB');
+            // fireEvent answers false when a handler prevented the default: the link did not navigate.
+            expect(await fireEvent.click(item, {detail: 1, button: 0})).toBe(false);
+            expect(open).not.toHaveBeenCalled();
+            open.mockRestore();
+        });
+
+        it('a double click opens the provider guide in a new tab', async () => {
+            const open = vi.spyOn(window, 'open').mockReturnValue(null);
+            const item = await legendItem('ECB');
+            await fireEvent.dblClick(item);
+            expect(open).toHaveBeenCalledTimes(1);
+            expect(open.mock.calls[0][0]).toBe('/mkdocs/user/fx/providers/ecb/');
+            expect(open.mock.calls[0][1]).toBe('_blank');
+            open.mockRestore();
+        });
+
+        it('the keyboard keeps the link: Enter (a click with no pointer) is not cancelled', async () => {
+            const item = await legendItem('ECB');
+            expect(item.tagName).toBe('A');
+            expect(item.getAttribute('href')).toBe('/mkdocs/user/fx/providers/ecb/');
+            expect(await fireEvent.click(item, {detail: 0})).toBe(true);
+        });
+
+        it('the keyboard reads the description: a focus shows the tooltip', async () => {
+            const item = await legendItem('ECB');
+            await fireEvent.focusIn(item);
+            await waitFor(() => expect(screen.getByTestId('tooltip-content')).toBeInTheDocument());
+        });
+
+        it('a click with a modifier key keeps the link too', async () => {
+            const item = await legendItem('ECB');
+            expect(await fireEvent.click(item, {detail: 1, button: 0, ctrlKey: true})).toBe(true);
+        });
+    });
+
     it('names the providers that cannot serve this pair', async () => {
         await setupI18n();
         mount();

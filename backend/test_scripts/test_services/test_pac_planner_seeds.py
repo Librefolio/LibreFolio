@@ -72,6 +72,39 @@ def test_a_run_that_raises_or_dies_is_a_run_with_no_result() -> None:
     assert [(run.seed, run.result, run.failure) for run in runs] == [(1, 1, None), (2, None, "RuntimeError"), (3, None, "RunProcessEnded")]
 
 
+# A figure out of every source line of this file and of ``seed_runs.py``: found in the log, it can only be the message.
+_PRIVATE_FIGURE = "8642.13"
+
+
+def _refuses_an_amount(seed: int, progress, budget=None) -> int:
+    raise ValueError(f"PRIVATE-{_PRIVATE_FIGURE}: a run refused an amount")
+
+
+@pytest.mark.parametrize("path", ["here", "child"])
+def test_a_failed_run_is_logged_by_class_and_code_site_never_its_message(path: str) -> None:
+    """R1-B2 of project 67 (the LOGS rule, the coordinator's ruling of 20/11): a run that fails is logged by its class and
+    where it was raised (``code_site``), never with ``exc_info``: a rendered traceback ends with the message, which can carry
+    the user's amounts. Both places that log it: a run in the caller's process (``_run_here``) and a run in its own
+    process (``_child``, called here in this process, so that its line is captured)."""
+    from structlog.testing import capture_logs  # noqa: PLC0415 — beside its only use
+
+    with capture_logs() as lines:
+        if path == "here":
+            run = seed_runs._run_here(_refuses_an_amount, 7, None, None, 5.0)
+            assert (run.result, run.failure) == (None, "ValueError")
+        else:
+            receiver, sender = multiprocessing.Pipe(duplex=False)
+            seed_runs._child(_refuses_an_amount, 7, sender, 5.0)
+            assert receiver.recv()[:2] == ("failure", "ValueError")
+            receiver.close()
+
+    (line,) = [line for line in lines if line["event"] == "Planner run failed"]
+    assert (line["seed"], line["error_type"]) == (7, "ValueError"), line
+    assert "exc_info" not in line and "exception" not in line, f"a traceback would render the message: {line}"
+    assert line["where"].endswith(":_refuses_an_amount"), line
+    assert _PRIVATE_FIGURE not in repr(line), f"the message reached the log: {line}"
+
+
 def test_a_run_past_the_deadline_is_stopped_and_has_no_result(monkeypatch) -> None:
     """No wait is unbounded: past the budget and the grace, a run still out is stopped."""
     monkeypatch.setattr(seed_runs, "_GRACE_SECONDS", 0.5)
@@ -441,7 +474,8 @@ def test_a_proven_plan_carries_no_margin() -> None:
 def test_the_seeded_runs_line_carries_no_amount() -> None:
     """Lot LOGS of project 67 (the coordinator's ruling on the log rule): the «Rebalancer seeded runs» line names each run's
     seed, origin, state, seconds and failure, never an amount of the plan. A run's value and bound, and the margin, are
-    money of the user's portfolio, which the UI masks as personal."""
+    money of the user's portfolio, which the UI masks as personal. ``refused`` (R1-A): the run held only a plan the exact
+    replay refuses, answered «no plan»."""
     from structlog.testing import capture_logs  # noqa: PLC0415 — beside its only use
 
     with capture_logs() as lines:
@@ -449,8 +483,26 @@ def test_the_seeded_runs_line_carries_no_amount() -> None:
 
     (line,) = [line for line in lines if line["event"] == "Rebalancer seeded runs"]
     assert set(line) == {"event", "log_level", "runs", "state", "chosen", "downgrade"}
-    assert [set(run) for run in line["runs"]] == [{"seed", "origin", "closed", "infeasible", "seconds", "failure"}] * 3
+    assert [set(run) for run in line["runs"]] == [{"seed", "origin", "closed", "infeasible", "refused", "seconds", "failure"}] * 3
     assert [run["seed"] for run in line["runs"]] == [1, 2, 3]
+    assert [run["refused"] for run in line["runs"]] == [False] * 3
+
+
+def test_three_runs_holding_only_a_refused_plan_answer_no_plan(monkeypatch) -> None:
+    """R1-A of project 67 (the consultant's answer 2): a run whose search ended holding only a plan the exact replay
+    refuses votes «no plan», never «failed», and passes no lower bound. Three such runs: «no plan» (before: no run could
+    be published, ``SeededRunsFailedError``, «execution_failed»); the merge's line carries each run as ``refused``."""
+    from structlog.testing import capture_logs  # noqa: PLC0415 — beside its only use
+
+    from backend.test_scripts.test_services.test_pac_planner_cash_rule import _held_refused_search, _short_case  # noqa: PLC0415
+
+    scenario, _product, quanta = _short_case("rebalancer")
+    _held_refused_search(monkeypatch, stage_one="unfinished", quanta=quanta)
+    with capture_logs() as lines:
+        result = planner.plan_exact_scenario(scenario, solver_time_budget_seconds=5, seeds=(1, 2, 3)).result
+    assert (result.result_state, result.proof.kind) == ("ready_no_incumbent", "not_proven")
+    (line,) = [line for line in lines if line["event"] == "Rebalancer seeded runs"]
+    assert [(run["refused"], run["failure"], run["origin"]) for run in line["runs"]] == [(True, None, "none")] * 3
 
 
 # ---------------------------------------------------------------------------- the planner, three runs in processes

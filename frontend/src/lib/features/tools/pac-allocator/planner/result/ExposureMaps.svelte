@@ -57,9 +57,12 @@
 
     interface Props {
         rows: readonly MapWeightRow[];
+        /** The two maps' names, when the Tool calls them otherwise: the Rebalancer's «Target» and «After the plan», where
+         * «actual» would read as today. The PAC's «ideal» and «actual» when absent. */
+        titles?: {target: string; final: string};
     }
 
-    let {rows}: Props = $props();
+    let {rows, titles}: Props = $props();
 
     type Side = 'target' | 'final';
     type MapView = {zoom?: number; center?: (number | string)[]};
@@ -98,7 +101,7 @@
         const widest = Math.ceil(Math.max(0, ...values));
         return widest > 0 ? widest : 100;
     });
-    const text = $derived(exposureTooltipText($t));
+    const text = $derived(titles ? {...exposureTooltipText($t), ...titles} : exposureTooltipText($t));
     const colours = $derived(dark ? SCALE.dark : SCALE.light);
 
     onMount(() => {
