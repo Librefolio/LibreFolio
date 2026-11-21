@@ -284,4 +284,80 @@ describe('the Targets step and the preview', () => {
         mount(REBALANCER_PLANNER_PROFILE, draft, previewWith('ready', ready(brokerKey)));
         expect(screen.queryAllByTestId('rebalancer-planner-target-now-line')).toHaveLength(0);
     });
+
+    describe('the limits the backend checks are said in this step, from the preview (R1-E of project 67)', () => {
+        // «Ho messo un minimo che era più di tutto il capitale disponibile, mi aspettavo già in 6 un banner» (§2 n. 2).
+        /** One of the preview's cross checks of the limits, on `assetKey`'s target entry (contract 2.0.0, a field path). */
+        function limitProblem(code: string, assetKey: string, field: 'minimum' | 'maximum' = 'minimum') {
+            return {code, severity: 'error', kind: 'invalid', path: {kind: 'field', section: 'targets', entity_kind: 'asset', entity_id: assetKey, field}, message_key: code, params: []} as unknown as PreviewReady['limit_problems'][number];
+        }
+        const box = (prefix: string) => screen.queryByTestId(`${prefix}-targets-limits-problems`);
+        const lines = (prefix: string, key: string) => screen.queryAllByTestId(`${prefix}-targets-limits-problem`).filter((line) => line.getAttribute('data-key') === key);
+
+        it('PAC: a minimum above the money the plan invests shows in the step, and stays while the preview is stale', () => {
+            const {draft} = scenario(PAC_PLANNER_PROFILE);
+            draft.setLimit('asset:probe', 'minimum', '20000');
+            const numbers = {...ready('none'), items: undefined, limit_problems: [limitProblem('allocation.bounds_min_sum_exceeds_reference', 'asset:probe')]};
+            mount(null, draft, previewWith('ready', numbers));
+            const [line] = lines('pac-planner', 'bounds_min_sum_exceeds_reference');
+            expect(line?.textContent).toContain('ETF probe');
+            cleanup();
+
+            mount(null, draft, previewWith('waiting', numbers));
+            expect(lines('pac-planner', 'bounds_min_sum_exceeds_reference')).toHaveLength(1);
+            cleanup();
+
+            // A failed preview has no numbers: nothing of it is said.
+            mount(null, draft, previewWith('error', null, 'unavailable'));
+            expect(box('pac-planner')).toBeNull();
+        });
+
+        it('Rebalancer: a maximum below what is held today names its entry', () => {
+            const {draft, brokerKey} = scenario(REBALANCER_PLANNER_PROFILE);
+            draft.setLimit('asset:probe', 'maximum', '1');
+            mount(REBALANCER_PLANNER_PROFILE, draft, previewWith('ready', {...ready(brokerKey), limit_problems: [limitProblem('allocation.bound_max_below_current', 'asset:probe', 'maximum')]}));
+            const [line] = lines('rebalancer-planner', 'bound_max_below_current');
+            expect(line?.getAttribute('data-asset-key')).toBe('asset:probe');
+            expect(line?.textContent).toContain('ETF probe');
+        });
+
+        it('a problem the page already says is not said twice', () => {
+            const {draft} = scenario(PAC_PLANNER_PROFILE);
+            draft.setLimit('asset:probe', 'minimum', '2000');
+            draft.setLimit('asset:probe', 'maximum', '1000');
+            mount(null, draft, previewWith('ready', {...ready('none'), items: undefined, limit_problems: [limitProblem('allocation.bound_min_above_max', 'asset:probe')]}));
+            expect(lines('pac-planner', 'limitMinAboveMax')).toHaveLength(1);
+            expect(lines('pac-planner', 'bound_min_above_max')).toHaveLength(0);
+        });
+
+        describe('a cash entry, named on the wire «<broker>:CURRENCY»', () => {
+            /** The same cross check on the cash entry of `brokerKey` in EUR. */
+            function onCash(code: string, brokerKey: string) {
+                const problem = limitProblem(code, '');
+                return {...problem, path: {kind: 'field', section: 'targets', entity_kind: 'cash', entity_id: `${brokerKey}:EUR`, field: 'minimum'}} as unknown as PreviewReady['limit_problems'][number];
+            }
+
+            it('is named by its Broker and currency, on its own row', () => {
+                const {draft, brokerKey} = scenario(PAC_PLANNER_PROFILE);
+                const entry = draft.addCashEntry(brokerKey, 'EUR');
+                draft.setLimit(entry.key, 'minimum', '600');
+                draft.setLimit(entry.key, 'maximum', '10%');
+                mount(null, draft, previewWith('ready', {...ready(brokerKey), items: undefined, limit_problems: [onCash('allocation.bound_min_above_max', brokerKey), onCash('allocation.bounds_min_sum_exceeds_reference', brokerKey)]}));
+                const [conflict] = lines('pac-planner', 'bound_min_above_max');
+                expect(conflict?.getAttribute('data-asset-key')).toBe(entry.key);
+                expect(conflict?.textContent).toContain('Broker probe · EUR');
+                expect(lines('pac-planner', 'bounds_min_sum_exceeds_reference')[0]?.textContent).toContain('Broker probe · EUR');
+            });
+
+            it('its minimum above the maximum in the same form is said once, by the page', () => {
+                const {draft, brokerKey} = scenario(PAC_PLANNER_PROFILE);
+                const entry = draft.addCashEntry(brokerKey, 'EUR');
+                draft.setLimit(entry.key, 'minimum', '2000');
+                draft.setLimit(entry.key, 'maximum', '1000');
+                mount(null, draft, previewWith('ready', {...ready(brokerKey), items: undefined, limit_problems: [onCash('allocation.bound_min_above_max', brokerKey)]}));
+                expect(lines('pac-planner', 'limitMinAboveMax')).toHaveLength(1);
+                expect(lines('pac-planner', 'bound_min_above_max')).toHaveLength(0);
+            });
+        });
+    });
 });

@@ -30,8 +30,10 @@ import type {
     PlannerRequestOrderRoute,
     PlannerRequestProvenance,
     PlannerResolvedRequest,
+    PlannerIssue,
     PlannerStep,
 } from './types';
+import {entityLabel} from './issues';
 
 export interface LocalProblem {
     id: string;
@@ -190,6 +192,48 @@ export function limitProblems(draft: PlannerDraft): LimitProblem[] {
     if (shareTotal !== null && compareDecimal(shareTotal, '100') === 1) {
         found.push({key: 'limitShareMinimumsAboveHundred', fallback: 'The minimums in percent add up to more than 100%: {assets}.', entity: null, assetKey: null, values: {assets: shareMinimums.map((item) => item.name).join(', ')}});
     }
+    return found;
+}
+
+/** One of the limits' cross checks the last preview names: its code and the target entry it is on (contract 2.0.0). */
+export type PreviewLimitProblem = Pick<PlannerIssue, 'code' | 'path'>;
+
+/** The sentence of each cross check, under `tools.pacAllocator.planner.issues.`: the words «Calculate» shows for it. */
+const PREVIEW_LIMIT_FALLBACKS: Record<string, string> = {
+    bound_min_above_max: 'The minimum is higher than the maximum.',
+    bounds_min_sum_exceeds_reference: 'The minimums add up to more than the money the plan can reach.',
+    bound_max_below_current: 'The maximum is below what the plan already holds and sales are off.',
+};
+
+/**
+ * The limits' cross checks that need the Tool's reference, as the last preview names them (R1-E of project 67: «mi
+ * aspettavo già in 6 un banner»): an amount against the plan's total, a minimum above a maximum in the other form, a maximum
+ * below what is held today. They warn in the Targets step; they stop nothing, as the backend's answer may be a draft old:
+ * «Calculate» answers them again. The wire names the minimums' sum once per entry: here it is one line naming them all. A
+ * problem the page already says (`limitProblems`: a minimum above the maximum in the same form, share minimums above 100%) is
+ * not said twice.
+ */
+export function previewLimitProblems(draft: PlannerDraft, problems: readonly PreviewLimitProblem[]): LimitProblem[] {
+    const local = limitProblems(draft);
+    const conflicts = new Set(local.filter((problem) => problem.key === 'limitMinAboveMax').map((problem) => problem.assetKey));
+    const shareSum = local.some((problem) => problem.key === 'limitShareMinimumsAboveHundred');
+    const found: LimitProblem[] = [];
+    const sumNames: string[] = [];
+    for (const problem of problems) {
+        const key = problem.code.replace(/^allocation\./, '');
+        if (!(key in PREVIEW_LIMIT_FALLBACKS)) continue;
+        const entity = 'entity_kind' in problem.path ? {kind: problem.path.entity_kind, id: problem.path.entity_id} : null;
+        const name = entityLabel(draft, entity);
+        // A target entry is the row of its Asset, or of its cash entry («<broker>:CURRENCY» on the wire).
+        const rowKey = entity === null ? null : entity.kind === 'asset' ? entity.id : (draft.targetRows.find((row) => row.kind === 'cash' && `${row.entry.brokerKey}:${row.entry.currency}` === entity.id)?.key ?? entity.id);
+        if (key === 'bounds_min_sum_exceeds_reference') {
+            if (!shareSum && name !== null && !sumNames.includes(name)) sumNames.push(name);
+            continue;
+        }
+        if (key === 'bound_min_above_max' && conflicts.has(rowKey)) continue;
+        found.push({key, fallback: PREVIEW_LIMIT_FALLBACKS[key], entity: name, assetKey: rowKey, values: {}});
+    }
+    if (sumNames.length > 0) found.push({key: 'bounds_min_sum_exceeds_reference', fallback: PREVIEW_LIMIT_FALLBACKS.bounds_min_sum_exceeds_reference, entity: sumNames.join(', '), assetKey: null, values: {}});
     return found;
 }
 

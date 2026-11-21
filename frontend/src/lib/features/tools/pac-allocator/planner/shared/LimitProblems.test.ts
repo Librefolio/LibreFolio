@@ -23,6 +23,7 @@ import {PRIVACY_PLACEHOLDER} from '$lib/utils/privacy/maskable';
 import {PlannerDraft, type DraftAsset} from '../draft.svelte';
 import {formatPlannerMoneyPlain, formatPlannerPercentUnits} from '../format';
 import LimitProblems from './LimitProblems.svelte';
+import type {PreviewLimitProblem} from '../request';
 
 beforeAll(async () => {
     await setupI18n();
@@ -68,8 +69,8 @@ function draftWith(limits: {minimum: string; maximum: string}[]): {draft: Planne
     return {draft, keys};
 }
 
-async function mount(draft: PlannerDraft): Promise<void> {
-    render(LimitProblems, {draft});
+async function mount(draft: PlannerDraft, previewProblems: PreviewLimitProblem[] = []): Promise<void> {
+    render(LimitProblems, {draft, previewProblems});
     flushSync();
     await tick();
 }
@@ -126,5 +127,40 @@ describe('LimitProblems', () => {
         flushSync();
         await tick();
         expect(screen.queryByTestId('pac-planner-targets-limits-problems')).toBeNull();
+    });
+
+    describe('the cross checks the preview names (R1-E of project 67)', () => {
+        /** One of the preview's cross checks, on `key`'s target entry, as the wire gives it (a field path). */
+        const problem = (code: string, key: string): PreviewLimitProblem => ({code, path: {kind: 'field', section: 'targets', entity_kind: 'asset', entity_id: key, field: 'minimum'}}) as PreviewLimitProblem;
+        const lines = (key: string) => screen.queryAllByTestId('pac-planner-targets-limits-problem').filter((line) => line.getAttribute('data-key') === key);
+
+        it('minimums above the money: one line naming every entry the wire names one by one', async () => {
+            const {draft, keys} = draftWith([
+                {minimum: '600', maximum: ''},
+                {minimum: '500', maximum: ''},
+            ]);
+            await mount(draft, [problem('allocation.bounds_min_sum_exceeds_reference', keys[0]), problem('allocation.bounds_min_sum_exceeds_reference', keys[1])]);
+
+            const found = lines('bounds_min_sum_exceeds_reference');
+            expect(found).toHaveLength(1);
+            expect(found[0].textContent).toContain('Probe 1');
+            expect(found[0].textContent).toContain('Probe 2');
+        });
+
+        it('a minimum above the maximum in two forms is for the backend to say: its line is shown', async () => {
+            const {draft, keys} = draftWith([{minimum: '600', maximum: '10%'}]);
+            await mount(draft, [problem('allocation.bound_min_above_max', keys[0])]);
+            expect(lines('bound_min_above_max').map((line) => line.getAttribute('data-asset-key'))).toEqual([keys[0]]);
+        });
+
+        it('share minimums above 100% are said once, by the page', async () => {
+            const {draft, keys} = draftWith([
+                {minimum: '60%', maximum: ''},
+                {minimum: '50%', maximum: ''},
+            ]);
+            await mount(draft, [problem('allocation.bounds_min_sum_exceeds_reference', keys[0]), problem('allocation.bounds_min_sum_exceeds_reference', keys[1])]);
+            expect(lines('limitShareMinimumsAboveHundred')).toHaveLength(1);
+            expect(lines('bounds_min_sum_exceeds_reference')).toHaveLength(0);
+        });
     });
 });

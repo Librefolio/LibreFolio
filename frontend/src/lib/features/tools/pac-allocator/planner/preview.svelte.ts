@@ -24,7 +24,7 @@ import {runTool} from '../../client';
 import {assertToolAccount} from '../../contracts';
 import type {PlannerDraft} from './draft.svelte';
 import type {PlannerProfile} from './profile';
-import {buildRequest} from './request';
+import {buildRequest, type PreviewLimitProblem} from './request';
 import type {PlannerDescriptor} from './run.svelte';
 import type {PlannerExactMoney, PlannerExactNumber} from './types';
 
@@ -60,7 +60,8 @@ export interface PreviewReady {
     valuation_currency: string;
     total: PreviewMoney;
     issues: {code: string}[];
-    limit_problems: {code: string}[];
+    /** The limits' cross checks the plan would refuse, each on its target entry: the Targets step says them (R1-E). */
+    limit_problems: PreviewLimitProblem[];
     /** Every target entry today, and «other cash» (the cash outside the entries, G5-2 of project 67). */
     items?: ({kind: 'asset'; asset_id: string; value: PreviewMoney; weight: PreviewNumber} | {kind: 'cash'; broker_id: string; currency: string; value: PreviewMoney; weight: PreviewNumber} | {kind: 'other_cash'; value: PreviewMoney; weight: PreviewNumber})[];
     table?: PreviewCostTable;

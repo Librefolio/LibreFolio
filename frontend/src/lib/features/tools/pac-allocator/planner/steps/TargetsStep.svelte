@@ -449,7 +449,7 @@
             />
         </div>
 
-        <LimitProblems {draft} />
+        <LimitProblems {draft} previewProblems={numbers?.limit_problems ?? []} />
         <p class={NOTICE.info} data-testid={testId('targets-limits-note', profile)}>
             {#if profile.text === 'rebalancer'}
                 {totalText !== null ? $t('tools.portfolioRebalancer.planner.targets.limitsNoteTotal', {values: {total: totalText}}) : $t('tools.portfolioRebalancer.planner.targets.limitsNote')}
