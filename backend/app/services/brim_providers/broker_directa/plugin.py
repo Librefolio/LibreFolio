@@ -16,12 +16,18 @@ only the reading differs, so a single parse path handles both via ``_brim_io``.
 **Supported Transaction Types:**
 - Acquisto → BUY
 - Vendita → SELL
-- Provento etf/azioni, Dividendi, Coupon → DIVIDEND
+- Provento etf/azioni, Dividendi, Coupon → DIVIDEND (but «Rit.provento etf» is the withholding on it: TAX)
 - Cedola → INTEREST
 - Conferimento → DEPOSIT
 - Prelievo → WITHDRAWAL
 - Rit.provento, Ritenuta, Tobin tax → TAX
 - Commissioni → FEE
+
+**Linked charges (project 66, P3):** a charge names its one parent (``parent_ref``), else it stays free.
+- Commissioni, Tobin tax → the BUY/SELL with the same ``Riferimento ordine``; «Rit. etf» → the SELL of that reference.
+- Any other «Rit.…» withholding without an order reference («Rit.cedola obb.», «Rit.provento etf»…) → the one
+  DIVIDEND or INTEREST of the same operation date and ISIN (the ``Protocollo`` differs between the two rows).
+- «Bollo portafoglio titoli» and the other account charges: no parent.
 
 **Columns:**
 - Data operazione: Transaction date (DD-MM-YYYY)
@@ -36,6 +42,7 @@ only the reading differs, so a single parse path handles both via ``_brim_io``.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import date as date_type
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
@@ -73,6 +80,7 @@ COL_QUANTITY = 7  # Quantità
 COL_AMOUNT_EUR = 8  # Importo euro
 COL_AMOUNT_DIV = 9  # Importo Divisa
 COL_CURRENCY = 10  # Divisa
+COL_REFERENCE = 11  # Riferimento ordine (may be missing, empty or blank on rows that are not trades)
 
 # Type mapping (lowercase search)
 TYPE_MAPPINGS: Dict[str, TransactionType] = {
@@ -80,13 +88,15 @@ TYPE_MAPPINGS: Dict[str, TransactionType] = {
     "acquisto": TransactionType.BUY,
     # SELL
     "vendita": TransactionType.SELL,
+    # A withholding first: «Rit.provento etf» is the tax on an income, not the income (project 66, P3; until 1.1.0 it
+    # matched «provento» and became a positive DIVIDEND).
+    "rit.": TransactionType.TAX,
     # DIVIDEND
     "provento": TransactionType.DIVIDEND,
     "dividendi": TransactionType.DIVIDEND,
     "dividendo": TransactionType.DIVIDEND,
     "coupon": TransactionType.DIVIDEND,
-    # TAX (must be before cedola/provento to catch "Rit.cedola", "Rit.provento")
-    "rit.": TransactionType.TAX,
+    # TAX
     "ritenuta": TransactionType.TAX,
     "tobin": TransactionType.TAX,
     "bollo": TransactionType.TAX,  # Bollo portafoglio titoli (stamp duty)
@@ -132,6 +142,39 @@ def _parse_directa_number(value: Any) -> Optional[Decimal]:
         return Decimal(s)
     except InvalidOperation:
         return None
+
+
+@dataclass(frozen=True)
+class _CreatedRow:
+    """A row of the output with what links a charge to its parent: its type text, ``Riferimento ordine`` and ISIN."""
+
+    row_num: int
+    tx: TXCreateItem
+    tipo: str
+    reference: str
+    isin: str
+
+
+def _parent_candidates(item: _CreatedRow, by_reference: Dict[str, List[TXCreateItem]], by_income: Dict[tuple, List[TXCreateItem]]) -> List[TXCreateItem]:
+    """The rows a charge could belong to (project 66, P3).
+
+    - A commission or a Tobin tax with a ``Riferimento ordine`` → the BUY/SELL of that reference.
+    - A withholding («Rit.…») with a reference → the SELL of that reference («Rit. etf», the tax on a gain); without
+      one → the DIVIDEND and INTEREST rows of its operation date and ISIN, both types together (the consultant, 21/11:
+      «Rit.cedola obb.», «Rit.provento etf» and any other «Rit.» label on an income).
+
+    Empty for the rest (account charges, a row with neither a reference nor an ISIN). The caller links only one candidate.
+    """
+    kind = "".join(item.tipo.lower().split())
+    if ("commission" in kind or "tobin" in kind) and item.reference:
+        return by_reference.get(item.reference, [])
+    if "rit." not in kind:
+        return []
+    if item.reference:
+        return [tx for tx in by_reference.get(item.reference, []) if tx.type == TransactionType.SELL]
+    if item.isin:
+        return [*by_income.get((TransactionType.DIVIDEND, item.tx.date, item.isin), []), *by_income.get((TransactionType.INTEREST, item.tx.date, item.isin), [])]
+    return []
 
 
 def _map_transaction_type(tipo: str) -> Optional[TransactionType]:
@@ -230,6 +273,8 @@ class DirectaBrokerProvider(BRIMProvider):
         validation_issues: List[BRIMValidationIssue] = []
         extracted_assets_raw: Dict[int, Dict[str, Optional[str]]] = {}
         asset_to_fake_id: Dict[str, int] = {}
+        # Every row created, with what links a charge to its parent: linked once every row is read (``_link_charges``).
+        created_rows: List[_CreatedRow] = []
         next_fake_id = FAKE_ASSET_ID_BASE
 
         # Read either variant (CSV or XLSX) into a uniform list[list[cell]]; the
@@ -350,7 +395,7 @@ class DirectaBrokerProvider(BRIMProvider):
                 amount = -amount
 
             # Create transaction (parent handles validation errors)
-            self._create_transaction(
+            created = self._create_transaction(
                 row_num=row_num,
                 transactions=transactions,
                 validation_issues=validation_issues,
@@ -364,6 +409,11 @@ class DirectaBrokerProvider(BRIMProvider):
                 description=f"{tipo_raw}: {description}" if description else tipo_raw,
                 tags=["import", "directa"],
             )
+            if created is not None:
+                reference = io.cell_str(row[COL_REFERENCE]).strip() if len(row) > COL_REFERENCE else ""
+                created_rows.append(_CreatedRow(row_num, created, tipo_raw, reference, isin))
+
+        self._link_charges(created_rows, transactions)
 
         if not transactions:
             warnings.append("Nessuna transazione valida trovata nel file")
@@ -387,10 +437,31 @@ class DirectaBrokerProvider(BRIMProvider):
 
         return BRIMParseOutput(transactions=transactions, warnings=[*warnings, *skips.notices()], validation_issues=validation_issues, extracted_assets=extracted_assets_typed)
 
+    def _link_charges(self, created_rows: List[_CreatedRow], transactions: List[TXCreateItem]) -> None:
+        """Link each charge to its one parent once every row is read, keeping the file's order (project 66, P3).
+
+        - Commissioni, Tobin tax → the one BUY/SELL with the same ``Riferimento ordine``; a «Rit.…» with a reference → the
+          one SELL. A reference that names no trade or several leaves the charge free.
+        - A «Rit.…» without a reference → the one DIVIDEND or INTEREST of the same date and ISIN (``_parent_candidates``).
+        """
+        by_reference: Dict[str, List[TXCreateItem]] = {}
+        by_income: Dict[tuple, List[TXCreateItem]] = {}
+        for item in created_rows:
+            if item.tx.type in (TransactionType.BUY, TransactionType.SELL) and item.reference:
+                by_reference.setdefault(item.reference, []).append(item.tx)
+            elif item.tx.type in (TransactionType.DIVIDEND, TransactionType.INTEREST) and item.isin:
+                by_income.setdefault((item.tx.type, item.tx.date, item.isin), []).append(item.tx)
+        for item in created_rows:
+            if item.tx.type in (TransactionType.FEE, TransactionType.TAX):
+                candidates = _parent_candidates(item, by_reference, by_income)
+                if len(candidates) == 1:
+                    self._link_existing_charge(item.tx, candidates[0], transactions, row_num=item.row_num)
+
     @property
     def plugin_version(self) -> str:
         # 1.1.0 — the rows left out (unreadable, unknown type) are reported with the shared notices and the link to open an issue (W-B86).
-        return "1.1.0"
+        # 1.2.0 — «Rit.provento etf» is a TAX, no longer a positive DIVIDEND; each charge is linked to its one parent (project 66, P3).
+        return "1.2.0"
 
     @property
     def docs_url(self) -> Optional[str]:
