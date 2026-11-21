@@ -1,6 +1,6 @@
 <script lang="ts">
     import {PieChart, Plus, Scale, Trash2} from 'lucide-svelte';
-    import type {Snippet} from 'svelte';
+    import {untrack, type Snippet} from 'svelte';
     import {MediaQuery} from 'svelte/reactivity';
     import {t} from '$lib/i18n';
     import DataTable from '$lib/components/table/DataTable.svelte';
@@ -59,6 +59,8 @@
     let copying = $state(false);
     let addingCash = $state(false);
     let tableRef: DataTable<TableRow> | undefined = $state(undefined);
+    /** The rows ticked in the table, as it reports them (77 SEL-D3). */
+    let tickedKeys = $state<string[]>([]);
 
     /** A row with a target of its own: an Asset, or a cash entry where the Tool gives cash a target (`full`). */
     function targetable(row: TableRow): boolean {
@@ -75,6 +77,11 @@
     });
     const otherCash = $derived(profile.cashEntries === 'full' && otherCashToday && (draft.data.cash.some((cash) => !draft.data.cashEntries.some((entry) => entry.brokerKey === cash.brokerKey && entry.currency === cash.currency)) || draft.data.contributions.some((item) => item.amount.trim() !== '')));
     const rows = $derived<TableRow[]>([...draft.targetRows, ...(otherCash ? [{kind: 'other' as const, key: OTHER_CASH_KEY}] : [])]);
+    // «Other cash» leaves the table when a preview says it is worth 0 today: its tick goes with it, so the selection never
+    // counts a row that is gone, and the row never comes back ticked (R1-C of project 67).
+    $effect(() => {
+        if (!otherCash && tickedKeys.includes(OTHER_CASH_KEY)) untrack(() => tableRef?.toggleRowSelectionById(OTHER_CASH_KEY));
+    });
     /** The rows whose targets the balancing reads and writes, in table order. */
     const editable = $derived(draft.targetRows.filter(targetable));
 
@@ -399,6 +406,7 @@
                 data={rows}
                 {columns}
                 getRowId={(row) => row.key}
+                onSelectionChange={(keys) => (tickedKeys = keys)}
                 storageKey={storageKey('targets', profile)}
                 enableSorting={false}
                 enablePagination={false}
