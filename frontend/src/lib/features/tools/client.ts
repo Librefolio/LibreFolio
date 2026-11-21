@@ -326,6 +326,11 @@ export async function runTool<const C extends ToolCode, const V extends ToolVers
     const snapshot = snapshotRequest(request);
     const validatedRequest = parseToolCodec(toolTransportSchemas.computeRequest, snapshot.value, 'validation', 'invalid_request');
     context.validateInput(validatedRequest.items[0]?.parameters);
+    // The client waits for the operation the sent parameters name (TURNI 5a), read from the validated snapshot like every
+    // other value of the request, never from the caller's object; not the platform's ceiling.
+    const sent = validatedRequest.items[0]?.parameters;
+    const operation = sent !== null && typeof sent === 'object' && typeof (sent as {operation?: unknown}).operation === 'string' ? (sent as {operation: string}).operation : undefined;
+    const clientTimeoutMs = context.clientTimeoutFor(operation);
     const expected: ExpectedBatch = {
         request_id: validatedRequest.request_id,
         items: validatedRequest.items.map((item) => ({
@@ -344,7 +349,7 @@ export async function runTool<const C extends ToolCode, const V extends ToolVers
                 if (onProgress) {
                     raw = await postComputeStream(snapshot.body, {
                         signal: requestSignal,
-                        timeoutMs: context.clientTimeoutMs,
+                        timeoutMs: clientTimeoutMs,
                         onProgress: (event) => {
                             if (event.correlation_id === correlationId && !requestSignal.aborted) onProgress(event);
                         },
@@ -352,7 +357,7 @@ export async function runTool<const C extends ToolCode, const V extends ToolVers
                 } else {
                     const response = await axiosInstance.post<unknown>('/api/v1/tools/compute', snapshot.value, {
                         signal: requestSignal,
-                        timeout: context.clientTimeoutMs,
+                        timeout: clientTimeoutMs,
                         headers: {'Content-Type': 'application/json'},
                         // Keep the raw-wire snapshot stable across asynchronous request interceptors.
                         transformRequest: [() => snapshot.body],
