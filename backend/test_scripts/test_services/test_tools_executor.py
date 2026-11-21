@@ -1720,6 +1720,53 @@ def test_raw_frame_length_over_the_owned_limit_is_rejected_before_payload_read()
     assert caught.value.code == "output_limit_exceeded"
 
 
+def _exited_worker_tree(exit_code: int) -> SimpleNamespace:
+    """A worker tree whose process has already exited with ``exit_code``; its memory reading does nothing."""
+    return SimpleNamespace(process=SimpleNamespace(exitcode=exit_code), observe_memory_limit=lambda: None)
+
+
+def test_a_frame_written_by_a_worker_that_exited_after_an_empty_poll_is_read(monkeypatch):
+    """GPAC-d of project 67: the worker writes its last frame and exits between the parent's empty ``select`` and its exit
+    check. The frame is in the pipe: the parent reads it, it does not answer ``worker_crashed`` (two PAC gallery reds on a
+    busy machine, 21/11/2026)."""
+    job = _owned_job()
+    job.tree = _exited_worker_tree(0)
+    reader, writer = os.pipe()
+    real_select = executor_module.select.select
+    polls = {"count": 0}
+
+    def select_then_worker_finishes(read, write, error, timeout):
+        polls["count"] += 1
+        if polls["count"] == 1:
+            # The poll times out empty; right after it the worker writes its frame and exits (exit code 0 above).
+            assert os.write(writer, b"FRAME") == 5
+            return [], [], []
+        return real_select(read, write, error, timeout)
+
+    monkeypatch.setattr(executor_module, "select", SimpleNamespace(select=select_then_worker_finishes))
+    try:
+        with os.fdopen(reader, "rb") as response:
+            assert executor_module._read_exact(response, 5, job) == b"FRAME"
+    finally:
+        os.close(writer)
+
+
+@pytest.mark.parametrize("exit_code", [0, 23])
+def test_a_worker_that_exited_with_nothing_left_in_the_pipe_is_still_a_crash(exit_code):
+    """GPAC-d: the second look finds nothing, and nothing more can come from an exited worker: ``worker_crashed``, as
+    before, whatever its exit code. The write end stays open, so no end-of-file answers for it."""
+    job = _owned_job()
+    job.tree = _exited_worker_tree(exit_code)
+    reader, writer = os.pipe()
+    try:
+        with os.fdopen(reader, "rb") as response:
+            with pytest.raises(ToolExecutionError) as caught:
+                executor_module._read_exact(response, 5, job)
+    finally:
+        os.close(writer)
+    assert caught.value.code == "worker_crashed"
+
+
 def test_frame_completed_at_deadline_is_not_published_after_decode(monkeypatch):
     job = _owned_job()
     clock = _Clock(job.spec.hard_deadline - 1)
