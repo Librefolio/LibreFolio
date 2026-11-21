@@ -6197,8 +6197,7 @@ class TestXTBQuotedHeader:
     def test_xtb_can_parse_still_accepts_bare_header(self, tmp_path):
         path = tmp_path / "xtb-bare.csv"
         path.write_text(
-            "ID;Type;Time;Symbol;Comment;Amount\n"
-            "530692719;Stocks/ETF purchase;12.04.2024 13:01:45;SPYL.DE;OPEN BUY 34/42.5658 @ 11.7480;-399.43\n",
+            "ID;Type;Time;Symbol;Comment;Amount\n" "530692719;Stocks/ETF purchase;12.04.2024 13:01:45;SPYL.DE;OPEN BUY 34/42.5658 @ 11.7480;-399.43\n",
             encoding="utf-8",
         )
         assert XTBBrokerProvider().can_parse(path) is True
@@ -6215,9 +6214,7 @@ class TestXTBQuotedHeader:
         else:
             path = tmp_path / "xtb-bare.csv"
             path.write_text(
-                "ID;Type;Time;Symbol;Comment;Amount\n"
-                "530692719;Stocks/ETF purchase;12.04.2024 13:01:45;SPYL.DE;OPEN BUY 34/42.5658 @ 11.7480;-399.43\n"
-                "530692720;Deposit;15.04.2024 09:00:00;; ;1000.00\n",
+                "ID;Type;Time;Symbol;Comment;Amount\n" "530692719;Stocks/ETF purchase;12.04.2024 13:01:45;SPYL.DE;OPEN BUY 34/42.5658 @ 11.7480;-399.43\n" "530692720;Deposit;15.04.2024 09:00:00;; ;1000.00\n",
                 encoding="utf-8",
             )
         output = XTBBrokerProvider().parse(path, broker_id=1)
