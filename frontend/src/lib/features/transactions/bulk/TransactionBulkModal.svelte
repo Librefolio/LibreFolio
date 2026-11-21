@@ -112,7 +112,7 @@
         type BulkDeletePlan,
         type ChargesUnread,
     } from './bulkCharges';
-    import {SPLIT_TYPE_MAP, splitHalfType, postSplitType} from './splitTypes';
+    import {SPLIT_TYPE_MAP, splitHalfType, postSplitType, splitTypeToSend} from './splitTypes';
     import {txRowRef} from '../chargeLinkRules';
     import {canEditBroker} from '$lib/stores/reference/brokerStore';
     import TxChargesActionModal from '../TxChargesActionModal.svelte';
@@ -1536,8 +1536,13 @@
                 resolved.push({intent: 'create', tempId: d.tempId, partnerTempId: pOp?.tempId, payload: collectCreate(d), partnerPayload});
             } else if (st === 'edited') {
                 const upd = collectUpdate(d);
-                // For split-queued rows, strip type (split handles type change)
-                if (upd && splitTxIds.has((d as any).txId)) delete upd.type;
+                // A split half: the split gives it its type, so the update names one only when the user swapped it
+                // (66 C22e, `splitTypeToSend`); otherwise the type stays out.
+                if (upd && splitTxIds.has((d as any).txId)) {
+                    const handType = splitTypeToSend(d, pendingSplits, txStoreGet((d as any).txId) ?? null);
+                    if (handType) upd.type = handType;
+                    else delete upd.type;
+                }
                 const payload = upd && Object.keys(upd).length > 1 ? upd : undefined;
                 let partnerPayload: Record<string, unknown> | null = null;
                 if (pOp && pOp.op === 'edit') {
