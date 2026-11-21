@@ -635,6 +635,30 @@ def test_the_planner_hands_the_runs_their_limit_and_the_whole_window(monkeypatch
     assert (result.result_state, result.proof.kind) == ("ready_incumbent", "optimal_proven")
 
 
+@pytest.mark.parametrize(("window", "whole"), [(15.0, True), (None, False)], ids=["a-window-of-three-turns", "no-window"])
+def test_the_published_time_budget_is_the_time_the_run_was_given(monkeypatch, window, whole) -> None:
+    """TURNI step 2, check 7 (the coordinator's rule of 21/11): the evidence publishes the time the run was really given.
+    On one usable CPU the published run of T4 is the one started last (the lowest seed, 17, chosen on a tie). With a window
+    of three turns it was given its whole limit, and every stage says 5 s; with no window it had the time left, a little
+    less, and every stage says that."""
+    monkeypatch.setattr(seed_runs, "usable_cpus", lambda: 1)
+    # The budget the scheduler gave each run, as it records it (``_Entry.budget``).
+    given: dict[int, float] = {}
+    real_entry = seed_runs._Entry
+
+    def entry(**fields):
+        given[fields["seed"]] = fields["budget"]
+        return real_entry(**fields)
+
+    monkeypatch.setattr(seed_runs, "_Entry", entry)
+    result = planner.plan_exact_scenario(cases.t4(), solver_time_budget_seconds=5, solver_window_seconds=window, seeds=(31, 23, 17)).result
+    assert (result.result_state, result.proof.kind) == ("ready_incumbent", "optimal_proven")
+    assert {settings.get("randomization/randomseedshift") for settings in _settings(result)} == {"17"}, "the run started last is published"
+    # Every stage of the published run says exactly the time that run was given, formatted as the solver writes it.
+    assert {settings.get("time_budget") for settings in _settings(result)} == {f"{given[17]:g}"}
+    assert given[17] == 5 if whole else given[17] < 5
+
+
 def test_a_run_carries_its_first_stage_band_in_the_unit_of_its_value() -> None:
     """«Target first»: SCIP minimizes D/F, the run's value is D, so the stage's band is divided by its scale (1/F) before
     the merge compares it with the value."""
