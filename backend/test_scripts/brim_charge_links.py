@@ -20,6 +20,8 @@ And what the lots P2–P6 add on top (project 66, P2 contract §2, fixed by the 
   charges stay free. ``_create_linked_charge`` leaves a charge free in silence, so the structure check alone would pass
   with zero links (P1a-b).
 - ``private_broker``: an in-memory database with one broker, for the reimport criterion of a plugin test.
+- ``reimport_report`` / ``sample_reimport_report``: the reimport without its verdict, for a lot that changes amounts on
+  purpose (Danske, P2c, contract §2.5): the test pins which rows are recognised and which are new.
 
 **Capturing a snapshot** — only on the code *before* the lot changes the plugin, from the repository root::
 
@@ -53,7 +55,7 @@ from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
-from typing import Any, AsyncIterator, Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import Any, AsyncIterator, Dict, FrozenSet, Iterable, List, Optional, Sequence, Tuple
 
 from sqlalchemy import delete, update
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
@@ -166,6 +168,34 @@ async def assert_reimport_adds_nothing(
     Everything this helper saves (rows and assets) is deleted before it returns, whatever the outcome. Returns the new
     parse output, so the caller can check what it was about.
     """
+    report = await reimport_report(previous_rows, plugin, sample_path, broker_id, session)
+    output = report.output
+    new_rows = [_describe(index, tx) for index, tx in enumerate(output.transactions) if index not in report.duplicates]
+    assert not new_rows, f"{plugin.provider_code} [{Path(sample_path).name}]: the reimport adds {len(new_rows)} of {len(output.transactions)} row(s) " f"to a broker that holds the previous version's {len(previous_rows)}:\n  " + "\n  ".join(new_rows)
+    assert report.unique == [], f"duplicate report lists unique rows: {report.unique}"
+    return output
+
+
+@dataclass(frozen=True)
+class ReimportReport:
+    """What a reimport over the previous version's rows finds (``reimport_report``): the new parse output, the indices
+    of its rows the duplicate report names (at any level), and the indices it lists as unique (rows it would add)."""
+
+    output: BRIMParseOutput
+    duplicates: FrozenSet[int]
+    unique: List[int]
+
+
+async def reimport_report(
+    previous_rows: Sequence[TXCreateItem],
+    plugin: BRIMProvider,
+    sample_path: Path,
+    broker_id: int,
+    session: AsyncSession,
+) -> ReimportReport:
+    """Steps 1–3 of ``assert_reimport_adds_nothing``, without its verdict: for a lot where the reimport is *expected* to
+    add some rows (Danske, P2c: the trades whose amount changes, and their new fees; P2 contract §2.5), so the test pins
+    both sides. Everything saved is deleted before it returns."""
     fake_ids = _fake_asset_ids(previous_rows)
     marker = uuid.uuid4().hex[:8]
     assets = [Asset(display_name=f"Reimport probe {marker} {fake_id}", currency="EUR") for fake_id in fake_ids]
@@ -194,11 +224,8 @@ async def assert_reimport_adds_nothing(
         mappings = [BRIMAssetMapping(fake_asset_id=fake_id, selected_asset_id=real_assets[fake_id]) for fake_id in _fake_asset_ids(output.transactions) if fake_id in real_assets]
         report = await detect_tx_duplicates(transactions=output.transactions, broker_id=broker_id, session=session, asset_mappings=mappings)
 
-        found = {candidate.tx_row_index for candidate in (*report.tx_possible_duplicates, *report.tx_likely_duplicates)}
-        new_rows = [_describe(index, tx) for index, tx in enumerate(output.transactions) if index not in found]
-        assert not new_rows, f"{plugin.provider_code} [{Path(sample_path).name}]: the reimport adds {len(new_rows)} of {len(output.transactions)} row(s) " f"to a broker that holds the previous version's {len(previous_rows)}:\n  " + "\n  ".join(new_rows)
-        assert report.tx_unique_indices == [], f"duplicate report lists unique rows: {report.tx_unique_indices}"
-        return output
+        found = frozenset(candidate.tx_row_index for candidate in (*report.tx_possible_duplicates, *report.tx_likely_duplicates))
+        return ReimportReport(output=output, duplicates=found, unique=list(report.tx_unique_indices))
     finally:
         await _delete_saved(session, saved_ids, asset_ids)
 
@@ -415,6 +442,15 @@ async def assert_sample_reimport_adds_nothing(plugin: BRIMProvider, sample_name:
         previous_rows = load_previous_output(plugin.provider_code, sample_name, broker_id)
         with tempfile.TemporaryDirectory(prefix="lf-brim-reimport-") as folder:
             return await assert_reimport_adds_nothing(previous_rows, plugin, sample_input(plugin, sample_name, Path(folder)), broker_id, session)
+
+
+async def sample_reimport_report(plugin: BRIMProvider, sample_name: str) -> ReimportReport:
+    """``reimport_report`` on one sample, in a database of its own: the snapshot of the previous version of ``plugin`` on
+    ``sample_name`` is saved without links, then the sample is parsed by ``plugin`` and checked for duplicates."""
+    async with private_broker(f"Reimport {plugin.provider_code}") as (session, broker_id):
+        previous_rows = load_previous_output(plugin.provider_code, sample_name, broker_id)
+        with tempfile.TemporaryDirectory(prefix="lf-brim-reimport-") as folder:
+            return await reimport_report(previous_rows, plugin, sample_input(plugin, sample_name, Path(folder)), broker_id, session)
 
 
 def version_tuple(version: str) -> Tuple[int, ...]:
