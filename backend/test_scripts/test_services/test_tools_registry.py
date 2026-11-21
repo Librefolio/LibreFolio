@@ -201,12 +201,13 @@ def _long_operation_policy(operation: str = "inspect", *, deterministic: bool = 
         max_parameter_bytes=262_144,
         max_result_bytes=524_288,
         queue_timeout_ms=10_000,
-        engine_timeout_ms=35_000,
-        job_timeout_ms=50_000,
-        soft_timeout_ms=45_000,
+        # Above every platform ceiling (three turns of the Rebalancer, TURNI step 3), so the platform lowers each one.
+        engine_timeout_ms=120_000,
+        job_timeout_ms=130_000,
+        soft_timeout_ms=125_000,
         cleanup_timeout_ms=7_000,
-        request_timeout_ms=70_000,
-        client_timeout_ms=75_000,
+        request_timeout_ms=150_000,
+        client_timeout_ms=160_000,
         memory_limit_bytes=2_147_483_648,
     )
 
@@ -1222,16 +1223,30 @@ def test_effective_policy_only_lowers_limits_and_reserves_output_time():
         "max_parameter_bytes": 131_072,
         "max_result_bytes": 262_144,
         "queue_timeout_ms": 5_000,
-        "engine_timeout_ms": 30_000,
-        "job_timeout_ms": 45_000,
-        "soft_timeout_ms": 44_000,
+        "engine_timeout_ms": 100_000,
+        "job_timeout_ms": 115_000,
+        "soft_timeout_ms": 114_000,
         "cleanup_timeout_ms": 5_000,
-        "request_timeout_ms": 59_000,
-        "client_timeout_ms": 65_000,
+        "request_timeout_ms": 129_000,
+        "client_timeout_ms": 135_000,
         "memory_limit_bytes": 1_073_741_824,
         "progress_phases": [],
     }
     assert declared.model_dump() == original
+
+
+_TODAY_S_PLAN_LIMITS = {"queue_timeout_ms": 5_000, "engine_timeout_ms": 30_000, "job_timeout_ms": 45_000, "soft_timeout_ms": 44_000, "cleanup_timeout_ms": 5_000, "request_timeout_ms": 59_000, "client_timeout_ms": 65_000}
+_TODAY_S_PREVIEW_LIMITS = {"queue_timeout_ms": 5_000, "engine_timeout_ms": 4_000, "job_timeout_ms": 5_000, "soft_timeout_ms": 4_000, "cleanup_timeout_ms": 2_000, "request_timeout_ms": 20_000, "client_timeout_ms": 25_000}
+
+
+@pytest.mark.parametrize("tool_code", ["pac_allocator", "portfolio_rebalancer"])
+def test_raising_the_platform_ceilings_moves_no_shipped_operation(tool_code):
+    """TURNI step 3: the ceilings rise to three turns, and every shipped operation keeps its effective limits, as literal
+    numbers: both plans and both previews. Only step 4 gives the Rebalancer's plan its own per-CPU limits."""
+    operations = {operation.operation: operation for operation in ToolPluginRegistry.get_definition(tool_code).descriptor.operations}
+    for name, expected in (("plan", _TODAY_S_PLAN_LIMITS), ("preview", _TODAY_S_PREVIEW_LIMITS)):
+        effective = effective_operation(operations[name], ToolPlatformPolicy()).model_dump(mode="json")
+        assert {key: effective[key] for key in expected} == expected, (tool_code, name)
 
 
 def test_effective_policy_rejects_request_without_platform_envelope_time():
