@@ -38,7 +38,7 @@ function source(quantities: Record<number, SourceHoldingQuantity | null>): Plann
             source_broker_id: Number(id),
             name: `Broker ${id}`,
             icon_url: null,
-            access_role: 'OWNER',
+            access_role: id === '8' ? 'EDITOR' : 'OWNER',
             ownership_share: '1',
             observed_currencies: ['EUR'],
             active: true,
@@ -82,6 +82,8 @@ describe('the user positions in the draft', () => {
             [domainBrokerKey(8), 'Broker 8', '12', '0.5', '6', '6'],
         ]);
         expect(positions.every((item) => positionIsCopied(item) && item.stamp !== null)).toBe(true);
+        // The user's role on each account comes with the copy: the share's badge reads it (R1-D of project 67).
+        expect(positions.map((item) => item.accessRole)).toEqual(['OWNER', 'EDITOR']);
         expect(Object.keys(draft.data.copies)).toHaveLength(1);
     });
 

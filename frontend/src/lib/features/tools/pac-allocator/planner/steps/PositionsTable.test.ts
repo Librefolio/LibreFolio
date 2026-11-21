@@ -19,7 +19,8 @@ import {cleanup, fireEvent, render, screen, setupI18n, within} from '$test/compo
 import {setPrivacyEnabled} from '$lib/stores/app/privacyStore.svelte';
 import {PRIVACY_PLACEHOLDER} from '$lib/utils/privacy/maskable';
 import {PlannerDraft, type DraftPosition} from '../draft.svelte';
-import {formatPlannerQuantity} from '../format';
+import {fractionToPercent} from '$lib/utils/core/exactDecimal';
+import {formatPlannerPercentUnits, formatPlannerQuantity} from '../format';
 import PositionsTable from './PositionsTable.svelte';
 
 beforeAll(async () => {
@@ -33,7 +34,7 @@ afterEach(() => {
 
 const ASSET = 'asset:11';
 
-function position(broker: number, custody: string, share: string, quantity: string): DraftPosition {
+function position(broker: number, custody: string, share: string, quantity: string, accessRole: string | null = 'OWNER'): DraftPosition {
     return {
         key: `holding:asset:11:broker:${broker}`,
         assetKey: ASSET,
@@ -43,6 +44,7 @@ function position(broker: number, custody: string, share: string, quantity: stri
         brokerIconUrl: null,
         custody,
         ownershipShare: share,
+        accessRole,
         quantity,
         copiedQuantity: quantity,
         stamp: {copyId: 'copy:1', provenanceId: 'source:portfolio-ledger'},
@@ -52,7 +54,7 @@ function position(broker: number, custody: string, share: string, quantity: stri
 
 function mount(): PlannerDraft {
     const draft = new PlannerDraft('EUR', 'proportional');
-    draft.data.positions.push(position(7, '1234', '1', '1234'), position(8, '12', '0.5', '6'), {...position(9, '3', '1', '3'), assetKey: 'asset:99'});
+    draft.data.positions.push(position(7, '1234', '1', '1234'), position(8, '12', '0.5', '6', 'EDITOR'), {...position(9, '3', '1', '3'), assetKey: 'asset:99'});
     render(PositionsTable, {draft, assetKey: ASSET, assetLabel: 'Apple'});
     flushSync();
     return draft;
@@ -102,6 +104,31 @@ describe('PositionsTable', () => {
         await tick();
         expect(table.textContent).toContain(shown);
         expect((within(cell(7)).getByTestId('pac-planner-position-quantity') as HTMLInputElement).value).toBe('1234');
+    });
+
+    it("a shared account shows the user's share as the broker page's badge: its percentage and its role; a whole one shows none", () => {
+        mount();
+        // R1-D of project 67 (the developer, 20/11: «la quota del conto come badge con la corona e la percentuale,
+        // similmente a come avviene in broker detail»).
+        const badges = screen.getAllByTestId('pac-planner-position-quota');
+        expect(badges.map((badge) => badge.getAttribute('data-position-key'))).toEqual(['holding:asset:11:broker:8']);
+        expect(badges[0].getAttribute('data-role')).toBe('EDITOR');
+        expect(badges[0].textContent).toContain(formatPlannerPercentUnits(fractionToPercent('0.5')));
+        expect(badges[0].querySelector('svg')).not.toBeNull();
+        // The custody column says the units only: the share is the badge's.
+        const custody = screen.getAllByText(formatPlannerQuantity('12'), {exact: false});
+        expect(custody.every((node) => !node.textContent?.includes(formatPlannerPercentUnits(fractionToPercent('0.5'))))).toBe(true);
+    });
+
+    it('a share with no role shows its percentage alone, never a crown', () => {
+        const draft = new PlannerDraft('EUR', 'proportional');
+        draft.data.positions.push(position(8, '12', '0.5', '6', null));
+        render(PositionsTable, {draft, assetKey: ASSET, assetLabel: 'Apple'});
+        flushSync();
+        const badge = screen.getByTestId('pac-planner-position-quota');
+        expect(badge.hasAttribute('data-role')).toBe(false);
+        expect(badge.textContent).toContain(formatPlannerPercentUnits(fractionToPercent('0.5')));
+        expect(badge.querySelector('svg')).toBeNull();
     });
 
     it('nothing is shown for an Asset without positions', () => {

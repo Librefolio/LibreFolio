@@ -305,6 +305,7 @@
     "rebalancer-planner-position-quantity": 1,
     "rebalancer-planner-position-quantity-cell": 1,
     "rebalancer-planner-position-quantity-masked": 1,
+    "rebalancer-planner-position-quota": 1,
     "rebalancer-planner-positions": 2,
     "rebalancer-planner-profile-save": 1,
     "rebalancer-planner-profile-save-change": 1,
