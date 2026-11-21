@@ -33,6 +33,10 @@ From the section "W5-7 STEP 6" on, the subject is the plugin ``broker_credit_agr
 contract, ``combine`` (the combined table), ``parse`` (the combined file), the standalone account rows (parity with 1.5.0, as
 literals) and the end-to-end proofs (``apply_history`` and ``compute_gap_fix`` on a private in-memory database).
 
+The last section, "LINKED CHARGES" (project 66, wave P2b), pins which FEE/TAX names which parent: the withholding of a coupon
+its coupon, «SPESE STACCO CEDOLA DEL <date> … TIT: <ISIN>» the one coupon of that ISIN and date, «ADDEBITO CAPITAL GAIN …
+DATA:<date>» the one sale or redemption of that day; anything else stays free.
+
 Every file is synthetic: written under ``tmp_path_factory`` by the builders of this module, with invented names, ISINs,
 dossier numbers and amounts. No server, no database, no network, no clock: pure.
 
@@ -98,6 +102,16 @@ from backend.app.services.brim_providers.broker_credit_agricole._rows import (
 )
 from backend.app.services.brim_providers.broker_credit_agricole._rows import (
     Testata as Header,
+)
+from backend.test_scripts.brim_charge_links import (
+    RowKey,
+    assert_charge_link_structure,
+    assert_expected_charge_links,
+    assert_sample_reimport_adds_nothing,
+    changes_besides_links,
+    load_previous_snapshot,
+    sample_input,
+    version_tuple,
 )
 from backend.test_scripts.brim_samples import SampleDir
 
@@ -2595,11 +2609,11 @@ def truths(records: Sequence[Dict[str, str]], kind: str) -> List[Dict[str, str]]
 
 
 class TestPluginContract:
-    """The plugin is a report-set plugin: 2.0.0, history tag, ``import`` policy, the two required roles, sample sets."""
+    """The plugin is a report-set plugin: 2.1.0, history tag, ``import`` policy, the two required roles, sample sets."""
 
     def test_version_history_tag_and_policy(self):
         plugin = ca_plugin()
-        assert plugin.plugin_version == "2.0.0"
+        assert plugin.plugin_version == "2.1.0"  # 2.0.0 the report set; 2.1.0 project 66 P2b, the linked charges
         assert plugin.history_tag == "credit_agricole"
         assert plugin.pre_checkpoint_policy == "import"  # every row is imported, nothing is summarised before a checkpoint
         assert plugin.is_report_set_plugin is True
@@ -3320,3 +3334,399 @@ class TestApplyHistoryKeepsTheOpening:
     @pytest.mark.asyncio
     async def test_an_opening_five_days_before_the_first_row_is_kept(self):
         assert await self._kept("2026-02-05") == [d("2026-01-31")]
+
+
+# =============================================================================
+# LINKED CHARGES (project 66, wave P2b) — a coupon's withholding, its detach fee, the capital gain of a sale
+# =============================================================================
+#
+# P2 contract §2 and §5 (21/11/2026); decisions of 16/11, «Plugin per plugin» and «Crédit Agricole, sugli estratti veri». A
+# charge is linked only when it has exactly ONE candidate parent, else it stays free:
+#
+# - the withholding a coupon spells out (``RITENUTA: …``) is booked from that coupon's row: it names that coupon (the pair
+#   arm, ``_booking.book_movement``, and the account arm, ``_booking.book_account_row``);
+# - «SPESE STACCO CEDOLA DEL <date> … TIT: <ISIN>» names the one coupon (INTEREST) of that ISIN dated <date>;
+# - «ADDEBITO CAPITAL GAIN … DATA:<date>» names the one sale or redemption (SELL) of <date>; with no asset of its own it
+#   takes the parent's (``_create_linked_charge``);
+# - free: the commissions and accrued interest inside a trade (the file gives the total only: no charge is emitted, the
+#   trade stays as it is), the account's own charges (stamp duty, management fee, canone), a match with zero or two candidates.
+#
+# Every date agrees in the invented rows: a coupon's operation date, its ``DATA :`` and the date its detach fee names. Which of
+# them a coupon is matched on when they differ is not pinned here.
+#
+# RED before the code: the expected links of the samples and of the invented sets, and the version. Green before and after
+# (guards): the structure, the snapshot comparison (taken at HEAD 595738c0c, plugin 2.0.0, on the sets as the tests combine
+# them), the reimport over the previous version's rows, and the «free» cases — those pass today because nothing links; each
+# has a twin one row away that must link.
+
+CHARGE_CAUSALE = "COMMISS./SPESE SU OPERAZ. TITOLI"
+OTHER_BOND_ACC, ISIN_C = "BTP OTHER 1/9/2030", "IT0000000003"
+THIRD_BOND_ACC, ISIN_D = "BTP THIRD 1/3/2031", "IT0000000004"
+COUPON_DAY, SALE_DAY = "2026-06-01", "2026-07-20"
+
+
+def ca_key(kind: str, day: str, amount: str, identifier: Optional[str] = None) -> RowKey:
+    """A row of a parse output named by what it is (``RowKey``), in EUR: the identifier is the ISIN the plugin extracted,
+    None for no asset or a title known by name only."""
+    return (kind, day, amount, "EUR", identifier)
+
+
+def coupon_on(op: str, amount: str, *, name: str = BOND_A_ACC, isin: str = ISIN_A, ritenuta: str = "31,25") -> Acc:
+    """An account coupon whose own ``DATA :`` is its operation date (``coupon_acc`` always writes 01/06/2026)."""
+    desc = f"CEDOLA:{name} {isin} DOS:00000/00000000 NOMINALE: 40.000,00 TASSO: 1,25 ALIQ: 12,50 RITENUTA: {ritenuta} DATA : {dmy(op)} N.MOVIM: 1"
+    return Acc(op, INCOME_CAUSALE, desc, amount)
+
+
+def detach_fee_acc(op: str, coupon_day: str, *, isin: str = ISIN_A, amount: str = "-1.50") -> Acc:
+    """«SPESE STACCO CEDOLA DEL <coupon_day> … TIT: <isin>», booked on ``op``."""
+    return Acc(op, CHARGE_CAUSALE, f"SPESE STACCO CEDOLA DEL {dmy(coupon_day)} DOSSIER: 00000/00000000 TIT: {isin}", amount)
+
+
+def capital_gain_acc(op: str, sale_day: str, *, amount: str = "-21.42") -> Acc:
+    """«ADDEBITO CAPITAL GAIN … DATA:<sale_day>», booked on ``op``."""
+    return Acc(op, CHARGE_CAUSALE, f"ADDEBITO CAPITAL GAIN (D.LGS 461/97) 0000000000000 DATA:{dmy(sale_day)}", amount)
+
+
+def sell_acc(op: str, amount: str, *, name: str = OTHER_BOND_ACC) -> Acc:
+    """A sale on the account; the plugin reads its quantity from a coupon of the same title (``coupon_on`` with ``name``)."""
+    return Acc(op, TRADE_CAUSALE, f"NOTA INF. VEND. TIT:{name} DOSS:00000/00000000", amount)
+
+
+def linked_parse(work: Work, accs: Sequence[Acc], secs: Sequence[Sec] = ()) -> BRIMParseOutput:
+    """An account export (and a securities export when ``secs``) combined by the plugin, written by the core, parsed."""
+    members: Dict[str, List[Path]] = {ROLE_ACCOUNT: [work.acc(accs)]}
+    if secs:
+        members[ROLE_SECURITIES] = [work.sec(secs)]
+    plugin = ca_plugin()
+    path = work.folder / f"combined-{work.count}.csv"
+    write_combined_csv(path, plugin.combine(members))
+    return plugin.parse(path, broker_id=BROKER_ID)
+
+
+def parse_sample_set(sample: str, folder: Path) -> BRIMParseOutput:
+    """A sample or a sample set (``a.csv+b.xlsx``) combined and parsed as the snapshot was (``sample_input``)."""
+    plugin = ca_plugin()
+    return plugin.parse(sample_input(plugin, sample, folder), broker_id=BROKER_ID)
+
+
+def the_row(out: BRIMParseOutput, kind: str, day: str, amount: str) -> TXCreateItem:
+    """The one row of ``kind`` on ``day`` for ``amount`` (presence barrier: exactly one)."""
+    found = [tx for tx in out.transactions if tx.type.value == kind and tx.date.isoformat() == day and tx.cash is not None and tx.cash.amount == Decimal(amount)]
+    assert len(found) == 1, f"presence barrier: {len(found)} {kind} rows on {day} for {amount}; output {[(tx.type.value, tx.date.isoformat(), tx.cash.amount if tx.cash else None) for tx in out.transactions]}"
+    return found[0]
+
+
+# The samples. The conti exports: one coupon of IT0000000001 on 01/06/2026 with its withholding and its detach fee; the
+# capital gain names 21/05/2026, a day with a purchase and no sale (zero candidates); stamp duty, management fee, canone
+# are the account's own.
+_CONTI_LINKED = [
+    (ca_key("TAX", "2026-06-01", "-31.25", ISIN_A), ca_key("INTEREST", "2026-06-01", "250.00", ISIN_A)),
+    (ca_key("FEE", "2026-06-01", "-1.50", ISIN_A), ca_key("INTEREST", "2026-06-01", "250.00", ISIN_A)),
+]
+_CONTI_FREE = [ca_key("TAX", "2026-06-30", "-87.50"), ca_key("FEE", "2026-06-30", "-10.00"), ca_key("FEE", "2026-06-30", "-4.00"), ca_key("TAX", "2026-07-14", "-21.42")]
+
+#: Per sample or sample set: (linked (charge, parent), free charges). Every FEE/TAX of the output is in one of the two.
+CA_LINK_EXPECTATIONS: Dict[str, Tuple[List[Tuple[RowKey, RowKey]], List[RowKey]]] = {
+    "credit_agricole-securities.csv+credit_agricole-account.xlsx": (
+        [
+            (ca_key("TAX", "2026-03-01", "-31.25", ISIN_A), ca_key("INTEREST", "2026-03-01", "250.00", ISIN_A)),  # a pair: the securities coupon and the account row
+            (ca_key("TAX", "2026-03-22", "-14.29", ISIN_B), ca_key("INTEREST", "2026-03-22", "114.29", ISIN_B)),  # the account coupon alone
+        ],
+        [],
+    ),
+    "credit_agricole-gap-securities.xlsx+credit_agricole-gap-account-1.xlsx+credit_agricole-gap-account-2.xlsx": (
+        [
+            (ca_key("TAX", "2026-05-12", "-31.25", ISIN_A), ca_key("INTEREST", "2026-05-12", "250.00", ISIN_A)),
+            (ca_key("TAX", "2026-08-12", "-31.25", ISIN_A), ca_key("INTEREST", "2026-08-12", "250.00", ISIN_A)),
+        ],
+        [],  # the coupon of 10/07/2026 is in the hole: booked from the securities row, with no withholding to say
+    ),
+    "credit_agricole-conti.csv": (_CONTI_LINKED, _CONTI_FREE),
+    "credit_agricole-conti.xlsx": (_CONTI_LINKED, _CONTI_FREE),
+    "credit_agricole-conti-contract.csv": (_CONTI_LINKED, _CONTI_FREE),
+    "credit_agricole-securities-contract.csv+credit_agricole-conti-contract.csv": (_CONTI_LINKED, _CONTI_FREE),  # the import E2E's set
+    "credit_agricole-export.csv": ([], []),  # a securities export alone: its 36 transfers, no charge
+    "credit_agricole-export.xlsx": ([], []),
+}
+CA_LINK_SAMPLES = sorted(CA_LINK_EXPECTATIONS)
+#: The ids name the set: pytest replaces a long one by ``sample<n>``.
+CA_LINK_PARAMS = [pytest.param(sample, id=sample) for sample in CA_LINK_SAMPLES]
+
+#: The day a capital gain is booked on, weeks after the sale it names; an inflow the plugin cannot resolve (a fund
+#: redemption paid by transfer with no securities row: a DEPOSIT); the reason codes of the todos these tests read.
+GAIN_DAY, UNRESOLVED_INFLOW = "2026-08-14", "250.00"
+UNALLOCATED, UNRESOLVED = "ca_account_charge_unallocated", "ca_account_trade_unresolved"
+
+#: The three SELL kinds a capital gain names, each booked alone on SALE_DAY: (account rows, securities rows, the SELL's amount).
+GAIN_SALES = [
+    pytest.param([coupon_on(COUPON_DAY, "200.00", name=OTHER_BOND_ACC, isin=ISIN_C, ritenuta="25,00"), sell_acc(SALE_DAY, "40180.00")], [], "40180.00", id="sale"),
+    pytest.param([matured_acc(SALE_DAY, "40000.00", name="BTP LONE 1/1/2026")], [], "40000.00", id="maturity"),
+    pytest.param([redeem_acc(SALE_DAY, "300.00")], [redeem_sec(SALE_DAY, "300.00")], "300.00", id="fund-redemption"),
+]
+
+
+def todos_on(out: BRIMParseOutput, tx: TXCreateItem, reason_code: str) -> List[Any]:
+    """The field todos of ``reason_code`` on ``tx`` (its index found by identity, not by equality)."""
+    index = next(i for i, row in enumerate(out.transactions) if row is tx)
+    return [todo for todo in out.field_todos if todo.reason_code == reason_code and todo.tx_index == index]
+
+
+def todo_keys(out: BRIMParseOutput) -> List[Tuple[int, str]]:
+    """Every field todo as (row index, reason), sorted: what two parses of the same rows can be compared on."""
+    return sorted((todo.tx_index, todo.reason_code) for todo in out.field_todos)
+
+
+class TestLinkedCharges:
+    """Project 66, wave P2b (P2 contract §2 and §5): the withholding of a coupon, its detach fee and the capital gain of a
+    sale name their one parent; with zero or two candidates the charge stays free."""
+
+    # -- the samples ---------------------------------------------------------------------------------------------------
+
+    @pytest.mark.parametrize("sample", CA_LINK_PARAMS)
+    def test_each_charge_names_its_one_parent(self, sample: str, tmp_path: Path):
+        """RED before P2b (the samples with charges): the expected links, exhaustive (every FEE/TAX is linked or declared free)."""
+        linked, free = CA_LINK_EXPECTATIONS[sample]
+        out = parse_sample_set(sample, tmp_path)
+
+        assert out.validation_issues == [], f"{sample}: {out.validation_issues}"
+        assert_expected_charge_links(out, f"{PLUGIN_CODE} [{sample}]", linked=linked, free=free)
+
+    @pytest.mark.parametrize("sample", CA_LINK_PARAMS)
+    def test_the_links_are_well_formed(self, sample: str, tmp_path: Path):
+        assert_charge_link_structure(parse_sample_set(sample, tmp_path), f"{PLUGIN_CODE} [{sample}]")
+
+    @pytest.mark.parametrize("sample", CA_LINK_PARAMS)
+    def test_only_the_names_change_from_the_previous_version(self, sample: str, tmp_path: Path):
+        """Guard: every row equals the snapshot's, in order, but for ``ref``/``parent_ref``: amounts (the trades with their
+        commissions inside too), assets, types unchanged."""
+        previous = load_previous_snapshot(PLUGIN_CODE, sample, BROKER_ID)
+        out = parse_sample_set(sample, tmp_path)
+
+        problems = changes_besides_links(previous.transactions, out.transactions)
+        assert not problems, f"{sample}: the output changed besides its links (snapshot HEAD {previous.source_head}):\n  " + "\n  ".join(problems)
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("sample", CA_LINK_PARAMS)
+    async def test_reimport_over_the_previous_version_adds_nothing(self, sample: str):
+        """Guard (P2 contract §2.1): the set, reimported over the rows the previous version saved (without links), adds no row."""
+        out = await assert_sample_reimport_adds_nothing(ca_plugin(), sample)
+
+        assert out.transactions, f"{sample}: the criterion ran on an empty output"
+
+    def test_the_version_is_above_the_previous_one(self):
+        """RED before P2b: the plugin goes up a version (P2 contract §1)."""
+        for sample in CA_LINK_SAMPLES:
+            previous = load_previous_snapshot(PLUGIN_CODE, sample, BROKER_ID)
+            assert version_tuple(ca_plugin().plugin_version) > version_tuple(previous.plugin_version), f"{PLUGIN_CODE} {ca_plugin().plugin_version}: not above the snapshot's {previous.plugin_version} ({sample})"
+
+    # -- «SPESE STACCO CEDOLA DEL <date> … TIT: <ISIN>»: the one coupon of that ISIN and date (invented rows) -------------
+
+    def test_a_detach_fee_above_its_coupon_names_it_and_keeps_todays_order(self, work: Work):
+        """RED before P2b. The fee is written above its coupon on the same day: the combined file keeps the account's row
+        order within a day, so the fee is booked first. It names the coupon all the same, and stays before it."""
+        out = linked_parse(work, [detach_fee_acc(COUPON_DAY, COUPON_DAY), coupon_on(COUPON_DAY, "218.75")])
+        fee, coupon = the_row(out, "FEE", COUPON_DAY, "-1.50"), the_row(out, "INTEREST", COUPON_DAY, "250.00")
+        assert out.transactions.index(fee) < out.transactions.index(coupon), "presence barrier: the fee is read before its coupon"
+
+        interest = ca_key("INTEREST", COUPON_DAY, "250.00", ISIN_A)
+        assert_expected_charge_links(out, "fee above its coupon", linked=[(ca_key("FEE", COUPON_DAY, "-1.50", ISIN_A), interest), (ca_key("TAX", COUPON_DAY, "-31.25", ISIN_A), interest)], free=[])
+
+    def test_a_detach_fee_booked_days_later_names_the_coupon_of_its_date(self, work: Work):
+        """RED before P2b. The fee is booked on 03/06 and names the coupon of 01/06: the date is the one written after ``DEL``."""
+        out = linked_parse(work, [coupon_on(COUPON_DAY, "218.75"), detach_fee_acc("2026-06-03", COUPON_DAY)])
+
+        interest = ca_key("INTEREST", COUPON_DAY, "250.00", ISIN_A)
+        assert_expected_charge_links(out, "fee booked later", linked=[(ca_key("FEE", "2026-06-03", "-1.50", ISIN_A), interest), (ca_key("TAX", COUPON_DAY, "-31.25", ISIN_A), interest)], free=[])
+
+    def test_a_detach_fee_names_a_paired_coupon(self, work: Work):
+        """RED before P2b. The coupon is a pair (the securities row and the account row, one INTEREST whose title the pair
+        gives its ISIN): the fee of the account names it, as does the withholding (the pair arm)."""
+        out = linked_parse(work, [coupon_on(COUPON_DAY, "218.75"), detach_fee_acc(COUPON_DAY, COUPON_DAY)], secs=[coupon_sec(COUPON_DAY, "218.75")])
+        coupon = the_row(out, "INTEREST", COUPON_DAY, "250.00")
+        assert coupon.description == f"CEDOLA: {BOND_A}", f"presence barrier: the coupon is booked from the pair (the securities name), got {coupon.description!r}"
+
+        interest = ca_key("INTEREST", COUPON_DAY, "250.00", ISIN_A)
+        assert_expected_charge_links(out, "paired coupon", linked=[(ca_key("FEE", COUPON_DAY, "-1.50", ISIN_A), interest), (ca_key("TAX", COUPON_DAY, "-31.25", ISIN_A), interest)], free=[])
+
+    def test_a_detach_fee_names_the_coupon_not_the_maturity_premium_of_its_day(self, work: Work):
+        """RED before P2b. The last coupon and the maturity on one day: the maturity books a SELL at par and its premium as an
+        INTEREST of the same title. The premium is no coupon: the fee names the coupon."""
+        out = linked_parse(work, [coupon_on(COUPON_DAY, "218.75"), matured_acc(COUPON_DAY, "40500.00"), detach_fee_acc(COUPON_DAY, COUPON_DAY)])
+        premium, coupon = the_row(out, "INTEREST", COUPON_DAY, "500.00"), the_row(out, "INTEREST", COUPON_DAY, "250.00")
+        # presence barrier: the premium is a second INTEREST of the coupon's security and day, so only its exclusion lets the fee link
+        assert premium.asset_id is not None and premium.asset_id == coupon.asset_id, f"the premium should share the coupon's security: {premium.asset_id} vs {coupon.asset_id}"
+        assert "maturity_premium" in (premium.tags or []), f"presence barrier: the premium is tagged as such, got {premium.tags}"
+
+        interest = ca_key("INTEREST", COUPON_DAY, "250.00", ISIN_A)
+        assert_expected_charge_links(out, "coupon and maturity", linked=[(ca_key("FEE", COUPON_DAY, "-1.50", ISIN_A), interest), (ca_key("TAX", COUPON_DAY, "-31.25", ISIN_A), interest)], free=[])
+
+    def test_a_detach_fee_with_two_coupons_of_its_isin_and_date_stays_free(self, work: Work):
+        """Guard for the fee (green today; the one-coupon twins link). Two coupons of the same ISIN on the same day: two
+        candidates, the fee stays free; each withholding still names its own coupon (RED before P2b)."""
+        out = linked_parse(work, [coupon_on(COUPON_DAY, "218.75"), coupon_on(COUPON_DAY, "100.00", ritenuta="14,29"), detach_fee_acc(COUPON_DAY, COUPON_DAY)])
+
+        linked = [
+            (ca_key("TAX", COUPON_DAY, "-31.25", ISIN_A), ca_key("INTEREST", COUPON_DAY, "250.00", ISIN_A)),
+            (ca_key("TAX", COUPON_DAY, "-14.29", ISIN_A), ca_key("INTEREST", COUPON_DAY, "114.29", ISIN_A)),
+        ]
+        assert_expected_charge_links(out, "two coupons", linked=linked, free=[ca_key("FEE", COUPON_DAY, "-1.50", ISIN_A)])
+
+    @pytest.mark.parametrize(
+        "coupon",
+        [
+            pytest.param(coupon_on("2026-06-02", "218.75"), id="another-day"),
+            pytest.param(coupon_on(COUPON_DAY, "218.75", name=BOND_B_ACC, isin=ISIN_B), id="another-isin"),
+        ],
+    )
+    def test_a_detach_fee_without_a_coupon_of_its_isin_and_date_stays_free(self, coupon: Acc, work: Work):
+        """Guard (green today; the twin with both equal links). One coupon that differs from the fee in its day or its ISIN:
+        zero candidates."""
+        out = linked_parse(work, [coupon, detach_fee_acc(COUPON_DAY, COUPON_DAY)])
+        the_row(out, "INTEREST", coupon.op, "250.00")  # presence barrier: the near-miss coupon is in the output
+        fee = the_row(out, "FEE", COUPON_DAY, "-1.50")
+
+        assert fee.parent_ref is None, f"zero candidates: the fee names {fee.parent_ref!r}"
+
+    # -- «ADDEBITO CAPITAL GAIN … DATA:<date>»: the one sale or redemption of that day (invented rows) --------------------
+
+    @pytest.mark.parametrize(
+        ("accs", "secs", "sell_amount"),
+        [
+            pytest.param([coupon_on(COUPON_DAY, "200.00", name=OTHER_BOND_ACC, isin=ISIN_C, ritenuta="25,00"), sell_acc(SALE_DAY, "40180.00")], [], "40180.00", id="sale"),
+            pytest.param([matured_acc(SALE_DAY, "40000.00", name="BTP LONE 1/1/2026")], [], "40000.00", id="maturity"),
+            pytest.param([redeem_acc(SALE_DAY, "300.00")], [redeem_sec(SALE_DAY, "300.00")], "300.00", id="fund-redemption"),
+        ],
+    )
+    def test_a_capital_gain_names_the_one_sale_of_its_date_and_takes_its_asset(self, accs: List[Acc], secs: List[Sec], sell_amount: str, work: Work):
+        """RED before P2b. One SELL on the date the charge names (a sale, a maturity, a fund redemption): the capital gain,
+        booked weeks later and with no title of its own, names it and takes its asset."""
+        out = linked_parse(work, [*accs, capital_gain_acc("2026-08-14", SALE_DAY)], secs=secs)
+        sale, gain = the_row(out, "SELL", SALE_DAY, sell_amount), the_row(out, "TAX", "2026-08-14", "-21.42")
+
+        assert sale.ref and gain.parent_ref == sale.ref, f"the capital gain should name the sale: parent_ref={gain.parent_ref!r}, the sale's ref={sale.ref!r}"
+        assert gain.asset_id == sale.asset_id, f"the capital gain takes the sale's asset: {gain.asset_id} vs {sale.asset_id}"
+        assert_charge_link_structure(out, "capital gain")
+
+    @pytest.mark.parametrize(
+        "accs",
+        [
+            pytest.param(
+                [
+                    coupon_on(COUPON_DAY, "200.00", name=OTHER_BOND_ACC, isin=ISIN_C, ritenuta="25,00"),
+                    coupon_on(COUPON_DAY, "150.00", name=THIRD_BOND_ACC, isin=ISIN_D, ritenuta="18,75"),
+                    sell_acc(SALE_DAY, "40180.00"),
+                    sell_acc(SALE_DAY, "39950.00", name=THIRD_BOND_ACC),
+                ],
+                id="two-sales",
+            ),
+            pytest.param(
+                [coupon_on(COUPON_DAY, "200.00", name=OTHER_BOND_ACC, isin=ISIN_C, ritenuta="25,00"), sell_acc(SALE_DAY, "40180.00"), matured_acc(SALE_DAY, "40000.00", name="BTP LONE 1/1/2026")],
+                id="a-sale-and-a-maturity",
+            ),
+        ],
+    )
+    def test_a_capital_gain_with_two_sales_of_its_date_stays_free(self, accs: List[Acc], work: Work):
+        """Guard (green today; the one-sale twins link). Two SELL rows on the date the charge names: the charge stays free,
+        with no asset (the field todo of a charge on no title stays the plugin's)."""
+        out = linked_parse(work, [*accs, capital_gain_acc("2026-08-14", SALE_DAY)])
+        sales = [tx for tx in out.transactions if tx.type.value == "SELL" and tx.date.isoformat() == SALE_DAY]
+        assert len(sales) == 2, f"presence barrier: two sales on {SALE_DAY}, got {[(tx.type.value, tx.date.isoformat()) for tx in out.transactions]}"
+
+        gain = the_row(out, "TAX", "2026-08-14", "-21.42")
+        assert (gain.parent_ref, gain.asset_id) == (None, None), f"two candidates: the capital gain names {gain.parent_ref!r}, asset {gain.asset_id}"
+
+    # -- the consultant's rulings of 21/11: an unresolved inflow competes, a linked gain loses its todo (invented rows) --
+
+    @pytest.mark.parametrize(("accs", "secs", "sell_amount"), GAIN_SALES)
+    @pytest.mark.parametrize(
+        ("deposit_day", "linked"),
+        [pytest.param(SALE_DAY, False, id="deposit-on-the-sale-day-stays-free"), pytest.param("2026-07-21", True, id="deposit-next-day-links")],
+    )
+    def test_an_unresolved_deposit_of_its_date_competes_with_the_sale(self, accs: List[Acc], secs: List[Sec], sell_amount: str, deposit_day: str, linked: bool, work: Work):
+        """Ruling 1 (21/11). An inflow the plugin could not resolve (an unresolved DEPOSIT: a fund redemption paid by
+        transfer) is never a parent, but on the date the capital gain names it is a second candidate: with one SELL beside
+        it the gain stays free and keeps its unallocated todo. Twin: the same DEPOSIT one day later, and the gain links."""
+        out = linked_parse(work, [*accs, redeem_acc(deposit_day, UNRESOLVED_INFLOW), capital_gain_acc(GAIN_DAY, SALE_DAY)], secs=secs)
+        sale, deposit = the_row(out, "SELL", SALE_DAY, sell_amount), the_row(out, "DEPOSIT", deposit_day, UNRESOLVED_INFLOW)
+        assert len(todos_on(out, deposit, UNRESOLVED)) == 1, f"presence barrier: the DEPOSIT is an inflow the plugin could not resolve, todos {todo_keys(out)}"
+        gain = the_row(out, "TAX", GAIN_DAY, "-21.42")
+
+        assert deposit.ref is None, f"an unresolved DEPOSIT is never a parent: it carries ref {deposit.ref!r}"
+        if linked:
+            assert sale.ref and gain.parent_ref == sale.ref, f"one SELL on its date: the gain should name it, parent_ref={gain.parent_ref!r}, the sale's ref={sale.ref!r}"
+            assert gain.asset_id is not None and gain.asset_id == sale.asset_id, f"the linked gain takes the sale's asset: {gain.asset_id} vs {sale.asset_id}"
+            assert [todo for todo in out.field_todos if todo.reason_code == UNALLOCATED] == [], f"a linked gain has no unallocated todo: {todo_keys(out)}"
+        else:
+            assert (gain.parent_ref, gain.asset_id) == (None, None), f"two candidates: the gain names {gain.parent_ref!r}, asset {gain.asset_id}"
+            assert len(todos_on(out, gain, UNALLOCATED)) == 1, f"a free gain keeps its unallocated todo: {todo_keys(out)}"
+        assert_charge_link_structure(out, "capital gain beside an unresolved deposit")
+
+    @pytest.mark.parametrize(
+        ("secs", "parent_kind", "linked"),
+        [
+            pytest.param([], "DEPOSIT", False, id="unresolved-deposit-stays-free"),
+            pytest.param([redeem_sec(SALE_DAY, "300.00")], "SELL", True, id="resolved-redemption-links"),
+        ],
+    )
+    def test_an_unresolved_deposit_alone_is_no_parent(self, secs: List[Sec], parent_kind: str, linked: bool, work: Work):
+        """Ruling 1 (21/11). The only inflow on the date the capital gain names is an unresolved DEPOSIT: no parent, the
+        gain stays free with its unallocated todo. Twin: the same account row resolved by its securities row is a SELL (a
+        fund redemption), and the gain links."""
+        out = linked_parse(work, [redeem_acc(SALE_DAY, "300.00"), capital_gain_acc(GAIN_DAY, SALE_DAY)], secs=secs)
+        inflow, gain = the_row(out, parent_kind, SALE_DAY, "300.00"), the_row(out, "TAX", GAIN_DAY, "-21.42")
+        assert len(todos_on(out, inflow, UNRESOLVED)) == (0 if linked else 1), f"presence barrier: the inflow is resolved only in the twin, todos {todo_keys(out)}"
+
+        if linked:
+            assert inflow.ref and gain.parent_ref == inflow.ref, f"the gain should name the redemption: parent_ref={gain.parent_ref!r}, its ref={inflow.ref!r}"
+            assert gain.asset_id is not None and gain.asset_id == inflow.asset_id, f"the linked gain takes the redemption's asset: {gain.asset_id} vs {inflow.asset_id}"
+            assert [todo for todo in out.field_todos if todo.reason_code == UNALLOCATED] == [], f"a linked gain has no unallocated todo: {todo_keys(out)}"
+        else:
+            assert inflow.ref is None, f"an unresolved DEPOSIT is never a parent: it carries ref {inflow.ref!r}"
+            assert (gain.parent_ref, gain.asset_id) == (None, None), f"no SELL on its date: the gain names {gain.parent_ref!r}, asset {gain.asset_id}"
+            assert len(todos_on(out, gain, UNALLOCATED)) == 1, f"a free gain keeps its unallocated todo: {todo_keys(out)}"
+
+    @pytest.mark.parametrize(("accs", "secs", "sell_amount"), GAIN_SALES)
+    def test_a_linked_capital_gain_drops_only_its_unallocated_todo(self, accs: List[Acc], secs: List[Sec], sell_amount: str, work: Work):
+        """Ruling 2 (21/11). A capital gain that links takes the sale's asset, so its ``ca_account_charge_unallocated`` todo
+        no longer fires; every other todo stays, on the same row. Twin: the same rows with the gain naming a day without a
+        sale (zero candidates): free, the todo on the gain, and nothing else differs."""
+        out = linked_parse(work, [*accs, capital_gain_acc(GAIN_DAY, SALE_DAY)], secs=secs)
+        free = linked_parse(work, [*accs, capital_gain_acc(GAIN_DAY, "2026-07-19")], secs=secs)
+        sale, gain = the_row(out, "SELL", SALE_DAY, sell_amount), the_row(out, "TAX", GAIN_DAY, "-21.42")
+        free_gain = the_row(free, "TAX", GAIN_DAY, "-21.42")
+        # presence barrier: the twin is free and carries the todo the linked parse must drop
+        assert (free_gain.parent_ref, free_gain.asset_id) == (None, None), f"the twin's gain names {free_gain.parent_ref!r}, asset {free_gain.asset_id}"
+        assert len(todos_on(free, free_gain, UNALLOCATED)) == 1, f"presence barrier: the free twin's gain has its unallocated todo, todos {todo_keys(free)}"
+
+        assert sale.ref and gain.parent_ref == sale.ref, f"the gain should name the sale: parent_ref={gain.parent_ref!r}, the sale's ref={sale.ref!r}"
+        assert gain.asset_id is not None and gain.asset_id == sale.asset_id, f"the linked gain takes the sale's asset: {gain.asset_id} vs {sale.asset_id}"
+        assert [todo for todo in out.field_todos if todo.reason_code == UNALLOCATED] == [], f"a linked gain has no unallocated todo: {todo_keys(out)}"
+        gain_index = next(i for i, row in enumerate(free.transactions) if row is free_gain)
+        assert todo_keys(free) == sorted([*todo_keys(out), (gain_index, UNALLOCATED)]), f"only the gain's todo differs: linked {todo_keys(out)}, free {todo_keys(free)}"
+
+    @pytest.mark.parametrize(
+        ("inflow", "inflow_amount", "unresolved", "linked"),
+        [
+            pytest.param(Acc(SALE_DAY, SCT_CAUSALE, SALARY_TRANSFER_DESC, "250.00"), "250.00", False, True, id="incoming-bank-transfer-links"),
+            pytest.param(sell_acc(SALE_DAY, "9950.00", name="BTP UNKNOWN 1/1/2032"), "9950.00", True, False, id="unresolved-trade-sale-stays-free"),
+        ],
+    )
+    def test_only_an_unresolved_deposit_competes_with_the_sale(self, inflow: Acc, inflow_amount: str, unresolved: bool, linked: bool, work: Work):
+        """Ruling 1, its boundary (21/11). A competitor is a DEPOSIT booked as UNRESOLVED, with its
+        ``ca_account_trade_unresolved`` todo: an unresolved COMPRAVENDITA sale (a title the file cannot resolve) beside the
+        one SELL of the date leaves the capital gain free. A real incoming bank transfer, an ordinary DEPOSIT, is no
+        competitor: beside the same SELL the gain links. Each case is the other's twin, one inflow of the same day apart."""
+        accs = [coupon_on(COUPON_DAY, "200.00", name=OTHER_BOND_ACC, isin=ISIN_C, ritenuta="25,00"), sell_acc(SALE_DAY, "40180.00"), inflow]
+        out = linked_parse(work, [*accs, capital_gain_acc(GAIN_DAY, SALE_DAY)])
+        sale, deposit = the_row(out, "SELL", SALE_DAY, "40180.00"), the_row(out, "DEPOSIT", SALE_DAY, inflow_amount)
+        assert len(todos_on(out, deposit, UNRESOLVED)) == (1 if unresolved else 0), f"presence barrier: the DEPOSIT is unresolved only for the trade sale, todos {todo_keys(out)}"
+        gain = the_row(out, "TAX", GAIN_DAY, "-21.42")
+
+        assert deposit.ref is None, f"a DEPOSIT is never a parent: it carries ref {deposit.ref!r}"
+        if linked:
+            assert sale.ref and gain.parent_ref == sale.ref, f"a bank transfer is no competitor: the gain should name the sale, parent_ref={gain.parent_ref!r}, the sale's ref={sale.ref!r}"
+            assert gain.asset_id is not None and gain.asset_id == sale.asset_id, f"the linked gain takes the sale's asset: {gain.asset_id} vs {sale.asset_id}"
+            assert [todo for todo in out.field_todos if todo.reason_code == UNALLOCATED] == [], f"a linked gain has no unallocated todo: {todo_keys(out)}"
+        else:
+            assert (gain.parent_ref, gain.asset_id) == (None, None), f"an unresolved trade sale competes: the gain names {gain.parent_ref!r}, asset {gain.asset_id}"
+            assert len(todos_on(out, gain, UNALLOCATED)) == 1, f"a free gain keeps its unallocated todo: {todo_keys(out)}"

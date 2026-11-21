@@ -1,0 +1,708 @@
+{
+  "format": "lf-brim-previous-output/1",
+  "comment": "Output of the plugin BEFORE its project-66 lot changed it (P2 contract §2.1). Never re-take it after the code change.",
+  "plugin_code": "broker_credit_agricole",
+  "plugin_version": "2.0.0",
+  "source_head": "595738c0c",
+  "captured_on": "2026-11-21",
+  "members": [
+    {
+      "sample": "broker_credit_agricole/sample_reports/credit_agricole-securities-contract.csv",
+      "sample_sha256": "f41e1cd329f73361f5e479ca2053502683fd6f7fc68154dad9b1ad78ac3a397b"
+    },
+    {
+      "sample": "broker_credit_agricole/sample_reports/credit_agricole-conti-contract.csv",
+      "sample_sha256": "3f2ee00e95c58393555eb5c50104938f35f5430cace7b2c2dbbfee84f6df3365"
+    }
+  ],
+  "extracted_assets": {
+    "2147483647": {
+      "extracted_symbol": null,
+      "extracted_isin": null,
+      "extracted_name": "BTP CONTRACT TRASFERITO 1/3/2031 2%",
+      "notices": []
+    },
+    "2147483646": {
+      "extracted_symbol": null,
+      "extracted_isin": null,
+      "extracted_name": "BTP SAMPLE",
+      "notices": [
+        {
+          "kind": "maturity_suspected",
+          "reason": "Rilevata almeno una transazione di scadenza/rimborso (es. «TITOLI SCADUTI» o «FONDI: RIMBORSO»).",
+          "transaction_indexes": [
+            1
+          ]
+        }
+      ]
+    },
+    "2147483645": {
+      "extracted_symbol": null,
+      "extracted_isin": "IT0000000003",
+      "extracted_name": "BTP OTHER 1/9/2030",
+      "notices": []
+    },
+    "2147483644": {
+      "extracted_symbol": null,
+      "extracted_isin": "IT0000000001",
+      "extracted_name": "BTP SAMPLE 1/12/2026",
+      "notices": []
+    },
+    "2147483643": {
+      "extracted_symbol": null,
+      "extracted_isin": "IT0000000002",
+      "extracted_name": "AZIONE SAMPLE",
+      "notices": []
+    }
+  },
+  "transactions": [
+    {
+      "asset_id": 2147483647,
+      "type": "ADJUSTMENT",
+      "date": "2025-01-15",
+      "quantity": "10000",
+      "cash": null,
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "credit_agricole"
+      ],
+      "description": "[GIRO ALTRO DOSSIER — successione / transfer-in] BTP CONTRACT TRASFERITO 1/3/2031 2% (price 0.00, qty 10000)",
+      "cost_basis_override": {
+        "code": "EUR",
+        "amount": "0.00"
+      },
+      "cost_basis_mode": "manual",
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483646,
+      "type": "SELL",
+      "date": "2025-05-26",
+      "quantity": "-30105.000",
+      "cash": {
+        "code": "EUR",
+        "amount": "30105.00"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "credit_agricole",
+        "titoli_scaduti_o_estratti",
+        "account_maturity"
+      ],
+      "description": "[TITOLI SCADUTI O ESTRATTI — rimborso/scadenza da conto, titolo non identificato] BTP SAMPLE (source: RIMB.TIT. BTP SAMPLE (0000000 ) DOS:00000/00000000 26/05/25; venduto interamente a par 100, nominale derivato 30105.000)",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": null,
+      "type": "DEPOSIT",
+      "date": "2025-11-11",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "9984.47"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "credit_agricole",
+        "giroconto_bonifico"
+      ],
+      "description": "ORD:SAMPLE FUND SICAV DT.ORD:000000 DESCR.OPERAZIONESCT::RIMBORSI: : : :SU SAMPLE FUND SIC AV CL B<*> RIFERIMENTO SCT:XX-2025-11-10-000000001 IDENTIFICATIVO SCT:",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": null,
+      "type": "INTEREST",
+      "date": "2025-12-31",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "3.20"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "credit_agricole",
+        "interessi_competenze"
+      ],
+      "description": "INTERESSI CREDITORI LORDI ANNO 2025",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483645,
+      "type": "BUY",
+      "date": "2026-05-10",
+      "quantity": "20000.00",
+      "cash": {
+        "code": "EUR",
+        "amount": "-20412.33"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "credit_agricole",
+        "compravendita_titoli_fondi_opzioni",
+        "account_trade"
+      ],
+      "description": "NOTA INF. ACQ. TIT:BTP OTHER 1/9/2030 DOSS:00000/00000000",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483644,
+      "type": "BUY",
+      "date": "2026-05-21",
+      "quantity": "40000.00",
+      "cash": {
+        "code": "EUR",
+        "amount": "-40000.00"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "credit_agricole",
+        "compravendita_titoli_fondi_opzioni",
+        "account_trade"
+      ],
+      "description": "NOTA INF. ACQ. TIT:BTP SAMPLE DOSS:00000/00000000",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483644,
+      "type": "INTEREST",
+      "date": "2026-06-01",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "250.00"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "credit_agricole",
+        "cedole_dividendi_premi_estratti"
+      ],
+      "description": "CEDOLA:BTP SAMPLE 1/12/2026 IT0000000001 DOS:00000/00000000 NOMINALE: 40.000,00 TASSO: 1,25 ALIQ: 12,50 RITENUTA: 31,25 DATA : 01/06/2026 N.MOVIM: 1",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483644,
+      "type": "TAX",
+      "date": "2026-06-01",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "-31.25"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "credit_agricole",
+        "cedole_dividendi_premi_estratti",
+        "withholding_tax"
+      ],
+      "description": "[CEDOLE, DIVIDENDI, PREMI ESTRATTI — ritenuta] CEDOLA:BTP SAMPLE 1/12/2026 IT0000000001 DOS:00000/00000000 NOMINALE: 40.000,00 TASSO: 1,25 ALIQ: 12,50 RITENUTA: 31,25 DATA : 01/06/2026 N.MOVIM: 1",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483644,
+      "type": "FEE",
+      "date": "2026-06-01",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "-1.50"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "credit_agricole",
+        "commiss_spese_su_operaz_titoli"
+      ],
+      "description": "SPESE STACCO CEDOLA DEL 01/06/2026 DOSSIER: 00000/00000000 TIT: IT0000000001",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483645,
+      "type": "INTEREST",
+      "date": "2026-06-02",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "200.00"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "credit_agricole",
+        "cedole_dividendi_premi_estratti"
+      ],
+      "description": "CEDOLA:BTP OTHER 1/9/2030 IT0000000003 DOS:00000/00000000 NOMINALE: 20.000,00 TASSO: 2,00",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483643,
+      "type": "DIVIDEND",
+      "date": "2026-06-15",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "95.40"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "credit_agricole",
+        "cedole_dividendi_premi_estratti"
+      ],
+      "description": "DIVIDENDO AZIONE SAMPLE IT0000000002 DOS:00000/00000000",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": null,
+      "type": "INTEREST",
+      "date": "2026-06-16",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "12.00"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "credit_agricole",
+        "cedole_dividendi_premi_estratti"
+      ],
+      "description": "DIVIDENDO CONGUAGLIO SENZA TITOLO IDENTIFICATO",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": null,
+      "type": "WITHDRAWAL",
+      "date": "2026-06-20",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "-50.00"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "credit_agricole",
+        "cedole_dividendi_premi_estratti"
+      ],
+      "description": "STORNO CEDOLA ERRATA IT0000000001 DOS:00000/00000000",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": null,
+      "type": "TAX",
+      "date": "2026-06-30",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "-87.50"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "credit_agricole",
+        "commissioni_spese"
+      ],
+      "description": "Imposta bollo prodotti finanziari DATA 30/06/2026 RAPP.00000/0000000000000 TIT",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": null,
+      "type": "FEE",
+      "date": "2026-06-30",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "-10.00"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "credit_agricole",
+        "commissioni_spese"
+      ],
+      "description": "SPESE DI GESTIONE E AMMINISTRAZ. DOS:0000/00000000 DATA:30/06/2026",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": null,
+      "type": "FEE",
+      "date": "2026-06-30",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "-4.00"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "credit_agricole",
+        "interessi_competenze"
+      ],
+      "description": "CANONE MENSILE CONTO SMART 06/26",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": null,
+      "type": "DEPOSIT",
+      "date": "2026-07-01",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "2879.70"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "credit_agricole",
+        "accredito_emolumenti"
+      ],
+      "description": "PENSIONE INPS 0000 000 00000000 01 DEL 01.07.2026",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": null,
+      "type": "DEPOSIT",
+      "date": "2026-07-05",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "231.00"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "credit_agricole",
+        "giroconto_bonifico"
+      ],
+      "description": "ORD:MITTENTE SAMPLE DT.ORD:000000 DESCR.OPERAZIONE SCT:RIMBORSO",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": null,
+      "type": "DEPOSIT",
+      "date": "2026-07-10",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "5.00"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "credit_agricole",
+        "commissioni_spese"
+      ],
+      "description": "STORNO SPESE - RIMBORSO COMMISSIONI PROMO",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": null,
+      "type": "WITHDRAWAL",
+      "date": "2026-07-12",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "-33.00"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "credit_agricole",
+        "operazione_non_censita"
+      ],
+      "description": "MOVIMENTO DI PROVA MAI VISTO PRIMA",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": null,
+      "type": "TAX",
+      "date": "2026-07-14",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "-21.42"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "credit_agricole",
+        "commiss_spese_su_operaz_titoli"
+      ],
+      "description": "ADDEBITO CAPITAL GAIN (D.LGS 461/97) 0000000000000 DATA:21/05/2026",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": null,
+      "type": "WITHDRAWAL",
+      "date": "2026-07-15",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "-5000.00"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "credit_agricole",
+        "compravendita_titoli_fondi_opzioni"
+      ],
+      "description": "SOTTOSC SICAV ORD.:2026/000000001 SAMPLE GLOB EQ FUND",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": null,
+      "type": "DEPOSIT",
+      "date": "2026-07-18",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "412.00"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "credit_agricole",
+        "giroconto_bonifico"
+      ],
+      "description": "ORD:AGENZIA ENTRATE DT.ORD:000000 DESCR.OPERAZIONE SCT:RIMBORSO IRPEF 2025",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": null,
+      "type": "DEPOSIT",
+      "date": "2026-07-19",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "27.45"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "credit_agricole",
+        "giroconto_bonifico"
+      ],
+      "description": "ORD:UTILITY PROVIDER DT.ORD:000000 DESCR.OPERAZIONE SCT:RIMBORSO CONGUAGLIO",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483645,
+      "type": "SELL",
+      "date": "2026-07-20",
+      "quantity": "-20000.00",
+      "cash": {
+        "code": "EUR",
+        "amount": "20180.00"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "credit_agricole",
+        "compravendita_titoli_fondi_opzioni",
+        "account_trade"
+      ],
+      "description": "NOTA INF. VEND. TIT:BTP OTHER 1/9/2030 DOSS:00000/00000000",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": null,
+      "type": "WITHDRAWAL",
+      "date": "2026-07-28",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "-42.10"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "credit_agricole",
+        "pagamento_tramite_pos"
+      ],
+      "description": "POS CARTA 00000000 DEL 28/07/26 C/O SUPERMARKET - ROMA",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": null,
+      "type": "WITHDRAWAL",
+      "date": "2026-07-29",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "-500.00"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "credit_agricole",
+        "prelievo_sport_autom_altra_banca"
+      ],
+      "description": "PREL. CON CARTA 00000000 DEL 29/07/26 ALTRA BANCA -SPORT. ROMA",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": null,
+      "type": "WITHDRAWAL",
+      "date": "2026-07-30",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "-61.20"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "credit_agricole",
+        "pagamento_utenze"
+      ],
+      "description": "SDD A : UTILITY PROVIDER ADDEBITO SDD NUMERO 0000000001",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    }
+  ]
+}

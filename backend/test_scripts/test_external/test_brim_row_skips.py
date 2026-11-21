@@ -89,7 +89,7 @@ ROW_SKIPS_PENDING = frozenset(
 # The version each plugin bumps to (the output for the same file changes: its notices). DEGIRO and Scalable pin theirs in their own files.
 # W-B87 block 1 (rows with an economic effect imported): Revolut 1.3.0, Trading 212 1.2.0, eToro 1.3.0, Swissquote 1.2.0 (their output now holds the new transactions); eToro 1.4.0 (lot W5-2c: the overnight refund is an INTEREST).
 NEW_VERSIONS = {
-    "broker_credit_agricole": "2.0.0",  # W5-7: a report-set plugin (the securities and the account exports imported together)
+    "broker_credit_agricole": "2.1.0",  # W5-7: a report-set plugin (the securities and the account exports imported together); 2.1.0 project 66 P2b: its charges are linked
     "broker_directa": "1.1.0",
     "broker_revolut": "1.3.0",
     "broker_trading212": "1.2.0",
