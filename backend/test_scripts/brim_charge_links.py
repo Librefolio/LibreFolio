@@ -30,6 +30,13 @@ It refuses an output that already carries ``ref``/``parent_ref`` (``--allow-link
 the lot, generic_csv), and it never replaces a snapshot taken at another plugin version (``--replace`` only re-takes
 one at the same version). Never run it after the code change of the same wave.
 
+**A report-set plugin** (``is_report_set_plugin``, Crédit Agricole) never parses one of its exports alone: a sample is
+then a *set* written ``a.csv+b.xlsx`` (one member alone is a set of one), its members' roles read by ``detect_role``,
+combined by the plugin and written by the core (``write_combined_csv``) as the set API does, and the combined file is
+parsed (wave P2b). The snapshot is ``<plugin_code>/<stem a>+<stem b>.json`` and lists each member with its sha256::
+
+    … capture --plugin broker_credit_agricole --head <short HEAD> credit_agricole-securities.csv+credit_agricole-account.xlsx
+
 Not a test module: no ``test_`` prefix, nothing collected here.
 """
 
@@ -38,6 +45,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import tempfile
 import uuid
 from collections import Counter
 from contextlib import asynccontextmanager
@@ -56,6 +64,7 @@ from backend.app.schemas.brim import BRIMAssetMapping, BRIMExtractedAssetInfo, B
 from backend.app.schemas.transactions.transactions import TXCreateItem
 from backend.app.schemas.transactions.type_metadata import charge_types
 from backend.app.services.brim.brim_provider import BRIMProvider
+from backend.app.services.brim.combined_files import write_combined_csv
 from backend.app.services.brim.duplicates import detect_tx_duplicates
 from backend.app.services.brim.registry import BRIMProviderRegistry
 from backend.test_scripts.brim_samples import BRIM_PROVIDERS_DIR, REPO_ROOT, SampleDir
@@ -237,6 +246,10 @@ SNAPSHOT_FORMAT = "lf-brim-previous-output/1"
 _CAPTURE_BROKER_ID = 1
 #: Fields a linking version may add to a row: names of the batch, nothing else (``changes_besides_links``).
 LINK_FIELDS = ("ref", "parent_ref")
+#: Joins the members of a report set in a sample name: ``credit_agricole-securities.csv+credit_agricole-account.xlsx``.
+SET_SEPARATOR = "+"
+#: The name of the combined file a report set is parsed from (the parse output never names it).
+COMBINED_FILE_NAME = "combined.csv"
 
 
 @dataclass(frozen=True)
@@ -245,15 +258,56 @@ class PreviousOutput:
 
     plugin_code: str
     plugin_version: str
-    sample: str  # the sample's path from ``brim_providers/``
+    sample: str  # the sample's path from ``brim_providers/``; for a report set, its members' paths joined by ``SET_SEPARATOR``
     source_head: str
     transactions: List[TXCreateItem]
     extracted_assets: Dict[int, BRIMExtractedAssetInfo]
 
 
+def sample_members(sample_name: str) -> List[str]:
+    """The file names of a sample name: one, or the members of a report set (``a.csv+b.xlsx``)."""
+    names = [name.strip() for name in sample_name.split(SET_SEPARATOR)]
+    if not all(names):
+        raise ValueError(f"{sample_name!r}: an empty member in the sample name")
+    return names
+
+
 def previous_output_path(plugin_code: str, sample_name: str) -> Path:
-    """The snapshot file of ``sample_name`` (a file name of ``sample_reports/``) read by ``plugin_code``."""
-    return PREVIOUS_OUTPUTS_DIR / plugin_code / f"{Path(sample_name).stem}.json"
+    """The snapshot file of ``sample_name`` (a file name of ``sample_reports/``, or a report set ``a.csv+b.xlsx``) read by
+    ``plugin_code``: ``<stem>.json``, the names of a set joined by ``SET_SEPARATOR``. A CSV is named by its stem (the
+    files of P2a), any other file keeps its extension: ``credit_agricole-conti.csv`` and ``credit_agricole-conti.xlsx``
+    are two samples, so two snapshots."""
+    names = [Path(name).stem if Path(name).suffix.lower() == ".csv" else Path(name).name for name in sample_members(sample_name)]
+    return PREVIOUS_OUTPUTS_DIR / plugin_code / f"{SET_SEPARATOR.join(names)}.json"
+
+
+def sample_input(plugin: BRIMProvider, sample_name: str, folder: Path) -> Path:
+    """The file ``plugin.parse`` reads for ``sample_name``.
+
+    A plain plugin reads the sample itself. A report-set plugin never parses one of its exports alone: the members are
+    given their role (``detect_role``), combined by the plugin and written by the core in ``folder`` as the set API does
+    (``COMBINED_FILE_NAME``, replaced if there), and that combined file is what ``parse`` reads.
+    """
+    samples = SampleDir()
+    names = sample_members(sample_name)
+    paths = [samples / name for name in names]
+    missing = [name for name, path in zip(names, paths, strict=True) if not path.is_file()]
+    if missing:
+        raise ValueError(f"no sample {', '.join(missing)}")
+    if not plugin.is_report_set_plugin:
+        if len(paths) != 1:
+            raise ValueError(f"{plugin.provider_code} is not a report-set plugin: {sample_name!r} names {len(paths)} files")
+        return paths[0]
+    members: Dict[str, List[Path]] = {}
+    for name, path in zip(names, paths, strict=True):
+        role = plugin.detect_role(path)
+        if role is None:
+            raise ValueError(f"{plugin.provider_code} reads {name} as no role of its set")
+        members.setdefault(role, []).append(path)
+    folder.mkdir(parents=True, exist_ok=True)
+    combined = folder / COMBINED_FILE_NAME
+    write_combined_csv(combined, plugin.combine(members))
+    return combined
 
 
 def _sha256(path: Path) -> str:
@@ -275,13 +329,18 @@ def load_previous_snapshot(plugin_code: str, sample_name: str, broker_id: int) -
     data = json.loads(path.read_text(encoding="utf-8"))
     assert data.get("format") == SNAPSHOT_FORMAT, f"{path}: format {data.get('format')!r}, expected {SNAPSHOT_FORMAT!r}"
     assert data["plugin_code"] == plugin_code, f"{path}: taken for {data['plugin_code']}, not {plugin_code}"
-    sample_path = BRIM_PROVIDERS_DIR / data["sample"]
-    assert sample_path.is_file(), f"{path}: its sample {data['sample']} no longer exists"
-    assert _sha256(sample_path) == data["sample_sha256"], f"{path}: the sample {data['sample']} changed after the snapshot was taken (HEAD {data['source_head']}): " "the snapshot no longer describes this file"
+    # A report set lists its members (P2b); a single sample is one member of its own (the P2a files, unchanged).
+    members = data.get("members") or [{"sample": data["sample"], "sample_sha256": data["sample_sha256"]}]
+    expected = [Path(name).name for name in sample_members(sample_name)]
+    assert [Path(member["sample"]).name for member in members] == expected, f"{path}: taken on {[member['sample'] for member in members]}, not on {expected}"
+    for member in members:
+        sample_path = BRIM_PROVIDERS_DIR / member["sample"]
+        assert sample_path.is_file(), f"{path}: its sample {member['sample']} no longer exists"
+        assert _sha256(sample_path) == member["sample_sha256"], f"{path}: the sample {member['sample']} changed after the snapshot was taken (HEAD {data['source_head']}): " "the snapshot no longer describes this file"
     return PreviousOutput(
         plugin_code=data["plugin_code"],
         plugin_version=data["plugin_version"],
-        sample=data["sample"],
+        sample=SET_SEPARATOR.join(member["sample"] for member in members),
         source_head=data["source_head"],
         transactions=[_rebuild(row, broker_id) for row in data["transactions"]],
         extracted_assets={int(fake_id): BRIMExtractedAssetInfo.model_validate(info) for fake_id, info in data["extracted_assets"].items()},
@@ -294,23 +353,23 @@ def load_previous_output(plugin_code: str, sample_name: str, broker_id: int) -> 
     return load_previous_snapshot(plugin_code, sample_name, broker_id).transactions
 
 
-def capture_previous_output(plugin: BRIMProvider, sample_path: Path, *, source_head: str, allow_links: bool = False) -> Dict[str, Any]:
-    """The snapshot of ``plugin`` on ``sample_path``, as ``load_previous_snapshot`` reads it (not written here).
-
-    Refuses an output with ``ref``/``parent_ref`` unless ``allow_links`` (a previous version has no links, P2–P5), and
-    an output whose rows do not come back equal from their JSON (a Decimal or a date that would not round-trip).
-    """
-    output = plugin.parse(sample_path, _CAPTURE_BROKER_ID)
+def _snapshot_rows(plugin: BRIMProvider, output: BRIMParseOutput, label: str, allow_links: bool) -> List[Dict[str, Any]]:
+    """The rows of ``output`` as a snapshot stores them (no broker); refuses links (unless ``allow_links``) and rows that
+    do not come back equal from their JSON (a Decimal or a date that would not round-trip)."""
     rows: List[Dict[str, Any]] = []
     for index, tx in enumerate(output.transactions):
         if not allow_links and (tx.ref or tx.parent_ref):
-            raise ValueError(f"{plugin.provider_code} [{sample_path.name}]: row {_describe(index, tx)} already carries a link: is this the code after the change?")
+            raise ValueError(f"{plugin.provider_code} [{label}]: row {_describe(index, tx)} already carries a link: is this the code after the change?")
         row = tx.model_dump(mode="json")
         if row.pop("broker_id") != _CAPTURE_BROKER_ID:
-            raise ValueError(f"{plugin.provider_code} [{sample_path.name}]: row #{index} is not on the broker parse was given")
+            raise ValueError(f"{plugin.provider_code} [{label}]: row #{index} is not on the broker parse was given")
         if _rebuild(row, _CAPTURE_BROKER_ID) != tx:
-            raise ValueError(f"{plugin.provider_code} [{sample_path.name}]: row {_describe(index, tx)} does not round-trip through JSON")
+            raise ValueError(f"{plugin.provider_code} [{label}]: row {_describe(index, tx)} does not round-trip through JSON")
         rows.append(row)
+    return rows
+
+
+def _snapshot(plugin: BRIMProvider, output: BRIMParseOutput, source_head: str, sample: Dict[str, Any], rows: List[Dict[str, Any]]) -> Dict[str, Any]:
     return {
         "format": SNAPSHOT_FORMAT,
         "comment": "Output of the plugin BEFORE its project-66 lot changed it (P2 contract §2.1). Never re-take it after the code change.",
@@ -318,11 +377,35 @@ def capture_previous_output(plugin: BRIMProvider, sample_path: Path, *, source_h
         "plugin_version": plugin.plugin_version,
         "source_head": source_head,
         "captured_on": date.today().isoformat(),
-        "sample": sample_path.resolve().relative_to(BRIM_PROVIDERS_DIR).as_posix(),
-        "sample_sha256": _sha256(sample_path),
+        **sample,
         "extracted_assets": {str(fake_id): info.model_dump(mode="json") for fake_id, info in output.extracted_assets.items()},
         "transactions": rows,
     }
+
+
+def _member(path: Path) -> Dict[str, str]:
+    return {"sample": path.resolve().relative_to(BRIM_PROVIDERS_DIR).as_posix(), "sample_sha256": _sha256(path)}
+
+
+def capture_previous_output(plugin: BRIMProvider, sample_path: Path, *, source_head: str, allow_links: bool = False) -> Dict[str, Any]:
+    """The snapshot of ``plugin`` on ``sample_path``, as ``load_previous_snapshot`` reads it (not written here).
+
+    Refuses an output with ``ref``/``parent_ref`` unless ``allow_links`` (a previous version has no links, P2–P5), and
+    an output whose rows do not come back equal from their JSON (a Decimal or a date that would not round-trip).
+    """
+    output = plugin.parse(sample_path, _CAPTURE_BROKER_ID)
+    rows = _snapshot_rows(plugin, output, sample_path.name, allow_links)
+    return _snapshot(plugin, output, source_head, _member(sample_path), rows)
+
+
+def capture_previous_set_output(plugin: BRIMProvider, sample_name: str, *, source_head: str, allow_links: bool = False) -> Dict[str, Any]:
+    """The snapshot of a report-set ``plugin`` on the set ``sample_name`` (``a.csv+b.xlsx``, or one member alone): the
+    members combined and parsed as ``sample_input`` does, each member listed with its sha256 (``members``)."""
+    with tempfile.TemporaryDirectory(prefix="lf-brim-capture-") as folder:
+        output = plugin.parse(sample_input(plugin, sample_name, Path(folder)), _CAPTURE_BROKER_ID)
+    rows = _snapshot_rows(plugin, output, sample_name, allow_links)
+    samples = SampleDir()
+    return _snapshot(plugin, output, source_head, {"members": [_member(samples / name) for name in sample_members(sample_name)]}, rows)
 
 
 async def assert_sample_reimport_adds_nothing(plugin: BRIMProvider, sample_name: str) -> BRIMParseOutput:
@@ -330,7 +413,8 @@ async def assert_sample_reimport_adds_nothing(plugin: BRIMProvider, sample_name:
     ``plugin`` on ``sample_name`` is saved without links, then the sample parsed by ``plugin`` must add no row."""
     async with private_broker(f"Reimport {plugin.provider_code}") as (session, broker_id):
         previous_rows = load_previous_output(plugin.provider_code, sample_name, broker_id)
-        return await assert_reimport_adds_nothing(previous_rows, plugin, SampleDir() / sample_name, broker_id, session)
+        with tempfile.TemporaryDirectory(prefix="lf-brim-reimport-") as folder:
+            return await assert_reimport_adds_nothing(previous_rows, plugin, sample_input(plugin, sample_name, Path(folder)), broker_id, session)
 
 
 def version_tuple(version: str) -> Tuple[int, ...]:
@@ -408,15 +492,20 @@ def _linked_problems(output: BRIMParseOutput, linked: Sequence[Tuple[RowKey, Row
 
 
 def _free_problems(output: BRIMParseOutput, free: Sequence[RowKey], declared: List[int]) -> List[str]:
-    """The charges expected free that name a parent."""
+    """The charges expected free that name a parent.
+
+    A key listed n times names exactly n rows (identical free charges, e.g. three connection fees of one day): rows alike
+    that all stay free need no position to be told apart."""
     problems: List[str] = []
-    for charge_key in free:
-        charge = _find(output, charge_key, problems)
-        if charge is None:
+    for charge_key, times in Counter(free).items():
+        charges = [tx for tx in output.transactions if _matches(output, tx, charge_key)]
+        if len(charges) != times:
+            problems.append(f"{len(charges)} rows match {charge_key}: the expectation lists it {times} time(s), one per row")
             continue
-        declared.append(id(charge))
-        if charge.parent_ref:
-            problems.append(f"{charge_key} should stay free, it names {charge.parent_ref!r}")
+        for charge in charges:
+            declared.append(id(charge))
+            if charge.parent_ref:
+                problems.append(f"{charge_key} should stay free, it names {charge.parent_ref!r}")
     return problems
 
 
@@ -425,11 +514,12 @@ def charge_link_expectation_problems(output: BRIMParseOutput, *, linked: Sequenc
 
     - ``linked``: (charge, parent) — the charge names the parent (``parent_ref`` = the parent's non-empty ``ref``) and
       has the parent's asset and broker;
-    - ``free``: the charges that name no parent;
+    - ``free``: the charges that name no parent (a key listed n times names n identical rows);
     - with ``exhaustive`` (the default) every FEE and TAX of the output is declared in one of the two (an undeclared
       charge is a problem); in any case no row that is not a charge names a parent.
 
-    Each key must name exactly one row (``RowKey``): two rows alike are told apart by their security, never by position.
+    Each key of ``linked`` must name exactly one row (``RowKey``): two rows alike are told apart by their security, never
+    by position; identical free charges are listed once per row.
     """
     declared: List[int] = []
     problems = [*_linked_problems(output, linked, declared), *_free_problems(output, free, declared)]
@@ -463,7 +553,7 @@ def _capture_main(argv: Optional[Sequence[str]] = None) -> int:
     capture.add_argument("--head", required=True, help="the short HEAD of the code the snapshot is taken on (before the change)")
     capture.add_argument("--replace", action="store_true", help="re-take a snapshot that exists, only at the same plugin version")
     capture.add_argument("--allow-links", action="store_true", help="accept an output that already links (a plugin that linked before its lot)")
-    capture.add_argument("samples", nargs="+", help="sample file names, as in sample_reports/")
+    capture.add_argument("samples", nargs="+", help="sample file names, as in sample_reports/; for a report-set plugin a set, its members joined by '+'")
     args = parser.parse_args(argv)
 
     BRIMProviderRegistry.auto_discover()
@@ -471,6 +561,7 @@ def _capture_main(argv: Optional[Sequence[str]] = None) -> int:
     if plugin is None:
         parser.error(f"no BRIM plugin {args.plugin}")
     samples = SampleDir()
+    is_set = plugin.is_report_set_plugin
     for sample_name in args.samples:
         target = previous_output_path(args.plugin, sample_name)
         if target.exists():
@@ -479,10 +570,15 @@ def _capture_main(argv: Optional[Sequence[str]] = None) -> int:
                 parser.error(f"{target}: taken at version {existing.get('plugin_version')}, the plugin is now {plugin.plugin_version}: the code changed, the snapshot stays")
             if not args.replace:
                 parser.error(f"{target} exists: --replace to re-take it at the same version")
-        sample_path = samples / sample_name
-        if not sample_path.is_file():
-            parser.error(f"no sample {sample_name}")
-        snapshot = capture_previous_output(plugin, sample_path, source_head=args.head, allow_links=args.allow_links)
+        missing = [name for name in sample_members(sample_name) if not (samples / name).is_file()]
+        if missing:
+            parser.error(f"no sample {', '.join(missing)}")
+        if is_set:
+            snapshot = capture_previous_set_output(plugin, sample_name, source_head=args.head, allow_links=args.allow_links)
+        else:
+            if len(sample_members(sample_name)) != 1:
+                parser.error(f"{args.plugin} is not a report-set plugin: one file per sample")
+            snapshot = capture_previous_output(plugin, samples / sample_name, source_head=args.head, allow_links=args.allow_links)
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(json.dumps(snapshot, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
         print(f"{target.relative_to(REPO_ROOT)}: {len(snapshot['transactions'])} rows, {args.plugin} {plugin.plugin_version}, HEAD {args.head}")
