@@ -101,6 +101,10 @@ class ToolService:
     output_type: object
     name_i18n_key: str | None = None
     description_i18n_key: str | None = None
+    #: The operations' limits by the machine's usable CPUs (TURNI of project 67): rows of (fewest CPUs, operations), from one
+    #: CPU up. The platform picks the row when it builds its executor (``catalog.operations_for``); a row changes only the
+    #: time limits of ``operations``. Empty: ``operations`` hold on every machine.
+    operations_by_usable_cpus: tuple[tuple[int, tuple[ToolOperationPolicy, ...]], ...] = ()
 
     def input_adapter(self) -> TypeAdapter:
         return TypeAdapter(self.input_type)

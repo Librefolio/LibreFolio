@@ -41,7 +41,8 @@ from backend.app.schemas.tools import (
 )
 from backend.app.services.plugin_settings.contract import BoundSettings
 from backend.app.services.tools.base import ToolDefinitionError, ToolExecutionError
-from backend.app.services.tools.catalog import effective_operation
+from backend.app.services.tools.catalog import effective_operation, operations_for
+from backend.app.services.tools.cpus import cpu_count_usable
 from backend.app.services.tools.process_tree import OwnedProcessTree
 from backend.app.services.tools.registry import ToolPluginRegistry, ToolRegistrySnapshot
 from backend.app.services.tools.resources import ToolResourceController
@@ -432,8 +433,12 @@ class ToolExecutor:
         policy: ToolPlatformPolicy | None = None,
         registry_class: type[ToolPluginRegistry] = ToolPluginRegistry,
         resource_controller: ToolResourceController | None = None,
+        usable_cpus: int | None = None,
     ):
         self.policy = policy or ToolPlatformPolicy()
+        #: The machine's usable CPUs, counted by ``get_tool_executor`` (TURNI of project 67): it picks each Tool's row of limits
+        #: (``catalog.operations_for``). None, as a test builds it: no CPU table applies.
+        self.usable_cpus = usable_cpus
         self.registry_class = registry_class
         self.resource_controller = resource_controller or ToolResourceController()
         self.runtime_id = uuid.uuid4().hex
@@ -518,7 +523,7 @@ class ToolExecutor:
         if (item.contract_version, item.implementation_version, item.schema_fingerprint) != (descriptor.contract_version, descriptor.implementation_version, descriptor.schema_fingerprint):
             raise ToolExecutionError("version_mismatch", retryable=True)
         operation = item.parameters.get("operation") if isinstance(item.parameters, dict) else None
-        selected = next((candidate for candidate in descriptor.operations if candidate.operation == operation), None)
+        selected = next((candidate for candidate in operations_for(definition, self.usable_cpus) if candidate.operation == operation), None)
         if selected is None:
             raise ToolExecutionError("invalid_parameters")
         try:
@@ -735,7 +740,11 @@ def get_tool_executor() -> ToolExecutor:
     global _executor
     with _executor_lock:
         if _executor is None:
-            _executor = ToolExecutor()
+            # Once per API process: the CPUs pick each Tool's row of limits (TURNI of project 67). The line is the signal for
+            # a server that counts more CPUs than its calculations then see.
+            usable_cpus = cpu_count_usable()
+            _executor = ToolExecutor(usable_cpus=usable_cpus)
+            logger.info("Tool executor built", usable_cpus=usable_cpus)
         return _executor
 
 

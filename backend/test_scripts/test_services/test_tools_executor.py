@@ -1728,6 +1728,25 @@ def test_raw_frame_length_over_the_owned_limit_is_rejected_before_payload_read()
     assert caught.value.code == "output_limit_exceeded"
 
 
+def test_the_executor_factory_counts_the_cpus_once_and_says_so(monkeypatch):
+    """TURNI step 4: the platform counts the usable CPUs when it builds its executor, once per API process, and logs the
+    number. The constructor stays free of I/O: a test executor built without a count applies no CPU table."""
+    counts = []
+
+    def count():
+        counts.append(1)
+        return 3
+
+    monkeypatch.setattr(executor_module, "cpu_count_usable", count)
+    monkeypatch.setattr(executor_module, "_executor", None)
+    with capture_logs(processors=[structlog.stdlib.add_logger_name]) as logs:
+        first = executor_module.get_tool_executor()
+        second = executor_module.get_tool_executor()
+    assert first is second and first.usable_cpus == 3 and len(counts) == 1
+    assert [entry["usable_cpus"] for entry in logs if entry.get("event") == "Tool executor built"] == [3]
+    assert executor_module.ToolExecutor().usable_cpus is None
+
+
 def _exited_worker_tree(exit_code: int) -> SimpleNamespace:
     """A worker tree whose process has already exited with ``exit_code``; its memory reading does nothing."""
     return SimpleNamespace(process=SimpleNamespace(exitcode=exit_code), observe_memory_limit=lambda: None)
