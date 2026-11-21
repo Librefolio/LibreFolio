@@ -43,7 +43,7 @@
     import DataTable from '$lib/components/table/DataTable.svelte';
     import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
 
-    import type {ColumnDef, CellContent} from '$lib/components/table/types';
+    import type {BulkAction, ColumnDef, CellContent} from '$lib/components/table/types';
     import {zodiosApi} from '$lib/api';
     import {ensureAssetsLoaded, getAssetInfo, getAllAssets} from '$lib/stores/reference/assetStore';
     import {ensureBrokersLoaded, getAccessibleBrokers, getEditableBrokers, brokerStoreVersion, type BrokerInfo} from '$lib/stores/reference/brokerStore';
@@ -119,7 +119,7 @@
     import type {ChargeDraft} from '../form/txCharges';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
     import {notify} from '$lib/stores/app/notify.svelte';
-    import {guideAnchor} from '$lib/features/onboarding/guideAnchors.svelte';
+    import {guideAnchor, guideAnchors} from '$lib/features/onboarding/guideAnchors.svelte';
     import {onboardingGuide} from '$lib/features/onboarding/onboardingGuide.svelte';
     import {TRANSACTION_BULK_STEP_IDS, type TransactionBulkStepId} from '$lib/features/onboarding/onboardingGuideCatalog';
     import {resolveFormItemsFromOps, type FormModalItems} from '../resolveFormItems';
@@ -3460,19 +3460,96 @@
         return highlight;
     }
 
-    /** Bulk actions for selected rows. */
-    let bulkDeleteSelected = $derived({
-        id: 'delete-selected',
-        icon: Trash2,
-        label: () => $t('transactions.bulk.deleteSelected') || 'Delete selected',
-        variant: 'danger' as const,
-        onClick: (rows: PendingOp[]) =>
-            void requestDelete(
-                rows.map((row) => row.tempId),
-                true,
-            ),
+    /** A row the selection's «Reset» acts on: changed or marked for deletion, or half of a split or a merge still waiting
+     *  for the save — `resetRows` undoes those too, and a row in a pending split can read «original» (77 SEL-E). */
+    function hasPendingChange(row: PendingOp): boolean {
+        const status = deriveStatus(row);
+        if (status === 'edited' || status === 'delete') return true;
+        if (row.op === 'edit' && pendingSplits.some((s) => s.id_a === row.txId || s.id_b === row.txId)) return true;
+        if (row.op === 'edit') return pendingPromotes.some((p) => p.id_a === row.txId || p.id_b === row.txId);
+        return !!row.link_uuid && pendingPromotes.some((p) => p.link_uuid_a === row.link_uuid || p.link_uuid_b === row.link_uuid);
+    }
+
+    /** The body that scrolls, which holds the table and its selection panel. */
+    let bulkBodyEl: HTMLElement | undefined = $state();
+
+    // The Bulk guide's «selection» step points at the selection bar (77 SEL-E). The table's panel draws it, at the top of
+    // the table or, once scrolled away, in the balloon at the bottom — another element: the anchor follows whichever is on
+    // screen while rows are ticked.
+    $effect(() => {
+        const body = bulkBodyEl;
+        if (!body || bulkTableSelectedRows.length === 0) return;
+        let current: HTMLElement | null = null;
+        let unregister: (() => void) | null = null;
+        const follow = () => {
+            const bar = body.querySelector<HTMLElement>('[data-testid="selection-toolbar"]');
+            if (bar === current) return;
+            unregister?.();
+            current = bar;
+            unregister = bar ? guideAnchors.register('transaction.bulk.selection', bar) : null;
+        };
+        // The registry is reactive: registering inside the effect would make the effect depend on it
+        untrack(follow);
+        const observer = new MutationObserver(follow);
+        observer.observe(body, {childList: true, subtree: true});
+        return () => {
+            observer.disconnect();
+            unregister?.();
+        };
     });
-    let bulkActionsForTable = $derived([bulkDeleteSelected] as never);
+
+    /**
+     * The selection's actions on the table's panel (77 SEL-E): the bar at the top of the table, the balloon when it scrolls
+     * away, each with the number of rows it takes. Hidden where it makes no sense, off with its reason where it is blocked.
+     * The test ids stay the Bulk's own.
+     */
+    let bulkActionsForTable = $derived.by((): BulkAction<PendingOp>[] => [
+        {
+            id: 'reset-selected',
+            testid: 'tx-bulk-reset-selected',
+            icon: Undo2,
+            label: () => $t('transactions.bulk.resetSelected') || 'Reset selected',
+            appliesTo: (row) => hasPendingChange(row),
+            // Offered, as before, only when a ticked row is changed or marked for deletion (66 C22b: no reset on a row that
+            // reads `original`); then it takes every row the reset undoes something on, and counts them
+            pointless: (rows) => !rows.some((row) => ['edited', 'delete'].includes(deriveStatus(row))),
+            onClick: (rows) => resetRows(rows.map((row) => row.tempId)),
+        },
+        {
+            id: 'link-charges',
+            testid: 'tx-bulk-link-charges',
+            icon: Link2,
+            label: () => $t('transactions.chargesLink.action') || 'Link the charges',
+            shortLabel: () => $t('transactions.chargesLink.actionShort') || 'Link',
+            pointless: () => bulkLinkState.kind === 'hidden',
+            blocked: () => (bulkLinkState.kind === 'disabled' ? {hint: () => bulkLinkHint, reason: bulkLinkState.reason} : null),
+            onClick: () => openLinkPanel(),
+        },
+        {
+            id: 'delete-selected',
+            testid: 'tx-bulk-delete-selected',
+            icon: Trash2,
+            label: () => $t('transactions.bulk.deleteSelected') || 'Delete selected',
+            shortLabel: () => $t('common.delete') || 'Delete',
+            variant: 'danger',
+            onClick: (rows) =>
+                void requestDelete(
+                    rows.map((row) => row.tempId),
+                    true,
+                ),
+        },
+        {
+            id: 'promote-pair',
+            testid: 'promote-toolbar-confirm',
+            icon: Link2,
+            label: () => (selectedForPromote.kind === 'hidden' ? $t('transactions.actions.promotePair') : `${$t('transactions.actions.promotePair')}: ${selectedForPromote.targetLabel}`),
+            shortLabel: () => (selectedForPromote.kind === 'hidden' ? $t('transactions.actions.promotePair') : selectedForPromote.targetLabel),
+            minSelection: 2,
+            pointless: () => selectedForPromote.kind === 'hidden',
+            blocked: () => (selectedForPromote.kind === 'disabled' ? {hint: () => promoteHint, reason: selectedForPromote.reason} : null),
+            onClick: () => handlePromoteSelected(),
+        },
+    ]);
 
     /** Rows currently selected in the bulk DataTable (for inline toolbar). */
     let bulkTableSelectedRows = $state<PendingOp[]>([]);
@@ -4198,12 +4275,6 @@
     }
 
     /** «Delete selected» (66 F7-c2): the rows taken at the click; the selection empties once the choice is made. */
-    function executeBulkDeleteOnSelected() {
-        void requestDelete(
-            bulkTableSelectedRows.map((row) => row.tempId),
-            true,
-        );
-    }
 </script>
 
 <ModalBase {open} maxWidth="none" onRequestClose={requestClose} testId="tx-bulk-modal" allowOverflow={true} contentClass="max-w-[95vw] w-[95vw]">
@@ -4278,32 +4349,10 @@
              TransactionFormModal that pushes its draft into the grid (no
              commit) so the user gets the structured single-row UX while
              staying in the bulk batch. -->
-        <TxBulkToolbar
-            bind:bulkTableSelectedRows
-            bind:importWizardOpen
-            bind:maxDeltaDays
-            {pendingSplits}
-            {tableRef}
-            {importableSuggestions}
-            {selectedForPromote}
-            {promoteHint}
-            {tableRefForToggle}
-            {visibleOps}
-            {deriveStatus}
-            {executeBulkDeleteOnSelected}
-            linkState={bulkLinkState}
-            linkHint={bulkLinkHint}
-            onLinkCharges={openLinkPanel}
-            {handlePromoteSelected}
-            {openAddRowForm}
-            {openPicker}
-            {openSuggestPicker}
-            {resetAll}
-            {resetRows}
-        />
+        <TxBulkToolbar bind:importWizardOpen bind:maxDeltaDays {pendingSplits} {importableSuggestions} {tableRefForToggle} {visibleOps} {deriveStatus} {openAddRowForm} {openPicker} {openSuggestPicker} {resetAll} />
 
         <!-- DataTable body -->
-        <div class="flex-1 min-h-0 overflow-y-auto px-3 py-2" data-testid="tx-bulk-body" use:captureChargeChip>
+        <div class="flex-1 min-h-0 overflow-y-auto px-3 py-2" data-testid="tx-bulk-body" bind:this={bulkBodyEl} use:captureChargeChip>
             <DataTable
                 bind:this={tableRef}
                 data={gridRows}
@@ -4325,6 +4374,7 @@
                 actionsColumnWidth="64px"
                 rowActions={rowActionsForTable}
                 bulkActions={bulkActionsForTable}
+                selectionPanel={true}
                 onSelectionChange={handleBulkTableSelectionChange}
                 stickyActions={false}
                 {getRowClass}
