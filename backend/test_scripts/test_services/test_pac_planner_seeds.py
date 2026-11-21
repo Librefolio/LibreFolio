@@ -620,6 +620,39 @@ def test_three_seeded_runs_of_t4_are_proven_with_the_chosen_seed_on_record() -> 
     assert {settings.get("randomization/randomseedshift") for settings in _settings(result)} == {"17"}
 
 
+def _two_stages(seed: int, progress, budget=None) -> int:
+    """A search of two named stages, 0.4 s each: what a search reports, in miniature."""
+    if progress is not None:
+        progress("search", step=1, total=2)
+    time.sleep(0.4)
+    if progress is not None:
+        progress("search", step=2, total=2)
+    time.sleep(0.4)
+    return seed
+
+
+@pytest.mark.parametrize("cpus", [1, 2, 3])
+def test_every_turn_reports_its_search_so_the_stream_is_never_silent_long(monkeypatch, cpus: int) -> None:
+    """TURNI step 4d (the coordinator's merge condition, 21/11): the Tool's stream forwards a progress line only when it is
+    new, so later turns repeating stages already reported were silent, for minutes on one CPU, which a reverse proxy can cut
+    (Nginx: 60 s). Each turn now reports its stages as steps of the whole: turn × stages + stage, of turns × stages. Every
+    line is new, the steps only go up, and no gap between two lines exceeds one search's stage plus a margin. With one turn
+    (three CPUs) the steps are today's."""
+    monkeypatch.setattr(seed_runs, "usable_cpus", lambda: cpus)
+    heard: list[tuple[float, int, int]] = []
+
+    def listen(phase: str, step: int | None = None, total: int | None = None) -> None:
+        assert phase == "search"
+        heard.append((time.monotonic(), step, total))
+
+    started = time.monotonic()
+    seed_runs.run_seeds(_two_stages, seeds=(1, 2, 3), time_budget_seconds=5, window_seconds=15, progress=listen)
+    turns = -(-3 // cpus)
+    assert [(step, total) for _at, step, total in heard] == [(step, 2 * turns) for step in range(1, 2 * turns + 1)]
+    instants = [started, *(at for at, _step, _total in heard)]
+    assert max(later - earlier for earlier, later in zip(instants, instants[1:], strict=False)) < 0.4 + 0.5, "no long silence"
+
+
 def test_searches_that_close_early_wait_no_longer_with_turns(monkeypatch) -> None:
     """TURNI «done when» 3: a request whose searches close early lasts as today. The window of three turns only lets a
     search use its whole limit; it never makes the others wait for it."""

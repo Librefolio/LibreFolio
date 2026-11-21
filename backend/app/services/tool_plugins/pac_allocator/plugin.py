@@ -19,7 +19,8 @@ one exact replay (``pac_allocator/preview.py``). No optimizer, no engine window,
 no phases; the platform's short default deadlines.
 
 **``plan`` reports its phases** (V2 of project 67): ``validate``, ``model``,
-``search`` («n of m» over the named stages), ``verify``, ``report``, declared on
+``search`` («n of m» over the named stages; on fewer usable CPUs than searches, over every turn's stages, so each
+turn sends new lines: TURNI 4d), ``verify``, ``report``, declared on
 the operation and handed to the engine as ``context.report_progress``.
 
 Timeout envelope: only one number is a product decision — ``engine_timeout_ms``,

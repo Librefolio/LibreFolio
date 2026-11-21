@@ -30,6 +30,9 @@ the same machine, with the same limit.** How:
   others have their own limit and a short settle (an unclosed run answers a little after its limit); a forced run has
   its own short budget and the settle. A run's limit runs from its own start: the first wave's limit for the first
   wave, the later run's own for a later one.
+* **Progress** (lot V1; turns, TURNI 4d): ``progress`` hears the furthest named stage any run has started, as a step of the
+  whole: turn × stages + stage, of turns × stages. A run in a later turn repeats the stages of the first, and the Tool
+  forwards only new lines, so this keeps the stream speaking at every turn. With one turn the steps are a search's own.
 * ``in_process``: one after the other, in the caller's process, each with the whole limit. For tests that read what a run
   did through a patch.
 
@@ -184,6 +187,8 @@ class _Entry:
     budget: float
     limit: float
     forced: bool
+    #: The turn the run started in (0 first): its stages are reported as steps of the whole (TURNI 4d of project 67).
+    turn: int = 0
 
 
 class _Runs:
@@ -205,6 +210,9 @@ class _Runs:
         #: The end of the first wave's limit, and of the whole window.
         self.limit = self.started + self.budget
         self.window_end = self.started + window
+        #: Runs launched so far, and the turns all the runs need on the CPUs counted: a run's turn is its rank over the CPUs.
+        self.launched = 0
+        self.turns = 1
         #: When the first run came back with a result, or None.
         self.first_answered: float | None = None
         #: «Impossible» answers so far, and whether the next run starts even with no time left.
@@ -214,6 +222,8 @@ class _Runs:
     def start(self, concurrency: int, *, first_wave: bool = False) -> None:
         """Start runs while fewer than ``concurrency`` are out: the first wave with the whole limit, the later ones with the
         smaller of the whole limit and the time left in the window, or forced after an «impossible»."""
+        if first_wave:
+            self.turns = -(-len(self.seeds) // concurrency)
         while self.pending and len(self.running) < concurrency:
             now = time.monotonic()
             left = self.window_end - now
@@ -228,7 +238,8 @@ class _Runs:
             process = self.context.Process(target=_child, args=(self.task, seed, sender, budget), name=f"planner-seed-{seed}", daemon=True)
             process.start()
             sender.close()
-            self.running[receiver] = _Entry(seed=seed, process=process, started=time.monotonic(), budget=budget, limit=limit, forced=forced)
+            self.running[receiver] = _Entry(seed=seed, process=process, started=time.monotonic(), budget=budget, limit=limit, forced=forced, turn=self.launched // concurrency)
+            self.launched += 1
 
     def deadline(self, entry: _Entry) -> float:
         """The one stop condition: a run's budget and a grace (a forced run, the settle); once the first run has a result,
@@ -263,10 +274,15 @@ class _Runs:
             self.finish(connection, SeedRun(seed=seed, failure="RunProcessEnded"))
             return
         if kind == "progress":
+            # A run in a later turn repeats the stages of the first, and the Tool forwards a line only when it is new: the
+            # stream would be silent for whole turns, which a reverse proxy can cut. So a stage is reported as a step of the
+            # whole: turn × stages + stage, of turns × stages (TURNI 4d of project 67). One turn reports today's steps.
             step, total = payload
-            if step > self.furthest:
-                self.furthest = step
-                report_phase(self.progress, "search", step, total)
+            turn = self.running[connection].turn
+            whole = turn * total + step
+            if whole > self.furthest:
+                self.furthest = whole
+                report_phase(self.progress, "search", whole, self.turns * total)
             return
         value, seconds = payload
         self.finish(connection, SeedRun(seed=seed, result=value, seconds=seconds) if kind == "result" else SeedRun(seed=seed, failure=value, seconds=seconds))
