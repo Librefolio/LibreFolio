@@ -180,6 +180,7 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 - Éditeur de transactions : « Réinitialiser la ligne », « Réinitialiser la sélection » et « Tout réinitialiser » annulent aussi une fusion en transfert ou en change pas encore enregistrée. Avant, la fusion restait en attente sans s'afficher et « Tout enregistrer » l'envoyait quand même ; une nouvelle transaction de cette fusion pouvait rester hors de l'enregistrement.
 - Éditeur de transactions : « Réinitialiser la ligne » et « Réinitialiser la sélection » sur une moitié d'une paire enregistrée, scindée et pas encore enregistrée, annulent aussi la scission. Avant, la paire revenait sur une seule ligne mais la scission restait en attente, et « Tout enregistrer » la scindait quand même.
 - Éditeur de transactions : après « Séparer la paire » sur un transfert enregistré, modifier deux fois la moitié retrait ne la transforme plus en dépôt au montant positif, ce qui faisait échouer « Tout enregistrer ».
+- Éditeur de transactions : après « Séparer la paire » sur un transfert enregistré, une moitié dont vous changez le type dans son formulaire (un dépôt devenu retrait, ou l’inverse) est désormais enregistrée avec ce type : jusqu’ici « Tout enregistrer » échouait.
 
 ### ⚠️ Changements incompatibles
 
