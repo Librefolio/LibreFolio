@@ -1351,6 +1351,60 @@ describe('bulkLinkSelection — «paired» from the Bulk’s own pairs (rule 8)'
     });
 });
 
+/**
+ * 66 C22d: `bulkLinkSelection` reads each row's type through `typeOf` (the Bulk passes `postSplitType`: a half of a
+ * queued split reads the type the split gives it), for the mirror rows AND for the type the reason names
+ * (`params.type`, which the toolbar's hint shows). Without `typeOf` it reads `fields.type`, as before.
+ */
+describe('bulkLinkSelection — the type of a row read through typeOf (66 C22d)', () => {
+    type BulkLinkSelectionWithType = (rows: readonly PendingOp[], ops: readonly PendingOp[], g: (id: number) => TXReadItem | undefined, opts: LinkOpts, typeOf?: (op: PendingOp) => string) => BulkLinkSelection;
+    const withType: BulkLinkSelectionWithType = (rows, ops, g, opts, typeOf) => c2<BulkLinkSelectionWithType>('bulkLinkSelection')(rows, ops, g, opts, typeOf);
+
+    /** A saved CASH_TRANSFER pair split in this Bulk: the sender on 77 (−50), the receiver on 77 (+50); no `pairedWith`. */
+    const CT_W = row(560, 'CASH_TRANSFER', {related_transaction_id: 561, cash: {code: 'EUR', amount: '-50.000000'}, description: 'split sender'});
+    const CT_D = row(561, 'CASH_TRANSFER', {related_transaction_id: 560, cash: {code: 'EUR', amount: '50.000000'}, description: 'split receiver'});
+    const CT_STORE = new Map<number, TXReadItem>([CT_W, CT_D].map((r) => [r.id, r]));
+    const ctGet = (id: number): TXReadItem | undefined => CT_STORE.get(id) ?? get(id);
+    /** The post-split types, as `postSplitType` gives them; any other row keeps its own. */
+    const POST: Record<number, string> = {560: 'WITHDRAWAL', 561: 'DEPOSIT'};
+    const typeOf = (op: PendingOp): string => (op.op === 'edit' && POST[op.txId]) || op.fields.type;
+
+    it('without typeOf both halves read CASH_TRANSFER, no charge role: hidden', () => {
+        const w = editOp(CT_W);
+        const d = editOp(CT_D);
+        const fee = editOp(FEE_FREE);
+        expect(withType([w, d, fee], [w, d, fee], ctGet, LINK_OPTS)).toEqual({kind: 'hidden'});
+    });
+
+    it('with typeOf both halves are parents: off, twoParents, and params.type is the typeOf value of the second (DEPOSIT), not CASH_TRANSFER', () => {
+        const w = editOp(CT_W);
+        const d = editOp(CT_D);
+        const fee = editOp(FEE_FREE);
+        const result = withType([w, d, fee], [w, d, fee], ctGet, LINK_OPTS, typeOf);
+        expectOff(result, 'twoParents');
+        const params = (result as {params?: {op?: PendingOp; type?: string}}).params;
+        expect({op: params?.op?.tempId, type: params?.type}, 'the second parent, named by its post-split type').toEqual({op: 't-561', type: 'DEPOSIT'});
+    });
+
+    it('the order of the selection picks the second parent: receiver first → params names the sender, WITHDRAWAL', () => {
+        const w = editOp(CT_W);
+        const d = editOp(CT_D);
+        const fee = editOp(FEE_FREE);
+        const result = withType([d, w, fee], [w, d, fee], ctGet, LINK_OPTS, typeOf);
+        expectOff(result, 'twoParents');
+        const params = (result as {params?: {op?: PendingOp; type?: string}}).params;
+        expect({op: params?.op?.tempId, type: params?.type}).toEqual({op: 't-560', type: 'WITHDRAWAL'});
+    });
+
+    it('a half marked for deletion: off, deleted, and params.type is its typeOf value', () => {
+        const d = editOp(CT_D, {markedDelete: true});
+        const fee = editOp(FEE_FREE);
+        const result = withType([d, fee], [editOp(CT_W), d, fee], ctGet, LINK_OPTS, typeOf);
+        expectOff(result, 'deleted');
+        expect((result as {params?: {type?: string}}).params?.type).toBe('DEPOSIT');
+    });
+});
+
 describe('withoutRows — rows leaving the Bulk, and the new charges linked with «Link» (§21.3, §22.3)', () => {
     const withoutRows = (ops: readonly PendingOp[], ids: Iterable<string>): PendingOp[] => c2<(o: readonly PendingOp[], i: Iterable<string>) => PendingOp[]>('withoutRows')(ops, ids);
 

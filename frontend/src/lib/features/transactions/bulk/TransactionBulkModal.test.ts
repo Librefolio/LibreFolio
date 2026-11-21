@@ -47,7 +47,7 @@ import {_} from '$lib/i18n';
 import {schemas} from '$lib/api/generated';
 import {currentLanguage} from '$lib/stores/app/language';
 import {ensureCurrenciesLoaded} from '$lib/stores/reference/currencyStore';
-import {ensureTypesLoaded, isTypesLoaded} from '$lib/features/transactions/transactionTypeStore';
+import {ensureTypesLoaded, getTypeRule, isTypesLoaded} from '$lib/features/transactions/transactionTypeStore';
 import {txStoreGet, txStoreInvalidate, txStoreSetAll} from '$lib/features/transactions/txStore.svelte';
 import {mergeBrokers, resetBrokerStore} from '$lib/stores/reference/brokerStore';
 import type {TransactionCreateItem} from '$lib/types';
@@ -6015,6 +6015,314 @@ describe('TransactionBulkModal — 66 F7-c1: the charges grouped under their par
                 expect.soft(create?.date, `C22c: the new FEE keeps the date it was following — ${JSON.stringify(create)}`).toBe(NEW_DATE);
                 expect.soft({parent_transaction_id: create?.parent_transaction_id ?? null, parent_ref: create?.parent_ref ?? null}, `C22c: the new FEE is created with no parent — ${JSON.stringify(create)}`).toEqual({parent_transaction_id: null, parent_ref: null});
                 expect.soft(lookOf(gridRows().filter((row) => rowDescription(row) === 'C22c new fee')), 'C22c: the new FEE is a new row of its own, no badge').toBe('top level, badge none, status new');
+            });
+
+            // ---------------------------------------------------------------
+            // C22d — «Link» reads the type the split will give a half
+            // ---------------------------------------------------------------
+
+            /**
+             * 66 C22d (FEE consultant, 21/11). «Split pair» on a saved pair (`handleSplitRow`, case A) queues the split and
+             * leaves each half's `fields.type` the pair's own (CASH_TRANSFER) until its Form hands it one. The Type cell
+             * already shows the type the split gives (CASH_TRANSFER → DEPOSIT), and the backend assigns it when it splits
+             * (`apply_splits`), checking the rules on the batch's final state (rule 7). «Link» must read that same type:
+             * one computation (`splitTypes.ts`, `postSplitType`) for the Type cell, the half's Form and the mirror rows of
+             * `bulkLinkSelection`. A type the user picked by hand wins; a split TRANSFER gives two ADJUSTMENT, which are no
+             * parents, so «Link» stays hidden. The Type cell's split branch also draws the chip of a half's charges.
+             */
+            describe('66 C22d: «Link» on a split half reads the type the split will give it', () => {
+                /** A saved FEE of nobody on the WITHDRAWAL's broker (88): FREE is on 77, and «Link» wants one broker. */
+                const FREE_88 = savedCash(92_541, 'FEE', 88, '-1.500000', 'C22d free fee on 88');
+                /** A saved TRANSFER pair of asset 101: the sender on 77 (quantity −5), the receiver on 88. */
+                const T_S = savedCash(92_551, 'DEPOSIT', 77, '0', 'C22d asset transfer', {type: 'TRANSFER', asset_id: 101, quantity: '-5.000000', cash: null, related_transaction_id: 92_552, partner_broker_id: 88});
+                const T_R = savedCash(92_552, 'DEPOSIT', 88, '0', 'C22d asset transfer', {type: 'TRANSFER', asset_id: 101, quantity: '5.000000', cash: null, related_transaction_id: 92_551, partner_broker_id: 77});
+
+                /** «Link» as the toolbar draws it for the ticked rows: `absent`, `off (<reason>)` or `on`. */
+                function linkOffer(): string {
+                    const button = screen.queryByTestId('tx-bulk-link-charges');
+                    if (!button) return 'absent';
+                    return button.getAttribute('aria-disabled') === 'true' ? `off (${button.getAttribute('data-reason') ?? 'no reason'})` : 'on';
+                }
+
+                /** What the chip in a row's Type cell counts, or `no chip`. */
+                function chipCount(row: HTMLElement): string {
+                    return chipOfRow(row)?.getAttribute('data-charges-count') ?? 'no chip';
+                }
+
+                /** The type a split half's Type cell says the split gives it: the slug of its last icon (`renderTypeHtml`,
+                 *  `/icons/transactions/<slug>.png`), never its translated label. */
+                function typeCellTarget(row: HTMLElement): string | null {
+                    const icons = row.querySelectorAll('td[data-column-id="type"] img');
+                    const src = icons[icons.length - 1]?.getAttribute('src') ?? '';
+                    return (src.match(/\/icons\/transactions\/([a-z-]+)\.png$/) ?? [])[1] ?? null;
+                }
+
+                /**
+                 * The saved pair `[sender, receiver]` split with «Split pair», neither half edited, `extra` loaded beside
+                 * it (no charge read). Ends on two rows, both `split`, the split queued, the receiver offering no
+                 * «Reset row» (untouched).
+                 */
+                async function openSplitUntouched(sender: TXReadItem, receiver: TXReadItem, extra: readonly TXReadItem[] = []): Promise<void> {
+                    answerChargesRead([]);
+                    txStoreSetAll([sender, receiver, ...extra], []);
+                    mountEditor({action: 'edit', txIds: [receiver.id, sender.id, ...extra.map((tx) => tx.id)]});
+                    await waitFor(() => expect(rowsShowing(sender.id, receiver.id), 'premise: the saved pair is one row').toHaveLength(1));
+                    for (const tx of extra) await waitFor(() => expect(rowsOf(tx.id), `premise: #${tx.id} is a row on screen`).toHaveLength(1));
+                    const pair = rowsShowing(sender.id, receiver.id)[0];
+                    expect(rowStatus(pair), 'premise: the pair is as saved').toBe('original');
+
+                    await rowAction(pair, 'split');
+                    expect(rowsOf(sender.id), 'premise: the sender is a row of its own').toHaveLength(1);
+                    expect(rowsOf(receiver.id), 'premise: the receiver is a row of its own').toHaveLength(1);
+                    expect(rowStatus(gridRow(sender.id)), 'premise: the sender is marked split').toBe('split');
+                    expect(rowStatus(gridRow(receiver.id)), 'premise: the receiver is marked split').toBe('split');
+                    expect(await offersReset(gridRow(receiver.id)), 'premise: the receiver is untouched (no «Reset row»)').toBe(false);
+                    const queued = (await validateNow()) as C22bPayload;
+                    expect(splitsOf(queued), `premise: one split queued, the saved pair — ${JSON.stringify(queued.splits)}`).toEqual([[sender.id, receiver.id].sort((a, b) => a - b)]);
+                }
+
+                // Case 1. Red today: the untouched DEPOSIT half still holds CASH_TRANSFER, no charge role, so the mirror
+                // row of `bulkLinkSelection` makes the selection `hidden`. Expected: the mirror reads DEPOSIT (the type the
+                // split gives the receiver), «Link» on, FREE under the half, and one batch holding the split and the link
+                // (the backend splits first, then checks rule 7 on the final state). The chip in the Type cell is the
+                // split branch's, which today returns before the chip.
+                it('C22d: the saved CASH_TRANSFER pair split, no edit, the DEPOSIT half + FREE ticked — «Link» on; FREE under the half; the split and FREE’s parent in one batch; the half’s chip counts 1', async () => {
+                    await openSplitUntouched(L_W, L_D, [FREE]);
+                    expect(typeCellTarget(gridRow(L_D.id)), 'premise: the Type cell says the split gives the DEPOSIT half DEPOSIT').toBe('deposit');
+                    await setTicked(gridRow(L_D.id), true);
+                    await setTicked(gridRow(FREE.id), true);
+                    expect(linkOffer(), 'C22d: «Link» reads the type the split gives the untouched half (DEPOSIT, a parent)').toBe('on');
+
+                    await linkRows(gridRow(L_D.id), gridRow(FREE.id));
+
+                    expect(chargeOfCell(gridRow(FREE.id)), 'C22d: FREE sits under the split DEPOSIT').toBe(gridRow(L_D.id).getAttribute('data-row-id'));
+                    const body = (await validateNow()) as C22bPayload;
+                    expect.soft(splitsOf(body), `C22d: the split is queued in the batch — ${JSON.stringify(body.splits)}`).toEqual([[L_W.id, L_D.id].sort((a, b) => a - b)]);
+                    expect.soft(updatesOf(body, FREE.id), `C22d: FREE is sent under the DEPOSIT half, in the same batch — ${JSON.stringify(body.updates)}`).toEqual([{id: FREE.id, parent_transaction_id: L_D.id}]);
+                    expect.soft(chipCount(gridRow(L_D.id)), 'C22d: the split DEPOSIT’s Type cell carries the chip of its charge').toBe('1');
+                });
+
+                // Case 2. WITHDRAWAL is a parent (`charge_role: "parent"`, `type_metadata.py`, and this file's
+                // TYPES_RESPONSE). Red today for the same reason as case 1. FREE is on 77 and the WITHDRAWAL on 88, so the
+                // brief's literal pairing gives «Link» off with `otherBroker` once the type is read; FREE_88 (on 88) is
+                // the one «Link» accepts. Both are asserted.
+                it('C22d: the saved CASH_TRANSFER pair split, no edit, the WITHDRAWAL half + a free FEE on its broker — «Link» on; the FEE under the half, in the split’s batch', async () => {
+                    expect(getTypeRule('WITHDRAWAL').chargeRole, 'premise: WITHDRAWAL is a parent type').toBe('parent');
+                    await openSplitUntouched(L_W, L_D, [FREE_88]);
+                    await setTicked(gridRow(L_W.id), true);
+                    await setTicked(gridRow(FREE_88.id), true);
+                    expect(linkOffer(), 'C22d: «Link» reads the type the split gives the untouched half (WITHDRAWAL, a parent)').toBe('on');
+
+                    await linkRows(gridRow(L_W.id), gridRow(FREE_88.id));
+
+                    expect(chargeOfCell(gridRow(FREE_88.id)), 'C22d: the FEE sits under the split WITHDRAWAL').toBe(gridRow(L_W.id).getAttribute('data-row-id'));
+                    const body = (await validateNow()) as C22bPayload;
+                    expect.soft(splitsOf(body), `C22d: the split is queued in the batch — ${JSON.stringify(body.splits)}`).toEqual([[L_W.id, L_D.id].sort((a, b) => a - b)]);
+                    expect.soft(updatesOf(body, FREE_88.id), `C22d: the FEE is sent under the WITHDRAWAL half — ${JSON.stringify(body.updates)}`).toEqual([{id: FREE_88.id, parent_transaction_id: L_W.id}]);
+                    expect.soft(chipCount(gridRow(L_W.id)), 'C22d: the split WITHDRAWAL’s Type cell carries the chip of its charge').toBe('1');
+                });
+
+                it('C22d: the saved CASH_TRANSFER pair split, no edit, the WITHDRAWAL half (broker 88) + FREE (broker 77) — «Link» drawn off with otherBroker', async () => {
+                    await openSplitUntouched(L_W, L_D, [FREE]);
+                    await setTicked(gridRow(L_W.id), true);
+                    await setTicked(gridRow(FREE.id), true);
+                    expect(linkOffer(), 'C22d: the WITHDRAWAL half is a parent, FREE on another broker').toBe('off (otherBroker)');
+                });
+
+                // Case 3, a guard, green today (the half still holds TRANSFER, no charge role) and after the fix (the split
+                // gives ADJUSTMENT, no charge role either). The presence barrier: in the same mount D0 (a lone DEPOSIT on
+                // 77) + FREE draw «Link» on; swapping D0 for the TRANSFER sender (77, the FEE's broker) takes it away.
+                it('C22d guard: a saved TRANSFER pair split, no edit — the sender half (ADJUSTMENT after the split) + FREE: no «Link»', async () => {
+                    await openSplitUntouched(T_S, T_R, [D0, FREE]);
+                    await setTicked(gridRow(D0.id), true);
+                    await setTicked(gridRow(FREE.id), true);
+                    expect(linkOffer(), 'barrier: a DEPOSIT + FREE draw «Link» on').toBe('on');
+                    await setTicked(gridRow(D0.id), false);
+                    await setTicked(gridRow(T_S.id), true);
+                    expect(rowCheckbox(gridRow(FREE.id)), 'premise: FREE still ticked').toHaveAttribute('data-state', 'checked');
+
+                    expect(linkOffer(), 'C22d: an ADJUSTMENT half is no parent — no «Link»').toBe('absent');
+                });
+
+                // Case 4. The real Form, on a saved row of the Bulk (`unlockImmutable`), offers the swap group of the type
+                // it was handed (`allowedTypes`, `getSwapGroup`): the DEPOSIT half may become a WITHDRAWAL. The Form pushes
+                // a WITHDRAWAL's cash signed (−50), and the editor holds a negative-rule cash as its magnitude (W-B65,
+                // `applyFormPayload` → `magnitudeForRule`): the half ends as WITHDRAWAL with cash +50. The sign rule
+                // (`postSplitTypeForForm`, the Type cell) reads +50 as the receiver, DEPOSIT, and overrides the user;
+                // the decision keeps the user's type. «Link» itself reads `fields.type` today, a parent either way, so it
+                // is on today and stays on (guard lines); the red lines are the Type cell and the Form handed again.
+                // An ADJUSTMENT half (a split TRANSFER) has no swap partner: not reachable there.
+                it('C22d: the DEPOSIT half turned WITHDRAWAL in its own Form — the Type cell and the Form read the user’s WITHDRAWAL; + FREE: «Link» on, FREE under it', async () => {
+                    await openSplitUntouched(L_W, L_D, [FREE]);
+                    await rowAction(gridRow(L_D.id), 'edit-single');
+                    await waitFor(() => expect(formProbe().open, 'premise: the Form of the DEPOSIT half is open').toBe(true));
+                    const item = ((formProbe().items as TXReadItem[] | null) ?? []).find((candidate) => candidate.id === L_D.id);
+                    expect(item?.type, 'premise: the Form is handed the type the split gives (DEPOSIT)').toBe('DEPOSIT');
+                    // What the real Form pushes for a WITHDRAWAL: its cash signed negative (`autoNegateCash`).
+                    await push({broker_id: item!.broker_id, type: 'WITHDRAWAL', date: item!.date, quantity: item!.quantity, asset_id: item!.asset_id, cash: {code: 'EUR', amount: '-50.000000'}, tags: item!.tags ?? [], description: item!.description});
+
+                    expect.soft(typeCellTarget(gridRow(L_D.id)), 'C22d: the Type cell shows the user’s type, not the one the sign gives').toBe('withdrawal');
+
+                    await setTicked(gridRow(L_D.id), true);
+                    await setTicked(gridRow(FREE.id), true);
+                    expect(linkOffer(), 'guard: the user’s WITHDRAWAL is a parent — «Link» on').toBe('on');
+                    await linkRows(gridRow(L_D.id), gridRow(FREE.id));
+                    expect(chargeOfCell(gridRow(FREE.id)), 'guard: FREE sits under the half').toBe(gridRow(L_D.id).getAttribute('data-row-id'));
+                    const body = (await validateNow()) as C22bPayload;
+                    expect(updatesOf(body, FREE.id), `guard: FREE is sent under the half — ${JSON.stringify(body.updates)}`).toEqual([{id: FREE.id, parent_transaction_id: L_D.id}]);
+
+                    await rowAction(gridRow(L_D.id), 'edit-single');
+                    await waitFor(() => expect(formProbe().open, 'the Form of the half is open again').toBe(true));
+                    const again = ((formProbe().items as TXReadItem[] | null) ?? []).find((candidate) => candidate.id === L_D.id);
+                    expect.soft(again?.type, 'C22d: the Form is handed the user’s type again (today the sign’s DEPOSIT)').toBe('WITHDRAWAL');
+                });
+
+                // The chip on the edited path (the C22b/C22c route: the DEPOSIT edited, so «Link» is on today). Red today on
+                // its own line: the Type cell's split branch returns before `chargesChipHtml`.
+                it('C22d: the split DEPOSIT edited, FREE linked to it by «Link» — the half’s Type cell carries the chip counting 1', async () => {
+                    await openSplitAndEdit(L_D, [FREE]);
+                    await linkRows(gridRow(L_D.id), gridRow(FREE.id));
+                    expect(chargeOfCell(gridRow(FREE.id)), 'premise: FREE sits under the split DEPOSIT').toBe(gridRow(L_D.id).getAttribute('data-row-id'));
+
+                    expect(chipCount(gridRow(L_D.id)), 'C22d: the split DEPOSIT’s Type cell carries the chip of its charge').toBe('1');
+                });
+
+                /**
+                 * What the batch makes of a saved half: the type and the cash the backend holds once it has split the pair
+                 * (`apply_splits` runs first and gives the sender, read on the saved sign, its type) and applied the half's
+                 * update (a type sent wins, a cash sent replaces the saved one), plus the splits queued.
+                 */
+                function savedOutcome(body: C22bPayload, half: TXReadItem, splitType: string): {type: string; cash: number; splits: number[][]} {
+                    const update = updatesOf(body, half.id)[0] ?? {};
+                    const cash = (update.cash as {amount?: string} | undefined)?.amount ?? half.cash?.amount;
+                    return {type: typeof update.type === 'string' ? update.type : splitType, cash: Number(cash), splits: splitsOf(body)};
+                }
+
+                // The common route of case 4: only the note of the WITHDRAWAL half changed in its Form. The Form pushes the
+                // type it was handed (WITHDRAWAL) with its cash signed (−50); the editor holds it as +50 (W-B65). The type
+                // the half holds is now WITHDRAWAL, its own: the Type cell and the Form must keep saying WITHDRAWAL.
+                //
+                // And what is SAVED, after a first and a second note edit. Before C22d the sign rule read the held +50 as the
+                // receiver and handed the Form DEPOSIT on the second opening: the Form pushed DEPOSIT +50, the editor held
+                // DEPOSIT +50, and the batch sent `{id: 92522, cash: +50, description}` (its type stripped, the split assigns
+                // it; measured on the old modal). Read from the backend's code, not run here: `apply_splits` splits first and
+                // `pair_sides` picks the sender on the saved amount (−50 → WITHDRAWAL), so the update writes +50 on a
+                // WITHDRAWAL, which rule 11 (`cash_sign: negative`, `cashSignNegative`) refuses. The half must keep cash −50
+                // and send no DEPOSIT.
+                it('C22d: the split WITHDRAWAL half, only its note edited in its Form, twice — the Type cell and the Form handed again still say WITHDRAWAL; the batch keeps it a WITHDRAWAL with cash −50', async () => {
+                    await openSplitUntouched(L_W, L_D);
+                    expect(typeCellTarget(gridRow(L_W.id)), 'premise: the Type cell says the split gives the WITHDRAWAL half WITHDRAWAL').toBe('withdrawal');
+                    await editHalfNote(L_W, 'C22d note a');
+                    const first = (await validateNow()) as C22bPayload;
+                    expect.soft(savedOutcome(first, L_W, 'WITHDRAWAL'), `C22d: after the first edit the half is saved a WITHDRAWAL, cash −50 — ${JSON.stringify(first.updates)}`).toEqual({type: 'WITHDRAWAL', cash: -50, splits: [[L_W.id, L_D.id].sort((a, b) => a - b)]});
+
+                    expect.soft(typeCellTarget(gridRow(L_W.id)), 'C22d: the Type cell still shows WITHDRAWAL after a note edit').toBe('withdrawal');
+                    await rowAction(gridRow(L_W.id), 'edit-single');
+                    await waitFor(() => expect(formProbe().open, 'the Form of the half is open again').toBe(true));
+                    const again = ((formProbe().items as TXReadItem[] | null) ?? []).find((candidate) => candidate.id === L_W.id);
+                    expect.soft(again?.type, 'C22d: the Form is handed WITHDRAWAL again').toBe('WITHDRAWAL');
+
+                    // The second edit: the Form pushes back what it was handed, only the note changed.
+                    await push({broker_id: again!.broker_id, type: again!.type, date: again!.date, quantity: again!.quantity, asset_id: again!.asset_id, cash: again!.cash, tags: again!.tags ?? [], description: 'C22d note b'});
+                    const second = (await validateNow()) as C22bPayload;
+                    expect(
+                        updatesOf(second, L_W.id).some((update) => update.description === 'C22d note b'),
+                        `premise: the second note is sent — ${JSON.stringify(second.updates)}`,
+                    ).toBe(true);
+                    expect.soft(savedOutcome(second, L_W, 'WITHDRAWAL'), `C22d: after the second edit the half is still saved a WITHDRAWAL, cash −50 — ${JSON.stringify(second.updates)}`).toEqual({type: 'WITHDRAWAL', cash: -50, splits: [[L_W.id, L_D.id].sort((a, b) => a - b)]});
+                    expect.soft(updatesOf(second, L_W.id), 'C22d: the update of the half is its note alone: no type (the split gives WITHDRAWAL), no cash (the saved −50 stays)').toEqual([{id: L_W.id, description: 'C22d note b'}]);
+                    expect.soft(typeCellTarget(gridRow(L_W.id)), 'C22d: the Type cell still shows WITHDRAWAL after the second edit').toBe('withdrawal');
+                });
+
+                // «Split pair» on a NEW pair is local (`handleSplitRow`, no backend split). Two shapes reach it: a visible
+                // create with its hidden create partner (case B, what the toolbar's merge of two new rows leaves), and two
+                // VISIBLE creates sharing a `link_uuid` with no `pairedWith` (case «legacy»). The legacy shape is built here
+                // by two single pushes carrying the same `link_uuid` (`addRowFromForm` keeps it); no flow of today's UI was
+                // found that leaves it (the merge, the import and the clone all hide the partner). Both now read the split
+                // row's side through `splitHalfType`. Guards: with a ±50 pair they are green before and after C22d; they
+                // pin that each row takes its type by its own sign and the link is dropped.
+
+                /** The creates of a payload as {description, type, cash, link_uuid}, sorted by description. */
+                function createsOf(body: C22bPayload): Array<{description: unknown; type: unknown; cash: number; link_uuid: unknown}> {
+                    return (body.creates ?? []).map((create) => ({description: create.description, type: create.type, cash: Number((create.cash as {amount?: string} | null)?.amount), link_uuid: create.link_uuid ?? null})).sort((a, b) => String(a.description).localeCompare(String(b.description)));
+                }
+
+                /** The editor on two saved rows (no Form opens by itself), ends on both on screen. */
+                async function openTwoSaved(): Promise<void> {
+                    answerChargesRead([]);
+                    txStoreSetAll([D0, FREE], []);
+                    mountEditor({action: 'edit', txIds: [D0.id, FREE.id]});
+                    await waitFor(() => expect(rowsOf(FREE.id), 'premise: both saved rows are on screen').toHaveLength(1));
+                }
+
+                it.each([
+                    ['the split row the sender (cash −50 on 88), the other +50 on 77', 'C22d legacy sender', '-50.000000', 88, 'C22d legacy receiver', '50.000000', 77],
+                    ['the split row the receiver (cash +50 on 77), the other −50 on 88', 'C22d legacy receiver', '50.000000', 77, 'C22d legacy sender', '-50.000000', 88],
+                ] as const)('C22d: a NEW CASH_TRANSFER pair of two visible rows sharing a link_uuid (case «legacy»), «Split pair» on %s — each row takes WITHDRAWAL / DEPOSIT by its sign, no link left', async (_label, mainNote, mainCash, mainBroker, otherNote, otherCash, otherBroker) => {
+                    await openTwoSaved();
+                    await addRow(cashPayload('DEPOSIT', mainBroker, mainCash, mainNote, {type: 'CASH_TRANSFER', link_uuid: 'c22d-legacy-pair'}));
+                    await addRow(cashPayload('DEPOSIT', otherBroker, otherCash, otherNote, {type: 'CASH_TRANSFER', link_uuid: 'c22d-legacy-pair'}));
+                    // The legacy shape: both rows visible (no hidden partner), both CASH_TRANSFER, one link.
+                    expect(typeCellTarget(gridRowDescribed(mainNote)), 'premise: the split row is a visible CASH_TRANSFER').toBe('cash-transfer');
+                    expect(typeCellTarget(gridRowDescribed(otherNote)), 'premise: its partner is a visible CASH_TRANSFER too').toBe('cash-transfer');
+                    const before = (await validateNow()) as C22bPayload;
+                    expect(
+                        createsOf(before).map((create) => create.link_uuid),
+                        `premise: both creates share the link — ${JSON.stringify(before.creates)}`,
+                    ).toEqual(['c22d-legacy-pair', 'c22d-legacy-pair']);
+
+                    await rowAction(gridRowDescribed(mainNote), 'split');
+
+                    expect.soft(typeCellTarget(gridRowDescribed('C22d legacy sender')), 'C22d: the sender row (−50) is a WITHDRAWAL').toBe('withdrawal');
+                    expect.soft(typeCellTarget(gridRowDescribed('C22d legacy receiver')), 'C22d: the receiver row (+50) is a DEPOSIT').toBe('deposit');
+                    const body = (await validateNow()) as C22bPayload;
+                    expect(createsOf(body), `C22d: two standalone creates, typed by their sign, no link — ${JSON.stringify(body.creates)}`).toEqual([
+                        {description: 'C22d legacy receiver', type: 'DEPOSIT', cash: 50, link_uuid: null},
+                        {description: 'C22d legacy sender', type: 'WITHDRAWAL', cash: -50, link_uuid: null},
+                    ]);
+                });
+
+                it('C22d: a NEW CASH_TRANSFER pair merged from two new rows (case B: the receiver a hidden partner), «Split pair» on its visible row — WITHDRAWAL −50 / DEPOSIT +50, no link left', async () => {
+                    await openTwoSaved();
+                    await addRow(cashPayload('DEPOSIT', 77, '50.000000', 'C22d new pair'));
+                    await addRow(cashPayload('WITHDRAWAL', 88, '-50.000000', 'C22d new pair'));
+                    const created = newRows();
+                    expect(created, 'premise: two new rows').toHaveLength(2);
+                    await mergeSelected(created[0], created[1]);
+                    const merged = newRows();
+                    expect(merged, 'premise: the merge is one visible row, its partner hidden').toHaveLength(1);
+                    expect(typeCellTarget(merged[0]), 'premise: the visible row is a CASH_TRANSFER').toBe('cash-transfer');
+
+                    await rowAction(merged[0], 'split');
+
+                    const rows = newRows();
+                    expect(rows, 'C22d: both halves are rows of their own').toHaveLength(2);
+                    expect.soft(rows.map((row) => typeCellTarget(row)).sort(), 'C22d: one WITHDRAWAL and one DEPOSIT').toEqual(['deposit', 'withdrawal']);
+                    const body = (await validateNow()) as C22bPayload;
+                    expect(
+                        createsOf(body)
+                            .map(({type, cash, link_uuid}) => ({type, cash, link_uuid}))
+                            .sort((a, b) => a.cash - b.cash),
+                        `C22d: two standalone creates, typed by their sign, no link — ${JSON.stringify(body.creates)}`,
+                    ).toEqual([
+                        {type: 'WITHDRAWAL', cash: -50, link_uuid: null},
+                        {type: 'DEPOSIT', cash: 50, link_uuid: null},
+                    ]);
+                });
+
+                // `twoParents`, on the two halves of the split: before C22d each mirror row read CASH_TRANSFER (no charge
+                // role) and «Link» was hidden; now both read their post-split type, two parents. The type the reason names
+                // (`params.type`) only reaches the screen inside the translated hint, so it is pinned on `bulkLinkSelection`
+                // in `bulkCharges.test.ts` (66 C22d, `typeOf`); here the reason, through `data-reason`.
+                it('C22d: the saved CASH_TRANSFER pair split, no edit, BOTH halves + FREE ticked — «Link» drawn off with twoParents', async () => {
+                    await openSplitUntouched(L_W, L_D, [FREE]);
+                    await setTicked(gridRow(L_D.id), true);
+                    await setTicked(gridRow(FREE.id), true);
+                    expect(linkOffer(), 'barrier: the DEPOSIT half + FREE draw «Link» on').toBe('on');
+                    await setTicked(gridRow(L_W.id), true);
+
+                    expect(linkOffer(), 'C22d: two halves, two parents (WITHDRAWAL and DEPOSIT) — «Link» off, twoParents').toBe('off (twoParents)');
+                });
             });
         });
     });
