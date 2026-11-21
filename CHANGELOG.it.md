@@ -126,6 +126,7 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 - Cambi: quando una coppia ha più rotte, ogni rotta ora salva i tassi del proprio provider. Prima una coppia poteva salvare il tasso di un'altra rotta col nome del provider della prima; una nuova sincronizzazione del periodo riscrive le righe.
 - Editor delle transazioni: «Reimposta riga», «Reimposta selezionati» e «Reimposta tutto» ora disfano anche un'unione in trasferimento o in cambio non ancora salvata. Prima l'unione restava in coda senza vedersi e «Salva tutto» la mandava comunque; una transazione nuova in quell'unione poteva restare fuori dal salvataggio.
 - Editor delle transazioni: «Reimposta riga» e «Reimposta selezionati» su una metà di una coppia salvata, divisa e non ancora salvata, ora disfano anche la divisione. Prima la coppia tornava una riga sola ma la divisione restava in coda, e «Salva tutto» la divideva comunque.
+- Editor delle transazioni: dopo «Scollega coppia» su un trasferimento salvato, modificare due volte la metà del prelievo non la trasforma più in un deposito con importo positivo, che faceva fallire «Salva tutto».
 
 ### ⚠️ Modifiche incompatibili
 
