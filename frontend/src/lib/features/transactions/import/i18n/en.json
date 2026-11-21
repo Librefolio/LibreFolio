@@ -280,7 +280,6 @@
       "split": "Split",
       "mergeWith": "Merge with…",
       "extract": "Remove from group",
-      "noTargets": "No other security",
       "actions": "Actions",
       "inspect": "Edit asset",
       "noIsin": "no ISIN",
@@ -577,6 +576,7 @@
       "preview_unreadable": "The file looks damaged or is not what its extension says: it cannot be previewed."
     },
     "reviewPossibleSplitNote": "{n, plural, one {# row looks like a stock split: the new shares come in at no cost.} other {# rows look like stock splits: the new shares come in at no cost.}} In the editor you can link or create the SPLIT event.",
-    "reviewPreFloorNote": "{n} selected rows are dated before 1 January 1900. Check the year: it is often a typo. You will be asked to confirm them when you save."
+    "reviewPreFloorNote": "{n} selected rows are dated before 1 January 1900. Check the year: it is often a typo. You will be asked to confirm them when you save.",
+    "viewDetailReading": "The file is still being read"
   }
 }

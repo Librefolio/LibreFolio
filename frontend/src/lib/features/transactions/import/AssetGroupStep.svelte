@@ -33,7 +33,23 @@
     import ContextMenu, {type ContextMenuItem} from '$lib/components/ui/ContextMenu.svelte';
     import {scrollOnOverflow} from '$lib/actions/scrollOnOverflow';
     import {overflowScrollTextClass} from '$lib/utils/overflowScroll';
-    import {clusterSignature, groupSignature, isPrimary, memberKey, movePartition, orderedIdentifiers, partitionOf, splitPartition, summariseLinks, type AssetGroup, type ExtractedAsset, type GroupPrimary, type IdentifierKind, type LinkSummary, type PrimaryMap} from '$lib/features/assets/assetGrouping';
+    import {
+        clusterSignature,
+        groupSignature,
+        isPrimary,
+        memberKey,
+        movePartition,
+        orderedIdentifiers,
+        partitionOf,
+        splitPartition,
+        summariseLinks,
+        type AssetGroup,
+        type ExtractedAsset,
+        type GroupPrimary,
+        type IdentifierKind,
+        type LinkSummary,
+        type PrimaryMap,
+    } from '$lib/features/assets/assetGrouping';
     import {KIND_TONES} from '$lib/theme/toneClasses';
 
     interface Props {
@@ -96,6 +112,17 @@
         menuOpen = true;
     }
 
+    /** «Merge with…» needs another group to merge with (77 SEL-M, D2). */
+    function canMerge(member: ExtractedAsset): boolean {
+        const own = groupOf(member);
+        return groups.some((g) => g.groupId !== own?.groupId);
+    }
+
+    /** «Extract» needs a group of more than one member. */
+    function canExtract(member: ExtractedAsset): boolean {
+        return (groupOf(member)?.members.length ?? 1) > 1;
+    }
+
     let menuItems = $derived.by((): ContextMenuItem[] => {
         const member = menuMember;
         if (!member) return [];
@@ -108,11 +135,11 @@
                     label: labelOfGroup(g),
                     testid: `asset-group-merge-target-${g.groupId}`,
                 }));
-            if (items.length === 0) items.push({id: 'noop', label: $t('importWizard.assetUnify.noTargets'), disabled: true});
             return items;
         }
-        const items: ContextMenuItem[] = [{id: 'merge', label: $t('importWizard.assetUnify.mergeWith'), icon: ChevronsLeftRight as unknown as ContextMenuItem['icon'], testid: 'asset-group-menu-merge'}];
-        if ((own?.members.length ?? 1) > 1) items.push({id: 'extract', label: $t('importWizard.assetUnify.extract'), icon: Scissors as unknown as ContextMenuItem['icon'], testid: 'asset-group-menu-extract'});
+        const items: ContextMenuItem[] = [];
+        if (canMerge(member)) items.push({id: 'merge', label: $t('importWizard.assetUnify.mergeWith'), icon: ChevronsLeftRight as unknown as ContextMenuItem['icon'], testid: 'asset-group-menu-merge'});
+        if (canExtract(member)) items.push({id: 'extract', label: $t('importWizard.assetUnify.extract'), icon: Scissors as unknown as ContextMenuItem['icon'], testid: 'asset-group-menu-extract'});
         return items;
     });
 
@@ -483,15 +510,18 @@
                                 <FileText class="h-3 w-3 shrink-0 text-lf-muted" />
                                 <span use:scrollOnOverflow class="{overflowScrollTextClass} grow text-[11px] text-lf-secondary">{member.fileName}</span>
                                 <span class="shrink-0 font-mono text-[10px] text-lf-muted">{member.isin ?? member.symbol ?? $t('importWizard.assetUnify.noIsin')}</span>
-                                <button
-                                    type="button"
-                                    class="shrink-0 rounded p-0.5 text-lf-muted hover:bg-lf-hover hover:text-lf-secondary"
-                                    onclick={(e) => openMenu(e, member)}
-                                    title={$t('importWizard.assetUnify.actions')}
-                                    data-testid={united ? `asset-group-member-menu-${member.fakeAssetId}` : `asset-group-single-menu-${member.fakeAssetId}`}
-                                >
-                                    <MoreVertical class="h-3.5 w-3.5" />
-                                </button>
+                                <!-- A row with no action (one group of one member, nothing to merge with) shows no ⋮ (77 SEL-M, D2) -->
+                                {#if canMerge(member) || canExtract(member)}
+                                    <button
+                                        type="button"
+                                        class="shrink-0 rounded p-0.5 text-lf-muted hover:bg-lf-hover hover:text-lf-secondary"
+                                        onclick={(e) => openMenu(e, member)}
+                                        title={$t('importWizard.assetUnify.actions')}
+                                        data-testid={united ? `asset-group-member-menu-${member.fakeAssetId}` : `asset-group-single-menu-${member.fakeAssetId}`}
+                                    >
+                                        <MoreVertical class="h-3.5 w-3.5" />
+                                    </button>
+                                {/if}
                             </div>
                         {/each}
                     </div>

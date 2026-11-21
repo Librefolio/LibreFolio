@@ -4285,7 +4285,9 @@ ${arrow}<span>${label}</span></span>`,
             id: 'viewDetail',
             label: () => $t('importWizard.viewDetail'),
             icon: Eye,
-            disabled: (row) => row.status !== 'done',
+            // A read that failed has no detail (its message and «Read again» stay); one still running says so (77 SEL-M, D3)
+            visible: (row) => row.status !== 'error',
+            blocked: (row) => (row.status !== 'done' ? {hint: () => $t('importWizard.viewDetailReading'), reason: 'reading'} : null),
             onClick: (row) => openParseDetail(row),
         },
         {
