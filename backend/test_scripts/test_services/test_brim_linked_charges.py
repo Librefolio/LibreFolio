@@ -30,23 +30,20 @@ PURE for the runner: no server, no shared database (the reimport tests open thei
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator, Callable
-from contextlib import asynccontextmanager
+from collections.abc import Callable
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
 from typing import List, Optional
 
 import pytest
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-from sqlmodel import SQLModel
 
-from backend.app.db.models import Broker, TransactionType
+from backend.app.db.models import TransactionType
 from backend.app.schemas.brim import FAKE_ASSET_ID_BASE, BRIMParseOutput, BRIMValidationIssue
 from backend.app.schemas.common import Currency
 from backend.app.schemas.transactions.transactions import TXCreateItem
 from backend.app.services.brim.brim_provider import BRIMProvider
-from backend.test_scripts.brim_charge_links import REF_MAX_LENGTH, assert_charge_link_structure, assert_reimport_adds_nothing, charge_link_structure_problems
+from backend.test_scripts.brim_charge_links import REF_MAX_LENGTH, assert_charge_link_structure, assert_reimport_adds_nothing, charge_link_structure_problems, private_broker
 
 BROKER_ID = 7
 DAY = date(2025, 3, 14)
@@ -544,28 +541,10 @@ class BuyOnlyBroker(FakeBroker):
         return BRIMParseOutput(transactions=transactions)
 
 
-@asynccontextmanager
-async def _private_broker() -> AsyncIterator[tuple[AsyncSession, int]]:
-    """This test's own in-memory database with the ORM schema and one broker: never the lane's database."""
-    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
-    async with engine.begin() as connection:
-        await connection.run_sync(SQLModel.metadata.create_all)
-    session = AsyncSession(engine)
-    try:
-        broker = Broker(name="Linked charges reimport")
-        session.add(broker)
-        await session.commit()
-        await session.refresh(broker)
-        yield session, broker.id
-    finally:
-        await session.close()
-        await engine.dispose()
-
-
 async def _reimport(tmp_path: Path, previous: Callable[[], FakeBroker], current: FakeBroker) -> BRIMParseOutput:
     sample = tmp_path / "fake-broker.csv"
     sample.write_text("fake broker export\n", encoding="utf-8")
-    async with _private_broker() as (session, broker_id):
+    async with private_broker() as (session, broker_id):
         previous_rows = previous().parse(sample, broker_id).transactions
         return await assert_reimport_adds_nothing(previous_rows, current, sample, broker_id, session)
 
