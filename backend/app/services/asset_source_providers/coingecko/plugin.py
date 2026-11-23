@@ -368,12 +368,13 @@ class CoinGeckoProvider(AssetSourceProvider):
         rows = []
         for coin in coins:
             name = str(coin.get("name") or coin["id"]).strip()
-            symbol = str(coin.get("symbol") or "").strip().upper()
             rows.append(
                 {
                     "identifier": coin["id"],
                     "identifier_type": IdentifierType.OTHER,
-                    "display_name": f"{name} ({symbol})" if symbol else name,
+                    # TL40: the coin's name alone, the name its metadata gives (an asset created from this row is not
+                    # offered a rename by «Ask the provider»); the symbol is the asset's ticker, from the metadata
+                    "display_name": name,
                     "currency": currency,
                     "type": AssetType.CRYPTO.value,
                     "provider_params": {"vs_currency": currency},

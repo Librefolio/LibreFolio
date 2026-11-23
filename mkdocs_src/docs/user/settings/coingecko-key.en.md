@@ -51,7 +51,7 @@ new one.
 
 1. Open **Assets** and create a new asset.
 2. In **Search Online**, type «bitcoin»: the CoinGecko chip is now on, and its results are among the others.
-3. Pick **Bitcoin (BTC)**. LibreFolio fills in the name, the type and the currency, then runs **Test Configuration**:
+3. Pick **Bitcoin**. LibreFolio fills in the name, the type and the currency, then runs **Test Configuration**:
    a price and a few days of history mean the key works.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
