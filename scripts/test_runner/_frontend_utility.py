@@ -449,6 +449,7 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/features/allocation/AllocationTable.test.ts",
             "src/lib/features/allocation/AllocationDimensionSelect.test.ts",
             "src/lib/features/allocation/AllocationResults.test.ts",
+            "src/lib/features/allocation/AllocationMatrix.test.ts",
             "src/lib/features/portfolio-view/PortfolioAllocationTab.test.ts",
             "src/lib/components/ui/select/FilterButton.test.ts",
             "src/lib/components/ui/select/SimpleSelect.test.ts",

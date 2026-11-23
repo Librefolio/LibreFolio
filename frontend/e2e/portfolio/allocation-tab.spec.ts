@@ -21,7 +21,12 @@
  * «Filters» button with chips; `md` 768: the side boxes of the tiles; `sm` 640: dimension buttons or a select), never from the
  * project's name.
  *
- * Settled states read: the tab root's `data-busy`, `T-tiles` and `T-results` visible, `T-results` `data-dimension` / `data-view`.
+ * The Class × dimension matrix (F4) is read the same way: the cells on screen are compared with the `matrix` of the answer the page
+ * was given (`data-share`, the dot of an empty cell, `data-selected`, the set of columns), never with a value written here. Its
+ * clicks are asserted on the next request body and on the remembered filters.
+ *
+ * Settled states read: the tab root's `data-busy`, `T-tiles` and `T-results` visible, `T-results` `data-dimension` / `data-view`,
+ * `T-results-matrix` `data-dimension`.
  */
 
 import type {Request} from '@playwright/test';
@@ -70,7 +75,16 @@ type AllocationAnswer = {
     excluded: {amount: string; by_bucket: Array<{key: string; amount: string}>; by_asset: Array<{asset_id: number; amount: string}>};
     classes: Array<{asset_class: string; amount: string}>;
     assets: Array<{asset_id: number; asset_class: string; amount: string; name: string}>;
+    matrix: AllocationMatrixAnswer | null;
     history: unknown[] | null;
+};
+
+/** `AllocationMatrix` of `schemas/portfolio/allocation.py`: classes and buckets largest first; `null` in the asset dimension; it does not depend on the filters. */
+type AllocationMatrixAnswer = {
+    rows: string[];
+    columns: string[];
+    cells: Array<{asset_class: string; key: string; amount: string; share_of_portfolio: string | null}>;
+    unattributed: Array<{reason: string; amount: string}>;
 };
 
 /** One allocation request the page sent, and the answer it got (null until it lands, and for a request that failed). */
@@ -311,6 +325,97 @@ function cssString(value: string): string {
 /** A row of the results table by its `data-row-id` (`slice:<key>`, `detail:<key>:<assetId>`, `excluded:bucket:<key>`…). */
 function tableRow(page: Page, tabId: string, rowId: string): Locator {
     return page.getByTestId(`${tabId}-results-table`).locator(`tr[data-row-id=${cssString(rowId)}]`);
+}
+
+// ---------------------------------------------------------------------------------------------------------------------------------
+// The Class × dimension matrix
+// ---------------------------------------------------------------------------------------------------------------------------------
+
+/** The matrix of the Dashboard tab's results (`T-results-matrix`). */
+const MATRIX = `${DASH}-results-matrix`;
+/** What `AllocationMatrix` draws for a cell the backend did not list (or listed at zero). */
+const EMPTY_CELL = '·';
+
+/** What the filters keep, for the cells to be framed: the classes that are on (`null` = every class) and the buckets taken out of the 100 %. */
+interface MatrixSelection {
+    classes: readonly string[] | null;
+    excluded: readonly string[];
+}
+
+const matrixCellId = (assetClass: string, key: string): string => `${MATRIX}-cell-${assetClass}-${key}`;
+
+/** The matrix the answer carries, or an Error: every dimension but the asset one has one when a class is held. */
+function requireMatrix(answer: AllocationAnswer, where: string): AllocationMatrixAnswer {
+    const matrix = answer.matrix;
+    if (!matrix || matrix.rows.length === 0 || matrix.columns.length === 0) {
+        throw new Error(`The ${where} answer carries no matrix (rows: ${matrix?.rows.length ?? 0}, columns: ${matrix?.columns.length ?? 0}): the matrix needs a held class. Check backend/test_scripts/test_db/populate_mock_data.py.`);
+    }
+    return matrix;
+}
+
+/** The backend's promise: the listed cells plus what has no column are the net worth of the view's day. */
+function expectMatrixIdentity(answer: AllocationAnswer, matrix: AllocationMatrixAnswer, where: string): void {
+    const cells = matrix.cells.reduce((total, cell) => total + parseFloat(cell.amount), 0);
+    const unattributed = matrix.unattributed.reduce((total, row) => total + parseFloat(row.amount), 0);
+    expect(Math.abs(cells + unattributed - parseFloat(answer.portfolio_total)), `${where}: cells (${cells}) + unattributed (${unattributed}) is not the net worth (${answer.portfolio_total})`).toBeLessThanOrEqual(0.01);
+}
+
+/** Every cell on screen, by test id, in one round trip (a one-shot read: always wrapped in `expect.poll`). */
+async function readMatrixCells(page: Page): Promise<Map<string, {share: string | null; text: string; selected: string | null}>> {
+    const cells = await page
+        .locator(`[data-testid^=${cssString(`${MATRIX}-cell-`)}]`)
+        .evaluateAll((nodes) => nodes.map((node) => ({id: node.getAttribute('data-testid') ?? '', share: node.getAttribute('data-share'), text: (node.textContent ?? '').trim(), selected: node.getAttribute('data-selected')})));
+    return new Map(cells.map((cell) => [cell.id, {share: cell.share, text: cell.text, selected: cell.selected}]));
+}
+
+/** The columns on screen, as the bucket keys of their test ids. */
+async function readMatrixColumns(page: Page): Promise<string[]> {
+    const prefix = `${MATRIX}-col-`;
+    const ids = await page.locator(`[data-testid^=${cssString(prefix)}]`).evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-testid') ?? ''));
+    return sorted(ids.map((id) => id.slice(prefix.length)));
+}
+
+/**
+ * What differs between the cells on screen and the answer's matrix: the number of cells drawn (rows × columns), the share of a listed cell,
+ * the dot (and no share) of an unlisted one, and whether it is framed as the filters say. An empty list is a match.
+ */
+async function matrixMismatches(page: Page, matrix: AllocationMatrixAnswer, selection: MatrixSelection): Promise<string[]> {
+    const drawn = await readMatrixCells(page);
+    const listed = new Map(matrix.cells.map((cell) => [`${cell.asset_class}\u0000${cell.key}`, cell]));
+    const problems: string[] = [];
+    const expected = matrix.rows.length * matrix.columns.length;
+    if (drawn.size !== expected) problems.push(`${drawn.size} cells drawn, the answer has ${matrix.rows.length} rows × ${matrix.columns.length} columns = ${expected}`);
+    for (const assetClass of matrix.rows) {
+        for (const key of matrix.columns) {
+            const id = matrixCellId(assetClass, key);
+            const cell = drawn.get(id);
+            if (!cell) {
+                problems.push(`${id}: not drawn`);
+                continue;
+            }
+            const answered = listed.get(`${assetClass}\u0000${key}`);
+            if (answered && parseFloat(answered.amount) !== 0) {
+                const share = answered.share_of_portfolio;
+                const same = share === null ? cell.share === '' : Math.abs(parseFloat(cell.share ?? '') - parseFloat(share)) < 1e-9;
+                if (!same) problems.push(`${id}: data-share ${JSON.stringify(cell.share)}, the answer says ${JSON.stringify(share)}`);
+            } else {
+                if (cell.text !== EMPTY_CELL) problems.push(`${id}: the answer lists no amount but the cell shows ${JSON.stringify(cell.text)}`);
+                if (!answered && cell.share !== '') problems.push(`${id}: the answer lists no cell but data-share is ${JSON.stringify(cell.share)}`);
+            }
+            const selected = (selection.classes === null || selection.classes.includes(assetClass)) && !selection.excluded.includes(key);
+            if (cell.selected !== String(selected)) problems.push(`${id}: data-selected ${JSON.stringify(cell.selected)}, expected ${selected}`);
+        }
+    }
+    return problems;
+}
+
+/** The matrix on screen is the one of `answer`: its dimension, its columns, and every cell as `matrixMismatches` reads them. */
+async function expectMatrixDrawn(page: Page, answer: AllocationAnswer, matrix: AllocationMatrixAnswer, selection: MatrixSelection, where: string): Promise<void> {
+    const root = page.getByTestId(MATRIX);
+    await expect(root, `${where}: the matrix is not on screen`).toBeVisible({timeout: PAGE_TIMEOUT});
+    await expect(root, `${where}: the matrix is not in the dimension of the answer`).toHaveAttribute('data-dimension', answer.dimension, {timeout: PAGE_TIMEOUT});
+    await expect.poll(() => readMatrixColumns(page), {message: `${where}: the columns on screen are not the answer's`, timeout: PAGE_TIMEOUT}).toEqual(sorted(matrix.columns));
+    await expect.poll(() => matrixMismatches(page, matrix, selection), {message: `${where}: the cells on screen do not follow the answer`, timeout: PAGE_TIMEOUT}).toEqual([]);
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------------
@@ -660,6 +765,121 @@ test.describe('«Allocazione» tab (lane 80, #89)', () => {
         } finally {
             if (flipped) await flipPrivacy(page, false).catch(() => undefined);
             await cleanUp(page, [keys.dashboard, PRIVACY_STORAGE_KEY]);
+        }
+    });
+
+    test('the Class × dimension matrix follows the answer, a click on a cell keeps its class alone and a second click gives every class back, it follows the dimension and is gone in Asset', async ({page}) => {
+        test.setTimeout(240_000);
+        const calls = recordAllocations(page);
+        await login(page, TEST_USER);
+        const keys = await userStorageKeys(page);
+        requireOwned(await ownedBrokerIds(page));
+        await forgetStored(page, [keys.dashboard]);
+        try {
+            const tab = await openDashboardTab(page);
+            const results = page.getByTestId(`${DASH}-results`);
+            const first = await answeredAfter(calls, 0, isFirstOpening, 'the tab never asked the first-opening question');
+            const sectorMatrix = requireMatrix(first.answer, 'sector');
+            const everyClass: MatrixSelection = {classes: null, excluded: []};
+
+            // 1. The matrix is the answer's: sector, every cell's share, a dot where the backend lists nothing, and the net worth adds up.
+            expectMatrixIdentity(first.answer, sectorMatrix, 'sector');
+            await expectMatrixDrawn(page, first.answer, sectorMatrix, everyClass, 'first opening (sector)');
+            // 2a. At the first opening every cell is framed (`matrixMismatches` read `data-selected` = true on all of them), with a cell present to say so.
+            await expect(page.getByTestId(matrixCellId(sectorMatrix.rows[0] ?? '', sectorMatrix.columns[0] ?? ''))).toHaveAttribute('data-selected', 'true');
+
+            // 2b. A cell of a class the answer holds, with an amount: its class alone, the numbers of the matrix untouched, the choice remembered.
+            if (sectorMatrix.rows.length < 2) {
+                throw new Error(`The sector matrix has ${sectorMatrix.rows.length} class(es) (${sectorMatrix.rows.join(', ')}): a click on a class needs a second one to see it turned off. Check backend/test_scripts/test_db/populate_mock_data.py.`);
+            }
+            let target: {assetClass: string; key: string} | null = null;
+            for (const assetClass of sectorMatrix.rows) {
+                const held = sectorMatrix.cells.filter((cell) => cell.asset_class === assetClass && parseFloat(cell.amount) !== 0).sort((left, right) => Math.abs(parseFloat(right.amount)) - Math.abs(parseFloat(left.amount)));
+                if (held[0]) {
+                    target = {assetClass, key: held[0].key};
+                    break;
+                }
+            }
+            if (!target) throw new Error('No class of the sector matrix has a cell with an amount. Check backend/test_scripts/test_db/populate_mock_data.py.');
+            const focused = target.assetClass;
+            const other = sectorMatrix.rows.find((assetClass) => assetClass !== focused);
+            const otherKey = sectorMatrix.columns[0];
+            if (other === undefined || otherKey === undefined) throw new Error('The sector matrix has no second class to compare with.');
+            const sample = page.getByTestId(matrixCellId(focused, target.key));
+            const shareBefore = await sample.getAttribute('data-share');
+            expect(shareBefore, 'the sample cell carries the backend share').not.toBe('');
+
+            const since = calls.length;
+            await sample.click();
+            const kept = await answeredAfter(calls, since, (body) => body.dimension === 'sector' && sameSet(body.classes, [focused]), `a click on a cell of ${focused} never asked with classes: [${focused}]`);
+            expect(kept.body.exclude_buckets, 'a click on a cell is no exclusion').toBeUndefined();
+            await waitForSettled(tab, PAGE_TIMEOUT);
+            const keptMatrix = requireMatrix(kept.answer, 'sector, one class kept');
+            await expectMatrixDrawn(page, kept.answer, keptMatrix, {classes: [focused], excluded: []}, `only ${focused} kept`);
+            await expect(page.getByTestId(matrixCellId(focused, target.key)), 'the clicked class is not framed').toHaveAttribute('data-selected', 'true');
+            await expect(page.getByTestId(matrixCellId(other, otherKey)), 'another class is still framed').toHaveAttribute('data-selected', 'false');
+            await expect(sample, 'the matrix moved with the filter: it counts the whole portfolio').toHaveAttribute('data-share', shareBefore ?? '');
+            await expect.poll(async () => (await readStored(page, keys.dashboard))?.classes ?? null, {message: 'the class was not stored under the Dashboard key', timeout: PAGE_TIMEOUT}).toEqual([focused]);
+
+            // The same cell again: no class filter, every class framed.
+            const sinceBack = calls.length;
+            await sample.click();
+            const back = await answeredAfter(calls, sinceBack, (body) => body.dimension === 'sector' && !('classes' in body), 'the second click on the same cell never asked without classes');
+            expect(back.body.exclude_buckets, 'the second click is no exclusion').toBeUndefined();
+            await waitForSettled(tab, PAGE_TIMEOUT);
+            await expectMatrixDrawn(page, back.answer, requireMatrix(back.answer, 'sector, every class back'), everyClass, 'every class back');
+            await expect(page.getByTestId(matrixCellId(other, otherKey)), 'the other class is not framed again').toHaveAttribute('data-selected', 'true');
+            await expect.poll(async () => (await readStored(page, keys.dashboard))?.classes, {message: 'the class filter was not forgotten', timeout: PAGE_TIMEOUT}).toBeNull();
+
+            // 4 (as the dimensions come). A column that is an excludable bucket the matrix has: its header excludes it, the frame leaves its cells, a second click restores it.
+            const tryExclusion = async (dimension: string, answer: AllocationAnswer, matrix: AllocationMatrixAnswer): Promise<boolean> => {
+                const bucket = answer.applicable_buckets.find((candidate) => matrix.columns.includes(candidate));
+                if (bucket === undefined) return false;
+                const header = page.getByTestId(`${MATRIX}-col-${bucket}`);
+                await expect(header, `precondition: the ${bucket} column is not excluded`).toHaveAttribute('data-excluded', 'false');
+                const sinceExclude = calls.length;
+                await header.click();
+                const excluded = await answeredAfter(calls, sinceExclude, (body) => body.dimension === dimension && sameSet(body.exclude_buckets, [bucket]), `a click on the ${bucket} column never asked with exclude_buckets`);
+                expect(excluded.body.classes, 'excluding a column is no class filter').toBeUndefined();
+                await expect(header).toHaveAttribute('data-excluded', 'true');
+                await waitForSettled(tab, PAGE_TIMEOUT);
+                await expectMatrixDrawn(page, excluded.answer, requireMatrix(excluded.answer, `${dimension}, ${bucket} excluded`), {classes: null, excluded: [bucket]}, `${bucket} excluded`);
+                const sinceRestore = calls.length;
+                await header.click();
+                await answeredAfter(calls, sinceRestore, (body) => body.dimension === dimension && !('exclude_buckets' in body), `a second click on the ${bucket} column never asked without exclude_buckets`);
+                await expect(header).toHaveAttribute('data-excluded', 'false');
+                await waitForSettled(tab, PAGE_TIMEOUT);
+                await expectMatrixDrawn(page, answer, matrix, everyClass, `${bucket} back in`);
+                return true;
+            };
+            let exclusionDone = await tryExclusion('sector', first.answer, sectorMatrix);
+
+            // 3. Area and Type: the matrix is in the dimension of the answer on screen, with its columns; in Asset it is gone.
+            for (const dimension of ['geography', 'type'] as const) {
+                const sinceDimension = calls.length;
+                await chooseDimension(page, DASH, dimension);
+                const answered = await answeredAfter(calls, sinceDimension, (body) => body.dimension === dimension && !('include_history' in body), `choosing ${dimension} never asked with that dimension`);
+                expect(answered.body.classes, `the ${dimension} question kept a class filter the test turned off`).toBeUndefined();
+                await expect(results).toHaveAttribute('data-dimension', dimension, {timeout: PAGE_TIMEOUT});
+                await waitForSettled(tab, PAGE_TIMEOUT);
+                const matrix = requireMatrix(answered.answer, dimension);
+                expectMatrixIdentity(answered.answer, matrix, dimension);
+                await expectMatrixDrawn(page, answered.answer, matrix, everyClass, dimension);
+                if (!exclusionDone) exclusionDone = await tryExclusion(dimension, answered.answer, matrix);
+            }
+            // Part 4 is required, as the bucket case of the Dashboard test above: the data must offer an excludable bucket (Unknown, Other) as a column.
+            if (!exclusionDone) throw new Error('No dimension of the Dashboard answer has an excludable bucket (Unknown, Other) among its matrix columns: seed an asset with no sector, country or type in backend/test_scripts/test_db/populate_mock_data.py.');
+
+            const sinceAsset = calls.length;
+            await chooseDimension(page, DASH, 'asset');
+            const asset = await answeredAfter(calls, sinceAsset, (body) => body.dimension === 'asset' && !('include_history' in body), 'choosing Asset never asked with dimension asset');
+            expect(asset.answer.matrix ?? null, 'the asset answer carries a matrix').toBeNull();
+            await expect(results).toHaveAttribute('data-dimension', 'asset', {timeout: PAGE_TIMEOUT});
+            await expect(page.getByTestId(`${DASH}-results-center`), 'the asset pie is not drawn yet').toBeVisible({timeout: PAGE_TIMEOUT});
+            await waitForSettled(tab, PAGE_TIMEOUT);
+            await expect(page.getByTestId(MATRIX), 'the matrix is still on screen in the asset dimension').toHaveCount(0);
+        } finally {
+            await cleanUp(page, [keys.dashboard]);
         }
     });
 });
