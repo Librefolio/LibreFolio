@@ -647,7 +647,7 @@ async def test_rebalancer_compute_rejects_a_pac_request_and_invest_and_sell(test
 @pytest.mark.asyncio
 async def test_preview_over_http(test_server):
     """B4 test 14 (contract §11): ``operation="preview"`` through ``POST /tools/compute`` gives, for each service, exactly the
-    numbers the preview computes in process: the PAC's total, the Rebalancer's F, items and table."""
+    numbers the preview computes in process: the PAC's total, the Rebalancer's F, items and the λ of its fidelity levels."""
     pac_payload = {**_buying_request(), "operation": "preview"}
     rebalancer_payload = {**reb.t4(), "operation": "preview"}
     async with _tool_user() as client:

@@ -87,8 +87,9 @@
         blocked: () => run.running || launching,
     });
     $effect(() => {
-        // Every edit of the draft asks again, after the pause; the class keeps the latest only.
-        void draft.fingerprint;
+        // Every edit of the draft asks again, after the pause; the class keeps the latest only. The target fidelity is
+        // left out: no number of the preview depends on it (R1-F (b) of project 67).
+        void draft.previewFingerprint;
         untrack(() => preview.schedule(draft));
     });
     /** Re-reads the copied facts the user has not changed, right before every «Calcola». */
