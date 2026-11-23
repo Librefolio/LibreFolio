@@ -141,6 +141,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - In the dialog of an FX pair, a click on a provider of the legend shows or hides its description; a double click opens its guide.
 - **AI Export: the «Portfolio Performance & Market Drivers» and «Broker Performance & Market Drivers» analyses answer first**: the prompt now asks for a direct answer of about a page, ending with the follow-up questions worth asking, instead of a long report in fixed sections.
+- **Tables**: a right click on a row opens the same menu as its ⋮ (inside a text field the browser's own menu stays, for Paste), and the selection bar sits on the table's right edge. In Files, deleting or downloading several files at once now asks for confirmation first.
 
 #### 🎯 PAC allocator and Tools
 

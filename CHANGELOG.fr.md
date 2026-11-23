@@ -141,6 +141,7 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 
 - Dans la fenêtre d'une paire de devises, un clic sur un fournisseur de la légende affiche ou masque sa description ; un double clic ouvre son guide.
 - **AI Export : les analyses « Performance et facteurs de marché » répondent d'abord** : le prompt demande une réponse directe d'environ une page, qui se termine par les questions utiles à poser ensuite, au lieu d'un long rapport en sections fixes.
+- **Tableaux** : un clic droit sur une ligne ouvre le même menu que son ⋮ (dans un champ de texte le menu du navigateur reste, pour Coller), et la barre de sélection se place sur le bord droit du tableau. Dans Fichiers, supprimer ou télécharger plusieurs fichiers à la fois demande maintenant une confirmation.
 
 #### 🎯 Allocateur PAC et Outils
 

@@ -141,6 +141,7 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 
 - En la ventana de un par de divisas, un clic en un proveedor de la leyenda muestra u oculta su descripción; un doble clic abre su guía.
 - **AI Export: los análisis «Rendimiento y factores de mercado» responden primero**: el prompt pide una respuesta directa de una página aproximadamente, que termina con las preguntas útiles para hacer después, en lugar de un largo informe en secciones fijas.
+- **Tablas**: un clic derecho en una fila abre el mismo menú que su ⋮ (dentro de un campo de texto sigue el menú del navegador, para Pegar), y la barra de selección se sitúa en el borde derecho de la tabla. En Archivos, eliminar o descargar varios archivos a la vez ahora pide confirmación antes.
 
 #### 🎯 Asignador PAC y Herramientas
 

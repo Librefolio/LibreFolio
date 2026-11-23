@@ -141,6 +141,7 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 
 - Nella finestra di una coppia di valute, un clic su un fornitore della legenda mostra o nasconde la sua descrizione; un doppio clic apre la sua guida.
 - **AI Export: le analisi «Performance e cause di mercato» rispondono subito**: il prompt chiede una risposta diretta di circa una pagina, che finisce con le domande utili da fare dopo, invece di un lungo rapporto a sezioni fisse.
+- **Tabelle**: il clic destro su una riga apre lo stesso menu del suo ⋮ (dentro un campo di testo resta il menu del browser, per Incolla), e la barra della selezione sta sul bordo destro della tabella. In File, eliminare o scaricare più file insieme ora chiede prima una conferma.
 
 #### 🎯 Allocatore PAC e Strumenti
 
