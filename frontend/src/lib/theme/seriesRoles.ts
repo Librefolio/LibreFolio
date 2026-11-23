@@ -39,6 +39,7 @@ export const SERIES_ROLE_VALUES = {
     '--lf-cat-crypto': {light: '#b87916', dark: '#e8bd69'},
     '--lf-cat-commodity': {light: '#b85e45', dark: '#e99a82'},
     '--lf-cat-stock': {light: '#7041c6', dark: '#b69af0'},
+    '--lf-cat-index': {light: '#a33d79', dark: '#e58bb9'},
     '--lf-cat-liquidity': {light: '#3f628c', dark: '#639bc0'},
     '--lf-cat-other': {light: '#727b87', dark: '#a9b0bb'},
     '--lf-cat-hold': {light: '#5d687b', dark: '#c6d0e0'},
