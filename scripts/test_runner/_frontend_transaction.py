@@ -214,6 +214,18 @@ def front_tx_charges_view(verbose: bool = False, ui: bool = False, headed: bool 
     return _run_playwright("transactions/tx-charges-view.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_tx_form_phone_width(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """The transaction form fits a 375 px phone sideways (testlist 3.9)."""
+    print_section("Frontend TX Form Phone Width Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("transactions/tx-form-phone-width.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_tx_charges_table(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Linked charges folded under their parent in the transactions table (project 66, F5)."""
     print_section("Frontend TX Linked Charges Table Tests")
@@ -862,6 +874,14 @@ def populate_registry(registry: dict) -> None:
     add_test(cat, "tx-edit-save-gate", front_tx_edit_save_gate, name="TX Edit Save Gate Tests", desc="Issue #58: changing the type or the asset of a stored row keeps Apply and Save-all enabled, and the discard question agrees", tests="transactions/tx-edit-save-gate.spec.ts")
     add_test(cat, "tx-split-promote", front_tx_split_promote, name="TX Split & Promote Tests", desc="Split paired, promote standalone, merge modal, guards, non-regression", tests="transactions/tx-split-promote.spec.ts")
     add_test(cat, "tx-charges-view", front_tx_charges_view, name="TX Linked Charges View Tests", desc="Project 66 F2: a BUY with a FEE and a TAX linked, opened read-only: the section lists the two charges with their notes and the total charged", tests="transactions/tx-charges-view.spec.ts")
+    add_test(
+        cat,
+        "tx-form-phone-width",
+        front_tx_form_phone_width,
+        name="TX Form Phone Width Tests",
+        desc="Testlist 3.9, at 375 px on a disposable account: a BUY and an asset TRANSFER pair of IWDA (long display name) opened in view mode then edit mode — tx-form-body and tx-form-modal-root do not scroll sideways, the view-mode pencil sits inside the screen",
+        tests="transactions/tx-form-phone-width.spec.ts",
+    )
     add_test(cat, "tx-charges-table", front_tx_charges_table, name="TX Linked Charges Table Tests", desc="Project 66 F5: charges folded under the BUY, kept under a broker filter, on their own under types=FEE, flat under a sort", tests="transactions/tx-charges-table.spec.ts")
     add_test(cat, "tx-charges-link-delete", front_tx_charges_link_delete, name="TX Charges Link and Delete Tests", desc="Project 66 F6: link BUY+FEE+TAX from the bar, otherBroker off, delete with all/keep, no panel if all selected", tests="transactions/tx-charges-link-delete.spec.ts")
     add_test(
