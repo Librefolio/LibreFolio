@@ -43,6 +43,7 @@
     import {PortfolioBannerActions} from './portfolioBannerActions.svelte';
     import PortfolioOverviewTab from './PortfolioOverviewTab.svelte';
     import PortfolioPositionsTab from './PortfolioPositionsTab.svelte';
+    import PortfolioAllocationTab from './PortfolioAllocationTab.svelte';
     import PortfolioRiskTab from './PortfolioRiskTab.svelte';
     import PortfolioTransactionsTab from './PortfolioTransactionsTab.svelte';
     import {busyKey as profileBusyKey, DEFAULT_PORTFOLIO_TAB, portfolioScopeProfile, tabsForProfile, type PortfolioScopeTestIds, type PortfolioTabId, type PortfolioViewScope} from './portfolioScopeProfile';
@@ -311,6 +312,7 @@
     const tabLabels: Record<PortfolioTabId, () => string> = {
         panoramica: () => $_('brokers.overview'),
         posizioni: () => $_('brokers.positions'),
+        allocazione: () => $_('allocation.tab'),
         rischio: () => $_('risk.title'),
         transazioni: () => $_('transactions.title'),
         info: () => $_('brokers.info'),
@@ -594,6 +596,16 @@
                 onCloseAnalysis={closeAssetPanel}
                 {refreshVersion}
                 onLotsRatesChanged={() => void loadAll(true)}
+            />
+        {:else if activeTab === 'allocazione'}
+            <!-- The report's own scope (brokers, period, currency, share): the backend reads the report's engine run and a filter replays nothing. -->
+            <PortfolioAllocationTab
+                testId={testIds.allocationTab}
+                page={isBrokerScope ? {kind: 'broker', brokerId: brokerScopeId} : {kind: 'portfolio'}}
+                scope={canAsk ? {brokerIds: activeBrokerIds, start: dateRangeCtl.historyStart, end: dateRangeCtl.end || undefined, currency: targetCurrency, fullShare: profile.fullShare} : null}
+                {refreshVersion}
+                busyKey={busy('allocation')}
+                brokers={isBrokerScope ? {kind: 'this'} : brokerFilterActive ? {kind: 'some', n: selectedBrokerIds.length} : {kind: 'all'}}
             />
         {:else if activeTab === 'rischio'}
             <PortfolioRiskTab
