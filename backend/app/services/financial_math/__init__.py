@@ -25,8 +25,11 @@ Modules:
   currencies, the pool after every movement, the unit cost each movement carried, and the
   conversions that could not be made.
 * ``native_cash`` — every broker's cash in the currencies it was recorded in: the balances,
-  their value in the report currency on any day, and the period flows by type and position; the first
+  their value in the report currency on any day, and the period flows by type and position (income in kind, a
+  REWARD, as a flow only, never a balance); the first
   day a broker's balance in a currency ends below zero.
+* ``income`` — the income of a transaction in its own currency: a DIVIDEND's or INTEREST's cash, a REWARD's value
+  on receipt (income in kind, no cash), unknown when the value is missing; the income types every reader takes.
 * ``change_days`` — the days something can change on: the days a reading of an FX pair can differ from
   the day before, the days a reading really changes on a calendar, and days with the day after each.
 * ``ledger_totals`` — the control totals of the transaction ledger, with no price, rate or

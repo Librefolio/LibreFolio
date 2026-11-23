@@ -987,6 +987,8 @@
             }
         }
         // else: target already has 'auto' or 'manual' and no explicit override → preserve
+        // A type whose cost basis is a stated value (`costBasisAuto` false: a REWARD, project 79) never takes Auto
+        if (target.cost_basis_mode === 'auto' && !getTypeRule(target.type).costBasisAuto) target.cost_basis_mode = 'manual';
 
         // Back to the editor's convention, last, so the derivation above reads the Form's payload as it always has
         // (W-B65): the Form pushes signed values, the editor holds a negative-rule value as its magnitude (`fieldsFromTx`),
@@ -2924,7 +2926,7 @@
             // Q-J57-5 (a) and Q-J57-1 (c): a row the plugin left without a cost mode starts in Auto where its type takes a
             // cost, so the hand-over's validation costs it or refuses it and leads to it; a cost the plugin wrote, or a
             // blocking cost todo, starts it in Manual.
-            op.fields.cost_basis_mode = initialCostBasisMode({mode: op.fields.cost_basis_mode, cost: op.fields.cost_basis_override, costAllowed: costBasisModeAllowed(op.fields)}, item.todos);
+            op.fields.cost_basis_mode = initialCostBasisMode({mode: op.fields.cost_basis_mode, cost: op.fields.cost_basis_override, costAllowed: costBasisModeAllowed(op.fields), autoAllowed: getTypeRule(op.fields.type).costBasisAuto}, item.todos);
             return op;
         });
         const linked = linkPairedImportOps(newOps);

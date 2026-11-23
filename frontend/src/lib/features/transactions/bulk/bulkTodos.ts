@@ -53,6 +53,9 @@ export interface ImportedCostBasis {
     cost: {code?: string; amount?: string} | null;
     /** Whether the row's type, on its side, takes a cost basis at all. */
     costAllowed: boolean;
+    /** Whether the type's cost basis may be the average cost (`costBasisAuto` of its rule). False (a REWARD, project 79):
+     *  the row starts in Manual wherever it would start in Auto. Missing = true. */
+    autoAllowed?: boolean;
 }
 
 /**
@@ -61,8 +64,15 @@ export interface ImportedCostBasis {
  * written by hand answers (Q-J57-1 (c)). Any other row starts in Auto: a row the plugin could not cost is never left
  * without a mode (developer decision Q-J57-5 (a), 19/10), so the hand-over's validation costs it at the average, or
  * refuses it when there is nothing to average.
+ * A type that never takes the average cost (`autoAllowed` false: a REWARD, its value on receipt) starts in Manual
+ * instead of Auto.
  */
 export function initialCostBasisMode(row: ImportedCostBasis, todos: ReadonlyArray<FieldTodoLike>): 'auto' | 'manual' | null {
+    const mode = initialModeBeforeTypeRule(row, todos);
+    return mode === 'auto' && row.autoAllowed === false ? 'manual' : mode;
+}
+
+function initialModeBeforeTypeRule(row: ImportedCostBasis, todos: ReadonlyArray<FieldTodoLike>): 'auto' | 'manual' | null {
     if (row.mode !== null) return row.mode;
     if (!row.costAllowed) return null;
     if (row.cost != null && String(row.cost.amount ?? '').trim() !== '') return 'manual';
