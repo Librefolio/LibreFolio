@@ -341,7 +341,8 @@
       "chargeParentRefNotFound": "Aucune ligne de cet envoi ne s'appelle « {parentRef} » : le frais ne peut pas y être lié.",
       "chargeParentTwice": "Un frais désigne sa transaction une seule fois : par la ligne de cet envoi ou par une transaction enregistrée, pas les deux.",
       "chargeParentIdInvalid": "La transaction à laquelle un frais est lié doit être une transaction enregistrée (un identifiant positif).",
-      "chargesDeleteIncomplete": "Cette transaction a des frais liés : supprimez-les ou déliez-les dans la même modification."
+      "chargesDeleteIncomplete": "Cette transaction a des frais liés : supprimez-les ou déliez-les dans la même modification.",
+      "costBasisAutoNotAllowed": "❌ {type} prend comme coût de base sa valeur à la réception, jamais le coût moyen : pas de mode Auto, saisissez la valeur."
     },
     "pydantic": {
       "greaterThan": "La valeur doit être supérieure à {gt}",

@@ -341,7 +341,8 @@
       "chargeParentRefNotFound": "No row of this batch is named '{parentRef}': the charge cannot be linked to it.",
       "chargeParentTwice": "A charge names its transaction once: by the row of this batch or by a saved transaction, not both.",
       "chargeParentIdInvalid": "The transaction a charge is linked to must be a saved transaction (a positive id).",
-      "chargesDeleteIncomplete": "This transaction has linked charges: delete them or unlink them in the same change."
+      "chargesDeleteIncomplete": "This transaction has linked charges: delete them or unlink them in the same change.",
+      "costBasisAutoNotAllowed": "❌ {type} takes its value on receipt as its cost basis, never the average cost: no Auto mode, enter the value."
     },
     "pydantic": {
       "greaterThan": "Value must be greater than {gt}",
