@@ -41,7 +41,6 @@
     import {hasPremium, orderSearchResults, splitSearchResults, type ProviderTier} from './assetSearchSections';
     import {buildSearchReport, type ProviderOutcome, type SearchReportContext} from './assetSearchReport';
     import {reportHref, supportChannel, type SupportChannel} from '$lib/features/support/supportChannel';
-    import ProviderAttributionNote from './ProviderAttributionNote.svelte';
 
     // =========================================================================
     // Types
@@ -733,8 +732,6 @@
                 {#if crownShown}
                     <p class="border-t border-lf-subtle px-3 py-1.5 text-xs text-lf-muted" data-testid="asset-search-crown-legend">{$t('assets.search.crownLegend')}</p>
                 {/if}
-                <!-- The line a provider's terms ask for, when it answered with a row: its names and ids are its data (76 P4b) -->
-                <ProviderAttributionNote providerCodes={orderedResults.map((result) => result.provider_code)} align="end" testId="asset-search-attribution" extraClass="px-3 py-1.5" />
             {/if}
             {#if reportPlacement === 'bottom' && channel}
                 {@render reportRow(channel)}
