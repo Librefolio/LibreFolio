@@ -217,7 +217,7 @@ class IBKRBrokerProvider(BRIMProvider):
                         trade_money = -trade_money
 
                     # Create main transaction
-                    self._create_transaction(
+                    booking = self._create_transaction(
                         row_num=row_num,
                         transactions=transactions,
                         validation_issues=validation_issues,
@@ -239,7 +239,8 @@ class IBKRBrokerProvider(BRIMProvider):
                         if not comm_currency:
                             comm_currency = currency
 
-                        self._create_transaction(
+                        self._create_charge_of(
+                            booking,  # project 66 P4: linked to the booking of its own row; free when that booking was refused
                             row_num=row_num,
                             transactions=transactions,
                             validation_issues=validation_issues,
@@ -289,7 +290,8 @@ class IBKRBrokerProvider(BRIMProvider):
     @property
     def plugin_version(self) -> str:
         # 1.1.0 — the rows left out (no ISIN, unknown direction, unreadable date) are listed in shared notices with the link to open an issue (W-B87).
-        return "1.1.0"
+        # 1.2.0 — project 66, P4: a fee or a tax is linked to the booking of its own row.
+        return "1.2.0"
 
     @property
     def docs_url(self) -> Optional[str]:
