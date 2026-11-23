@@ -27,7 +27,7 @@
     import ContextMenu from '$lib/components/ui/ContextMenu.svelte';
     import type {ContextMenuItem} from '$lib/components/ui/ContextMenu.svelte';
     import type {BulkAction, ColumnDef, ColumnWidthsState, FilterValue, FooterCellContent, FooterCells, PaginationState, RowAction, RowActions, SelectionState, SortState, VisibilityState} from './types';
-    import {compareRowsByColumn, matchesColumnFilter, paginateFlat, reorderKeepingAbsent, withNewColumns} from './dataTableLogic';
+    import {compareRowsByColumn, holdRowOrder, matchesColumnFilter, paginateFlat, reorderKeepingAbsent, withNewColumns} from './dataTableLogic';
     import {clearTimer} from '$lib/utils/core/clearTimer';
 
     interface Props {
@@ -404,6 +404,28 @@
         return result;
     });
 
+    // The display order held while a field in the table is being edited: the ids in the order the rows had when the field was
+    // entered, or null. A sorted table re-sorts at every keystroke otherwise, and the row under the cursor runs away from it;
+    // it sorts again when the focus leaves the table's fields (blur, Enter).
+    let heldOrder = $state<string[] | null>(null);
+
+    /** A field the user types into, inside the rows. */
+    const EDIT_FIELDS = 'input, textarea, select, [contenteditable]:not([contenteditable="false"])';
+
+    function holdOrderOnFocus(event: FocusEvent): void {
+        const target = event.target instanceof Element ? event.target : null;
+        if (!target?.closest(EDIT_FIELDS) || heldOrder || !sortState || !enableSorting) return;
+        heldOrder = sortedData.map((row) => getRowId(row));
+    }
+
+    function releaseOrderOnBlur(event: FocusEvent): void {
+        if (!heldOrder) return;
+        const next = event.relatedTarget instanceof Element ? event.relatedTarget : null;
+        // Moving to another field of the table keeps the order held: re-sorting then would move the field being entered.
+        if (next?.closest(EDIT_FIELDS) && event.currentTarget instanceof Element && event.currentTarget.contains(next)) return;
+        heldOrder = null;
+    }
+
     // Sorted data
     let sortedData = $derived.by(() => {
         if (!sortState || !enableSorting) return filteredData;
@@ -411,7 +433,9 @@
         const column = columns.find((c) => c.id === sortState!.columnId);
         if (!column) return filteredData;
 
-        return [...filteredData].sort((a, b) => compareRowsByColumn(column, a, b, sortState!.direction));
+        const sorted = [...filteredData].sort((a, b) => compareRowsByColumn(column, a, b, sortState!.direction));
+        // While a field of the table is being edited the order it had at the first focus holds (81 U48, issue #89).
+        return heldOrder ? holdRowOrder(sorted, heldOrder, getRowId) : sorted;
     });
 
     // The pages cut by `opensPage` (66 F7-c1); null without it, when the pages are fixed slices.
@@ -531,6 +555,7 @@
         } else {
             sortState = {columnId, direction: 'asc'};
         }
+        heldOrder = null;
         onSortChange?.(sortState);
     }
 
@@ -1133,7 +1158,7 @@
                         {/if}
                     </tr>
                 </thead>
-                <tbody>
+                <tbody onfocusin={holdOrderOnFocus} onfocusout={releaseOrderOnBlur}>
                     {#if isLoading}
                         <tr>
                             <td colspan={visibleColumns.length + (effectiveSelectionMode === 'multi' ? 1 : 0) + (showActionsColumn ? 1 : 0)} class="td-loading" data-testid="dt-loading">
