@@ -98,6 +98,12 @@ export function removeClassChip(filters: AllocationFilters, assetClass: string):
     return {...filters, classes: next.length === 0 ? null : next};
 }
 
+/** A click on a class of the matrix: the selection becomes that class alone; on the class that is already alone, every class again. */
+export function focusClass(filters: AllocationFilters, assetClass: string): AllocationFilters {
+    const alone = filters.classes !== null && filters.classes.length === 1 && filters.classes[0] === assetClass;
+    return {...filters, classes: alone ? null : [assetClass]};
+}
+
 export function setBucketExcluded(filters: AllocationFilters, bucket: ExcludableBucket, excluded: boolean): AllocationFilters {
     const rest = filters.excludeBuckets.filter((item) => item !== bucket);
     return {...filters, excludeBuckets: excluded ? [...rest, bucket] : rest};

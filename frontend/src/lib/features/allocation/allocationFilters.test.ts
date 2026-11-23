@@ -2,7 +2,7 @@
  * The filters of the Allocazione tab: first opening, memory per page (and its failures), the choices and their chips.
  */
 import {describe, expect, it} from 'vitest';
-import {emptyFilters, filterChips, filtersStorageKey, hasFilters, isClassOn, parseFilters, removeChip, removeClassChip, sameFilters, serializeFilters, setAssetExcluded, setAssetsExcluded, setBucketExcluded, setClass, type AllocationFilters} from './allocationFilters';
+import {emptyFilters, filterChips, filtersStorageKey, hasFilters, isClassOn, parseFilters, removeChip, removeClassChip, sameFilters, serializeFilters, setAssetExcluded, setAssetsExcluded, setBucketExcluded, setClass, type AllocationFilters, focusClass} from './allocationFilters';
 
 const PRESENT = ['STOCK', 'BOND', 'LIQUIDITY'];
 
@@ -111,5 +111,16 @@ describe('sameFilters', () => {
     it('ignores the order of the lists', () => {
         expect(sameFilters({classes: ['A', 'B'], excludeBuckets: ['Other', 'Unknown'], excludeAssetIds: [2, 1]}, {classes: ['B', 'A'], excludeBuckets: ['Unknown', 'Other'], excludeAssetIds: [1, 2]})).toBe(true);
         expect(sameFilters(emptyFilters(), {classes: [], excludeBuckets: [], excludeAssetIds: []}), '[] is nothing, null is everything').toBe(false);
+    });
+});
+
+describe('focusClass (a click on the matrix)', () => {
+    it('keeps only that class', () => {
+        expect(focusClass(emptyFilters(), 'STOCK').classes).toEqual(['STOCK']);
+        expect(focusClass({classes: ['STOCK', 'BOND'], excludeBuckets: ['Unknown'], excludeAssetIds: [3]}, 'BOND')).toEqual({classes: ['BOND'], excludeBuckets: ['Unknown'], excludeAssetIds: [3]});
+    });
+
+    it('on the class that is already alone goes back to every class', () => {
+        expect(focusClass({classes: ['STOCK'], excludeBuckets: [], excludeAssetIds: []}, 'STOCK').classes).toBeNull();
     });
 });

@@ -83,6 +83,7 @@ describe('normalizeAllocation', () => {
             classes: [],
             assets: [],
             history: null,
+            matrix: null,
         });
     });
 

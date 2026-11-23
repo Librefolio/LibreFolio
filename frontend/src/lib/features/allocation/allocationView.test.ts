@@ -2,7 +2,7 @@
  * The answer read as things to draw: pie entries, map data, colour ranks and table rows.
  */
 import {describe, expect, it} from 'vitest';
-import {assetNamesOf, colorRanksOf, geoData, pieEntries, tableRows} from './allocationView';
+import {assetNamesOf, colorRanksOf, geoData, matrixModel, pieEntries, tableRows} from './allocationView';
 import {makeView} from './allocation.fixture';
 
 const geo = makeView({
@@ -127,5 +127,86 @@ describe('tableRows', () => {
 describe('assetNamesOf', () => {
     it('maps the ids the answer lists to their names', () => {
         expect(assetNamesOf(makeView()).get(2)).toBe('Apple Inc.');
+    });
+});
+
+describe('matrixModel', () => {
+    const matrix = {
+        rows: ['STOCK', 'BOND'],
+        columns: ['USA', 'ITA', 'Unknown'],
+        cells: [
+            {asset_class: 'STOCK', key: 'USA', amount: '23600.00', share_of_portfolio: '29.50'},
+            {asset_class: 'STOCK', key: 'ITA', amount: '3000.00', share_of_portfolio: '3.75'},
+            {asset_class: 'BOND', key: 'ITA', amount: '10000.00', share_of_portfolio: '12.50'},
+            {asset_class: 'BOND', key: 'Unknown', amount: '0.00', share_of_portfolio: '0.00'},
+        ],
+        unattributed: [{reason: 'no_country' as const, amount: '880.00'}],
+    };
+    const view = makeView({dimension: 'geography', matrix});
+    const all = () => true;
+
+    it('is nothing when the answer has no matrix (the asset dimension)', () => {
+        expect(matrixModel(makeView({matrix: null}), all, new Set())).toBeNull();
+    });
+
+    it('is a grid in the order of the rows and the columns, an unlisted or zero cell empty', () => {
+        const model = matrixModel(view, all, new Set())!;
+        expect(model.rows).toEqual(['STOCK', 'BOND']);
+        expect(model.columns).toEqual(['USA', 'ITA', 'Unknown']);
+        expect(model.cells.map((row) => row.map((cell) => cell.present))).toEqual([
+            [true, true, false],
+            [false, true, false],
+        ]);
+        expect(model.cells[0][0]).toMatchObject({assetClass: 'STOCK', key: 'USA', shareOfPortfolio: '29.50', amount: 23600});
+        expect(model.unattributed).toEqual([{reason: 'no_country', amount: 880}]);
+    });
+
+    it('tints in proportion to the heaviest cell, and not an empty one', () => {
+        const model = matrixModel(view, all, new Set())!;
+        expect(model.cells[0][0].intensity).toBe(1);
+        expect(model.cells[1][1].intensity).toBeCloseTo(12.5 / 29.5, 5);
+        expect(model.cells[1][0].intensity).toBe(0);
+    });
+
+    it('marks as selected the cells of a class that is on, outside the columns taken out', () => {
+        const model = matrixModel(view, (assetClass) => assetClass === 'STOCK', new Set(['Unknown']))!;
+        expect(model.cells.map((row) => row.map((cell) => cell.selected))).toEqual([
+            [true, true, false],
+            [false, false, false],
+        ]);
+    });
+
+    it('tints one unit for all: a cell whose share rounds to 0.00 stays the lightest, never darker than a real share', () => {
+        const mixed = makeView({
+            matrix: {
+                ...matrix,
+                cells: [
+                    {asset_class: 'STOCK', key: 'USA', amount: '23600.00', share_of_portfolio: '29.50'},
+                    {asset_class: 'STOCK', key: 'ITA', amount: '40.00', share_of_portfolio: '0.00'},
+                    {asset_class: 'BOND', key: 'ITA', amount: '10000.00', share_of_portfolio: '12.50'},
+                ],
+            },
+        });
+        const model = matrixModel(mixed, all, new Set())!;
+        expect(model.cells[0][0].intensity).toBe(1);
+        expect(model.cells[0][1].intensity, 'its 40 € is not weighed against percentages').toBe(0);
+        expect(model.cells[0][1].present, 'it is still a cell that holds something').toBe(true);
+        expect(model.cells[1][1].intensity).toBeCloseTo(12.5 / 29.5, 5);
+    });
+
+    it('counts an exclusion only in a dimension that has it: a saved «Other» does not frame-out a column in Area', () => {
+        const inArea = makeView({dimension: 'geography', applicable_buckets: ['Unknown'], matrix: {...matrix, columns: ['USA', 'Other', 'Unknown']}});
+        const model = matrixModel(inArea, all, new Set(['Other', 'Unknown']))!;
+        expect(model.cells[0].map((cell) => [cell.key, cell.selected])).toEqual([
+            ['USA', true],
+            ['Other', true],
+            ['Unknown', false],
+        ]);
+    });
+
+    it('a row of shares the backend did not send (NAV at or below zero) is still drawn, from the amounts', () => {
+        const noShare = makeView({matrix: {...matrix, cells: matrix.cells.map((cell) => ({...cell, share_of_portfolio: null}))}});
+        const model = matrixModel(noShare, all, new Set())!;
+        expect(model.cells[0][0]).toMatchObject({present: true, shareOfPortfolio: null, intensity: 1});
     });
 });

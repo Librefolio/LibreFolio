@@ -68,6 +68,18 @@ export interface AllocationResponse {
     assets: AllocationScopeAsset[];
     /** The selection's history in steps, when it was asked (`include_history`); `null` otherwise. */
     history: AllocationHistoryStep[] | null;
+    /** Class × dimension of the WHOLE portfolio, whatever the filters; `null` in the asset dimension. */
+    matrix: AllocationMatrixView | null;
+}
+
+export interface AllocationMatrixView {
+    /** The classes, largest first. */
+    rows: string[];
+    /** The buckets of the dimension, largest first. */
+    columns: string[];
+    cells: Array<{asset_class: string; key: string; amount: string; share_of_portfolio: string | null}>;
+    /** What has no column (the cash in the geography, the securities in transit): with the cells, the net worth. */
+    unattributed: Array<{reason: 'in_transit' | 'no_country'; amount: string}>;
 }
 
 /** A step of the selection's history: the slices hold from `date` to `through` (inclusive); `base` is their sum. */
@@ -100,6 +112,19 @@ function normalizeHistory(steps: RawHistoryStep[]): AllocationHistoryStep[] {
     }));
 }
 
+type RawMatrix = {rows?: string[]; columns?: string[]; cells?: Array<{asset_class: string; key: string; amount: string; share_of_portfolio?: string | null | Array<string | null>}>; unattributed?: Array<{reason: 'in_transit' | 'no_country'; amount: string}>};
+
+function normalizeMatrix(raw: unknown): AllocationMatrixView | null {
+    if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) return null;
+    const matrix = raw as RawMatrix;
+    return {
+        rows: matrix.rows ?? [],
+        columns: matrix.columns ?? [],
+        cells: (matrix.cells ?? []).map((cell) => ({asset_class: cell.asset_class, key: cell.key, amount: cell.amount, share_of_portfolio: text(cell.share_of_portfolio)})),
+        unattributed: matrix.unattributed ?? [],
+    };
+}
+
 /** Reads the generated answer into the strict one, at the one place the client's widened types are met. */
 export function normalizeAllocation(raw: RawAllocationResponse): AllocationResponse {
     return {
@@ -128,6 +153,7 @@ export function normalizeAllocation(raw: RawAllocationResponse): AllocationRespo
         },
         classes: raw.classes ?? [],
         assets: (raw.assets ?? []).map((asset) => ({asset_id: asset.asset_id, asset_class: asset.asset_class, amount: asset.amount, name: asset.name, ticker: text(asset.ticker), asset_type: text(asset.asset_type), icon_url: text(asset.icon_url)})),
+        matrix: normalizeMatrix(raw.matrix),
         history: Array.isArray(raw.history) && raw.history.every((step) => typeof step === 'object' && step !== null && !Array.isArray(step) && 'date' in step) ? normalizeHistory(raw.history as unknown as RawHistoryStep[]) : null,
     };
 }

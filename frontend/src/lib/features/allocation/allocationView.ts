@@ -137,3 +137,61 @@ export function tableRows(view: AllocationResponse, expanded: ReadonlySet<string
 
 /** The dimensions the selector offers, in its order. */
 export const ALLOCATION_DIMENSIONS: readonly AllocationDimension[] = ['sector', 'geography', 'type', 'asset'];
+
+// ---------------------------------------------------------------------------
+// The matrix
+// ---------------------------------------------------------------------------
+
+export interface MatrixCellModel {
+    assetClass: string;
+    key: string;
+    amount: number;
+    /** The backend's share of the portfolio; `null` when it sent none (NAV at or below zero). */
+    shareOfPortfolio: string | null;
+    /** The cell holds something. */
+    present: boolean;
+    /** 0–1: how heavy the cell is next to the heaviest, only to tint it. */
+    intensity: number;
+    /** In the selection: the class is on and the column is not taken out of the 100 %. */
+    selected: boolean;
+}
+
+export interface MatrixModel {
+    rows: string[];
+    columns: string[];
+    /** `cells[row][column]`, in the order of `rows` and `columns`. */
+    cells: MatrixCellModel[][];
+    unattributed: Array<{reason: 'in_transit' | 'no_country'; amount: number}>;
+}
+
+/**
+ * The matrix as a grid, with what the filters keep marked. The tint is a drawing of the cell's share next to the heaviest cell
+ * (a ratio for the colour, never shown); the shares themselves are the backend's. A cell the backend did not list is empty.
+ */
+export function matrixModel(view: AllocationResponse, isClassOn: (assetClass: string) => boolean, excludedBuckets: ReadonlySet<string>): MatrixModel | null {
+    // Only the exclusions the dimension has count (the backend applies a bucket only where the dimension lists it): a saved «Other» does nothing in Area.
+    const matrix = view.matrix;
+    if (!matrix) return null;
+    const applicable = new Set<string>(view.applicable_buckets);
+    const bySlot = new Map(matrix.cells.map((cell) => [`${cell.asset_class}\u0000${cell.key}`, cell]));
+    // One unit for the whole tint: the shares when the backend sent any (a tiny cell rounds to «0.00» and must stay the lightest), else the amounts.
+    const byShare = matrix.cells.some((cell) => cell.share_of_portfolio != null);
+    const weightOf = (cell: {amount: string; share_of_portfolio: string | null}): number => Math.abs(num(byShare ? cell.share_of_portfolio : cell.amount));
+    const heaviest = Math.max(0, ...matrix.cells.map(weightOf));
+    const cells = matrix.rows.map((assetClass) =>
+        matrix.columns.map((key): MatrixCellModel => {
+            const cell = bySlot.get(`${assetClass}\u0000${key}`);
+            const weight = cell ? weightOf(cell) : 0;
+            return {
+                assetClass,
+                key,
+                amount: cell ? num(cell.amount) : 0,
+                shareOfPortfolio: cell?.share_of_portfolio ?? null,
+                present: !!cell && num(cell.amount) !== 0,
+                intensity: heaviest > 0 ? weight / heaviest : 0,
+                selected: isClassOn(assetClass) && !(applicable.has(key) && excludedBuckets.has(key)),
+            };
+        }),
+    );
+    return {rows: [...matrix.rows], columns: [...matrix.columns], cells, unattributed: matrix.unattributed.map((row) => ({reason: row.reason, amount: num(row.amount)}))};
+}

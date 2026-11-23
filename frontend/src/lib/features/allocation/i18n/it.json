@@ -89,6 +89,14 @@
     "history": {
       "empty": "Nessuno storico per questa selezione nel periodo.",
       "loading": "Carico lo storico…"
+    },
+    "matrix": {
+      "title": "Classe × {dimension}",
+      "hint": "Segue la dimensione scelta in alto. Quote del portafoglio intero; le celle con il riquadro sono la selezione. Clic su una cella per tenere solo la sua classe.",
+      "classHeader": "Classe",
+      "unattributed": "Fuori dalle colonne:",
+      "cell": "{class}, {bucket}: {share}",
+      "cellEmpty": "{class}, {bucket}: niente"
     }
   }
 }

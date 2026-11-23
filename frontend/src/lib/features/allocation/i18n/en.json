@@ -89,6 +89,14 @@
     "history": {
       "empty": "No history for this selection in the period.",
       "loading": "Loading the history…"
+    },
+    "matrix": {
+      "title": "Class × {dimension}",
+      "hint": "Follows the dimension chosen above. Shares of the whole portfolio; the framed cells are the selection. Click a cell to keep only its class.",
+      "classHeader": "Class",
+      "unattributed": "Not in a column:",
+      "cell": "{class}, {bucket}: {share}",
+      "cellEmpty": "{class}, {bucket}: nothing"
     }
   }
 }
