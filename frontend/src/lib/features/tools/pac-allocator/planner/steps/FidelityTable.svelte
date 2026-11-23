@@ -2,10 +2,11 @@
   The table «Maximum acceptable cost» of the Rebalancer's Strategy step (F3a of project 67, step 10a; M30–M33).
 
   How much the plan may spend at most, in fees and taxes, to put back money that is in the wrong place, per fidelity level.
-  The figures are the backend preview's as it gives them (N1): no figure is computed here. The «Custom» column is there
-  only while that choice is active and the answer carries it (M32); «Target first» has no column, the line under the
-  table says why (M33). While the preview waits the figures stay, muted; after a failure the table goes and a line says
-  why. Every figure derives from the user's total: masked in privacy mode.
+  The figures are the page's own (`acceptableCost.ts`, R1-F (b) of project 67), on the preview's total and the λ of its
+  three levels: a level chosen or a figure typed changes them at once, with no call. The «Custom» column is there only
+  while that choice is active with a λ (M32); «Target first» has no column, the line under the table says why (M33).
+  While the preview waits the figures stay, muted; after a failure the table goes and a line says why. Every figure
+  derives from the user's total: masked in privacy mode.
 
   G6d (the developer's call): each column's minimum width fits its widest cell, so our `DataTable`, which cuts a cell
   wider than its column, never cuts one; a phone scrolls sideways. A header never wraps and widens its column by itself.
@@ -20,7 +21,8 @@
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import type {DraftFidelity} from '../draft.svelte';
     import {formatExactMoneyCompact, formatExactMoneyPlain} from '../format';
-    import type {PlannerPreview, PreviewCostRow, PreviewMoney} from '../preview.svelte';
+    import type {PlannerPreview, PreviewMoney} from '../preview.svelte';
+    import {acceptableCostTable, type AcceptableCostRow} from '../acceptableCost';
     import {fidelityName} from '../strategyText';
     import TableColumns from '../shared/TableColumns.svelte';
     import {BADGE, HINT, SECTION_TITLE} from '../ui';
@@ -30,7 +32,7 @@
     const profile = getPlannerProfile();
 
     interface Props {
-        /** The scenario preview (step 8): the table, already counted. */
+        /** The scenario preview (step 8): the total and the λ of the levels the table is counted on. */
         preview: PlannerPreview | null;
         /** The draft's fidelity: the «Custom» column shows only while it is the choice. */
         fidelity: DraftFidelity;
@@ -46,14 +48,16 @@
     interface Row {
         id: string;
         index: number;
-        row: PreviewCostRow;
+        row: AcceptableCostRow;
     }
 
     const numbers = $derived(preview?.numbers ?? null);
-    const table = $derived(numbers?.table ?? null);
+    /** The draft's λ for the «Custom» column: only while that choice is active. */
+    const customLambda = $derived(fidelity.kind === 'custom' ? fidelity.lambda : null);
+    const table = $derived(numbers?.fidelity_level_weights ? acceptableCostTable(numbers.total, numbers.fidelity_level_weights, customLambda) : null);
     const stale = $derived(preview?.stale ?? false);
-    const rows = $derived<Row[]>((table?.rows ?? []).map((row, index) => ({id: String(index), index, row})));
-    const showCustom = $derived(fidelity.kind === 'custom' && (table?.rows[0]?.custom ?? null) !== null);
+    const rows = $derived<Row[]>((table ?? []).map((row, index) => ({id: String(index), index, row})));
+    const showCustom = $derived((table?.[0]?.custom ?? null) !== null);
     const totalText = $derived(numbers ? formatExactMoneyPlain(numbers.total) : null);
 
     let tableRef: DataTable<Row> | undefined = $state(undefined);
