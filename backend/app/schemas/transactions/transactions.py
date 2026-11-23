@@ -79,6 +79,10 @@ def tags_to_csv(tags: Optional[List[str]]) -> Optional[str]:
     return ",".join(tags)
 
 
+# Types whose cost basis is a value the user or the import states, never the pool's average cost (rule 12c)
+_MANUAL_COST_BASIS_ONLY = frozenset({TransactionType.REWARD})
+
+
 def validate_transaction_business_rules(  # noqa: C901 — flat per-rule error collection
     *,
     tx_type: TransactionType,
@@ -194,6 +198,16 @@ def validate_transaction_business_rules(  # noqa: C901 — flat per-rule error c
                 {"type": t, "qty": str(quantity)},
             )
         )
+    # Rule 12c (project 79, Q-B): a REWARD's cost basis is its value on receipt, which is also its income. The average
+    # cost of the pool (Auto) is not that value, so a REWARD takes a manual cost basis only.
+    elif tx_type in _MANUAL_COST_BASIS_ONLY and cost_basis_mode in ("auto", "auto-detail"):
+        errors.append(
+            PydanticCustomError(
+                "costBasisAutoNotAllowed",
+                "{type} takes its value on receipt as its cost basis, never the average cost: cost_basis_mode {mode} is not allowed",
+                {"type": t, "mode": cost_basis_mode},
+            )
+        )
 
     return errors
 
@@ -224,6 +238,7 @@ class TXCreateItem(StrictModel):
     - TRANSFER: quantity +/-, cash = None, link_uuid REQUIRED
     - FX_CONVERSION: quantity = 0, cash.amount +/-, link_uuid REQUIRED
     - ADJUSTMENT: quantity +/-, cash = None
+    - REWARD: quantity > 0, cash = None, cost_basis_override = per-unit value at receipt
     """
 
     broker_id: int = Field(..., description="Broker ID")
