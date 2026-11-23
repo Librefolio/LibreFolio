@@ -438,6 +438,8 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/components/ui/input/TagInput.test.ts",
             "src/lib/components/ui/input/PasswordInput.test.ts",
             "src/lib/components/ui/input/PasswordStrength.test.ts",
+            "src/lib/components/ui/input/Switch.test.ts",
+            "src/lib/components/ui/select/FilterButton.test.ts",
             "src/lib/components/ui/select/SimpleSelect.test.ts",
             "src/lib/components/ui/select/SimpleSelect.portal.test.ts",
             "src/lib/components/ui/select/SearchSelect.test.ts",
