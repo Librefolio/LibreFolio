@@ -157,3 +157,33 @@ describe('Distribution: the row menu (77 SEL-M)', () => {
         expect(within(menu).getByTestId('context-menu-action-balance')).not.toHaveAttribute('aria-disabled');
     });
 });
+
+// 81 U48 (issue #89) — sorted on the weight, a weight typed out of order does not move its row from under the cursor.
+describe('Distribution: the order holds while a weight is typed (81 U48)', () => {
+    const rowOf = (section: HTMLElement, label: string): HTMLElement => {
+        const row = within(section)
+            .getAllByRole('row')
+            .find((r) => r.textContent?.includes(label));
+        if (!row) throw new Error(`no row shows ${label}`);
+        return row;
+    };
+    const weightField = (section: HTMLElement, label: string) => rowOf(section, label).querySelector('input.cell-editable-number') as HTMLInputElement;
+    const order = (section: HTMLElement) => [...section.querySelectorAll('tbody tr[data-row-id]')].map((r) => r.querySelector('input.cell-editable-number') as HTMLInputElement).map((i) => i.value);
+
+    it('the row keeps its place and the focus until the field is left, then the table sorts again', async () => {
+        const {section} = mount({Technology: 0.5, Energy: 0.3, Utilities: 0.1});
+        await fireEvent.click(within(section).getByTestId('dt-sort-weight'));
+        expect(order(section)).toEqual(['10', '30', '50']);
+
+        const field = weightField(section, 'Utilities');
+        field.focus();
+        await fireEvent.input(field, {target: {value: '90'}});
+
+        expect(order(section), 'the row of the weight being typed stayed first').toEqual(['90', '30', '50']);
+        expect(document.activeElement).toBe(field);
+        expect(weightField(section, 'Utilities')).toBe(field);
+
+        field.blur();
+        await waitFor(() => expect(order(section)).toEqual(['30', '50', '90']));
+    });
+});

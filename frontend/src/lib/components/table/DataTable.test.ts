@@ -957,6 +957,83 @@ const numberInput = () => document.querySelector('input.cell-editable-number') a
 const textInput = () => document.querySelector('input.cell-editable-text') as HTMLInputElement;
 const toggleButton = () => document.querySelector('button[aria-label="Toggle"]') as HTMLButtonElement;
 
+// 81 U48 (issue #89) — a table sorted on a column holds its order while a field in it is being edited, and sorts again
+// when the field is left (blur or Enter): the row under the cursor does not run away from it at the first digit.
+describe('DataTable — the order holds while a field is edited (81 U48)', () => {
+    interface QtyRow {
+        id: string;
+        qty: number;
+    }
+
+    /** A table sorted ascending on an editable `qty`, whose parent takes each change back as new data, as the editors do. */
+    async function mountSorted() {
+        await setupI18n();
+        let data: QtyRow[] = [
+            {id: 'a', qty: 1},
+            {id: 'b', qty: 2},
+            {id: 'c', qty: 3},
+        ];
+        const view: {rerender: (props: Record<string, unknown>) => Promise<void>} = {rerender: async () => {}};
+        const columns = [
+            {
+                id: 'qty',
+                header: 'Qty',
+                type: 'number',
+                sortable: true,
+                getValue: (r: QtyRow) => r.qty,
+                cell: (r: QtyRow) => ({
+                    type: 'editable-number' as const,
+                    value: r.qty,
+                    onchange: (value: number | null) => {
+                        data = data.map((x) => (x.id === r.id ? {...x, qty: value ?? 0} : x));
+                        void view.rerender({data});
+                    },
+                }),
+            },
+        ] as unknown as ColumnDef<unknown>[];
+        const {rerender} = render(DataTable, {data, columns, getRowId: ((r: QtyRow) => r.id) as (row: unknown) => string, storageKey: 'order-hold', enablePagination: false});
+        view.rerender = rerender as typeof view.rerender;
+        await fireEvent.click(screen.getByTestId('dt-sort-qty'));
+        expect(screen.getByTestId('dt-header-qty')).toHaveAttribute('data-sort', 'asc');
+        expect(pageIds()).toEqual(['a', 'b', 'c']);
+        return (id: string) => row(id).querySelector('input.cell-editable-number') as HTMLInputElement;
+    }
+
+    it('keeps every row in place, and the focus in the same field, while a number is typed out of order', async () => {
+        const field = await mountSorted();
+        const input = field('a');
+        input.focus();
+        await fireEvent.input(input, {target: {value: '10'}});
+
+        await waitFor(() => expect(field('a').value).toBe('10'));
+        expect(pageIds(), 'the row did not move under the cursor').toEqual(['a', 'b', 'c']);
+        expect(field('a')).toBe(input);
+        expect(document.activeElement).toBe(input);
+    });
+
+    it('sorts again when the field is left', async () => {
+        const field = await mountSorted();
+        const input = field('a');
+        input.focus();
+        await fireEvent.input(input, {target: {value: '10'}});
+        expect(pageIds()).toEqual(['a', 'b', 'c']);
+
+        input.blur();
+        await waitFor(() => expect(pageIds()).toEqual(['b', 'c', 'a']));
+    });
+
+    it('sorts again on Enter, which leaves the field', async () => {
+        const field = await mountSorted();
+        const input = field('a');
+        input.focus();
+        await fireEvent.input(input, {target: {value: '10'}});
+        expect(pageIds()).toEqual(['a', 'b', 'c']);
+
+        await fireEvent.keyDown(input, {key: 'Enter'});
+        await waitFor(() => expect(pageIds()).toEqual(['b', 'c', 'a']));
+    });
+});
+
 describe('DataTable — editable cells', () => {
     describe('editable-number', () => {
         it('steps the value up with the arrow key', async () => {
