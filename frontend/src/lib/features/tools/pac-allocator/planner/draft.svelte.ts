@@ -451,6 +451,14 @@ export class PlannerDraft {
             .map((entry) => entry.asset);
     });
 
+    /**
+     * The Rebalancer's last «Custom» λ (TL-1 of project 67, the testlist of 21/11): the «Custom» column of the table
+     * «Maximum acceptable cost» stays, for comparison, when another choice is made, and «Custom» chosen again finds it.
+     * Presentation only, like `liquidityOrder`: the plan reads `data.fidelity`, so no fingerprint changes. Written when a
+     * figure becomes λ (`PlannerPreview`) or «Custom» is left with one; '' once the field is cleared, or never filled.
+     */
+    customLambdaMemory = $state('');
+
     /** The Tool this draft is for (F1 of project 67): its steps, its test ids. The PAC when none is given. */
     readonly profile: PlannerProfile;
 
@@ -470,6 +478,7 @@ export class PlannerDraft {
         this.data.policy = policy;
         this.liquidityOrder = [];
         this.assetOrder = [];
+        this.customLambdaMemory = '';
     }
 
     /** The scenario date is always today: set before every copy read and every calculation. */
