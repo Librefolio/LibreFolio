@@ -336,7 +336,8 @@ flight does not: an identical request with a later start builds on its own.
 **One run per page** (FB-14). The Portfolio page asks the report (with the Performance table) and the positions chart
 for the same period; each used to call `calculate()` with its own flags, so the two requests had different blob keys
 and the page built the engine twice. `PortfolioService._engine_run()` is now the one call of `get_report()`,
-`get_positions_contribution()`, `get_positions_series()` and `get_acquisition_funding_history()`: always from t=0,
+`get_positions_contribution()`, `get_positions_series()`, `get_acquisition_funding_history()` and `get_allocation()`
+(the «Allocazione» tab, `POST /portfolio/allocation`: a change of its filters replays nothing): always from t=0,
 with `include_positions`, `include_acquisition_funding` and `period_start` = the period's start. The requests of one
 page share the key: the first builds, the others read the cache or wait on the flight above. Each caller still
 serializes only what its query asks (a report without `include_acquisition_funding` has no funding series). The

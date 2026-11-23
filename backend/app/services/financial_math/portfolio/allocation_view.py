@@ -47,7 +47,7 @@ from decimal import Decimal
 from enum import StrEnum
 
 from backend.app.services.assets.type_rules import asset_type_content
-from backend.app.services.financial_math.portfolio.daily_state import AssetClassification, allocation_parts
+from backend.app.services.financial_math.portfolio.daily_state import GEOGRAPHY_VOICE, SECTOR_VOICE, AssetClassification, allocation_voice_parts
 from backend.app.services.financial_math.portfolio.derived_views import DerivedViewsBuilder, percent_cents
 from backend.app.services.financial_math.portfolio.models import DailyPortfolioState
 from backend.app.services.financial_math.weights import percent_of, slice_percents
@@ -246,13 +246,14 @@ def _keyed_parts(
     day: date_type,
     value: Decimal,
 ) -> tuple[tuple[str | int, Decimal], ...]:
-    """An asset's ``(key, amount)`` pairs in the dimension: the replay's split (``allocation_parts``), in its order."""
+    """An asset's ``(key, amount)`` pairs in the dimension: the replay's split (``allocation_parts``: the type whole, a
+    voice through ``allocation_voice_parts``), in its order. Only the asked voice is split: a history reads it on every
+    change row."""
     if dimension is AllocationDimension.ASSET:
         return ((asset_id, value),)
-    parts = allocation_parts(asset_type, classification, day, value)
     if dimension is AllocationDimension.TYPE:
-        return ((parts.type_key, value),)
-    return parts.sector if dimension is AllocationDimension.SECTOR else parts.geography
+        return ((asset_type, value),)
+    return allocation_voice_parts(classification, SECTOR_VOICE if dimension is AllocationDimension.SECTOR else GEOGRAPHY_VOICE, day, value)
 
 
 def _cash(state: DailyPortfolioState) -> Decimal:
@@ -280,8 +281,11 @@ def _split(
     filters: AllocationFilters,
     asset_types: Mapping[int, str],
     asset_classifications: Mapping[int, AssetClassification | None],
+    *,
+    with_members: bool = True,
 ) -> _Split:
-    """Where every amount of the state's NAV goes under ``filters``: class, then excluded asset, then excluded bucket."""
+    """Where every amount of the state's NAV goes under ``filters``: class, then excluded asset, then excluded bucket.
+    ``with_members`` False skips each slice's assets: a history step shows the slices only."""
     split = _Split()
     excludable = filters.exclude_buckets & BUCKETS_BY_DIMENSION[dimension]
     for asset_id, value in state.by_asset.items():
@@ -298,7 +302,8 @@ def _split(
                 _add(split.excluded_buckets, key, amount)
                 continue
             _add(split.slices, key, amount)
-            _add(split.slice_assets.setdefault(key, {}), asset_id, amount)
+            if with_members:
+                _add(split.slice_assets.setdefault(key, {}), asset_id, amount)
     _place_cash(split, _cash(state), dimension, filters)
     if state.in_transit_asset_market_value:
         _add(split.unattributable, UnattributableReason.IN_TRANSIT, state.in_transit_asset_market_value)
@@ -426,7 +431,7 @@ def _history(
     def components(state: DailyPortfolioState) -> list[dict]:
         # A change row's state is its segment's, dated at the segment's start. The weights cannot change inside a
         # segment (a profile step starts a segment: DailyStateBuilder's dirty days), so the start's are the row's
-        split = _split(state, state.date, dimension, filters, asset_types, asset_classifications)
+        split = _split(state, state.date, dimension, filters, asset_types, asset_classifications, with_members=False)
         percents = slice_percents(split.slices)
         rows = []
         for key, amount in _largest_first(split.slices):

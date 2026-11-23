@@ -117,6 +117,12 @@ def allocation_parts(asset_type: str, classification: AssetClassification | None
     )
 
 
+def allocation_voice_parts(classification: AssetClassification | None, voice: str, day: date_type, value: Decimal) -> tuple[tuple[str, Decimal], ...]:
+    """One voice of :func:`allocation_parts` (``SECTOR_VOICE`` or ``GEOGRAPHY_VOICE``), the same pairs: for a reader of
+    one dimension, which need not split the other on every day of a history (the «Allocazione» tab)."""
+    return _voice_parts((classification or {}).get(voice), voice, day, value)
+
+
 def _classification_change_days(classifications: Mapping[int, AssetClassification | None]) -> set[date_type]:
     """The first day of every step whose weights differ from the step before it, for any asset and voice: the days the
     allocation changes with nothing else moving. A step that only changes source (same weights) is not one."""

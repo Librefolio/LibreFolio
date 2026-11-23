@@ -25,7 +25,7 @@ Runs in ``./dev.py test services financial-math`` (the runner collects the whole
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 
 from backend.app.services.financial_math.portfolio import daily_state as daily_state_module
@@ -156,3 +156,22 @@ class TestTheResultCarriesWhatTheReplayRead:
     def test_a_result_without_a_replay_has_empty_maps(self):
         result = PortfolioCalculationResult(daily_states=DailyStates())
         assert result.asset_types == {} and dict(result.asset_classifications) == {}
+
+
+class TestOneVoice:
+    """Lane 80, B2: ``allocation_voice_parts`` is one voice of ``allocation_parts``, the same pairs (the «Allocazione»
+    history splits only the dimension it shows)."""
+
+    def test_each_voice_is_allocation_parts_voice(self):
+        classifications = (
+            None,
+            {daily_state_module.GEOGRAPHY_VOICE: _whole(GEO_2), daily_state_module.SECTOR_VOICE: _whole(SECTOR_1)},
+            {daily_state_module.GEOGRAPHY_VOICE: _whole(None)},
+            {daily_state_module.SECTOR_VOICE: _steps((BOOK_FROM, BOOK_FROM, SECTOR_1), (BOOK_FROM + timedelta(days=1), BOOK_TO, W_GEO))},
+        )
+        value = Decimal("1234.56")
+        for classification in classifications:
+            for day in (BOOK_FROM, BOOK_FROM + timedelta(days=3), BOOK_TO):
+                parts = daily_state_module.allocation_parts("ETF_STOCK", classification, day, value)
+                assert daily_state_module.allocation_voice_parts(classification, daily_state_module.SECTOR_VOICE, day, value) == parts.sector
+                assert daily_state_module.allocation_voice_parts(classification, daily_state_module.GEOGRAPHY_VOICE, day, value) == parts.geography

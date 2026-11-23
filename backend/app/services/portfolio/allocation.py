@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import dataclasses
 from datetime import date as date_type
 
@@ -53,7 +54,10 @@ class PortfolioAllocationMixin:
         if states:
             asset_ids |= set(states[-1].by_asset)
         assets = await self._get_assets_map(asset_ids)
-        view = build_allocation_view(
+        # Pure CPU, and long with the history (every asset split again on every change row: ~0.2–0.7 s on 2000 segments ×
+        # 20 assets): off the event loop. to_thread copies the context, the Decimal context included
+        view = await asyncio.to_thread(
+            build_allocation_view,
             states,
             asset_types=asset_types,
             asset_classifications=asset_classifications,
