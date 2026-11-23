@@ -22,6 +22,8 @@ import pytest
 RANGE_BOUND_CONSUMERS = (
     "backend.app.services.financial_math.portfolio.engine",
     "backend.app.services.portfolio.positions",
+    # Lane 80: the «Allocazione» tab's view ends its period at the bound, as the report does
+    "backend.app.services.portfolio.allocation",
     "backend.app.services.portfolio.report",
     "backend.app.services.portfolio.summary",
     "backend.app.services.portfolio.lots_analysis_service",
