@@ -318,6 +318,40 @@ only genuine observed prices (backward-filled points excluded) inside the reques
 AI period, reports coverage against the requested days, and is `partial` when the
 observations do not span the whole period.
 
+## 🛡️ Risk Evidence {: #risk-evidence }
+
+`portfolio.risk_evidence` is an internal dataset, required by `portfolio.protection_strategies` beside
+`portfolio.overview_and_history`. Its two components (`ai_export/components/risk_evidence.py`, version 1) copy the
+results of one `RiskService.execute` call, cached for the request, so they share one joint calendar and one measured
+window. They compute nothing.
+
+| Component | Risk analytic | What it carries |
+| --- | --- | --- |
+| `portfolio.risk_concentration` | `risk_contribution` | per held asset (its brokers summed): weight and share of the portfolio's volatility; the annualized volatility, the effective number of positions, the diversification multiple, the cash and excluded weights |
+| `portfolio.tail_risk` | `historical_var`, 95 %, 30 calendar days | the loss of a bad month (VaR and CVaR, positive numbers), the worst 30-day window with its dates and signed return, the number of overlapping windows |
+
+- **Today's holdings** (`current_composition`, `current_buy_and_hold`), not the portfolio's history: the Dashboard's
+  Risk tab measures its bad month on the history (TWRR) over the Dashboard period, so its figure differs by design. The
+  prompt's «Risk measures» rule tells the AI so.
+- **Twelve months up to the end of the export period**, whatever the period chosen: the same day twelve calendar months
+  before (`datetime_utils.months_before`, the rule of the «1 year» presets). The components declare `AS_OF`, the
+  dataset too: the window is their own, not the AI period.
+- **A holding quoted only recently shortens the window for every holding**: the joint calendar starts on the first day
+  all of them have a price. Each section carries the requested and the measured window and the holdings that shortened
+  it (`window_shortened_by`, from Risk's `short_history` warning). A holding with no usable price leaves the measures,
+  is listed in `excluded_assets` with its reason, and weighs as cash.
+- **The scope** is the export's broker filter, the scope of the positions printed beside it, with the ownership share
+  of every Portfolio section. It sits behind one switch, `RISK_EVIDENCE_FOLLOWS_BROKER_FILTER`, pending the developer's
+  decision (D10): `portfolio.drawdown_summary` and the Risk tab use the whole portfolio.
+- **Never a failed snapshot.** A required component that raised would fail the whole snapshot, so a Risk refusal
+  (`insufficient_history`, a composition outside the contract) is an `unavailable` section and a Risk error a `failed`
+  one, with its `reason_code` and no figures. The validators forbid figures on those statuses and require them on `ok`
+  and `partial`.
+- **Percentages only**, with their base written in the payload (`weight_basis`): shares of the net worth of the scope,
+  cash included, with cash and the excluded holdings at zero risk. The renderer prints them under names that say what
+  they are: `value_at_risk_loss_percent`, `expected_shortfall_loss_percent`, `worst_window_return_percent`,
+  `risk_share_percent` ([Snapshot Data Tables](#snapshot-data-tables)).
+
 ## 🧾 Task-specific Evidence Datasets
 
 Baseline adequacy rating flagged missing concrete evidence for several analyses.
@@ -363,7 +397,7 @@ degrade independently. Fiscal Analyses add the internal full-FIFO dataset.
 | `portfolio.rebalancing`                | `portfolio.overview_and_history` | `portfolio.asset_history`    |
 | `portfolio.performance_market_drivers` | `portfolio.overview_and_history` | `portfolio.asset_history`    |
 | `portfolio.fiscal_lots`                | general + internal full FIFO     | `portfolio.asset_history`    |
-| `portfolio.protection_strategies`      | `portfolio.overview_and_history` | `portfolio.asset_history`    |
+| `portfolio.protection_strategies`      | general + internal risk evidence | `portfolio.asset_history`    |
 | `broker.review`                        | `broker.overview_and_history`    | `broker.asset_history`       |
 | `broker.performance_market_drivers`    | `broker.overview_and_history`    | `broker.asset_history`       |
 | `broker.fiscal_lots`                   | general + internal full FIFO     | `broker.asset_history`       |
@@ -743,6 +777,14 @@ field — a key in `FIELD_REFERENCE_KEYS`: a `field` leaf, as in `asset.position
 `coverage.omitted[].missing_fields` — goes through the same map, so it names the
 column as the prompt shows it; free text such as `reason` is never rewritten, and the
 backend payload keeps the canonical codes.
+
+The conversion is an allow-list, not a suffix rule: a `*_ratio` field becomes a
+percentage only when `NORMALIZED_RATIO_FIELDS` names it, with its public name in
+`PUBLIC_RATIO_FIELD_NAMES` and, when it may leave 0–100 %, its entry in
+`SIGNED_NORMALIZED_RATIO_FIELDS` or `UNBOUNDED_NORMALIZED_RATIO_FIELDS`. A new ratio
+that is in none of them prints as a raw decimal under its `_ratio` name. A field that
+is not a share (the diversification ratio of the [Risk Evidence](#risk-evidence), a
+multiple of at least 1) is named without `_ratio` on purpose.
 
 ## 📋 Manifests
 
