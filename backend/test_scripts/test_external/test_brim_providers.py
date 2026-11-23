@@ -3441,10 +3441,12 @@ class TestFinecoSafeRows:
         assert (notice.context or {}).get("report_issue") is True and (notice.context or {}).get("count") == 1
         assert sorted(line for evidence in notice.evidence for line in evidence.row_numbers) == [_FINECO_FIRST_LINE], "the notice lists the skipped row's line"
 
-    def test_fineco_plugin_version_is_1_5_0(self):
-        """Red today: 1.4.0. Contract (Fineco left the beta, W-B92): the rows it leaves out are now the shared ``rows_not_recognized``
-        and ``rows_unreadable`` notices instead of plain strings, so the output for the same file changes and its version becomes 1.5.0."""
-        assert FinecoBrokerProvider().plugin_version == "1.5.0"
+    def test_fineco_plugin_version_is_at_least_1_5_0(self):
+        """Contract (Fineco left the beta, W-B92): the rows it leaves out are now the shared ``rows_not_recognized`` and
+        ``rows_unreadable`` notices instead of plain strings, so the output for the same file changed and its version became
+        1.5.0. Later versions keep it (1.6.0, project 66 P2a: the commission is linked to its trade; pinned in
+        ``test_brim_fineco.py`` and ``test_brim_row_skips.py``)."""
+        assert tuple(int(part) for part in FinecoBrokerProvider().plugin_version.split(".")) >= (1, 5, 0)
 
 
 # =============================================================================
@@ -5027,7 +5029,7 @@ class TestCreditAgricoleCanonicalCharacterization:
                     "quantity": "0",
                     "cash": {"code": "EUR", "amount": "250.00"},
                     "link_uuid": None,
-                    "ref": None,
+                    "ref": "r6",
                     "parent_ref": None,
                     "parent_transaction_id": None,
                     "tags": ["import", "credit_agricole", "cedole_dividendi_premi_estratti"],
@@ -5045,7 +5047,7 @@ class TestCreditAgricoleCanonicalCharacterization:
                     "cash": {"code": "EUR", "amount": "-31.25"},
                     "link_uuid": None,
                     "ref": None,
-                    "parent_ref": None,
+                    "parent_ref": "r6",
                     "parent_transaction_id": None,
                     "tags": ["import", "credit_agricole", "cedole_dividendi_premi_estratti", "withholding_tax"],
                     "description": "[CEDOLE, DIVIDENDI, PREMI ESTRATTI — ritenuta] CEDOLA:BTP SAMPLE 1/12/2026 IT0000000001 DOS:00000/00000000 NOMINALE: 40.000,00 TASSO: 1,25 ALIQ: 12,50 RITENUTA: 31,25 DATA : 01/06/2026 N.MOVIM: 1",
@@ -5062,7 +5064,7 @@ class TestCreditAgricoleCanonicalCharacterization:
                     "cash": {"code": "EUR", "amount": "-1.50"},
                     "link_uuid": None,
                     "ref": None,
-                    "parent_ref": None,
+                    "parent_ref": "r6",
                     "parent_transaction_id": None,
                     "tags": ["import", "credit_agricole", "commiss_spese_su_operaz_titoli"],
                     "description": "SPESE STACCO CEDOLA DEL 01/06/2026 DOSSIER: 00000/00000000 TIT: IT0000000001",

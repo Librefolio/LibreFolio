@@ -37,3 +37,16 @@ export function postSplitType(op: PendingOp, splits: readonly QueuedSplit[]): st
     if (!split || op.fields.type !== split.originalType) return op.fields.type;
     return splitHalfType(split.originalType, op.fields) ?? op.fields.type;
 }
+
+/** The type the update of a split half must carry (66 C22e), or `null` when it carries none. The backend splits first
+ *  (`apply_splits`) and gives the half the type of its side as saved (`pair_sides`); the update runs after. So the
+ *  update names a type only when the one the Bulk shows (`postSplitType`) differs from that: the user swapped it by
+ *  hand. The side is read on the saved row, never on the draft: after a swap the draft's amount is a magnitude. */
+export function splitTypeToSend(op: PendingOp, splits: readonly QueuedSplit[], saved: {quantity?: string | null; cash?: {amount: string} | null} | null): string | null {
+    if (op.op !== 'edit' || !saved) return null;
+    const split = splits.find((s) => s.id_a === op.txId || s.id_b === op.txId);
+    if (!split) return null;
+    const serverType = splitHalfType(split.originalType, saved);
+    const finalType = postSplitType(op, splits);
+    return serverType && finalType !== serverType ? finalType : null;
+}

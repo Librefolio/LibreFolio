@@ -263,6 +263,26 @@ def external_brim_traderepublic(verbose: bool = False, test_names: list = None) 
     return run_command(cmd, "BRIM Trade Republic tests", verbose=verbose)
 
 
+def external_brim_fineco(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the Fineco plugin's linked charges (project 66, wave P2a); the rest of Fineco is in brim-providers."""
+    print_section("External: BRIM Fineco Tests")
+    print_info("Testing: broker_fineco — each commission names the trade of its row (also across currencies), the previous version's snapshot, the reimport")
+    print_info("Tests: the four samples (Variant B links, Variant A has no charge), structure, only names change, reimport adds nothing, version")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_external/test_brim_fineco.py", test_names or None)
+    return run_command(cmd, "BRIM Fineco tests", verbose=verbose)
+
+
+def external_brim_directa(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the Directa plugin's linked charges (project 66, lot P3); the rest of Directa is in brim-providers."""
+    print_section("External: BRIM Directa Tests")
+    print_info("Testing: broker_directa — commissions, «Rit. etf» and Tobin tax by order reference, withholdings by date and ISIN, «Rit.provento etf» as a TAX")
+    print_info("Tests: the sample and invented rows, one candidate only, order kept, snapshot of the previous version, reimport, version")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_external/test_brim_directa.py", test_names or None)
+    return run_command(cmd, "BRIM Directa tests", verbose=verbose)
+
+
 def external_brim_scalable(verbose: bool = False, test_names: list = None) -> bool:
     """Test the Scalable Capital plugins (broker account and overnight account)."""
     print_section("External: BRIM Scalable Capital Tests")
@@ -375,7 +395,29 @@ These tests verify external API integrations:
         name="BRIM Trade Republic",
         desc="Test the Trade Republic plugin (Transaction export, also re-saved by Excel, and the Dutch CSV)",
         prereq="Sample files in test fixtures",
-        tests="Recognition, both shapes and ; identical, sample row by row, date column, tax refund, unsettled rows, duplicates, rows left out, assets",
+        tests="Recognition, both shapes and ; identical, sample row by row, date column, tax refund, unsettled rows, duplicates, rows left out, assets, linked charges",
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "brim-fineco",
+        external_brim_fineco,
+        name="BRIM Fineco",
+        desc="Test the Fineco plugin's linked charges (project 66, wave P2a)",
+        prereq="Sample files in test fixtures",
+        tests="Each commission names its trade (EUR fee on a USD trade too), Variant A without charges, structure, snapshot of the previous version, reimport, version",
+        # PURE: the samples and tmp_path files; the reimport tests open a private in-memory SQLite each and dispose it.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "brim-directa",
+        external_brim_directa,
+        name="BRIM Directa",
+        desc="Test the Directa plugin's linked charges (project 66, lot P3)",
+        prereq="Sample files in test fixtures",
+        tests="Commission / «Rit. etf» / Tobin tax by order reference, coupon and ETF income withholdings by date and ISIN, «Rit.provento etf» as a TAX, one candidate only, order, snapshot, reimport, version, XLSX",
+        # PURE: the sample and tmp_path files; the reimport test opens a private in-memory SQLite and disposes it.
         isolation="pure",
     )
     add_test(
@@ -385,7 +427,7 @@ These tests verify external API integrations:
         name="BRIM Scalable Capital",
         desc="Test the Scalable Capital plugins (broker and overnight account)",
         prereq="Sample files in test fixtures",
-        tests="Recognition, refusals with a code, PRIME and exporter samples, legs, notices, synthetic edge cases",
+        tests="Recognition, refusals with a code, PRIME and exporter samples, legs, notices, synthetic edge cases, linked charges",
     )
     add_test(
         cat,

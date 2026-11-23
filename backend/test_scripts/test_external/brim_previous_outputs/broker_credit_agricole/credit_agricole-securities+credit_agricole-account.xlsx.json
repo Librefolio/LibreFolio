@@ -1,0 +1,364 @@
+{
+  "format": "lf-brim-previous-output/1",
+  "comment": "Output of the plugin BEFORE its project-66 lot changed it (P2 contract §2.1). Never re-take it after the code change.",
+  "plugin_code": "broker_credit_agricole",
+  "plugin_version": "2.0.0",
+  "source_head": "595738c0c",
+  "captured_on": "2026-11-21",
+  "members": [
+    {
+      "sample": "broker_credit_agricole/sample_reports/credit_agricole-securities.csv",
+      "sample_sha256": "507f1432e8a6905748ab6bf8cfb1907270d5b10c02e710c4b87ef9e5d5fcebf9"
+    },
+    {
+      "sample": "broker_credit_agricole/sample_reports/credit_agricole-account.xlsx",
+      "sample_sha256": "d8cbba5f98af45a242323054c9f5ed9ee872729d329b7d00fe60ca40dffafc68"
+    }
+  ],
+  "extracted_assets": {
+    "2147483647": {
+      "extracted_symbol": null,
+      "extracted_isin": "IT0000000001",
+      "extracted_name": "BTP SAMPLE 1/12/2026 1.25%",
+      "notices": [
+        {
+          "kind": "maturity_suspected",
+          "reason": "Rilevata almeno una transazione di scadenza/rimborso (es. «TITOLI SCADUTI» o «FONDI: RIMBORSO»).",
+          "transaction_indexes": [
+            10,
+            11
+          ]
+        }
+      ]
+    },
+    "2147483646": {
+      "extracted_symbol": null,
+      "extracted_isin": null,
+      "extracted_name": "BTP DEMO 15/03/2033 3.35%",
+      "notices": []
+    },
+    "2147483645": {
+      "extracted_symbol": null,
+      "extracted_isin": null,
+      "extracted_name": "SAMPLE GLOB EQ FUND",
+      "notices": []
+    },
+    "2147483644": {
+      "extracted_symbol": null,
+      "extracted_isin": null,
+      "extracted_name": "SAMPLE FUND SICAV CL B",
+      "notices": [
+        {
+          "kind": "maturity_suspected",
+          "reason": "Rilevata almeno una transazione di scadenza/rimborso (es. «TITOLI SCADUTI» o «FONDI: RIMBORSO»).",
+          "transaction_indexes": [
+            7
+          ]
+        }
+      ]
+    },
+    "2147483643": {
+      "extracted_symbol": null,
+      "extracted_isin": "IT0000000002",
+      "extracted_name": "BTP DEMO 15/03/2033",
+      "notices": []
+    }
+  },
+  "transactions": [
+    {
+      "asset_id": 2147483647,
+      "type": "ADJUSTMENT",
+      "date": "2026-02-20",
+      "quantity": "40000",
+      "cash": null,
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "credit_agricole"
+      ],
+      "description": "[GIRO ALTRO DOSSIER — successione / transfer-in] BTP SAMPLE 1/12/2026 1.25% (price 0.00, qty 40000)",
+      "cost_basis_override": {
+        "code": "EUR",
+        "amount": "0.00"
+      },
+      "cost_basis_mode": "manual",
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483647,
+      "type": "INTEREST",
+      "date": "2026-03-01",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "250.00"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "credit_agricole"
+      ],
+      "description": "CEDOLA: BTP SAMPLE 1/12/2026 1.25%",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483647,
+      "type": "TAX",
+      "date": "2026-03-01",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "-31.25"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "credit_agricole",
+        "cedole_dividendi_premi_estratti",
+        "withholding_tax"
+      ],
+      "description": "[CEDOLE, DIVIDENDI, PREMI ESTRATTI — ritenuta] CEDOLA:BTP SAMPLE 1/12/2026 IT0000000001 DOS:00000/00000000 NOMINALE: 40.000,00 TASSO: 1,25 ALIQ: 12,50 RITENUTA: 31,25 DATA : 01/06/2026 N.MOVIM: 1",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483646,
+      "type": "BUY",
+      "date": "2026-03-02",
+      "quantity": "5000",
+      "cash": {
+        "code": "EUR",
+        "amount": "-5010.00"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "credit_agricole"
+      ],
+      "description": "ACQ.CONT.SU MERC.: BTP DEMO 15/03/2033 3.35%",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": null,
+      "type": "DEPOSIT",
+      "date": "2026-03-02",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "2000.00"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "credit_agricole",
+        "accredito_emolumenti"
+      ],
+      "description": "STIPENDIO SAMPLE a",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": null,
+      "type": "WITHDRAWAL",
+      "date": "2026-03-12",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "-42.10"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "credit_agricole",
+        "pagamento_tramite_pos"
+      ],
+      "description": "POS CARTA 00000000 a",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483645,
+      "type": "BUY",
+      "date": "2026-03-16",
+      "quantity": "10.500",
+      "cash": {
+        "code": "EUR",
+        "amount": "-1000.00"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "credit_agricole"
+      ],
+      "description": "SICAV: SOTTOSCR: SAMPLE GLOB EQ FUND",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483644,
+      "type": "SELL",
+      "date": "2026-03-19",
+      "quantity": "-100",
+      "cash": {
+        "code": "EUR",
+        "amount": "300.00"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "credit_agricole"
+      ],
+      "description": "FONDI: RIMBORSO: SAMPLE FUND SICAV CL B",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483643,
+      "type": "INTEREST",
+      "date": "2026-03-22",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "114.29"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "credit_agricole",
+        "cedole_dividendi_premi_estratti"
+      ],
+      "description": "CEDOLA:BTP DEMO 15/03/2033 IT0000000002 DOS:00000/00000000 NOMINALE: 40.000,00 TASSO: 1,25 ALIQ: 12,50 RITENUTA: 14,29 DATA : 01/06/2026 N.MOVIM: 1",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483643,
+      "type": "TAX",
+      "date": "2026-03-22",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "-14.29"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "credit_agricole",
+        "cedole_dividendi_premi_estratti",
+        "withholding_tax"
+      ],
+      "description": "[CEDOLE, DIVIDENDI, PREMI ESTRATTI — ritenuta] CEDOLA:BTP DEMO 15/03/2033 IT0000000002 DOS:00000/00000000 NOMINALE: 40.000,00 TASSO: 1,25 ALIQ: 12,50 RITENUTA: 14,29 DATA : 01/06/2026 N.MOVIM: 1",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483647,
+      "type": "SELL",
+      "date": "2026-03-25",
+      "quantity": "-40000.000",
+      "cash": {
+        "code": "EUR",
+        "amount": "40000.00"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "credit_agricole"
+      ],
+      "description": "TITOLI SCADUTI: BTP SAMPLE 1/12/2026 1.25% (redeemed at par 100, nominal 40000.000 [position], premium 500.00)",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483647,
+      "type": "INTEREST",
+      "date": "2026-03-25",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "500.00"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "credit_agricole",
+        "maturity_premium"
+      ],
+      "description": "[TITOLI SCADUTI — premio/rivalutazione a scadenza] BTP SAMPLE 1/12/2026 1.25% (surplus over par 500.00)",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": null,
+      "type": "WITHDRAWAL",
+      "date": "2026-03-28",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "-61.20"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "credit_agricole",
+        "pagamento_utenze"
+      ],
+      "description": "SDD A : UTILITY PROVIDER ADDEBITO SDD NUMERO 0000000001",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    }
+  ]
+}

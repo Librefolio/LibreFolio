@@ -20,7 +20,8 @@
  *
  * The walk is R5's (tx-import-report-set.spec.ts), helpers copied rather than imported from a
  * spec file: both exports in one step-1 session → one complete set → its combined file parsed →
- * notices read past → every charge kept → review → only the 5 cash rows of the history selected
+ * notices read past → the charges still asked for kept (project 66, P2c: Kaamos alone, the other trades are split by
+ * the plugin) → review → only the 5 cash rows of the history selected
  * (nothing to resolve, nothing created) → Import. On a fresh broker the opening deposit of
  * 2699.50 EUR is always proposed, so the step always opens.
  */
@@ -37,14 +38,25 @@ import {samplePath} from '../fixtures/brimSamples';
 
 const API = '/api/v1';
 const UPLOAD_PATH = `${API}/brokers/import/upload`;
+const PARSE_PATH = /^\/api\/v1\/brokers\/import\/files\/[^/]+\/parse$/;
 const SPEC_DIR = path.dirname(fileURLToPath(import.meta.url));
 const CUSTODY_XLSX = samplePath('danske_bank-custody.xlsx');
 const CASH_CSV = samplePath('danske_bank-cash.csv');
 const DANSKE = 'broker_danske_bank';
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-/** The facts of the main set on a fresh broker (backend phase B). */
-const MAIN_SET = {trades: 11, cashRowsInHistory: 5} as const;
+/**
+ * The facts of the main set on a fresh broker (backend phase B). Project 66, P2c: of the 11 trades only Kaamos, priced in
+ * another currency, still asks about its charges; the other 10 are split by the plugin.
+ */
+const MAIN_SET = {chargeTodos: 1, cashRowsInHistory: 5} as const;
+
+type ParsedSet = {field_todos: Array<{tx_index: number; context?: Record<string, unknown> | null}>};
+
+/** The parse of the combined file, armed before the click that starts it (a POST, never served from a cache). */
+function parseResponse(page: Page): Promise<ParsedSet> {
+    return page.waitForResponse((response) => response.request().method() === 'POST' && PARSE_PATH.test(new URL(response.url()).pathname), {timeout: 60_000}).then((response) => response.json() as Promise<ParsedSet>);
+}
 
 /** Budget of the first C3 element: before the implementation it is the one that fails. */
 const C3_FIRST = 8_000;
@@ -179,16 +191,20 @@ async function walkMainSetToReview(page: Page, brokerId: number): Promise<Locato
     await expect(card).toHaveAttribute('data-selected', 'all');
     const parse = page.getByTestId('import-wizard-parse');
     await expect(parse).toBeEnabled({timeout: 5_000});
+    const parsed = parseResponse(page);
     await parse.click();
     await expect(page.getByTestId('import-wizard-step3')).toBeVisible({timeout: 10_000});
     await waitForParseVerdict(page, 60_000);
+    // The rows the corrections step lists: a todo with a split hint, read from the parse.
+    const fixRows = new Set((await parsed).field_todos.filter((todo) => todo.context?.split_hint).map((todo) => todo.tx_index)).size;
+    expect(fixRows, 'P2c: only the trade priced in another currency asks about its charges').toBe(MAIN_SET.chargeTodos);
 
     await page.getByTestId('import-wizard-continue').click();
     const confirm = page.getByTestId('import-wizard-warning-confirm');
     await expect(confirm).toBeVisible({timeout: 5_000});
     await confirm.click();
     await expect(currentStep(page)).toHaveAttribute('data-step-id', 'fix', {timeout: 30_000});
-    await expect(page.getByTestId('fix-step-row')).toHaveCount(MAIN_SET.trades, {timeout: 10_000});
+    await expect(page.getByTestId('fix-step-row')).toHaveCount(fixRows, {timeout: 10_000});
     await page.getByTestId('fix-step-accept-all').click();
     await expect(page.locator('[data-testid="fix-step-row"][data-decision="pending"]')).toHaveCount(0, {timeout: 10_000});
     await page.getByTestId('import-wizard-fix-continue').click();

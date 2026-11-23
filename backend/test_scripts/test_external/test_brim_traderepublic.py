@@ -1,5 +1,5 @@
 """
-Test Suite: the Trade Republic plugin — ``broker_traderepublic`` 1.2.0 (lane 73 TR)
+Test Suite: the Trade Republic plugin — ``broker_traderepublic`` 1.3.0 (lane 73 TR; project 66 P2a)
 
 The plugin reads two layouts: Trade Republic's «Transaction export» (the native CSV since April 2026, read by
 ``broker_traderepublic/_transactions_export.py``, whose module docstring is the spec) and the old Dutch 8-column CSV,
@@ -7,7 +7,7 @@ unchanged. The plugin is reached through the registry inside each test, never im
 
 What is pinned:
 
-- A. identity: code, version 1.2.0, the ``.csv`` extension, a file of another extension refused;
+- A. identity: code, version 1.3.0, the ``.csv`` extension, a file of another extension refused;
 - B. recognition by the header, never by the file name: the clean export (``,``, every cell quoted), the same rows as
   Excel re-saves them (one quoted cell per line, CRLF), a ``;`` variant, columns in another order and in upper case;
   the Dutch sample still recognised; a header missing any one of the required columns refused (``can_parse`` false,
@@ -24,9 +24,14 @@ What is pinned:
 - E. the wording: the plugin's three info notes are in the four UI catalogues (the developer, 11/11/2026), message and
   evidence comment, so the user reads them in the UI language rather than the plugin's English fallback.
 
+- F. the linked charges (project 66, wave P2a): the fee and tax of a row name its booking; the tax of a TAX_OPTIMIZATION
+  row, the account's own fee and tax rows and the tax refunds name nothing; the Dutch CSV gives no charge; the output differs
+  from the previous version's snapshot (``brim_previous_outputs/``, HEAD 890343101) only by its names, and reimporting a
+  sample over it adds nothing.
+
 Every input is a sample of ``sample_reports/`` or a file written in ``tmp_path``; every synthetic value is invented (the
-ISINs are public securities). The far-future day is in 2099, so no clock is patched. This module is pure: no server,
-no database, no network.
+ISINs are public securities). The far-future day is in 2099, so no clock is patched. No server, no shared database, no
+network: the reimport tests of F open a private in-memory SQLite each and dispose it.
 """
 
 from __future__ import annotations
@@ -43,6 +48,15 @@ import pytest
 from backend.app.schemas.brim import FAKE_ASSET_ID_BASE, BRIMNotice, BRIMParseOutput
 from backend.app.services.brim.brim_provider import BRIMParseError, BRIMProvider
 from backend.app.services.brim.registry import BRIMProviderRegistry
+from backend.test_scripts.brim_charge_links import (
+    RowKey,
+    assert_charge_link_structure,
+    assert_expected_charge_links,
+    assert_sample_reimport_adds_nothing,
+    changes_besides_links,
+    load_previous_snapshot,
+    version_tuple,
+)
 from backend.test_scripts.brim_samples import SampleDir
 from scripts.i18n_catalog import load_catalog
 
@@ -51,7 +65,7 @@ from scripts.i18n_catalog import load_catalog
 # =============================================================================
 
 PLUGIN_CODE = "broker_traderepublic"
-PLUGIN_VERSION = "1.2.0"
+PLUGIN_VERSION = "1.3.0"  # project 66 P2a: the fee and tax of a row are linked to its booking
 SAMPLE_DIR = SampleDir()
 CLEAN_SAMPLE = SAMPLE_DIR / "traderepublic-transactions.csv"
 EXCEL_SAMPLE = SAMPLE_DIR / "traderepublic-transactions-excel.csv"
@@ -279,7 +293,7 @@ class TestFixtureGuards:
 
 class TestIdentity:
     def test_code_version_and_extension(self):
-        """A: the code the brokers name, version 1.2.0 (the Transaction export), ``.csv`` only."""
+        """A: the code the brokers name, version 1.3.0 (the Transaction export, its charges linked), ``.csv`` only."""
         plugin = _plugin()
         assert plugin.provider_code == PLUGIN_CODE
         assert plugin.plugin_version == PLUGIN_VERSION
@@ -710,3 +724,113 @@ class TestWhatTheWizardWords:
         """Each message names ``{count}``: the notice's ``context.count`` is its only value."""
         catalogue = load_catalog(language, fallback=False)
         assert all("{count" in str(_entry(catalogue, f"importWizard.brimNotice.{code}")) for code in INFO_NOTES)
+
+
+# =============================================================================
+# F. LINKED CHARGES (project 66, wave P2a) — the fee and tax of a row name that row
+# =============================================================================
+
+
+def _key(kind: str, day: str, amount: str, identifier: Optional[str] = None) -> RowKey:
+    """A row named by type, date, amount, EUR and its security's identifier (ISIN or symbol; None: no asset)."""
+    return (kind, day, amount, "EUR", identifier)
+
+
+#: The clean export and its Excel shape: (linked (charge, parent), free charges). Every FEE/TAX is in one of the two; the
+#: «Tax refund» (TAX_OPTIMIZATION with a positive tax) is an INTEREST, not a charge, and names nothing.
+_TRANSACTIONS_EXPECTED: Tuple[List[Tuple[RowKey, RowKey]], List[RowKey]] = (
+    [
+        # The tax withheld on an interest payment: same row, INTEREST is a parent type.
+        (_key("TAX", "2025-02-03", "-1.30"), _key("INTEREST", "2025-02-03", "5.000000")),
+        (_key("FEE", "2025-02-21", "-1.00", MSCI_EM), _key("SELL", "2025-02-21", "650.00", MSCI_EM)),
+        (_key("TAX", "2025-02-21", "-12.35", MSCI_EM), _key("SELL", "2025-02-21", "650.00", MSCI_EM)),
+        (_key("FEE", "2025-02-25", "-1.00", ETH), _key("BUY", "2025-02-25", "-100.00", ETH)),
+        (_key("TAX", "2025-03-03", "-1.04"), _key("INTEREST", "2025-03-03", "4.000000")),
+        (_key("FEE", "2025-03-04", "-1.00", APPLE), _key("BUY", "2025-03-04", "-400.00", APPLE)),
+    ],
+    # TAX_OPTIMIZATION: the tax is the booking, there is no main row to name.
+    [_key("TAX", "2025-02-10", "-3.50")],
+)
+LINK_EXPECTATIONS: Dict[str, Tuple[List[Tuple[RowKey, RowKey]], List[RowKey]]] = {
+    "traderepublic-transactions.csv": _TRANSACTIONS_EXPECTED,
+    "traderepublic-transactions-excel.csv": _TRANSACTIONS_EXPECTED,
+    # The Dutch CSV: Kosten and Belasting are not imported, the sample has no Kosten/Belasting row: no charge at all.
+    "traderepublic-export.csv": ([], []),
+}
+LINK_SAMPLES = tuple(LINK_EXPECTATIONS)
+
+
+class TestLinkedCharges:
+    """Project 66, wave P2a (P2 contract §2–§3; decisions of 16/11, «Plugin per plugin»): in the Transaction export the fee and
+    the tax of a row name the row's booking (BUY, SELL, DIVIDEND, INTEREST) as their parent (``parent_ref`` = its ``ref``), with
+    its asset and broker. Free: the tax of a TAX_OPTIMIZATION row (no main row), the account's own FEE/TAX rows, a tax beside a
+    fee (a FEE is no parent); a «Tax refund» is an INTEREST and names nothing. The Dutch CSV emits no charges.
+
+    RED before the code change: the expected links and the version. Green before and after (guards): the structure, the snapshot
+    comparison (taken at HEAD 890343101, plugin 1.2.0), the reimport over the previous version's rows — on a private in-memory
+    SQLite, disposed after each test.
+    """
+
+    @pytest.mark.parametrize("sample", LINK_SAMPLES)
+    def test_the_fee_and_tax_of_a_row_name_its_booking(self, sample: str):
+        linked, free = LINK_EXPECTATIONS[sample]
+        out = _parse(SAMPLE_DIR / sample)
+
+        assert_expected_charge_links(out, f"{PLUGIN_CODE} [{sample}]", linked=linked, free=free)
+
+    def test_the_rows_with_no_booking_of_their_own_leave_their_charges_free(self, tmp_path: Path):
+        """Invented rows: a dividend with its tax and a sale with its fee and a tax refund (linked, the refund naming nothing);
+        the account's own FEE and TAX rows, and a FEE row whose tax column would make a FEE the parent (free)."""
+        path = _write(
+            tmp_path,
+            [
+                _row(),
+                _row(category="CASH", type="DIVIDEND", asset_class="STOCK", name="Apple", symbol=APPLE, amount="10.00", tax="-2.60", description="Dividend Apple"),
+                _sell(fee="-1.00", tax="3.10"),
+                _row(category="CASH", type="FEE", amount="-5.00", description="Card fee"),
+                _row(category="CASH", type="TAX", amount="-2.00", description="Tax payment"),
+                _row(category="CASH", type="FEE", amount="-7.00", tax="-1.10", description="Fee with its tax"),
+            ],
+        )
+        out = _parse(path)
+        refunds = [tx for tx in out.transactions if tx.type.value == "INTEREST"]
+        assert len(refunds) == 1, f"presence barrier: one «Tax refund»; {[(tx.type.value, tx.description) for tx in out.transactions]}"
+
+        assert refunds[0].parent_ref is None, f"a tax refund is not a charge: parent_ref={refunds[0].parent_ref!r}"
+        assert_expected_charge_links(
+            out,
+            "synthetic rows",
+            linked=[
+                (_key("TAX", "2025-04-01", "-2.60", APPLE), _key("DIVIDEND", "2025-04-01", "10.00", APPLE)),
+                (_key("FEE", "2025-04-01", "-1.00", MSCI_EM), _key("SELL", "2025-04-01", "650.00", MSCI_EM)),
+            ],
+            free=[_key("FEE", "2025-04-01", "-5.00"), _key("TAX", "2025-04-01", "-2.00"), _key("FEE", "2025-04-01", "-7.00"), _key("TAX", "2025-04-01", "-1.10")],
+        )
+
+    @pytest.mark.parametrize("sample", LINK_SAMPLES)
+    def test_the_links_are_well_formed(self, sample: str):
+        assert_charge_link_structure(_parse(SAMPLE_DIR / sample), f"{PLUGIN_CODE} [{sample}]")
+
+    @pytest.mark.parametrize("sample", LINK_SAMPLES)
+    def test_only_the_names_change_from_the_previous_version(self, sample: str):
+        """Guard: every row equals the snapshot's, in order, but for ``ref``/``parent_ref``: amounts, currencies, assets, types unchanged."""
+        previous = load_previous_snapshot(PLUGIN_CODE, sample, BROKER_ID)
+        out = _parse(SAMPLE_DIR / sample)
+
+        problems = changes_besides_links(previous.transactions, out.transactions)
+        assert not problems, f"{sample}: the output changed besides its links (snapshot HEAD {previous.source_head}):\n  " + "\n  ".join(problems)
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("sample", LINK_SAMPLES)
+    async def test_reimport_over_the_previous_version_adds_nothing(self, sample: str):
+        """Guard (P2 contract §2.1): the sample, reimported over the rows the previous version saved (without links), adds no row."""
+        out = await assert_sample_reimport_adds_nothing(_plugin(), sample)
+
+        assert out.transactions, f"{sample}: the criterion ran on an empty output"
+
+    def test_the_version_is_above_the_previous_one(self):
+        """RED before P2a: every touched plugin goes up a version (the decisions of 16/11)."""
+        plugin = _plugin()
+        for sample in LINK_SAMPLES:
+            previous = load_previous_snapshot(PLUGIN_CODE, sample, BROKER_ID)
+            assert version_tuple(plugin.plugin_version) > version_tuple(previous.plugin_version), f"{PLUGIN_CODE} {plugin.plugin_version}: not above the snapshot's {previous.plugin_version} ({sample})"

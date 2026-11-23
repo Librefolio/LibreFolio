@@ -25,8 +25,13 @@ What is pinned:
   in the four catalogues, no catalogue keeps a key for a notice the plugins no longer give, and the evidence tables
   carry no title of their own, so the wizard captions them.
 
+- F. the linked charges (project 66, wave P2a): the fee and tax columns of a trade, a dividend or an interest name their
+  row; the account's own fee and tax rows and the tax refunds name nothing; the output differs from the previous version's
+  snapshot (``brim_previous_outputs/``, HEAD 890343101) only by its names, and reimporting a sample over it adds nothing.
+
 Every input is a sample of ``sample_reports/`` or is written in ``tmp_path``; every value of the synthetic files is
-invented (the ISINs are public securities). No server and no database: this module is pure. The endpoint that asks a
+invented (the ISINs are public securities). No server and no shared database: the reimport tests of F open a private
+in-memory SQLite each and dispose it. The endpoint that asks a
 plugin about an uploaded file (``GET /import/files/{file_id}/plugin-check``) is tested in ``test_api/test_brim_api.py``,
 category 17; the contract of ``cannot_parse_detail`` for every plugin, in ``test_brim_providers.py``, category 4d.
 
@@ -51,6 +56,15 @@ from backend.app.schemas.brim import FAKE_ASSET_ID_BASE, BRIMEvidence, BRIMNotic
 from backend.app.schemas.transactions.transactions import TXCreateItem
 from backend.app.services.brim.brim_provider import BRIMParseError, BRIMProvider
 from backend.app.services.brim.registry import BRIMProviderRegistry
+from backend.test_scripts.brim_charge_links import (
+    RowKey,
+    assert_charge_link_structure,
+    assert_expected_charge_links,
+    assert_sample_reimport_adds_nothing,
+    changes_besides_links,
+    load_previous_snapshot,
+    version_tuple,
+)
 from backend.test_scripts.brim_samples import SampleDir
 from scripts.i18n_catalog import load_catalog
 
@@ -64,7 +78,7 @@ BROKER_NAME = "Scalable Capital broker"
 DEPOSIT_NAME = "Scalable Capital overnight account"
 PLUGIN_CODES = (BROKER_CODE, DEPOSIT_CODE)
 DOCS_URL = "/mkdocs/user/transactions/import/scalable/"
-PLUGIN_VERSION = "1.2.0"
+PLUGIN_VERSION = "1.3.0"  # project 66 P2a: the fee and tax columns are linked to their row
 SAMPLE_DIR = SampleDir()
 PRIME_SAMPLE = SAMPLE_DIR / "scalable-prime-export.csv"
 BROKER_SAMPLE = SAMPLE_DIR / "scalable-broker-export.csv"
@@ -1509,3 +1523,123 @@ class TestWhatTheWizardWords:
 
         assert not titled, f"{spec.path.name}: evidence tables with a title of their own, shown instead of the wizard's translated caption: {titled}"
         assert all(_is_worded(table.comment) for _, table in tables), f"{spec.path.name}: the comment explains the rows: {[(code, table.comment) for code, table in tables]}"
+
+
+# =============================================================================
+# F. LINKED CHARGES (project 66, wave P2a) — the fee and tax columns of a row name that row
+# =============================================================================
+
+
+def _charge(kind: str, day: str, amount: str, isin: Optional[str] = None) -> RowKey:
+    """A FEE or TAX of a sample, named by type, date, amount, EUR and its security (None: a cash row)."""
+    return (kind, day, amount, "EUR", isin)
+
+
+def _parent(kind: str, day: str, amount: str, isin: Optional[str] = None) -> RowKey:
+    return (kind, day, amount, "EUR", isin)
+
+
+# The TAX of an INTEREST row (the tax withheld on the cash interest). §3 of the P2 contract names «a trade or a dividend»;
+# the rule of 16/11 links a charge to its own row whenever the parent is one of the six parent types, and INTEREST is one
+# (`_income` reads interest and dividends alike). Linked here; it is the only link of the overnight account.
+_PRIME_INTEREST_TAX = (_charge("TAX", "2026-04-30", "-1.12"), _parent("INTEREST", "2026-04-30", "4.24"))
+_DEPOSIT_INTEREST_TAXES = [
+    (_charge("TAX", "2026-05-31", "-0.92"), _parent("INTEREST", "2026-05-31", "3.50")),
+    (_charge("TAX", "2026-04-30", "-0.65"), _parent("INTEREST", "2026-04-30", "2.47")),
+]
+# The account's own rows: a subscription fee and a capital-gains tax, no operation to name (free by rule).
+_OWN_ROWS = [_charge("FEE", "2026-03-31", "-4.99"), _charge("TAX", "2026-03-10", "-8.4")]
+
+#: Per (plugin, sample): (linked (charge, parent), free charges). Every FEE/TAX of the output is in one of the two; the
+#: «Tax refund» rows are INTEREST, not charges: they name no parent (checked for every row that is not a charge).
+LINK_EXPECTATIONS: Dict[Tuple[str, str], Tuple[List[Tuple[RowKey, RowKey]], List[RowKey]]] = {
+    (BROKER_CODE, "scalable-prime-export.csv"): (
+        [
+            (_charge("FEE", "2026-06-15", "-0.99", APPLE), _parent("SELL", "2026-06-15", "902", APPLE)),
+            (_charge("TAX", "2026-06-15", "-24.57", APPLE), _parent("SELL", "2026-06-15", "902", APPLE)),
+            (_charge("TAX", "2026-06-10", "-22.74", TELEKOM), _parent("DIVIDEND", "2026-06-10", "86.00", TELEKOM)),
+            (_charge("FEE", "2026-06-02", "-0.99", APPLE), _parent("BUY", "2026-06-02", "-750.5", APPLE)),
+            _PRIME_INTEREST_TAX,
+        ],
+        _OWN_ROWS,
+    ),
+    (BROKER_CODE, "scalable-broker-export.csv"): (
+        [
+            (_charge("FEE", "2026-06-15", "-0.99", APPLE), _parent("SELL", "2026-06-15", "902", APPLE)),
+            (_charge("TAX", "2026-06-15", "-24.57", APPLE), _parent("SELL", "2026-06-15", "902", APPLE)),
+            (_charge("FEE", "2026-06-02", "-0.99", APPLE), _parent("BUY", "2026-06-02", "-750.5", APPLE)),
+            (_charge("FEE", "2026-05-20", "-1.49", MSCI_WORLD), _parent("BUY", "2026-05-20", "-1181.4", MSCI_WORLD)),
+        ],
+        _OWN_ROWS,
+    ),
+    (DEPOSIT_CODE, "scalable-deposit-export.csv"): (_DEPOSIT_INTEREST_TAXES, []),
+}
+LINK_SAMPLES = [pytest.param(code, sample, id=f"{code}-{sample}") for code, sample in LINK_EXPECTATIONS]
+LINK_PLUGINS = [pytest.param(code, id=code) for code in PLUGIN_CODES]
+
+
+class TestLinkedCharges:
+    """Project 66, wave P2a (P2 contract §2–§3; decisions of 16/11, «Plugin per plugin»): the ``fee`` and ``tax`` columns of a
+    trade, a dividend or an interest name that row as their parent (``parent_ref`` = its ``ref``), with its asset and broker. The
+    account's own ``Fee``/``Taxes`` rows stay free; a «Tax refund» is an INTEREST, not a charge, and names nothing.
+
+    RED before the code change: the expected links and the version. Green before and after (guards): the structure, the snapshot
+    comparison (taken at HEAD 890343101, both plugins 1.2.0), the reimport over the previous version's rows — this last one on a
+    private in-memory SQLite, disposed after each test.
+    """
+
+    @pytest.mark.parametrize(("code", "sample"), LINK_SAMPLES)
+    def test_each_fee_and_tax_column_names_its_row(self, code: str, sample: str):
+        linked, free = LINK_EXPECTATIONS[(code, sample)]
+        out = _parse(code, SAMPLE_DIR / sample)
+
+        assert out.validation_issues == [], f"{sample}: {out.validation_issues}"
+        assert_expected_charge_links(out, f"{code} [{sample}]", linked=linked, free=free)
+
+    @pytest.mark.parametrize(("code", "sample", "pair"), [pytest.param(BROKER_CODE, "scalable-prime-export.csv", _PRIME_INTEREST_TAX, id="prime"), *(pytest.param(DEPOSIT_CODE, "scalable-deposit-export.csv", pair, id=f"deposit-{pair[0][1]}") for pair in _DEPOSIT_INTEREST_TAXES)])
+    def test_the_tax_withheld_on_interest_names_the_interest(self, code: str, sample: str, pair: Tuple[RowKey, RowKey]):
+        """The reading this wave takes for an INTEREST row (see ``_PRIME_INTEREST_TAX``): its own test, so a different decision changes one place."""
+        assert_expected_charge_links(_parse(code, SAMPLE_DIR / sample), f"{code} [{sample}]: the interest tax", linked=[pair], free=[], exhaustive=False)
+
+    @pytest.mark.parametrize("layout", BROKER_LAYOUTS)
+    def test_a_tax_refund_names_nothing_while_the_fee_of_its_row_names_the_sale(self, layout: Layout, tmp_path: Path):
+        """A negative tax on a sale is an INTEREST «Tax refund» (not a charge: no ``parent_ref``); the fee of the same row is
+        still linked to the sale. Invented row."""
+        path = _write(tmp_path, layout, _laid_out([_trade("Sell", APPLE, "5", "180,4", "902", fee="0,99", tax="-12,34")], layout))
+        out = _parse(BROKER_CODE, path)
+        refunds = [tx for tx in out.transactions if tx.type.value == "INTEREST"]
+        assert len(refunds) == 1 and (refunds[0].description or "").startswith(LEG_REFUND), f"presence barrier: one «Tax refund»; {[(tx.type.value, tx.description) for tx in out.transactions]}"
+
+        assert refunds[0].parent_ref is None, f"a tax refund is not a charge: parent_ref={refunds[0].parent_ref!r}"
+        assert_expected_charge_links(out, f"{layout.name}: sale with a tax refund", linked=[(_charge("FEE", "2026-05-04", "-0.99", APPLE), _parent("SELL", "2026-05-04", "902", APPLE))], free=[])
+
+    @pytest.mark.parametrize(("code", "sample"), LINK_SAMPLES)
+    def test_the_links_are_well_formed(self, code: str, sample: str):
+        assert_charge_link_structure(_parse(code, SAMPLE_DIR / sample), f"{code} [{sample}]")
+
+    @pytest.mark.parametrize(("code", "sample"), LINK_SAMPLES)
+    def test_only_the_names_change_from_the_previous_version(self, code: str, sample: str):
+        """Guard: every row equals the snapshot's, in order, but for ``ref``/``parent_ref``: amounts, currencies, assets, types unchanged."""
+        previous = load_previous_snapshot(code, sample, BROKER_ID)
+        out = _parse(code, SAMPLE_DIR / sample)
+
+        problems = changes_besides_links(previous.transactions, out.transactions)
+        assert not problems, f"{sample}: the output changed besides its links (snapshot HEAD {previous.source_head}):\n  " + "\n  ".join(problems)
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(("code", "sample"), LINK_SAMPLES)
+    async def test_reimport_over_the_previous_version_adds_nothing(self, code: str, sample: str):
+        """Guard (P2 contract §2.1): the sample, reimported over the rows the previous version saved (without links), adds no row."""
+        out = await assert_sample_reimport_adds_nothing(_plugin(code), sample)
+
+        assert out.transactions, f"{sample}: the criterion ran on an empty output"
+
+    @pytest.mark.parametrize("code", LINK_PLUGINS)
+    def test_the_version_is_above_the_previous_one(self, code: str):
+        """RED before P2a: both plugins of the shared reader go up a version (one commit, two versions: P2 contract §1)."""
+        plugin = _plugin(code)
+        for plugin_code, sample in LINK_EXPECTATIONS:
+            if plugin_code != code:
+                continue
+            previous = load_previous_snapshot(code, sample, BROKER_ID)
+            assert version_tuple(plugin.plugin_version) > version_tuple(previous.plugin_version), f"{code} {plugin.plugin_version}: not above the snapshot's {previous.plugin_version} ({sample})"

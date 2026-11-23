@@ -20,7 +20,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import timedelta
 from decimal import Decimal
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
 
 import structlog
 
@@ -40,6 +40,8 @@ from backend.app.services.brim.brim_provider import BRIMProvider
 from backend.app.services.brim_providers import _brim_io as io
 from backend.app.services.brim_providers._brim_output import attach_maturity_notices
 from backend.app.services.brim_providers.broker_credit_agricole._classify import (
+    ACCOUNT_CAPITAL_GAIN_RE,
+    ACCOUNT_DETACH_FEE_RE,
     ACCOUNT_MATURITY_RE,
     ACCOUNT_NOMINALE_RE,
     ACCOUNT_RITENUTA_RE,
@@ -120,6 +122,11 @@ class Booking:
     unknown_causali: Dict[str, List[tuple[int, Sequence]]] = field(default_factory=dict)
     held: Dict[str, Decimal] = field(default_factory=dict)
     succession_rows: List[Tuple[int, SecuritiesRow]] = field(default_factory=list)
+    #: The charges on a securities operation, linked once every row is booked (``link_charges``): the row, its full
+    #: description, the charge and its ``ca_account_charge_unallocated`` todo when it has one.
+    pending_charges: List[Tuple[int, str, TXCreateItem, Optional[BRIMFieldTodo]]] = field(default_factory=list)
+    #: The days of an inflow booked as an unresolved DEPOSIT (a sale or a fund redemption the file does not resolve).
+    unresolved_inflow_days: Set[Any] = field(default_factory=set)
 
     @property
     def evidence_headers(self) -> List[str]:
@@ -721,10 +728,12 @@ class Booking:
             return
 
         if withholding is not None:
-            self.provider._create_transaction(
-                row_num=offset,
-                transactions=self.transactions,
-                validation_issues=self.validation_issues,
+            # The withholding the coupon's own row spells out: linked to that coupon (project 66, P2b).
+            self.provider._create_linked_charge(
+                offset,
+                self.transactions,
+                self.validation_issues,
+                created,
                 context=f"Withholding tax on {context}",
                 broker_id=self.broker_id,
                 asset_id=asset_id,
@@ -766,6 +775,8 @@ class Booking:
                     evidence=[self.source_row_evidence(row, offset, comment=todo_comment)],
                 )
             )
+            if tx_type == TransactionType.DEPOSIT:
+                self.unresolved_inflow_days.add(tx_date)
         elif tier == TIER_UNKNOWN:
             self.unknown_causali.setdefault(causale, []).append((offset, row))
 
@@ -773,28 +784,30 @@ class Booking:
         # for. This layout names neither, so the charge lands unallocated and silently
         # skews the cost basis of whatever it belonged to. Flagged as a warning, not a
         # blocker: the file may genuinely never say, and a fee is still a real expense.
+        unallocated: Optional[BRIMFieldTodo] = None
         if causale in ACCT_FEETAX_CAUSALI_SECURITIES and tx_type in (TransactionType.FEE, TransactionType.TAX) and asset_id is None:
-            self.field_todos.append(
-                BRIMFieldTodo(
-                    tx_index=len(self.transactions) - 1,
-                    field="asset_id",
-                    severity="warning",
-                    reason_code="ca_account_charge_unallocated",
-                    message=f"Riga {offset}: spesa su operazione titoli non collegata a nessun titolo. Assegnala al titolo giusto, oppure tienila così se riguarda il conto.",
-                    context={"causale": causale, "row": offset},
-                    evidence=[
-                        self.source_row_evidence(
-                            row,
-                            offset,
-                            comment=(
-                                "Questa è una spesa o imposta su un'operazione in titoli, ma la descrizione non dice su quale. "
-                                "Resta a carico del conto invece che del titolo, e il costo di carico di quel titolo risulta più basso del reale. "
-                                "Scegli il titolo a cui appartiene, oppure tienila com'è se è una spesa di conto."
-                            ),
-                        )
-                    ],
-                )
+            unallocated = BRIMFieldTodo(
+                tx_index=len(self.transactions) - 1,
+                field="asset_id",
+                severity="warning",
+                reason_code="ca_account_charge_unallocated",
+                message=f"Riga {offset}: spesa su operazione titoli non collegata a nessun titolo. Assegnala al titolo giusto, oppure tienila così se riguarda il conto.",
+                context={"causale": causale, "row": offset},
+                evidence=[
+                    self.source_row_evidence(
+                        row,
+                        offset,
+                        comment=(
+                            "Questa è una spesa o imposta su un'operazione in titoli, ma la descrizione non dice su quale. "
+                            "Resta a carico del conto invece che del titolo, e il costo di carico di quel titolo risulta più basso del reale. "
+                            "Scegli il titolo a cui appartiene, oppure tienila com'è se è una spesa di conto."
+                        ),
+                    )
+                ],
             )
+            self.field_todos.append(unallocated)
+        if causale in ACCT_FEETAX_CAUSALI_SECURITIES and tx_type in (TransactionType.FEE, TransactionType.TAX):
+            self.pending_charges.append((offset, description, created, unallocated))
 
     # ------------------------------------------------------------------ the securities arms
 
@@ -919,10 +932,12 @@ class Booking:
                 tags=[*TAGS, "maturity_premium"],
             )
         if withholding is not None and account is not None:
-            self.provider._create_transaction(
-                row_num=offset,
-                transactions=self.transactions,
-                validation_issues=self.validation_issues,
+            # The withholding the account row of the pair spells out: linked to the coupon (project 66, P2b).
+            self.provider._create_linked_charge(
+                offset,
+                self.transactions,
+                self.validation_issues,
+                created,
                 context=f"Withholding tax on {description}",
                 broker_id=self.broker_id,
                 asset_id=asset_id,
@@ -933,6 +948,54 @@ class Booking:
                 description=f"[{account.causale} — ritenuta] {account.description}"[:500],
                 tags=[*TAGS, slug_causale(account.causale), "withholding_tax"],
             )
+
+    # ------------------------------------------------------------------ linked charges (project 66, P2b)
+
+    def link_charges(self) -> None:
+        """Link the charges a description ties to another row, once every row is booked; the output order never changes.
+
+        A charge names its parent only through a date in its description, and the combined file may book it before that
+        parent (``_data_key`` sorts by day, then keeps the account's order), so the matching runs on the whole output.
+        A charge is linked only to exactly one candidate; with none or several it stays free, as before.
+
+        - «SPESE STACCO CEDOLA DEL <date> … TIT: <ISIN>» → the one coupon (INTEREST or DIVIDEND) of that security dated
+          ``<date>``. A maturity premium (tagged ``maturity_premium``) is no coupon. The security is the asset id the
+          booking already gave both rows (an ISIN, or the securities name a pair tied to it).
+        - «ADDEBITO CAPITAL GAIN … DATA:<date>» → the one SELL of ``<date>`` (a trade sale, a maturity, a fund redemption).
+          An inflow of that day booked as an unresolved DEPOSIT is no parent but is a second candidate: the charge stays
+          free. Linked, the charge takes the sale's asset, and its ``ca_account_charge_unallocated`` todo is dropped.
+
+        Withholdings are linked where they are created (``book_account_row``, ``book_movement``): same row, one coupon.
+        """
+        for row_num, description, charge, unallocated in self.pending_charges:
+            if charge.type == TransactionType.FEE:
+                parent = self._detach_fee_coupon(description, charge)
+            elif charge.type == TransactionType.TAX:
+                parent = self._capital_gain_sale(description)
+            else:
+                parent = None
+            if parent is None or not self.provider._link_existing_charge(charge, parent, self.transactions, row_num=row_num):
+                continue
+            if unallocated is not None and charge.asset_id is not None:
+                self.field_todos[:] = [todo for todo in self.field_todos if todo is not unallocated]
+
+    def _detach_fee_coupon(self, description: str, fee: TXCreateItem) -> Optional[TXCreateItem]:
+        """The one coupon a detach fee names (its security and the date after ``DEL``), else ``None``."""
+        match = ACCOUNT_DETACH_FEE_RE.search(description)
+        coupon_day = io.to_date(match.group("day")) if match else None
+        if coupon_day is None or fee.asset_id is None:
+            return None
+        coupons = [tx for tx in self.transactions if tx.type in (TransactionType.INTEREST, TransactionType.DIVIDEND) and tx.date == coupon_day and tx.asset_id == fee.asset_id and "maturity_premium" not in (tx.tags or [])]
+        return coupons[0] if len(coupons) == 1 else None
+
+    def _capital_gain_sale(self, description: str) -> Optional[TXCreateItem]:
+        """The one sale a capital gain names (the date after ``DATA:``), else ``None``; an unresolved inflow of that day competes."""
+        match = ACCOUNT_CAPITAL_GAIN_RE.search(description)
+        sale_day = io.to_date(match.group("day")) if match else None
+        if sale_day is None or sale_day in self.unresolved_inflow_days:
+            return None
+        sales = [tx for tx in self.transactions if tx.type == TransactionType.SELL and tx.date == sale_day]
+        return sales[0] if len(sales) == 1 else None
 
     # ------------------------------------------------------------------ what the rows say once all are booked
 

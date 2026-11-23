@@ -184,10 +184,6 @@ def _to_decimal(text: str) -> Optional[Decimal]:
     return value if value.is_finite() else None
 
 
-def _fi_money(value: Decimal) -> str:
-    return core.money(value).replace(".", ",")
-
-
 # =============================================================================
 # SOURCE ROWS
 # =============================================================================
@@ -1122,6 +1118,11 @@ class _CombinedParser:
         self.deposits: List[Line] = []
         self.mismatched: List[Line] = []
         self.discarded: List[Line] = []
+        #: The trades whose commission was split from the sum paid (project 66, P2c): the info note lists them.
+        self.split_trades: List[Line] = []
+        #: The standalone taxes and withdrawals: a tax is linked to the one withdrawal of its day once every row is read.
+        self.cash_taxes: List[Tuple[int, TXCreateItem]] = []
+        self.cash_withdrawals: Dict[date, List[TXCreateItem]] = defaultdict(list)
         self.absorbed: Dict[date, List[BRIMAbsorbedRow]] = defaultdict(list)
         self.truth_cash: Dict[date, _TruthCash] = {}
         self.positions: Dict[date, List[BRIMTruthPosition]] = defaultdict(list)
@@ -1200,21 +1201,44 @@ class _CombinedParser:
             tx_type, delta = TransactionType.DIVIDEND, ZERO
         else:
             tx_type, delta = (TransactionType.BUY if quantity > 0 else TransactionType.SELL), quantity
+        # Project 66, P2c (the developer's decision of 16/11): a trade whose sum paid quantity × price explains is booked at
+        # quantity × price, and the difference becomes its commission, a FEE linked to it. A sum it does not explain (a
+        # price in another currency) keeps today's proposal; a difference of zero has nothing to split.
+        split = _trade_split(tx_type, quantity, row, amount)
+        trade_amount = amount if split is None else (-split.gross if tx_type == TransactionType.BUY else split.gross)
+        asset_id = self._fake_id(name)
         created = self._create(
             line,
             label,
-            asset_id=self._fake_id(name),
+            asset_id=asset_id,
             type=tx_type,
             date=day,
             quantity=delta,
-            cash=Currency(code=CURRENCY, amount=amount),
+            cash=Currency(code=CURRENCY, amount=trade_amount),
             description=f"{label} ({order_type})"[:500],
             tags=["import", HISTORY_TAG],
         )
         if created is None:
             return
-        if tx_type != TransactionType.DIVIDEND:
+        if tx_type != TransactionType.DIVIDEND and split is None:
             self.todos.append(_charges_todo(len(self.transactions) - 1, line, row, tx_type, quantity, amount))
+        elif split is not None and split.charges > ZERO:
+            self.provider._create_linked_charge(
+                line,
+                self.transactions,
+                self.issues,
+                created,
+                context=f"Palkkio: {label}",
+                broker_id=self.broker_id,
+                asset_id=asset_id,
+                type=TransactionType.FEE,
+                date=day,
+                quantity=ZERO,
+                cash=Currency(code=CURRENCY, amount=-split.charges),
+                description=f"Palkkio: {label} ({order_type})"[:500],
+                tags=["import", HISTORY_TAG],
+            )
+            self.split_trades.append((line, row))
         if not core.compatible(name, _cash_label_class(label, amount)[1]):
             self.mismatched.append((line, row))
 
@@ -1255,7 +1279,11 @@ class _CombinedParser:
                 f"Line {line} of the combined file is not a standalone cash row",
                 details={"line": line, "code": "danske_combined_line_not_cash", "context": {"line": line}},
             )
-        self._create(line, label, type=tx_type, date=day, cash=Currency(code=CURRENCY, amount=amount), description=label[:500], tags=["import", HISTORY_TAG])
+        created = self._create(line, label, type=tx_type, date=day, cash=Currency(code=CURRENCY, amount=amount), description=label[:500], tags=["import", HISTORY_TAG])
+        if created is not None and created.type == TransactionType.TAX:
+            self.cash_taxes.append((line, created))
+        elif created is not None and created.type == TransactionType.WITHDRAWAL:
+            self.cash_withdrawals[day].append(created)
         if klass == "deposit":
             self.deposits.append((line, row))
 
@@ -1305,7 +1333,17 @@ class _CombinedParser:
         absorbed = BRIMAbsorbed(count=len(rows), cash=[BRIMTruthCash(currency=code, amount=amount) for code, amount in sorted(sums.items())], rows=rows, opening_cash=opening)
         return BRIMCheckpoint(as_of=day, kind=kind, cash=cash, positions=self.positions.get(day, []), absorbed=absorbed, evidence=truth.evidence)
 
+    def _link_cash_taxes(self) -> None:
+        """Each tax of the account («vero osakesäästötililtä») → the one withdrawal of its day (project 66, P2c): the tax the
+        bank withholds on a withdrawal from the equity savings account. With none, or several, it stays free. Linked once
+        every row is read, because the statement lists the newest first and the output keeps its order."""
+        for line, tax in self.cash_taxes:
+            withdrawals = self.cash_withdrawals.get(tax.date, [])
+            if len(withdrawals) == 1:
+                self.provider._link_existing_charge(tax, withdrawals[0], self.transactions, row_num=line)
+
     def output(self) -> BRIMParseOutput:
+        self._link_cash_taxes()
         return BRIMParseOutput(
             transactions=self.transactions,
             warnings=self._notices(),
@@ -1354,25 +1392,51 @@ class _CombinedParser:
         if broken:
             message = "Tilitiedoston saldot eivät täsmää tapahtumien kanssa: saldoja käytetään vain vertailuun, ei korjauksiin."
             notices.append(BRIMNotice(severity="warning", code="balance_chain_broken", message=message, context={"dates": [day.isoformat() for day in broken]}))
+        if self.split_trades:
+            message = f"{len(self.split_trades)} kaupan summasta erotettiin palkkio omaksi kulukseen, joka on liitetty kauppaan."
+            comment = "Määrä × kurssi selittää summan: kauppa kirjattiin määrä × kurssi -arvoon ja erotus palkkioksi. Kassa ei muutu."
+            notices.append(BRIMNotice(severity="info", code="danske_trade_charges_split", message=message, evidence=_row_evidence(self.split_trades, comment), context={"count": len(self.split_trades)}))
         if self.deposits:
             message = f"{len(self.deposits)} hyvitystä kirjattiin talletuksiksi, koska osakesäästötilille voi tallettaa vain rahaa: tarkista ne."
             notices.append(BRIMNotice(severity="info", code="deposit_assumed", message=message, evidence=_row_evidence(self.deposits, "Maksajan nimi ei ole tunnettu tapahtumatyyppi, joten rivi on tulkittu talletukseksi."), context={"count": len(self.deposits)}))
         return notices
 
 
-def _charges_todo(tx_index: int, line: int, row: Row, tx_type: TransactionType, quantity: Decimal, amount: Decimal) -> BRIMFieldTodo:
-    """Every trade: Summa includes the commission (the fee column is always 0); the split is optional (D-S17)."""
-    name = row["custody:Sijoituskohde"]
+@dataclass(frozen=True)
+class _Split:
+    """A trade's sum paid as quantity × price (``gross``) and the commission inside it (``charges``, ≥ 0)."""
+
+    gross: Decimal
+    charges: Decimal
+
+
+def _trade_split(tx_type: TransactionType, quantity: Decimal, row: Row, amount: Decimal) -> Optional[_Split]:
+    """The split of a trade's sum paid when quantity × price explains it (project 66, P2c); ``None`` when it does not.
+
+    The bank gives only Summa (the fee column is always 0). The commission is the difference from quantity × price when
+    it is not negative and at most ``max(15 €, 1 % of the gross)``; outside that the price is not in euros and the file
+    says nothing. A price of zero explains nothing. A dividend has no commission.
+    """
+    if tx_type == TransactionType.DIVIDEND:
+        return None
     price = _to_decimal(row["custody:Kurssi"]) or ZERO
     gross = (abs(quantity) * price).quantize(CENT)
+    if gross <= ZERO:
+        return None
     charges = abs(amount) - gross if tx_type == TransactionType.BUY else gross - abs(amount)
-    plausible = ZERO <= charges <= max(Decimal("15"), gross / 100)
-    suggestions = []
-    if plausible:
-        suggestions.append(f"Määrä × kurssi = {_fi_money(gross)} €: jos kurssi on euroissa, erotus {_fi_money(charges)} € on todennäköisesti palkkio.")
-    else:
-        suggestions.append("Kurssi voi olla muussa valuutassa kuin euroissa, joten palkkiota ei voi laskea tiedostosta.")
-    suggestions.append("Tarkat luvut ovat kauppavahvistuksessa: avaa tapahtuma verkkopankissa.")
+    return _Split(gross=gross, charges=charges) if ZERO <= charges <= max(Decimal("15"), gross / 100) else None
+
+
+def _charges_todo(tx_index: int, line: int, row: Row, tx_type: TransactionType, quantity: Decimal, amount: Decimal) -> BRIMFieldTodo:
+    """A trade whose sum paid quantity × price does not explain (``_trade_split`` is ``None``): Summa includes the
+    commission (the fee column is always 0), and only the trade confirmation can split it."""
+    name = row["custody:Sijoituskohde"]
+    # Quantity × price does not explain the sum (``_trade_split``): the price is not in euros, or it is zero. The file
+    # cannot say the commission, so the todo proposes no amount (project 66, P2c).
+    suggestions = [
+        "Kurssi voi olla muussa valuutassa kuin euroissa, joten palkkiota ei voi laskea tiedostosta.",
+        "Tarkat luvut ovat kauppavahvistuksessa: avaa tapahtuma verkkopankissa.",
+    ]
     context: Dict[str, Any] = {
         "row": line,
         "cash": core.money(abs(amount)),
@@ -1381,8 +1445,6 @@ def _charges_todo(tx_index: int, line: int, row: Row, tx_type: TransactionType, 
         "split_hint": "trade_charges",
         "split_suggestions": suggestions,
     }
-    if plausible:
-        context["charges"] = core.money(charges)
     verb = "osto" if tx_type == TransactionType.BUY else "myynti"
     comment = "Pankki ilmoittaa vain kokonaissumman: palkkiosarake on aina 0, joten palkkio sisältyy summaan. Kassa on oikein; jos haluat seurata palkkioita erikseen, jaa rivi."
     return BRIMFieldTodo(
@@ -1463,7 +1525,9 @@ class DanskeBankBrokerProvider(BRIMProvider):
         # 1.0.1 — excluded_not_yet_settled is an info note, no longer a warning (N74: only settled rows).
         # 1.0.2 — a reservation («Varaus») is left out without a notice; excluded_status asks for an issue (W-B85).
         # 1.1.0 — trades dated with the trade date, Kauppapäivä; truths in operation-date terms (B-52).
-        return "1.1.0"
+        # 1.2.0 — a trade whose sum quantity × price explains is booked at quantity × price with its commission as a linked FEE;
+        #         the tax of a withdrawal is linked to it (project 66, P2c).
+        return "1.2.0"
 
     @property
     def test_file_pattern(self) -> Optional[str]:

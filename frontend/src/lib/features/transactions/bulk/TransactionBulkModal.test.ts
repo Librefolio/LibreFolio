@@ -6326,6 +6326,132 @@ describe('TransactionBulkModal — 66 F7-c1: the charges grouped under their par
 
                     expect(linkOffer(), 'C22d: two halves, two parents (WITHDRAWAL and DEPOSIT) — «Link» off, twoParents').toBe('off (twoParents)');
                 });
+
+                // ---------------------------------------------------------------
+                // C22e — the update of a split half carries the type the user chose
+                // ---------------------------------------------------------------
+
+                /**
+                 * 66 C22e (FEE consultant + coordinator, 21/11). `resolveOps` strips `type` from the update of every
+                 * split-queued row: the backend's split assigns it (`apply_splits`, on the SAVED side, `pair_sides`). Once the
+                 * user swaps a half in its Form (DEPOSIT ↔ WITHDRAWAL, the swap group the Form offers), the update still goes
+                 * out without a type: the DEPOSIT half turned WITHDRAWAL is sent `{id, cash: −50}`, the split makes it a
+                 * DEPOSIT, rule 11 refuses −50 on a DEPOSIT and the whole batch fails (present since v1.3.0).
+                 *
+                 * The decision: the update carries `type` exactly when the type the Bulk shows for the half (`postSplitType`)
+                 * differs from the one the backend's split gives it (`splitHalfType` on the saved side) —
+                 * `splitTypes.ts`, `splitTypeToSend`. The backend accepts a swap in an update (`SWAP_GROUPS`), and updates run
+                 * after splits, then `link_charges`.
+                 *
+                 * Read through «Save all», the path that fails. `push` stands in for the real Form's Apply: a WITHDRAWAL's
+                 * cash signed negative (`autoNegateCash`), a DEPOSIT's positive; the editor holds a WITHDRAWAL as its
+                 * magnitude (W-B65).
+                 */
+                describe('66 C22e: the update of a swapped split half carries its type', () => {
+                    /** The cash amount of one update, as a number (NaN when it carries none). */
+                    function cashOf(update: Record<string, unknown> | undefined): number {
+                        return Number((update?.cash as {amount?: string} | undefined)?.amount);
+                    }
+
+                    /** The half's own Form, its type swapped to `type` with `cash` as the real Form signs it. Ends on the
+                     *  Form closed and the half's Type cell showing the user's type. */
+                    async function swapHalf(half: TXReadItem, type: 'DEPOSIT' | 'WITHDRAWAL', cash: string): Promise<void> {
+                        await rowAction(gridRow(half.id), 'edit-single');
+                        await waitFor(() => expect(formProbe().open, `premise: the Form of #${half.id} is open`).toBe(true));
+                        const item = ((formProbe().items as TXReadItem[] | null) ?? []).find((candidate) => candidate.id === half.id);
+                        expect(item, `premise: the Form holds #${half.id}`).toBeDefined();
+                        expect(item!.type, `premise: the Form of #${half.id} is handed the other type of its swap group`).not.toBe(type);
+                        await push({broker_id: item!.broker_id, type, date: item!.date, quantity: item!.quantity, asset_id: item!.asset_id, cash: {code: 'EUR', amount: cash}, tags: item!.tags ?? [], description: item!.description});
+                        expect(typeCellTarget(gridRow(half.id)), `premise: the Type cell of #${half.id} shows the user’s ${type}`).toBe(type.toLowerCase());
+                    }
+
+                    const PAIR_SPLIT = [[L_W.id, L_D.id].sort((a, b) => a - b)];
+
+                    // The defect. Today: `{id: 92521, cash: {amount: "-50…"}}`, no type.
+                    it('C22e: the DEPOSIT half swapped to WITHDRAWAL in its Form — «Save all» sends its update with type WITHDRAWAL and cash −50', async () => {
+                        await openSplitUntouched(L_W, L_D);
+                        await swapHalf(L_D, 'WITHDRAWAL', '-50.000000');
+
+                        const body = (await saveAll()) as C22bPayload;
+                        const sent = JSON.stringify({splits: body.splits, updates: body.updates});
+                        expect(splitsOf(body), `premise: the split is in the batch — ${sent}`).toEqual(PAIR_SPLIT);
+                        const updates = updatesOf(body, L_D.id);
+                        expect(updates, `premise: one update for the swapped half — ${sent}`).toHaveLength(1);
+                        expect.soft(updates[0].type, `C22e: the swapped half carries the user’s type, or the split makes it a DEPOSIT — ${sent}`).toBe('WITHDRAWAL');
+                        expect.soft(cashOf(updates[0]), `C22e: and its cash signed as a WITHDRAWAL — ${sent}`).toBe(-50);
+                        expect.soft(updatesOf(body, L_W.id), `C22e: the untouched sender is not sent — ${sent}`).toEqual([]);
+                    });
+
+                    // Guard, green today and after the cure: a half edited without a swap (its note, twice — C22d's route) shows
+                    // the type the split gives it, so its update carries none. The WITHDRAWAL half is the discriminating one: its
+                    // draft holds +50 (W-B65) while the saved side, the one the server reads, is −50.
+                    it.each([
+                        ['the DEPOSIT half', 'dep'],
+                        ['the WITHDRAWAL half', 'wd'],
+                    ] as const)('C22e guard: %s, only its note edited in its Form, twice — «Save all» sends the note and no type', async (_label, which) => {
+                        const half = which === 'dep' ? L_D : L_W;
+                        await openSplitUntouched(L_W, L_D);
+                        await editHalfNote(half, 'C22e note a');
+                        await editHalfNote(half, 'C22e note b');
+
+                        const body = (await saveAll()) as C22bPayload;
+                        const sent = JSON.stringify({splits: body.splits, updates: body.updates});
+                        expect(splitsOf(body), `premise: the split is in the batch — ${sent}`).toEqual(PAIR_SPLIT);
+                        const updates = updatesOf(body, half.id);
+                        expect(
+                            updates.some((update) => update.description === 'C22e note b'),
+                            `premise: the second note is sent — ${sent}`,
+                        ).toBe(true);
+                        expect(
+                            updates.filter((update) => 'type' in update),
+                            `C22e guard: no swap, no type — the split gives #${half.id} its type — ${sent}`,
+                        ).toEqual([]);
+                    });
+
+                    // Both halves swapped: the sender (saved −50) turned DEPOSIT, the receiver (saved +50) turned WITHDRAWAL.
+                    // Today both go out without a type: the WITHDRAWAL half as `cash: −50`, the DEPOSIT half as `cash: +50`.
+                    it('C22e: both halves swapped in their Forms — each update carries its own type and its cash signed by it', async () => {
+                        await openSplitUntouched(L_W, L_D);
+                        await swapHalf(L_D, 'WITHDRAWAL', '-50.000000');
+                        await swapHalf(L_W, 'DEPOSIT', '50.000000');
+                        // The swapped halves now cancel each other (a DEPOSIT +50 on 88, a WITHDRAWAL −50 on 77): the banner
+                        // offers them as a merge, and «Save all» stops at the unseen-suggestions gate until it is looked at.
+                        // A click inside the banner (not on its link, which would merge) marks it seen.
+                        const banner = screen.queryByTestId('promote-suggest-banner');
+                        expect(banner, 'premise: the banner offers the two swapped halves').not.toBeNull();
+                        await fireEvent.click(banner!);
+                        await settle();
+                        expect(screen.queryByTestId('promote-suggest-banner'), 'premise: looking at the banner merges nothing').not.toBeNull();
+
+                        const body = (await saveAll()) as C22bPayload;
+                        const sent = JSON.stringify({splits: body.splits, updates: body.updates});
+                        expect(splitsOf(body), `premise: the split is in the batch — ${sent}`).toEqual(PAIR_SPLIT);
+                        const deposit = updatesOf(body, L_D.id);
+                        const withdrawal = updatesOf(body, L_W.id);
+                        expect([deposit.length, withdrawal.length], `premise: one update for each half — ${sent}`).toEqual([1, 1]);
+                        expect.soft({type: deposit[0].type, cash: cashOf(deposit[0])}, `C22e: the receiver (saved +50) goes out a WITHDRAWAL −50 — ${sent}`).toEqual({type: 'WITHDRAWAL', cash: -50});
+                        expect.soft({type: withdrawal[0].type, cash: cashOf(withdrawal[0])}, `C22e: the sender (saved −50) goes out a DEPOSIT +50 — ${sent}`).toEqual({type: 'DEPOSIT', cash: 50});
+                    });
+
+                    // The swap and a link in one batch: FREE (a saved FEE of nobody, on 77, the DEPOSIT half's broker) linked by
+                    // «Link» to the half swapped to WITHDRAWAL (a parent type either way). One commit holds the split, the
+                    // half's update with its type, and FREE's parent; the backend splits, updates, then links
+                    // (`test_transaction_charge_edits.py`, C22e).
+                    it('C22e: the DEPOSIT half swapped to WITHDRAWAL and FREE linked to it by «Link» — one «Save all»: the split, the half’s update with its type, FREE under the half', async () => {
+                        await openSplitUntouched(L_W, L_D, [FREE]);
+                        await swapHalf(L_D, 'WITHDRAWAL', '-50.000000');
+                        await linkRows(gridRow(L_D.id), gridRow(FREE.id));
+                        expect(chargeOfCell(gridRow(FREE.id)), 'premise: FREE sits under the swapped half').toBe(gridRow(L_D.id).getAttribute('data-row-id'));
+
+                        const body = (await saveAll()) as C22bPayload;
+                        const sent = JSON.stringify({splits: body.splits, updates: body.updates});
+                        expect(splitsOf(body), `premise: the split is in the batch — ${sent}`).toEqual(PAIR_SPLIT);
+                        expect.soft(updatesOf(body, FREE.id), `C22e: FREE is sent under the half, in the same batch — ${sent}`).toEqual([{id: FREE.id, parent_transaction_id: L_D.id}]);
+                        const updates = updatesOf(body, L_D.id);
+                        expect(updates, `premise: one update for the swapped half — ${sent}`).toHaveLength(1);
+                        expect.soft({type: updates[0].type, cash: cashOf(updates[0])}, `C22e: the half goes out a WITHDRAWAL −50, so FREE’s parent is the type the user sees — ${sent}`).toEqual({type: 'WITHDRAWAL', cash: -50});
+                    });
+                });
             });
         });
     });

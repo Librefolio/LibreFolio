@@ -132,9 +132,10 @@ class TradeRepublicBrokerProvider(BRIMProvider):
 
     @property
     def plugin_version(self) -> str:
+        # 1.3.0 — the fee and tax of a row of the Transaction export are linked to that row's booking (project 66, P2a).
         # 1.2.0 — the Transaction export (23 columns, also re-saved by Excel): each amount, fee and tax column is its own transaction (lane 73 TR).
         # 1.1.0 — the rows left out, and the fee and tax columns not imported, are listed in shared notices with the link to open an issue (W-B87).
-        return "1.2.0"
+        return "1.3.0"
 
     @property
     def docs_url(self) -> Optional[str]:

@@ -286,12 +286,13 @@ class TransactionsExportParser:
             return
 
         description = get.get("description") or raw_type
-        if main is not None:
-            self._emit(row, main[0], day, main[1], Currency(code=currency, amount=main[2]), asset_id, description)
+        # The fee and tax of a row are linked to the booking of that row (project 66); a row without one, or whose booking
+        # was refused, leaves them free. The helper also leaves free a tax on a fee (not a parent type).
+        booking = self._emit(row, main[0], day, main[1], Currency(code=currency, amount=main[2]), asset_id, description) if main is not None else None
         if fee < 0:
-            self._emit(row, TransactionType.FEE, day, Decimal("0"), Currency(code=currency, amount=fee), asset_id, f"Fee: {description}")
+            self._emit(row, TransactionType.FEE, day, Decimal("0"), Currency(code=currency, amount=fee), asset_id, f"Fee: {description}", parent=booking)
         if tax < 0:
-            self._emit(row, TransactionType.TAX, day, Decimal("0"), Currency(code=currency, amount=tax), asset_id, f"Tax: {description}")
+            self._emit(row, TransactionType.TAX, day, Decimal("0"), Currency(code=currency, amount=tax), asset_id, f"Tax: {description}", parent=booking)
         elif tax > 0:
             self.tax_refunds.append(row)
             self._emit(row, TransactionType.INTEREST, day, Decimal("0"), Currency(code=currency, amount=tax), asset_id, f"Tax refund: {description}")
@@ -317,21 +318,25 @@ class TransactionsExportParser:
         )
         return asset_id
 
-    def _emit(self, row: _Row, tx_type: TransactionType, day: date_type, quantity: Decimal, cash: Currency, asset_id: Optional[int], description: str) -> None:
-        self.provider._create_transaction(
-            row_num=row.line,
-            transactions=self.transactions,
-            validation_issues=self.validation_issues,
-            context=description,
-            broker_id=self.broker_id,
-            asset_id=asset_id,
-            type=tx_type,
-            date=day,
-            quantity=quantity,
-            cash=cash,
-            description=description,
-            tags=list(TAGS),
-        )
+    def _emit(self, row: _Row, tx_type: TransactionType, day: date_type, quantity: Decimal, cash: Currency, asset_id: Optional[int], description: str, *, parent: Optional[TXCreateItem] = None) -> Optional[TXCreateItem]:
+        """One row of the output, or ``None`` when it is refused; a charge given a ``parent`` is linked to it."""
+        fields = {
+            "row_num": row.line,
+            "transactions": self.transactions,
+            "validation_issues": self.validation_issues,
+            "context": description,
+            "broker_id": self.broker_id,
+            "asset_id": asset_id,
+            "type": tx_type,
+            "date": day,
+            "quantity": quantity,
+            "cash": cash,
+            "description": description,
+            "tags": list(TAGS),
+        }
+        if parent is None:
+            return self.provider._create_transaction(**fields)
+        return self.provider._create_linked_charge(parent=parent, **fields)
 
     # --- the info notes ----------------------------------------------------------------------------------------------------------------------
     def _notes(self) -> List[BRIMNotice]:
