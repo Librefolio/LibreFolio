@@ -140,7 +140,8 @@
 </script>
 
 <!-- Required section -->
-<fieldset class="border border-lf-subtle rounded-lg p-4" data-testid="tx-form-required" use:guideAnchor={'transaction.create.amounts'}>
+<!-- min-w-0: a fieldset's default min-inline-size is min-content, so the asset's one-line label would widen it past a phone (TL-1). -->
+<fieldset class="min-w-0 border border-lf-subtle rounded-lg p-4" data-testid="tx-form-required" use:guideAnchor={'transaction.create.amounts'}>
     <legend class="text-xs font-semibold uppercase tracking-wide text-lf-muted px-1">{$t('transactions.form.sectionRequired')}</legend>
 
     <!-- Reordered to match table column order (Bugfix-1 §U5):
