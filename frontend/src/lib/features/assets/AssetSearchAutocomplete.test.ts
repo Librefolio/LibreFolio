@@ -1723,7 +1723,7 @@ describe("AssetSearchAutocomplete — a provider's attribution under its results
 // (CoinGecko's coin logo); the row draws it, and a result without one is drawn as before (the asset type's icon).
 describe('AssetSearchAutocomplete — the icon of a result (76 S3)', () => {
     const LOGO = 'https://coin-images.coingecko.com/coins/images/29850/large/pepe-token.jpeg';
-    const PEPE = {identifier: 'pepe', identifier_type: 'other', display_name: 'Pepe (PEPE)', provider_code: 'alpha', currency: 'EUR', asset_type: 'CRYPTO', via_web: false, icon_url: LOGO};
+    const PEPE = {identifier: 'pepe', identifier_type: 'other', display_name: 'Pepe', provider_code: 'alpha', currency: 'EUR', asset_type: 'CRYPTO', via_web: false, icon_url: LOGO};
     const iconOf = (index: number) => screen.getByTestId(`asset-search-result-${index}`).querySelector(`img[src="${LOGO}"]`);
 
     it("ASA-I1: the streamed row draws the result's icon; a result without one draws none of it", async () => {
