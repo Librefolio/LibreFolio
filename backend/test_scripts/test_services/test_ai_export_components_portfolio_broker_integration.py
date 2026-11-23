@@ -854,7 +854,7 @@ class TestDatasetAndAnalysisRegistryConstruction:
     def test_analysis_registry_has_11_analyses(self):
         dataset_registry = build_portfolio_broker_dataset_registry()
         analysis_registry = build_portfolio_broker_analysis_registry(dataset_registry)
-        assert len(analysis_registry) == EXPECTED_ANALYSIS_COUNT == 11
+        assert len(analysis_registry) == EXPECTED_ANALYSIS_COUNT == 12
 
     def test_portfolio_and_broker_datasets_present(self):
         registry = build_portfolio_broker_dataset_registry()
@@ -895,7 +895,7 @@ class TestDatasetAndAnalysisRegistryConstruction:
         analysis_registry = build_portfolio_broker_analysis_registry()
         portfolio_analysis_ids = {spec.analysis_id for spec in analysis_registry if spec.domain == Domain.PORTFOLIO}
         broker_analysis_ids = {spec.analysis_id for spec in analysis_registry if spec.domain == Domain.BROKER}
-        assert len(portfolio_analysis_ids) == 4
+        assert len(portfolio_analysis_ids) == 5  # 78 L3: protection_strategies
         assert len(broker_analysis_ids) == 3
 
 
@@ -1185,7 +1185,7 @@ class TestBrokerProvenanceInEveryBrokerDataset:
 
 class TestAnalysisComposition:
     @pytest.mark.asyncio
-    async def test_all_four_portfolio_analyses_compose(self, monkeypatch):
+    async def test_all_five_portfolio_analyses_compose(self, monkeypatch):
         scope = _portfolio_scope()
         _setup_portfolio_scenario(monkeypatch, scope)
         dataset_registry = build_portfolio_broker_dataset_registry()
@@ -1194,7 +1194,7 @@ class TestAnalysisComposition:
         composer = Composer()
 
         portfolio_analyses = [spec for spec in analysis_registry if spec.domain == Domain.PORTFOLIO]
-        assert len(portfolio_analyses) == 4
+        assert len(portfolio_analyses) == 5  # 78 L3: protection_strategies
         for analysis in portfolio_analyses:
             composition = await composer.compose_analysis(analysis, dataset_registry, context, detail_level=DetailLevel.STANDARD)
             assert set(analysis.required_dataset_ids).issubset(set(composition.dataset_ids))
@@ -1572,8 +1572,8 @@ class TestImportCycleSafety:
         )
         result = subprocess.run([sys.executable, "-c", probe], capture_output=True, text=True, timeout=60)
         assert result.returncode == 0, f"fresh-process registry construction failed:\nstdout={result.stdout}\nstderr={result.stderr}"
-        # D5 (plan 68): asset.profile is the 68th component (before D5: "67 40 11")
-        assert result.stdout.strip() == "68 40 11"
+        # D5 (plan 68): asset.profile is the 68th component (before D5: "67 40 11"); 78 L3: the 12th analysis
+        assert result.stdout.strip() == "68 40 12"
 
 
 # =============================================================================

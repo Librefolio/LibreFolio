@@ -57,11 +57,15 @@
         },
         "performance_market_drivers": {
           "display": "Portfolio Performance & Market Drivers",
-          "description": "Explain portfolio performance and research dated market drivers for every held Asset."
+          "description": "Explain what drove the portfolio's result in the period, with dated market news for the movements that matter."
         },
         "fiscal_lots": {
           "display": "Capital-Loss Offset Strategies",
           "description": "Explore how available or expiring tax losses might offset eligible gains using economic FIFO lots, after clarifying the official tax-loss inventory, jurisdiction, regime, expiries, and legal rules."
+        },
+        "protection_strategies": {
+          "display": "Protection Strategies",
+          "description": "Assess whether protecting the portfolio makes sense now and, only if it does, with which strategy."
         }
       },
       "broker": {
@@ -71,7 +75,7 @@
         },
         "performance_market_drivers": {
           "display": "Broker Performance & Market Drivers",
-          "description": "Explain selected-broker performance and research dated market drivers for every held Asset."
+          "description": "Explain what drove the selected broker's result in the period, with dated market news for the movements that matter."
         },
         "fiscal_lots": {
           "display": "Capital-Loss Offset Strategies",

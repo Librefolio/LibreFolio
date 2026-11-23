@@ -492,7 +492,7 @@ def test_tuning_v2_excludes_only_all_data_and_builds_approved_matrices():
     assert [(case["period_label"], case["detail_level"]) for case in as_of_analysis_cases] == [("1Y", "standard")]
 
 
-def test_public_catalog_v1_profile_is_exact_19_by_6_without_6m():
+def test_public_catalog_v1_profile_is_exact_20_by_6_without_6m():
     selections = [
         {
             "kind": "dataset" if selection_id in PUBLIC_CATALOG_V1_DATASETS else "analysis",
@@ -508,14 +508,14 @@ def test_public_catalog_v1_profile_is_exact_19_by_6_without_6m():
 
     assert _parse_args(["--profile", PUBLIC_CATALOG_V1_PROFILE]).profile == PUBLIC_CATALOG_V1_PROFILE
     assert [selection["id"] for selection in selected] == [*PUBLIC_CATALOG_V1_DATASETS, *PUBLIC_CATALOG_V1_ANALYSES]
-    assert len(selected) == 19
-    assert len(cases) == PUBLIC_CATALOG_V1_EXPECTED_CASE_COUNT == 114
+    assert len(selected) == 20
+    assert len(cases) == PUBLIC_CATALOG_V1_EXPECTED_CASE_COUNT == 120
     assert {case["period_label"] for case in cases} == {"3M", "1Y"}
     assert {case["detail_level"] for case in cases} == {"compact", "standard", "full"}
     assert all(case["period_label"] != "6M" for case in cases)
     with pytest.raises(ProbeError, match="only 3M and 1Y"):
         public_catalog_v1_cases(selected[0], period_filter="6M")
-    with pytest.raises(ProbeError, match="exact 114-case"):
+    with pytest.raises(ProbeError, match="exact 120-case"):
         run_probe(_parse_args(["--profile", PUBLIC_CATALOG_V1_PROFILE, "--period", "3M"]))
     with pytest.raises(ProbeError, match="exactly one deterministic user"):
         run_probe(_parse_args(["--profile", PUBLIC_CATALOG_V1_PROFILE, "--user", "alfy", "--user", "marco"]))

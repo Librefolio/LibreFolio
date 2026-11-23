@@ -159,6 +159,14 @@ export const AI_EXPORT_PUBLIC_CATALOG_CONFIG = [
     },
     {
         group: 'analysis',
+        id: 'portfolio.protection_strategies',
+        domain: 'portfolio',
+        icon: 'shield',
+        displayI18nKey: 'aiExport.analysis.portfolio.protection_strategies.display',
+        descriptionI18nKey: 'aiExport.analysis.portfolio.protection_strategies.description',
+    },
+    {
+        group: 'analysis',
         id: 'broker.review',
         domain: 'broker',
         icon: 'landmark',

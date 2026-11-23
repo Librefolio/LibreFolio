@@ -485,7 +485,7 @@ class TestDatasetAnalysisRegistryConstruction:
 
     def test_analysis_registry_totals_and_asset_fx_subsets(self):
         registry = build_asset_fx_analysis_registry()
-        assert len(registry) == EXPECTED_ANALYSIS_COUNT == 11
+        assert len(registry) == EXPECTED_ANALYSIS_COUNT == 12
         asset_analyses = {a.analysis_id for a in registry.for_domain(Domain.ASSET)}
         fx_analyses = {a.analysis_id for a in registry.for_domain(Domain.FX)}
         assert asset_analyses == {"asset.position_review", "asset.market_analysis"}
@@ -499,7 +499,7 @@ class TestDatasetAnalysisRegistryConstruction:
     def test_analysis_registry_builds_over_supplied_dataset_registry(self):
         dataset_registry = build_asset_fx_dataset_registry()
         analysis_registry = build_asset_fx_analysis_registry(dataset_registry)
-        assert len(analysis_registry) == 11
+        assert len(analysis_registry) == 12
 
 
 # =============================================================================

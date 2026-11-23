@@ -10,7 +10,7 @@ const DATASETS = {
 } as const;
 
 const ANALYSES = {
-    portfolio: ['portfolio.pac_planning', 'portfolio.rebalancing', 'portfolio.performance_market_drivers', 'portfolio.fiscal_lots'],
+    portfolio: ['portfolio.pac_planning', 'portfolio.rebalancing', 'portfolio.performance_market_drivers', 'portfolio.fiscal_lots', 'portfolio.protection_strategies'],
     broker: ['broker.review', 'broker.performance_market_drivers', 'broker.fiscal_lots'],
     asset: ['asset.position_review', 'asset.market_analysis'],
     fx: ['fx.pair_analysis', 'fx.exposure_impact'],

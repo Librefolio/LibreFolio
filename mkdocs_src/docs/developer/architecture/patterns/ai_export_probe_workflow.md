@@ -93,7 +93,7 @@ count: inspect the catalog recorded in `run_manifest.json`.
 The release-validation profile is `public-catalog-v1`:
 
 ```text
-19 public selections × {3M, 1Y} × {Compact, Standard, Full} = 114 prompts
+20 public selections × {3M, 1Y} × {Compact, Standard, Full} = 120 prompts
 ```
 
 It measures every prompt but permanently retains only approved named cases plus
