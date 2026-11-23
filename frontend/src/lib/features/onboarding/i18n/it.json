@@ -317,6 +317,10 @@
         "info": {
           "title": "Informazioni e condivisione",
           "description": "Controlla i metadati del conto e gestisci chi può visualizzare o modificare questo broker."
+        },
+        "allocation": {
+          "title": "Allocazione e filtri",
+          "description": "L'allocazione divide il valore del conto per settore, area, tipo o asset e permette di tenere solo alcune classi o di escludere asset e voci dal 100%."
         }
       }
     },
