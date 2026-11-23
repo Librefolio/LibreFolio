@@ -2114,6 +2114,21 @@ def test_the_output_declares_the_paths_it_ran_against_the_ones_asked_and_its_win
         bootstrap_output(estimation_start=date(2022, 1, 3), estimation_observations=10)
 
 
+def test_the_chosen_period_and_the_available_history_are_whole():
+    """RSK-SIM1 (P-7): a period ends on or after its start; the available history carries both ends or none."""
+    assert SimulationParams(horizon_days=30, path_count=256, history_start=date(2020, 1, 1), history_end=date(2020, 1, 1)).history_end == date(2020, 1, 1)
+    assert SimulationParams(horizon_days=30, path_count=256).history_start is None
+    with pytest.raises(ValidationError, match="history_end must not precede history_start"):
+        SimulationParams(horizon_days=30, path_count=256, history_start=date(2021, 1, 2), history_end=date(2021, 1, 1))
+
+    output = bootstrap_output(history_available_start=date(2016, 5, 3), history_available_end=date(2026, 11, 24), history_chosen=True)
+    assert output.history_chosen is True
+    with pytest.raises(ValidationError):
+        bootstrap_output(history_available_start=date(2016, 5, 3))
+    with pytest.raises(ValidationError):
+        bootstrap_output(history_available_start=date(2026, 11, 24), history_available_end=date(2016, 5, 3))
+
+
 def test_the_amber_line_measures_the_history_to_the_end_of_the_window():
     """RN-16c, point 2 (the consultant, 17/11/2026): the history the simulation used is the window's end minus its
     baseline — the rule's own measure: a holding at rest keeps its last price, the page's rule — not the last observation

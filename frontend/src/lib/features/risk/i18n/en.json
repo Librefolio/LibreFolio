@@ -294,7 +294,14 @@
       "driftUncertaintyWide": "The drift comes from just {count} observations: that alone puts this median between {low} and {high} — wider than the band above.",
       "estimation": "Estimated on {length} of history, from {start} to {end} ({count} observations), whatever the period chosen above.",
       "estimationTruncated": "A longer common history exists: these are its most recent {count} observations, as many as the calculation can carry.",
-      "pathsReduced": "{used} paths instead of {requested}: as many as fit the calculation for this portfolio and horizon."
+      "pathsReduced": "{used} paths instead of {requested}: as many as fit the calculation for this portfolio and horizon.",
+      "history": {
+        "label": "Days drawn from",
+        "all": "All the common history",
+        "chosen": "A period I choose",
+        "available": "Common history of the holdings: from {start} to {end}.",
+        "chosenNote": "(chosen period)"
+      }
     },
     "errors": {
       "analytic_not_found": "Analytic not available.",
@@ -367,7 +374,8 @@
       "extreme_day_ratio_undefined_assets": "Extreme days are undefined for {names}: the series does not move.",
       "simulation_history_shorter_than_horizon": "The simulation projects {horizon_days} days from {history_days} days of history: the band is only as wide as that history.",
       "simulation_excluded_short_history": "{names}: {history_days} days of history, less than the {horizon_days}-day horizon: left out of the simulation, its weight counts as cash.",
-      "simulation_mostly_excluded": "The simulation describes only part of your portfolio ({covered, number, percent}): the rest is left out of the simulation."
+      "simulation_mostly_excluded": "The simulation describes only part of your portfolio ({covered, number, percent}): the rest is left out of the simulation.",
+      "simulation_history_start_moved": "The chosen period starts on {requested_start}, before the common history of the holdings: the simulation draws its days from {used_start}."
     },
     "assetDetail": {
       "overviewTab": "Overview",

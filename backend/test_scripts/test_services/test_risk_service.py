@@ -3048,7 +3048,7 @@ def _weighted_scope(weights: dict[int, float]) -> ScopeInputs:
 prepared_windows: list[DateRangeModel] = []
 
 
-async def _simulation_context(monkeypatch, *, weights: dict[int, float], first_quotes: dict[int, date | None], horizon_days: int = 365, currencies: dict[int, str] | None = None, fx_first: dict[str, date] | None = None):
+async def _simulation_context(monkeypatch, *, weights: dict[int, float], first_quotes: dict[int, date | None], horizon_days: int = 365, currencies: dict[int, str] | None = None, fx_first: dict[str, date] | None = None, history_start: date | None = None, history_end: date | None = None):
     prepared_ids: list[tuple[int, ...]] = []
     prepared_windows.clear()
 
@@ -3077,7 +3077,7 @@ async def _simulation_context(monkeypatch, *, weights: dict[int, float], first_q
             "analytics": [{"instance_id": "simulation", "analytic_code": "simulation", "parameters": {"horizon_days": horizon_days, "path_count": 256}}],
         }
     )
-    context = await risk_simulation_window_module.prepare_simulation_context(EmptyRowsDb(), request=request, scope_inputs=_weighted_scope(weights), never_priced_asset_ids=frozenset(), horizon_days=horizon_days)
+    context = await risk_simulation_window_module.prepare_simulation_context(EmptyRowsDb(), request=request, scope_inputs=_weighted_scope(weights), never_priced_asset_ids=frozenset(), horizon_days=horizon_days, history_start=history_start, history_end=history_end)
     return context, prepared_ids
 
 
@@ -3320,3 +3320,162 @@ async def test_d3_classifications_are_the_profile_of_the_analysis_day(tmp_path):
     assert no_profile.geography_exposures is None and no_profile.sector_exposures is None, "no profile row: no exposure"
     assert loaded[ids["unreadable"]].metadata_error == "invalid_classification_metadata"
     assert loaded[ids["unreadable"]].sector_exposures is None
+
+
+# --------------------------------------------------------------------------- #
+# RSK-SIM1 (P-7, the developer, 23/11/2026): the user chooses the period the simulation draws its days from, inside the
+# common history; by default all of it. Who takes part is decided on all the history available (the coordinator: a
+# short period never drops a holding in silence); a start before the common history moves to it, with a warning.
+# --------------------------------------------------------------------------- #
+
+#: Two holdings with long histories (the common one starts 2016-05-03) and one shorter than the horizon.
+SIM1_QUOTES = {1: date(2015, 1, 2), 2: date(2016, 5, 2), 3: None}
+SIM1_WEIGHTS = {1: 0.6, 2: 0.4}
+
+
+@pytest.mark.asyncio
+async def test_no_period_draws_from_all_the_common_history_as_before(monkeypatch):
+    context, _ = await _simulation_context(monkeypatch, weights=SIM1_WEIGHTS, first_quotes=SIM1_QUOTES)
+
+    (window,) = prepared_windows
+    assert (window.start, window.end) == (date(2016, 5, 3), latest_range_end())
+    assert context.simulation_history.available == window
+    assert context.simulation_history.chosen is False
+    assert context.requested_range == window
+    assert not any(warning.code == "simulation_history_start_moved" for warning in context.execution_warnings)
+
+
+@pytest.mark.asyncio
+async def test_a_period_inside_the_common_history_is_the_window(monkeypatch):
+    start, end = date(2020, 2, 1), date(2021, 3, 31)
+    context, _ = await _simulation_context(monkeypatch, weights=SIM1_WEIGHTS, first_quotes=SIM1_QUOTES, history_start=start, history_end=end)
+
+    (window,) = prepared_windows
+    assert (window.start, window.end) == (start, end)
+    assert context.requested_range == window, "the plugin's amber line counts the history of the window it drew from"
+    assert (context.simulation_history.available.start, context.simulation_history.available.end) == (date(2016, 5, 3), latest_range_end())
+    assert context.simulation_history.chosen is True
+    assert not any(warning.code == "simulation_history_start_moved" for warning in context.execution_warnings)
+
+
+@pytest.mark.asyncio
+async def test_only_a_start_or_only_an_end(monkeypatch):
+    await _simulation_context(monkeypatch, weights=SIM1_WEIGHTS, first_quotes=SIM1_QUOTES, history_start=date(2022, 1, 1))
+    assert (prepared_windows[0].start, prepared_windows[0].end) == (date(2022, 1, 1), latest_range_end())
+    await _simulation_context(monkeypatch, weights=SIM1_WEIGHTS, first_quotes=SIM1_QUOTES, history_end=date(2019, 12, 31))
+    assert (prepared_windows[0].start, prepared_windows[0].end) == (date(2016, 5, 3), date(2019, 12, 31))
+    context, _ = await _simulation_context(monkeypatch, weights=SIM1_WEIGHTS, first_quotes=SIM1_QUOTES, history_end=latest_range_end() + timedelta(days=30))
+    assert prepared_windows[0].end == latest_range_end(), "never past the data's end"
+    assert context.simulation_history.chosen is True
+
+
+@pytest.mark.asyncio
+async def test_a_start_before_the_common_history_moves_to_it_and_says_so(monkeypatch):
+    context, _ = await _simulation_context(monkeypatch, weights=SIM1_WEIGHTS, first_quotes=SIM1_QUOTES, history_start=date(2015, 6, 1), history_end=date(2018, 6, 30))
+
+    (window,) = prepared_windows
+    assert (window.start, window.end) == (date(2016, 5, 3), date(2018, 6, 30))
+    (moved,) = [warning for warning in context.execution_warnings if warning.code == "simulation_history_start_moved"]
+    assert moved.message_i18n_key == "risk.warnings.simulation_history_start_moved"
+    assert moved.message_params == {"requested_start": "2015-06-01", "used_start": "2016-05-03"}
+
+
+@pytest.mark.asyncio
+async def test_a_short_period_drops_no_holding(monkeypatch):
+    """Who takes part is decided on all the history available: a period shorter than the horizon keeps every holding
+    that reaches it on the whole history (the plugin's amber line then says the period is short)."""
+    recent = latest_range_end() - timedelta(days=63)
+    quotes = {1: date(2015, 1, 2), 2: date(2016, 5, 2), 3: recent}
+    weights = {1: 0.7, 2: 0.2, 3: 0.1}
+    whole, whole_ids = await _simulation_context(monkeypatch, weights=weights, first_quotes=quotes)
+    short_period, short_ids = await _simulation_context(monkeypatch, weights=weights, first_quotes=quotes, history_start=date(2024, 1, 1), history_end=date(2024, 2, 29))
+
+    assert whole_ids == short_ids == [(1, 2)], "the same participants: holding 3 is short on the whole history, 1 and 2 are not"
+    assert whole.cash_weight == pytest.approx(short_period.cash_weight)
+    assert (prepared_windows[0].start, prepared_windows[0].end) == (date(2024, 1, 1), date(2024, 2, 29))
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("history_start", "history_end"),
+    [
+        pytest.param(None, date(2016, 1, 31), id="ends-before-the-common-history"),
+        pytest.param(latest_range_end() + timedelta(days=10), None, id="starts-after-the-data"),
+    ],
+)
+async def test_a_period_with_no_common_day_is_refused(monkeypatch, history_start, history_end):
+    with pytest.raises(RiskUnavailableError) as raised:
+        await _simulation_context(monkeypatch, weights=SIM1_WEIGHTS, first_quotes=SIM1_QUOTES, history_start=history_start, history_end=history_end)
+    assert raised.value.code == RiskErrorCode.INSUFFICIENT_HISTORY
+    assert prepared_windows == [], "nothing is prepared"
+
+
+@pytest.mark.asyncio
+async def test_the_service_hands_the_chosen_period_to_the_simulation(monkeypatch):
+    """RSK-SIM1 end to end through ``RiskService.execute``: the period in the simulation's parameters reaches the window
+    it is prepared on, and the context the plugin reads says a period was chosen."""
+    page = DateRangeModel(start=date(2026, 1, 2), end=date(2026, 1, 21))
+    prepared = make_prepared_set({1: [0.01, -0.01] * 30, 2: [0.005, -0.002] * 30}, baseline=date(2023, 6, 15))
+    prepared_ranges: list[DateRangeModel] = []
+    seen: dict[str, object] = {}
+
+    async def fake_scope(_db, **_kwargs):
+        return ScopeInputs(
+            requested_asset_ids=(1, 2),
+            weights={1: 0.6, 2: 0.4},
+            asset_values={1: Decimal("60"), 2: Decimal("40")},
+            cash_weight=0.0,
+            scope_value=Decimal("100"),
+            portfolio_report=None,
+            data_quality=DataQualityReport(),
+            warnings=(),
+            broker_ids=(3,),
+            composition_as_of=page.end,
+        )
+
+    async def fake_assets(_db, asset_ids):
+        return set(asset_ids)
+
+    async def fake_prepare(_db, **kwargs):
+        prepared_ranges.append(kwargs["date_range"])
+        return prepared
+
+    async def fake_facts(_db, **kwargs):
+        return {1: _facts(date(2021, 3, 1)), 2: _facts(date(2023, 6, 14))}
+
+    async def capture_execute(self, params, context):
+        seen["requested_range"] = context.requested_range
+        seen["history"] = context.simulation_history
+        raise RiskUnavailableError("captured", code=RiskErrorCode.DATA_UNAVAILABLE)
+
+    async def serve_holidays() -> frozenset[date]:
+        return frozenset()
+
+    monkeypatch.setattr(risk_service_module, "load_scope_inputs", fake_scope)
+    monkeypatch.setattr(risk_service_module, "load_existing_asset_ids", fake_assets)
+    monkeypatch.setattr(risk_service_module, "prepare_asset_series", fake_prepare)
+    monkeypatch.setattr(risk_simulation_window_module, "prepare_asset_series", fake_prepare)
+    monkeypatch.setattr(risk_simulation_window_module, "load_price_window_facts", fake_facts)
+    monkeypatch.setattr(risk_service_module, "ensure_market_holidays", serve_holidays)
+    monkeypatch.setattr(SimulationAnalytic, "execute", capture_execute)
+
+    parameters = {"horizon_days": 30, "path_count": 256, "history_start": "2024-01-02", "history_end": "2024-12-31"}
+    await RiskService(db=EmptyRowsDb()).execute(
+        user_id=7,
+        request=RiskQueryRequest.model_validate(
+            {
+                "scope": {"kind": "portfolio", "broker_ids": [3]},
+                "date_range": {"start": page.start.isoformat(), "end": page.end.isoformat()},
+                "target_currency": "EUR",
+                "mode": "current_composition",
+                "composition_policy": "current_buy_and_hold",
+                "analytics": [{"instance_id": "simulation", "analytic_code": "simulation", "parameters": parameters}],
+            }
+        ),
+    )
+
+    (window,) = prepared_ranges[1:]
+    assert (window.start, window.end) == (date(2024, 1, 2), date(2024, 12, 31))
+    assert seen["requested_range"] == window
+    assert seen["history"].chosen is True
+    assert (seen["history"].available.start, seen["history"].available.end) == (date(2023, 6, 15), latest_range_end())
