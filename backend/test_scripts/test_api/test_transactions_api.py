@@ -809,6 +809,10 @@ async def test_get_transaction_types(test_server):
         assert reward.get("cost_basis_pair") is None
         assert reward["cash_mode"] == "forbidden"
         assert reward["quantity_sign"] == "positive"
+        # STK-2a: whether the cost basis may be the average cost (Auto) — never for a REWARD (rule 12c)
+        assert reward["cost_basis_auto"] is False, "a REWARD's cost basis is its value on receipt: no Auto"
+        assert types_by_code["ADJUSTMENT"]["cost_basis_auto"] is True
+        assert all(t["cost_basis_auto"] is True for code, t in types_by_code.items() if code != "REWARD"), {code: t.get("cost_basis_auto") for code, t in types_by_code.items()}
 
         # Event types should have emoji + compatible_tx_types
         ev_types = data["event_types"]

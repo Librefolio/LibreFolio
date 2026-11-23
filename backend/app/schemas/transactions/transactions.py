@@ -79,10 +79,6 @@ def tags_to_csv(tags: Optional[List[str]]) -> Optional[str]:
     return ",".join(tags)
 
 
-# Types whose cost basis is a value the user or the import states, never the pool's average cost (rule 12c)
-_MANUAL_COST_BASIS_ONLY = frozenset({TransactionType.REWARD})
-
-
 def validate_transaction_business_rules(  # noqa: C901 — flat per-rule error collection
     *,
     tx_type: TransactionType,
@@ -198,9 +194,9 @@ def validate_transaction_business_rules(  # noqa: C901 — flat per-rule error c
                 {"type": t, "qty": str(quantity)},
             )
         )
-    # Rule 12c (project 79, Q-B): a REWARD's cost basis is its value on receipt, which is also its income. The average
-    # cost of the pool (Auto) is not that value, so a REWARD takes a manual cost basis only.
-    elif tx_type in _MANUAL_COST_BASIS_ONLY and cost_basis_mode in ("auto", "auto-detail"):
+    # Rule 12c (project 79, Q-B): where TX_TYPE_METADATA says cost_basis_auto False the cost basis is a stated value, never
+    # the pool's average cost (Auto): a REWARD's is its value on receipt, which is also its income.
+    elif meta is not None and not meta.cost_basis_auto and cost_basis_mode in ("auto", "auto-detail"):
         errors.append(
             PydanticCustomError(
                 "costBasisAutoNotAllowed",

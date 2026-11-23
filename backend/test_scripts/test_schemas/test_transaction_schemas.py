@@ -648,6 +648,31 @@ class TestRewardRules:
         assert meta.event_compatible is False
         assert meta.requires_link is False
 
+    def test_cost_basis_auto_false_for_reward_only(self):
+        """STK-2a: TX_TYPE_METADATA.cost_basis_auto is False for REWARD and True for every other type."""
+        assert TX_TYPE_METADATA[TransactionType.REWARD].cost_basis_auto is False
+        others = {tx_type.value: meta.cost_basis_auto for tx_type, meta in TX_TYPE_METADATA.items() if tx_type != TransactionType.REWARD}
+        assert others, "the table lists other types"
+        assert all(value is True for value in others.values()), others
+        assert set(TX_TYPE_METADATA) == set(TransactionType), "every type has a row: none falls back to the field default unseen"
+
+    def test_rule_12c_reads_the_table_not_a_type_list(self, monkeypatch):
+        """Rule 12c follows cost_basis_auto: flipped to False on ADJUSTMENT, an Auto ADJUSTMENT is refused."""
+        adjustment = TX_TYPE_METADATA[TransactionType.ADJUSTMENT]
+        monkeypatch.setitem(TX_TYPE_METADATA, TransactionType.ADJUSTMENT, adjustment.model_copy(update={"cost_basis_auto": False}))
+        for mode in ("auto", "auto-detail"):
+            errors = validate_transaction_business_rules(tx_type=TransactionType.ADJUSTMENT, asset_id=1, quantity=Decimal("20"), cash=None, asset_event_id=None, cost_basis_mode=mode)
+            assert [(error.type, error.context) for error in errors] == [("costBasisAutoNotAllowed", {"type": "ADJUSTMENT", "mode": mode})]
+        manual = validate_transaction_business_rules(tx_type=TransactionType.ADJUSTMENT, asset_id=1, quantity=Decimal("20"), cash=None, asset_event_id=None, cost_basis_mode="manual")
+        assert manual == [], "Manual stays allowed"
+
+    def test_rule_12c_lets_auto_through_where_the_table_allows_it(self, monkeypatch):
+        """The reverse: a REWARD row flipped to cost_basis_auto True takes Auto — no hard-coded REWARD set is left."""
+        reward = TX_TYPE_METADATA[TransactionType.REWARD]
+        monkeypatch.setitem(TX_TYPE_METADATA, TransactionType.REWARD, reward.model_copy(update={"cost_basis_auto": True}))
+        errors = validate_transaction_business_rules(tx_type=TransactionType.REWARD, asset_id=1, quantity=Decimal("20"), cash=None, asset_event_id=None, cost_basis_mode="auto")
+        assert errors == [], [(error.type, error.context) for error in errors]
+
 
 #: Marker for ``TestRewardRules._codes``: leave this keyword out of the request.
 _ABSENT = object()
