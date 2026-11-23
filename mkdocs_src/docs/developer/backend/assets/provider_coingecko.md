@@ -138,13 +138,13 @@ Italiana's icons are theirs: it follows CoinGecko's own updates, and no file is 
 
 ## 🏷️ Attribution
 
-CoinGecko's terms ask for every price it gives to be shown with «Powered by CoinGecko», prominent, linked to its site.
-`attribution` returns it as a constant `FAProviderAttribution`. `GET /assets/provider` exposes it, and the interface
-draws it with `ProviderAttributionNote`:
+CoinGecko's terms ask for its data to be shown with «Powered by CoinGecko», linked to its site. `attribution` returns
+it as a constant `FAProviderAttribution`. `GET /assets/provider` exposes it.
 
-- under the price on the asset page;
-- on the plugin's card in Settings › Plugins;
-- once at the foot of the asset list and of the Dashboard positions, when an asset on screen is priced by CoinGecko.
+Where it is shown is the developer's decision (TL42, 23/11/2026): on CoinGecko's own pages only, its card in Settings ›
+Plugins (`ProviderAttributionNote`) and its user-guide page. The screens that show its prices (the asset page, the asset
+list, the Dashboard positions, the search, «Provider Data Comparison») carry no line: the asset shows CoinGecko's icon,
+and its page links to the coin on coingecko.com.
 
 The brand phrase is shown as CoinGecko writes it, in every language.
 
