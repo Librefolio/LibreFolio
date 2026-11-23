@@ -155,6 +155,22 @@ describe('the bar at the top', () => {
         expect(remove).toHaveBeenCalledWith([expect.objectContaining({id: 'r2'})]);
     });
 
+    it('the confirmation takes the action’s own button text (81 U21) and keeps «Confirm» without one', async () => {
+        const list: BulkAction<Row>[] = [
+            {id: 'fetch', icon: Trash2, label: 'Fetch', requireConfirm: true, confirmText: () => 'Fetch them', onClick: vi.fn()},
+            {id: 'plain', icon: Trash2, label: 'Plain', requireConfirm: true, onClick: vi.fn()},
+        ];
+        mount(rowsOf(4), {bulkActions: list, selectionPanel: true});
+        await tick('r1');
+        await fireEvent.click(screen.getByTestId('toolbar-action-fetch'));
+        expect(await screen.findByTestId('confirm-modal-confirm')).toHaveTextContent('Fetch them');
+        await fireEvent.click(screen.getByTestId('confirm-modal-cancel'));
+        await tick('r1');
+        await tick('r1');
+        await fireEvent.click(screen.getByTestId('toolbar-action-plain'));
+        expect(await screen.findByTestId('confirm-modal-confirm')).not.toHaveTextContent('Fetch them');
+    });
+
     it('the count button clears the whole table’s selection', async () => {
         const {list} = actions();
         const {onSelectionChange} = mount(rowsOf(4), {bulkActions: list, selectionPanel: true});

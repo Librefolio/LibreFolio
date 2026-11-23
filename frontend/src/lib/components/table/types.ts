@@ -447,6 +447,9 @@ export interface BulkAction<T> {
     /** Confirmation message - string or function with count */
     confirmMessage?: string | ((count: number) => string);
 
+    /** The confirmation's button, when «Confirm» is too generic for it (81 U21: «Download»). */
+    confirmText?: string | (() => string);
+
     /** Minimum number of rows the action must take, under which it is hidden (the rows it can take, `appliesTo`). */
     minSelection?: number;
 

@@ -1343,6 +1343,7 @@
     items={pendingBulkRows.map((row) => (getRowDisplayName ? getRowDisplayName(row) : String(getRowId(row))))}
     itemsLabel={`${pendingBulkRows.length} ${$t('table.items')}`}
     message={pendingBulkAction?.confirmMessage ? (typeof pendingBulkAction.confirmMessage === 'function' ? pendingBulkAction.confirmMessage(pendingBulkRows.length) : pendingBulkAction.confirmMessage) : `${$t('table.confirmBulkAction')} ${pendingBulkRows.length} ${$t('table.items')}?`}
+    confirmText={pendingBulkAction?.confirmText ? (typeof pendingBulkAction.confirmText === 'function' ? pendingBulkAction.confirmText() : pendingBulkAction.confirmText) : undefined}
     onCancel={cancelBulkAction}
     onConfirm={confirmBulkAction}
     open={showDeleteModal}
