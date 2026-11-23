@@ -66,11 +66,38 @@ export interface AllocationResponse {
     };
     classes: Array<{asset_class: string; amount: string}>;
     assets: AllocationScopeAsset[];
+    /** The selection's history in steps, when it was asked (`include_history`); `null` otherwise. */
+    history: AllocationHistoryStep[] | null;
+}
+
+/** A step of the selection's history: the slices hold from `date` to `through` (inclusive); `base` is their sum. */
+export interface AllocationHistoryStep {
+    date: string;
+    through: string;
+    base: string;
+    /** The slices of the step, as the history chart reads them (`name`, the share in percent or `null`, the amount, the asset id). */
+    components: Array<{name: string; value: string | null; amount: string; emoji: string | null; id: number | null}>;
 }
 
 /** An optional scalar of the generated type, as the `string | null` it is. */
 function text(value: string | null | undefined | Array<string | null>): string | null {
     return typeof value === 'string' ? value : null;
+}
+
+type RawHistoryStep = {
+    date: string;
+    through?: string | null;
+    base: string;
+    components?: Array<{name: string; value?: string | null | Array<string | null>; amount: string; emoji?: string | null | Array<string | null>; id?: number | null | Array<number | null>}>;
+};
+
+function normalizeHistory(steps: RawHistoryStep[]): AllocationHistoryStep[] {
+    return steps.map((step) => ({
+        date: step.date,
+        through: step.through ?? step.date,
+        base: step.base,
+        components: (step.components ?? []).map((component) => ({name: component.name, value: text(component.value), amount: component.amount, emoji: text(component.emoji), id: typeof component.id === 'number' ? component.id : null})),
+    }));
 }
 
 /** Reads the generated answer into the strict one, at the one place the client's widened types are met. */
@@ -101,6 +128,7 @@ export function normalizeAllocation(raw: RawAllocationResponse): AllocationRespo
         },
         classes: raw.classes ?? [],
         assets: (raw.assets ?? []).map((asset) => ({asset_id: asset.asset_id, asset_class: asset.asset_class, amount: asset.amount, name: asset.name, ticker: text(asset.ticker), asset_type: text(asset.asset_type), icon_url: text(asset.icon_url)})),
+        history: Array.isArray(raw.history) && raw.history.every((step) => typeof step === 'object' && step !== null && !Array.isArray(step) && 'date' in step) ? normalizeHistory(raw.history as unknown as RawHistoryStep[]) : null,
     };
 }
 

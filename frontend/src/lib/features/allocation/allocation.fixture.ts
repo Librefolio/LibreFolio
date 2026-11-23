@@ -45,6 +45,7 @@ export function makeView(overrides: Partial<AllocationResponse> = {}): Allocatio
             {asset_id: 2, asset_class: 'STOCK', amount: '4000.00', name: 'Apple Inc.', ticker: 'AAPL', asset_type: 'STOCK', icon_url: null},
             {asset_id: 3, asset_class: 'BOND', amount: '22000.00', name: 'Gov Bond', ticker: null, asset_type: 'BOND', icon_url: null},
         ],
+        history: null,
         ...overrides,
     };
 }

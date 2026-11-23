@@ -54,6 +54,41 @@
     "chip": {
       "without": "Without {name}",
       "remove": "Remove {name}"
+    },
+    "dimension": {
+      "label": "Group by",
+      "sector": "Sector",
+      "geography": "Area",
+      "type": "Type",
+      "asset": "Asset"
+    },
+    "view": {
+      "label": "View",
+      "now": "Now",
+      "history": "History"
+    },
+    "table": {
+      "label": "Allocation table",
+      "amount": "Amount",
+      "shareOfSelection": "% of the selection",
+      "shareOfPortfolio": "% of the portfolio",
+      "assets": "Assets",
+      "excluded": "(excluded)",
+      "ofSlice": "{share} of the slice",
+      "hint": "Click a row to see the assets that make it up. The first % column adds up to 100, the second to {share}.",
+      "hintNoShare": "Click a row to see the assets that make it up.",
+      "empty": "Nothing in the selection."
+    },
+    "map": {
+      "captionBefore": "Colours on the selection: 100% =",
+      "captionAfter": "of the portfolio"
+    },
+    "pie": {
+      "center": "Base"
+    },
+    "history": {
+      "empty": "No history for this selection in the period.",
+      "loading": "Loading the history…"
     }
   }
 }

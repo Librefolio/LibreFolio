@@ -598,7 +598,8 @@
                 onLotsRatesChanged={() => void loadAll(true)}
             />
         {:else if activeTab === 'allocazione'}
-            <!-- The report's own scope (brokers, period, currency, share): the backend reads the report's engine run and a filter replays nothing. -->
+            <!-- The report's own scope (brokers, `historyStart`, period end, currency, share): the backend reads the report's engine run and a
+                 filter replays nothing. -->
             <PortfolioAllocationTab
                 testId={testIds.allocationTab}
                 page={isBrokerScope ? {kind: 'broker', brokerId: brokerScopeId} : {kind: 'portfolio'}}

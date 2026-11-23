@@ -7,7 +7,9 @@
  *
  * @module features/allocation/allocationLabels
  */
+import {getAssetTypeIconUrl, LIQUIDITY_KEY, sectorI18nKey} from '$lib/utils/assetTypes';
 import type {AllocationChip, ExcludableBucket} from './allocationFilters';
+import type {AllocationDimension} from './allocationQuery';
 
 export type Translate = (key: string, options?: {values?: Record<string, string | number>; default?: string}) => string;
 
@@ -46,4 +48,50 @@ export function chipName(t: Translate, chip: AllocationChip, assetNames: Readonl
 export function chipText(t: Translate, chip: AllocationChip, assetNames: ReadonlyMap<number, string>): string {
     const name = chipName(t, chip, assetNames);
     return chip.kind === 'class' ? name : t('allocation.chip.without', {values: {name}});
+}
+
+// ---------------------------------------------------------------------------
+// Rows of the table and of the pie
+// ---------------------------------------------------------------------------
+
+export interface RowLabelDeps {
+    t: Translate;
+    /** The assets the answer lists, by id. */
+    assetNames: ReadonlyMap<number, string>;
+    /** The country of an ISO3 code, as the country store says it (its name in the interface language, its flag). */
+    country: (iso3: string) => {name: string; flag_emoji: string};
+    /** The emoji of a sector key, from the sector store. */
+    sectorEmoji: (key: string) => string;
+}
+
+/** What a row or a legend entry says: a text and, before it, a glyph (a flag, an emoji) or an icon. */
+export interface RowLabel {
+    text: string;
+    glyph?: string;
+    iconUrl?: string;
+}
+
+const BUCKET_GLYPH: Record<string, string> = {Unknown: '❓', Other: '📦'};
+
+/** A slice's label in the dimension it belongs to: a sector or an asset type translated, a country by its flag and name, an asset as sent. */
+export function sliceLabel(deps: RowLabelDeps, dimension: AllocationDimension, key: string, assetId?: number | null): RowLabel {
+    const {t} = deps;
+    if (dimension === 'asset' && assetId != null) return {text: deps.assetNames.get(assetId) ?? `#${assetId}`};
+    if (key === 'Unknown' || key === 'Other') return {text: bucketLabel(t, key), glyph: BUCKET_GLYPH[key]};
+    if (key === 'Liquidity') return {text: classLabel(t, key), iconUrl: getAssetTypeIconUrl(LIQUIDITY_KEY)};
+    if (dimension === 'geography') {
+        const info = deps.country(key);
+        return {text: info.name, glyph: info.flag_emoji};
+    }
+    if (dimension === 'sector') {
+        const i18nKey = `sectors.${sectorI18nKey(key)}`;
+        return {text: t(i18nKey, {default: key.replace(/_/g, ' ')}), glyph: deps.sectorEmoji(key)};
+    }
+    if (dimension === 'type') return {text: classLabel(t, key), iconUrl: getAssetTypeIconUrl(key)};
+    return {text: key};
+}
+
+/** An asset of the detail or of the exclusions, by its name. */
+export function assetLabel(deps: RowLabelDeps, assetId: number): RowLabel {
+    return {text: deps.assetNames.get(assetId) ?? `#${assetId}`};
 }

@@ -82,6 +82,7 @@ describe('normalizeAllocation', () => {
             excluded: {amount: '0.00', by_bucket: [], by_asset: [], unattributable: []},
             classes: [],
             assets: [],
+            history: null,
         });
     });
 

@@ -30,6 +30,7 @@
     import AllocationBaseTiles from '$lib/features/allocation/AllocationBaseTiles.svelte';
     import AllocationFilterPanel from '$lib/features/allocation/AllocationFilterPanel.svelte';
     import AllocationChips from '$lib/features/allocation/AllocationChips.svelte';
+    import AllocationResults from '$lib/features/allocation/AllocationResults.svelte';
     import type {PortfolioScope} from './portfolioDataScope';
 
     interface Props {
@@ -61,7 +62,7 @@
     $effect(() => {
         const current = scope;
         const version = refreshVersion;
-        const ask: AllocationAsk | null = current ? {scope: current, dimension: controller.dimension, filters: controller.filters} : null;
+        const ask: AllocationAsk | null = current ? {scope: current, dimension: controller.dimension, filters: controller.filters, includeHistory: controller.mode === 'history'} : null;
         if (!ask) return;
         const key = `${allocationAskKey(ask)}|v${version}`;
         untrack(() => {
@@ -143,7 +144,8 @@
                     </div>
                     <AllocationChips filters={controller.filters} {view} onchange={(next) => controller.setFilters(next)} testId="{testId}-chips" />
                 {/if}
-                <!-- F3: the dimension selector, the chart, the table and the history go here. -->
+                <AllocationResults {view} dimension={controller.dimension} onDimension={(next) => controller.setDimension(next)} mode={controller.mode} onMode={(next) => controller.setMode(next)} loading={controller.loading} testId="{testId}-results" />
+                <!-- F4: the class × dimension matrix goes under the results. -->
             </div>
         </div>
     {/if}

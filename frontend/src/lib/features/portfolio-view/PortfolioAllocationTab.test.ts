@@ -12,7 +12,9 @@
 import {afterEach, beforeAll, beforeEach, describe, expect, it, vi} from 'vitest';
 import {cleanup, fireEvent, render, screen, setupI18n, waitFor} from '$test/component';
 
-const mocks = vi.hoisted(() => ({fetch: vi.fn()}));
+const mocks = vi.hoisted(() => ({fetch: vi.fn(), results: vi.fn()}));
+// The chart, the map and the table have their own specs; here they would need a canvas.
+vi.mock('$lib/features/allocation/AllocationResults.svelte', () => ({default: mocks.results}));
 vi.mock('$lib/api', async (importOriginal) => ({...(await importOriginal<typeof import('$lib/api')>()), zodiosApi: {get_portfolio_allocation_api_v1_portfolio_allocation_post: mocks.fetch}}));
 
 import PortfolioAllocationTab from './PortfolioAllocationTab.svelte';
@@ -56,6 +58,7 @@ function memoryStorage(): Storage {
 beforeEach(() => {
     vi.stubGlobal('localStorage', memoryStorage());
     mocks.fetch.mockReset();
+    mocks.results.mockReset();
     mocks.fetch.mockImplementation(async () => makeView());
     viewport(true);
 });
@@ -211,5 +214,41 @@ describe('the filter panel is mounted once', () => {
         await loaded();
         expect(screen.getAllByTestId('alloc-chips-chip').length, 'the other two classes are kept').toBe(2);
         expect(screen.getByTestId('alloc-filters-button')).toHaveTextContent('2');
+    });
+});
+
+describe('the results', () => {
+    /** The props the (mocked) results component was last mounted or updated with. */
+    const resultsProps = () => mocks.results.mock.calls.at(-1)?.[1] as {view: {dimension: string}; dimension: string; mode: string; onDimension: (next: string) => void; onMode: (next: string) => void};
+
+    it('are given the answer, the dimension and the mode of the first opening', async () => {
+        render(PortfolioAllocationTab, props());
+        await loaded();
+        await waitFor(() => expect(mocks.results).toHaveBeenCalled());
+        expect(resultsProps().dimension).toBe('sector');
+        expect(resultsProps().mode).toBe('now');
+    });
+
+    it('choosing another dimension is a new question for that dimension', async () => {
+        render(PortfolioAllocationTab, props());
+        await loaded();
+        await waitFor(() => expect(mocks.results).toHaveBeenCalled());
+        resultsProps().onDimension('geography');
+        await waitFor(() => expect(mocks.fetch).toHaveBeenCalledTimes(2));
+        expect(calls()[1]).toMatchObject({dimension: 'geography'});
+        expect(calls()[1]).not.toHaveProperty('include_history');
+    });
+
+    it('«History» asks the same question with the history, and «Now» goes back to asking without it', async () => {
+        render(PortfolioAllocationTab, props());
+        await loaded();
+        await waitFor(() => expect(mocks.results).toHaveBeenCalled());
+        resultsProps().onMode('history');
+        await waitFor(() => expect(mocks.fetch).toHaveBeenCalledTimes(2));
+        expect(calls()[1]).toMatchObject({dimension: 'sector', include_history: true});
+        await loaded();
+        resultsProps().onMode('now');
+        await waitFor(() => expect(mocks.fetch).toHaveBeenCalledTimes(3));
+        expect(calls()[2]).not.toHaveProperty('include_history');
     });
 });

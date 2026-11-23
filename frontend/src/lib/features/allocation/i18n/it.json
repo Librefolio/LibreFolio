@@ -54,6 +54,41 @@
     "chip": {
       "without": "Senza {name}",
       "remove": "Rimuovi {name}"
+    },
+    "dimension": {
+      "label": "Raggruppa per",
+      "sector": "Settore",
+      "geography": "Area",
+      "type": "Tipo",
+      "asset": "Asset"
+    },
+    "view": {
+      "label": "Vista",
+      "now": "Ora",
+      "history": "Storico"
+    },
+    "table": {
+      "label": "Tabella dell'allocazione",
+      "amount": "Importo",
+      "shareOfSelection": "% della selezione",
+      "shareOfPortfolio": "% del portafoglio",
+      "assets": "Asset",
+      "excluded": "(escluso)",
+      "ofSlice": "{share} della voce",
+      "hint": "Clic su una riga: gli asset che la compongono. La prima colonna % somma 100, la seconda {share}.",
+      "hintNoShare": "Clic su una riga: gli asset che la compongono.",
+      "empty": "Niente nella selezione."
+    },
+    "map": {
+      "captionBefore": "Colori sulla selezione: 100% =",
+      "captionAfter": "del portafoglio"
+    },
+    "pie": {
+      "center": "Base"
+    },
+    "history": {
+      "empty": "Nessuno storico per questa selezione nel periodo.",
+      "loading": "Carico lo storico…"
     }
   }
 }

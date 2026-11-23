@@ -41,6 +41,8 @@ export class AllocationController {
     failed = $state(false);
     filters = $state.raw<AllocationFilters>(emptyFilters());
     dimension = $state<AllocationDimension>(DEFAULT_ALLOCATION_DIMENSION);
+    /** «Now» (the base's slices) or «History» (the selection's history in steps, asked with the same answer). */
+    mode = $state<'now' | 'history'>('now');
 
     readonly #storageKey: string;
     readonly #deps: AllocationControllerDeps;
@@ -66,6 +68,10 @@ export class AllocationController {
 
     setDimension(next: AllocationDimension): void {
         this.dimension = next;
+    }
+
+    setMode(next: 'now' | 'history'): void {
+        this.mode = next;
     }
 
     /** Asks the backend. Resolves when this ask is answered, failed or dropped; never rejects. */
