@@ -150,6 +150,8 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 
 ### 🐛 Corrections
 
+- Sur un téléphone, la fenêtre d'une transaction ne défile plus sur le côté quand l'actif a un nom long : les champs tiennent de nouveau dans l'écran, en consultation et en modification. Le défaut existait déjà dans la 1.3.0.
+- Une transaction ouverte en consultation depuis l'onglet Transactions d'un courtier propose maintenant le crayon de modification, comme sur la page Transactions, à qui peut modifier ce courtier.
 - Les numéros de page de la liste Fichiers restent en bas de la fenêtre pendant le défilement, comme sur les autres pages, et la barre de sélection en bas d'une page ne cache plus les numéros de page d'un tableau.
 - Page FX : après l'échec d'un chargement de la comparaison, la comparaison ne cesse plus de se mettre à jour ; les chargements suivants partent quand même.
 - L'icône de la Banca d'Italia s'affiche désormais dans la fenêtre des routes, dans les paramètres des plugins et dans le guide utilisateur : le site de la banque ne laisse pas d'autres sites afficher son icône, LibreFolio en sert donc une copie.

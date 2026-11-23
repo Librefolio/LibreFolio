@@ -150,6 +150,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🐛 Fixed
 
+- On a phone, the transaction window no longer scrolls sideways when the asset has a long name: the fields shrink to the screen again, in view and in edit. The defect was already in 1.3.0.
+- A transaction opened read-only from a broker's Transactions tab now offers the edit pencil, as on the Transactions page, to who can edit that broker.
 - The page numbers of the Files list stay at the bottom of the window while you scroll, as on the other pages, and the selection bar at the bottom of a page no longer covers a table's page numbers.
 - FX page: after one comparison load failed, the comparison no longer stops updating; the next loads still run.
 - The Banca d'Italia icon now shows in the route window, in the plugin settings and in the user guide: the bank's site does not let other sites show its icon, so LibreFolio serves a copy.

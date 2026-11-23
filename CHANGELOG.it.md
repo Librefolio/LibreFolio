@@ -150,6 +150,8 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 
 ### 🐛 Corretto
 
+- Sul telefono la finestra della transazione non scorre più di lato quando l'asset ha un nome lungo: i campi tornano a stare nello schermo, in visualizza e in modifica. Il difetto c'era già nella 1.3.0.
+- Una transazione aperta in visualizza dal tab Transazioni di un broker ora offre la matita per modificarla, come nella pagina Transazioni, a chi può modificare quel broker.
 - I numeri di pagina dell'elenco File restano in fondo alla finestra mentre scorri, come nelle altre pagine, e la barra della selezione in fondo a una pagina non copre più i numeri di pagina di una tabella.
 - Pagina FX: dopo un caricamento del confronto andato in errore, il confronto non smette più di aggiornarsi; i caricamenti successivi partono lo stesso.
 - L'icona di Banca d'Italia ora si vede nella finestra delle route, nelle impostazioni dei plugin e nella guida utente: il sito della banca non lascia mostrare la sua icona da altri siti, quindi LibreFolio ne serve una copia.
