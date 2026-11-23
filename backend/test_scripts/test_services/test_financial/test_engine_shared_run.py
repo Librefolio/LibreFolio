@@ -15,7 +15,8 @@ alone staying a flag of the caller.
   ``test_the_old_flags_build_twice`` pins that this count can tell the two apart): a report with every section the page
   asks then the positions series of the same window → one build; the same two requests concurrent, the build held until
   the second one waits on it → one build (single-flight); the standalone Performance table and BUY funding split of that
-  window after the report → no new build. Each call is first proved to answer with data (series points, contribution
+  window after the report → no new build; the «Allocazione» views (lane 80) of every dimension, with filters and
+  history, after the report → no new build, and their total is the report's net worth. Each call is first proved to answer with data (series points, contribution
   rows, history points), so a «no build» can never come from an early empty return.
 - ``TestOutputsUnchanged`` — the parity: each public output computed with the shared run equals, field by field
   (``model_dump(mode="json")``), the same output computed with the old flags of its caller. The old flags are put back
@@ -75,6 +76,7 @@ import backend.app.services.financial_math.portfolio.engine as portfolio_engine_
 from backend.app.db.base import SQLModel  # every model, for create_all; importing backend.app.db brings the session module and its PRAGMA listener
 from backend.app.db.models import Asset, AssetType, Broker, BrokerUserAccess, FxRate, PriceHistory, Transaction, TransactionType, User, UserRole
 from backend.app.schemas.common import OpenDateRangeModel
+from backend.app.schemas.portfolio.allocation import PortfolioAllocationQuery
 from backend.app.schemas.portfolio.positions_series import PositionKey, PositionsSeriesQuery
 from backend.app.schemas.portfolio.report import PortfolioReportQuery
 from backend.app.services.financial_math.portfolio.engine import PortfolioCalculationEngine
@@ -464,6 +466,25 @@ class TestOneBuildPerPage:
             assert funding.points, "the standalone BUY funding has no point in the window"
         assert builds.count == 1, f"the standalone contribution and funding made {builds.count - 1} new builds"
         print_success("the report's run answers the standalone contribution and funding")
+
+    @pytest.mark.asyncio
+    async def test_the_allocation_views_after_the_report_build_nothing(self, book, builds):
+        """Lane 80, B2: the «Allocazione» tab reads the page's run. Every dimension, a class filter, an exclusion and the
+        history after the report of the same window: no new build, and each view answers with the report's net worth."""
+        print_section("Lane 80: the allocation views after the report — no new build")
+        broker_ids = sorted(book.broker_ids.values())
+        async with AsyncSession(book.engine, expire_on_commit=False) as session:
+            service = PortfolioService(session)
+            report = await service.get_report(book.user_id, _page_report_query(book, WINDOW))
+            _assert_report_has_data(report)
+            assert builds.count == 1
+            for dimension in ("sector", "geography", "type", "asset"):
+                for filters in ({}, {"classes": ["STOCK"], "exclude_buckets": ["Unknown"]}, {"exclude_asset_ids": [book.asset_ids["X"]], "include_history": True}):
+                    view = await service.get_allocation(book.user_id, PortfolioAllocationQuery(broker_ids=broker_ids, date_range=_range(WINDOW), target_currency=EUR, dimension=dimension, **filters))
+                    assert view.as_of == WINDOW[1] and view.assets, f"{dimension} {filters}: the view has data"
+                    assert view.portfolio_total == report.summary.net_worth.amount, f"{dimension} {filters}: the total is the report's net worth"
+        assert builds.count == 1, f"the allocation views made {builds.count - 1} new builds"
+        print_success("the report's run answers every allocation view")
 
 
 # =============================================================================

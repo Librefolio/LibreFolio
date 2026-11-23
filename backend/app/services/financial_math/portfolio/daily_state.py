@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from datetime import date as date_type
 from datetime import timedelta
 from decimal import Decimal
+from typing import NamedTuple
 
 import structlog
 
@@ -79,6 +80,41 @@ def _weights_on(steps: Sequence[ClassificationStep], day: date_type) -> Mapping[
     if step is None:
         step = steps[0] if day < steps[0].date else steps[-1]
     return step.weights
+
+
+class AllocationParts(NamedTuple):
+    """How one asset's value splits on one day (lane 80, B1a): the whole value under its type, and ordered ``(key,
+    amount)`` pairs for its sectors and its countries. A key can repeat (the country «Other» is named ``Unknown`` beside
+    a real ``Unknown``): a caller adds every pair, in order. A named tuple: built for every held position on every
+    computed day, it costs what a tuple costs."""
+
+    type_key: str
+    sector: tuple[tuple[str, Decimal], ...]
+    geography: tuple[tuple[str, Decimal], ...]
+
+
+def _voice_parts(steps: Sequence[ClassificationStep] | None, voice: str, day: date_type, value: Decimal) -> tuple[tuple[str, Decimal], ...]:
+    """The pairs of one voice: ``value * weight`` per key of the day's weights, in their order; no weights → all
+    ``Unknown``. In geography the country «Other» (a source's «rest of the world») is ``Unknown`` too."""
+    weights = _weights_on(steps, day) if steps else None
+    if not weights:
+        return ((_UNKNOWN, value),)
+    if voice == GEOGRAPHY_VOICE:
+        return tuple([(_UNKNOWN if name == "Other" else name, value * weight) for name, weight in weights.items()])
+    return tuple([(name, value * weight) for name, weight in weights.items()])
+
+
+def allocation_parts(asset_type: str, classification: AssetClassification | None, day: date_type, value: Decimal) -> AllocationParts:
+    """The allocation parts of ``value`` held in one asset on ``day``: by its type, and by the countries and sectors its
+    profile has on that day (plan 68, D2). No profile, a voice absent or emptied on purpose: the whole value is unknown
+    in that dimension. The one home of this split: the daily replay and the filtered views of the «Allocazione» tab
+    both read it."""
+    voices = classification or {}
+    return AllocationParts(
+        type_key=asset_type,
+        sector=_voice_parts(voices.get(SECTOR_VOICE), SECTOR_VOICE, day, value),
+        geography=_voice_parts(voices.get(GEOGRAPHY_VOICE), GEOGRAPHY_VOICE, day, value),
+    )
 
 
 def _classification_change_days(classifications: Mapping[int, AssetClassification | None]) -> set[date_type]:
@@ -873,6 +909,8 @@ class DailyStateBuilder:
             realized_sales=realized_sales,
             market_value_transfers=market_value_transfers,
             missing_fx={pair: set(dates) for pair, dates in self._missing_fx.items()},
+            asset_types=dict(self.asset_types),
+            asset_classifications=dict(self.asset_classifications),
         )
 
     # ── Helper methods ──
@@ -1624,17 +1662,10 @@ class DailyStateBuilder:
     ) -> None:
         """Distribute market value into allocation buckets, with the countries and sectors the asset's profile has on
         ``day`` (plan 68, D2). No profile, a voice absent or emptied on purpose: the whole value is unknown in that
-        dimension; the country «Other» (a source's «rest of the world») is unknown too."""
-        asset_type = self.asset_types.get(asset_id, "Unknown")
-        by_type[asset_type] = by_type.get(asset_type, Decimal("0")) + mv
-
-        voices = self.asset_classifications.get(asset_id) or {}
-        for voice, bucket in ((SECTOR_VOICE, by_sector), (GEOGRAPHY_VOICE, by_geo)):
-            steps = voices.get(voice)
-            weights = _weights_on(steps, day) if steps else None
-            if not weights:
-                bucket[_UNKNOWN] = bucket.get(_UNKNOWN, Decimal("0")) + mv
-                continue
-            for name, weight in weights.items():
-                key = _UNKNOWN if voice == GEOGRAPHY_VOICE and name == "Other" else name
-                bucket[key] = bucket.get(key, Decimal("0")) + mv * weight
+        dimension; the country «Other» (a source's «rest of the world») is unknown too. The split is
+        :func:`allocation_parts`'s."""
+        parts = allocation_parts(self.asset_types.get(asset_id, "Unknown"), self.asset_classifications.get(asset_id), day, mv)
+        by_type[parts.type_key] = by_type.get(parts.type_key, Decimal("0")) + mv
+        for bucket, pairs in ((by_sector, parts.sector), (by_geo, parts.geography)):
+            for key, amount in pairs:
+                bucket[key] = bucket.get(key, Decimal("0")) + amount
