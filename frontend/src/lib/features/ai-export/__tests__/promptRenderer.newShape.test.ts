@@ -19,8 +19,8 @@ import {findAiExportResponseContract} from '../templates/responseContracts';
 import {findAiExportAnalysisInstruction} from '../templates/sharedInstructions';
 import {compatibilityFixture, selectionFixture, snapshotFixture} from './runtimeFixtures';
 
-/** The analyses moved to the new shape by L1: the two market-driver analyses. */
-const NEW_SHAPE_IDS = ['portfolio.performance_market_drivers', 'broker.performance_market_drivers'] as const satisfies readonly AiExportAnalysisId[];
+/** The analyses in the new shape: the two market-driver analyses (L1) and Protection Strategies (L3). */
+const NEW_SHAPE_IDS = ['portfolio.performance_market_drivers', 'broker.performance_market_drivers', 'portfolio.protection_strategies'] as const satisfies readonly AiExportAnalysisId[];
 const OLD_SHAPE_IDS = AI_EXPORT_ANALYSIS_IDS.filter((id) => !(NEW_SHAPE_IDS as readonly string[]).includes(id));
 
 const NEW_ORDER = ['task', 'rules_of_reasoning', 'how_to_answer', 'ground_rules', 'snapshot_metadata', 'snapshot_data', 'additional_librefolio_data', 'domain_notes', 'legal_notice', 'user_question', 'response_language'];

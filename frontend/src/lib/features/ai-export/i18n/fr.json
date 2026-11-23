@@ -57,11 +57,15 @@
         },
         "performance_market_drivers": {
           "display": "Performance et facteurs de marché",
-          "description": "Explique la performance du portefeuille et recherche des facteurs de marché datés pour chaque actif détenu."
+          "description": "Explique ce qui a fait bouger le résultat du portefeuille sur la période, avec des actualités de marché datées pour les mouvements qui comptent."
         },
         "fiscal_lots": {
           "display": "Stratégies de compensation des moins-values",
           "description": "Étudie comment des moins-values disponibles ou proches de l’expiration pourraient compenser des gains éligibles à partir des lots FIFO économiques, après clarification du relevé fiscal officiel, du pays, du régime, des échéances et des règles applicables."
+        },
+        "protection_strategies": {
+          "display": "Stratégies de protection",
+          "description": "Évalue s'il est judicieux de protéger le portefeuille aujourd'hui et, seulement dans ce cas, avec quelle stratégie."
         }
       },
       "broker": {
@@ -71,7 +75,7 @@
         },
         "performance_market_drivers": {
           "display": "Performance et facteurs de marché",
-          "description": "Explique la performance du courtier sélectionné et recherche des facteurs de marché datés pour chaque actif détenu."
+          "description": "Explique ce qui a fait bouger le résultat du courtier sélectionné sur la période, avec des actualités de marché datées pour les mouvements qui comptent."
         },
         "fiscal_lots": {
           "display": "Stratégies de compensation des moins-values",
