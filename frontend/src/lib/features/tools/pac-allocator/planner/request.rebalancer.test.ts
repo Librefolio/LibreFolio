@@ -249,24 +249,29 @@ describe('the Rebalancer request, «Invest only»', () => {
         expect(stepOfWirePath(['holdings', 0, 'planning_quantity'])).toBe('assets');
     });
 
-    it('the preview carries the euros, and a «Custom» still without λ as «Balanced»; the plan refuses that «Custom»', () => {
+    it('the preview sends «Balanced» whatever the fidelity; the plan sends the draft λ and refuses a «Custom» without one', () => {
         const {draft, entryKey} = scenario();
         draft.data.fidelity = {kind: 'custom', lambda: ''};
         // An incomplete total: the preview builds anyway.
         draft.data.targets[entryKey] = '';
 
-        const preview = buildRequest(draft, NOW, {operation: 'preview', customReferenceAmount: '60'});
-        expect(preview.ok ? [] : preview.problems.map((problem) => problem.key)).toEqual([]);
-        if (!preview.ok) return;
-        expect(preview.built.request).toMatchObject({operation: 'preview', target_fidelity: {kind: 'level', level: 'balanced'}, custom_reference_amount: {amount: '60', currency: 'EUR'}});
+        // R1-F (b): no number of the preview depends on the fidelity, and the page keys it without it.
+        for (const fidelity of [{kind: 'custom', lambda: ''}, {kind: 'custom', lambda: '0.0123'}, {kind: 'target_first'}, {kind: 'level', level: 'faithful'}] as const) {
+            draft.data.fidelity = fidelity;
+            const preview = buildRequest(draft, NOW, {operation: 'preview'});
+            expect(preview.ok ? [] : preview.problems.map((problem) => problem.key)).toEqual([]);
+            if (!preview.ok) return;
+            expect(preview.built.request).toMatchObject({operation: 'preview', target_fidelity: {kind: 'level', level: 'balanced'}});
+            expect(preview.built.request).not.toHaveProperty('custom_reference_amount');
+        }
 
         draft.data.targets[entryKey] = '10';
+        draft.data.fidelity = {kind: 'custom', lambda: ''};
         const plan = buildRequest(draft, NOW);
         // Step 10b: the plan refuses it as a problem of the Strategy step, the field's (no longer a structure error).
         expect(plan.ok ? [] : plan.problems.map((problem) => `${problem.step}:${problem.key}`)).toEqual(['strategy:fidelityCustomMissing']);
-        // The euros never travel with a plan.
         draft.data.fidelity = {kind: 'custom', lambda: '0.0123'};
-        const planned = buildRequest(draft, NOW, {customReferenceAmount: '60'});
-        expect(planned.ok && planned.built.request).not.toHaveProperty('custom_reference_amount');
+        const planned = buildRequest(draft, NOW);
+        expect(planned.ok && planned.built.request).toMatchObject({target_fidelity: {kind: 'custom', lambda: '0.0123'}});
     });
 });

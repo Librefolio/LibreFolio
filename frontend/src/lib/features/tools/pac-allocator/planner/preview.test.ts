@@ -4,14 +4,16 @@
  *
  * Subject. Before the calculation the numbers come from the backend: the service's `preview` operation reads the same
  * request as `plan` (`buildRequest(draft, now, {operation: 'preview'})`, even incomplete) and answers the total, today's
- * items, the table «maximum acceptable cost» and the custom fidelity. `PlannerPreview`:
+ * items and the λ of the fidelity levels. `PlannerPreview`:
  *   - calls it once, a delay after the last change, with the latest draft's request;
  *   - while it waits, keeps the previous numbers, marked stale;
  *   - drops an answer older than the latest asked;
  *   - on a failure (the network, a `needs_input` answer, a draft it cannot send) drops the numbers and keeps the reason;
  *   - never runs during a calculation (one batch per user: the run would get a 429);
- *   - sends the euros typed for «Custom», and the draft keeps the λ the answer gives.
- * No calculation here: the class reads and forwards. The call is a fake; nothing talks to a server.
+ *   - turns the euros typed for «Custom» into the draft's λ on a current answer's total (`acceptableCost.ts`, R1-F (b) of
+ *     project 67): at once, with no call, when the numbers are current; on the next answer when they are stale;
+ *   - is keyed on the draft without its fidelity, and sends «Balanced»: a level chosen or a figure typed asks nothing.
+ * The call is a fake; nothing talks to a server.
  */
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 
@@ -255,108 +257,102 @@ describe('PlannerPreview', () => {
         preview.dispose();
     });
 
-    it('custom euros go to preview and the draft keeps the lambda it returns', async () => {
+    /** A ready answer on `total` with the λ of the three levels, as the Rebalancer's preview gives them. */
+    function levels(total: string): PreviewAnswer {
+        return ready(total, {fidelity_level_weights: {cost_aware: {kind: 'finite_decimal', value: '0.25'}, balanced: {kind: 'finite_decimal', value: '1'}, faithful: {kind: 'finite_decimal', value: '4'}}});
+    }
+
+    it('the preview is keyed on the draft without its fidelity: a level chosen or a figure typed asks nothing (R1-F b)', () => {
         const draft = draftOf();
-        draft.data.fidelity = {kind: 'custom', lambda: ''};
+        const key = draft.previewFingerprint;
+        const fingerprint = draft.fingerprint;
+        draft.data.fidelity = {kind: 'custom', lambda: '0.6'};
+        // The plan's fingerprint moves (a result on another λ is stale); the preview's key does not.
+        expect(draft.fingerprint).not.toBe(fingerprint);
+        expect(draft.previewFingerprint).toBe(key);
+        draft.data.fidelity = {kind: 'target_first'};
+        expect(draft.previewFingerprint).toBe(key);
+        draft.data.targets['asset:probe'] = '50';
+        expect(draft.previewFingerprint).not.toBe(key);
+    });
+
+    it('the preview request carries «Balanced» whatever the fidelity, and never the euros (R1-F b)', async () => {
+        const draft = draftOf();
+        draft.data.fidelity = {kind: 'custom', lambda: '0.6'};
         const {call, pending} = controlled();
         const preview = new PlannerPreview({call, blocked: () => false});
-
-        preview.setCustomEuros(draft, '60');
-        vi.advanceTimersByTime(PREVIEW_DELAY_MS);
-        expect(pending[0].request.custom_reference_amount).toEqual({amount: '60', currency: 'EUR'});
-        pending[0].resolve(ready('150', {custom: {distance_weight: {kind: 'finite_decimal', value: '0.0123'}, reference_amount: {value: {kind: 'finite_decimal', value: '60'}, currency: 'EUR'}}}));
-        await vi.runAllTimersAsync();
-
-        // The figure is never recomputed here: λ is the answer's, as given.
-        expect(draft.data.fidelity).toEqual({kind: 'custom', lambda: '0.0123'});
-        // The draft keeps λ: the next preview (a new total) sends λ, not the euros, and gives the euros back.
-        draft.data.targets['asset:probe'] = '50';
         preview.schedule(draft);
-        vi.advanceTimersByTime(PREVIEW_DELAY_MS);
-        expect(pending[1].request).not.toHaveProperty('custom_reference_amount');
-        expect(pending[1].request.target_fidelity).toEqual({kind: 'custom', lambda: '0.0123'});
+        await vi.advanceTimersByTimeAsync(PREVIEW_DELAY_MS);
+        expect(pending[0].request.target_fidelity).toEqual({kind: 'level', level: 'balanced'});
+        expect(pending[0].request).not.toHaveProperty('custom_reference_amount');
         preview.dispose();
     });
 
-    it('the λ an answer writes asks no second preview: that answer already counts it (R1-F a)', async () => {
-        // «Costo massimo accettabile», «Personalizzata»: every figure typed made two previews, the second giving the same
-        // numbers back (R1 §2 n. 7, «così lento sembra rotto»). The shell asks again at every change of the draft's
-        // fingerprint; λ written by the answer is such a change.
+    it('euros typed on current numbers become the draft λ at once, with no call (R1-F b, «istantaneo»)', async () => {
         const draft = draftOf();
-        draft.data.fidelity = {kind: 'custom', lambda: ''};
         const {call, pending} = controlled();
         const preview = new PlannerPreview({call, blocked: () => false});
-
-        preview.setCustomEuros(draft, '60');
-        await vi.advanceTimersByTimeAsync(PREVIEW_DELAY_MS);
-        pending[0].resolve(ready('150', {custom: {distance_weight: {kind: 'finite_decimal', value: '0.0123'}, reference_amount: {value: {kind: 'finite_decimal', value: '60'}, currency: 'EUR'}}}));
-        await vi.advanceTimersByTimeAsync(0);
-        expect(draft.data.fidelity).toEqual({kind: 'custom', lambda: '0.0123'});
-
-        // As the shell's effect does after λ lands.
         preview.schedule(draft);
+        await vi.advanceTimersByTimeAsync(PREVIEW_DELAY_MS);
+        pending[0].resolve(levels('20000'));
+        await vi.advanceTimersByTimeAsync(0);
+        expect(preview.state).toBe('ready');
+
+        // As the step does: «Custom» with no λ, then the figure.
+        draft.data.fidelity = {kind: 'custom', lambda: ''};
+        preview.setCustomEuros(draft, '60');
+        // 60·20 000/(2·1 000²) = 0.6, on the spot.
+        expect(draft.data.fidelity).toEqual({kind: 'custom', lambda: '0.6'});
         await vi.advanceTimersByTimeAsync(PREVIEW_DELAY_MS * 2);
         expect(call).toHaveBeenCalledTimes(1);
-        expect(preview.state).toBe('ready');
-        expect(preview.stale).toBe(false);
-
-        // A real change afterwards asks again, with λ.
-        draft.data.targets['asset:probe'] = '50';
-        preview.schedule(draft);
-        expect(preview.state).toBe('waiting');
-        await vi.advanceTimersByTimeAsync(PREVIEW_DELAY_MS);
-        expect(call).toHaveBeenCalledTimes(2);
-        expect(pending[1].request.target_fidelity).toEqual({kind: 'custom', lambda: '0.0123'});
+        expect([preview.state, preview.stale]).toEqual(['ready', false]);
         preview.dispose();
     });
 
-    it('a change made while the answer was on its way still goes, after λ lands (R1-F a)', async () => {
+    it('euros typed while the numbers are stale become λ on the next answer, on its total', async () => {
         const draft = draftOf();
-        draft.data.fidelity = {kind: 'custom', lambda: ''};
         const {call, pending} = controlled();
         const preview = new PlannerPreview({call, blocked: () => false});
-
-        preview.setCustomEuros(draft, '60');
+        preview.schedule(draft);
         await vi.advanceTimersByTimeAsync(PREVIEW_DELAY_MS);
-        // The target changes while the euros are on their way: a newer draft waits in the queue.
+        pending[0].resolve(levels('20000'));
+        await vi.advanceTimersByTimeAsync(0);
+
+        // A new total is on its way: the figure waits for it, never converted on the old one.
         draft.data.targets['asset:probe'] = '50';
         preview.schedule(draft);
-        pending[0].resolve(ready('150', {custom: {distance_weight: {kind: 'finite_decimal', value: '0.0123'}, reference_amount: {value: {kind: 'finite_decimal', value: '60'}, currency: 'EUR'}}}));
-        await vi.advanceTimersByTimeAsync(0);
-        // The shell's effect, for λ.
-        preview.schedule(draft);
-        await vi.advanceTimersByTimeAsync(PREVIEW_DELAY_MS * 2);
-        expect(call).toHaveBeenCalledTimes(2);
-        expect(pending[1].request.target_weights).toEqual(expect.arrayContaining([expect.objectContaining({weight: '0.5'})]));
-        preview.dispose();
-    });
-
-    it('a λ lands only for the euros still typed: newer euros, or a cleared field, drop the older answer (10b)', async () => {
-        const custom = (lambda: string, euros: string) => ({custom: {distance_weight: {kind: 'finite_decimal', value: lambda}, reference_amount: {value: {kind: 'finite_decimal', value: euros}, currency: 'EUR'}}});
-        const draft = draftOf();
         draft.data.fidelity = {kind: 'custom', lambda: ''};
-        const {call, pending} = controlled();
-        const preview = new PlannerPreview({call, blocked: () => false});
-
-        // 60, then 600 before the answer for 60 lands: that answer gives no λ; the one for 600 does.
         preview.setCustomEuros(draft, '60');
-        await vi.advanceTimersByTimeAsync(PREVIEW_DELAY_MS);
-        preview.setCustomEuros(draft, '600');
-        pending[0].resolve(ready('150', custom('0.0123', '60')));
-        await vi.advanceTimersByTimeAsync(0);
         expect(draft.data.fidelity).toEqual({kind: 'custom', lambda: ''});
         await vi.advanceTimersByTimeAsync(PREVIEW_DELAY_MS);
-        expect(pending[1].request.custom_reference_amount).toEqual({amount: '600', currency: 'EUR'});
-        pending[1].resolve(ready('150', custom('0.123', '600')));
+        pending[1].resolve(levels('10000'));
         await vi.advanceTimersByTimeAsync(0);
-        expect(draft.data.fidelity).toEqual({kind: 'custom', lambda: '0.123'});
+        // 60·10 000/(2·500²) = 1.2.
+        expect(draft.data.fidelity).toEqual({kind: 'custom', lambda: '1.2'});
+        expect(call).toHaveBeenCalledTimes(2);
+        preview.dispose();
+    });
 
-        // 70, then the field cleared before the answer: no λ for 70.
+    it('the figure still typed wins: newer euros replace the waiting ones, a cleared field withdraws them (10b)', async () => {
+        const draft = draftOf();
+        const {pending, call} = controlled();
+        const preview = new PlannerPreview({call, blocked: () => false});
+        preview.schedule(draft);
+        draft.data.fidelity = {kind: 'custom', lambda: ''};
+        preview.setCustomEuros(draft, '60');
+        preview.setCustomEuros(draft, '600');
+        await vi.advanceTimersByTimeAsync(PREVIEW_DELAY_MS);
+        pending[0].resolve(levels('20000'));
+        await vi.advanceTimersByTimeAsync(0);
+        expect(draft.data.fidelity).toEqual({kind: 'custom', lambda: '6'});
+
+        draft.data.targets['asset:probe'] = '50';
+        preview.schedule(draft);
         draft.data.fidelity = {kind: 'custom', lambda: ''};
         preview.setCustomEuros(draft, '70');
-        await vi.advanceTimersByTimeAsync(PREVIEW_DELAY_MS);
         preview.setCustomEuros(draft, '');
-        pending[2].resolve(ready('150', custom('0.0143', '70')));
+        await vi.advanceTimersByTimeAsync(PREVIEW_DELAY_MS);
+        pending[1].resolve(levels('20000'));
         await vi.advanceTimersByTimeAsync(0);
         expect(draft.data.fidelity).toEqual({kind: 'custom', lambda: ''});
         preview.dispose();
@@ -367,11 +363,12 @@ describe('PlannerPreview', () => {
         draft.data.fidelity = {kind: 'custom', lambda: ''};
         const {call, pending} = controlled();
         const preview = new PlannerPreview({call, blocked: () => false});
+        preview.schedule(draft);
         preview.setCustomEuros(draft, '60');
-        vi.advanceTimersByTime(PREVIEW_DELAY_MS);
+        await vi.advanceTimersByTimeAsync(PREVIEW_DELAY_MS);
 
         draft.data.fidelity = {kind: 'level', level: 'balanced'};
-        pending[0].resolve(ready('150', {custom: {distance_weight: {kind: 'finite_decimal', value: '0.0123'}, reference_amount: {value: {kind: 'finite_decimal', value: '60'}, currency: 'EUR'}}}));
+        pending[0].resolve(levels('20000'));
         await vi.runAllTimersAsync();
 
         expect(draft.data.fidelity).toEqual({kind: 'level', level: 'balanced'});

@@ -90,8 +90,7 @@ describe('the Rebalancer issues and their step', () => {
         expect([presented.step, presented.entity]).toEqual(['targets', 'Broker probe · EUR']);
     });
 
-    it('a wire path under the target fidelity, or the «Custom» euros, leads to the Strategy step', () => {
+    it('a wire path under the target fidelity leads to the Strategy step', () => {
         expect(stepOfWirePath(['target_fidelity', 'lambda'])).toBe('strategy');
-        expect(stepOfWirePath(['custom_reference_amount', 'amount'])).toBe('strategy');
     });
 });
