@@ -147,6 +147,16 @@ class TestTheEngineCacheFollowsTheAssetType:
         assert _types(after) == {"ETF_BOND"}, f"the last day's by_type follows the new type: {_types(after)}"
 
     @pytest.mark.asyncio
+    async def test_the_run_and_its_cached_copy_carry_the_types_and_profiles(self, tmp_path):
+        """Lane 80, B1a: the result carries the maps the replay split by, and the blob cache keeps them."""
+        async with _book(tmp_path) as book:
+            first = await _run(book)
+            second = await _run(book)
+        assert second is first, "precondition: the second run is the cached one"
+        assert second.asset_types == {book.asset_id: "ETF"}
+        assert dict(second.asset_classifications) == {book.asset_id: None}, "no profile row: None, both voices unknown"
+
+    @pytest.mark.asyncio
     async def test_a_type_change_is_seen_by_the_next_report(self, tmp_path):
         query = PortfolioReportQuery(date_range=OpenDateRangeModel(start=D0, end=END), target_currency=EUR, include_summary=True)
         async with _book(tmp_path) as book:
