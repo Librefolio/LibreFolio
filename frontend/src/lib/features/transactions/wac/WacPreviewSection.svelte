@@ -114,6 +114,12 @@
          *  Total/Per-unit display toggle — without it (or with quantity <= 0)
          *  the field always behaves as "Per unit" regardless of the toggle. */
         quantity?: string | null;
+        /** Whether the type's cost basis may be the average cost (`costBasisAuto` of the type rule). False (a REWARD,
+         *  project 79): no Auto/Manual toggle, the value is always stated. */
+        autoAllowed?: boolean;
+        /** The field's label and its help, when the type names its cost basis otherwise («Value on receipt»). */
+        label?: string | null;
+        labelTooltip?: string | null;
     }
 
     let {
@@ -137,6 +143,9 @@
         availableCurrencies = [],
         onOpenFxSync,
         quantity = null,
+        autoAllowed = true,
+        label = null,
+        labelTooltip = null,
     }: Props = $props();
 
     // =========================================================================
@@ -365,8 +374,8 @@
     <!-- Label row with toggle -->
     <div class="flex items-center gap-2">
         <span class="text-xs text-lf-muted whitespace-nowrap flex items-center gap-1">
-            {$t('transactions.form.costBasis')}
-            <Tooltip text={$t('transactions.costBasisOverride.tooltip')} position="top" testId="{testid}-help">
+            {label ?? $t('transactions.form.costBasis')}
+            <Tooltip text={labelTooltip ?? $t('transactions.costBasisOverride.tooltip')} position="top" testId="{testid}-help">
                 <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-lf-muted"
                     ><circle cx="12" cy="12" r="10" /><path d="M12 16v-4" /><path d="M12 8h.01" /></svg
                 >
@@ -378,8 +387,8 @@
             {/if}
         </span>
 
-        <!-- Toggle Auto/Manual — always visible -->
-        {#if !disabled}
+        <!-- Toggle Auto/Manual — visible wherever the type may take the average cost -->
+        {#if !disabled && autoAllowed}
             <div class="flex items-center gap-1 text-[10px] ml-auto" data-testid="{testid}-toggle">
                 <button
                     type="button"
