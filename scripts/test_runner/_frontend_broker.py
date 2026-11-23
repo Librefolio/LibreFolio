@@ -99,6 +99,17 @@ def front_broker_tx_link_charges(verbose: bool = False, ui: bool = False, headed
     return _run_playwright("brokers/broker-tx-link-charges.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_broker_tx_view_edit(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """The edit pencil of a row opened read-only from the broker's Transactions tab, on a 375 px phone (project 66, TL-1b)."""
+    print_section("Frontend Broker Transactions View Edit Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("brokers/broker-tx-view-edit.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
 def front_broker_page_roles(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run the broker page's per-role E2E: owner, editor and viewer (shared, share 0) see what their role allows."""
     print_section("Frontend Broker Page Roles Tests")
@@ -215,6 +226,14 @@ def populate_registry(registry: dict) -> None:
         name="Broker Transactions Link Charges Tests",
         desc="Project 66 TL-5: on the broker's Transactions tab, a BUY and a free FEE ticked → «Link» → the panel → confirm: event tx.charges.linked and the FEE points at the BUY, read back by id; a BUY with an asset and a FEE without one → «Link» off with the reason noAsset",
         tests="brokers/broker-tx-link-charges.spec.ts",
+    )
+    add_test(
+        cat,
+        "broker-tx-view-edit",
+        front_broker_tx_view_edit,
+        name="Broker Transactions View Edit Tests",
+        desc="Project 66 TL-1b: at 375 px, a row of the broker's Transactions tab opened read-only (a FEE linked to a BUY, and the BUY) offers the edit pencil inside the screen; a tap opens that row in edit; the Dashboard's Transactions tab (hideActions) offers no pencil",
+        tests="brokers/broker-tx-view-edit.spec.ts",
     )
     add_test(
         cat,
