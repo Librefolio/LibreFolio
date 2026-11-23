@@ -4,8 +4,8 @@
   Where am I exposed, looking at only a part? The user keeps some classes, takes buckets or assets out of the 100 %, and the
   backend (`POST /portfolio/allocation`) answers with the base, what the filter leaves out and what is excluded. This file
   holds the page-level pieces: the question, the three boxes, the filters (a column on a wide screen, behind the «Filters»
-  button below `lg`, with the choices as chips) and the states (loading, failed, empty). The chart, the table and the history
-  (F3) and the matrix (F4) come in their own lots, beside the filters.
+  button below `lg`, with the choices as chips) and the states (loading, failed, empty). The results (the dimension, the chart or
+  the map, the table, the history and the class × dimension matrix) are `AllocationResults`, beside the filters.
 
   The question is the page's own scope (its brokers, `historyStart`, `end`, currency, `fullShare`: the report's), so the
   backend reads the report's engine run and a filter replays nothing. The tab asks nothing while the page cannot
@@ -144,8 +144,17 @@
                     </div>
                     <AllocationChips filters={controller.filters} {view} onchange={(next) => controller.setFilters(next)} testId="{testId}-chips" />
                 {/if}
-                <AllocationResults {view} dimension={controller.dimension} onDimension={(next) => controller.setDimension(next)} mode={controller.mode} onMode={(next) => controller.setMode(next)} loading={controller.loading} testId="{testId}-results" />
-                <!-- F4: the class × dimension matrix goes under the results. -->
+                <AllocationResults
+                    {view}
+                    dimension={controller.dimension}
+                    onDimension={(next) => controller.setDimension(next)}
+                    mode={controller.mode}
+                    onMode={(next) => controller.setMode(next)}
+                    loading={controller.loading}
+                    filters={controller.filters}
+                    onFilters={(next) => controller.setFilters(next)}
+                    testId="{testId}-results"
+                />
             </div>
         </div>
     {/if}

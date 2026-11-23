@@ -7,16 +7,18 @@
 import {afterEach, beforeAll, beforeEach, describe, expect, it, vi} from 'vitest';
 import {cleanup, fireEvent, render, screen, setupI18n} from '$test/component';
 
-const mocks = vi.hoisted(() => ({pie: vi.fn(), map: vi.fn(), history: vi.fn(), table: vi.fn()}));
+const mocks = vi.hoisted(() => ({pie: vi.fn(), map: vi.fn(), history: vi.fn(), table: vi.fn(), matrix: vi.fn()}));
 vi.mock('$lib/components/charts/AllocationPieChart.svelte', () => ({default: mocks.pie}));
 vi.mock('$lib/components/charts/GeographyMap.svelte', () => ({default: mocks.map}));
 vi.mock('$lib/features/dashboard/AllocationHistoryChart.svelte', () => ({default: mocks.history}));
 vi.mock('./AllocationTable.svelte', () => ({default: mocks.table}));
+vi.mock('./AllocationMatrix.svelte', () => ({default: mocks.matrix}));
 
 import {setPrivacyEnabled} from '$lib/stores/app/privacyStore.svelte';
 import {PRIVACY_PLACEHOLDER} from '$lib/utils/privacy/maskable';
 import AllocationResults from './AllocationResults.svelte';
 import {makeView} from './allocation.fixture';
+import {emptyFilters} from './allocationFilters';
 import type {AllocationDimension, AllocationResponse} from './allocationQuery';
 
 beforeAll(async () => {
@@ -38,7 +40,8 @@ function mount(overrides: {view?: Partial<AllocationResponse>; dimension?: Alloc
     const dimension = overrides.dimension ?? overrides.view?.dimension ?? 'sector';
     const onDimension = vi.fn();
     const onMode = vi.fn();
-    render(AllocationResults, {view: makeView({dimension, ...overrides.view}), dimension, onDimension, mode: overrides.mode ?? 'now', onMode, loading: overrides.loading ?? false, testId: 'r'});
+    const onFilters = vi.fn();
+    render(AllocationResults, {view: makeView({dimension, ...overrides.view}), dimension, onDimension, mode: overrides.mode ?? 'now', onMode, loading: overrides.loading ?? false, filters: emptyFilters(), onFilters, testId: 'r'});
     return {onDimension, onMode};
 }
 
@@ -132,10 +135,17 @@ describe('a selection with no shares, or with the cash below zero', () => {
     });
 });
 
-describe('the table', () => {
-    it('is always under the chart, given the answer', () => {
+describe('the table and the matrix', () => {
+    it('are always under the chart, given the answer; the matrix also gets the filters and a way to change them', () => {
         mount();
         expect(lastProps(mocks.table)).toMatchObject({testId: 'r-table'});
+        expect(lastProps(mocks.matrix)).toMatchObject({testId: 'r-matrix', filters: emptyFilters()});
+        expect(typeof lastProps(mocks.matrix).onchange).toBe('function');
+    });
+
+    it('stay in the History view too (the matrix is the whole portfolio, whatever the view)', () => {
+        mount({mode: 'history', view: {history: []}});
+        expect(mocks.matrix).toHaveBeenCalled();
     });
 });
 

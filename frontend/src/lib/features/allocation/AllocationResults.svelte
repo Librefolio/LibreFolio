@@ -26,7 +26,9 @@
     import {formatPercent} from '$lib/utils/core/formatPercent';
     import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
     import AllocationDimensionSelect from './AllocationDimensionSelect.svelte';
+    import AllocationMatrix from './AllocationMatrix.svelte';
     import AllocationTable from './AllocationTable.svelte';
+    import type {AllocationFilters} from './allocationFilters';
     import type {AllocationDimension, AllocationResponse} from './allocationQuery';
     import {colorRanksOf, geoData, pieEntries} from './allocationView';
 
@@ -38,10 +40,13 @@
         onMode: (next: 'now' | 'history') => void;
         /** A request is on its way (the history is on its way). */
         loading: boolean;
+        /** The user's choices, for the matrix (it frames what they keep and a click on it changes them). */
+        filters: AllocationFilters;
+        onFilters: (next: AllocationFilters) => void;
         testId: string;
     }
 
-    let {view, dimension, onDimension, mode, onMode, loading, testId}: Props = $props();
+    let {view, dimension, onDimension, mode, onMode, loading, filters, onFilters, testId}: Props = $props();
 
     const PERSONAL = {sensitivity: 'personal', minFraction: 0, maxFraction: 0} as const;
 
@@ -132,4 +137,6 @@
     {/if}
 
     <AllocationTable {view} testId="{testId}-table" />
+
+    <AllocationMatrix {view} {filters} onchange={onFilters} testId="{testId}-matrix" />
 </div>
