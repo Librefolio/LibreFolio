@@ -91,12 +91,12 @@ ROW_SKIPS_PENDING = frozenset(
 NEW_VERSIONS = {
     "broker_credit_agricole": "2.1.0",  # W5-7: a report-set plugin (the securities and the account exports imported together); 2.1.0 project 66 P2b: its charges are linked
     "broker_directa": "1.2.0",  # project 66 P3: «Rit.provento etf» is a TAX, the charges are linked
-    "broker_revolut": "1.3.0",
-    "broker_trading212": "1.2.0",
+    "broker_revolut": "1.4.0",  # project 66 P4: the fee is linked to its trade
+    "broker_trading212": "1.3.0",  # project 66 P4: the withholding is linked to its dividend
     "broker_etoro": "1.4.0",
     "broker_traderepublic": "1.3.0",  # lane 73: the Transaction export; 1.3.0 project 66 P2a: its charges are linked
     "broker_swissquote": "1.2.0",
-    "broker_ibkr": "1.1.0",
+    "broker_ibkr": "1.2.0",  # project 66 P4: the commission is linked to its trade
     "broker_fineco": "1.6.0",  # project 66 P2a: the commission is linked to its trade
 }
 

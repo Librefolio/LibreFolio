@@ -1,0 +1,235 @@
+{
+  "format": "lf-brim-previous-output/1",
+  "comment": "Output of the plugin BEFORE its project-66 lot changed it (P2 contract §2.1). Never re-take it after the code change.",
+  "plugin_code": "broker_cointracking",
+  "plugin_version": "1.0.0",
+  "source_head": "a2e85db13",
+  "captured_on": "2026-11-21",
+  "sample": "broker_cointracking/sample_reports/cointracking-export.csv",
+  "sample_sha256": "007ca1eb745090dead8026e79730eec43728efc80cf864917ffede754893fed3",
+  "extracted_assets": {
+    "2147483647": {
+      "extracted_symbol": "BTC",
+      "extracted_isin": null,
+      "extracted_name": "BTC (Crypto)",
+      "notices": []
+    }
+  },
+  "transactions": [
+    {
+      "asset_id": 2147483647,
+      "type": "ADJUSTMENT",
+      "date": "2025-01-18",
+      "quantity": "0.00100000",
+      "cash": null,
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "cointracking"
+      ],
+      "description": "CoinTracking staking reward BTC",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483647,
+      "type": "FEE",
+      "date": "2025-01-18",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "-2.00000000"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "cointracking",
+        "fee"
+      ],
+      "description": "CoinTracking fee: Staking: Kraken",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483647,
+      "type": "BUY",
+      "date": "2025-01-01",
+      "quantity": "0.00550000",
+      "cash": {
+        "code": "EUR",
+        "amount": "-500.00000000"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "cointracking"
+      ],
+      "description": "CoinTracking trade buy BTC on Kraken",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483647,
+      "type": "FEE",
+      "date": "2025-01-01",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "-19.00000000"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "cointracking",
+        "fee"
+      ],
+      "description": "CoinTracking fee: Trade: Kraken",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483647,
+      "type": "BUY",
+      "date": "2024-12-06",
+      "quantity": "0.00110000",
+      "cash": {
+        "code": "EUR",
+        "amount": "-100.00000000"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "cointracking"
+      ],
+      "description": "CoinTracking trade buy BTC on Pocket Bitcoin",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483647,
+      "type": "FEE",
+      "date": "2024-12-06",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "-1.00000000"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "cointracking",
+        "fee"
+      ],
+      "description": "CoinTracking fee: Trade: Pocket Bitcoin",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483647,
+      "type": "SELL",
+      "date": "2025-01-11",
+      "quantity": "-0.00220000",
+      "cash": {
+        "code": "EUR",
+        "amount": "200.00000000"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "cointracking"
+      ],
+      "description": "CoinTracking trade sell BTC on Kraken",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483647,
+      "type": "FEE",
+      "date": "2025-01-11",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "-2.00000000"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "cointracking",
+        "fee"
+      ],
+      "description": "CoinTracking fee: Trade: Kraken",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483647,
+      "type": "ADJUSTMENT",
+      "date": "2024-12-25",
+      "quantity": "0.00100000",
+      "cash": null,
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "cointracking"
+      ],
+      "description": "CoinTracking crypto deposit BTC",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483647,
+      "type": "ADJUSTMENT",
+      "date": "2025-01-11",
+      "quantity": "-0.00100000",
+      "cash": null,
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "cointracking"
+      ],
+      "description": "CoinTracking crypto withdrawal BTC",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    }
+  ]
+}

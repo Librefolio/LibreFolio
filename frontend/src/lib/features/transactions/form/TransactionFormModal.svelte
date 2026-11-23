@@ -1666,8 +1666,8 @@
         <!-- ============================================================= -->
         <!-- Header -->
         <!-- ============================================================= -->
-        <div class="flex items-center justify-between p-5 pb-4 border-b border-lf-subtle shrink-0">
-            <h2 class="text-lg font-semibold text-lf-primary" data-testid="tx-form-title">
+        <div class="flex items-center justify-between gap-2 p-5 pb-4 border-b border-lf-subtle shrink-0">
+            <h2 class="min-w-0 break-words text-lg font-semibold text-lf-primary" data-testid="tx-form-title">
                 {#if pairLayout}
                     {#if pairLayout === 'fx'}💱{:else if pairLayout === 'transfer_asset'}📦{:else}🏦{/if}
                     {#if mode === 'edit'}
@@ -1695,7 +1695,7 @@
                     👁 {$t('transactions.form.titleView')} #{mainRow?.id}
                 {/if}
             </h2>
-            <div class="flex items-center gap-1">
+            <div class="flex shrink-0 items-center gap-1">
                 {#if isReadonly && onSwitchToEdit && canEdit}
                     <button class="p-2 text-lf-muted hover:text-lf-link hover:bg-lf-hover rounded-lg transition-colors" onclick={onSwitchToEdit} data-testid="tx-form-switch-edit" aria-label="Edit" title={$t('transactions.form.titleEdit') || 'Edit'}>
                         <Pencil size={18} />
