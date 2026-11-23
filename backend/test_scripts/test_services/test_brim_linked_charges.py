@@ -869,3 +869,135 @@ def test_link_existing_matches_create_linked(provider, parent_type, parent_overr
     assert verdict is linked and bool(created.parent_ref) is linked, f"verdicts: existing {verdict}, created {bool(created.parent_ref)}, expected {linked}"
     assert existing.model_dump() == created.model_dump(), "the same resulting charge"
     assert existing_parent.ref == created_parent.ref
+
+
+# ─── _create_charge_of: the same-row pattern of P4 (a parent, or None when the plugin's parent was refused) ──────────
+
+
+def _charge_of(provider: BRIMProvider, transactions: List[TXCreateItem], parent: Optional[TXCreateItem], issues: List[BRIMValidationIssue], **kwargs) -> Optional[TXCreateItem]:
+    """``_create_charge_of`` called as a plugin calls it: the return of the parent's ``_create_transaction``, the charge's
+    fields as kwargs."""
+    return provider._create_charge_of(parent, 99, transactions, issues, context="charge row", **kwargs)
+
+
+def _issue_view(issues: List[BRIMValidationIssue]) -> List[tuple]:
+    return [(i.row, i.code, i.field, i.context) for i in issues]
+
+
+#: Charges with no parent to name: (charge type, overrides). The last one has no broker: refused, as by ``_create_transaction``.
+WITHOUT_PARENT = [
+    pytest.param(TransactionType.FEE, {"asset_id": FAKE_A}, id="fee-with-asset"),
+    pytest.param(TransactionType.TAX, {}, id="tax-without-asset"),
+    pytest.param(TransactionType.FEE, {"broker_id": None}, id="fee-without-broker"),
+]
+
+
+@pytest.mark.parametrize(("charge_type", "charge_overrides"), WITHOUT_PARENT)
+def test_charge_of_without_parent_is_create_transaction(provider, charge_type, charge_overrides):
+    """Guard of P4: parent ``None`` (the plugin's booking was refused) → exactly ``_create_transaction`` with the same
+    kwargs: the same row or ``None``, the same issues, free. A booking of an earlier row, in the output just before, is
+    never named nor used."""
+    kwargs = _charge_kwargs(charge_type, **charge_overrides)
+    expected_out: List[TXCreateItem] = []
+    expected_issues: List[BRIMValidationIssue] = []
+    expected = provider._create_transaction(99, expected_out, expected_issues, context="charge row", **kwargs)
+
+    transactions: List[TXCreateItem] = []
+    earlier = _add_parent(provider, transactions, TransactionType.BUY)
+    issues: List[BRIMValidationIssue] = []
+
+    charge = _charge_of(provider, transactions, None, issues, **kwargs)
+
+    assert _issue_view(issues) == _issue_view(expected_issues)
+    if expected is None:
+        assert charge is None and transactions == [earlier], "refused as by _create_transaction: nothing appended"
+    else:
+        assert charge is not None and transactions[-1] is charge and len(transactions) == 2
+        assert charge.model_dump() == expected.model_dump(), "the same row _create_transaction gives"
+        assert charge.parent_ref is None
+    assert earlier.ref is None, f"the earlier booking is not named: got {earlier.ref!r}"
+
+
+#: (parent type, parent overrides, charge type, charge overrides): valid links and refused ones alike.
+CHARGE_OF_PARITY = [
+    pytest.param(TransactionType.BUY, {}, TransactionType.FEE, {}, id="fee-without-asset-under-buy"),
+    pytest.param(TransactionType.BUY, {}, TransactionType.FEE, {"asset_id": FAKE_A, "broker_id": BROKER_ID + 1}, id="fee-other-broker-under-buy"),
+    pytest.param(TransactionType.SELL, {}, TransactionType.TAX, {"asset_id": FAKE_A}, id="tax-under-sell"),
+    pytest.param(TransactionType.DEPOSIT, {}, TransactionType.TAX, {}, id="tax-under-deposit"),
+    pytest.param(TransactionType.SELL, {}, TransactionType.FEE, {"asset_id": FAKE_B}, id="fee-another-asset"),
+    pytest.param(TransactionType.ADJUSTMENT, {}, TransactionType.FEE, {"asset_id": FAKE_A}, id="parent-adjustment"),
+    pytest.param(TransactionType.DEPOSIT, {"link_uuid": PAIR_UUID}, TransactionType.FEE, {}, id="parent-pair-leg"),
+]
+
+
+@pytest.mark.parametrize(("parent_type", "parent_overrides", "charge_type", "charge_overrides"), CHARGE_OF_PARITY)
+def test_charge_of_with_a_parent_is_create_linked_charge(provider, parent_type, parent_overrides, charge_type, charge_overrides):
+    """Guard of P4: a parent given → exactly ``_create_linked_charge`` with the same arguments, each on its own output:
+    the same charge, the same issues, the same parent name, the same rows."""
+    linked_out: List[TXCreateItem] = []
+    linked_parent = _add_parent(provider, linked_out, parent_type, **parent_overrides)
+    linked_issues: List[BRIMValidationIssue] = []
+    expected = _link(provider, linked_out, linked_parent, linked_issues, **_charge_kwargs(charge_type, **charge_overrides))
+    assert expected is not None, "premise: _create_linked_charge creates the charge"
+
+    transactions: List[TXCreateItem] = []
+    parent = _add_parent(provider, transactions, parent_type, **parent_overrides)
+    issues: List[BRIMValidationIssue] = []
+
+    charge = _charge_of(provider, transactions, parent, issues, **_charge_kwargs(charge_type, **charge_overrides))
+
+    assert charge is not None and transactions == [parent, charge] and transactions[1] is charge
+    assert charge.model_dump() == expected.model_dump(), "the same charge _create_linked_charge gives"
+    assert parent.ref == linked_parent.ref, f"the same parent name: {parent.ref!r} vs {linked_parent.ref!r}"
+    assert _issue_view(issues) == _issue_view(linked_issues)
+    assert charge_link_structure_problems(transactions) == []
+
+
+def test_charge_of_a_valid_parent_names_it(provider):
+    """Guard of P4, the link itself: a FEE without an asset under a BUY names the BUY and takes its asset and broker."""
+    transactions: List[TXCreateItem] = []
+    buy = _add_parent(provider, transactions, TransactionType.BUY)
+    issues: List[BRIMValidationIssue] = []
+
+    fee = _charge_of(provider, transactions, buy, issues, **_charge_kwargs())
+
+    assert issues == [] and fee is not None
+    assert buy.ref and fee.parent_ref == buy.ref
+    assert (fee.asset_id, fee.broker_id) == (buy.asset_id, buy.broker_id) == (FAKE_A, BROKER_ID)
+
+
+@pytest.mark.parametrize(("parent_type", "parent_overrides"), INVALID_PARENTS)
+def test_charge_of_an_invalid_parent_is_free_and_leaves_it_unnamed(provider, parent_type, parent_overrides):
+    """Guard of P4 (D10): a parent that cannot be one — an ADJUSTMENT, a CASH_TRANSFER, a leg of a pair, a FEE under a
+    TAX — gives a charge created free, with the plugin's own values and no issue; the parent gets no name."""
+    transactions: List[TXCreateItem] = []
+    parent = _add_parent(provider, transactions, parent_type, **parent_overrides)
+    charge_type = _charge_type_for(parent_type)
+    issues: List[BRIMValidationIssue] = []
+
+    charge = _charge_of(provider, transactions, parent, issues, **_charge_kwargs(charge_type, asset_id=FAKE_B))
+
+    assert charge is not None and issues == [], f"created, no issue; issues {issues}"
+    assert transactions == [parent, charge] and transactions[1] is charge
+    assert not charge.parent_ref and charge.parent_transaction_id is None
+    assert (charge.type, charge.broker_id, charge.asset_id) == (charge_type, BROKER_ID, FAKE_B), "the plugin's own values"
+    assert parent.ref is None, f"no link, no name: got {parent.ref!r}"
+
+
+@pytest.mark.parametrize("with_parent", [False, True], ids=["parent-none", "parent-buy"])
+def test_charge_of_a_refused_charge_is_none_and_an_issue(provider, with_parent):
+    """Guard of P4: a charge the validation refuses (a FEE with a positive amount) → ``None``, nothing appended, and the
+    issues ``_create_transaction`` records for the same row — with a parent or without one."""
+    wrong = _charge_kwargs(cash=Currency(code="EUR", amount=Decimal("2.50")))
+    expected_issues: List[BRIMValidationIssue] = []
+    assert provider._create_transaction(99, [], expected_issues, context="charge row", **{**wrong, "asset_id": FAKE_A}) is None
+    assert expected_issues, "premise: _create_transaction refuses the row"
+    transactions: List[TXCreateItem] = []
+    buy = _add_parent(provider, transactions, TransactionType.BUY)
+    issues: List[BRIMValidationIssue] = []
+
+    charge = _charge_of(provider, transactions, buy if with_parent else None, issues, **wrong)
+
+    assert charge is None
+    assert transactions == [buy], "nothing is appended"
+    assert _issue_view(issues) == _issue_view(expected_issues)

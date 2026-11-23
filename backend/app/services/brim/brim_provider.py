@@ -623,6 +623,24 @@ class BRIMProvider(PluginSettingsMixin, ABC):
         linked = {**kwargs, "broker_id": parent.broker_id, "asset_id": charge_asset, "parent_ref": parent_ref}
         return self._create_transaction(row_num, transactions, validation_issues, context=context, **linked)
 
+    def _create_charge_of(
+        self,
+        parent: Optional[TXCreateItem],
+        row_num: int,
+        transactions: List[TXCreateItem],
+        validation_issues: List[BRIMValidationIssue],
+        *,
+        context: Optional[str] = None,
+        **kwargs,
+    ) -> Optional[TXCreateItem]:
+        """A FEE or a TAX born from the row of ``parent`` (project 66, P4): linked to it through ``_create_linked_charge``
+        when the plugin created the parent, created free (as before the link existed) when the parent was refused and is
+        ``None``. The same-row pattern of a plugin: ``parent = self._create_transaction(...)``, then one call per charge.
+        """
+        if parent is None:
+            return self._create_transaction(row_num, transactions, validation_issues, context=context, **kwargs)
+        return self._create_linked_charge(row_num, transactions, validation_issues, parent, context=context, **kwargs)
+
     @staticmethod
     def _charge_link_check(charge_type: Any, charge_asset: Optional[int], charge_link_uuid: Optional[str], parent: TXCreateItem) -> Tuple[Optional[int], Optional[ChargeIssue]]:
         """The asset a charge would carry under ``parent`` (its own, or the parent's when it has none) and the reason the
