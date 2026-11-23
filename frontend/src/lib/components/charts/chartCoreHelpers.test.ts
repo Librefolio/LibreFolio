@@ -52,6 +52,7 @@ import {
     buildGrowthUpdateSeries,
     clipToSign,
     findReferenceTotalPnl,
+    hasRewards,
     splitBySign,
     toCandlestickPoint,
     type EurLabels,
@@ -3793,6 +3794,7 @@ describe('canonical overlay axis and reference helpers', () => {
                 pnlCandleByDate: new Map<string, DailyCandle>(),
                 dividendValues: flows(),
                 interestValues: flows(),
+                rewardValues: flows(),
                 costValues: flows(),
                 depositValues: flows(),
                 acqFromNewCapitalValues: flows(),
@@ -3802,7 +3804,7 @@ describe('canonical overlay axis and reference helpers', () => {
         }
 
         /** Each label is its own slot's name, so a swapped slot shows in the names. The product passes translations. */
-        const PNL_LABELS: PnlLabels = {total: 'total', dividend: 'dividend', interest: 'interest', costs: 'costs', deposit: 'deposit', acqNewCapital: 'acqNewCapital', acqReinvested: 'acqReinvested', bookValue: 'bookValue'};
+        const PNL_LABELS: PnlLabels = {total: 'total', dividend: 'dividend', interest: 'interest', reward: 'reward', costs: 'costs', deposit: 'deposit', acqNewCapital: 'acqNewCapital', acqReinvested: 'acqReinvested', bookValue: 'bookValue'};
         const EUR_LABELS: EurLabels = {bookAssetLike: 'bookAssetLike', bookAssetLikeTooltip: 'bookAssetLikeTooltip', cashContributed: 'cashContributed', cashGenerated: 'cashGenerated', nav: 'nav', capitalBaseline: 'capitalBaseline', capitalBaselineTooltip: 'capitalBaselineTooltip'};
 
         /** The P&L view on screen, as GrowthChart's `seriesContext()` builds it for the series builders. */
@@ -4651,6 +4653,123 @@ describe('canonical overlay axis and reference helpers', () => {
                     expect(sums(entry)).toEqual(factors.map((factor) => [55 * factor]));
                 }
             });
+
+            // Rewards in kind (REWARD, project 79, STK-2b): a 7th slot, appended after the six so their indexes stay as
+            // they were, on the income stack, in the reward magenta — and only when the period holds a reward, so a
+            // portfolio without one draws the chart it always drew. The six-slot cases above run on an entry whose
+            // rewards are all zero (`growthInputs` gives every flow 0): they are the "without" half of this block.
+            describe('rewards in kind: a 7th income slot, only when the period has one', () => {
+                /** The reward metric of an entry this module built, where it is always present. */
+                function rewardMetric(entry: AggregatedResolutionData): AggregatedMetric {
+                    const metric = entry.pnl.income.reward;
+                    expect(metric, 'buildLadderData/buildResolutionData always build pnl.income.reward').toBeDefined();
+                    if (!metric) throw new Error('pnl.income.reward missing');
+                    return metric;
+                }
+
+                const REWARD_SLOT: IncomeSlot = {label: PNL_LABELS.reward, metric: rewardMetric, stack: 'income', colour: 'reward'};
+                const SEVEN_SLOTS = [...EXPECTED_SLOTS, REWARD_SLOT];
+                // ×7 the day number: a seventh amount none of the six shares, so a slot reading a sibling's path shows.
+                const rewardInputs: AggregationInputs = {...incomeInputs, rewardValues: flow(7)};
+                const rewardEntry = buildLadderData(rewardInputs, '1W', '2026-02-15');
+                const rewardContext = pnlContext('income', rewardInputs);
+
+                it('hasRewards is false on the six-slot fixture (all zero) and true with rewards', () => {
+                    // Positive control of the "without" half: the reward metric is there, and every bucket of it is 0.
+                    expect(rewardMetric(incomeEntry).values).toEqual([0, 0]);
+                    expect(hasRewards(incomeEntry)).toBe(false);
+                    expect(hasRewards(rewardEntry)).toBe(true);
+                });
+
+                it('the update appends a 7th slot, reward, reading its own path and faded on the partial bucket — the six before it unchanged', () => {
+                    expect(new Set(SEVEN_SLOTS.map((slot) => slot.metric(rewardEntry).values.join('|'))).size).toBe(7);
+
+                    const update = buildGrowthUpdateSeries(rewardContext, rewardEntry);
+
+                    expect(update.map((series) => series.name)).toEqual(SEVEN_SLOTS.map((slot) => slot.label));
+                    update.forEach((series, index) => {
+                        expect(series.data.map((point) => point.value)).toEqual(SEVEN_SLOTS[index].metric(rewardEntry).points.map((point) => point.value));
+                        expect(series.data.map((point) => point.itemStyle)).toEqual([{opacity: PARTIAL_BUCKET_OPACITY}, undefined]);
+                    });
+                    // The six slots draw what they drew without rewards: the 7th is appended, never interleaved.
+                    const without = buildGrowthUpdateSeries(incomeContext, incomeEntry);
+                    expect(update.slice(0, 6).map((series) => series.data.map((point) => point.value))).toEqual(without.map((series) => series.data.map((point) => point.value)));
+                });
+
+                it('buildGrowthFullSeries draws seriesData[6] as a bar on the income stack, in the reward colour in both themes', () => {
+                    const update = buildGrowthUpdateSeries(rewardContext, rewardEntry);
+                    for (const isDark of [false, true]) {
+                        const theme = isDark ? 'dark' : 'light';
+                        const full = drawn(buildGrowthFullSeries(rewardContext, isDark, update));
+
+                        expect(full).toHaveLength(7);
+                        expect(full.map((series) => series.name)).toEqual(SEVEN_SLOTS.map((slot) => slot.label));
+                        full.forEach((series, index) => expect(series.data).toBe(update[index].data));
+                        expect(full.map((series) => series.type)).toEqual(SEVEN_SLOTS.map(() => 'bar'));
+                        expect(full.map((series) => series.stack)).toEqual(SEVEN_SLOTS.map((slot) => slot.stack));
+                        expect(full.map((series) => series.itemStyle?.color)).toEqual(SEVEN_SLOTS.map((slot) => GROWTH_SERIES[slot.colour][theme]));
+                        expect(full[6].itemStyle?.color).toBe(GROWTH_SERIES.reward[theme]);
+                    }
+                });
+
+                it('without a reward the Income view is exactly the six of before: no empty reward entry in the legend', () => {
+                    const update = buildGrowthUpdateSeries(incomeContext, incomeEntry);
+
+                    expect(update.map((series) => series.name)).toEqual(EXPECTED_SLOTS.map((slot) => slot.label));
+                    expect(update.map((series) => series.name)).not.toContain(PNL_LABELS.reward);
+                    expect(drawn(buildGrowthFullSeries(incomeContext, false, update)).map((series) => series.name)).toEqual(EXPECTED_SLOTS.map((slot) => slot.label));
+                });
+
+                it('one reward in one bucket is enough to draw the slot, with its zero bucket kept', () => {
+                    // Only the last day (Sun 01-18, the second bucket) holds a reward.
+                    const lastDayOnly = incomeDates.map((_, index) => (index === incomeDates.length - 1 ? 25 : 0));
+                    const inputs: AggregationInputs = {...incomeInputs, rewardValues: lastDayOnly};
+                    const entry = buildLadderData(inputs, '1W', '2026-02-15');
+                    expect(rewardMetric(entry).values).toEqual([0, 25]);
+
+                    const update = buildGrowthUpdateSeries(pnlContext('income', inputs), entry);
+
+                    expect(update).toHaveLength(7);
+                    expect(update[6].name).toBe(PNL_LABELS.reward);
+                    expect(update[6].data.map((point) => point.value[1])).toEqual([0, 25]);
+                });
+
+                it('an entry without the reward metric, or with only nulls and zeros in it, draws the six', () => {
+                    const withoutMetric: AggregatedResolutionData = {...rewardEntry, pnl: {...rewardEntry.pnl, income: {dividend: rewardEntry.pnl.income.dividend, interest: rewardEntry.pnl.income.interest}}};
+                    const nullsAndZeros: AggregatedResolutionData = {...rewardEntry, pnl: {...rewardEntry.pnl, income: {...rewardEntry.pnl.income, reward: {values: [null, 0], points: []}}}};
+
+                    for (const entry of [withoutMetric, nullsAndZeros]) {
+                        expect(hasRewards(entry)).toBe(false);
+                        expect(buildGrowthUpdateSeries(rewardContext, entry).map((series) => series.name)).toEqual(EXPECTED_SLOTS.map((slot) => slot.label));
+                    }
+                });
+
+                it('a stray 7th series not named reward is never drawn as rewards', () => {
+                    // Positive control: the same update, untouched, does draw the reward slot.
+                    const update = buildGrowthUpdateSeries(rewardContext, rewardEntry);
+                    expect(drawn(buildGrowthFullSeries(rewardContext, false, update))).toHaveLength(7);
+
+                    const stray = [...update.slice(0, 6), {name: 'Broker A', data: update[6].data}];
+                    const full = drawn(buildGrowthFullSeries(rewardContext, false, stray));
+
+                    expect(full.map((series) => series.name)).toEqual(EXPECTED_SLOTS.map((slot) => slot.label));
+                    expect(full.map((series) => series.itemStyle?.color)).not.toContain(GROWTH_SERIES.reward.light);
+                });
+
+                it('sums the rewards per bucket, as every flow — in the density cascade and in the ladder alike', () => {
+                    // The pattern of the six-dimension case above: each week closes on a day holding less than its sum.
+                    const days = isoDays('2026-01-05', 14);
+                    const pattern = [0, 40, 0, 0, 5, 0, 1, 0, 0, 7, 0, 0, 0, 2];
+                    const inputs = growthInputs(days, {rewardValues: pattern.map((value) => 7 * value)});
+
+                    for (const entry of [buildResolutionData(inputs, 'weekly'), buildLadderData(inputs, '1W', '2026-01-18')]) {
+                        expect(rewardMetric(entry).values).toEqual([46 * 7, 9 * 7]);
+                    }
+                    for (const entry of [buildResolutionData(inputs, 'monthly'), buildLadderData(inputs, '1M', '2026-01-18')]) {
+                        expect(rewardMetric(entry).values).toEqual([55 * 7]);
+                    }
+                });
+            });
         });
 
         // -------------------------------------------------------------------
@@ -4809,6 +4928,7 @@ describe('canonical overlay axis and reference helpers', () => {
                 const alignments: Array<[string, string, string]> = [
                     ['dividendValues', 'incomeHistory', 'point.dividend.amount'],
                     ['interestValues', 'incomeHistory', 'point.interest.amount'],
+                    ['rewardValues', 'incomeHistory', 'point.reward?.amount ?? 0'],
                     ['costValues', 'costHistory', 'point.cost.amount'],
                     ['depositValues', 'depositHistory', 'point.deposit.amount'],
                     ['acqFromNewCapitalValues', 'acquisitionFunding', 'point.from_new_capital.amount'],
@@ -4845,6 +4965,8 @@ describe('canonical overlay axis and reference helpers', () => {
                 depositVal: number;
                 acqNewVal: number;
                 acqReinvestedVal: number;
+                /** Rewards in kind (project 79, STK-2b); 0 when a case does not name it. */
+                rewardVal?: number;
             }
 
             /** The tooltip of the Income view hovered on a day holding these six values. */
@@ -4858,6 +4980,7 @@ describe('canonical overlay axis and reference helpers', () => {
                     depositValues: [values.depositVal],
                     acqFromNewCapitalValues: [values.acqNewVal],
                     acqFromReinvestedValues: [values.acqReinvestedVal],
+                    rewardValues: [values.rewardVal ?? 0],
                 });
                 const view: GrowthTooltipView = {
                     entry: reshape(buildLadderData(inputs, '1D', DAY)),
@@ -5018,12 +5141,60 @@ describe('canonical overlay axis and reference helpers', () => {
                 expect(dividerCount(html)).toBe(1);
             });
 
+            // Rewards in kind (REWARD, project 79, STK-2b): a row after interest only when the day holds one, in the reward
+            // magenta, and always in the income total — a reward is income, received in units instead of cash.
+            it('a day with a reward in kind lists it after interest, in the reward colour in both themes, and counts it in the income total', () => {
+                for (const isDark of [false, true]) {
+                    const theme = isDark ? 'dark' : 'light';
+                    const html = incomeTooltip({...zeroDay, divVal: 10, intVal: 2, rewardVal: 7}, isDark);
+
+                    expect(rowsOf(html).map(({label, colour, amount}) => [label, colour, amount])).toEqual([
+                        ['dividend', GROWTH_SERIES.dividend[theme], 10],
+                        ['interest', GROWTH_SERIES.interest[theme], 2],
+                        ['reward', GROWTH_SERIES.reward[theme], 7],
+                        [TOTAL, THEME.textColor, 19],
+                    ]);
+                    expect(dividerCount(html)).toBe(1);
+                }
+            });
+
+            it('a day without a reward lists no reward row, and its total is dividend + interest', () => {
+                const html = incomeTooltip({...zeroDay, divVal: 42, intVal: 8, rewardVal: 0});
+
+                expect(rowLabels(html)).toEqual(['dividend', 'interest', TOTAL]);
+                expect(rowNamed(html, TOTAL).amount).toBe(50);
+            });
+
+            it('a reward joins the income block only: the batch-2 rows and their totals are untouched', () => {
+                const html = incomeTooltip({...allActive, rewardVal: 7});
+
+                expect(rowLabels(html)).toEqual(['dividend', 'interest', 'reward', TOTAL, 'costs', 'deposit', '<b>bookValue</b>', '↳ acqNewCapital', '↳ acqReinvested']);
+                expect(rowNamed(html, TOTAL).amount).toBe(10 + 2 + 7);
+                expect(rowNamed(html, '<b>bookValue</b>').amount).toBe(400);
+                expect(dividerCount(html)).toBe(2);
+            });
+
+            it('an entry built without the reward metric reads its reward as 0: no row, no share of the total', () => {
+                // Positive control: the same day, untouched, lists the reward.
+                expect(rowLabels(incomeTooltip({...zeroDay, divVal: 10, intVal: 2, rewardVal: 7}))).toContain('reward');
+
+                const html = incomeTooltip({...zeroDay, divVal: 10, intVal: 2, rewardVal: 7}, false, (entry) => ({...entry, pnl: {...entry.pnl, income: {dividend: entry.pnl.income.dividend, interest: entry.pnl.income.interest}}}));
+
+                expect(rowLabels(html)).toEqual(['dividend', 'interest', TOTAL]);
+                expect(rowNamed(html, TOTAL).amount).toBe(12);
+            });
+
             it('reuses existing i18n keys for costs and deposit — batch 2 adds ZERO new keys for those two', () => {
                 const source = readFileSync(new URL('../../features/dashboard/GrowthChart.svelte', import.meta.url), 'utf8');
                 const storeReference = importedTranslationStoreReference(source);
 
                 expect(source).toMatch(translationCallPattern(storeReference, 'dashboard.feesAndTaxes'));
                 expect(source).toMatch(translationCallPattern(storeReference, 'transactions.types.DEPOSIT'));
+            });
+
+            it('labels the rewards in kind with the REWARD transaction type key — no new key (project 79)', () => {
+                const source = readFileSync(new URL('../../features/dashboard/GrowthChart.svelte', import.meta.url), 'utf8');
+                expect(source).toMatch(translationCallPattern(importedTranslationStoreReference(source), 'transactions.types.REWARD'));
             });
         });
 

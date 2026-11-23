@@ -153,6 +153,7 @@ function dailyInputs(): AggregationInputs {
         pnlCandleByDate: oldCandlesByDate(dailyFromSteps(CANDLES.points)),
         dividendValues: alignFlowToDates(dates, INCOME.points, (p) => Number(p.dividend.amount)),
         interestValues: alignFlowToDates(dates, INCOME.points, (p) => Number(p.interest.amount)),
+        rewardValues: dates.map(() => 0), // the INCOME fixture predates rewards in kind (project 79): none
         costValues: alignFlowToDates(dates, COSTS.points, (p) => Number(p.cost.amount)),
         depositValues: alignFlowToDates(dates, DEPOSITS.points, (p) => Number(p.deposit.amount)),
         acqFromNewCapitalValues: alignFlowToDates(dates, FUNDING.points, (p) => Number(p.from_new_capital.amount)),
@@ -263,6 +264,37 @@ describe('buildAggregationInputs: the daily resolution is the steps', () => {
         expect(inputs.pctValuesRaw.mwrrCum[at('2026-01-01')]).toBeNull();
         expect(inputs.pctValuesRaw.mwrrCum[at('2026-02-20')]).toBeCloseTo(1.23, 9);
         expect(inputs.pctValuesRaw.mwrrCum[at('2026-02-21')]).toBeNull();
+    });
+
+    it('aligns the rewards in kind of the income history by point.reward.amount, and reads a point without one as 0 (project 79)', () => {
+        // The answer of a backend older than 1.4 has no `reward` on its points: the second point stands for it.
+        const incomeHistory = {
+            points: [
+                {date: '2026-01-20', dividend: money(12), interest: money(0), reward: money(30)},
+                {date: '2026-03-05', dividend: money(0), interest: money(3)},
+            ],
+        };
+        const inputs = buildAggregationInputs(sources({mwrrLine: [], incomeHistory}));
+        const at = (day: string) => inputs.dates.indexOf(day);
+        // Precondition: both points' days are dates of the inputs, so a 0 below is read, not missed.
+        expect(at('2026-01-20')).toBeGreaterThanOrEqual(0);
+        expect(at('2026-03-05')).toBeGreaterThanOrEqual(0);
+        expect(inputs.rewardValues).toHaveLength(inputs.dates.length);
+
+        expect(inputs.rewardValues[at('2026-01-20')]).toBe(30);
+        // Control: the point without a reward is read — its interest is there — and its reward is 0.
+        expect(inputs.interestValues[at('2026-03-05')]).toBe(3);
+        expect(inputs.rewardValues[at('2026-03-05')]).toBe(0);
+        // A day with no income point at all is a known zero, as every flow.
+        expect(inputs.rewardValues[at('2026-01-01')]).toBe(0);
+        // The reward is its own series: the dividend of the same point is not folded into it, nor the other way round.
+        expect(inputs.dividendValues[at('2026-01-20')]).toBe(12);
+        expect(inputs.rewardValues.reduce((sum, value) => sum + value, 0)).toBe(30);
+    });
+
+    it('gives all-zero rewards when the report has no income history', () => {
+        const inputs = buildAggregationInputs(sources({mwrrLine: [], incomeHistory: null}));
+        expect(inputs.rewardValues).toEqual(inputs.dates.map(() => 0));
     });
 
     it('gives the broker overlay only with two brokers or more, as the old pipeline did', () => {
