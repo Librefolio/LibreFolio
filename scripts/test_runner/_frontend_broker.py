@@ -87,6 +87,18 @@ def front_broker_tx_charges_delete(verbose: bool = False, ui: bool = False, head
     return _run_playwright("brokers/broker-tx-charges-delete.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_broker_tx_link_charges(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """«Link the charges» from the broker's Transactions tab, as on the Transactions page (project 66, TL-5)."""
+    print_section("Frontend Broker Transactions Link Charges Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("brokers/broker-tx-link-charges.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_broker_page_roles(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run the broker page's per-role E2E: owner, editor and viewer (shared, share 0) see what their role allows."""
     print_section("Frontend Broker Page Roles Tests")
@@ -195,6 +207,14 @@ def populate_registry(registry: dict) -> None:
         name="Broker Transactions Charges Delete Tests",
         desc="Project 66 F7-d: on the broker's Transactions tab, «Delete» on a BUY with FEE+TAX (row menu or bar) opens the panel before the Bulk; Keep → the BUY goes, its charges stay unlinked; Delete all → all three go — read back by id",
         tests="brokers/broker-tx-charges-delete.spec.ts",
+    )
+    add_test(
+        cat,
+        "broker-tx-link-charges",
+        front_broker_tx_link_charges,
+        name="Broker Transactions Link Charges Tests",
+        desc="Project 66 TL-5: on the broker's Transactions tab, a BUY and a free FEE ticked → «Link» → the panel → confirm: event tx.charges.linked and the FEE points at the BUY, read back by id; a BUY with an asset and a FEE without one → «Link» off with the reason noAsset",
+        tests="brokers/broker-tx-link-charges.spec.ts",
     )
     add_test(
         cat,
