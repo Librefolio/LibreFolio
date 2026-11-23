@@ -184,7 +184,7 @@ async def test_catalog_returns_8_datasets_and_11_analyses():
         "fx.market_and_exposure",
         "fx.market_history",
     }
-    assert len(payload["analyses"]) == 11
+    assert len(payload["analyses"]) == 12
     assert "asset.drawdown_recovery" not in {entry["id"] for entry in payload["analyses"]}
     assert "portfolio.market_events_review" not in {entry["id"] for entry in payload["analyses"]}
     assert "broker.concentration_context" not in {entry["id"] for entry in payload["analyses"]}

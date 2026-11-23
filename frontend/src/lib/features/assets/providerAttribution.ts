@@ -1,9 +1,9 @@
 /**
- * providerAttribution — which attribution lines a screen owes (project 76, P4).
+ * providerAttribution — which attribution lines a list of providers owes (project 76, P4 and TL42).
  *
- * A provider's terms may ask the interface to show a line with its prices (CoinGecko: «Powered by CoinGecko», linked
- * to its site; `GET /assets/provider` → `attribution`). A screen owes one line per such provider among the assets it
- * shows: never one per row, none when no asset on screen is priced by such a provider.
+ * A provider's terms may ask for a line crediting it (CoinGecko: «Powered by CoinGecko», linked to its site;
+ * `GET /assets/provider` → `attribution`). The line lives on the provider's own card in Settings › Plugins, never on
+ * the screens that show its prices (TL42). One line per such provider among the codes given, never one per repeat.
  *
  * @module features/assets/providerAttribution
  */
@@ -14,7 +14,7 @@ export interface ProviderAttribution {
     url: string;
 }
 
-/** One line a screen owes: the provider and its attribution. */
+/** One line owed: the provider and its attribution. */
 export interface AttributionLine extends ProviderAttribution {
     code: string;
 }

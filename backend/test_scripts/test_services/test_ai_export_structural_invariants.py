@@ -52,7 +52,7 @@ _IMPORT_LENGTH_SITES = (
     _GuardSite("A09-portfolio-ids", "components.portfolio_broker_registry", "PORTFOLIO_REAL_COMPONENT_IDS", "components.portfolio_broker_registry.PortfolioBrokerRegistryError", expected_size=21),
     _GuardSite("A10-broker-ids", "components.portfolio_broker_registry", "BROKER_REAL_COMPONENT_IDS", "components.portfolio_broker_registry.PortfolioBrokerRegistryError", expected_size=20),
     _GuardSite("A11-public-datasets", "datasets.catalog", "PUBLIC_DATASETS", "datasets.spec.DatasetRegistryError", expected_size=8),
-    _GuardSite("A13-public-analyses", "analyses.catalog", "PUBLIC_ANALYSES", "analyses.spec.AnalysisRegistryError", expected_size=11),
+    _GuardSite("A13-public-analyses", "analyses.catalog", "PUBLIC_ANALYSES", "analyses.spec.AnalysisRegistryError", expected_size=12),
 )
 _BUILD_SITE = _GuardSite("A12-all-datasets", "datasets.catalog", "specs", "datasets.spec.DatasetRegistryError", expected_size=40, scope="build_dataset_registry")
 _UNION_SITE = _GuardSite(
@@ -349,7 +349,7 @@ def run_fault():
 
 def require_registry_counts(components, datasets, analyses):
     counts = (len(components), len(datasets), len(analyses))
-    require(counts == (68, 40, 11), "healthy registry counts changed: " + repr(counts))
+    require(counts == (68, 40, 12), "healthy registry counts changed: " + repr(counts))
 
 
 def run_healthy():
@@ -377,7 +377,7 @@ def run_healthy():
     # longer imports them, so a blanket optimization ban cannot evade controls.
     importlib.import_module(PREFIX + "temporal.policy")
     importlib.import_module(PREFIX + "dependencies")
-    return {"fragment": fragment_name, "counts": [68, 40, 11]}
+    return {"fragment": fragment_name, "counts": [68, 40, 12]}
 
 
 try:
@@ -443,4 +443,4 @@ class TestFreshImportCompatibility:
     def test_healthy_fragment_and_integrated_registries(self, fragment: str, optimize: int):
         result = _run_child({"kind": "healthy", "fragment": fragment}, optimize)
         assert result["fragment"] == fragment
-        assert result["counts"] == [68, 40, 11]
+        assert result["counts"] == [68, 40, 12]
