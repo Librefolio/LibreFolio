@@ -1804,7 +1804,7 @@ def services_asset_type_rules(verbose: bool = False, test_names: list = None) ->
     """Run the asset type rules: the family of a type and the INDEX rule (lane 65, lot B1)."""
     print_section("Services: Asset Type Rules")
     print_info("Testing: backend/app/services/assets/type_rules.py")
-    print_info("Tests: every AssetType has a family, ETF_*/CROWDFUND_* roll up, family change, INDEX with and without transactions")
+    print_info("Tests: every AssetType has a family, ETF_*/CROWDFUND_* roll up, family change, INDEX with and without transactions, the content of a type = the frontend's PRIMARY_TYPE_MAP (lane 80)")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_asset_type_rules.py", test_names)
     return run_command(cmd, "Asset type rules tests", verbose=verbose)
 
@@ -4269,7 +4269,7 @@ Note: No backend server required.
         "asset-type-rules",
         services_asset_type_rules,
         name="Asset Type Rules",
-        desc="Lane 65 B1: asset_type_family (every AssetType member has a family; ETF_* -> ETF, CROWDFUND_* -> CROWDFUND, any other its own), family_changed, classify_type_change (ETF -> ETF_STOCK ok; CROWDFUND_REAL_ESTATE -> ETF_STOCK and STOCK -> BOND warn; ETF -> INDEX warns without transactions and is blocked with them, with no warning on top; an INDEX already holding transactions is left alone), only INDEX forbids transactions",
+        desc="Lane 65 B1: asset_type_family (every AssetType member has a family; ETF_* -> ETF, CROWDFUND_* -> CROWDFUND, any other its own), family_changed, classify_type_change (ETF -> ETF_STOCK ok; CROWDFUND_REAL_ESTATE -> ETF_STOCK and STOCK -> BOND warn; ETF -> INDEX warns without transactions and is blocked with them, with no warning on top; an INDEX already holding transactions is left alone), only INDEX forbids transactions; lane 80 B1b: asset_type_content is the frontend's PRIMARY_TYPE_MAP (parsed from assetTypes.ts), ETF_MONETARY, ETF and Unknown hold themselves",
         # PURE: functions over the enum, no session, no server.
         isolation="pure",
     )
