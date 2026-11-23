@@ -221,6 +221,7 @@ export function applyOwnedPositions(draft: PlannerDraft, source: PlannerSource, 
             if (existing) {
                 existing.custody = quantity.custody;
                 existing.ownershipShare = quantity.ownershipShare;
+                existing.accessRole = broker.access_role;
                 existing.copiedQuantity = quantity.economic;
                 existing.brokerName = broker.name;
                 existing.brokerIconUrl = broker.icon_url;
@@ -236,6 +237,7 @@ export function applyOwnedPositions(draft: PlannerDraft, source: PlannerSource, 
                 brokerIconUrl: broker.icon_url,
                 custody: quantity.custody,
                 ownershipShare: quantity.ownershipShare,
+                accessRole: broker.access_role,
                 quantity: quantity.economic,
                 copiedQuantity: quantity.economic,
                 stamp,

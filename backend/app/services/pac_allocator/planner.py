@@ -35,7 +35,10 @@ needs D more".
 ``evaluator.rounding_top_ups`` decides. Any other rejection raises
 ``ExactReplayRejectedError``, which the Tool reports as ``execution_failed``:
 publishing an unverified plan is the one outcome this package exists to
-prevent, and a SCIP plan the replay rejects is a defect, not a result.
+prevent, and a SCIP plan the replay rejects is a defect, not a result. One
+rejection is answered «no plan» instead: the plan the solver held for want of
+another, already refused by its own replay, when the cascade ends on it (R1-A
+of project 67, ``_refused_plan``; logged).
 
 Both functions are exported. The Rebalancer plans «Invest only» until C1:
 its request refuses «Invest and sell» and any sale route at the schema
@@ -134,6 +137,9 @@ __all__ = ["plan_pac_allocation", "plan_rebalancing"]
 
 logger = get_logger(__name__)
 
+#: R1-A of project 67: the line of a search that ended holding only a plan the exact replay refuses (``_refused_plan``).
+REFUSED_PLAN_EVENT = "Planner held only a plan the exact replay refuses"
+
 _PRIMARY_SOLUTION_ID = "solution:primary"
 
 # Phase-1 deployment answer. `deployment_omitted` states "we did not compute
@@ -210,7 +216,8 @@ def plan_pac_allocation(
     budget are *results*, each with its own ``result_state``. A genuine
     contract violation propagates, and so do two defects of the search, which
     are not outcomes to answer with: ``ExactReplayRejectedError``, a SCIP plan
-    the exact replay rejects for more than rounding, and
+    the exact replay rejects for more than rounding (save the one the solver
+    held for want of another, answered «no plan», R1-A), and
     ``SolverInfeasibilityContradictedError``, an infeasibility verdict on a
     scenario where doing nothing is a valid plan.
 
@@ -229,21 +236,23 @@ def plan_rebalancing(
     *,
     checkpoint: Checkpoint | None = None,
     solver_time_budget_seconds: float | None = None,
+    solver_window_seconds: float | None = None,
     progress: ProgressReporter | None = None,
     seeds: tuple[int, ...] | None = None,
 ) -> RebalancerPlannerResult:
     """Plan a rebalancing and return a wire result: ``plan_pac_allocation``'s body, with the Rebalancer's product.
 
     The same promises: a planning outcome is a result, never an exception; the same two defects of the search propagate;
-    ``solver_time_budget_seconds`` is the caller's engine window. The basis publishes the request's fidelity as the request
+    ``solver_time_budget_seconds`` is one run's limit and ``solver_window_seconds`` the whole window of its turns (lot
+    TURNI; None: the limit itself). The basis publishes the request's fidelity as the request
     wrote it (a level, a custom ``λ``, «Target first»), which the exact scenario keeps only as ``λ``. ``seeds`` fixes the
     three runs' seeds (lot SEEDS, ``plan_exact_scenario``); None draws them.
     """
     product = _rebalancer_product(request.target_fidelity)
-    return _plan(request, normalize_rebalancer_plan, product, checkpoint=checkpoint, solver_time_budget_seconds=solver_time_budget_seconds, progress=progress, seeds=seeds)
+    return _plan(request, normalize_rebalancer_plan, product, checkpoint=checkpoint, solver_time_budget_seconds=solver_time_budget_seconds, solver_window_seconds=solver_window_seconds, progress=progress, seeds=seeds)
 
 
-def _plan(request, normalize, product: _Product, *, checkpoint: Checkpoint | None, solver_time_budget_seconds: float | None, progress: ProgressReporter | None = None, seeds: tuple[int, ...] | None = None):
+def _plan(request, normalize, product: _Product, *, checkpoint: Checkpoint | None, solver_time_budget_seconds: float | None, solver_window_seconds: float | None = None, progress: ProgressReporter | None = None, seeds: tuple[int, ...] | None = None):
     """The one body of both service functions: normalize, then a failure result or the plan. ``progress`` hears the phases
     (V2, ``progress.py``); a failure stops at ``validate``, the phase it is born in."""
     check_budget(checkpoint)
@@ -255,7 +264,7 @@ def _plan(request, normalize, product: _Product, *, checkpoint: Checkpoint | Non
     if not normalized.ready or normalized.normalized is None:
         return _failure_result(normalized.availability, snapshot, list(normalized.issues), product)
 
-    return plan_exact_scenario(normalized.normalized, issues=tuple(normalized.issues), checkpoint=checkpoint, solver_time_budget_seconds=solver_time_budget_seconds, product=product, progress=progress, seeds=seeds).result
+    return plan_exact_scenario(normalized.normalized, issues=tuple(normalized.issues), checkpoint=checkpoint, solver_time_budget_seconds=solver_time_budget_seconds, solver_window_seconds=solver_window_seconds, product=product, progress=progress, seeds=seeds).result
 
 
 def plan_exact_scenario(
@@ -264,6 +273,7 @@ def plan_exact_scenario(
     issues: tuple[PlannerIssue, ...] = (),
     checkpoint: Checkpoint | None = None,
     solver_time_budget_seconds: float | None = None,
+    solver_window_seconds: float | None = None,
     product: _Product | None = None,
     progress: ProgressReporter | None = None,
     seeds: tuple[int, ...] | None = None,
@@ -287,6 +297,10 @@ def plan_exact_scenario(
     above with its own seed, in parallel (``seed_runs``), and publishes the run ``proof.merge_seeded_runs`` chooses: the
     lowest plan, «proven» only when two runs closed on it. ``seeds`` fixes them; None takes the test configuration's or
     three fresh random ones. One seed, or none (the PAC, which keeps SCIP's own), is one run, as before.
+
+    Lot TURNI of project 67 (specification §16.22): ``solver_time_budget_seconds`` is one run's limit and
+    ``solver_window_seconds`` the whole window its turns live in; a run that starts later has the smaller of its limit and
+    the time left in the window (``seed_runs``). None for the window is the limit itself: a later run has the time left.
     """
     product = product or (_rebalancer_product(None) if scenario.product == "rebalancer" else _PAC)
     report_phase(progress, "model")
@@ -298,11 +312,11 @@ def plan_exact_scenario(
     budget = DEFAULT_SOLVER_TIME_BUDGET_SECONDS if solver_time_budget_seconds is None else solver_time_budget_seconds
 
     def one_run(seed: int, forward: ProgressReporter | None, run_budget: float) -> _RunOutcome:
-        # A run started later on a machine with fewer usable CPUs than runs has the time left (lot SEEDS-c).
+        # ``run_budget`` is this run's own limit: the whole limit in its turn, or what the window has left (lot TURNI).
         return _single_run(scenario, view, issues, None, run_budget, product, forward, seed=seed)
 
     # «Impossible» needs two runs: after one, the next starts even with no time left (lot SEEDS-c).
-    runs = run_seeds(one_run, seeds=run_seeds_of, time_budget_seconds=budget, checkpoint=checkpoint, progress=progress, start_next_after=_answered_impossible)
+    runs = run_seeds(one_run, seeds=run_seeds_of, time_budget_seconds=budget, window_seconds=solver_window_seconds, checkpoint=checkpoint, progress=progress, start_next_after=_answered_impossible)
     report_phase(progress, "verify")
     check_budget(checkpoint)
     published = _merged_report(runs, scenario)
@@ -323,6 +337,8 @@ class _RunOutcome:
     #: stage's scale, SCIP's unit over that one (1 for a score in euros, 1/F for «Target first»).
     bound: Fraction | None = None
     scale: Fraction = Fraction(1)
+    #: R1-A: the run's search ended holding only a plan the exact replay refuses, answered «no plan» (``_refused_plan``).
+    refused: bool = False
 
 
 class SeededRunsFailedError(RuntimeError):
@@ -373,7 +389,7 @@ def _merged_report(runs, scenario: ExactPlannerScenario) -> PlanReport:
     # portfolio. Which run closed, and how long each took, is what a diagnosis of the seeds reads.
     logger.info(
         "Rebalancer seeded runs",
-        runs=[{"seed": vote.seed, "origin": vote.origin, "closed": vote.closed, "infeasible": vote.infeasible, "seconds": run.seconds, "failure": run.failure} for vote, run in zip(votes, runs, strict=True)],
+        runs=[{"seed": vote.seed, "origin": vote.origin, "closed": vote.closed, "infeasible": vote.infeasible, "refused": run.result is not None and run.result.refused, "seconds": run.seconds, "failure": run.failure} for vote, run in zip(votes, runs, strict=True)],
         state=verdict.state,
         chosen=None if verdict.index is None else votes[verdict.index].seed,
         downgrade=verdict.downgrade,
@@ -445,10 +461,16 @@ def _single_run(
     # The single non-negotiable hop: nothing is published that exact
     # arithmetic has not re-derived from the candidate itself. Its verdict is
     # final: a rounding deficit within the threshold comes back as top-ups,
-    # any other rejection raises.
+    # any other rejection raises, save one: the plan the solver itself held for
+    # want of another, refused by its replay already (R1-A of project 67).
     report_phase(progress, "verify")
     evaluation = evaluate_exact_candidate(scenario, view, search.candidate, checkpoint=checkpoint)
-    top_ups = rounding_top_ups(scenario, evaluation)
+    try:
+        top_ups = rounding_top_ups(scenario, evaluation)
+    except ExactReplayRejectedError as exc:
+        if search.solver.held_unpublishable_at is None:
+            raise
+        return _refused_plan(scenario, view, search, exc, issue_list, product, progress)
 
     conclusion = _conclude(view, search, published=search.candidate)
     check_budget(checkpoint)
@@ -456,6 +478,20 @@ def _single_run(
     published = PlanReport(result=_ready_result(scenario, view, search, evaluation, conclusion, issue_list, top_ups, product))
     bound, scale = _first_stage_bound(search)
     return _RunOutcome(report=published, origin="prudent", closed=isinstance(conclusion, OptimalProvenConclusion), value=_first_stage_value(scenario, view, evaluation), band=_first_stage_band(search), bound=bound, scale=scale)
+
+
+def _refused_plan(scenario: ExactPlannerScenario, view: ExactPolicyView, search: _Search, error: ExactReplayRejectedError, issues: list[PlannerIssue], product: _Product, progress: ProgressReporter | None) -> _RunOutcome:
+    """R1-A of project 67: the search ended holding only the plan it kept for want of another, which the exact replay
+    refuses. That is «no plan» (not proven, the stop reason the stages give), as the wide model already answers, never a
+    failure: the review's «execution_failed» on a valid draft. One log line says what was refused, a WARNING when stage 1
+    stopped at a limit, an ERROR when it closed (then the prudent model's own optimum is refused, a defect of the model).
+    The replay's message names rules, cells and pools, never amounts (``evaluator.rounding_top_ups``). A seeded run of the
+    Rebalancer logs it in its own process; the merge's line carries the run as ``refused``."""
+    stage_one_closed = bool(search.solver.stages) and search.solver.stages[0].status == "finished"
+    log = logger.error if stage_one_closed else logger.warning
+    log(REFUSED_PLAN_EVENT, error_type=type(error).__qualname__, reason=str(error), stage_ordinal=search.solver.held_unpublishable_at, stage_one_closed=stage_one_closed)
+    result = _no_incumbent_result(scenario, view, _Search(candidate=None, solver=search.solver, program=search.program), issues, product, progress)
+    return _RunOutcome(report=PlanReport(result=result), refused=True)
 
 
 def _first_stage_value(scenario: ExactPlannerScenario, view: ExactPolicyView, evaluation: ExactEvaluation) -> Fraction:
@@ -580,9 +616,10 @@ def _no_incumbent_result(scenario: ExactPlannerScenario, view: ExactPolicyView, 
     ``SolverInfeasibilityContradictedError`` is raised instead.
 
     Everything else is ``ready_no_incumbent`` with ``not_proven``: a limit that
-    left no solution. A SCIP plan the Decimal replay rejects never lands here:
-    it is published with its rounding top-ups, or ``plan_pac_allocation``
-    raises ``ExactReplayRejectedError``.
+    left no solution. A SCIP plan the Decimal replay rejects lands here only
+    when the solver held it for want of another (R1-A, ``_refused_plan``);
+    otherwise it is published with its rounding top-ups, or
+    ``plan_pac_allocation`` raises ``ExactReplayRejectedError``.
     """
     evaluation = evaluate_do_nothing(scenario, view)
     conclusion = _conclude(view, search, published=None)

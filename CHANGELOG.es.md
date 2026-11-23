@@ -67,17 +67,18 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 #### 🎯 Reequilibrador de cartera y Asignador PAC
 
 - **Reequilibrador de cartera**, una nueva herramienta en la página Herramientas: lleva una cartera que ya tienes de vuelta hacia sus pesos objetivo. No envía órdenes.
-  - **De dónde parte:** de las posiciones que LibreFolio registra en cada bróker. Puedes cambiar una cantidad para simular otra cartera; LibreFolio no se modifica.
+  - **De dónde parte:** de las posiciones que LibreFolio registra en cada bróker. Puedes cambiar una cantidad para simular otra cartera; LibreFolio no se modifica. En una cuenta compartida con otros, el bróker muestra tu cuota como insignia con tu rol, como en la página del bróker.
   - **Brókeres:** un bróker donde tienes posiciones pero no operas cuenta como «solo posiciones», y «Añadir al plan» permite que el plan opere también allí.
-  - **Objetivos:** en porcentaje de toda la cartera, efectivo incluido. El efectivo de un bróker en una divisa puede ser una fila propia («Añadir efectivo»); el resto es «Otro efectivo», al 0 %. La columna «Ahora» muestra el peso actual de cada fila.
+  - **Objetivos:** en porcentaje de toda la cartera, efectivo incluido. El efectivo de un bróker en una divisa puede ser una fila propia («Añadir efectivo»); el resto es «Otro efectivo», al 0 %, mostrado cuando hoy vale algo. La columna «Ahora» muestra el peso actual de cada fila.
   - **Estrategia:** «Solo invertir» usa el efectivo para comprar lo que está por debajo del objetivo y no vende nada; «Invertir y vender» aparece como próximamente.
   - **Fidelidad al objetivo:** «Atento a los costes», «Equilibrado», «Fiel al objetivo», «El objetivo ante todo» o «Personalizada». Fija cuánto aceptas gastar en comisiones para devolver el dinero al objetivo, y la tabla «Coste máximo aceptable» muestra esa cifra para cada suma mal colocada.
   - **Resultado:**
     - el plan en el orden en que ejecutarlo: primero los depósitos, las transferencias entre brókeres y los cambios de divisa, después las compras en cada bróker;
     - la tabla «Asignación por partida»: hoy, objetivo y después del plan, con tus límites;
     - las cifras clave: «Vale hoy», «Valdrá después», «Dinero perdido», y la «Distancia máxima al objetivo» con la partida a la que pertenece;
-    - las exposiciones por tipo de activo, sector y país — hoy, después del plan y tu objetivo — sobre toda la cartera, efectivo incluido.
+    - las exposiciones por tipo de activo, sector y país — hoy, después del plan y tu objetivo — sobre toda la cartera, efectivo incluido; los países también en dos mapas del mundo, tu objetivo y después del plan.
   - **Qué tan seguro es el plan:** la búsqueda se ejecuta tres veces, y un plan se demuestra el mejor solo cuando una segunda búsqueda lo confirma. Un plan no demostrado se presenta como un óptimo local, con su margen cuando las búsquedas lo dan: el mejor plan posible debería ser como mucho esa cantidad mejor.
+  - **Cada búsqueda tiene sus 30 s.** En un servidor con tres o más CPU utilizables las tres búsquedas se ejecutan a la vez. Con una o dos se ejecutan por turnos, cada una con sus 30 s completos, así que el cálculo puede tardar hasta unos 1 minuto 45 s con una CPU y 1 minuto 10 s con dos; el panel de espera muestra ese límite más largo (135 s con una CPU, 100 s con dos). El cálculo informa de cada paso, así que su conexión nunca queda mucho tiempo en silencio; detrás de Nginx, la página del administrador sobre proxies inversos sugiere también `proxy_read_timeout 150s;` como margen.
 - **El perfil operativo de un bróker**, en la ventana del bróker. Reúne cómo toma las órdenes (por número de unidades o por importe, con su incremento) y sus comisiones de compra y de venta (mínimo, porcentaje, máximo, parte fija), divisa por divisa, además de cómo convierte la divisa y su régimen fiscal («Administrado» o «Declarativo»).
   - Las herramientas lo copian en un plan, donde todavía puedes cambiarlo.
   - «Guardar en el bróker», en el editor del bróker del planificador, lleva tus cambios al bróker tras una confirmación que los enumera.
@@ -85,13 +86,14 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 - **Límites en los objetivos**, en el Asignador PAC y en el Reequilibrador de cartera. Cada partida puede tener un mínimo y un máximo de su valor al final del plan, como importe (500) o como porcentaje del total (35 %).
   - El efectivo de un bróker en una divisa también puede tener límites, con «Añadir efectivo»; en el PAC solo tiene límites, sin objetivo.
   - La Revisión y el resumen cuentan las partidas con un límite.
-  - Un mínimo por encima de su máximo, o mínimos que en total superan el 100 %, se señalan antes del cálculo.
+  - Un mínimo por encima de su máximo, mínimos que en total superan el 100 % o el dinero del plan, o un máximo por debajo de lo que ya tienes se señalan en el paso Objetivos, antes del cálculo.
   - Cuando los límites no dejan ningún plan, el resultado dice «Ninguna solución con estos límites» y los enumera.
   - Cuando la búsqueda termina sin un plan dentro de los límites, el resultado lo dice, y aclara que no es una prueba de que no exista ningún plan.
   - Cuando los límites no dejan sitio a los redondeos, el plan se encuentra contando los redondeos a su favor: respeta los límites una vez añadida la cantidad adicional que pida el resultado, si la hay, y no se demuestra que sea el mejor. Un límite de efectivo incumplido solo porque cada importe se redondea al céntimo recibe una nota con el importe.
 - **Las cifras de hoy mientras editas el plan**: el paso Objetivos muestra el total que el plan reparte (en el Reequilibrador también el peso actual de cada fila), actualizado un momento después de cada cambio.
 - **El cálculo muestra su fase** mientras esperas: «Compruebo los datos», «Construyo el modelo», «Busco el plan», «Verifico las cuentas», «Preparo el resultado», con su posición («2 de 5»).
 - **Cuando un bróker convierte la divisa en cada compra, el plan lo dice.** Cuenta una conversión por par de divisas; el bróker puede redondear cada orden por separado, así que algunos céntimos por orden pueden diferir.
+- Cuando un cálculo del Asignador PAC o del Reequilibrador de cartera falla, **Copiar la solicitud** copia los datos enviados, para adjuntarlos a un informe. El servidor no guarda nada.
 
 ### 🔄 Cambios
 
@@ -99,6 +101,7 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 - Los **Identificadores** del activo, los sectores y países del perfil, el **Calendario de intereses** y el editor de precios, eventos y tipos usan la misma barra de selección que las demás tablas: cada acción muestra sobre cuántas filas actúa, y **Fusionar** explica por qué está desactivado en periodos no consecutivos. En una sección estrecha la barra pasa a iconos con sus números, que dicen su nombre al pasar el ratón y con el foco del teclado; en el teléfono las páginas de una tabla ya no muestran las palabras «por página».
 - En el paso **Objetivos** del Asignador PAC y del Reequilibrador de cartera la barra de selección está en la cabecera del paso, como en las demás tablas: **Equilibrar las filas seleccionadas al 100 %** muestra sobre cuántas filas actúa, no se ofrece cuando el total ya es 100 %, y dice por qué cuando está desactivado.
 - **Menús de las filas** (activos, divisas, lotes, objetivos del PAC, vincular eventos): una acción que no se aplica a la fila ya no aparece; una que se aplica pero está bloqueada se queda, en gris con un ⓘ, y dice por qué al pasar el ratón, al tocar o con el teclado. El menú se usa con el teclado: flechas, Inicio y Fin, Intro, y Esc para volver a ⋮.
+- **Editor masivo**: las acciones sobre las filas marcadas (**Restablecer seleccionados**, **Vincular los gastos**, **Eliminar seleccionadas**, **Promover par**) están en la barra de selección arriba de la tabla, que te sigue abajo al desplazarte; cada una muestra sobre cuántas filas actúa. En la importación, un archivo que aún se está leyendo lo dice en su menú, y uno fallido solo ofrece volver a leerlo.
 - El derecho especial de giro del FMI (XDR) lo ofrece ahora cada proveedor FX cuyo banco lo publica: la Banca d'Italia, el Banco Nacional de Ucrania, Norges Bank, el Banco Nacional Suizo (medias mensuales), el Banco Nacional de Rumanía, el Narodowy Bank Polski, el BCRA y el Central Bank of Nigeria se suman al BCB, Banxico y el CNB. Metales e índices quedan fuera.
 - **Reenlazar eventos** agrupa las transacciones según lo que falta (un evento encontrado, ninguno, varios), con **Vincular todas** y **Crear todos** por grupo, una sola barra de selección con los números, la acción de la fila siempre a mano y una ventana para elegir el evento cuando ese día hay varios.
 - **Lista de activos: Recargar actualiza solo los activos seleccionados**, no toda la lista.
@@ -135,13 +138,15 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 - Los análisis de riesgo publican nuevas medidas junto a las existentes: el mejor día y los 30 mejores días, la mayor subida, la proporción de días positivos, las ganancias frente a las pérdidas (Omega), la semidesviación, la profundidad media bajo el máximo, los días extremos, el día medio de subida y de bajada y la racha positiva más larga. El VaR, el CVaR y cada cifra ya publicada no cambian. Una serie que nunca ganó, o nunca perdió, ya no se marca como parcial por el mejor o peor día que le falta.
 - El número efectivo de posiciones de la pestaña Riesgo se mide solo sobre las posiciones con precio: el efectivo y las posiciones sin precios ya no lo inflan, así que nunca supera las posiciones medidas.
 
+- En la ventana de un par de divisas, un clic en un proveedor de la leyenda muestra u oculta su descripción; un doble clic abre su guía.
+
 #### 🎯 Asignador PAC y Herramientas
 
 - **Un plan cuya optimalidad no está demostrada se presenta ahora como un óptimo local.**
 - **La «Compra obligatoria» de una ruta desaparece.** Para obligar una compra, fija un mínimo en el objetivo del activo. El mínimo de la ruta solo vale si el plan compra en esa ruta.
 - **El editor del bróker del escenario usa el panel del perfil operativo**: comisiones de compra y de venta con mínimo, porcentaje, máximo y parte fija, divisa por divisa.
 - **Cuando el solver se detiene por un error numérico** tras encontrar un plan, el resultado ahora lo dice en una nota: el plan es válido y se puede ejecutar, y puede existir uno mejor.
-- En la página Herramientas, el título de una herramienta pasa a la línea siguiente entre palabras, y el enlace a la documentación queda a su lado, con su etiqueta bajo el icono.
+- En la página Herramientas, el título de una herramienta pasa a la línea siguiente entre palabras, y el enlace a la documentación queda a su lado, como icono.
 
 ### 🐛 Corregido
 
@@ -182,6 +187,7 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 - Editor de transacciones: «Restablecer fila» y «Restablecer seleccionados» sobre una mitad de un par guardado, dividido y aún no guardado, ahora también deshacen la división. Antes, el par volvía a una sola fila pero la división quedaba en cola, y «Guardar todo» lo dividía igualmente.
 - Editor de transacciones: tras «Separar par» en una transferencia guardada, editar dos veces la mitad de retirada ya no la convierte en un depósito con importe positivo, lo que hacía fallar «Guardar todo».
 - Editor de transacciones: tras «Separar par» en una transferencia guardada, una mitad cuyo tipo cambias en su formulario (un depósito convertido en retirada, o al revés) ahora se guarda con ese tipo: hasta ahora «Guardar todo» fallaba.
+- Asignador PAC: en un servidor con carga, un cálculo ya terminado podía aparecer como fallido, «El proceso de cálculo se detuvo inesperadamente.». Ahora su resultado se lee.
 
 ### ⚠️ Cambios incompatibles
 

@@ -81,15 +81,24 @@ class ToolPlatformPolicy(ToolTransportModel):
     envelope_reserve_bytes: ToolPositiveInt = 65_536
     max_json_depth: Annotated[int, Field(strict=True, ge=1, le=64)] = 32
     queue_timeout_ms: ToolPositiveInt = 5_000
-    engine_timeout_ms: ToolPositiveInt = 30_000
-    job_timeout_ms: ToolPositiveInt = 45_000
-    soft_timeout_ms: ToolPositiveInt = 44_000
+    # The time ceilings hold the longest operation a shipped Tool declares: the Rebalancer's plan in three turns of three
+    # runs on one usable CPU (TURNI of project 67, specification §16.22). They are fixed numbers, the same on every machine;
+    # each operation declares its own limits under them, and ``effective_operation`` takes the smaller.
+    #   engine  = three runs of 30 s and the 5 s grace between turns         100 000 = 3 × 30 000 + 2 × 5 000
+    #   soft    = engine + today's 14 s past it (44 000 − 30 000)          114 000 = 100 000 + 14 000
+    #             (the runs' worst end, the last grace at 105 s, then leaves 9 s for start-up and model; today 6 s)
+    #   job     = soft + output_reserve                                      115 000
+    #   request = ingress + queue + job + cleanup + response                 129 000
+    #   client  = request + today's 6 s of transport                         135 000
+    engine_timeout_ms: ToolPositiveInt = 100_000
+    job_timeout_ms: ToolPositiveInt = 115_000
+    soft_timeout_ms: ToolPositiveInt = 114_000
     output_reserve_ms: ToolPositiveInt = 1_000
     cleanup_timeout_ms: ToolPositiveInt = 5_000
     ingress_timeout_ms: ToolPositiveInt = 2_000
     response_reserve_ms: ToolPositiveInt = 2_000
-    request_timeout_ms: ToolPositiveInt = 59_000
-    client_timeout_ms: ToolPositiveInt = 65_000
+    request_timeout_ms: ToolPositiveInt = 129_000
+    client_timeout_ms: ToolPositiveInt = 135_000
     memory_limit_bytes: ToolPositiveInt = 1_073_741_824
 
     @model_validator(mode="after")

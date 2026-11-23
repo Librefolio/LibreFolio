@@ -9,8 +9,7 @@
   Tooltip, placed against the whole menu and never over its items; its own click runs nothing and leaves the menu open.
   The keyboard follows the WAI-ARIA menu: the focus goes to the first item when the menu opens, ↑ ↓ Home End move
   through every item (the blocked ones too), Enter and Space run, Escape and Tab close and give the focus back to the
-  element that opened the menu. `disabled` without a reason is the old form, drawn as before (native `disabled`), until
-  its last users move to `blocked`.
+  element that opened the menu. An item is never off without a reason: there is no `disabled` (SEL-M part 2).
 
   Used by DataTable for row-level context menus. Can also be used standalone.
 -->
@@ -29,8 +28,6 @@
         /** Why the item is blocked: then it is off, reachable, and says why (77 SEL-M). `hint` is the text the user reads,
          *  `reason` a stable code for tests and logs (as `data-disabled-reason` of the selection bar). */
         blocked?: {hint: string; reason: string};
-        /** The old form: off with no reason, natively disabled. New items use `blocked`. */
-        disabled?: boolean;
         title?: string;
         testid?: string;
         iconClass?: string;
@@ -65,9 +62,9 @@
     let keyboardNav = $state(false);
     const menuId = `context-menu-${Math.random().toString(36).slice(2, 8)}`;
 
-    /** The items the focus can rest on: every action, the blocked ones too; an old natively disabled one cannot. */
+    /** The items the focus can rest on: every action, the blocked ones too. */
     function focusableItems(): HTMLButtonElement[] {
-        return menuEl ? [...menuEl.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].filter((item) => !item.disabled) : [];
+        return menuEl ? [...menuEl.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')] : [];
     }
 
     function focusItem(index: number): void {
@@ -247,12 +244,11 @@
                     role="menuitem"
                     tabindex="-1"
                     class="context-item {item.variant === 'danger' ? 'danger' : ''}"
-                    disabled={item.disabled}
                     data-testid={item.testid ?? `context-menu-action-${item.id}`}
                     title={item.title}
                     onclick={(e) => {
                         e.stopPropagation();
-                        if (!item.disabled && item.id) {
+                        if (item.id) {
                             // The focus goes back where it was before the action runs: a dialog the action opens takes it from
                             // there, and closing it brings the user back to the ⋮ (WAI-ARIA menu)
                             giveFocusBack();
@@ -273,11 +269,10 @@
                 role="menuitem"
                 tabindex="-1"
                 class="context-item {item.variant === 'danger' ? 'danger' : ''}"
-                disabled={item.disabled}
                 data-testid={item.testid ?? `context-menu-action-${item.id}`}
                 onclick={(e) => {
                     e.stopPropagation();
-                    if (!item.disabled && item.id) {
+                    if (item.id) {
                         giveFocusBack();
                         onAction(item.id);
                     }
@@ -322,12 +317,8 @@
         text-align: left;
         transition: background-color 0.1s;
     }
-    .context-item:hover:not(:disabled) {
+    .context-item:hover {
         background: var(--lf-surface-hover);
-    }
-    .context-item:disabled {
-        opacity: 0.4;
-        cursor: default;
     }
     /* Blocked with its reason (77 SEL-M): the label is muted, the ⓘ says there is a reason; no hover of an action. */
     .context-item.blocked {
@@ -344,7 +335,7 @@
     .context-item.danger {
         color: var(--lf-danger);
     }
-    .context-item.danger:hover:not(:disabled) {
+    .context-item.danger:hover {
         background: var(--lf-danger-soft);
     }
     .context-separator {

@@ -24,14 +24,16 @@ units per cash pool (N = the pool's postings that carry a quantum) is
 published with its top-ups — one per negative pool, "this broker/currency
 needs D more" (test_rounding_top_up_*). Any other rejection raises
 ``ExactReplayRejectedError``, which the Tool reports as
-``execution_failed``; it is never ``ready_no_incumbent``
-(test_replay_rejection_*). The locked properties, each mapped to a test:
+``execution_failed`` (test_replay_rejection_*); the one exception is a
+refused plan the solver held for want of another, which is
+``ready_no_incumbent`` (R1-A, ``test_pac_planner_cash_rule.py``). The
+locked properties, each mapped to a test:
 
 * **No-op is a first-class optimum, not "no exception".** The unmodified fixture
   has €5 against a €10 whole-unit price, so doing nothing *is* the proven
   optimum. Asserting ``ready_no_op`` **and** ``optimal_proven`` is what caught a
-  real defect once (building a ``PacIncumbentSolution``, which needs ≥1 order
-  row, before testing for no-op) — the single most common real-world PAC case
+  real defect once (building a ``PacIncumbentSolution``, which needs ≥1 step,
+  before testing for no-op) — the single most common real-world PAC case
   early in the month.
 * **The wire-union revalidation is the real gate**: ``model_dump`` →
   ``PAC_PLAN_OUTPUT_ADAPTER.validate_python`` runs every schema validator.
@@ -128,7 +130,7 @@ from backend.app.schemas.pac_allocator.results import (
     PacPlannerUnsupportedResult,
     PlannerResultSnapshot,
 )
-from backend.app.services.pac_allocator import planner, rebalancer_report
+from backend.app.services.pac_allocator import planner, rebalancer_report, seed_runs
 from backend.app.services.pac_allocator.evaluation.errors import ExactEvaluatorError, ExactReplayRejectedError
 from backend.app.services.pac_allocator.evaluation.evaluator import build_exact_policy_view, evaluate_do_nothing, evaluate_exact_candidate
 from backend.app.services.pac_allocator.evaluation.keys import exact_decision_id
@@ -136,6 +138,7 @@ from backend.app.services.pac_allocator.models import ExactCashEntry, ExactLimit
 from backend.app.services.pac_allocator.normalize import normalize_pac_plan
 from backend.app.services.pac_allocator.numeric import ExactRatio as R
 from backend.app.services.pac_allocator.planner import plan_pac_allocation, plan_rebalancing
+from backend.app.services.pac_allocator.solver import SolverStageError
 from backend.app.services.tools.executor import TOOL_PROGRESS_MESSAGE_CAP
 from backend.test_scripts.test_schemas.test_pac_planner_schemas import _compact_pac_request, _fixture, _pac_request
 from backend.test_scripts.test_services import _pac_reference_values as ref
@@ -1806,8 +1809,8 @@ def test_currency_catalog_publishes_the_babel_quantum_of_every_referenced_curren
 # far below any enumeration of it (the oracle polls ~89-96 times per candidate).
 _ENUMERATION_CHECKPOINT_BUDGET = 2_000
 
-# The engine window the Tool claims for a plan (``engine_timeout_ms=30_000`` in
-# ``tool_plugins/pac_allocator/plugin.py``), so the X1 scenario is planned exactly as
+# The engine window the Tool claims for a PAC plan (the one-turn row of ``plan_policy`` in
+# ``tool_plugins/pac_allocator/plugin.py``, 30 000 ms), so the X1 scenario is planned exactly as
 # production plans it. A budget handed to SCIP, never an assertion: the test
 # itself neither reads nor asserts on the clock.
 _TOOL_ENGINE_WINDOW_SECONDS = 30.0
@@ -2505,9 +2508,11 @@ def test_pac_plan_reports_its_phases_in_order() -> None:
 
 
 @pytest.mark.parametrize(("fidelity", "total"), [pytest.param(reb.BALANCED, 3, id="weighted"), pytest.param({"kind": "target_first"}, 4, id="target-first")])
-def test_rebalancer_search_counts_the_score_then_the_tie_breaks(fidelity: dict, total: int) -> None:
+def test_rebalancer_search_counts_the_score_then_the_tie_breaks(monkeypatch, fidelity: dict, total: int) -> None:
     """V2 test 2: the search counts the stages of the program by name: the score (or the chain's two) first, then the two
-    named tie-breaks; the canonical vector, one stage per decision, is not counted."""
+    named tie-breaks; the canonical vector, one stage per decision, is not counted. On three usable CPUs, one turn: on
+    fewer, the steps count every turn's stages (TURNI 4d, ``test_pac_planner_seeds.py``)."""
+    monkeypatch.setattr(seed_runs, "usable_cpus", lambda: 3)
     recorder = _Recorder()
     plan_rebalancing(REBALANCER_PLAN_INPUT_ADAPTER.validate_python(reb.t4(fidelity=fidelity)), progress=recorder)
     searches = [message for message in recorder.messages if message[0] == "search"]
@@ -2610,3 +2615,23 @@ def _available(value) -> Fraction:
 
 def _exact(number) -> Fraction:
     return exact_fraction(number)
+
+
+def test_a_stage_error_before_any_plan_is_not_an_execution_failure() -> None:
+    """SCIP failing inside the first stage, before it holds any plan, still answers a planner result.
+
+    The gallery's PAC draft of 19/11/2026 (mock data, contract 2.0.0) at EUR/USD 1.0792 with every cash amount and the
+    contribution multiplied by 300: SCIP fails inside ``fixed_l2`` in under a second, deterministically, and
+    ``_solve_stages`` raises ``SolverStageError``, which the Tool reports as ``execution_failed`` (consultant REB,
+    R1-A, ``r1a_err``). A known defect: the error itself is reported as an expected failure (``pytest.xfail``, the
+    coordinator's decision of 20/11/2026, non-strict), and only that error; anything else stays a real red. The answer
+    it should give is R1-A part 2's, which waits for the developer: that lot replaces the call with its assertion.
+    """
+    request = _validated(_fixture("pac_plan_request.stage-error-fixed-l2.2-0-0.json"))
+    try:
+        result = plan_pac_allocation(request, solver_time_budget_seconds=_TOOL_ENGINE_WINDOW_SECONDS)
+    except SolverStageError as error:
+        if "'fixed_l2' before holding any plan" in str(error):
+            pytest.xfail(f"known defect R1-A part 2 (project 67), a stage error before any plan: {error}")
+        raise
+    assert result.result_state in ("ready_incumbent", "ready_no_op", "ready_no_incumbent"), result.result_state

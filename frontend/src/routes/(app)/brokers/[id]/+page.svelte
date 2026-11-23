@@ -13,8 +13,9 @@
     import {zodiosApi} from '$lib/api';
     import {goBack} from '$lib/stores/app/navigationStore';
     import {formatPercent} from '$lib/utils/core/formatPercent';
-    import {ArrowLeft, ArrowRightLeft, Briefcase, Copy, Crown, ExternalLink, Eye, FileText, Pencil, Plus, RefreshCw, Share2, Trash2, Upload, Users} from 'lucide-svelte';
+    import {ArrowLeft, ArrowRightLeft, Briefcase, Copy, ExternalLink, FileText, Pencil, Plus, RefreshCw, Share2, Trash2, Upload, Users} from 'lucide-svelte';
     import BrokerModal from '$lib/features/brokers/BrokerModal.svelte';
+    import BrokerQuotaBadge from '$lib/features/brokers/BrokerQuotaBadge.svelte';
     import BrokerIcon from '$lib/components/ui/display/BrokerIcon.svelte';
     import BrokerImportFilesModal from '$lib/features/brokers/BrokerImportFilesModal.svelte';
     import BrokerSharingPanel from '$lib/features/brokers/BrokerSharingPanel.svelte';
@@ -236,19 +237,8 @@
             <div class="flex-1 min-w-0">
                 <div class="flex items-center gap-2 flex-wrap">
                     {#if safeString(broker.user_role)}
-                        {@const role = safeString(broker.user_role)}
-                        <!-- colour: closest role, to review: broker role badge (owner amber, editor blue, viewer grey) on warning, info and neutral tints -->
-                        <span
-                            class="inline-flex items-center gap-1 px-2 py-1 rounded-full flex-shrink-0
-                            {role === 'OWNER' ? 'bg-lf-warning-soft text-lf-warning-on-soft' : role === 'EDITOR' ? 'bg-lf-info-soft text-lf-info-on-soft' : 'bg-lf-neutral text-lf-secondary'}"
-                            title={$_(role === 'OWNER' ? 'brokers.sharing.roleOwnerShort' : role === 'EDITOR' ? 'brokers.sharing.roleEditorShort' : 'brokers.sharing.roleViewerShort')}
-                            data-testid="broker-quota-badge"
-                        >
-                            {#if broker.user_share_percentage != null}
-                                <span class="text-xs font-medium">{formatSharePercentage(broker.user_share_percentage, $uiLocaleStore)}</span>
-                            {/if}
-                            {#if role === 'OWNER'}<Crown size={13} />{:else if role === 'EDITOR'}<Pencil size={13} />{:else}<Eye size={13} />{/if}
-                        </span>
+                        <!-- The user's share and role (the shared badge, also on the Rebalancer's positions: R1-D of project 67) -->
+                        <BrokerQuotaBadge role={safeString(broker.user_role)} share={broker.user_share_percentage != null ? formatSharePercentage(broker.user_share_percentage, $uiLocaleStore) : null} testid="broker-quota-badge" />
                     {/if}
                     <h1 class="text-2xl font-bold text-lf-primary truncate" data-testid="broker-name">{broker.name}</h1>
                 </div>

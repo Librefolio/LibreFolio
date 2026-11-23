@@ -286,6 +286,10 @@ class SolverRunResult:
     wall_seconds: float
     finished_stage_count: int
     anomaly: str | None
+    #: R1-A of project 67: the ordinal of the stage that found ``candidate`` when it is the plan held for want of another,
+    #: which its exact replay refused (``_take_candidate``); None when the plan held is publishable, or there is none. The
+    #: planner answers «no plan» on it instead of raising. Internal: never on the wire.
+    held_unpublishable_at: int | None = None
     exact_replay_required: Literal[True] = True
 
 
@@ -438,7 +442,7 @@ def solve_policy_program(
     tolerances = _read_tolerances(model)
     started = time.monotonic()
 
-    reports, candidate, outcome, anomaly = _solve_stages(
+    reports, candidate, outcome, anomaly, held_unpublishable_at = _solve_stages(
         model=model,
         program=program,
         time_budget_seconds=time_budget_seconds,
@@ -459,6 +463,7 @@ def solve_policy_program(
         wall_seconds=time.monotonic() - started,
         finished_stage_count=sum(1 for report in reports if report.status == "finished"),
         anomaly=anomaly,
+        held_unpublishable_at=held_unpublishable_at,
     )
 
 
@@ -496,6 +501,8 @@ class _Cascade:
     # The exact value of every stage on ``best``, in cascade order. ``None``
     # when there is no best plan yet, or when it failed its exact replay.
     best_values: tuple[Fraction, ...] | None = None
+    # The ordinal of the stage that found ``best`` when the replay refused it (held for want of another), else None.
+    held_unpublishable_at: int | None = None
     outcome: Literal["incumbent", "reported_infeasible", "no_incumbent"] = "no_incumbent"
     anomaly: str | None = None
     pending_pin: tuple[ObjectiveStage, float] | None = None
@@ -597,7 +604,9 @@ def _take_candidate(cascade: _Cascade, candidate: CandidateActionVector, ordinal
     maximum became the best one, and the planner raised instead of publishing
     the plan it held). It is flagged as an anomaly. Found first, it is held
     without values, like a plan that fails its replay: any publishable plan
-    found later replaces it.
+    found later replaces it. The stage that found it is kept
+    (``held_unpublishable_at``): a cascade that ends on it is «no plan» for
+    the planner, never a failure (R1-A of project 67).
     """
     values, publishable = _replay(cascade, candidate)
     if values is None or not publishable:
@@ -605,11 +614,14 @@ def _take_candidate(cascade: _Cascade, candidate: CandidateActionVector, ordinal
         if cascade.in_tail or cascade.best is not None:
             return
         values = None  # held for want of another, never a yardstick: any publishable plan replaces it
+        cascade.held_unpublishable_at = ordinal
     elif cascade.in_tail and cascade.best_values is not None and values > cascade.best_values:
         return
     elif cascade.best_values is not None and _worse_before_tie_break(cascade.program.objective_stages, ordinal, values, cascade.best_values):
         cascade.rejected.add(ordinal)
         return
+    if values is not None:
+        cascade.held_unpublishable_at = None
     cascade.best = candidate
     cascade.best_values = values
     cascade.outcome = "incumbent"
@@ -831,7 +843,7 @@ def _solve_stages(
     started: float,
     checkpoint: Checkpoint | None,
     progress: ProgressReporter | None = None,
-) -> tuple[list[SolverStageReport], CandidateActionVector | None, Literal["incumbent", "reported_infeasible", "no_incumbent"], str | None]:
+) -> tuple[list[SolverStageReport], CandidateActionVector | None, Literal["incumbent", "reported_infeasible", "no_incumbent"], str | None, int | None]:
     cascade = _Cascade(program=program, checkpoint=checkpoint, reports=[])
     reserve = stage_one_reserve_seconds(time_budget_seconds)
     stages = program.objective_stages
@@ -868,4 +880,4 @@ def _solve_stages(
             break
 
     _flag_contradicted_bounds(cascade)
-    return cascade.reports, cascade.best, cascade.outcome, cascade.anomaly
+    return cascade.reports, cascade.best, cascade.outcome, cascade.anomaly, cascade.held_unpublishable_at

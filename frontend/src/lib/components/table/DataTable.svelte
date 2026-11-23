@@ -661,7 +661,6 @@
                 icon: action.icon,
                 variant: action.variant,
                 blocked: block ? {hint: typeof block.hint === 'function' ? block.hint() : block.hint, reason: block.reason} : undefined,
-                disabled: action.disabled?.(row) ?? false,
                 title: typeof action.title === 'function' ? action.title(row) : action.title,
                 testid: typeof action.testid === 'function' ? action.testid(row) : action.testid,
                 iconClass: action.iconClass?.(row),

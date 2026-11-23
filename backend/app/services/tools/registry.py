@@ -14,7 +14,7 @@ from typing import ClassVar
 from pydantic import TypeAdapter, ValidationError
 
 from backend.app.logging_config import get_logger
-from backend.app.schemas.tools import ToolDescriptor, ToolDiscoveryFailure, ToolDiscoveryReason
+from backend.app.schemas.tools import ToolDescriptor, ToolDiscoveryFailure, ToolDiscoveryReason, ToolOperationPolicy
 from backend.app.services.platform.provider_registry import PLUGIN_MODULE_NAME, AbstractPluginRegistry
 from backend.app.services.plugin_settings.fields import SettingsDeclarationError, claim_env_variables, validate_declaration
 from backend.app.services.plugin_settings.groups import validate_plugin_groups
@@ -118,6 +118,35 @@ def _check_settings_declaration(plugin_class: type[ToolPlugin], tool_code: str) 
         raise ToolDefinitionError("invalid_settings") from exc
 
 
+#: What a row of a service's CPU table may change: the time limits, nothing else (TURNI of project 67).
+_ROW_TIME_FIELDS = frozenset({"queue_timeout_ms", "engine_timeout_ms", "job_timeout_ms", "soft_timeout_ms", "cleanup_timeout_ms", "request_timeout_ms", "client_timeout_ms"})
+
+
+def _check_cpu_table(service: ToolService) -> None:
+    """A CPU table starts at one CPU, its rows go up, and each row holds the service's operations with only their time
+    limits changed; otherwise the service is quarantined as an invalid operation policy. Whether a row fits the platform's
+    ceilings is the catalog's to say, as for ``operations``."""
+    table = service.operations_by_usable_cpus
+    if not table:
+        return
+    declared = {policy.operation: policy for policy in service.operations}
+    previous = 0
+    for row in table:
+        if not (isinstance(row, tuple) and len(row) == 2):
+            raise ToolDefinitionError("invalid_operation_policy")
+        minimum, operations = row
+        if type(minimum) is not int or minimum <= previous or (previous == 0 and minimum != 1):
+            raise ToolDefinitionError("invalid_operation_policy")
+        previous = minimum
+        if not isinstance(operations, tuple) or not all(isinstance(policy, ToolOperationPolicy) for policy in operations):
+            raise ToolDefinitionError("invalid_operation_policy")
+        if sorted(policy.operation for policy in operations) != sorted(declared):
+            raise ToolDefinitionError("invalid_operation_policy")
+        for policy in operations:
+            if policy.model_dump(exclude=_ROW_TIME_FIELDS) != declared[policy.operation].model_dump(exclude=_ROW_TIME_FIELDS):
+                raise ToolDefinitionError("invalid_operation_policy")
+
+
 def build_tool_definition(plugin_class: type[ToolPlugin], service: ToolService) -> ToolDefinition:
     plugin_class = _validate_plugin_class(plugin_class)
     if not isinstance(service, ToolService):
@@ -139,6 +168,7 @@ def build_tool_definition(plugin_class: type[ToolPlugin], service: ToolService) 
     operations = declared_operations(input_schema)
     if not service.operations or {policy.operation for policy in service.operations} != operations:
         raise ToolDefinitionError("invalid_operation_policy")
+    _check_cpu_table(service)
     try:
         descriptor = ToolDescriptor(
             tool_code=service.tool_code,

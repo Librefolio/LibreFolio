@@ -65,6 +65,7 @@ function draftWithAPosition(profile: PlannerProfile): PlannerDraft {
         ownershipShare: '1',
         quantity: '20',
         copiedQuantity: '20',
+        accessRole: 'OWNER',
         stamp: {copyId: 'copy:1', provenanceId: 'source:portfolio-ledger'},
         enteredAt: '2026-11-14T10:00:00Z',
     });

@@ -37,29 +37,39 @@ def effective_operation(policy: ToolOperationPolicy, platform: ToolPlatformPolic
     )
 
 
-def effective_descriptor(definition: ToolDefinition, policy: ToolPlatformPolicy) -> ToolDescriptor:
+def operations_for(definition: ToolDefinition, usable_cpus: int | None) -> tuple[ToolOperationPolicy, ...]:
+    """The operations a Tool runs with on this machine (TURNI of project 67): the row of its CPU table for ``usable_cpus``,
+    the last row whose fewest CPUs it reaches; without a count or a table, its declared operations. The one chooser: the
+    catalog and every job read it."""
+    table = definition.service.operations_by_usable_cpus
+    if usable_cpus is None or not table:
+        return tuple(definition.descriptor.operations)
+    return [operations for minimum, operations in table if minimum <= usable_cpus][-1]
+
+
+def effective_descriptor(definition: ToolDefinition, policy: ToolPlatformPolicy, usable_cpus: int | None = None) -> ToolDescriptor:
     return ToolDescriptor.model_validate(
         {
             **definition.descriptor.model_dump(),
-            "operations": [effective_operation(operation, policy) for operation in definition.descriptor.operations],
+            "operations": [effective_operation(operation, policy) for operation in operations_for(definition, usable_cpus)],
         }
     )
 
 
-def effective_catalog_entries(policy: ToolPlatformPolicy, registry_class: type[ToolPluginRegistry] = ToolPluginRegistry) -> tuple[list[ToolDescriptor], tuple[ToolDiscoveryFailure, ...]]:
+def effective_catalog_entries(policy: ToolPlatformPolicy, registry_class: type[ToolPluginRegistry] = ToolPluginRegistry, usable_cpus: int | None = None) -> tuple[list[ToolDescriptor], tuple[ToolDiscoveryFailure, ...]]:
     snapshot = registry_class.get_snapshot()
     descriptors: list[ToolDescriptor] = []
     failures = list(snapshot.failures)
     for code, definition in snapshot.definitions.items():
         try:
-            descriptors.append(effective_descriptor(definition, policy))
+            descriptors.append(effective_descriptor(definition, policy, usable_cpus))
         except ToolDefinitionError as exc:
             failures.append(ToolDiscoveryFailure(tool_code=code, filename="operation_policy", reason=exc.reason))
     return descriptors, tuple(failures)
 
 
-def get_tool_catalog(policy: ToolPlatformPolicy, registry_class: type[ToolPluginRegistry] = ToolPluginRegistry) -> ToolCatalogResponse:
-    descriptors, failures = effective_catalog_entries(policy, registry_class)
+def get_tool_catalog(policy: ToolPlatformPolicy, registry_class: type[ToolPluginRegistry] = ToolPluginRegistry, usable_cpus: int | None = None) -> ToolCatalogResponse:
+    descriptors, failures = effective_catalog_entries(policy, registry_class, usable_cpus)
     unavailable_codes = dict.fromkeys(failure.tool_code for failure in failures)
     return ToolCatalogResponse(
         catalog_version="2",

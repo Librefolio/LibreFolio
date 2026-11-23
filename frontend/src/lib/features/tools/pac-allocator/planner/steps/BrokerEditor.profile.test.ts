@@ -239,6 +239,8 @@ describe('BrokerEditor and the shared operating profile panel', () => {
         mount(draft);
         const save = () => screen.getByTestId('pac-planner-broker-editor-profile-save') as HTMLButtonElement;
         expect(save().disabled).toBe(true);
+        // R1-C of project 67 (the developer, 20/11): the button carries the save icon.
+        expect(save().querySelector('svg')).not.toBeNull();
 
         await fireEvent.input(within(block('EUR')).getByTestId('pac-planner-mode-fee-rate'), {target: {value: '0.25'}});
         expect(save().disabled).toBe(false);
@@ -258,7 +260,7 @@ describe('BrokerEditor and the shared operating profile panel', () => {
         expect(screen.queryByTestId('pac-planner-broker-editor-profile-save')).toBeNull();
     });
 
-    it('the confirm banner shows before any write, cancel writes nothing, confirm writes once', async () => {
+    it('the confirmation modal shows before any write, cancel writes nothing, confirm writes once', async () => {
         const stored: OperatingProfileDocument = {...PROFILE, tax_regime: 'administered'};
         api.getBroker.mockImplementation(async () => {
             api.calls.push('read');
@@ -284,18 +286,24 @@ describe('BrokerEditor and the shared operating profile panel', () => {
 
         expect(api.calls).toEqual(['read']);
         expect(api.getBroker).toHaveBeenCalledWith({params: {broker_id: BROKER}});
+        // R1-C of project 67: the project's confirmation modal asks, not a banner in the window; the changes are in it, open.
+        expect(screen.getByTestId('pac-planner-profile-save-modal')).toBeTruthy();
+        expect(screen.getByTestId('pac-planner-profile-save').hidden).toBe(true);
         expect(screen.getAllByTestId('pac-planner-profile-save-change').map((item) => [item.getAttribute('data-currency'), item.getAttribute('data-change')])).toEqual([
             ['EUR', 'updated'],
             ['USD', 'created'],
         ]);
 
-        await fireEvent.click(screen.getByTestId('pac-planner-profile-save-cancel'));
+        await fireEvent.click(screen.getByTestId('confirm-modal-cancel'));
         expect(screen.queryByTestId('pac-planner-profile-save')).toBeNull();
+        expect(screen.queryByTestId('pac-planner-profile-save-modal')).toBeNull();
+        // The confirmation gives the focus back to the button that opened it, in the Broker window (keyboard users).
+        await vi.waitFor(() => expect(document.activeElement).toBe(screen.getByTestId('pac-planner-broker-editor-profile-save')));
         expect(api.patchBroker).not.toHaveBeenCalled();
 
         await fireEvent.click(screen.getByTestId('pac-planner-broker-editor-profile-save'));
         await vi.waitFor(() => expect(screen.getByTestId('pac-planner-profile-save').getAttribute('data-phase')).toBe('confirm'));
-        await fireEvent.click(screen.getByTestId('pac-planner-profile-save-confirm'));
+        await fireEvent.click(screen.getByTestId('confirm-modal-confirm'));
         await vi.waitFor(() => expect(screen.getByTestId('pac-planner-profile-save').getAttribute('data-phase')).toBe('saved'));
 
         expect(api.calls).toEqual(['read', 'read', 'write']);
@@ -317,7 +325,7 @@ describe('BrokerEditor and the shared operating profile panel', () => {
         await fireEvent.input(within(block('EUR')).getByTestId('pac-planner-mode-fee-rate'), {target: {value: '0.25'}});
         await fireEvent.click(screen.getByTestId('pac-planner-broker-editor-profile-save'));
         await vi.waitFor(() => expect(screen.getByTestId('pac-planner-profile-save').getAttribute('data-phase')).toBe('confirm'));
-        await fireEvent.click(screen.getByTestId('pac-planner-profile-save-confirm'));
+        await fireEvent.click(screen.getByTestId('confirm-modal-confirm'));
         await vi.waitFor(() => expect(screen.getByTestId('pac-planner-profile-save').getAttribute('data-phase')).toBe('saved'));
 
         // The draft's Broker knows the new copy even before «Apply»; after it, nothing differs.
@@ -337,12 +345,44 @@ describe('BrokerEditor and the shared operating profile panel', () => {
         await fireEvent.input(within(block('EUR')).getByTestId('pac-planner-mode-fee-rate'), {target: {value: '0.25'}});
         await fireEvent.click(screen.getByTestId('pac-planner-broker-editor-profile-save'));
         await vi.waitFor(() => expect(screen.getByTestId('pac-planner-profile-save').getAttribute('data-phase')).toBe('confirm'));
-        await fireEvent.click(screen.getByTestId('pac-planner-profile-save-confirm'));
+        await fireEvent.click(screen.getByTestId('confirm-modal-confirm'));
         await vi.waitFor(() => expect(screen.getByTestId('pac-planner-profile-save').getAttribute('data-phase')).toBe('refused'));
 
         expect(screen.getByTestId('pac-planner-profile-save-refusal').textContent).toBe('refused probe');
         expect(JSON.parse(JSON.stringify(broker(draft)))).toEqual(copyBefore);
         expect(screen.getByTestId('pac-planner-broker-editor-modes').getAttribute('data-origin')).toBe('modified');
+    });
+
+    it('confirm closes the modal; a line says the save runs, then that it is done', async () => {
+        let answer: (value: unknown) => void = () => undefined;
+        api.getBroker.mockResolvedValue({id: BROKER, operating_profile: PROFILE});
+        api.patchBroker.mockImplementation(() => new Promise((resolve) => (answer = resolve)));
+        mount(copiedDraft());
+        await fireEvent.input(within(block('EUR')).getByTestId('pac-planner-mode-fee-rate'), {target: {value: '0.25'}});
+        await fireEvent.click(screen.getByTestId('pac-planner-broker-editor-profile-save'));
+        const phase = () => screen.getByTestId('pac-planner-profile-save').getAttribute('data-phase');
+        await vi.waitFor(() => expect(phase()).toBe('confirm'));
+        await fireEvent.click(screen.getByTestId('confirm-modal-confirm'));
+
+        await vi.waitFor(() => expect(phase()).toBe('writing'));
+        expect(screen.queryByTestId('pac-planner-profile-save-modal')).toBeNull();
+        expect(screen.getByTestId('pac-planner-profile-save').hidden).toBe(false);
+        answer({results: [{id: BROKER, success: true}], success_count: 1});
+        await vi.waitFor(() => expect(phase()).toBe('saved'));
+    });
+
+    it('nothing to save is a line in the window, never a modal', async () => {
+        // The stored profile already holds the rate typed below: the plan has nothing to write.
+        const [mode] = PROFILE.order_modes ?? [];
+        const stored: OperatingProfileDocument = {...PROFILE, order_modes: [{...mode, fees: [{...mode.fees![0], rate: '0.0025'}]}]};
+        api.getBroker.mockResolvedValue({id: BROKER, operating_profile: stored});
+        mount(copiedDraft());
+        await fireEvent.input(within(block('EUR')).getByTestId('pac-planner-mode-fee-rate'), {target: {value: '0.25'}});
+        await fireEvent.click(screen.getByTestId('pac-planner-broker-editor-profile-save'));
+        await vi.waitFor(() => expect(screen.getByTestId('pac-planner-profile-save-nothing')).toBeTruthy());
+        expect(screen.queryByTestId('pac-planner-profile-save-modal')).toBeNull();
+        expect(screen.getByTestId('pac-planner-profile-save').hidden).toBe(false);
+        expect(api.patchBroker).not.toHaveBeenCalled();
     });
 
     it('a broker that cannot be read is not written', async () => {

@@ -767,18 +767,36 @@ def test_observed_item_durations_are_strict_nonnegative_integers(phase, value):
     ("field", "ceiling"),
     [
         ("queue_timeout_ms", 5_000),
-        ("engine_timeout_ms", 30_000),
-        ("job_timeout_ms", 45_000),
-        ("soft_timeout_ms", 44_000),
+        ("engine_timeout_ms", 100_000),
+        ("job_timeout_ms", 115_000),
+        ("soft_timeout_ms", 114_000),
         ("output_reserve_ms", 1_000),
         ("cleanup_timeout_ms", 5_000),
-        ("request_timeout_ms", 59_000),
-        ("client_timeout_ms", 65_000),
+        ("request_timeout_ms", 129_000),
+        ("client_timeout_ms", 135_000),
         ("memory_limit_bytes", 1_073_741_824),
     ],
 )
 def test_platform_policy_exposes_long_operation_ceilings(field, ceiling):
     assert getattr(ToolPlatformPolicy(), field) == ceiling
+
+
+def test_platform_ceilings_hold_three_turns():
+    """TURNI step 3 of project 67 (specification §16.22): the ceilings hold the Rebalancer's worst case, three turns of three
+    runs on one usable CPU, as fixed numbers, the same on every machine. Its runs' window is three limits of 30 s and the
+    grace (5 s) between turns: 100 s. Its runs end at most 105 s after they start (the last run's grace); the soft deadline
+    keeps the 6 s today's single turn keeps past its worst case (38 s within 44 s) for the child's start-up, the request's
+    normalization and the model built before the runs. Every other ceiling follows from the platform's own identities."""
+    policy = ToolPlatformPolicy()
+    run_limit_ms, grace_ms, turns = 30_000, 5_000, 3
+    window_ms = turns * run_limit_ms + (turns - 1) * grace_ms
+    assert policy.engine_timeout_ms == window_ms == 100_000
+    # The rule step 4 derives its rows from: soft is the window plus today's 14 s past it (44 s − 30 s).
+    assert policy.soft_timeout_ms - policy.engine_timeout_ms == 44_000 - 30_000
+    assert policy.soft_timeout_ms - (window_ms + grace_ms) >= 44_000 - 38_000, "the margin of today's tightest case"
+    assert policy.soft_timeout_ms + policy.output_reserve_ms == policy.job_timeout_ms
+    assert policy.ingress_timeout_ms + policy.queue_timeout_ms + policy.job_timeout_ms + policy.cleanup_timeout_ms + policy.response_reserve_ms == policy.request_timeout_ms
+    assert policy.client_timeout_ms - policy.request_timeout_ms == 65_000 - 59_000, "today's transport time after the server's deadline"
 
 
 def test_platform_policy_accepts_exact_envelope_and_deadline_boundaries():

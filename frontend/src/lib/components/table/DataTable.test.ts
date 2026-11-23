@@ -646,7 +646,7 @@ describe('DataTable — row actions', () => {
             testid: 'act-delete',
             requireConfirm: true,
             visible: (r) => r.id !== 'r3',
-            disabled: (r) => r.id === 'r2',
+            blocked: (r) => (r.id === 'r2' ? {hint: 'Locked row', reason: 'locked'} : null),
         },
     ];
 
@@ -666,7 +666,7 @@ describe('DataTable — row actions', () => {
         expect(within(menu3).queryByTestId('act-delete')).toBeNull();
     });
 
-    it('renders a disabled action as unusable rather than hiding it', async () => {
+    it('renders a blocked action off with its reason rather than hiding it (77 SEL-M)', async () => {
         await setupI18n();
         const onEdit = vi.fn();
         const onDelete = vi.fn();
@@ -674,7 +674,8 @@ describe('DataTable — row actions', () => {
 
         const menu = await openMenu('r2');
         const del = within(menu).getByTestId('act-delete');
-        expect(del).toBeDisabled();
+        expect(del).toHaveAttribute('aria-disabled', 'true');
+        expect(del).toHaveAttribute('data-disabled-reason', 'locked');
 
         await fireEvent.click(del);
         expect(onDelete).not.toHaveBeenCalled();

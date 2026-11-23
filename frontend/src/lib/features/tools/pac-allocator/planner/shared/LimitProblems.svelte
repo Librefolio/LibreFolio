@@ -4,13 +4,16 @@
   answer F2-Q2). The amounts are formatted here, where the line is drawn, through the planner's personal formatter, so privacy
   masks them; a share is a percentage, public. The message is cut at two private-use markers, so each language keeps its
   own word order and each limit gets a `data-side` of its own.
+  Below them, the cross checks only the backend can make, as the last preview names them (R1-E of project 67: «Ho messo un
+  minimo che era più di tutto il capitale disponibile, mi aspettavo già in 6 un banner»): with «Calculate»'s own sentence.
+  These warn and stop nothing; they stay while the preview is being updated, as its figures do, and go with a failed one.
 -->
 <script lang="ts">
     import {t} from '$lib/i18n';
     import type {PlannerDraft} from '../draft.svelte';
     import {formatPlannerMoneyPlain, formatPlannerPercentUnits} from '../format';
     import {parseLimit} from '../limits';
-    import {limitProblems, type LimitProblem} from '../request';
+    import {limitProblems, previewLimitProblems, type LimitProblem, type PreviewLimitProblem} from '../request';
     import {NOTICE} from '../ui';
     import {getPlannerProfile, testId} from '../profile';
 
@@ -22,11 +25,13 @@
 
     interface Props {
         draft: PlannerDraft;
+        /** The limits' cross checks of the last preview (none without one). */
+        previewProblems?: readonly PreviewLimitProblem[];
     }
 
-    let {draft}: Props = $props();
+    let {draft, previewProblems = []}: Props = $props();
 
-    const problems = $derived(limitProblems(draft));
+    const problems = $derived([...limitProblems(draft), ...previewLimitProblems(draft, previewProblems)]);
 
     /** One literal key per limit problem, so the i18n audit can prove each one is used. */
     function problemText(problem: LimitProblem): string {
@@ -38,6 +43,12 @@
                 return $t('tools.pacAllocator.planner.problems.limitShareAboveHundred', options);
             case 'limitShareMinimumsAboveHundred':
                 return $t('tools.pacAllocator.planner.problems.limitShareMinimumsAboveHundred', options);
+            case 'bound_min_above_max':
+                return $t('tools.pacAllocator.planner.issues.allocation.bound_min_above_max', options);
+            case 'bounds_min_sum_exceeds_reference':
+                return $t('tools.pacAllocator.planner.issues.allocation.bounds_min_sum_exceeds_reference', options);
+            case 'bound_max_below_current':
+                return $t('tools.pacAllocator.planner.issues.allocation.bound_max_below_current', options);
             default:
                 return $t('tools.pacAllocator.planner.problems.limitMinAboveMax', options);
         }

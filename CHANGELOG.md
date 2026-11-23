@@ -67,17 +67,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 #### 🎯 Portfolio rebalancer and PAC allocator
 
 - **Portfolio rebalancer**, a new tool on the Tools page: it brings a portfolio you already hold back towards its target weights. It places no orders.
-  - **Where it starts:** the positions LibreFolio records at each Broker. You can change a quantity to simulate another portfolio; LibreFolio is not changed.
+  - **Where it starts:** the positions LibreFolio records at each Broker. You can change a quantity to simulate another portfolio; LibreFolio is not changed. On an account shared with others, the Broker shows your share as a badge with your role, as on the broker page.
   - **Brokers:** a Broker where you hold positions but do not trade counts as «positions only», and «Add to the plan» lets the plan trade there too.
-  - **Targets:** in percent of the whole portfolio, cash included. A Broker's cash in one currency can be a row of its own («Add a cash entry»); the rest is «Other cash», at 0 %. The «Now» column shows each row's weight today.
+  - **Targets:** in percent of the whole portfolio, cash included. A Broker's cash in one currency can be a row of its own («Add a cash entry»); the rest is «Other cash», at 0 %, shown when it is worth something today. The «Now» column shows each row's weight today.
   - **Strategy:** «Invest only» uses the cash to buy what is below target and sells nothing; «Invest and sell» is shown as coming soon.
   - **Target fidelity:** «Cost-aware», «Balanced», «Faithful to the target», «Target first» or «Custom». It sets how much you accept to spend in fees to put money back on target, and the «Maximum acceptable cost» table shows that amount for each sum of money in the wrong place.
   - **Result:**
     - the plan in the order to carry it out: deposits, transfers between Brokers and currency exchanges first, then the purchases at each Broker;
     - the «Allocation per entry» table: today, target and after the plan, with your limits;
     - the key figures: «Worth today», «Worth after», «Money lost», and the «Largest gap from target» with the entry it belongs to;
-    - the exposures by asset type, sector and country — today, after the plan and your target — on the whole portfolio, cash included.
+    - the exposures by asset type, sector and country — today, after the plan and your target — on the whole portfolio, cash included; the countries also on two world maps, your target and after the plan.
   - **How sure the plan is:** the search runs three times, and a plan is proven the best only when a second search confirms it. A plan not proven shows its margin when the searches give one: «Local optimum (within …)», and the best possible plan should be at most that much better.
+  - **Each search has its own 30 s.** On a server with three or more usable CPUs the three searches run at once. With one or two, they run in turns, each with its whole 30 s, so the calculation can take up to about 1 minute 45 s on one CPU and 1 minute 10 s on two; the waiting panel shows that longer limit (135 s on one CPU, 100 s on two). The calculation reports each step, so its connection never stays silent for long; behind Nginx, the administrator's page on reverse proxies now also suggests `proxy_read_timeout 150s;` as a margin.
 - **A broker's operating profile**, in the broker window. It holds how the broker takes orders (by number of units or by amount, with its increment) and its purchase and sale fees (minimum, percentage, maximum, fixed part), currency by currency, plus how it converts currency and its tax regime («Administered» or «Declarative»).
   - The tools copy it into a plan, where you can still change it.
   - «Save to the broker», in the planner's Broker editor, writes your changes back to the broker after a confirmation that lists them.
@@ -85,13 +86,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Limits on the targets**, in the PAC allocator and the Portfolio rebalancer. Each entry can have a minimum and a maximum of its value at the end of the plan, as an amount (500) or a percentage of the total (35%).
   - A Broker's cash in one currency can have limits too, with «Add a cash entry»; in the PAC it has limits only, no target.
   - The Review and the summary count the entries with a limit.
-  - A minimum above its maximum, or minimums above 100% in all, are flagged before the calculation.
+  - A minimum above its maximum, minimums above 100% in all or above the money the plan has, or a maximum below what you already hold are flagged in the Targets step, before the calculation.
   - When the limits leave no plan, the result says «No solution with these limits» and lists them.
   - When the search ends without a plan within the limits, the result says so, and that this is not a proof that no plan exists.
   - When the limits leave no room for rounding, the plan is found counting the rounding in its favour: it respects the limits once the extra money the result asks for, if any, is added, and it is not proven the best. A cash limit missed only because every amount is rounded to the cent gets a note with the amount.
 - **Today's figures while you edit the plan**: the Targets step shows the total the plan splits (in the Portfolio rebalancer also each row's weight today), updated a moment after each change.
 - **The calculation shows its phase** while you wait: «Checking the data», «Building the model», «Searching for the plan», «Verifying the figures», «Preparing the result», with its position («2 of 5»).
 - **When a Broker converts currency at each purchase, the plan says so.** It counts one conversion per currency pair; the broker may round each order separately, so a few cents per order may differ.
+- When a calculation of the PAC allocator or of the Portfolio rebalancer fails, **Copy the request** copies the data it sent, to attach to a report. Nothing is kept on the server.
 
 ### 🔄 Changed
 
@@ -99,6 +101,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The asset's **Identifiers**, the profile's sectors and countries, the **Interest Schedule** and the editor of prices, events and rates use the same selection bar as the other tables: each action shows how many rows it takes, and **Merge** explains why it is off on periods that are not consecutive. In a narrow section the bar turns to icons with their numbers, which name themselves on hover and on keyboard focus; on a phone the pages of a table no longer show the words «per page».
 - In the **Targets** step of the PAC allocator and of the Portfolio rebalancer the selection bar sits in the step's head, like the other tables: **Balance the selected rows to 100%** shows how many rows it takes, is not offered when the total is already 100%, and says why when it is off.
 - **Row menus** (assets, FX, lots, the PAC targets, relink events): an action that does not apply to the row is no longer shown; one that applies but is blocked stays, greyed with an ⓘ, and says why on hover, on a tap or with the keyboard. The menu works from the keyboard: arrows, Home and End, Enter, and Escape back to ⋮.
+- **Bulk editor**: the actions on the ticked rows (**Reset selected**, **Link the charges**, **Delete selected**, **Promote pair**) are in the selection bar at the top of the table, which follows you to the bottom when you scroll; each one shows how many rows it acts on. In the import, a file still being read says so in its menu, and a failed one offers only to read it again.
 - The IMF's special drawing right (XDR) is now served by every FX provider whose bank publishes it: Banca d'Italia, the National Bank of Ukraine, Norges Bank, the Swiss National Bank (monthly averages), the National Bank of Romania, Narodowy Bank Polski, the BCRA and the Central Bank of Nigeria join the BCB, Banxico and the CNB. Metals and indices stay out.
 - **Relink events** groups the transactions by what is missing (an event found, none, several), with **Link all** and **Create all** per group, one selection bar with the numbers, the row's action always at hand, and a window to choose the event when there are several that day.
 - **Asset list: Reload refreshes the selected assets only**, not the whole list.
@@ -135,13 +138,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Risk analytics publish new measures beside the existing ones: the best day and the best 30 days, the largest rally, the share of positive days, gains against losses (Omega), the semi-deviation, the average depth below the peak, extreme days, the average up and down day and the longest positive streak. VaR, CVaR and every figure already published do not move. A series that never gained, or never lost, is no longer marked as partial for its missing best or worst day.
 - The effective number of positions on the Risk tab is measured on the holdings with a price alone: cash and holdings without prices no longer inflate it, so it never exceeds the positions measured.
 
+- In the dialog of an FX pair, a click on a provider of the legend shows or hides its description; a double click opens its guide.
+
 #### 🎯 PAC allocator and Tools
 
 - **A plan that is not proven the best is now marked «Local optimum»**, instead of «Optimality not proven».
 - **The «Required purchase» of a route is gone.** To oblige a purchase, set a minimum on the Asset's target. The route's own minimum applies only if the plan buys on that route.
 - **The scenario's Broker editor uses the operating profile's panel**: purchase and sale fees with minimum, percentage, maximum and fixed part, currency by currency.
 - **When the solver stops on a numerical error** after finding a plan, the result now says so in a note: the plan is valid and can be carried out, and a better one may exist.
-- On the Tools page, a tool's title wraps between words, and the documentation link stays beside it, its label under the icon.
+- On the Tools page, a tool's title wraps between words, and the documentation link stays beside it, as an icon.
 
 ### 🐛 Fixed
 
@@ -182,6 +187,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Transactions editor: «Reset row» and «Reset selected» on a half of a saved pair split and not saved yet now undo the split too. Before, the pair came back as one row but the split stayed queued, and «Save All» split it anyway.
 - Transactions editor: after «Split pair» on a saved transfer, editing the withdrawal half twice no longer turns it into a deposit with a positive amount, which made «Save All» fail.
 - Transactions editor: after «Split pair» on a saved transfer, a half whose type you swap in its form (a deposit made a withdrawal, or the other way) is now saved with that type: until now «Save All» failed.
+- PAC allocator: on a busy server, a calculation that had finished could be shown as failed, «The calculation process stopped unexpectedly.». Its result is now read.
 
 ### ⚠️ Breaking changes
 

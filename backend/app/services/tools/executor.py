@@ -41,7 +41,8 @@ from backend.app.schemas.tools import (
 )
 from backend.app.services.plugin_settings.contract import BoundSettings
 from backend.app.services.tools.base import ToolDefinitionError, ToolExecutionError
-from backend.app.services.tools.catalog import effective_operation
+from backend.app.services.tools.catalog import effective_operation, operations_for
+from backend.app.services.tools.cpus import cpu_count_usable
 from backend.app.services.tools.process_tree import OwnedProcessTree
 from backend.app.services.tools.registry import ToolPluginRegistry, ToolRegistrySnapshot
 from backend.app.services.tools.resources import ToolResourceController
@@ -72,6 +73,21 @@ type ToolProgressListener = Callable[[ToolComputeProgress], None]
 type _ProgressForward = Callable[[str, int | None, int | None], None]
 
 
+#: Where a ``worker_crashed`` was raised, as the crash line names it (GPAC-d follow-up of project 67): a crash that comes back
+#: can be traced to its site without a traceback. A closed set: a new raising site adds its reason here.
+CRASH_REASONS = (
+    "exited_without_frame",  # the worker exited and nothing was left in the pipe
+    "pipe_closed",  # the worker's end of the pipe closed (it exited, or closed it) before a whole frame
+    "frame_length_invalid",  # a frame's declared length is negative
+    "frame_of_another_job",  # a frame carries another job's execution id
+    "ready_frame_invalid",  # the worker's first frame is not the ``ready`` frame it must be
+    "result_frame_invalid",  # the result frame has the wrong shape
+    "frame_out_of_order",  # a frame of a kind not expected at that point
+    "start_failed",  # preparing or starting the worker raised ``EOFError``, ``OSError`` or ``ValueError``
+    "pipe_error",  # after the start, reading the pipe or decoding a frame raised one of them (a pydantic error is a ``ValueError``)
+)
+
+
 def _crashed_exit_code(job: _OwnedJob) -> int | None:
     """The crashed worker's own exit status (J-19), read before the cleanup that may signal it: an exit code, or the
     negative number of the signal that ended it; None while it still runs, or when it cannot be read."""
@@ -86,14 +102,17 @@ def _crashed_exit_code(job: _OwnedJob) -> int | None:
 
 
 def _log_worker_crash(job: _OwnedJob) -> None:
-    """One structured line for a crashed worker (J-19): its identity, exit status, memory and time — never its input
-    or output."""
+    """One structured line for a crashed worker (J-19): its identity, exit status, the site that saw the crash
+    (``crash_reason``, one of ``CRASH_REASONS``, and ``crash_cause``, the exception's class when there is one), memory and
+    time — never its input, its output or an exception's message."""
     memory = job.metrics.resources.memory if job.metrics.resources is not None else None
     logger.warning(
         "Tool worker crashed",
         execution_id=job.spec.execution_id,
         tool_code=job.spec.tool_code,
         exit_code=job.metrics.worker_exit_code,
+        crash_reason=job.crash_reason,
+        crash_cause=job.crash_cause,
         peak_observed_bytes=memory.peak_observed_bytes if memory is not None else None,
         memory_limit_bytes=memory.limit_bytes if memory is not None else None,
         memory_mode=memory.mode if memory is not None else None,
@@ -146,6 +165,10 @@ class _OwnedJob:
     on_progress: _ProgressForward | None = None
     progress_seen: set[tuple[str, int | None, int | None]] = field(default_factory=set)
     log_lines: int = 0
+    #: Where a ``worker_crashed`` was raised, one of ``CRASH_REASONS``; None for every other outcome.
+    crash_reason: str | None = None
+    #: The class name of the exception a ``start_failed`` or ``pipe_error`` came from, never its message.
+    crash_cause: str | None = None
 
 
 @dataclass(slots=True)
@@ -169,14 +192,17 @@ def _read_exact(connection: Connection, size: int, job: _OwnedJob) -> bytes:
         if not readable:
             if job.tree is not None:
                 job.tree.observe_memory_limit()
-                if job.tree.process.exitcode is not None:
-                    raise ToolExecutionError("worker_crashed")
+                # The worker may have written its last frames and exited after the empty poll (GPAC-d of project 67, a
+                # busy machine): look at the pipe once more. This look is final, as an exited worker writes nothing more:
+                # the exit is read first and the pipe second, an order that must not be swapped.
+                if job.tree.process.exitcode is not None and not select.select([descriptor], [], [], 0)[0]:
+                    raise ToolExecutionError("worker_crashed", reason="exited_without_frame")
             continue
         chunk = os.read(descriptor, size - len(chunks))
         if not chunk:
             if job.tree is not None:
                 job.tree.observe_memory_limit()
-            raise ToolExecutionError("worker_crashed")
+            raise ToolExecutionError("worker_crashed", reason="pipe_closed")
         chunks.extend(chunk)
     return bytes(chunks)
 
@@ -186,7 +212,7 @@ def _read_frame(connection: Connection, job: _OwnedJob) -> dict[str, object]:
     if length == -1:
         length = struct.unpack("!Q", _read_exact(connection, 8, job))[0]
     if length < 0:
-        raise ToolExecutionError("worker_crashed")
+        raise ToolExecutionError("worker_crashed", reason="frame_length_invalid")
     if length > job.spec.max_result_bytes + 65_536:
         raise ToolExecutionError("output_limit_exceeded")
     payload = _read_exact(connection, length, job)
@@ -194,16 +220,16 @@ def _read_frame(connection: Connection, job: _OwnedJob) -> dict[str, object]:
     if time.monotonic() >= job.spec.hard_deadline:
         raise ToolExecutionError("execution_timeout", retryable=True)
     if frame.get("execution_id") != job.spec.execution_id:
-        raise ToolExecutionError("worker_crashed")
+        raise ToolExecutionError("worker_crashed", reason="frame_of_another_job")
     return dict(frame)
 
 
 def _accept_ready(frame: dict[str, object], job: _OwnedJob) -> None:
     if set(frame) != {"kind", "execution_id", "pid", "pgid", "created_at"} or job.tree is None:
-        raise ToolExecutionError("worker_crashed")
+        raise ToolExecutionError("worker_crashed", reason="ready_frame_invalid")
     pid, group_id, created_at = frame["pid"], frame["pgid"], frame["created_at"]
     if type(pid) is not int or type(group_id) is not int or type(created_at) is not float:
-        raise ToolExecutionError("worker_crashed")
+        raise ToolExecutionError("worker_crashed", reason="ready_frame_invalid")
     job.tree.confirm_session(pid=pid, group_id=group_id, created_at=created_at)
     job.metrics = job.metrics.model_copy(update={"startup_ms": _milliseconds(job.granted_at)})
 
@@ -212,7 +238,7 @@ def _accept_result(frame: dict[str, object], job: _OwnedJob) -> tuple[object, To
     success = frame.get("status") == "success"
     expected = {"kind", "execution_id", "status", "metrics", "result" if success else "error"}
     if set(frame) != expected or frame.get("status") not in ("success", "error"):
-        raise ToolExecutionError("worker_crashed")
+        raise ToolExecutionError("worker_crashed", reason="result_frame_invalid")
     child_metrics = ToolItemMetrics.model_validate(frame["metrics"])
     # The parent owns the worker's exit status (J-19): a value the worker sends is dropped.
     job.metrics = child_metrics.model_copy(update={"queue_wait_ms": job.metrics.queue_wait_ms, "startup_ms": job.metrics.startup_ms, "worker_exit_code": None})
@@ -295,7 +321,7 @@ def _wait_result(response: Connection, cancellation: Connection, job: _OwnedJob)
         elif frame.get("kind") == "log" and ready:
             _accept_log(frame, job)
         else:
-            raise ToolExecutionError("worker_crashed")
+            raise ToolExecutionError("worker_crashed", reason="frame_out_of_order")
 
 
 def _finish_physical_job(job: _OwnedJob, cancellation: Connection | None, cleanup_ms: int) -> bool:
@@ -321,6 +347,7 @@ def _run_owned_job(
     value: object = None
     error: ToolError | None = None
     cancellation: Connection | None = None
+    started = False
     with ExitStack() as resources:
         try:
             context = multiprocessing.get_context("spawn")
@@ -346,11 +373,15 @@ def _run_owned_job(
             child_response.close()
             child_cancel.close()
             job.tree.bind_started_process()
+            started = True
             value, error = _wait_result(response, cancellation, job)
         except ToolExecutionError as exc:
             error = _error(exc.code, retryable=exc.retryable)
-        except (EOFError, OSError, ValueError):
+            job.crash_reason = exc.reason if exc.code == "worker_crashed" else None
+        except (EOFError, OSError, ValueError) as exc:
             error = _error("worker_crashed")
+            job.crash_reason = "pipe_error" if started else "start_failed"
+            job.crash_cause = type(exc).__name__
         except Exception:
             error = _error("execution_failed")
         finally:
@@ -402,8 +433,12 @@ class ToolExecutor:
         policy: ToolPlatformPolicy | None = None,
         registry_class: type[ToolPluginRegistry] = ToolPluginRegistry,
         resource_controller: ToolResourceController | None = None,
+        usable_cpus: int | None = None,
     ):
         self.policy = policy or ToolPlatformPolicy()
+        #: The machine's usable CPUs, counted by ``get_tool_executor`` (TURNI of project 67): it picks each Tool's row of limits
+        #: (``catalog.operations_for``). None, as a test builds it: no CPU table applies.
+        self.usable_cpus = usable_cpus
         self.registry_class = registry_class
         self.resource_controller = resource_controller or ToolResourceController()
         self.runtime_id = uuid.uuid4().hex
@@ -488,7 +523,7 @@ class ToolExecutor:
         if (item.contract_version, item.implementation_version, item.schema_fingerprint) != (descriptor.contract_version, descriptor.implementation_version, descriptor.schema_fingerprint):
             raise ToolExecutionError("version_mismatch", retryable=True)
         operation = item.parameters.get("operation") if isinstance(item.parameters, dict) else None
-        selected = next((candidate for candidate in descriptor.operations if candidate.operation == operation), None)
+        selected = next((candidate for candidate in operations_for(definition, self.usable_cpus) if candidate.operation == operation), None)
         if selected is None:
             raise ToolExecutionError("invalid_parameters")
         try:
@@ -705,7 +740,11 @@ def get_tool_executor() -> ToolExecutor:
     global _executor
     with _executor_lock:
         if _executor is None:
-            _executor = ToolExecutor()
+            # Once per API process: the CPUs pick each Tool's row of limits (TURNI of project 67). The line is the signal for
+            # a server that counts more CPUs than its calculations then see.
+            usable_cpus = cpu_count_usable()
+            _executor = ToolExecutor(usable_cpus=usable_cpus)
+            logger.info("Tool executor built", usable_cpus=usable_cpus)
         return _executor
 
 

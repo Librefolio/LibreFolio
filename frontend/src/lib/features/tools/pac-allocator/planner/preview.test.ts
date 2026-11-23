@@ -270,10 +270,64 @@ describe('PlannerPreview', () => {
         // The figure is never recomputed here: λ is the answer's, as given.
         expect(draft.data.fidelity).toEqual({kind: 'custom', lambda: '0.0123'});
         // The draft keeps λ: the next preview (a new total) sends λ, not the euros, and gives the euros back.
+        draft.data.targets['asset:probe'] = '50';
         preview.schedule(draft);
         vi.advanceTimersByTime(PREVIEW_DELAY_MS);
         expect(pending[1].request).not.toHaveProperty('custom_reference_amount');
         expect(pending[1].request.target_fidelity).toEqual({kind: 'custom', lambda: '0.0123'});
+        preview.dispose();
+    });
+
+    it('the λ an answer writes asks no second preview: that answer already counts it (R1-F a)', async () => {
+        // «Costo massimo accettabile», «Personalizzata»: every figure typed made two previews, the second giving the same
+        // numbers back (R1 §2 n. 7, «così lento sembra rotto»). The shell asks again at every change of the draft's
+        // fingerprint; λ written by the answer is such a change.
+        const draft = draftOf();
+        draft.data.fidelity = {kind: 'custom', lambda: ''};
+        const {call, pending} = controlled();
+        const preview = new PlannerPreview({call, blocked: () => false});
+
+        preview.setCustomEuros(draft, '60');
+        await vi.advanceTimersByTimeAsync(PREVIEW_DELAY_MS);
+        pending[0].resolve(ready('150', {custom: {distance_weight: {kind: 'finite_decimal', value: '0.0123'}, reference_amount: {value: {kind: 'finite_decimal', value: '60'}, currency: 'EUR'}}}));
+        await vi.advanceTimersByTimeAsync(0);
+        expect(draft.data.fidelity).toEqual({kind: 'custom', lambda: '0.0123'});
+
+        // As the shell's effect does after λ lands.
+        preview.schedule(draft);
+        await vi.advanceTimersByTimeAsync(PREVIEW_DELAY_MS * 2);
+        expect(call).toHaveBeenCalledTimes(1);
+        expect(preview.state).toBe('ready');
+        expect(preview.stale).toBe(false);
+
+        // A real change afterwards asks again, with λ.
+        draft.data.targets['asset:probe'] = '50';
+        preview.schedule(draft);
+        expect(preview.state).toBe('waiting');
+        await vi.advanceTimersByTimeAsync(PREVIEW_DELAY_MS);
+        expect(call).toHaveBeenCalledTimes(2);
+        expect(pending[1].request.target_fidelity).toEqual({kind: 'custom', lambda: '0.0123'});
+        preview.dispose();
+    });
+
+    it('a change made while the answer was on its way still goes, after λ lands (R1-F a)', async () => {
+        const draft = draftOf();
+        draft.data.fidelity = {kind: 'custom', lambda: ''};
+        const {call, pending} = controlled();
+        const preview = new PlannerPreview({call, blocked: () => false});
+
+        preview.setCustomEuros(draft, '60');
+        await vi.advanceTimersByTimeAsync(PREVIEW_DELAY_MS);
+        // The target changes while the euros are on their way: a newer draft waits in the queue.
+        draft.data.targets['asset:probe'] = '50';
+        preview.schedule(draft);
+        pending[0].resolve(ready('150', {custom: {distance_weight: {kind: 'finite_decimal', value: '0.0123'}, reference_amount: {value: {kind: 'finite_decimal', value: '60'}, currency: 'EUR'}}}));
+        await vi.advanceTimersByTimeAsync(0);
+        // The shell's effect, for λ.
+        preview.schedule(draft);
+        await vi.advanceTimersByTimeAsync(PREVIEW_DELAY_MS * 2);
+        expect(call).toHaveBeenCalledTimes(2);
+        expect(pending[1].request.target_weights).toEqual(expect.arrayContaining([expect.objectContaining({weight: '0.5'})]));
         preview.dispose();
     });
 

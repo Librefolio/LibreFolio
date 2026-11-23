@@ -67,17 +67,18 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 #### 🎯 Rééquilibreur de portefeuille et Allocateur PAC
 
 - **Rééquilibreur de portefeuille**, un nouvel outil de la page Outils : il ramène un portefeuille que vous détenez déjà vers ses poids cibles. Il n'envoie aucun ordre.
-  - **Son point de départ :** les positions que LibreFolio enregistre chez chaque courtier. Vous pouvez changer une quantité pour simuler un autre portefeuille ; LibreFolio n'est pas modifié.
+  - **Son point de départ :** les positions que LibreFolio enregistre chez chaque courtier. Vous pouvez changer une quantité pour simuler un autre portefeuille ; LibreFolio n'est pas modifié. Sur un compte partagé avec d'autres, le courtier affiche votre part en badge avec votre rôle, comme sur la page du courtier.
   - **Courtiers :** un courtier où vous détenez des positions sans y opérer compte comme « positions seulement », et « Ajouter au plan » permet au plan d'y opérer aussi.
-  - **Cibles :** en pourcentage du portefeuille entier, liquidités comprises. Les liquidités d'un courtier dans une devise peuvent former une ligne à part (« Ajouter des liquidités ») ; le reste est « Autres liquidités », à 0 %. La colonne « Aujourd’hui » montre le poids actuel de chaque ligne.
+  - **Cibles :** en pourcentage du portefeuille entier, liquidités comprises. Les liquidités d'un courtier dans une devise peuvent former une ligne à part (« Ajouter des liquidités ») ; le reste est « Autres liquidités », à 0 %, affichée quand elle vaut quelque chose aujourd'hui. La colonne « Aujourd’hui » montre le poids actuel de chaque ligne.
   - **Stratégie :** « Investir seulement » utilise les liquidités pour acheter ce qui est sous la cible et ne vend rien ; « Investir et vendre » est annoncé pour bientôt.
   - **Fidélité à la cible :** « Attentif aux coûts », « Équilibré », « Fidèle à la cible », « La cible avant tout » ou « Personnalisée ». Elle fixe combien vous acceptez de dépenser en frais pour remettre l'argent sur la cible, et le tableau « Coût maximal acceptable » montre ce montant pour chaque somme mal placée.
   - **Résultat :**
     - le plan dans l'ordre où l'exécuter : d'abord les dépôts, les transferts entre courtiers et les changes de devises, puis les achats chez chaque courtier ;
     - le tableau « Allocation par ligne » : aujourd'hui, cible et après le plan, avec vos limites ;
     - les chiffres clés : « Vaut aujourd’hui », « Vaudra après », « Argent perdu », et l'« Écart maximal à l’objectif » avec la ligne à laquelle il appartient ;
-    - les expositions par type d'actif, secteur et pays — aujourd'hui, après le plan et votre cible — sur le portefeuille entier, liquidités comprises.
+    - les expositions par type d'actif, secteur et pays — aujourd'hui, après le plan et votre cible — sur le portefeuille entier, liquidités comprises ; les pays aussi sur deux cartes du monde, votre cible et après le plan.
   - **La fiabilité du plan :** la recherche tourne trois fois, et un plan n'est prouvé le meilleur que si une seconde recherche le confirme. Un plan non prouvé est présenté comme un optimum local, avec sa marge quand les recherches en donnent une : le meilleur plan possible devrait être au plus meilleur de ce montant.
+  - **Chaque recherche a ses 30 s.** Sur un serveur avec trois CPU utilisables ou plus, les trois recherches tournent en même temps. Avec une ou deux, elles tournent à tour de rôle, chacune avec ses 30 s entières, donc le calcul peut durer jusqu'à environ 1 minute 45 s avec un CPU et 1 minute 10 s avec deux ; le panneau d'attente affiche cette limite plus longue (135 s avec un CPU, 100 s avec deux). Le calcul signale chaque étape, donc sa connexion ne reste jamais longtemps silencieuse ; derrière Nginx, la page de l'administrateur sur les reverse proxies suggère aussi `proxy_read_timeout 150s;` comme marge.
 - **Le profil opérationnel d'un courtier**, dans la fenêtre du courtier. Il réunit la façon dont le courtier prend les ordres (en nombre de parts ou en montant, avec son incrément) et ses frais d'achat et de vente (minimum, pourcentage, maximum, partie fixe), devise par devise, ainsi que sa façon de convertir les devises et son régime fiscal (« Administré » ou « Déclaratif »).
   - Les outils le copient dans un plan, où vous pouvez encore le modifier.
   - « Enregistrer dans le courtier », dans l'éditeur du courtier du planificateur, reporte vos modifications dans le courtier après une confirmation qui les énumère.
@@ -85,13 +86,14 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 - **Des limites sur les cibles**, dans l'Allocateur PAC et le Rééquilibreur de portefeuille. Chaque ligne peut avoir un minimum et un maximum de sa valeur à la fin du plan, en montant (500) ou en pourcentage du total (35 %).
   - Les liquidités d'un courtier dans une devise peuvent aussi avoir des limites, avec « Ajouter des liquidités » ; dans le PAC elles n'ont que des limites, pas de cible.
   - Le Récapitulatif et le résumé comptent les lignes avec une limite.
-  - Un minimum au-dessus de son maximum, ou des minimums qui dépassent 100 % au total, sont signalés avant le calcul.
+  - Un minimum au-dessus de son maximum, des minimums qui dépassent 100 % au total ou l'argent du plan, ou un maximum en dessous de ce que vous détenez déjà sont signalés à l'étape Cibles, avant le calcul.
   - Quand les limites ne laissent aucun plan, le résultat indique « Aucune solution avec ces limites » et les énumère.
   - Quand la recherche se termine sans plan dans les limites, le résultat le dit, et précise que ce n'est pas une preuve qu'aucun plan n'existe.
   - Quand les limites ne laissent pas de place aux arrondis, le plan est trouvé en comptant les arrondis en sa faveur : il respecte les limites une fois ajoutée la somme supplémentaire éventuelle que demande le résultat, et il n'est pas prouvé le meilleur. Une limite de liquidités manquée seulement parce que chaque montant est arrondi au centime reçoit une note avec le montant.
 - **Les chiffres du jour pendant que vous modifiez le plan** : l'étape Cibles montre le total que le plan répartit (dans le Rééquilibreur aussi le poids actuel de chaque ligne), mis à jour un instant après chaque modification.
 - **Le calcul montre sa phase** pendant l'attente : « Je contrôle les données », « Je construis le modèle », « Je cherche le plan », « Je vérifie les comptes », « Je prépare le résultat », avec sa position (« 2 sur 5 »).
 - **Quand un courtier convertit la devise à chaque achat, le plan le dit.** Il compte une conversion par paire de devises ; le courtier peut arrondir chaque ordre séparément, donc quelques centimes par ordre peuvent différer.
+- Quand un calcul de l'Allocateur PAC ou du Rééquilibreur de portefeuille échoue, **Copier la requête** copie les données envoyées, à joindre à un signalement. Le serveur ne conserve rien.
 
 ### 🔄 Modifié
 
@@ -99,6 +101,7 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 - Les **Identifiants** de l'actif, les secteurs et les pays du profil, le **Calendrier d'intérêts** et l'éditeur des prix, événements et taux utilisent la même barre de sélection que les autres tableaux : chaque action indique sur combien de lignes elle agit, et **Fusionner** explique pourquoi il est désactivé sur des périodes non consécutives. Dans une section étroite, la barre devient des icônes avec leurs nombres, qui disent leur nom au survol et au focus clavier ; sur téléphone, les pages d'un tableau n'affichent plus les mots « par page ».
 - À l'étape **Cibles** de l'Allocateur PAC et du Rééquilibreur de portefeuille, la barre de sélection est dans l'en-tête de l'étape, comme dans les autres tableaux : **Équilibrer les lignes sélectionnées à 100 %** indique sur combien de lignes il agit, n'est pas proposé quand le total fait déjà 100 %, et dit pourquoi quand il est désactivé.
 - **Menus des lignes** (actifs, devises, lots, cibles du PAC, relier les événements) : une action qui ne s'applique pas à la ligne n'est plus affichée ; une action applicable mais bloquée reste, grisée avec un ⓘ, et dit pourquoi au survol, au toucher ou au clavier. Le menu s'utilise au clavier : flèches, Début et Fin, Entrée, et Échap pour revenir à ⋮.
+- **Éditeur en masse** : les actions sur les lignes cochées (**Réinitialiser la sélection**, **Lier les frais**, **Supprimer sélectionnées**, **Promouvoir la paire**) sont dans la barre de sélection en haut du tableau, qui vous suit en bas quand vous faites défiler ; chacune indique sur combien de lignes elle agit. Dans l'import, un fichier encore en lecture le dit dans son menu, et un fichier en échec propose seulement de le relire.
 - Le droit de tirage spécial du FMI (XDR) est désormais servi par chaque fournisseur FX dont la banque le publie : la Banca d'Italia, la Banque nationale d'Ukraine, Norges Bank, la Banque nationale suisse (moyennes mensuelles), la Banque nationale de Roumanie, la Narodowy Bank Polski, la BCRA et la Central Bank of Nigeria rejoignent la BCB, Banxico et la CNB. Les métaux et les indices restent exclus.
 - **Relier les événements** regroupe les transactions selon ce qui manque (un événement trouvé, aucun, plusieurs), avec **Tout relier** et **Tout créer** par groupe, une seule barre de sélection avec les nombres, l'action de la ligne toujours à portée de main et une fenêtre pour choisir l'événement quand il y en a plusieurs ce jour-là.
 - **Liste des actifs : Recharger ne met à jour que les actifs sélectionnés**, pas toute la liste.
@@ -135,13 +138,15 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 - Les analyses de risque publient de nouvelles mesures à côté des existantes : le meilleur jour et les 30 meilleurs jours, la plus forte hausse, la part de jours positifs, les gains face aux pertes (Omega), la semi-déviation, la profondeur moyenne sous le sommet, les jours extrêmes, le jour moyen de hausse et de baisse et la plus longue série positive. La VaR, la CVaR et chaque chiffre déjà publié ne bougent pas. Une série qui n'a jamais gagné, ou jamais perdu, n'est plus marquée partielle pour son meilleur ou pire jour manquant.
 - Le nombre effectif de positions de l'onglet Risque se mesure sur les seules positions qui ont un prix : les liquidités et les positions sans prix ne le gonflent plus, il ne dépasse donc jamais les positions mesurées.
 
+- Dans la fenêtre d'une paire de devises, un clic sur un fournisseur de la légende affiche ou masque sa description ; un double clic ouvre son guide.
+
 #### 🎯 Allocateur PAC et Outils
 
 - **Un plan dont l'optimalité n'est pas prouvée est désormais présenté comme un optimum local.**
 - **L'« Achat obligatoire » d'une route disparaît.** Pour obliger un achat, fixez un minimum sur la cible de l'actif. Le minimum de la route ne vaut que si le plan achète sur cette route.
 - **L'éditeur du courtier du scénario utilise le panneau du profil opérationnel** : frais d'achat et de vente avec minimum, pourcentage, maximum et partie fixe, devise par devise.
 - **Quand le solveur s'arrête sur une erreur numérique** après avoir trouvé un plan, le résultat le dit désormais dans une note : le plan est valide et peut être exécuté, et un meilleur peut exister.
-- Sur la page Outils, le titre d'un outil passe à la ligne entre les mots, et le lien vers la documentation reste à côté, son libellé sous l'icône.
+- Sur la page Outils, le titre d'un outil passe à la ligne entre les mots, et le lien vers la documentation reste à côté, sous forme d'icône.
 
 ### 🐛 Corrections
 
@@ -182,6 +187,7 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 - Éditeur de transactions : « Réinitialiser la ligne » et « Réinitialiser la sélection » sur une moitié d'une paire enregistrée, scindée et pas encore enregistrée, annulent aussi la scission. Avant, la paire revenait sur une seule ligne mais la scission restait en attente, et « Tout enregistrer » la scindait quand même.
 - Éditeur de transactions : après « Séparer la paire » sur un transfert enregistré, modifier deux fois la moitié retrait ne la transforme plus en dépôt au montant positif, ce qui faisait échouer « Tout enregistrer ».
 - Éditeur de transactions : après « Séparer la paire » sur un transfert enregistré, une moitié dont vous changez le type dans son formulaire (un dépôt devenu retrait, ou l’inverse) est désormais enregistrée avec ce type : jusqu’ici « Tout enregistrer » échouait.
+- Allocateur PAC : sur un serveur chargé, un calcul déjà terminé pouvait apparaître en échec, « Le processus de calcul s’est arrêté de manière inattendue. ». Son résultat est désormais lu.
 
 ### ⚠️ Changements incompatibles
 

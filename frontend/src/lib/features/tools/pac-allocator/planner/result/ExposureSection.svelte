@@ -3,7 +3,10 @@
   Asset types and sectors as bars (the two distributions side by side). The weights are the backend's, exact;
   the charts only draw them, and an accessible list under each chart carries the same numbers.
   The Rebalancer (F4a of project 67, step 8): today, after the plan and the target of every category, the cash the last
-  row, as a bullet chart in all three dimensions (no maps), on the whole portfolio, its legend once above them.
+  row, as a bullet chart in all three dimensions, on the whole portfolio, its legend once above them. The countries are also
+  on the two maps, target and after the plan, under their bullets (R1-D of project 67: F4a said «no maps»; the developer,
+  20/11: «per l'area geografica mi aspettavo comunque la mappa doppia … magari sotto a questo a proiettile»). «Today» stays
+  in the bullets; the cash, which is no place, too.
 -->
 <script lang="ts">
     import {untrack} from 'svelte';
@@ -121,6 +124,11 @@
                     <div class="mt-2">
                         {#if rebalancer}
                             <RebalancerExposureBullets rows={view.bullets} dimension={view.dimension} />
+                            {#if view.dimension === 'geography'}
+                                <div class="mt-4">
+                                    <ExposureMaps rows={view.weights.filter((row) => row.id !== 'cash')} titles={{target: bulletWords.target, final: bulletWords.after}} />
+                                </div>
+                            {/if}
                         {:else if view.dimension === 'geography'}
                             <ExposureMaps rows={view.weights} />
                         {:else}

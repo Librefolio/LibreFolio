@@ -187,8 +187,13 @@ class XTBBrokerProvider(BRIMProvider):
 
         try:
             content = self._read_file_head(file_path, num_lines=1)
-            first_line = content.splitlines()[0].strip() if content else ""
-            return first_line == XTB_HEADER
+            if not content:
+                return False
+            # LibreOffice/Excel re-saves quote text cells ("ID";"Type";...);
+            # compare the parsed header fields, not the raw line.
+            first_line = content.splitlines()[0].strip()
+            fields = next(csv.reader([first_line], delimiter=";"))
+            return [field.strip() for field in fields] == XTB_HEADER.split(";")
         except Exception:
             return False
 

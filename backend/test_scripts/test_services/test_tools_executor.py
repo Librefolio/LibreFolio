@@ -9,8 +9,10 @@ after the assertions about production cleanup.
 
 from __future__ import annotations
 
+import ast
 import asyncio
 import errno
+import inspect
 import logging
 import os
 import re
@@ -1174,7 +1176,7 @@ async def test_real_worker_failures_are_platform_errors_and_leave_no_owned_proce
 # without any of the item's input or output.
 _EXECUTOR_LOGGER = "backend.app.services.tools.executor"
 _CRASH_EVENT = "Tool worker crashed"
-_CRASH_EVENT_KEYS = frozenset({"execution_id", "tool_code", "exit_code", "peak_observed_bytes", "memory_limit_bytes", "memory_mode", "execution_ms"})
+_CRASH_EVENT_KEYS = frozenset({"execution_id", "tool_code", "exit_code", "crash_reason", "crash_cause", "peak_observed_bytes", "memory_limit_bytes", "memory_mode", "execution_ms"})
 # Not keyword arguments of the log call: the event name, and what the capture adds.
 _CAPTURE_KEYS = frozenset({"event", "log_level", "logger"})
 _CAPTURE_PROBE_EVENT = "J-19 capture probe"
@@ -1275,6 +1277,9 @@ class TestJ19CrashedWorkerExitStatus:
         assert (event.get("logger"), event.get("log_level")) == (_EXECUTOR_LOGGER, "warning"), event
         assert set(event) - _CAPTURE_KEYS == _CRASH_EVENT_KEYS, f"the keys of the log call: {sorted(set(event) - _CAPTURE_KEYS)}"
         assert (event["execution_id"], event["tool_code"], event["exit_code"]) == (result.execution_id, item.tool_code, 23)
+        # The raising site, as one of a closed set of reasons (GPAC-d follow-up of project 67): a worker that exits closes its
+        # end of the pipe, so the parent reads the end of the file.
+        assert (event["crash_reason"], event["crash_cause"]) == ("pipe_closed", None), event
         assert event["exit_code"] == getattr(result.metrics, "worker_exit_code", _ABSENT), "the warning and the metric carry the same exit status"
         assert (event["memory_limit_bytes"], event["memory_mode"]) == (memory.limit_bytes, memory.mode)
         peak = event["peak_observed_bytes"]
@@ -1687,6 +1692,9 @@ def test_malformed_handshake_cannot_authorize_or_publish_a_result(fault):
         with pytest.raises(ToolExecutionError) as caught:
             executor_module._wait_result(response, _Commands(events), job)
     assert caught.value.code == "worker_crashed"
+    # The site, as the crash line names it (GPAC-d follow-up).
+    expected = {"result-before-ready": "frame_out_of_order", "duplicate-ready": "frame_out_of_order", "wrong-execution": "frame_of_another_job", "ready-extra": "ready_frame_invalid", "ready-boolean-pid": "ready_frame_invalid"}
+    assert caught.value.reason == expected[fault]
     commands = [value for kind, value in events if kind == "command"]
     assert commands == ([b"\x00"] if fault == "duplicate-ready" else [])
 
@@ -1718,6 +1726,133 @@ def test_raw_frame_length_over_the_owned_limit_is_rejected_before_payload_read()
             executor_module._read_frame(response, job)
 
     assert caught.value.code == "output_limit_exceeded"
+
+
+def test_the_executor_factory_counts_the_cpus_once_and_says_so(monkeypatch):
+    """TURNI step 4: the platform counts the usable CPUs when it builds its executor, once per API process, and logs the
+    number. The constructor stays free of I/O: a test executor built without a count applies no CPU table."""
+    counts = []
+
+    def count():
+        counts.append(1)
+        return 3
+
+    monkeypatch.setattr(executor_module, "cpu_count_usable", count)
+    monkeypatch.setattr(executor_module, "_executor", None)
+    with capture_logs(processors=[structlog.stdlib.add_logger_name]) as logs:
+        first = executor_module.get_tool_executor()
+        second = executor_module.get_tool_executor()
+    assert first is second and first.usable_cpus == 3 and len(counts) == 1
+    assert [entry["usable_cpus"] for entry in logs if entry.get("event") == "Tool executor built"] == [3]
+    assert executor_module.ToolExecutor().usable_cpus is None
+
+
+def _exited_worker_tree(exit_code: int) -> SimpleNamespace:
+    """A worker tree whose process has already exited with ``exit_code``; its memory reading does nothing."""
+    return SimpleNamespace(process=SimpleNamespace(exitcode=exit_code), observe_memory_limit=lambda: None)
+
+
+def test_a_frame_written_by_a_worker_that_exited_after_an_empty_poll_is_read(monkeypatch):
+    """GPAC-d of project 67: the worker writes its last frame and exits between the parent's empty ``select`` and its exit
+    check. The frame is in the pipe: the parent reads it, it does not answer ``worker_crashed`` (two PAC gallery reds on a
+    busy machine, 21/11/2026)."""
+    job = _owned_job()
+    job.tree = _exited_worker_tree(0)
+    reader, writer = os.pipe()
+    real_select = executor_module.select.select
+    polls = {"count": 0}
+
+    def select_then_worker_finishes(read, write, error, timeout):
+        polls["count"] += 1
+        if polls["count"] == 1:
+            # The poll times out empty; right after it the worker writes its frame and exits (exit code 0 above).
+            assert os.write(writer, b"FRAME") == 5
+            return [], [], []
+        return real_select(read, write, error, timeout)
+
+    monkeypatch.setattr(executor_module, "select", SimpleNamespace(select=select_then_worker_finishes))
+    try:
+        with os.fdopen(reader, "rb") as response:
+            assert executor_module._read_exact(response, 5, job) == b"FRAME"
+    finally:
+        os.close(writer)
+
+
+@pytest.mark.parametrize("exit_code", [0, 23])
+def test_a_worker_that_exited_with_nothing_left_in_the_pipe_is_still_a_crash(exit_code):
+    """GPAC-d: the second look finds nothing, and nothing more can come from an exited worker: ``worker_crashed``, as
+    before, whatever its exit code. The write end stays open, so no end-of-file answers for it."""
+    job = _owned_job()
+    job.tree = _exited_worker_tree(exit_code)
+    reader, writer = os.pipe()
+    try:
+        with os.fdopen(reader, "rb") as response:
+            with pytest.raises(ToolExecutionError) as caught:
+                executor_module._read_exact(response, 5, job)
+    finally:
+        os.close(writer)
+    assert caught.value.code == "worker_crashed"
+    assert caught.value.reason == "exited_without_frame"
+
+
+def test_a_crash_names_its_reason_from_a_closed_set():
+    """The raising site of a ``worker_crashed`` (GPAC-d follow-up): a frame of another job is ``frame_of_another_job``, a
+    worker's end of file is ``pipe_closed``. Every reason the executor raises is in the closed set it logs from."""
+    job = _owned_job()
+    with _Frames([{**_result(job), "execution_id": "another-job"}], []) as response:
+        with pytest.raises(ToolExecutionError) as caught:
+            executor_module._read_frame(response, job)
+    assert (caught.value.code, caught.value.reason) == ("worker_crashed", "frame_of_another_job")
+
+    reader, writer = os.pipe()
+    os.close(writer)
+    with os.fdopen(reader, "rb") as response:
+        with pytest.raises(ToolExecutionError) as caught:
+            executor_module._read_exact(response, 4, job)
+    assert (caught.value.code, caught.value.reason) == ("worker_crashed", "pipe_closed")
+
+    reader, writer = os.pipe()
+    try:
+        assert os.write(writer, struct.pack("!i", -2)) == 4
+    finally:
+        os.close(writer)
+    with os.fdopen(reader, "rb") as response:
+        with pytest.raises(ToolExecutionError) as caught:
+            executor_module._read_frame(response, job)
+    assert (caught.value.code, caught.value.reason) == ("worker_crashed", "frame_length_invalid")
+
+    frame = _result(job)
+    frame["unexpected"] = "private"
+    with pytest.raises(ToolExecutionError) as caught:
+        executor_module._accept_result(frame, job)
+    assert (caught.value.code, caught.value.reason) == ("worker_crashed", "result_frame_invalid")
+
+
+def test_every_worker_crash_names_a_reason_of_the_closed_set():
+    """A source scan of ``executor.py`` (GPAC-d follow-up): every ``worker_crashed`` it raises carries a literal reason of
+    ``CRASH_REASONS``, every handler that turns an exception into ``worker_crashed`` sets one, and every reason is used.
+    A new site without its reason, or a reason nobody raises, fails here."""
+    tree = ast.parse(inspect.getsource(executor_module))
+    reasons = set(executor_module.CRASH_REASONS)
+    assert len(reasons) == len(executor_module.CRASH_REASONS), "a reason is listed twice"
+    used: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call) and getattr(node.func, "id", None) == "ToolExecutionError" and node.args and getattr(node.args[0], "value", None) == "worker_crashed":
+            keywords = {keyword.arg: keyword.value for keyword in node.keywords}
+            assert "reason" in keywords, f"line {node.lineno}: worker_crashed raised without a reason"
+            assert isinstance(keywords["reason"], ast.Constant) and keywords["reason"].value in reasons, f"line {node.lineno}: reason not in CRASH_REASONS"
+            used.add(keywords["reason"].value)
+        if isinstance(node, ast.ExceptHandler):
+            makes_crash = any(isinstance(call, ast.Call) and getattr(call.func, "id", None) == "_error" and call.args and getattr(call.args[0], "value", None) == "worker_crashed" for call in ast.walk(node))
+            if makes_crash:
+                assigned = [value for target, value in ((assign.targets[0], assign.value) for assign in ast.walk(node) if isinstance(assign, ast.Assign)) if getattr(target, "attr", None) == "crash_reason"]
+                assert assigned, f"line {node.lineno}: a handler makes worker_crashed without setting crash_reason"
+                for value in assigned:
+                    for constant in ast.walk(value):
+                        if isinstance(constant, ast.Constant) and isinstance(constant.value, str):
+                            assert constant.value in reasons, f"line {node.lineno}: {constant.value!r} not in CRASH_REASONS"
+                            used.add(constant.value)
+    assert used == reasons, f"reasons never raised: {sorted(reasons - used)}"
 
 
 def test_frame_completed_at_deadline_is_not_published_after_decode(monkeypatch):
@@ -2231,6 +2366,37 @@ def _install_owned_run_fakes(
 
     monkeypatch.setattr(executor_module, "_wait_result", wait_result)
     return events, tree
+
+
+@pytest.mark.parametrize(
+    ("where", "raised", "reason"),
+    [("start", OSError("no cgroup"), "start_failed"), ("read", ValueError("bad metrics"), "pipe_error")],
+    ids=["before-the-worker-starts", "while-reading"],
+)
+def test_a_failure_turned_into_a_crash_names_its_site_and_class(monkeypatch, where, raised, reason):
+    """GPAC-d follow-up: an ``OSError``, ``EOFError`` or ``ValueError`` becomes ``worker_crashed``. Before the worker was
+    started it is ``start_failed``; after, ``pipe_error`` (a pydantic error in a frame is a ``ValueError``). The line also
+    names the exception's class, never its message."""
+    _events, tree = _install_owned_run_fakes(monkeypatch)
+    if where == "start":
+
+        def prepare_resources(execution_id):
+            raise raised
+
+        monkeypatch.setattr(tree, "prepare_resources", prepare_resources)
+    else:
+
+        def wait_result(response, cancellation, job):
+            raise raised
+
+        monkeypatch.setattr(executor_module, "_wait_result", wait_result)
+    job = _owned_job()
+    with capture_logs(processors=[structlog.stdlib.add_logger_name]) as logs:
+        outcome = executor_module._run_owned_job(job, FixtureRegistry)
+    assert outcome.error is not None and outcome.error.code == "worker_crashed"
+    (event,) = _crash_events(logs)
+    assert (event["crash_reason"], event["crash_cause"]) == (reason, type(raised).__name__)
+    assert str(raised) not in repr(event), "the exception's message reached the log"
 
 
 @pytest.mark.asyncio

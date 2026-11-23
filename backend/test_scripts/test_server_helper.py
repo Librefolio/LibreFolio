@@ -45,8 +45,9 @@ TEST_SERVER_PLANNER_SEEDS = (11, 22, 33)
 
 def without_time_limits(plan: dict) -> dict:
     """A planner result as the wire dumps it, with the value of every stage's time-limit setting dropped: the only
-    clock-dependent figure it publishes. The wide model is solved with the time the prudent one left (lot ZB), and on a
-    machine with fewer usable CPUs than runs a later run has the time left (lot SEEDS-c of project 67)."""
+    clock-dependent figure it publishes. The wide model is solved with the time the prudent one left (lot ZB), and a run
+    publishes the time it was really given (TURNI of project 67, check 7): on a machine with fewer usable CPUs than runs,
+    and no window of turns or one counted short, a later run has the time left (lot SEEDS-c)."""
     plan = copy.deepcopy(plan)
     for stage in plan["solver_evidence"]["stages"]:
         for setting in stage.get("settings", []):
