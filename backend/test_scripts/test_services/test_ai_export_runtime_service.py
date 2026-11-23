@@ -246,7 +246,7 @@ def test_catalog_exposes_exact_public_v1_catalog_without_prompts():
 
     assert catalog.catalog_version == AI_EXPORT_CATALOG_VERSION
     assert len(catalog.datasets) == 8
-    assert len(catalog.analyses) == 11
+    assert len(catalog.analyses) == 12
     assert {entry.id for entry in catalog.datasets} == {
         "portfolio.overview_and_history",
         "portfolio.asset_history",
