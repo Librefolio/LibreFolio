@@ -221,7 +221,7 @@ frontend/src/routes/
     - Pairs keep their own rules: legs side by side and ghost partners, with no filter and no sort.
     - **Link** in the selection bar (one parent and its charges) goes through `createChargesLinkFlow`
       (`lib/features/transactions/chargesLinkFlow.svelte.ts`, shared with a broker's Transactions tab): it follows
-      `linkSelection` of `chargeLinkRules.ts`, loads the type rules itself, and saves at once (`linkCommit`) after the
+      `linkSelection` of `chargeLinkRules.ts`, loads the type rules itself once two rows are selected, and saves at once (`linkCommit`) after the
       `TxChargesActionModal` confirmation. **Delete** goes through `createChargesDeleteFlow` (`chargesDeleteFlow.svelte.ts`): a parent whose
       charges are not all selected opens the same panel («Keep the charges» / «Delete all») before the bulk workspace
       ([Deleting a parent and keeping its charges](../state/transaction-draft.md#workspace-intent)).

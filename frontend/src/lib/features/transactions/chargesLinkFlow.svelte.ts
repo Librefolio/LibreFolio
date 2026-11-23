@@ -4,8 +4,9 @@
  * `open`, `parent`, `charges`, `linking`, `confirm` and `cancel`, and its `action` in the selection bar.
  *
  *   - `state`: `linkSelection` on the rows the page has selected (`selection()`): hidden, off with its reason, or one
- *     parent with the charges to link. The type rules are read here (`ensureTypesLoaded`): the broker's tab does not
- *     load them otherwise, and without them every row would have no charge role and the action would stay hidden.
+ *     parent with the charges to link. The type rules are read here (`ensureTypesLoaded`) once two rows are selected:
+ *     the broker's tab does not load them otherwise, and without them every row would have no charge role and the
+ *     action would stay hidden. Not before: the broker's page opens without them (the Bulk's cold path).
  *   - `action`: the bar's entry (`link-charges`): hidden when the selection is not one parent with charges, off with
  *     the reason when a rule refuses it, otherwise it opens the panel.
  *   - `confirm()`: saves the links in one commit (`linkCommit`). Committed → the panel closes, `tx.charges.linked` is
@@ -65,8 +66,12 @@ function storeIssueContext(): ResolverContext {
 export function createChargesLinkFlow({selection, onLinked, issueContext}: ChargesLinkFlowDeps): ChargesLinkFlow {
     const types = fromStore(typesVersion);
     const translate = fromStore(_);
+    // The rules are asked for once a selection could be linked (two rows at least; fewer is hidden anyway), not when the
+    // page opens: the broker's page keeps its cold path, the Bulk opening on an empty types cache (brokers-detail, 6b).
     // A failure is logged by the store; the action then stays hidden, as for any row without a charge role.
-    void ensureTypesLoaded().catch(() => undefined);
+    $effect(() => {
+        if (selection().length >= 2) void ensureTypesLoaded().catch(() => undefined);
+    });
 
     const t = (key: string, fallback: string, values?: Record<string, string | number>): string => translate.current(key, values ? {values} : undefined) || fallback;
 

@@ -12,7 +12,7 @@
  *
  *   - `state` / `action`: `linkSelection` on `selection()`; the rules themselves are `chargeLinkRules.test.ts`'s, so
  *     these cases only prove the flow wires them: ok, hidden, off with its reason and a hint.
- *   - The type rules: the flow calls `ensureTypesLoaded` itself (the broker's tab never loads them). Before they land
+ *   - The type rules: the flow calls `ensureTypesLoaded` itself once two rows are selected (the broker's tab never loads them). Before they land
  *     every row has no charge role and the action is hidden; once they land the same selection is ok.
  *   - `open`: false until `action.onClick()`; `cancel()` closes it.
  *   - `confirm()`: one commit (`linkCommit`); committed → closed, `tx.charges.linked` notified, `onLinked` once;
@@ -161,11 +161,15 @@ beforeEach(() => {
 // the other blocks release the rules themselves.
 describe('createChargesLinkFlow — the type rules', () => {
     it('before the rules land every row has no charge role (hidden); once ensureTypesLoaded resolves the same selection is ok', async () => {
-        const {flow} = mount([BUY, FEE]);
+        // One row cannot be linked: the rules are not asked for yet (the broker's page keeps its cold path, TL-1b).
+        const {flow, page} = mount([BUY]);
+        expect(zodiosApi.get_transaction_types_api_v1_transactions_types_get, 'one row selected: the type rules are not asked for').not.toHaveBeenCalled();
+        page.rows = [BUY, FEE];
+        flushSync();
         const kinds = recordReads(() => flow.state.kind);
         onTestFinished(() => kinds.stop());
 
-        expect(zodiosApi.get_transaction_types_api_v1_transactions_types_get, 'the flow asks for the type rules itself').toHaveBeenCalled();
+        expect(zodiosApi.get_transaction_types_api_v1_transactions_types_get, 'two rows selected: the flow asks for the type rules itself').toHaveBeenCalled();
         expect(flow.state.kind, 'no rules yet: no charge role, the action is hidden').toBe('hidden');
         expect(pointless(flow)).toBe(true);
 
