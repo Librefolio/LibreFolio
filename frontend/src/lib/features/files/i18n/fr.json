@@ -93,7 +93,10 @@
     "deleteSkipped": "Les fichiers que vous n'avez pas le droit de supprimer sont restés en place",
     "backups": "Sauvegardes",
     "systemUploader": "Système",
-    "docsHelp": "Les fichiers que vous avez déposés : les relevés de courtiers à importer et les images que LibreFolio utilise, avec la place qu'ils occupent."
+    "docsHelp": "Les fichiers que vous avez déposés : les relevés de courtiers à importer et les images que LibreFolio utilise, avec la place qu'ils occupent.",
+    "confirmBulkDownload": {
+      "message": "Télécharger {n} fichier(s) ?"
+    }
   },
   "files": {
     "deleteFailed": "Échec de la suppression du fichier"
