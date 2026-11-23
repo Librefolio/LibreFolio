@@ -110,7 +110,8 @@ flowchart LR
 
 - **Search** (`search`): `/search?query=…`. Only its coins are kept, never its NFTs, exchanges or categories.
     - The coins are ordered by `market_cap_rank`; a coin without a rank comes last, in CoinGecko's order.
-    - A row is `identifier=<id>`, `identifier_type=OTHER`, «Name (SYMBOL)», `type` CRYPTO, with the user's
+    - A row is `identifier=<id>`, `identifier_type=OTHER`, the coin's name alone (TL40: the name its metadata gives,
+        so «Ask the provider» offers no rename; the symbol is the ticker), `type` CRYPTO, with the user's
         `preferred_currency` as `currency` and as `vs_currency`. A blank query asks nothing.
     - The row's `icon_url` is the coin's logo, `large` of the answer (S3): the very image the metadata gives the asset,
         so the browser asks it once.
