@@ -64,6 +64,7 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 - Gli amministratori possono tenere attivi solo alcuni provider di prezzi e di cambi su un'istanza (`LIBREFOLIO_ASSET_PROVIDERS_ENABLED`, `LIBREFOLIO_FX_PROVIDERS_ENABLED`): gli altri spariscono da elenchi, ricerca, assegnazioni e impostazioni; le assegnazioni esistenti tengono i prezzi salvati. MANUAL è sempre attivo.
 - Ricerca degli asset: cercando una criptovaluta su Yahoo Finance compare anche il suo ticker in euro (per esempio BTC-EUR accanto a BTC-USD), così si può prezzare direttamente in euro.
 - **AI Export: «Strategie di protezione»**, una nuova analisi della Dashboard: dice se adesso ha senso proteggere il portafoglio e, solo se ha senso, come.
+- **Premi in token (staking, airdrop) come tipo di transazione.** Un tipo nuovo, «Premio», registra le unità ricevute come reddito in natura: apre un lotto al loro valore alla ricezione, e quel valore conta come reddito, come un dividendo reinvestito lo stesso giorno: nessun movimento di contante e nessun capitale aggiunto. Lotti, costo medio, redditi, Yield on Cost e P&L del periodo lo leggono. Nella finestra della transazione un Premio chiede il «Valore alla ricezione», proposto dallo storico dei prezzi dell'asset e sempre modificabile. (#90)
 
 #### 🎯 Ribilanciatore e Allocatore PAC
 

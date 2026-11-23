@@ -64,6 +64,7 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 - Les administrateurs peuvent ne garder actifs que certains fournisseurs de prix et de taux de change sur une instance (`LIBREFOLIO_ASSET_PROVIDERS_ENABLED`, `LIBREFOLIO_FX_PROVIDERS_ENABLED`) : les autres disparaissent des listes, de la recherche, des affectations et des paramètres ; les affectations existantes gardent leurs prix enregistrés. MANUAL reste toujours actif.
 - Recherche d'actifs : en cherchant une cryptomonnaie sur Yahoo Finance, son ticker en euros apparaît aussi (par exemple BTC-EUR à côté de BTC-USD), pour la valoriser directement en euros.
 - **AI Export : « Stratégies de protection »**, une nouvelle analyse du Tableau de bord : elle dit s'il est utile de protéger votre portefeuille maintenant et, seulement si c'est le cas, comment.
+- **Récompenses en jetons (staking, airdrops) comme type de transaction.** Un nouveau type, « Récompense », enregistre les unités reçues comme revenu en nature : il ouvre un lot à leur valeur à la réception, et cette valeur compte comme revenu, comme un dividende réinvesti le jour même : aucun mouvement d'espèces et aucun capital ajouté. Les lots, le coût moyen, les revenus, le Yield on Cost et le P&L de la période le lisent. Dans la fenêtre de transaction, une Récompense demande la « Valeur à la réception », préremplie depuis l'historique des prix de l'actif et toujours modifiable. (#90)
 
 #### 🎯 Rééquilibreur de portefeuille et Allocateur PAC
 
