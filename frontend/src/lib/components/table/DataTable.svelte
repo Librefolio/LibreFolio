@@ -669,6 +669,9 @@
         });
     }
 
+    /** What keeps the browser's own context menu inside a row: the places where the user pastes or edits text. */
+    const NATIVE_MENU_FIELDS = 'input, textarea, select, [contenteditable]:not([contenteditable="false"])';
+
     function openRowActionsMenu(row: T, button: HTMLButtonElement): void {
         const rect = button.getBoundingClientRect();
         contextMenuRow = row;
@@ -1172,7 +1175,17 @@
                                 }}
                                 oncontextmenu={(e) => {
                                     if (enableContextMenu && visibleRowActions.length > 0) {
+                                        const target = e.target instanceof Element ? e.target : null;
+                                        // A field inside the row keeps the browser's own menu, so «Paste» still works there (81 U15).
+                                        if (target?.closest(NATIVE_MENU_FIELDS)) return;
                                         e.preventDefault();
+                                        // From the keyboard (Shift+F10, the Menu key) the event comes from the ⋮: open the menu on it,
+                                        // so Esc gives the focus back to it.
+                                        const actionsButton = target?.closest<HTMLButtonElement>('button.row-actions-btn');
+                                        if (actionsButton) {
+                                            openRowActionsMenu(row, actionsButton);
+                                            return;
+                                        }
                                         contextMenuRow = row;
                                         contextMenuAnchor = null;
                                         contextMenuPos = {x: e.clientX, y: e.clientY};
