@@ -38,6 +38,7 @@ import {
     pointKey,
     lotColor,
     incomeEventColor,
+    isLotIncomeKind,
     formatAxisPercent,
     formatAxisCurrency,
     formatAxisAmount,
@@ -131,6 +132,27 @@ describe('incomeEventColor', () => {
         expect(incomeEventColor('DIVIDEND', true)).toBe('#e8bd69');
         expect(incomeEventColor('INTEREST', false)).toBe('#7041c6');
         expect(incomeEventColor('INTEREST', true)).toBe('#b69af0');
+    });
+
+    it('uses the magenta of --lf-cat-index for a reward in kind (REWARD, project 79), per theme, apart from gold and violet', () => {
+        // WHY: consultant Q-1 (23/11/2026) — one magenta for rewards in kind, the Growth chart's too
+        // (INCOME_EVENT_COLORS.reward), the farthest from the dividend gold and the interest violet.
+        expect(incomeEventColor('REWARD', false)).toBe('#a33d79');
+        expect(incomeEventColor('REWARD', true)).toBe('#e58bb9');
+        for (const isDark of [false, true]) {
+            expect(incomeEventColor('REWARD', isDark)).not.toBe(incomeEventColor('DIVIDEND', isDark));
+            expect(incomeEventColor('REWARD', isDark)).not.toBe(incomeEventColor('INTEREST', isDark));
+        }
+    });
+});
+
+describe('isLotIncomeKind', () => {
+    it.each(['DIVIDEND', 'INTEREST', 'REWARD'])('accepts %s, an income kind the lot charts draw', (kind) => {
+        expect(isLotIncomeKind(kind)).toBe(true);
+    });
+
+    it.each([['BUY'], ['SELL'], ['FEE'], ['TAX'], ['reward'], [''], [null], [undefined], [42]])('refuses %s', (value) => {
+        expect(isLotIncomeKind(value)).toBe(false);
     });
 });
 
