@@ -1,6 +1,6 @@
 <script lang="ts">
     import {PieChart, Plus, Scale, Trash2} from 'lucide-svelte';
-    import {untrack, type Snippet} from 'svelte';
+    import type {Snippet} from 'svelte';
     import {MediaQuery} from 'svelte/reactivity';
     import {t} from '$lib/i18n';
     import DataTable from '$lib/components/table/DataTable.svelte';
@@ -10,6 +10,7 @@
     import type {PlannerDraft, TargetRow} from '../draft.svelte';
     import {formatExactMoneyPlain, formatExactPercent, formatPlannerPercentUnits} from '../format';
     import type {PlannerPreview} from '../preview.svelte';
+    import {chartPercent} from '../result/model';
     import {BUTTON_SECONDARY, HINT, NOTICE} from '../ui';
     import AssetNameCell from '../shared/AssetNameCell.svelte';
     import CashEntryIcon from '../shared/CashEntryIcon.svelte';
@@ -51,9 +52,11 @@
     const BAR_CLASS: Record<TotalState, string> = STATUS_TONES.pacTargetBar;
     const TOTAL_CLASS: Record<TotalState, string> = STATUS_TONES.pacTargetTotal;
 
-    /** A row of the table: an Asset, a cash entry (F3a of project 67), or the fixed «Other cash» row of the Rebalancer. */
-    type TableRow = TargetRow | {kind: 'other'; key: string};
-    const OTHER_CASH_KEY = 'other-cash';
+    /**
+     * A row of the table: an Asset or a cash entry (F3a of project 67). The cash without an entry of its own (the backend's
+     * `other_cash`) is counted by the plan, never shown here (TL-2 of project 67, the developer's testlist of 21/11).
+     */
+    type TableRow = TargetRow;
     const R = 'tools.portfolioRebalancer.planner.targets';
 
     let copying = $state(false);
@@ -66,22 +69,7 @@
     function targetable(row: TableRow): boolean {
         return row.kind === 'asset' || (row.kind === 'cash' && profile.cashEntries === 'full');
     }
-    // «Other cash»: the cash without a cash entry of its own, and the contributions (new money with no target of its own, G5-2).
-    // Shown only while it is worth more than 0 today (R1-C of project 67, the developer's «ok» of 19/11): the last preview says
-    // so, stale or not; with none yet there is no row. Its sign is read off the backend's figure, never computed here (N1).
-    const otherCashToday = $derived.by(() => {
-        const item = numbers?.items?.find((candidate) => candidate.kind === 'other_cash');
-        if (!item) return false;
-        const value = item.value.value;
-        return (value.kind === 'finite_decimal' ? decimalSign(value.value) : decimalSign(value.numerator)) === 1;
-    });
-    const otherCash = $derived(profile.cashEntries === 'full' && otherCashToday && (draft.data.cash.some((cash) => !draft.data.cashEntries.some((entry) => entry.brokerKey === cash.brokerKey && entry.currency === cash.currency)) || draft.data.contributions.some((item) => item.amount.trim() !== '')));
-    const rows = $derived<TableRow[]>([...draft.targetRows, ...(otherCash ? [{kind: 'other' as const, key: OTHER_CASH_KEY}] : [])]);
-    // «Other cash» leaves the table when a preview says it is worth 0 today: its tick goes with it, so the selection never
-    // counts a row that is gone, and the row never comes back ticked (R1-C of project 67).
-    $effect(() => {
-        if (!otherCash && tickedKeys.includes(OTHER_CASH_KEY)) untrack(() => tableRef?.toggleRowSelectionById(OTHER_CASH_KEY));
-    });
+    const rows = $derived<TableRow[]>(draft.targetRows);
     /** The rows whose targets the balancing reads and writes, in table order. */
     const editable = $derived(draft.targetRows.filter(targetable));
 
@@ -96,12 +84,15 @@
         return 'unknown';
     });
     const excess = $derived(remaining === null ? null : remainingControlPercentage(remaining, '0'));
-    const maxWeight = $derived(Math.max(1, ...editable.map((row) => percentNumber(draft.data.targets[row.key]))));
+    /**
+     * The scale of the bars, in percent: the widest target, and in a Tool with «Now» the widest weight today too, so both bars
+     * of a row are drawn on one scale (TL-2). Drawing only.
+     */
+    const maxWeight = $derived(Math.max(1, ...editable.map((row) => percentNumber(draft.data.targets[row.key])), ...(showNow ? rows.map((row) => chartPercent(nowItem(row)?.weight) ?? 0) : [])));
 
     function rowLabel(row: TableRow): string {
         if (row.kind === 'asset') return [row.asset.ticker, row.asset.name].filter((part) => part.trim() !== '').join(' ');
-        if (row.kind === 'cash') return $t(`${R}.cashEntry`, {values: {broker: draft.broker(row.entry.brokerKey)?.name || '—', currency: row.entry.currency}});
-        return $t(`${R}.otherCash`);
+        return $t(`${R}.cashEntry`, {values: {broker: draft.broker(row.entry.brokerKey)?.name || '—', currency: row.entry.currency}});
     }
 
     /** Bar length only: a picture of the target, never a value that is sent. */
@@ -111,10 +102,30 @@
         return Number.isFinite(number) ? Math.max(0, number) : 0;
     }
 
+    /** A bar's width, in percent of the column: its value on the bars' scale. */
+    function barWidth(percent: number): string {
+        return `${Math.min(100, Math.max(0, (percent / maxWeight) * 100)).toFixed(2)}%`;
+    }
+
+    /**
+     * «Distribution»: the target as a bar, coloured by the total's state. In a Tool with «Now» (the Rebalancer, TL-2) two bars on
+     * one scale, the grey weight today above the target, as the result's tables pair theirs; muted while the preview is stale.
+     */
     function barHtml(row: TableRow): string {
         if (!targetable(row)) return '';
-        const width = Math.min(100, (percentNumber(draft.data.targets[row.key]) / maxWeight) * 100);
-        return `<div data-testid="${testId('target-bar', profile)}" data-asset-key="${escapeHtml(row.key)}" aria-hidden="true" class="h-3 overflow-hidden rounded-full bg-lf-neutral"><div class="h-full rounded-full transition-all ${escapeHtml(BAR_CLASS[totalState])}" style="width: ${width}%"></div></div>`;
+        const key = escapeHtml(row.key);
+        const width = barWidth(percentNumber(draft.data.targets[row.key]));
+        if (!showNow) {
+            return `<div data-testid="${testId('target-bar', profile)}" data-asset-key="${key}" data-width="${width}" aria-hidden="true" class="h-3 overflow-hidden rounded-full bg-lf-neutral"><div class="h-full rounded-full transition-all ${escapeHtml(BAR_CLASS[totalState])}" style="width: ${width}"></div></div>`;
+        }
+        const today = chartPercent(nowItem(row)?.weight);
+        const nowWidth = barWidth(today ?? 0);
+        return (
+            `<div class="flex w-full flex-col gap-1" aria-hidden="true">` +
+            `<div data-testid="${testId('target-bar-now', profile)}" data-asset-key="${key}" data-width="${nowWidth}" data-known="${today === null ? 'false' : 'true'}" class="h-2 overflow-hidden rounded-full bg-lf-neutral"><div class="h-full rounded-full bg-lf-secondary transition-all${stale ? ' opacity-50' : ''}" style="width: ${nowWidth}"></div></div>` +
+            `<div data-testid="${testId('target-bar', profile)}" data-asset-key="${key}" data-width="${width}" class="h-2 overflow-hidden rounded-full bg-lf-neutral"><div class="h-full rounded-full transition-all ${escapeHtml(BAR_CLASS[totalState])}" style="width: ${width}"></div></div>` +
+            `</div>`
+        );
     }
 
     /** Gives this row what is missing, or takes away the excess, within 0–100. */
@@ -203,18 +214,17 @@
     function nameCell(row: TableRow) {
         const now = nowLine(row);
         if (row.kind === 'asset') return {type: 'custom' as const, component: AssetNameCell, props: {label: rowLabel(row), iconUrl: row.asset.iconUrl, assetType: row.asset.assetClass ? row.asset.assetClass.toUpperCase() : null, now}};
-        if (row.kind === 'cash') return {type: 'custom' as const, component: CashEntryNameCell, props: {broker: draft.broker(row.entry.brokerKey), currency: row.entry.currency, now}};
-        return {type: 'custom' as const, component: CashEntryNameCell, props: {other: true, now}};
+        return {type: 'custom' as const, component: CashEntryNameCell, props: {broker: draft.broker(row.entry.brokerKey), currency: row.entry.currency, now}};
     }
 
-    /** Today's weight of a row, as the preview gives it (G5-2: «Other cash» too); empty without a preview. */
+    /** A row's item in the preview: its value and weight today; none without a preview. */
+    function nowItem(row: TableRow) {
+        return row.kind === 'asset' ? numbers?.items?.find((candidate) => candidate.kind === 'asset' && candidate.asset_id === row.key) : numbers?.items?.find((candidate) => candidate.kind === 'cash' && candidate.broker_id === row.entry.brokerKey && candidate.currency === row.entry.currency);
+    }
+
+    /** Today's weight of a row, as the preview gives it; empty without a preview. */
     function nowText(row: TableRow): string {
-        const item =
-            row.kind === 'asset'
-                ? numbers?.items?.find((candidate) => candidate.kind === 'asset' && candidate.asset_id === row.key)
-                : row.kind === 'cash'
-                  ? numbers?.items?.find((candidate) => candidate.kind === 'cash' && candidate.broker_id === row.entry.brokerKey && candidate.currency === row.entry.currency)
-                  : numbers?.items?.find((candidate) => candidate.kind === 'other_cash');
+        const item = nowItem(row);
         return item ? formatExactPercent(item.weight, 1) : '';
     }
 
@@ -226,11 +236,6 @@
     /** A PAC cash row has limits only (F3a step 14, U8): no target, a dash in its place. */
     function noTargetHtml(): string {
         return '<span class="text-lf-muted" aria-hidden="true">—</span>';
-    }
-
-    /** «Other cash» always counts 0 %: shown, never edited (mockup screen 5). */
-    function fixedZeroHtml(): string {
-        return `<span class="font-mono text-lf-muted" data-testid="${testId('target-other-cash', profile)}">${escapeHtml(formatPlannerPercentUnits('0'))}</span>`;
     }
 
     const columns = $derived.by((): ColumnDef<TableRow>[] =>
@@ -246,6 +251,18 @@
                 getValue: (row) => rowLabel(row),
                 cell: (row) => nameCell(row),
             },
+            {
+                id: 'bar',
+                header: () => $t(`${KEY}.shape`, {default: 'Distribution'}),
+                type: 'custom',
+                sortable: false,
+                filterable: false,
+                width: 200,
+                minWidth: 100,
+                hiddenByDefault: phone.current,
+                cell: (row) => ({type: 'html', html: barHtml(row)}),
+            },
+            // «Now» right after the bars and before the target: today's weight next to the target's (TL-2).
             ...(showNow
                 ? [
                       {
@@ -264,17 +281,6 @@
                   ]
                 : []),
             {
-                id: 'bar',
-                header: () => $t(`${KEY}.shape`, {default: 'Distribution'}),
-                type: 'custom',
-                sortable: false,
-                filterable: false,
-                width: 200,
-                minWidth: 100,
-                hiddenByDefault: phone.current,
-                cell: (row) => ({type: 'html', html: barHtml(row)}),
-            },
-            {
                 id: 'target',
                 header: () => $t(`${KEY}.target`, {default: 'Target %'}),
                 headerTooltip: () => (profile.text === 'rebalancer' ? $t('tools.portfolioRebalancer.planner.targets.wire') : $t(`${KEY}.wire`, {default: 'The share of the money you invest now that goes to this Asset, in percent. Decimals are allowed.'})),
@@ -284,7 +290,7 @@
                 align: 'right',
                 width: phone.current ? 96 : 140,
                 minWidth: phone.current ? 84 : 128,
-                cell: (row) => (targetable(row) ? {type: 'custom', component: TargetInputCell, props: {draft, assetKey: row.key, label: rowLabel(row)}} : {type: 'html', html: row.kind === 'other' ? fixedZeroHtml() : noTargetHtml()}),
+                cell: (row) => (targetable(row) ? {type: 'custom', component: TargetInputCell, props: {draft, assetKey: row.key, label: rowLabel(row)}} : {type: 'html', html: noTargetHtml()}),
             },
             {
                 // F2 of project 67 (M1, M17): minimum and maximum of the final value; the total a percentage refers to is named, not computed.
@@ -302,7 +308,7 @@
                 align: 'right',
                 width: phone.current ? 96 : 184,
                 minWidth: phone.current ? 92 : 176,
-                cell: (row) => (row.kind === 'other' ? {type: 'html', html: ''} : {type: 'custom', component: LimitInputCell, props: {draft, assetKey: row.key, label: rowLabel(row)}}),
+                cell: (row) => ({type: 'custom', component: LimitInputCell, props: {draft, assetKey: row.key, label: rowLabel(row)}}),
             },
         ]),
     );

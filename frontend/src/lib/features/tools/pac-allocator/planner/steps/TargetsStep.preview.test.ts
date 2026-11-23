@@ -176,107 +176,111 @@ describe('the Targets step and the preview', () => {
         expect(note()).toContain(shown);
     });
 
-    it('«Other cash» shows its own weight today, from the preview (G5-2)', () => {
-        const {draft, brokerKey} = scenario(REBALANCER_PLANNER_PROFILE);
-        draft.addCashEntry(brokerKey, 'EUR');
-        // A manual account: cash without a target of its own, so the «Other cash» row is there.
-        draft.addManualAccount({name: 'Bank probe', currency: 'EUR', available: '100', selected: '50'});
-        mount(REBALANCER_PLANNER_PROFILE, draft, previewWith('ready', ready(brokerKey)));
-
-        const other = screen.getAllByTestId('rebalancer-planner-target-now').find((cell) => cell.getAttribute('data-asset-key') === 'other-cash');
-        expect(other?.textContent?.trim()).toBe(formatExactPercent({kind: 'finite_decimal', value: '0.12'}, 1));
-    });
-
-    describe('«Other cash» only when it is worth more than 0 today (R1-C of project 67, approved 19/11)', () => {
-        /** The last preview with «Other cash» worth `amount` today. */
+    describe('the cash without a target of its own is never a row (TL-2 of project 67, the testlist of 21/11)', () => {
+        /** The last preview with the backend's `other_cash` worth `amount` today. */
         function withOther(brokerKey: string, amount: string): PreviewReady {
             const numbers = ready(brokerKey);
             return {...numbers, items: numbers.items!.map((item) => (item.kind === 'other_cash' ? {...item, value: {value: {kind: 'finite_decimal' as const, value: amount}, currency: 'EUR'}} : item))};
         }
-        /** Cash without a target of its own: the draft has «Other cash»; whether it shows is the preview's to say. */
-        function withLooseCash() {
-            const made = scenario(REBALANCER_PLANNER_PROFILE);
-            made.draft.addManualAccount({name: 'Bank probe', currency: 'EUR', available: '100', selected: '50'});
-            return made;
-        }
-        const row = () => screen.queryByTestId('rebalancer-planner-target-other-cash');
+        const keys = () => screen.getAllByTestId('rebalancer-planner-target-now').map((cell) => cell.getAttribute('data-asset-key'));
 
-        it('no row before a preview has said what it is worth', () => {
-            const {draft} = withLooseCash();
-            mount(REBALANCER_PLANNER_PROFILE, draft, previewWith('waiting', null));
-            expect(screen.getByTestId('rebalancer-planner-targets').getAttribute('data-preview')).toBe('waiting');
-            expect(row()).toBeNull();
-        });
-
-        it('no row when it is worth 0 today', () => {
-            const {draft, brokerKey} = withLooseCash();
-            mount(REBALANCER_PLANNER_PROFILE, draft, previewWith('ready', withOther(brokerKey, '0')));
-            expect(screen.getByTestId('rebalancer-planner-targets').getAttribute('data-preview')).toBe('ready');
-            expect(row()).toBeNull();
-        });
-
-        it('the row when it is worth more than 0 today', () => {
-            const {draft, brokerKey} = withLooseCash();
-            mount(REBALANCER_PLANNER_PROFILE, draft, previewWith('ready', withOther(brokerKey, '0.01')));
-            expect(row()).not.toBeNull();
-        });
-
-        it('an exact ratio is read by its sign too: worth a third of a cent, the row is there', () => {
-            const {draft, brokerKey} = withLooseCash();
-            const numbers = ready(brokerKey);
-            const third = {kind: 'exact_ratio' as const, numerator: '1', denominator: '300', display_decimal: '0.003333', display_scale: 6, display_authority: 'non_authoritative' as const};
-            const withRatio: PreviewReady = {...numbers, items: numbers.items!.map((item) => (item.kind === 'other_cash' ? {...item, value: {value: third, currency: 'EUR'}} : item))};
-            mount(REBALANCER_PLANNER_PROFILE, draft, previewWith('ready', withRatio));
-            expect(row()).not.toBeNull();
-        });
-
-        it('a stale preview keeps its answer until the next one: the row stays, or stays out', () => {
-            const {draft, brokerKey} = withLooseCash();
-            mount(REBALANCER_PLANNER_PROFILE, draft, previewWith('waiting', withOther(brokerKey, '50')));
-            expect(screen.getByTestId('rebalancer-planner-targets').getAttribute('data-stale')).toBe('true');
-            expect(row()).not.toBeNull();
-            cleanup();
-            mount(REBALANCER_PLANNER_PROFILE, draft, previewWith('waiting', withOther(brokerKey, '0')));
-            expect(row()).toBeNull();
-        });
-
-        it('a preview worth more than 0 adds no row when no cash is outside the entries', () => {
+        it('cash outside the entries, worth more than 0 today: no row, and the plan is the same', () => {
             const {draft, brokerKey} = scenario(REBALANCER_PLANNER_PROFILE);
-            draft.addCashEntry(brokerKey, 'EUR');
+            draft.addManualAccount({name: 'Bank probe', currency: 'EUR', available: '100', selected: '50'});
+            const fingerprint = draft.fingerprint;
+            mount(REBALANCER_PLANNER_PROFILE, draft, previewWith('ready', withOther(brokerKey, '50')));
+            expect(keys()).toEqual(['asset:probe']);
+            expect(screen.queryByTestId('dt-row-checkbox-other-cash')).toBeNull();
+            expect(draft.fingerprint).toBe(fingerprint);
+        });
+
+        it('a contribution alone, worth more than 0 today: no row either; stale or not', () => {
+            const {draft, brokerKey} = scenario(REBALANCER_PLANNER_PROFILE);
+            const contribution = draft.addContribution('EUR', 'Salary probe');
+            draft.contribution(contribution.key)!.amount = '300';
             mount(REBALANCER_PLANNER_PROFILE, draft, previewWith('ready', ready(brokerKey)));
-            expect(row()).toBeNull();
+            expect(keys()).toEqual(['asset:probe']);
+            cleanup();
+            mount(REBALANCER_PLANNER_PROFILE, draft, previewWith('waiting', ready(brokerKey)));
+            expect(keys()).toEqual(['asset:probe']);
         });
     });
 
-    it('a contribution alone is «Other cash» too: the row is there with its weight (G5-2)', () => {
-        const {draft, brokerKey} = scenario(REBALANCER_PLANNER_PROFILE);
-        const contribution = draft.addContribution('EUR', 'Salary probe');
-        draft.contribution(contribution.key)!.amount = '300';
-        mount(REBALANCER_PLANNER_PROFILE, draft, previewWith('ready', ready(brokerKey)));
+    describe('«Distribution» with two bars in the Rebalancer, on one scale (TL-2)', () => {
+        const bars = (testid: string) => Object.fromEntries(screen.getAllByTestId(testid).map((bar) => [bar.getAttribute('data-asset-key'), bar.getAttribute('data-width')]));
 
-        const other = screen.getAllByTestId('rebalancer-planner-target-now').find((cell) => cell.getAttribute('data-asset-key') === 'other-cash');
-        expect(other?.textContent?.trim()).toBe(formatExactPercent({kind: 'finite_decimal', value: '0.12'}, 1));
+        it('the grey bar is the weight today, the coloured one the target: 50 % and 42 % today on a scale of 50', () => {
+            const {draft, brokerKey} = scenario(REBALANCER_PLANNER_PROFILE);
+            const entry = draft.addCashEntry(brokerKey, 'EUR');
+            draft.data.targets['asset:probe'] = '50';
+            draft.data.targets[entry.key] = '10';
+            mount(REBALANCER_PLANNER_PROFILE, draft, previewWith('ready', ready(brokerKey)));
+            // Targets 50 and 10 %, today 42 and 6 %: the widest, 50, fills the column.
+            expect(bars('rebalancer-planner-target-bar')).toEqual({'asset:probe': '100.00%', [entry.key]: '20.00%'});
+            expect(bars('rebalancer-planner-target-bar-now')).toEqual({'asset:probe': '84.00%', [entry.key]: '12.00%'});
+        });
+
+        it('a weight today above every target sets the scale', () => {
+            const {draft, brokerKey} = scenario(REBALANCER_PLANNER_PROFILE);
+            draft.data.targets['asset:probe'] = '21';
+            mount(REBALANCER_PLANNER_PROFILE, draft, previewWith('ready', ready(brokerKey)));
+            expect(bars('rebalancer-planner-target-bar')).toEqual({'asset:probe': '50.00%'});
+            expect(bars('rebalancer-planner-target-bar-now')).toEqual({'asset:probe': '100.00%'});
+        });
+
+        it('a stale preview mutes the grey bar, a current one does not', () => {
+            const {draft, brokerKey} = scenario(REBALANCER_PLANNER_PROFILE);
+            const muted = () => screen.getByTestId('rebalancer-planner-target-bar-now').firstElementChild?.classList.contains('opacity-50');
+            mount(REBALANCER_PLANNER_PROFILE, draft, previewWith('waiting', ready(brokerKey)));
+            expect(muted()).toBe(true);
+            cleanup();
+            mount(REBALANCER_PLANNER_PROFILE, draft, previewWith('ready', ready(brokerKey)));
+            expect(muted()).toBe(false);
+        });
+
+        it('without a preview the grey bar is empty, the target is drawn', () => {
+            const {draft} = scenario(REBALANCER_PLANNER_PROFILE);
+            mount(REBALANCER_PLANNER_PROFILE, draft, previewWith('waiting', null));
+            expect(bars('rebalancer-planner-target-bar')).toEqual({'asset:probe': '100.00%'});
+            expect(bars('rebalancer-planner-target-bar-now')).toEqual({'asset:probe': '0.00%'});
+            expect(screen.getByTestId('rebalancer-planner-target-bar-now').getAttribute('data-known')).toBe('false');
+        });
+
+        it('the columns: Entry, Distribution, Now, Target %, Limits — «Now» beside the target', () => {
+            const {draft, brokerKey} = scenario(REBALANCER_PLANNER_PROFILE);
+            mount(REBALANCER_PLANNER_PROFILE, draft, previewWith('ready', ready(brokerKey)));
+            const order = screen.getAllByTestId(/^dt-header-/).map((header) => header.getAttribute('data-testid')!.replace('dt-header-', ''));
+            expect(order.filter((id) => ['asset', 'bar', 'now', 'target', 'limits'].includes(id))).toEqual(['asset', 'bar', 'now', 'target', 'limits']);
+        });
+
+        it('the PAC keeps one bar and its columns: no «Now»', () => {
+            const {draft, brokerKey} = scenario(PAC_PLANNER_PROFILE);
+            mount(null, draft, previewWith('ready', ready(brokerKey)));
+            expect(screen.queryAllByTestId('pac-planner-target-bar-now')).toHaveLength(0);
+            expect(bars('pac-planner-target-bar')).toEqual({'asset:probe': '100.00%'});
+            const order = screen.getAllByTestId(/^dt-header-/).map((header) => header.getAttribute('data-testid')!.replace('dt-header-', ''));
+            expect(order.filter((id) => ['asset', 'bar', 'now', 'target', 'limits'].includes(id))).toEqual(['asset', 'bar', 'target', 'limits']);
+        });
     });
 
     it('on a phone, where «Now» starts hidden, each name carries its weight today under it (G5-1)', async () => {
         asPhone();
         const {draft, brokerKey} = scenario(REBALANCER_PLANNER_PROFILE);
         const entry = draft.addCashEntry(brokerKey, 'EUR');
-        draft.addManualAccount({name: 'Bank probe', currency: 'EUR', available: '100', selected: '50'});
         mount(REBALANCER_PLANNER_PROFILE, draft, previewWith('ready', ready(brokerKey)));
 
         expect(screen.queryAllByTestId('rebalancer-planner-target-now')).toHaveLength(0);
         const lines = screen.getAllByTestId('rebalancer-planner-target-now-line').map((line) => [line.getAttribute('data-asset-key'), line.textContent ?? '']);
-        expect(lines.map(([key]) => key)).toEqual(['asset:probe', entry.key, 'other-cash']);
+        expect(lines.map(([key]) => key)).toEqual(['asset:probe', entry.key]);
         const percent = (value: string) => formatExactPercent({kind: 'finite_decimal', value}, 1);
-        expect(lines.map(([, text], index) => (text ?? '').includes(percent(['0.42', '0.06', '0.12'][index])))).toEqual([true, true, true]);
+        expect(lines.map(([, text], index) => (text ?? '').includes(percent(['0.42', '0.06'][index])))).toEqual([true, true]);
 
         // «Columns» brings the column back: the lines go, the cells show the weights.
         await fireEvent.click(within(screen.getByTestId('rebalancer-planner-targets-columns')).getByTestId('column-visibility-toggle'));
         await fireEvent.click(await screen.findByTestId('column-visibility-item-now'));
         flushSync();
         expect(screen.queryAllByTestId('rebalancer-planner-target-now-line')).toHaveLength(0);
-        expect(screen.getAllByTestId('rebalancer-planner-target-now').map((cell) => cell.getAttribute('data-asset-key'))).toEqual(['asset:probe', entry.key, 'other-cash']);
+        expect(screen.getAllByTestId('rebalancer-planner-target-now').map((cell) => cell.getAttribute('data-asset-key'))).toEqual(['asset:probe', entry.key]);
         cleanup();
 
         // On a wide screen the column shows it: no line under the names.
