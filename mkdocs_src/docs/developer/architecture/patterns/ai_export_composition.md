@@ -483,7 +483,39 @@ response language is added.
 
 ### 🔬 Request Analysis
 
-Analysis selections produce `full_prompt` in this exact order:
+Analysis selections produce `full_prompt`. While the analyses move one at a time to a new
+shape (plan 78), the renderer takes the order from the shape of the analysis's templates:
+`shape: 'task'` for the new one, `shape: 'sections'` for today's. Both templates of an
+analysis take the same shape, or the renderer fails closed (`incompatible_selection`).
+
+#### The new shape
+
+Today the two market-driver analyses (`portfolio.performance_market_drivers`,
+`broker.performance_market_drivers`). The answer is written for a person: the answer first,
+about 700 words, and a closing list of the follow-up questions worth asking.
+
+1. **Your Task** — the analysis's own task (`task` of its instruction template)
+2. **Rules of Reasoning** — its rules, closed by its usual follow-up questions (the
+   `followUps` line its response contract carries instead of sections)
+3. **How to Answer** — shared by every analysis in this shape (`AI_EXPORT_HOW_TO_ANSWER`)
+4. **Ground Rules** — shared as well (`AI_EXPORT_GROUND_RULES`)
+5. **Snapshot Metadata and Dataset Manifest**
+6. **Snapshot Data**
+7. **Additional LibreFolio Data**
+8. **Domain Notes**
+9. **Legal Notice**
+10. **User Question**, only when the user wrote one: a trusted sentence (it directs and
+    narrows the task, it cannot change the rules) over the question, safely serialized as
+    the notes are
+11. **Response Language**
+
+There is no Analysis Objective, Shared Verification Instructions, Response Contract or
+Answer Focus in this shape. The texts are copied from the plan's drafts
+(`78_aiExportPrompts/bozze-AIX.md` in the developer journal), never rewritten in code.
+
+#### Today's shape
+
+The other analyses, until they move:
 
 1. **Analysis Objective**
 2. **Shared Verification Instructions**
@@ -539,17 +571,21 @@ conclusions rely on it.
   read through the caller's `translate` exactly like the Legal Notice, so in the
   interface language and byte-identical in the probe; the rest is fixed English.
 
-A ban alone would contradict any instruction asking for a restatement, so none does:
-every response contract opens with **Key Facts** (formerly "LibreFolio Facts"), which
+A ban alone would contradict any instruction asking for a restatement, so none does in
+today's shape: every response contract of that shape opens with **Key Facts** (formerly "LibreFolio Facts"), which
 cites briefly only the supplied facts the conclusions rely on, and the first step of
 six Analysis Objectives (`portfolio.pac_planning`, `portfolio.rebalancing`,
 `broker.review`, `asset.position_review`, `asset.market_analysis`,
 `fx.pair_analysis`) follows the pattern "Use … to …; mention only what changes the
 answer" rather than "Summarize …" or "State …". Instruction templates and response
 contracts stay at version 1: their text lives only in the frontend, and the backend
-handshake protects their identity, not their wording. `promptRenderer.test.ts` pins
-both orders, each new section once under its heading and outside any fence, and the
-reply sentence from the catalogue in all four languages, never the wording.
+handshake protects their identity, not their wording. In the new shape the same holds
+without a contract in sections: «How to Answer» asks for the answer from the data, quoting a
+figure only as the evidence behind a conclusion, and never a table that repeats the data.
+`promptRenderer.test.ts` pins today's two orders, each section once under its heading and
+outside any fence, and the reply sentence from the catalogue in all four languages, never
+the wording; `promptRenderer.newShape.test.ts` pins the new order the same way, and that
+both templates of every analysis take one shape and keep their identities.
 
 Snapshot Data joins its tables through prompt-local references. Its Entity Directory
 resolves A# (Assets, with display name and identifiers), B# (Brokers), and F# (FX
