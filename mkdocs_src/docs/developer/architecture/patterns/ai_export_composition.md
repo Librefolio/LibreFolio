@@ -363,6 +363,7 @@ degrade independently. Fiscal Analyses add the internal full-FIFO dataset.
 | `portfolio.rebalancing`                | `portfolio.overview_and_history` | `portfolio.asset_history`    |
 | `portfolio.performance_market_drivers` | `portfolio.overview_and_history` | `portfolio.asset_history`    |
 | `portfolio.fiscal_lots`                | general + internal full FIFO     | `portfolio.asset_history`    |
+| `portfolio.protection_strategies`      | `portfolio.overview_and_history` | `portfolio.asset_history`    |
 | `broker.review`                        | `broker.overview_and_history`    | `broker.asset_history`       |
 | `broker.performance_market_drivers`    | `broker.overview_and_history`    | `broker.asset_history`       |
 | `broker.fiscal_lots`                   | general + internal full FIFO     | `broker.asset_history`       |
