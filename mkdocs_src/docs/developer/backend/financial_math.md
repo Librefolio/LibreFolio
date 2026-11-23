@@ -96,6 +96,7 @@ backend/app/services/financial_math/
 │   ├── period.py            a period's boundary states, its P&L, the identity that closes it and its residual (the AI Export reconciliation, J-14); the day's P&L change; the period's realized sales (`period_realized_sales`)
 │   ├── contributions.py     a position's row in the Dashboard's Performance table: its period P&L (`position_period_pnl`), return on the start value, annualized returns (a closed flight too short to annualize: `closed_flight_too_short`, MF-A3), the internal-transfer split (P22: `transfer_tract` is the tract of one transfer for one broker)
 │   ├── asset_groups.py      an asset held at several brokers as one row, the Dashboard's «Globale» view (project 74): the sum of its brokers' holdings (`group_holdings`), Performance rows (`group_contributions`), Yield on Cost (`group_yield_on_cost`) and other effects (`merge_by_kind`); every ratio from the sums, never an average and never a replay as one broker
+│   ├── allocation_view.py   the «Allocazione» tab's filtered allocation (lane 80): the slices of a selection of classes (an asset's class: `type_rules.asset_type_content`), without the excluded assets and buckets; what stays outside and what is excluded, base + outside + excluded = NAV; the class × dimension matrix of the whole portfolio; the selection's history in steps (`build_allocation_view`)
 │   ├── position_series.py   a position's series, as steps, for the Dashboard's positions chart: P&L since the period's start (the Performance row's, at each day), its base and the percent on it, from the engine's frames of that position (J5-1, #48; D-P4)
 │   └── engine.py            PortfolioCalculationEngine: loads a scope, runs the steps, caches
 └── lots/                    lots analysis math, called by lots_analysis_service.py
@@ -500,10 +501,10 @@ asset id), plus the Liquidity slice of `by_type` (cash and cash in transit): the
 
 **Allocation slices (MF-C2).** Every allocation dimension — type, sector, geography, asset;
 current and history — takes its percentages from `weights.slice_percents()`: each slice's amount over the signed sum of
-the day's slices, × 100, unrounded, in the mapping's order; `DerivedViewsBuilder` rounds them to 0.01 (`_cents()`). A
+the day's slices, × 100, unrounded, in the mapping's order; `DerivedViewsBuilder` rounds them to 0.01 (`percent_cents()`). A
 slice keeps its sign, so with negative cash and a positive sum the cash slice is below zero and the others add up to
 more than 100 (`{Stock: 1500, Liquidity: −500}` → 150 / −50). When the sum is zero or negative, no slice has a share:
-`slice_percents()` returns None for every slice and `_cents()` keeps it, while `name`, `amount`, `id`, `emoji` and the
+`slice_percents()` returns None for every slice and `percent_cents()` keeps it, while `name`, `amount`, `id`, `emoji` and the
 order (by amount, descending) are unchanged — stocks bought on an overdraft (`{Stock: 500, Liquidity: −500}`), or an
 emptied portfolio (`{Liquidity: 0}`). The contracts carry the None: `AllocationItem.value` (`schemas/portfolio.py`,
 also inside `AllocationHistoryPoint.components`) and the AI Export `AllocationSlice.percent`
