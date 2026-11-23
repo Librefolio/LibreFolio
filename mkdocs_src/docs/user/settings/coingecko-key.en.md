@@ -79,7 +79,7 @@ When you create the asset, LibreFolio loads its history: the last year on the De
   [Data Editor](../assets/detail/data-editor.md#import-from-csv).
 - **Self-hosted only**: CoinGecko is offered on instances you run yourself; a hosted service may switch it off.
 - **The data are CoinGecko's**, under [its API terms](https://www.coingecko.com/en/api_terms): whoever creates the key
-  accepts them. LibreFolio shows «Powered by CoinGecko» with its prices, as the terms ask
+  accepts them. LibreFolio credits CoinGecko with «Powered by CoinGecko», as the terms ask
   ([where](../assets/providers/coingecko.md#attribution)).
 - **One key for the whole instance**: every user's CoinGecko assets spend the same account's credits.
 

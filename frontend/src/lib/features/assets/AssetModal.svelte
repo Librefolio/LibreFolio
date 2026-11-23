@@ -1952,7 +1952,6 @@
     differences={comparisonDifferences}
     assetName={displayName}
     zIndex={zIndex + 20}
-    providerCodes={[providerCode]}
     onapply={handleComparisonApply}
     oncancel={() => {
         showComparisonModal = false;
