@@ -804,6 +804,18 @@ def front_tx_broker_icon_hydration(verbose: bool = False, ui: bool = False, head
     return _run_playwright("transactions/tx-broker-icon-hydration.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_tx_reward_form(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run TX REWARD form E2E tests (79 STK-2a: value on receipt prefilled from the price history, no Auto, a typed value saved)."""
+    print_section("Frontend TX Reward Form Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("transactions/tx-reward-form.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_tx_bulk_row_order(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run the BulkModal same-date creation-order E2E test (C4: E-order)."""
     print_section("Frontend TX Bulk Row Order Tests")
@@ -1090,6 +1102,7 @@ def populate_registry(registry: dict) -> None:
         desc="C3: an owned broker without icon fields is asked for (GET /brokers/{id}) at most once per cache generation, across a Refresh round trip; portal_url control never asked",
         tests="transactions/tx-broker-icon-hydration.spec.ts",
     )
+    add_test(cat, "tx-reward-form", front_tx_reward_form, name="TX Reward Form Tests", desc="79 STK-2a: REWARD through the FormModal, its value on receipt prefilled from the price history, no Auto toggle, a typed value saved", tests="transactions/tx-reward-form.spec.ts")
     add_test(cat, "tx-bulk-row-order", front_tx_bulk_row_order, name="TX Bulk Row Order Tests", desc="C4 E-order: five new same-date rows keep their creation order in the BulkModal grid, read by owned description; editor discarded, nothing saved", tests="transactions/tx-bulk-row-order.spec.ts")
     add_test(
         cat,
