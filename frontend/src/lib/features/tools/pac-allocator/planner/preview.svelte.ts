@@ -18,7 +18,7 @@
  *     flight (`busy`, `settled()`) instead of aborting it;
  *   - sends the euros typed for «Custom» (`setCustomEuros`) until an answer that carried them lands, and writes the λ that
  *     answer gives into the draft, while the draft's choice is still «Custom»; later previews send λ (§7.3: the draft keeps
- *     λ, a new total gives the euros back).
+ *     λ, a new total gives the euros back). Writing that λ asks no second preview: the answer already counts it (R1-F).
  */
 import {runTool} from '../../client';
 import {assertToolAccount} from '../../contracts';
@@ -109,14 +109,25 @@ export class PlannerPreview {
     #inFlight: Promise<void> | null = null;
     /** A change arrived while a call was on its way: send the latest draft when it lands. */
     #queued = false;
+    /**
+     * The draft's fingerprint right after an answer wrote its own λ: that answer counts that λ already, so the shell asking
+     * again for that fingerprint arms nothing (R1-F of project 67). Used once.
+     */
+    #counted: string | null = null;
 
     constructor(deps: PreviewDeps) {
         this.#deps = deps;
     }
 
-    /** The draft changed: ask again after the pause, keeping the numbers on screen (stale) meanwhile. */
+    /**
+     * The draft changed: ask again after the pause, keeping the numbers on screen (stale) meanwhile. The one exception is the
+     * change an answer made by writing its own λ: those numbers count it already (R1-F of project 67).
+     */
     schedule(draft: PlannerDraft): void {
         this.#draft = draft;
+        const counted = this.#counted;
+        this.#counted = null;
+        if (counted !== null && draft.fingerprint === counted) return;
         this.state = 'waiting';
         this.#arm();
     }
@@ -218,6 +229,10 @@ export class PlannerPreview {
         const lambda = ready.custom?.distance_weight.kind === 'finite_decimal' ? ready.custom.distance_weight.value : undefined;
         if (lambda !== undefined && draft.data.fidelity.kind === 'custom' && draft.data.fidelity.lambda !== lambda) {
             draft.data.fidelity = {kind: 'custom', lambda};
+            // The answer counted the euros as this λ, rounded as the backend sends it back: the same numbers again, so the
+            // shell's call for this change asks nothing (R1-F of project 67, «rendilo istantaneo»). A newer change waiting
+            // to be sent is not lost: its pause or its queue is already armed, and sends the latest draft.
+            this.#counted = draft.fingerprint;
         }
     }
 

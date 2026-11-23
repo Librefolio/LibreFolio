@@ -21,10 +21,12 @@ class ToolDefinitionError(ValueError):
 
 
 class ToolExecutionError(RuntimeError):
-    def __init__(self, code: ToolErrorCode, *, retryable: bool = False):
+    def __init__(self, code: ToolErrorCode, *, retryable: bool = False, reason: str | None = None):
         super().__init__(code)
         self.code = code
         self.retryable = retryable
+        # Where a ``worker_crashed`` was raised, one of the executor's ``CRASH_REASONS``: for the server log, never the wire.
+        self.reason = reason
 
 
 @dataclass(frozen=True, slots=True)
@@ -99,6 +101,10 @@ class ToolService:
     output_type: object
     name_i18n_key: str | None = None
     description_i18n_key: str | None = None
+    #: The operations' limits by the machine's usable CPUs (TURNI of project 67): rows of (fewest CPUs, operations), from one
+    #: CPU up. The platform picks the row when it builds its executor (``catalog.operations_for``); a row changes only the
+    #: time limits of ``operations``. Empty: ``operations`` hold on every machine.
+    operations_by_usable_cpus: tuple[tuple[int, tuple[ToolOperationPolicy, ...]], ...] = ()
 
     def input_adapter(self) -> TypeAdapter:
         return TypeAdapter(self.input_type)
