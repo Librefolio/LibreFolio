@@ -87,6 +87,7 @@ _ORPHAN_ISSUE_CODES = {
 
 _CUSTODY_KINDS = {
     LotTimelineEventKind.BUY,
+    LotTimelineEventKind.REWARD,
     LotTimelineEventKind.ADJUSTMENT_IN,
     LotTimelineEventKind.TRANSFER_DEPART,
     LotTimelineEventKind.TRANSFER_ARRIVE,
@@ -1425,9 +1426,7 @@ class LotsAnalysisService:
                     LotTimelineEventSchema(
                         lot_id=lot_id,
                         date=event.date,
-                        # A REWARD opens its lot as the BUY of the DIVIDEND + BUY pair it stands for (project 79); its own
-                        # timeline kind and marker come with the frontend lot (STK-2)
-                        kind=LotTimelineEventKind.BUY if event.kind == "REWARD" else LotTimelineEventKind(event.kind),
+                        kind=LotTimelineEventKind(event.kind),
                         transaction_id=event.transaction_id,
                         related_transaction_id=event.pair_id,
                         broker_id=event.broker_id,

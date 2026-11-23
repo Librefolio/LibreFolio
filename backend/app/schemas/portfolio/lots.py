@@ -166,6 +166,7 @@ class LotTimelineEventKind(StrEnum):
     """Presentation-level lot chronology events derived from engine events/closures."""
 
     BUY = "BUY"
+    REWARD = "REWARD"
     SELL = "SELL"
     ADJUSTMENT_IN = "ADJUSTMENT_IN"
     ADJUSTMENT_OUT = "ADJUSTMENT_OUT"
