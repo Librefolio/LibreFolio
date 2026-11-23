@@ -193,6 +193,109 @@ describe('the Rebalancer Strategy step', () => {
         expect(localProblems(draft).map((problem) => problem.key)).not.toContain('fidelityCustomMissing');
     });
 
+    describe('the «Custom» column stays for comparison once another choice is made (TL-1)', () => {
+        function mountOn(draft: PlannerDraft, preview: PlannerPreview) {
+            const view = render(ProfileHarness, {props: {profile: REBALANCER_PLANNER_PROFILE, child: RebalancerStrategyStep, childProps: {draft, preview}}});
+            flushSync();
+            return view;
+        }
+
+        function customCells(): HTMLElement[] {
+            return screen.getAllByTestId('rebalancer-planner-fidelity-cell').filter((cell) => cell.getAttribute('data-level') === 'custom');
+        }
+
+        async function typedThenBalanced() {
+            const draft = new PlannerDraft('EUR', defaultPolicy(REBALANCER_PLANNER_PROFILE), REBALANCER_PLANNER_PROFILE);
+            const preview = new PlannerPreview({call: vi.fn(), blocked: () => false});
+            preview.state = 'ready';
+            preview.numbers = ready();
+            const view = mountOn(draft, preview);
+            await chooseCustom();
+            await fireEvent.input(screen.getByTestId('rebalancer-planner-fidelity-custom-input'), {target: {value: '80'}});
+            flushSync();
+            const fingerprints = [draft.fingerprint, draft.previewFingerprint];
+            await pick('balanced');
+            flushSync();
+            return {draft, preview, view, fingerprints};
+        }
+
+        it('a figure typed, then «Balanced»: the column keeps its figures, not highlighted; the plan reads «Balanced»', async () => {
+            const {draft} = await typedThenBalanced();
+            expect(draft.data.fidelity).toEqual({kind: 'level', level: 'balanced'});
+            // 2·0.8·d²/20 000 on the rows 200, 500, 1 000, 2 000: 3.2, 20, 80, 320.
+            expect(customCells()).toHaveLength(4);
+            expect(customCells().map((cell) => cell.getAttribute('data-highlight'))).toEqual(['false', 'false', 'false', 'false']);
+        });
+
+        it('the figure remembered moves no fingerprint: a result does not go stale, the preview asks nothing', async () => {
+            const {draft, fingerprints} = await typedThenBalanced();
+            const level = new PlannerDraft('EUR', defaultPolicy(REBALANCER_PLANNER_PROFILE), REBALANCER_PLANNER_PROFILE);
+            level.data.fidelity = {kind: 'level', level: 'balanced'};
+            // The same facts and «Balanced», with or without a figure remembered: the same keys.
+            expect([draft.fingerprint, draft.previewFingerprint]).toEqual([level.fingerprint, level.previewFingerprint]);
+            expect(draft.previewFingerprint).toBe(fingerprints[1]);
+        });
+
+        it('back to «Custom»: the figure is there again, and λ with it', async () => {
+            const {draft} = await typedThenBalanced();
+            await chooseCustom();
+            flushSync();
+            expect(draft.data.fidelity).toEqual({kind: 'custom', lambda: '0.8'});
+            expect((screen.getByTestId('rebalancer-planner-fidelity-custom-input') as HTMLInputElement).value).toBe('80');
+            expect(customCells().map((cell) => cell.getAttribute('data-highlight'))).toEqual(['true', 'true', 'true', 'true']);
+        });
+
+        it('leaving the step and coming back: the column is still there, and «Custom» gives the figure back', async () => {
+            const {draft, preview, view} = await typedThenBalanced();
+            view.unmount();
+            mountOn(draft, preview);
+            expect(customCells()).toHaveLength(4);
+            expect(customCells().map((cell) => cell.getAttribute('data-highlight'))).toEqual(['false', 'false', 'false', 'false']);
+            await chooseCustom();
+            flushSync();
+            expect(draft.data.fidelity).toEqual({kind: 'custom', lambda: '0.8'});
+            expect((screen.getByTestId('rebalancer-planner-fidelity-custom-input') as HTMLInputElement).value).toBe('80');
+        });
+
+        it('a «Custom» λ that came from elsewhere is remembered too when another choice is made (a guard)', async () => {
+            const draft = new PlannerDraft('EUR', defaultPolicy(REBALANCER_PLANNER_PROFILE), REBALANCER_PLANNER_PROFILE);
+            draft.data.fidelity = {kind: 'custom', lambda: '0.6'};
+            const preview = new PlannerPreview({call: vi.fn(), blocked: () => false});
+            preview.state = 'ready';
+            preview.numbers = ready();
+            mountOn(draft, preview);
+            expect(draft.customLambdaMemory).toBe('');
+            await pick('balanced');
+            flushSync();
+            expect(draft.customLambdaMemory).toBe('0.6');
+            expect(customCells().map((cell) => cell.getAttribute('data-highlight'))).toEqual(['false', 'false', 'false', 'false']);
+        });
+
+        it('never a figure: no column, whatever the choice', async () => {
+            const {draft} = setup();
+            await chooseCustom();
+            await pick('faithful');
+            flushSync();
+            expect(draft.data.fidelity).toEqual({kind: 'level', level: 'faithful'});
+            expect(screen.getAllByTestId('rebalancer-planner-fidelity-cell').filter((cell) => cell.getAttribute('data-level') === 'custom')).toEqual([]);
+        });
+
+        it('a cleared field forgets the figure: another choice then shows no column', async () => {
+            const draft = new PlannerDraft('EUR', defaultPolicy(REBALANCER_PLANNER_PROFILE), REBALANCER_PLANNER_PROFILE);
+            const preview = new PlannerPreview({call: vi.fn(), blocked: () => false});
+            preview.state = 'ready';
+            preview.numbers = ready();
+            mountOn(draft, preview);
+            await chooseCustom();
+            const field = screen.getByTestId('rebalancer-planner-fidelity-custom-input');
+            await fireEvent.input(field, {target: {value: '80'}});
+            await fireEvent.input(field, {target: {value: ''}});
+            await pick('balanced');
+            flushSync();
+            expect(customCells()).toEqual([]);
+        });
+    });
+
     it('without the preview total (one that cannot be counted yet) the «Custom» field is off', async () => {
         setup(null, 'error');
         await chooseCustom();

@@ -3,8 +3,10 @@
 
   How much the plan may spend at most, in fees and taxes, to put back money that is in the wrong place, per fidelity level.
   The figures are the page's own (`acceptableCost.ts`, R1-F (b) of project 67), on the preview's total and the λ of its
-  three levels: a level chosen or a figure typed changes them at once, with no call. The «Custom» column is there only
-  while that choice is active with a λ (M32); «Target first» has no column, the line under the table says why (M33).
+  three levels: a level chosen or a figure typed changes them at once, with no call. The «Custom» column is there while
+  that choice is active with a λ, highlighted (M32); once another choice is made it stays, plain, for comparison, on the
+  last λ the draft remembers (TL-1 of project 67, the developer's testlist of 21/11). «Target first» has no column, the
+  line under the table says why (M33).
   While the preview waits the figures stay, muted; after a failure the table goes and a line says why. Every figure
   derives from the user's total: masked in privacy mode.
 
@@ -34,11 +36,13 @@
     interface Props {
         /** The scenario preview (step 8): the total and the λ of the levels the table is counted on. */
         preview: PlannerPreview | null;
-        /** The draft's fidelity: the «Custom» column shows only while it is the choice. */
+        /** The draft's fidelity: the «Custom» column is highlighted only while it is the choice. */
         fidelity: DraftFidelity;
+        /** The last «Custom» λ (TL-1): under another choice the column stays, for comparison; '' for none. */
+        rememberedLambda?: string;
     }
 
-    let {preview, fidelity}: Props = $props();
+    let {preview, fidelity, rememberedLambda = ''}: Props = $props();
 
     const T = 'tools.portfolioRebalancer.planner.strategy.table';
     /** On a phone (the table's own 768 px breakpoint) the headers are short and the cells drop «up to» (mockup screen 6). */
@@ -52,8 +56,12 @@
     }
 
     const numbers = $derived(preview?.numbers ?? null);
-    /** The draft's λ for the «Custom» column: only while that choice is active. */
-    const customLambda = $derived(fidelity.kind === 'custom' ? fidelity.lambda : null);
+    /**
+     * The λ of the «Custom» column: the draft's while that choice is active (none while a new figure converts), else the
+     * one remembered, kept for comparison (TL-1).
+     */
+    const customChosen = $derived(fidelity.kind === 'custom');
+    const customLambda = $derived(fidelity.kind === 'custom' ? fidelity.lambda : rememberedLambda || null);
     const table = $derived(numbers?.fidelity_level_weights ? acceptableCostTable(numbers.total, numbers.fidelity_level_weights, customLambda) : null);
     const stale = $derived(preview?.stale ?? false);
     const rows = $derived<Row[]>((table ?? []).map((row, index) => ({id: String(index), index, row})));
@@ -95,7 +103,8 @@
         let widest = 0;
         for (const row of rows) {
             const amount = level === 'misplaced' ? row.row.misplaced : row.row[level];
-            // The «Custom» column is bold and shaded; the reference row carries its badge beside the figure.
+            // The «Custom» column is bold and shaded while chosen, and measured so always, so it never jumps when the choice
+            // changes (TL-1); the reference row carries its badge beside the figure.
             let width = textWidth(cellText(level, amount), 14, level === 'custom' ? 600 : 400, 0.64) + CELL_PADDING + MARGIN;
             if (level === 'custom') width += SHADE_PADDING;
             if (level === 'misplaced' && row.row.reference) width += textWidth($t(`${T}.reference`), 12, 400, 0.66) + BADGE_PADDING;
@@ -107,9 +116,10 @@
     function cellHtml(row: Row, level: Level | 'misplaced', amount: PreviewMoney | null): string {
         const text = cellText(level, amount);
         const reference = level === 'misplaced' && row.row.reference ? ` <span class="${BADGE.neutral}">${escapeHtml($t(`${T}.reference`))}</span>` : '';
-        const tone = stale ? 'text-lf-muted' : level === 'misplaced' || level === 'custom' ? 'text-lf-primary' : 'text-lf-secondary';
+        // The «Custom» column stands out only while it is the choice; kept for comparison (TL-1), it reads as a level.
+        const highlight = level === 'custom' && customChosen;
+        const tone = stale ? 'text-lf-muted' : level === 'misplaced' || highlight ? 'text-lf-primary' : 'text-lf-secondary';
         // G6-2: the «Custom» column in the chosen cards' shade, bold, as the mockup.
-        const highlight = level === 'custom';
         const shade = highlight ? ' rounded-md bg-lf-selected px-2 py-0.5 font-semibold' : '';
         return `<span class="whitespace-nowrap tabular-nums ${tone}${shade}" data-testid="${testId('fidelity-cell', profile)}" data-level="${level}" data-row="${row.index}" data-reference="${row.row.reference ? 'true' : 'false'}" data-highlight="${highlight ? 'true' : 'false'}">${escapeHtml(text)}${reference}</span>`;
     }
