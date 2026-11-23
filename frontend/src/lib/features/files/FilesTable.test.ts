@@ -709,3 +709,37 @@ describe.each(['static', 'brim'] as const)('FilesTable %s: the files the install
         expect(uploaderCell(table, 'unknown'), 'an unknown account keeps its number').toHaveTextContent('#8080');
     });
 });
+
+// 81 U21: a bulk «Download» asks first, on every table that draws the selection panel (the developer lost three images to a
+// bulk «Delete» that ran at once, and the download started without a word). The page owns what «Delete» does and asks for
+// its confirm through `requireConfirm` (`DataTable` shows the modal); the table owns «Download», so it asks here.
+describe.each(['static', 'brim'] as const)('FilesTable %s: the bulk download asks first (81 U21)', (type) => {
+    async function tickTwo() {
+        const downloads = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+        const selectionActions = [{id: 'delete', icon: () => null, label: () => 'Delete', variant: 'danger' as const, onClick: vi.fn()}];
+        render(FilesTable, {type, files: filesFor(type), onDelete: vi.fn(), selectionActions});
+        await waitFor(() => expect(root(type)).toHaveAttribute('data-users-state', 'ready'));
+        await fireEvent.click(screen.getByTestId('dt-row-checkbox-zephyr'));
+        await fireEvent.click(screen.getByTestId('dt-row-checkbox-atlas10'));
+        return downloads;
+    }
+
+    it('opens the confirmation and downloads nothing until the user confirms', async () => {
+        const downloads = await tickTwo();
+        await fireEvent.click(screen.getByTestId('toolbar-action-download'));
+        expect(await screen.findByTestId('confirm-modal-confirm')).toBeInTheDocument();
+        await new Promise((resolve) => setTimeout(resolve, 450));
+        expect(downloads).not.toHaveBeenCalled();
+        await fireEvent.click(screen.getByTestId('confirm-modal-confirm'));
+        await waitFor(() => expect(downloads).toHaveBeenCalledTimes(2));
+    });
+
+    it('downloads nothing on Cancel and keeps the selection', async () => {
+        const downloads = await tickTwo();
+        await fireEvent.click(screen.getByTestId('toolbar-action-download'));
+        await fireEvent.click(await screen.findByTestId('confirm-modal-cancel'));
+        await new Promise((resolve) => setTimeout(resolve, 450));
+        expect(downloads).not.toHaveBeenCalled();
+        expect(screen.getByTestId('dt-row-checkbox-zephyr')).toHaveAttribute('data-state', 'checked');
+    });
+});

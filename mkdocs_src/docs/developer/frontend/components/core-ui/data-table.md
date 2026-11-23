@@ -41,7 +41,7 @@ The `DataTable` is a powerful, generic table component built with Svelte 5 Runes
   columns present and forgets the absent ones.
 - **Actions**: Per-row actions behind a **⋮** button in the actions column, and bulk actions on the
   selected rows. Actions with `requireConfirm` go through a [ConfirmModal](modals.md#confirmmodal).
-- **Context Menu**: Right-click on a row opens the same menu as **⋮**, built from `rowActions`.
+- **Context Menu**: Right-click on a row opens the same menu as **⋮**, built from `rowActions`. A right-click on an `input`, `textarea`, `select` or `contenteditable` inside the row keeps the browser's own menu, so «Paste» works there; a `contextmenu` that comes from the ⋮ itself (Shift+F10, the Menu key) opens the menu anchored to the ⋮, and Escape gives the focus back to it. A table that passes `rowActions` does not switch the menu off: `rowMenuCoverage.gate.test.ts` fails on `enableContextMenu={false}` or on a value that follows the phone.
   - **Hidden or blocked** (77 SEL-M, Q-SEL-12): an action that makes no sense on a row is hidden with `visible`. One that
     makes sense but is blocked returns its reason from `blocked(row)` (`{hint, reason}`, as the bulk actions do). Its item
     is `aria-disabled`, reachable, with an ⓘ; a hover, a tap, a click or the keyboard focus opens the reason in the
@@ -170,7 +170,7 @@ The source of truth is the `Props` interface of `lib/components/table/DataTable.
 | `actionsColumnWidth` | `string` | `'64px'` | Width of the actions column. |
 | `actionsLabel` | `string` | `table.actions` | Header and ⋮ label of the actions column. |
 | `stickyActions` | `boolean` | `true` | Whether the actions column sticks to the right edge, above 768 px — see [Sticky columns](#sticky-columns). |
-| `enableContextMenu` | `boolean` | `true` | Right-click menu on rows. |
+| `enableContextMenu` | `boolean` | `true` | Right-click menu on rows. Keep it on wherever `rowActions` is not empty (gate). |
 
 **Columns, sorting, filters**
 

@@ -235,7 +235,7 @@
         </div>
     {:else}
         <!-- No selection: the hint holds the row, and there is no bar yet (`selection-toolbar` exists only with a selection). -->
-        <div class="top-bar" data-variant="top">
+        <div class="top-bar" data-variant="top" data-in-head={inHead ? 'true' : undefined}>
             <span class="top-hint" data-testid="selection-toolbar-hint">{hint ?? $t('table.selectionHint')}</span>
         </div>
     {/if}
@@ -527,6 +527,13 @@
         align-items: center;
         gap: 0.375rem;
         min-height: 2rem;
+    }
+
+    /* The actions on the selected rows, when they are not floating, sit on the right edge (81 U20); the hint before the
+       first tick sits there too, so the bar grows from one edge and nothing jumps when it appears. A section's head
+       (`in-head`, `data-in-head`) places the bar itself. */
+    .top-bar:not(.in-head):not([data-in-head]) {
+        justify-content: flex-end;
     }
 
     /* In a section's head (77 SEL-D2) the bar keeps one line, so the head keeps its height: below 50rem of head (the

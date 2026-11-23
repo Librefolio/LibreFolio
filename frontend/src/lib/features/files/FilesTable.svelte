@@ -653,6 +653,10 @@
                 id: 'download',
                 icon: Download,
                 label: () => $t('uploads.download'),
+                // 81 U21: a download of many files starts only after the user says yes (the list shows which).
+                requireConfirm: true,
+                confirmMessage: (count) => $t('uploads.confirmBulkDownload.message', {values: {n: count}}),
+                confirmText: () => $t('uploads.download'),
                 onClick: (selectedFiles) => {
                     selectedFiles.forEach((file, index) => {
                         setTimeout(() => {

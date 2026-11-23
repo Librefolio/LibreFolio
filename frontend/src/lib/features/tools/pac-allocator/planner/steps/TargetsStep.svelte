@@ -419,7 +419,6 @@
                 enableColumnVisibility
                 enableColumnFilters={false}
                 enableColumnResize
-                enableContextMenu={phone.current}
                 enableActions={!phone.current}
                 {rowActions}
                 actionsColumnWidth={phone.current ? '44px' : '64px'}
