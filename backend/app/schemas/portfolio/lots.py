@@ -286,14 +286,16 @@ class PerformanceHistoryPoint(StepSpan):
 
 
 class LotIncomeEventKind(StrEnum):
-    """Asset-linked income transaction kinds allocated to LONG lots (plan v3 §11 markers)."""
+    """Asset-linked income transaction kinds allocated to LONG lots (plan v3 §11 markers). REWARD is income in kind: its
+    value on receipt, allocated to the lots held the day before (project 79)."""
 
     DIVIDEND = "DIVIDEND"
     INTEREST = "INTEREST"
+    REWARD = "REWARD"
 
 
 class LotIncomeEventSchema(StrictModel):
-    """A single asset-linked DIVIDEND/INTEREST transaction allocated pro-rata across open LONG lots.
+    """A single asset-linked DIVIDEND/INTEREST/REWARD transaction allocated pro-rata across open LONG lots.
 
     Powers the dashed income markers on the WAC/Value/Return charts (plan v3 §11): one entry per
     income transaction that had at least one open LONG lot on its date. ``amount`` is the whole
@@ -308,7 +310,7 @@ class LotIncomeEventSchema(StrictModel):
     lot_ids: List[int] = Field(default_factory=list, description="LONG lots the income was allocated to at transaction.date.")
 
 
-EconomicTypeLiteral = Literal["FEE", "TAX", "DIVIDEND", "INTEREST"]
+EconomicTypeLiteral = Literal["FEE", "TAX", "DIVIDEND", "INTEREST", "REWARD"]
 
 
 AllocationContextLiteral = Literal["OPENING", "CLOSURE", "INCOME", "HOLDING"]
@@ -324,6 +326,7 @@ AllocationRuleLiteral = Literal[
     "OPEN_LOTS_FALLBACK",
     "LINKED_TRADE",
     "LINKED_INCOME",
+    "REWARD_OWN_LOT",
 ]
 
 
