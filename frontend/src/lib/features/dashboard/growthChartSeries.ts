@@ -34,6 +34,8 @@ export interface PnlLabels {
     total: string;
     dividend: string;
     interest: string;
+    /** Rewards in kind (REWARD, project 79). */
+    reward: string;
     costs: string;
     deposit: string;
     acqNewCapital: string;
@@ -257,6 +259,11 @@ export function findReferenceTotalPnl(entry: AggregatedResolutionData, reference
     return daily[idx] ?? null;
 }
 
+/** Whether the entry holds a reward in kind (REWARD, project 79) on some bucket: the Income view then draws its series. */
+export function hasRewards(entry: AggregatedResolutionData): boolean {
+    return (entry.pnl.income.reward?.values ?? []).some((value) => value != null && value !== 0);
+}
+
 /** The data of every series the view on screen draws, in the order the full build declares them. */
 export function buildGrowthUpdateSeries(context: GrowthSeriesContext, entry: AggregatedResolutionData, referenceDate: string | null = null): GrowthSeriesData[] {
     const {viewMode, pnlSubmode, eurLabels, pnlLabels, pctSeries, aggregationInputs} = context;
@@ -313,6 +320,9 @@ export function buildGrowthUpdateSeries(context: GrowthSeriesContext, entry: Agg
             {name: pnlLabels.deposit, data: faded(entry.pnl.deposits.points)},
             {name: pnlLabels.bookValue, data: faded(entry.pnl.acquisition.fromNewCapital.points)},
             {name: pnlLabels.bookValue, data: faded(entry.pnl.acquisition.fromReinvested.points)},
+            // Slot 6, appended so the six above keep their indexes: rewards in kind, stacked with the income. Only when
+            // the period has one: a portfolio without rewards draws the chart it always drew, with no empty legend entry
+            ...(hasRewards(entry) ? [{name: pnlLabels.reward, data: faded(entry.pnl.income.reward?.points ?? [])}] : []),
         ];
     }
 
@@ -486,6 +496,9 @@ function buildSeries(context: GrowthSeriesContext, isDark: boolean, seriesData: 
             // so hiding it in one view hides it in the other too (accepted, D27).
             {name: pnlLabels.bookValue, type: 'bar' as const, stack: 'acquisition', data: seriesData[4].data, itemStyle: {color: cc('bookAssetLike')}, ...gaps},
             {name: pnlLabels.bookValue, type: 'bar' as const, stack: 'acquisition', data: seriesData[5].data, itemStyle: {color: cc('cashGenerated')}, ...gaps},
+            // Rewards in kind (REWARD, project 79): on the income stack, above dividends and interest; the last slot so the
+            // indexes above stay as they were, and only when the update built it (`hasRewards`)
+            ...(seriesData[6]?.name === pnlLabels.reward ? [{name: pnlLabels.reward, type: 'bar' as const, stack: 'income', data: seriesData[6].data, itemStyle: {color: cc('reward')}, ...gaps}] : []),
         ];
     }
 
