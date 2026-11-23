@@ -5,29 +5,21 @@ exact arithmetic, and return the numbers the screen shows before the calculation
 
 * the total of the plan: ``F`` for the Rebalancer, the cash the PAC invests (its fixed reference);
 * the Rebalancer's target entries today, value and weight on ``F``;
-* the Rebalancer's table «maximum acceptable cost», from ``financial_math.acceptable_cost``, with the λ of the three levels
-  (``FIDELITY_LEVEL_WEIGHTS``, the normalizer's table) and the «custom» fidelity both ways.
+* the λ of the Rebalancer's three fidelity levels (``FIDELITY_LEVEL_WEIGHTS``, the normalizer's table). The page computes
+  the table «maximum acceptable cost» from them and ``F`` (R1-F (b) of project 67): no number here depends on the request's
+  target fidelity, so the page asks no preview when only the fidelity changes.
 
 The numbers come from the replay of the do-nothing plan (``evaluation.evaluator.evaluate_do_nothing``), the same exact
 reading the planner publishes in a scenario basis. **No optimizer**: this module never imports the compiler, the solver or
 SCIP, so it answers in milliseconds and stays importable where SCIP is not. A request that cannot be counted answers like
 ``plan`` does, with the normalizer's issues. Limits that contradict each other or the portfolio (the normalizer's three
 cross checks) do not stop it: they make the plan ``invalid``, while the preview counts and names them in ``limit_problems``.
-
-The «custom» λ computed from euros is rounded to six significant digits (``lambda_from_reference_amount``), and its euros
-and column come from that rounded λ: the page sends it back to ``plan`` as it is.
 """
 
 from __future__ import annotations
 
-from decimal import Decimal
-
-from backend.app.schemas.pac_allocator.exact import ExactMoney
 from backend.app.schemas.pac_allocator.issues import PlannerIssue
 from backend.app.schemas.pac_allocator.preview import (
-    AcceptableCostRow,
-    AcceptableCostTable,
-    CustomFidelityPreview,
     FidelityLevelWeights,
     PacPreviewReadyResult,
     PlannerPreviewInvalidResult,
@@ -40,7 +32,6 @@ from backend.app.schemas.pac_allocator.preview import (
 )
 from backend.app.schemas.pac_allocator.request import PacPlannerRequest, RebalancerPlannerRequest
 from backend.app.schemas.pac_allocator.results import PlannerResultSnapshot
-from backend.app.services.financial_math.acceptable_cost import REFERENCE_ROW_INDEX, acceptable_cost_rows, lambda_from_reference_amount, max_acceptable_cost
 from backend.app.services.pac_allocator.evaluation.economics import initial_cash_by_cell
 from backend.app.services.pac_allocator.evaluation.evaluator import build_exact_policy_view, evaluate_do_nothing
 from backend.app.services.pac_allocator.evaluation.scenario import build_scenario_index, exact_scenario_fingerprint
@@ -66,8 +57,8 @@ def preview_pac_allocation(request: PacPlannerRequest, *, checkpoint: Checkpoint
 
 
 def preview_rebalancing(request: RebalancerPlannerRequest, *, checkpoint: Checkpoint | None = None):
-    """The Rebalancer's preview: ``F``, today's target entries on it, the table «maximum acceptable cost» and the «custom»
-    fidelity both ways (the euros typed win over a custom λ in the request); or the issues that keep it from being counted."""
+    """The Rebalancer's preview: ``F``, today's target entries on it and the λ of the three fidelity levels; or the issues
+    that keep it from being counted."""
     check_budget(checkpoint)
     normalized = normalize_rebalancer_plan(request)
     scenario = _counted(normalized)
@@ -75,25 +66,8 @@ def preview_rebalancing(request: RebalancerPlannerRequest, *, checkpoint: Checkp
         return _failure(normalized.availability, request.snapshot.snapshot_id, list(normalized.issues))
     evaluation = _do_nothing(scenario, checkpoint)
     wealth = evaluation.accounting.initial_wealth
-    currency = scenario.valuation_currency
-    rows = acceptable_cost_rows(wealth)
-    custom_weight = _custom_weight(request, wealth, rows[REFERENCE_ROW_INDEX])
-    table = AcceptableCostTable(
-        level_weights=FidelityLevelWeights(**{level: ratio_to_exact_number(weight) for level, weight in FIDELITY_LEVEL_WEIGHTS.items()}),
-        rows=[
-            AcceptableCostRow(
-                misplaced=ratio_to_money(misplaced, currency),
-                reference=index == REFERENCE_ROW_INDEX,
-                **{level: _cost(weight, misplaced, wealth, currency) for level, weight in FIDELITY_LEVEL_WEIGHTS.items()},
-                custom=_cost(custom_weight, misplaced, wealth, currency) if custom_weight is not None else None,
-            )
-            for index, misplaced in enumerate(rows)
-        ],
-    )
-    custom = None
-    if custom_weight is not None:
-        custom = CustomFidelityPreview(distance_weight=ratio_to_exact_number(custom_weight), reference_amount=_cost(custom_weight, rows[REFERENCE_ROW_INDEX], wealth, currency))
-    return RebalancerPreviewReadyResult(**_ready_fields(scenario, normalized), total=ratio_to_money(wealth, currency), items=_items(scenario, evaluation, request), table=table, custom=custom)
+    levels = FidelityLevelWeights(**{level: ratio_to_exact_number(weight) for level, weight in FIDELITY_LEVEL_WEIGHTS.items()})
+    return RebalancerPreviewReadyResult(**_ready_fields(scenario, normalized), total=ratio_to_money(wealth, scenario.valuation_currency), items=_items(scenario, evaluation, request), fidelity_level_weights=levels)
 
 
 def _counted(normalized: PlannerV2NormalizationResult) -> ExactPlannerScenario | None:
@@ -109,20 +83,6 @@ def _do_nothing(scenario: ExactPlannerScenario, checkpoint: Checkpoint | None) -
     if evaluation.accounting is None:
         raise ValueError("the preview requires a do-nothing replay that produced accounting")
     return evaluation
-
-
-def _custom_weight(request: RebalancerPlannerRequest, wealth: ExactRatio, reference: ExactRatio) -> ExactRatio | None:
-    """The «custom» λ: from the euros typed on the reference row when the request has them, else the request's custom λ;
-    none for a level or «Target first» (M33: it has no maximum)."""
-    if request.custom_reference_amount is not None:
-        return lambda_from_reference_amount(ExactRatio.from_decimal(Decimal(request.custom_reference_amount.amount)), wealth, reference)
-    if request.target_fidelity.kind == "custom":
-        return ExactRatio.from_decimal(Decimal(request.target_fidelity.lambda_))
-    return None
-
-
-def _cost(weight: ExactRatio, misplaced: ExactRatio, wealth: ExactRatio, currency: str) -> ExactMoney:
-    return ratio_to_money(max_acceptable_cost(weight, misplaced, wealth), currency)
 
 
 def _items(scenario: ExactPlannerScenario, evaluation: ExactEvaluation, request: RebalancerPlannerRequest) -> list:
