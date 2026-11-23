@@ -32,7 +32,7 @@ import {CHART_GAIN_LOSS, LOT_WAC_COLORS} from '$lib/theme/chartTheme';
 import type {ScopeBoundary} from './lotChartShared';
 
 /** The seven presentation-level lot chronology event kinds. */
-export type LotEventKind = 'BUY' | 'SELL' | 'ADJUSTMENT_IN' | 'ADJUSTMENT_OUT' | 'SPLIT' | 'TRANSFER_DEPART' | 'TRANSFER_ARRIVE';
+export type LotEventKind = 'BUY' | 'REWARD' | 'SELL' | 'ADJUSTMENT_IN' | 'ADJUSTMENT_OUT' | 'SPLIT' | 'TRANSFER_DEPART' | 'TRANSFER_ARRIVE';
 
 /** A per-broker series point in both representations. */
 export interface ValuePoint {
@@ -390,9 +390,11 @@ export function eventKey(event: LotEventIdentity): string {
 
 /** The marker series an event kind belongs to, or `null` if it draws no marker. A transfer leg read at the scope's edge
  *  (`scopeBoundary`, J-48) is a transfer marker, whatever adjustment kind carries its figures. */
-export function eventCategory(kind: LotEventKind, scopeBoundary?: ScopeBoundary | null): 'buy' | 'sell' | 'transfer' | 'adjustment' | 'split' | null {
+export function eventCategory(kind: LotEventKind, scopeBoundary?: ScopeBoundary | null): 'buy' | 'reward' | 'sell' | 'transfer' | 'adjustment' | 'split' | null {
     if (scopeBoundary === 'IN' || scopeBoundary === 'OUT') return 'transfer';
     if (kind === 'BUY') return 'buy';
+    // A lot opened by a reward in kind (project 79): its own marker, the reason the lot exists
+    if (kind === 'REWARD') return 'reward';
     if (kind === 'SELL') return 'sell';
     if (kind === 'TRANSFER_ARRIVE') return 'transfer';
     if (kind === 'ADJUSTMENT_IN' || kind === 'ADJUSTMENT_OUT') return 'adjustment';
@@ -409,7 +411,7 @@ export function eventTimelineOrder(kind: LotEventKind): number {
     if (kind === 'TRANSFER_DEPART') return 0;
     if (kind === 'TRANSFER_ARRIVE') return 1;
     if (kind === 'SPLIT') return 2;
-    if (kind === 'BUY' || kind === 'ADJUSTMENT_IN') return 3;
+    if (kind === 'BUY' || kind === 'REWARD' || kind === 'ADJUSTMENT_IN') return 3;
     return 4;
 }
 
@@ -541,7 +543,7 @@ export function applyLotEvent(before: LotEventState, event: LotEventInput): LotE
     let afterQuantity = beforeQuantity;
     let afterUnitPrice = beforeUnitPrice;
 
-    if (event.kind === 'BUY') {
+    if (event.kind === 'BUY' || event.kind === 'REWARD') {
         const openedQuantity = quantity == null ? null : Math.abs(quantity);
         const baseQuantity = beforeQuantity ?? 0;
         afterQuantity = openedQuantity == null ? beforeQuantity : baseQuantity + openedQuantity;
