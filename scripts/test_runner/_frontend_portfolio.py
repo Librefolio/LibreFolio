@@ -32,6 +32,19 @@ def front_portfolio_dashboard_cache(verbose: bool = False, ui: bool = False, hea
     return _run_playwright("portfolio/dashboard-cache.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_portfolio_allocation_tab(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the «Allocazione» tab E2E tests (lane 80, #89): Dashboard and broker page, filters, dimensions, history, privacy."""
+    print_section("Frontend Portfolio Allocazione Tab Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    # Both projects: the filter panel is a column on a wide screen and a popover on a phone, and the spec drives each.
+    return _run_playwright("portfolio/allocation-tab.spec.ts", ui=ui, headed=headed, debug=debug, project="", test_names=test_names, coverage=coverage)
+
+
 def front_portfolio_page_busy(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run the page busy E2E tests (Y11, decision 48): the Refresh button waits for its own page's big requests."""
     print_section("Frontend Portfolio Page Busy Tests")
@@ -653,6 +666,15 @@ def populate_registry(registry: dict) -> None:
     )
     add_test(cat, "broker-icons", front_portfolio_broker_icons, name="Broker Icon Tests", desc="Dashboard positions broker fallback chain", tests="portfolio/broker-icons.spec.ts")
     add_test(cat, "dashboard-cache", front_portfolio_dashboard_cache, name="Dashboard Page Cache", desc="Return to the Dashboard reuses cached data, shows it while refreshing, owned-broker scope, restored filters, Refresh", tests="portfolio/dashboard-cache.spec.ts")
+    add_test(
+        cat,
+        "allocation-tab",
+        front_portfolio_allocation_tab,
+        name="Allocazione Tab Tests",
+        desc="Lane 80 (#89), read-only on TEST_USER, both projects: the Dashboard tab asks POST /portfolio/allocation over exactly the owned brokers with the first-opening body (no filter, sector) and base + outside + excluded is the net worth; a class switched off narrows the body, shrinks the base tile, shows as a chip (narrow) or an off switch (wide), is stored under the Dashboard's key, survives a reload in the first request and «Rimuovi filtri» restores the first-opening body; an excludable bucket found in the answer is excluded and listed in the excluded box and the table, then switched back; Area, Asset and Sector ask with their dimension, the table shows the answer's slices, a slice with assets opens and closes its detail rows, History asks with include_history; the broker page asks for its own broker whole (apply_ownership_share false), keeps its filters under its own key and leaves the Dashboard's untouched; privacy masks the base amount and keeps the percentage",
+        prereq="TEST_USER owns a broker holding two classes and an asset in an Unknown/Other bucket (populate_mock_data.py)",
+        tests="portfolio/allocation-tab.spec.ts",
+    )
     add_test(
         cat,
         "page-busy",
