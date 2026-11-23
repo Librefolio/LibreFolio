@@ -1,0 +1,886 @@
+{
+  "format": "lf-brim-previous-output/1",
+  "comment": "Output of the plugin BEFORE its project-66 lot changed it (P2 contract §2.1). Never re-take it after the code change.",
+  "plugin_code": "broker_parqet",
+  "plugin_version": "1.0.0",
+  "source_head": "a2e85db13",
+  "captured_on": "2026-11-21",
+  "sample": "broker_parqet/sample_reports/parqet-export.csv",
+  "sample_sha256": "d40f62010b589de73f5d3786270dcf8e17c5eaa7cd5121b69b44fcfcbd9b38c1",
+  "extracted_assets": {
+    "2147483647": {
+      "extracted_symbol": null,
+      "extracted_isin": "LU2089238203",
+      "extracted_name": "Amundi Index Solutions Prime Global UCITS ETF - DR USD ACC (WKN A2PWMK)",
+      "notices": []
+    },
+    "2147483646": {
+      "extracted_symbol": null,
+      "extracted_isin": "IE00BM67HT60",
+      "extracted_name": "Xtrackers MSCI World Information Technology UCITS ETF - 1C USD ACC (WKN A113FM)",
+      "notices": []
+    },
+    "2147483645": {
+      "extracted_symbol": null,
+      "extracted_isin": "US7561091049",
+      "extracted_name": "Realty Income (WKN 899744)",
+      "notices": []
+    },
+    "2147483644": {
+      "extracted_symbol": null,
+      "extracted_isin": "US02079K3059",
+      "extracted_name": "Alphabet 'A' (WKN A14Y6F)",
+      "notices": []
+    },
+    "2147483643": {
+      "extracted_symbol": null,
+      "extracted_isin": "DE0008404005",
+      "extracted_name": "Allianz (WKN 840400)",
+      "notices": []
+    },
+    "2147483642": {
+      "extracted_symbol": null,
+      "extracted_isin": "DE0007164600",
+      "extracted_name": "SAP (WKN 716460)",
+      "notices": []
+    },
+    "2147483641": {
+      "extracted_symbol": null,
+      "extracted_isin": "IL0011582033",
+      "extracted_name": "Fiverr International (WKN A2PLX6)",
+      "notices": []
+    },
+    "2147483640": {
+      "extracted_symbol": null,
+      "extracted_isin": "US0378331005",
+      "extracted_name": "Apple (WKN 865985)",
+      "notices": []
+    }
+  },
+  "transactions": [
+    {
+      "asset_id": 2147483647,
+      "type": "BUY",
+      "date": "2024-08-02",
+      "quantity": "17.83803",
+      "cash": {
+        "code": "EUR",
+        "amount": "-500"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "parqet"
+      ],
+      "description": "Parqet Buy | underlying broker: trade_republic | Amundi Index Solutions Prime Global UCITS ETF - DR USD ACC | WKN A2PWMK | price=28.03",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483646,
+      "type": "BUY",
+      "date": "2024-08-02",
+      "quantity": "0.078433",
+      "cash": {
+        "code": "EUR",
+        "amount": "-5.91"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "parqet"
+      ],
+      "description": "Parqet Buy | underlying broker: trade_republic | Xtrackers MSCI World Information Technology UCITS ETF - 1C USD ACC | WKN A113FM | price=75.35",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483647,
+      "type": "BUY",
+      "date": "2024-08-02",
+      "quantity": "0.250089",
+      "cash": {
+        "code": "EUR",
+        "amount": "-7.01"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "parqet"
+      ],
+      "description": "Parqet Buy | underlying broker: trade_republic | Amundi Index Solutions Prime Global UCITS ETF - DR USD ACC | WKN A2PWMK | price=28.03",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483646,
+      "type": "BUY",
+      "date": "2024-07-23",
+      "quantity": "0.00036",
+      "cash": {
+        "code": "EUR",
+        "amount": "-0.03"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "parqet"
+      ],
+      "description": "Parqet Buy | underlying broker: trade_republic | Xtrackers MSCI World Information Technology UCITS ETF - 1C USD ACC | WKN A113FM | price=83.33",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483646,
+      "type": "BUY",
+      "date": "2024-07-16",
+      "quantity": "1.162925",
+      "cash": {
+        "code": "EUR",
+        "amount": "-100"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "parqet"
+      ],
+      "description": "Parqet Buy | underlying broker: trade_republic | Xtrackers MSCI World Information Technology UCITS ETF - 1C USD ACC | WKN A113FM | price=85.99",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483647,
+      "type": "BUY",
+      "date": "2024-07-16",
+      "quantity": "16.747613",
+      "cash": {
+        "code": "EUR",
+        "amount": "-500"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "parqet"
+      ],
+      "description": "Parqet Buy | underlying broker: trade_republic | Amundi Index Solutions Prime Global UCITS ETF - DR USD ACC | WKN A2PWMK | price=29.86",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483646,
+      "type": "BUY",
+      "date": "2024-07-16",
+      "quantity": "0.094894",
+      "cash": {
+        "code": "EUR",
+        "amount": "-8.16"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "parqet"
+      ],
+      "description": "Parqet Buy | underlying broker: trade_republic | Xtrackers MSCI World Information Technology UCITS ETF - 1C USD ACC | WKN A113FM | price=85.99",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483645,
+      "type": "DIVIDEND",
+      "date": "2024-07-15",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "9.66"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "parqet"
+      ],
+      "description": "Parqet Dividend | underlying broker: trade_republic | Realty Income | WKN 899744 | price=0.24",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483645,
+      "type": "TAX",
+      "date": "2024-07-15",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "-2.48"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "parqet",
+        "tax"
+      ],
+      "description": "Parqet tax: Parqet Dividend | underlying broker: trade_republic | Realty Income | WKN 899744 | price=0.24",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483646,
+      "type": "BUY",
+      "date": "2024-07-09",
+      "quantity": "0.10941",
+      "cash": {
+        "code": "EUR",
+        "amount": "-9.51"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "parqet"
+      ],
+      "description": "Parqet Buy | underlying broker: trade_republic | Xtrackers MSCI World Information Technology UCITS ETF - 1C USD ACC | WKN A113FM | price=86.92",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483647,
+      "type": "BUY",
+      "date": "2024-07-02",
+      "quantity": "17.050298",
+      "cash": {
+        "code": "EUR",
+        "amount": "-500"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "parqet"
+      ],
+      "description": "Parqet Buy | underlying broker: trade_republic | Amundi Index Solutions Prime Global UCITS ETF - DR USD ACC | WKN A2PWMK | price=29.33",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483646,
+      "type": "BUY",
+      "date": "2024-07-02",
+      "quantity": "0.079526",
+      "cash": {
+        "code": "EUR",
+        "amount": "-6.72"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "parqet"
+      ],
+      "description": "Parqet Buy | underlying broker: trade_republic | Xtrackers MSCI World Information Technology UCITS ETF - 1C USD ACC | WKN A113FM | price=84.5",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483647,
+      "type": "BUY",
+      "date": "2024-07-02",
+      "quantity": "0.511508",
+      "cash": {
+        "code": "EUR",
+        "amount": "-15"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "parqet"
+      ],
+      "description": "Parqet Buy | underlying broker: trade_republic | Amundi Index Solutions Prime Global UCITS ETF - DR USD ACC | WKN A2PWMK | price=29.33",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483646,
+      "type": "BUY",
+      "date": "2024-06-24",
+      "quantity": "0.103435",
+      "cash": {
+        "code": "EUR",
+        "amount": "-8.55"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "parqet"
+      ],
+      "description": "Parqet Buy | underlying broker: trade_republic | Xtrackers MSCI World Information Technology UCITS ETF - 1C USD ACC | WKN A113FM | price=82.66",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483646,
+      "type": "BUY",
+      "date": "2024-06-17",
+      "quantity": "1.184974",
+      "cash": {
+        "code": "EUR",
+        "amount": "-100"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "parqet"
+      ],
+      "description": "Parqet Buy | underlying broker: trade_republic | Xtrackers MSCI World Information Technology UCITS ETF - 1C USD ACC | WKN A113FM | price=84.39",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483644,
+      "type": "DIVIDEND",
+      "date": "2024-06-17",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "1.11"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "parqet"
+      ],
+      "description": "Parqet Dividend | underlying broker: trade_republic | Alphabet 'A' | WKN A14Y6F | price=0.18",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483644,
+      "type": "TAX",
+      "date": "2024-06-17",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "-0.27"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "parqet",
+        "tax"
+      ],
+      "description": "Parqet tax: Parqet Dividend | underlying broker: trade_republic | Alphabet 'A' | WKN A14Y6F | price=0.18",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483647,
+      "type": "BUY",
+      "date": "2024-06-17",
+      "quantity": "17.190991",
+      "cash": {
+        "code": "EUR",
+        "amount": "-500"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "parqet"
+      ],
+      "description": "Parqet Buy | underlying broker: trade_republic | Amundi Index Solutions Prime Global UCITS ETF - DR USD ACC | WKN A2PWMK | price=29.09",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483646,
+      "type": "BUY",
+      "date": "2024-06-17",
+      "quantity": "0.298613",
+      "cash": {
+        "code": "EUR",
+        "amount": "-25.2"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "parqet"
+      ],
+      "description": "Parqet Buy | underlying broker: trade_republic | Xtrackers MSCI World Information Technology UCITS ETF - 1C USD ACC | WKN A113FM | price=84.39",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483645,
+      "type": "DIVIDEND",
+      "date": "2024-06-14",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "9.76"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "parqet"
+      ],
+      "description": "Parqet Dividend | underlying broker: trade_republic | Realty Income | WKN 899744 | price=0.24",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483645,
+      "type": "TAX",
+      "date": "2024-06-14",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "-2.5"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "parqet",
+        "tax"
+      ],
+      "description": "Parqet tax: Parqet Dividend | underlying broker: trade_republic | Realty Income | WKN 899744 | price=0.24",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483643,
+      "type": "SELL",
+      "date": "2024-06-04",
+      "quantity": "-6",
+      "cash": {
+        "code": "EUR",
+        "amount": "1578"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "parqet"
+      ],
+      "description": "Parqet Sell | Allianz | WKN 840400 | price=263",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483643,
+      "type": "TAX",
+      "date": "2024-06-04",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "-14.83"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "parqet",
+        "tax"
+      ],
+      "description": "Parqet tax: Parqet Sell | Allianz | WKN 840400 | price=263",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483643,
+      "type": "FEE",
+      "date": "2024-06-04",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "-1"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "parqet",
+        "fee"
+      ],
+      "description": "Parqet fee: Parqet Sell | Allianz | WKN 840400 | price=263",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483647,
+      "type": "BUY",
+      "date": "2024-06-03",
+      "quantity": "17.655367",
+      "cash": {
+        "code": "EUR",
+        "amount": "-500"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "parqet"
+      ],
+      "description": "Parqet Buy | Amundi Index Solutions Prime Global UCITS ETF - DR USD ACC | WKN A2PWMK | price=28.32",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483647,
+      "type": "BUY",
+      "date": "2024-06-03",
+      "quantity": "0.47846",
+      "cash": {
+        "code": "EUR",
+        "amount": "-13.55"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "parqet"
+      ],
+      "description": "Parqet Buy | Amundi Index Solutions Prime Global UCITS ETF - DR USD ACC | WKN A2PWMK | price=28.32",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483642,
+      "type": "DIVIDEND",
+      "date": "2024-05-21",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "26.4"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "parqet"
+      ],
+      "description": "Parqet Dividend | SAP | WKN 716460 | price=2.2",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483647,
+      "type": "BUY",
+      "date": "2024-05-15",
+      "quantity": "17.510068",
+      "cash": {
+        "code": "EUR",
+        "amount": "-500"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "parqet"
+      ],
+      "description": "Parqet Buy | Amundi Index Solutions Prime Global UCITS ETF - DR USD ACC | WKN A2PWMK | price=28.56",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483641,
+      "type": "SELL",
+      "date": "2024-05-15",
+      "quantity": "-14",
+      "cash": {
+        "code": "EUR",
+        "amount": "320.32"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "parqet"
+      ],
+      "description": "Parqet Sell | Fiverr International | WKN A2PLX6 | price=22.88",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483641,
+      "type": "TAX",
+      "date": "2024-05-15",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "-12.64"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "parqet",
+        "tax"
+      ],
+      "description": "Parqet tax: Parqet Sell | Fiverr International | WKN A2PLX6 | price=22.88",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483641,
+      "type": "FEE",
+      "date": "2024-05-15",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "-1"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "parqet",
+        "fee"
+      ],
+      "description": "Parqet fee: Parqet Sell | Fiverr International | WKN A2PLX6 | price=22.88",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483640,
+      "type": "DIVIDEND",
+      "date": "2024-05-15",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "1.61"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "parqet"
+      ],
+      "description": "Parqet Dividend | Apple | WKN 865985 | price=0.23",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483640,
+      "type": "TAX",
+      "date": "2024-05-15",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "-0.42"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "parqet",
+        "tax"
+      ],
+      "description": "Parqet tax: Parqet Dividend | Apple | WKN 865985 | price=0.23",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483645,
+      "type": "DIVIDEND",
+      "date": "2024-05-14",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "9.6"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "parqet"
+      ],
+      "description": "Parqet Dividend | Realty Income | WKN 899744 | price=0.24",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483645,
+      "type": "TAX",
+      "date": "2024-05-14",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "-2.51"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "parqet",
+        "tax"
+      ],
+      "description": "Parqet tax: Parqet Dividend | Realty Income | WKN 899744 | price=0.24",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483643,
+      "type": "DIVIDEND",
+      "date": "2024-05-10",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "82.8"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "parqet"
+      ],
+      "description": "Parqet Dividend | Allianz | WKN 840400 | price=13.8",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483643,
+      "type": "TAX",
+      "date": "2024-05-10",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "-11.46"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "parqet",
+        "tax"
+      ],
+      "description": "Parqet tax: Parqet Dividend | Allianz | WKN 840400 | price=13.8",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    }
+  ]
+}
