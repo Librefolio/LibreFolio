@@ -109,7 +109,9 @@ class IncomeHistoryPoint(BaseModel):
     date: date_type
     dividend: Currency = Field(..., description="Signed sum of DIVIDEND transactions for this date")
     interest: Currency = Field(..., description="Signed sum of INTEREST transactions for this date")
-    reward: Currency = Field(..., description="Sum of REWARD transactions for this date: their value at receipt, income in kind")
+    # Optional on the wire (always sent by the service): an answer or a captured report from before 1.4 has none, and
+    # a reader counts a missing one as zero
+    reward: Optional[Currency] = Field(None, description="Sum of REWARD transactions for this date: their value at receipt, income in kind. Absent in an answer from before 1.4: read as zero")
 
 
 class IncomeHistorySeries(StrictModel):
