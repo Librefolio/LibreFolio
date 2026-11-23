@@ -63,6 +63,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A documentation icon on the right of more panels (Dashboard charts and positions, lots analysis, assets list and lab, asset detail, brokers, FX, files and backups, settings, transactions) opens the matching page of the manual, with a short explanation of the panel in its tooltip.
 - Administrators can keep only some price and exchange-rate providers active on an instance (`LIBREFOLIO_ASSET_PROVIDERS_ENABLED`, `LIBREFOLIO_FX_PROVIDERS_ENABLED`): the others disappear from lists, search, assignments and settings; existing assignments keep their saved prices. MANUAL is always active.
 - Asset search: looking up a cryptocurrency on Yahoo Finance also offers its euro ticker (for example BTC-EUR beside BTC-USD), so it can be priced directly in euros.
+- **AI Export: Protection Strategies**, a new Dashboard analysis: it says whether protecting your portfolio makes sense now and, only if it does, how.
 
 #### 🎯 Portfolio rebalancer and PAC allocator
 
@@ -139,6 +140,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The effective number of positions on the Risk tab is measured on the holdings with a price alone: cash and holdings without prices no longer inflate it, so it never exceeds the positions measured.
 
 - In the dialog of an FX pair, a click on a provider of the legend shows or hides its description; a double click opens its guide.
+- **AI Export: the «Portfolio Performance & Market Drivers» and «Broker Performance & Market Drivers» analyses answer first**: the prompt now asks for a direct answer of about a page, ending with the follow-up questions worth asking, instead of a long report in fixed sections.
 
 #### 🎯 PAC allocator and Tools
 

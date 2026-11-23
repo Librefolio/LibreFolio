@@ -63,6 +63,7 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 - Une icône de documentation à droite d'autres panneaux (graphiques et positions du Dashboard, analyse des lots, liste et laboratoire des actifs, détail de l'actif, courtiers, FX, fichiers et sauvegardes, paramètres, transactions) ouvre la page correspondante du manuel, avec une courte explication du panneau dans son infobulle.
 - Les administrateurs peuvent ne garder actifs que certains fournisseurs de prix et de taux de change sur une instance (`LIBREFOLIO_ASSET_PROVIDERS_ENABLED`, `LIBREFOLIO_FX_PROVIDERS_ENABLED`) : les autres disparaissent des listes, de la recherche, des affectations et des paramètres ; les affectations existantes gardent leurs prix enregistrés. MANUAL reste toujours actif.
 - Recherche d'actifs : en cherchant une cryptomonnaie sur Yahoo Finance, son ticker en euros apparaît aussi (par exemple BTC-EUR à côté de BTC-USD), pour la valoriser directement en euros.
+- **AI Export : « Stratégies de protection »**, une nouvelle analyse du Tableau de bord : elle dit s'il est utile de protéger votre portefeuille maintenant et, seulement si c'est le cas, comment.
 
 #### 🎯 Rééquilibreur de portefeuille et Allocateur PAC
 
@@ -139,6 +140,7 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 - Le nombre effectif de positions de l'onglet Risque se mesure sur les seules positions qui ont un prix : les liquidités et les positions sans prix ne le gonflent plus, il ne dépasse donc jamais les positions mesurées.
 
 - Dans la fenêtre d'une paire de devises, un clic sur un fournisseur de la légende affiche ou masque sa description ; un double clic ouvre son guide.
+- **AI Export : les analyses « Performance et facteurs de marché » répondent d'abord** : le prompt demande une réponse directe d'environ une page, qui se termine par les questions utiles à poser ensuite, au lieu d'un long rapport en sections fixes.
 
 #### 🎯 Allocateur PAC et Outils
 

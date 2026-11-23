@@ -63,6 +63,7 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 - Un icono de documentación a la derecha de más paneles (gráficos y posiciones del Dashboard, análisis de lotes, lista y laboratorio de activos, detalle del activo, brókers, FX, archivos y copias de seguridad, ajustes, transacciones) abre la página correspondiente del manual, con una breve explicación del panel en su tooltip.
 - Los administradores pueden mantener activos solo algunos proveedores de precios y de tipos de cambio en una instancia (`LIBREFOLIO_ASSET_PROVIDERS_ENABLED`, `LIBREFOLIO_FX_PROVIDERS_ENABLED`): los demás desaparecen de listas, búsqueda, asignaciones y ajustes; las asignaciones existentes conservan sus precios guardados. MANUAL siempre está activo.
 - Búsqueda de activos: al buscar una criptomoneda en Yahoo Finance aparece también su ticker en euros (por ejemplo BTC-EUR junto a BTC-USD), para valorarla directamente en euros.
+- **AI Export: «Estrategias de protección»**, un nuevo análisis del Panel: dice si ahora tiene sentido proteger tu cartera y, solo si lo tiene, cómo.
 
 #### 🎯 Reequilibrador de cartera y Asignador PAC
 
@@ -139,6 +140,7 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 - El número efectivo de posiciones de la pestaña Riesgo se mide solo sobre las posiciones con precio: el efectivo y las posiciones sin precios ya no lo inflan, así que nunca supera las posiciones medidas.
 
 - En la ventana de un par de divisas, un clic en un proveedor de la leyenda muestra u oculta su descripción; un doble clic abre su guía.
+- **AI Export: los análisis «Rendimiento y factores de mercado» responden primero**: el prompt pide una respuesta directa de una página aproximadamente, que termina con las preguntas útiles para hacer después, en lugar de un largo informe en secciones fijas.
 
 #### 🎯 Asignador PAC y Herramientas
 
