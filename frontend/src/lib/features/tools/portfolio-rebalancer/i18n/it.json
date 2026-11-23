@@ -36,8 +36,6 @@
         },
         "targets": {
           "cashEntry": "Cassa · {broker} · {currency}",
-          "otherCash": "Altra cassa",
-          "otherCashHelp": "Tutta la cassa senza un obiettivo suo: vale sempre 0 %, e il piano può usarla per comprare.",
           "addCash": "Aggiungi una cassa",
           "addCashHelp": "La cassa di un Broker in una valuta diventa una riga degli obiettivi, con obiettivo e limiti, come un Asset.",
           "addCashNone": "Ogni Broker e valuta dello scenario ha già una sua cassa.",

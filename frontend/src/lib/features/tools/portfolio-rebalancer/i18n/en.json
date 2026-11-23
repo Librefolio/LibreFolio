@@ -36,8 +36,6 @@
         },
         "targets": {
           "cashEntry": "Cash · {broker} · {currency}",
-          "otherCash": "Other cash",
-          "otherCashHelp": "All the cash without a target of its own: it always counts 0 %, and the plan can use it to buy.",
           "addCash": "Add a cash entry",
           "addCashHelp": "A Broker's cash in one currency becomes a row of the targets, with a target and limits, like an Asset.",
           "addCashNone": "Every Broker and currency of the scenario already has a cash entry.",
