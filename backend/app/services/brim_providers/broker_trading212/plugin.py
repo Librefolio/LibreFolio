@@ -343,7 +343,7 @@ class Trading212BrokerProvider(BRIMProvider):
                     tx_desc = f"{desc_str}{desc_extra}"
 
                     # Create main transaction
-                    self._create_transaction(
+                    booking = self._create_transaction(
                         row_num=row_num,
                         transactions=transactions,
                         validation_issues=validation_issues,
@@ -369,7 +369,8 @@ class Trading212BrokerProvider(BRIMProvider):
                         if tax_amount > 0:
                             tax_amount = -tax_amount
 
-                        self._create_transaction(
+                        self._create_charge_of(
+                            booking,  # project 66 P4: linked to the booking of its own row; free when that booking was refused
                             row_num=row_num,
                             transactions=transactions,
                             validation_issues=validation_issues,
@@ -518,7 +519,8 @@ class Trading212BrokerProvider(BRIMProvider):
     def plugin_version(self) -> str:
         # 1.2.0 — a multiplicative stock split (``Stock split close`` + ``open``) becomes an incoming ADJUSTMENT at no cost, flagged ``possible_split`` (W-B87).
         # 1.1.0 — a split, a share distribution or a currency conversion is listed in a notice with the link to open an issue (W-B87).
-        return "1.2.0"
+        # 1.3.0 — project 66, P4: a fee or a tax is linked to the booking of its own row.
+        return "1.3.0"
 
     @property
     def docs_url(self) -> Optional[str]:
