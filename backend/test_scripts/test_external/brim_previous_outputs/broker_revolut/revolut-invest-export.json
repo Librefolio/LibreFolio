@@ -1,0 +1,236 @@
+{
+  "format": "lf-brim-previous-output/1",
+  "comment": "Output of the plugin BEFORE its project-66 lot changed it (P2 contract §2.1). Never re-take it after the code change.",
+  "plugin_code": "broker_revolut",
+  "plugin_version": "1.3.0",
+  "source_head": "a2e85db13",
+  "captured_on": "2026-11-21",
+  "sample": "broker_revolut/sample_reports/revolut-invest-export.csv",
+  "sample_sha256": "404f5d0f0168e68286d96791babbd25607627e68899d0faedf912c0268afbe97",
+  "extracted_assets": {
+    "2147483647": {
+      "extracted_symbol": "O",
+      "extracted_isin": null,
+      "extracted_name": null,
+      "notices": []
+    },
+    "2147483646": {
+      "extracted_symbol": "MA",
+      "extracted_isin": null,
+      "extracted_name": null,
+      "notices": []
+    },
+    "2147483645": {
+      "extracted_symbol": "MSFT",
+      "extracted_isin": null,
+      "extracted_name": null,
+      "notices": []
+    },
+    "2147483644": {
+      "extracted_symbol": "TSLA",
+      "extracted_isin": null,
+      "extracted_name": null,
+      "notices": []
+    }
+  },
+  "transactions": [
+    {
+      "asset_id": null,
+      "type": "WITHDRAWAL",
+      "date": "2019-12-02",
+      "quantity": "0",
+      "cash": {
+        "code": "USD",
+        "amount": "-30.93"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "revolut"
+      ],
+      "description": "cash withdrawal",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": null,
+      "type": "DEPOSIT",
+      "date": "2019-11-15",
+      "quantity": "0",
+      "cash": {
+        "code": "USD",
+        "amount": "5.22"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "revolut"
+      ],
+      "description": "cash top-up",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483647,
+      "type": "BUY",
+      "date": "2023-09-22",
+      "quantity": "1.63453043",
+      "cash": {
+        "code": "USD",
+        "amount": "-85.11"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "revolut"
+      ],
+      "description": "buy - market: O",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483646,
+      "type": "SELL",
+      "date": "2023-07-14",
+      "quantity": "-0.1998348",
+      "cash": {
+        "code": "USD",
+        "amount": "80.34"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "revolut"
+      ],
+      "description": "sell - market: MA",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483645,
+      "type": "DIVIDEND",
+      "date": "2019-12-13",
+      "quantity": "0",
+      "cash": {
+        "code": "USD",
+        "amount": "0.08"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "revolut"
+      ],
+      "description": "dividend: MSFT",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": null,
+      "type": "FEE",
+      "date": "2021-09-01",
+      "quantity": "0",
+      "cash": {
+        "code": "USD",
+        "amount": "-0.01"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "revolut"
+      ],
+      "description": "custody fee",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483644,
+      "type": "ADJUSTMENT",
+      "date": "2022-08-25",
+      "quantity": "0.16431924",
+      "cash": null,
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "revolut"
+      ],
+      "description": "stock split: TSLA",
+      "cost_basis_override": {
+        "code": "USD",
+        "amount": "0"
+      },
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483644,
+      "type": "BUY",
+      "date": "2025-06-05",
+      "quantity": "0.56217674",
+      "cash": {
+        "code": "EUR",
+        "amount": "-50"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "revolut"
+      ],
+      "description": "buy - market: TSLA",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483645,
+      "type": "BUY",
+      "date": "2025-09-08",
+      "quantity": "0.76672417",
+      "cash": {
+        "code": "EUR",
+        "amount": "-20"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "revolut"
+      ],
+      "description": "buy - market: MSFT",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    }
+  ]
+}
