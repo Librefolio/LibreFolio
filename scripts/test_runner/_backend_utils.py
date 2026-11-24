@@ -285,6 +285,15 @@ def utils_docs_developer_english_only(verbose: bool = False, test_names: list = 
     return run_command(cmd, "Docs developer English only tests", verbose=verbose)
 
 
+def utils_docs_shared_nav(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the hook that writes the documentation menu once per language (lane 84-D)."""
+    print_section("Utils: Docs shared navigation")
+    print_info("Testing: mkdocs_src/hooks/shared_nav.py, docs/javascripts/nav-enhance.js (its contract), and a copy of real pages (when the site is built)")
+    print_info("Tests: Material's pruning rule, the shared menu with paths from the root, the round trip gives every page the menu it had, 404 and serve untouched")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_docs_shared_nav.py", test_names)
+    return run_command(cmd, "Docs shared navigation tests", verbose=verbose)
+
+
 def utils_docs_mermaid_colours(verbose: bool = False, test_names: list = None) -> bool:
     """Test that a Mermaid node with its own fill also sets its text colour (E9C)."""
     print_section("Utils: Docs Mermaid Colours")
@@ -823,6 +832,15 @@ Tests for utility modules and helper functions:
         utils_docs_developer_english_only,
         name="Docs developer English only",
         desc="mkdocs_src/hooks/developer_english_only.py: after the build the copies of the English-only developer manual under it/fr/es become redirect pages to the English page (113 MB of HTML saved), the links of the other pages lead straight to the English pages, sitemap.xml(.gz) and the hreflang alternates stop naming the copies; a page with a <name>.<lang>.md source stays; idempotent; skipped for serve and the nested per-language build",
+        # Trees in tmp_path and a copy of a few real pages (read only): no DB, no server, no network, no repo writes.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "docs-shared-nav",
+        utils_docs_shared_nav,
+        name="Docs shared navigation",
+        desc="mkdocs_src/hooks/shared_nav.py: after the build each page keeps the menu Material draws for a pruned navigation (the branch of the page whole, every other group one link to its first page) and the whole menu of the language is written once, javascripts/nav/nav.<lang>.<hash>.js, read by nav-enhance.js before Material starts; the round trip (the script's algorithm in Python, same keys) gives every page the menu it had, on a synthetic site and on a copy of real pages; a group the shared menu does not hold stays whole; 404.html and serve untouched; the menu comes before the code in the file; the hook is registered",
         # Trees in tmp_path and a copy of a few real pages (read only): no DB, no server, no network, no repo writes.
         isolation="pure",
     )

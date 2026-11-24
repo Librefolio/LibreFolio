@@ -2,7 +2,7 @@
 MkDocs hook: the pages of the built site lose the indentation Material's templates write (lane 84-C).
 
 Material's Jinja templates leave a third of every HTML file as indentation and blank lines (387 MB of HTML in the four
-languages; measured 223 MB without them). After the build this hook rewrites each ``*.html`` of the site so that every run
+languages, 242 MB without them). After the build this hook rewrites each ``*.html`` of the site so that every run
 of whitespace that contains a newline, between the tags and inside the text, becomes a single newline. A browser renders
 the same page: a run of whitespace is one space wherever the layout collapses it, and the newline is kept so that two
 inline elements never touch.
