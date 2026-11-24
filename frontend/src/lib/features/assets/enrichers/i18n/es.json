@@ -65,7 +65,8 @@
         "error": "No se pudieron buscar los enriquecedores: añádelos a mano.",
         "no_identifiers": "El activo no tiene identificadores que reconocer: añade los enriquecedores desde «Fuera de la lista» aquí abajo."
       },
-      "conflictWith": "Identificador distinto: la fuente indica {named}"
+      "conflictWith": "Identificador distinto: la fuente indica {named}",
+      "price": "Precios"
     }
   }
 }

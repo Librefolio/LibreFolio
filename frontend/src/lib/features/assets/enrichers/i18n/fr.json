@@ -65,7 +65,8 @@
         "error": "Impossible de rechercher les enrichisseurs : ajoutez-les à la main.",
         "no_identifiers": "L'actif n'a pas d'identifiants à reconnaître : ajoutez les enrichisseurs depuis « Pas dans la liste » ci-dessous."
       },
-      "conflictWith": "Identifiant différent : la source indique {named}"
+      "conflictWith": "Identifiant différent : la source indique {named}",
+      "price": "Prix"
     }
   }
 }

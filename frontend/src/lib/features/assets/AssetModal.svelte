@@ -515,9 +515,13 @@
     let coveringEnrichers = $derived(enricherCatalogue.filter((info) => info.default_priority?.[assetType as keyof typeof info.default_priority] != null));
     let coveringTypes = $derived([...new Set(coveringEnrichers.flatMap((info) => info.accepted_identifier_types))]);
 
+    /** The price assignment as «Riconosci»'s seed (ENR-2): the enricher of the same code is asked first with it, its
+     *  parameters too (Borsa Italiana's `codice_fondo`), and its symbol is the ticker a found one may enter by. */
+    let priceSeed = $derived(hasProvider && providerCode && providerIdentifier.trim() ? {code: providerCode, identifier_type: providerIdentifierType, identifier: providerIdentifier.trim(), params: {...(providerParams ?? {})}} : null);
+
     /** What «Riconosci» asks with: at creation a whole ISIN is needed; for an asset that exists any identifier a covering
-     *  enricher accepts (ENR-1, R1). */
-    let recognitionInput = $derived({assetType, identifiers: formIdentifiers, priceProviderCode: hasProvider ? providerCode : null, ...(editMode ? {acceptedTypes: coveringTypes} : {})});
+     *  enricher accepts, the price assignment's too (ENR-1, R1; ENR-2). */
+    let recognitionInput = $derived({assetType, identifiers: formIdentifiers, priceProviderCode: hasProvider ? providerCode : null, seed: priceSeed, ...(editMode ? {acceptedTypes: coveringTypes} : {})});
 
     // At creation «Riconosci» starts by itself with a whole ISIN (PROF, rounds 18 and 21); never in the tour's preview.
     // A question already asked is not asked again (enricherRecognition).
@@ -530,11 +534,16 @@
     });
 
     // For an asset that exists it starts when its enrichers' window opens, once the catalogue says what the enrichers
-    // accept (ENR-1, R1): the same question once per opening of the asset window, not at every opening of the window
+    // accept (ENR-1, R1): the same question once per opening of the asset window, not at every opening of the window.
+    // At creation the window's first opening asks too, when nothing was asked yet (ENR-2, E2-1: a symbol picked from
+    // Yahoo's search, no ISIN): opening it is a deliberate gesture, a key typed is not
     $effect(() => {
-        if (!open || !editMode || tourPreview || !enrichersModalOpen || !coveringEnrichers.length) return;
-        const input = recognitionInput;
-        untrack(() => recognition.start(input));
+        if (!open || tourPreview || !enrichersModalOpen || !coveringEnrichers.length) return;
+        const input = {...recognitionInput, acceptedTypes: coveringTypes};
+        const edit = editMode;
+        untrack(() => {
+            if (edit || recognition.status === 'idle') recognition.start(input);
+        });
     });
 
     // What «Riconosci» proposes is the list until the user applies one of their own
@@ -569,7 +578,7 @@
 
     /** The covering enrichers «Riconosci» asks: configured, accepting an identifier the form holds (the cascade never
      *  answers for the others). */
-    let askableEnrichers = $derived(coveringEnrichers.filter((info) => info.configured !== false && info.accepted_identifier_types.some((type) => type in formIdentifiers)).map((info) => info.code));
+    let askableEnrichers = $derived(coveringEnrichers.filter((info) => info.configured !== false && info.accepted_identifier_types.some((type) => type in formIdentifiers || type === priceSeed?.identifier_type)).map((info) => info.code));
 
     /** The codes «Riconosci» is still asking: the askable ones not answered yet. */
     let enrichersSearching = $derived(recognition.status === 'running' ? askableEnrichers.filter((code) => !recognition.recognitions[code]) : []);
@@ -599,7 +608,7 @@
         const codes = Object.keys(enrichersConfig);
         // Found by a ticker alone: not in the list by itself (ENR-1, R2), named so the user checks and adds them
         const byTicker = Object.values(recognition.recognitions)
-            .filter((answer) => answer.status === 'found' && !(answer.code in enrichersConfig) && !entersAlone(answer))
+            .filter((answer) => answer.status === 'found' && !(answer.code in enrichersConfig) && !entersAlone(answer, recognition.trustedTickers))
             .map((answer) => enricherCatalogue.find((info) => info.code === answer.code)?.name ?? answer.name ?? answer.code);
         const tickerText = byTicker.length ? ` ${$t('assets.modal.enrichersTickerOnly', {values: {names: byTicker.join(', ')}})}` : '';
         if (!codes.length) return {state: 'none', text: $t('assets.modal.enrichersNone') + tickerText, reading: 'none', readingText: null};
@@ -1980,6 +1989,8 @@
         proposal={recognition.proposal}
         adopt={editMode ? Object.keys(enrichersConfig).length === 0 : !enrichersChosen}
         line={enrichersLine}
+        price={priceSeed ? {name: getAssetProviderName(priceSeed.code), identifier: priceSeed.identifier} : null}
+        trustedTickers={recognition.trustedTickers}
         zIndex={zIndex + 30}
         onapply={(config) => {
             enrichersConfig = config;

@@ -65,7 +65,8 @@
         "error": "Non è stato possibile cercare gli arricchitori: aggiungili a mano.",
         "no_identifiers": "L'asset non ha identificativi da riconoscere: aggiungi gli arricchitori da «Non in elenco» qui sotto."
       },
-      "conflictWith": "Identificativo diverso: la fonte indica {named}"
+      "conflictWith": "Identificativo diverso: la fonte indica {named}",
+      "price": "Prezzi"
     }
   }
 }

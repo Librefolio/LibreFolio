@@ -65,7 +65,8 @@
         "error": "The enrichers could not be searched: add them by hand.",
         "no_identifiers": "The asset has no identifiers to recognise: add the enrichers from «Not in the list» below."
       },
-      "conflictWith": "Different identifier: the source names {named}"
+      "conflictWith": "Different identifier: the source names {named}",
+      "price": "Prices"
     }
   }
 }

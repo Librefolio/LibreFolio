@@ -74,6 +74,10 @@
         adopt?: boolean;
         /** The line of «Riconosci» on top of the window; null: nothing to say yet. */
         line?: RecognitionLine | null;
+        /** The asset's price assignment, shown in the asset's box (ENR-2, «PREZZI»): the provider's name and identifier. */
+        price?: {name: string; identifier: string} | null;
+        /** The tickers a found one may enter by: the price assignment's symbol (ENR-2, R6). */
+        trustedTickers?: string[];
         zIndex?: number;
         onapply: (config: Record<string, EnricherBinding>) => void;
         oncancel?: () => void;
@@ -96,6 +100,8 @@
         proposal = {},
         adopt = false,
         line = null,
+        price = null,
+        trustedTickers = [],
         zIndex = 70,
         onapply,
         oncancel,
@@ -163,7 +169,7 @@
         touched = true;
     }
 
-    let context = $derived<EnrichersContext>({catalogue: liveCatalogue, assetType: asset.assetType, state: readState, recognitions, searching});
+    let context = $derived<EnrichersContext>({catalogue: liveCatalogue, assetType: asset.assetType, state: readState, recognitions, searching, trustedTickers});
     let chosen = $derived(chosenRows(draft, context));
     let others = $derived(otherRows(draft, context));
     let issues = $derived(draftIssues(draft, context));
@@ -229,13 +235,18 @@
                     <span class="text-sm font-semibold text-lf-primary">{asset.name}</span>
                     <span class="px-1.5 py-0.5 text-[10px] font-medium rounded {assetTypeBadgeClass(asset.assetType)}" data-testid="enrichers-asset-type" data-type={asset.assetType}>{$t(`assets.types.${asset.assetType}`)}</span>
                 </div>
-                {#if Object.keys(asset.identifiers).length}
+                {#if Object.keys(asset.identifiers).length || price}
                     <div class="mt-1.5 flex flex-wrap gap-1.5">
                         {#each Object.entries(asset.identifiers) as [type, value] (type)}
                             <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded border border-lf-subtle bg-lf-card text-[11px] font-mono text-lf-secondary">
                                 <span class="text-lf-muted">{type}</span>{value}
                             </span>
                         {/each}
+                        {#if price}
+                            <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded border border-lf-subtle bg-lf-card text-[11px] text-lf-secondary" data-testid="enrichers-asset-price">
+                                <span class="text-lf-muted uppercase">{$t('assets.enrichers.price')}</span>{price.name} · <span class="font-mono">{price.identifier}</span>
+                            </span>
+                        {/if}
                     </div>
                 {/if}
             </div>
