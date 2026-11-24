@@ -11,6 +11,7 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 
 ### ✨ Aggiunto
 
+- **Una nuova scheda «Allocazione»** nella Dashboard e nella pagina di ogni broker, fra Posizioni e Rischio ([#89](https://github.com/Librefolio/LibreFolio/issues/89)): guarda solo una parte del tuo portafoglio. Tieni alcune classi (un ETF di azioni conta come Azioni), togli dal 100% la parte non classificata o «Altro», o lascia fuori singoli asset, e ogni percentuale si ricalcola su quella base — per Settore, Area (la mappa del mondo colorata sulla tua selezione), Tipo o Asset. Tre riquadri mostrano la base, cosa lascia fuori il filtro e cosa è escluso, e sommano al tuo patrimonio netto; la tabella dà la quota di ogni fetta sulla selezione e sull'intero portafoglio, e un clic apre gli asset che la compongono; con lei arrivano lo Storico della selezione e una matrice Classe × dimensione dell'intero portafoglio (Classe × Area, Classe × Settore…), con la tua selezione riquadrata. I filtri sono ricordati per ogni pagina, e la card Allocazione della Dashboard ha un link «Analizza →» alla scheda. La guida del broker ha un passo in più.
 - Nella ricerca degli asset, un risultato mostra l'icona dell'asset quando il provider la fornisce: le monete di CoinGecko compaiono con il loro logo.
 - **Arricchitore ESMA**: ogni asset negoziato su un mercato europeo può leggere dati ufficiali dal registro FIRDS dell'ESMA — il LEI dell'emittente e la forma legale; per un'obbligazione la scadenza, il tipo di cedola, una cedola fissa e la garanzia di uno Stato; per un fondo se accumula o distribuisce. Viene dopo le altre fonti e riempie quello che lasciano vuoto.
 - **La barra della selezione sta sopra la tabella in Transazioni, nella scheda Transazioni del broker e in FX**, e le sue azioni scendono nella barra in basso quando scorri. Ogni azione dice su quante righe agisce (Modifica ed Elimina contano solo le righe che puoi modificare, Sincronizza solo le coppie o gli asset con un provider).
@@ -65,6 +66,7 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 - Ricerca degli asset: cercando una criptovaluta su Yahoo Finance compare anche il suo ticker in euro (per esempio BTC-EUR accanto a BTC-USD), così si può prezzare direttamente in euro.
 - **AI Export: «Strategie di protezione»**, una nuova analisi della Dashboard: dice se adesso ha senso proteggere il portafoglio e, solo se ha senso, come.
 - **Premi in token (staking, airdrop) come tipo di transazione.** Un tipo nuovo, «Premio», registra le unità ricevute come reddito in natura: apre un lotto al loro valore alla ricezione, e quel valore conta come reddito, come un dividendo reinvestito lo stesso giorno: nessun movimento di contante e nessun capitale aggiunto. Lotti, costo medio, redditi, Yield on Cost e P&L del periodo lo leggono. Nella finestra della transazione un Premio chiede il «Valore alla ricezione», proposto dallo storico dei prezzi dell'asset e sempre modificabile. Nella vista Reddito della Dashboard i premi sono una serie a sé, in magenta, e i grafici dei lotti li segnano. (#90)
+- **Rischio › Simulazione, il periodo da cui pescare i giorni**: «Giorni pescati da» offre «Tutta la storia comune» (il predefinito) o «Un periodo scelto», dentro la storia comune delle posizioni, per un tratto più calmo o più agitato. Un inizio prima della storia comune si sposta al suo primo giorno, con un avviso.
 
 #### 🎯 Ribilanciatore e Allocatore PAC
 
@@ -154,6 +156,7 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 
 ### 🐛 Corretto
 
+- Dopo un cambio del tipo di un asset, l'allocazione «Per tipo» mostrava ancora il tipo vecchio fino a 24 ore.
 - Sul telefono la finestra della transazione non scorre più di lato quando l'asset ha un nome lungo: i campi tornano a stare nello schermo, in visualizza e in modifica. Il difetto c'era già nella 1.3.0.
 - Una transazione aperta in visualizza dal tab Transazioni di un broker ora offre la matita per modificarla, come nella pagina Transazioni, a chi può modificare quel broker.
 - I numeri di pagina dell'elenco File restano in fondo alla finestra mentre scorri, come nelle altre pagine, e la barra della selezione in fondo a una pagina non copre più i numeri di pagina di una tabella.

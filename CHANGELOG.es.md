@@ -11,6 +11,7 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 
 ### ✨ Añadido
 
+- **Una nueva pestaña «Asignación»** en el Panel y en la página de cada bróker, entre Posiciones y Riesgo ([#89](https://github.com/Librefolio/LibreFolio/issues/89)): mira solo una parte de tu cartera. Conserva algunas clases (un ETF de acciones cuenta como Acciones), quita del 100% la parte sin clasificar o «Otro», o deja fuera activos sueltos, y cada porcentaje se recalcula sobre esa base — por Sector, Área (el mapa del mundo coloreado sobre tu selección), Tipo o Activo. Tres recuadros muestran la base, lo que el filtro deja fuera y lo excluido, y suman tu patrimonio neto; la tabla da la parte de cada porción sobre la selección y sobre toda la cartera, y un clic abre los activos que la componen; la acompañan el Historial de la selección y una matriz Clase × dimensión de toda la cartera (Clase × Área, Clase × Sector…), con tu selección enmarcada. Los filtros se recuerdan para cada página, y la tarjeta Asignación del Panel tiene un enlace «Analizar →» a la pestaña. La guía del bróker gana un paso.
 - En la búsqueda de activos, un resultado muestra el icono del activo cuando el proveedor lo ofrece: las monedas de CoinGecko aparecen con su logotipo.
 - **Enriquecedor ESMA**: todo activo negociado en un mercado europeo puede leer datos oficiales del registro FIRDS de la ESMA — el LEI del emisor y la forma jurídica; para un bono, el vencimiento, el tipo de cupón, un cupón fijo y la garantía de un Estado; para un fondo, si acumula o distribuye. Va después de las demás fuentes y completa lo que dejan vacío.
 - **La barra de selección está encima de la tabla en Transacciones, la pestaña Transacciones del bróker y FX**, y sus acciones bajan a la barra inferior al desplazarte. Cada acción dice sobre cuántas filas actúa (Editar y Eliminar cuentan solo las filas que puedes editar, Sincronizar solo los pares o activos con un proveedor).
@@ -65,6 +66,7 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 - Búsqueda de activos: al buscar una criptomoneda en Yahoo Finance aparece también su ticker en euros (por ejemplo BTC-EUR junto a BTC-USD), para valorarla directamente en euros.
 - **AI Export: «Estrategias de protección»**, un nuevo análisis del Panel: dice si ahora tiene sentido proteger tu cartera y, solo si lo tiene, cómo.
 - **Recompensas en tokens (staking, airdrops) como tipo de transacción.** Un tipo nuevo, «Recompensa», registra las unidades recibidas como ingreso en especie: abre un lote a su valor al recibirlas, y ese valor cuenta como ingreso, como un dividendo reinvertido el mismo día: sin movimiento de efectivo ni capital añadido. Los lotes, el coste medio, los ingresos, el Yield on Cost y el P&L del periodo lo leen. En la ventana de la transacción, una Recompensa pide el «Valor al recibirlo», precargado desde el historial de precios del activo y siempre editable. En la vista de Ingresos del Panel, las recompensas son una serie propia, en magenta, y los gráficos de lotes las marcan. (#90)
+- **Riesgo › Simulación, el periodo del que se toman los días**: «Días tomados de» ofrece «Toda la historia común» (por defecto) o «Un periodo elegido», dentro de la historia común de las posiciones, para un tramo más tranquilo o más agitado. Un inicio anterior a la historia común pasa a su primer día, con un aviso.
 
 #### 🎯 Reequilibrador de cartera y Asignador PAC
 
@@ -154,6 +156,7 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 
 ### 🐛 Corregido
 
+- Tras cambiar el tipo de un activo, la asignación «Por tipo» seguía mostrando el tipo anterior hasta 24 horas.
 - En el móvil, la ventana de una transacción ya no se desplaza de lado cuando el activo tiene un nombre largo: los campos vuelven a caber en la pantalla, al verla y al editarla. El defecto ya estaba en la 1.3.0.
 - Una transacción abierta en modo lectura desde la pestaña Transacciones de un bróker ahora ofrece el lápiz para editarla, como en la página Transacciones, a quien puede editar ese bróker.
 - Los números de página de la lista Archivos se quedan al pie de la ventana mientras te desplazas, como en las demás páginas, y la barra de selección al pie de una página ya no tapa los números de página de una tabla.

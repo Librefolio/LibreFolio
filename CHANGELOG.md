@@ -66,6 +66,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Asset search: looking up a cryptocurrency on Yahoo Finance also offers its euro ticker (for example BTC-EUR beside BTC-USD), so it can be priced directly in euros.
 - **AI Export: Protection Strategies**, a new Dashboard analysis: it says whether protecting your portfolio makes sense now and, only if it does, how.
 - **Token rewards (staking, airdrops) as a transaction type.** A new type, «Reward», records units received as income in kind: it opens a lot at their value on receipt, and that value counts as income, as a dividend reinvested the same day would — no cash moves and no capital is added. Lots, average cost, income, Yield on Cost and the period's P&L read it. In the transaction form a Reward takes its «Value on receipt», prefilled from the asset's price history and always editable. The Dashboard's income view shows rewards as a series of their own, in magenta, and the lots charts mark them. (#90)
+- **Risk › Simulation, the period the days are drawn from**: «Days drawn from» offers «All the common history» (the default) or «A period I choose», inside the holdings' common history, for a calmer or rougher stretch. A start before the common history moves to its first day, with a warning.
 
 #### 🎯 Portfolio rebalancer and PAC allocator
 
@@ -155,6 +156,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🐛 Fixed
 
+- After an asset's type was changed, the «By type» allocation kept showing the old type for up to 24 hours.
 - On a phone, the transaction window no longer scrolls sideways when the asset has a long name: the fields shrink to the screen again, in view and in edit. The defect was already in 1.3.0.
 - A transaction opened read-only from a broker's Transactions tab now offers the edit pencil, as on the Transactions page, to who can edit that broker.
 - The page numbers of the Files list stay at the bottom of the window while you scroll, as on the other pages, and the selection bar at the bottom of a page no longer covers a table's page numbers.

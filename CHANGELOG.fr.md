@@ -11,6 +11,7 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 
 ### ✨ Ajouté
 
+- **Un nouvel onglet « Allocation »** dans le Tableau de bord et dans la page de chaque courtier, entre Positions et Risque ([#89](https://github.com/Librefolio/LibreFolio/issues/89)) : regardez seulement une partie de votre portefeuille. Gardez certaines classes (un ETF d'actions compte comme Actions), retirez du 100 % la part non classée ou « Autre », ou laissez de côté des actifs, et chaque pourcentage est recalculé sur cette base — par Secteur, Zone (la carte du monde colorée sur votre sélection), Type ou Actif. Trois encadrés montrent la base, ce que le filtre laisse de côté et ce qui est exclu, et totalisent votre patrimoine net ; le tableau donne la part de chaque tranche dans la sélection et dans tout le portefeuille, et un clic ouvre les actifs qui la composent ; l'Historique de la sélection et une matrice Classe × dimension de tout le portefeuille (Classe × Zone, Classe × Secteur…), avec votre sélection encadrée, l'accompagnent. Les filtres sont mémorisés pour chaque page, et la carte Allocation du Tableau de bord a un lien « Analyser → » vers l'onglet. Le guide du courtier gagne une étape.
 - Dans la recherche d'actifs, un résultat affiche l'icône de l'actif quand le fournisseur en donne une : les cryptomonnaies de CoinGecko apparaissent avec leur logo.
 - **Enrichisseur ESMA** : tout actif négocié sur un marché européen peut lire des données officielles dans le registre FIRDS de l'ESMA — le LEI de l'émetteur et la forme juridique ; pour une obligation, l'échéance, le type de coupon, un coupon fixe et la garantie d'un État ; pour un fonds, s'il capitalise ou distribue. Il passe après les autres sources et complète ce qu'elles laissent vide.
 - **La barre de sélection est au-dessus du tableau dans Transactions, l'onglet Transactions du courtier et FX**, et ses actions descendent dans la barre du bas quand vous faites défiler. Chaque action indique sur combien de lignes elle agit (Modifier et Supprimer ne comptent que les lignes que vous pouvez modifier, Synchroniser seulement les paires ou actifs avec un fournisseur).
@@ -65,6 +66,7 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 - Recherche d'actifs : en cherchant une cryptomonnaie sur Yahoo Finance, son ticker en euros apparaît aussi (par exemple BTC-EUR à côté de BTC-USD), pour la valoriser directement en euros.
 - **AI Export : « Stratégies de protection »**, une nouvelle analyse du Tableau de bord : elle dit s'il est utile de protéger votre portefeuille maintenant et, seulement si c'est le cas, comment.
 - **Récompenses en jetons (staking, airdrops) comme type de transaction.** Un nouveau type, « Récompense », enregistre les unités reçues comme revenu en nature : il ouvre un lot à leur valeur à la réception, et cette valeur compte comme revenu, comme un dividende réinvesti le jour même : aucun mouvement d'espèces et aucun capital ajouté. Les lots, le coût moyen, les revenus, le Yield on Cost et le P&L de la période le lisent. Dans la fenêtre de transaction, une Récompense demande la « Valeur à la réception », préremplie depuis l'historique des prix de l'actif et toujours modifiable. Dans la vue Revenus du Tableau de bord, les récompenses forment une série à part, en magenta, et les graphiques des lots les marquent. (#90)
+- **Risque › Simulation, la période d'où les jours sont tirés** : « Jours tirés de » propose « Tout l'historique commun » (par défaut) ou « Une période choisie », dans l'historique commun des positions, pour une période plus calme ou plus agitée. Un début avant l'historique commun passe à son premier jour, avec un avertissement.
 
 #### 🎯 Rééquilibreur de portefeuille et Allocateur PAC
 
@@ -154,6 +156,7 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 
 ### 🐛 Corrections
 
+- Après un changement du type d'un actif, l'allocation « Par type » montrait encore l'ancien type jusqu'à 24 heures.
 - Sur un téléphone, la fenêtre d'une transaction ne défile plus sur le côté quand l'actif a un nom long : les champs tiennent de nouveau dans l'écran, en consultation et en modification. Le défaut existait déjà dans la 1.3.0.
 - Une transaction ouverte en consultation depuis l'onglet Transactions d'un courtier propose maintenant le crayon de modification, comme sur la page Transactions, à qui peut modifier ce courtier.
 - Les numéros de page de la liste Fichiers restent en bas de la fenêtre pendant le défilement, comme sur les autres pages, et la barre de sélection en bas d'une page ne cache plus les numéros de page d'un tableau.
