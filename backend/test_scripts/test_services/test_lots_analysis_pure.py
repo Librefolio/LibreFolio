@@ -70,7 +70,7 @@ from backend.app.services.financial_math.lots.histories import (
 from backend.app.services.financial_math.lots.prices import opening_reference_price
 from backend.app.services.financial_math.lots.scope_boundary import BoundaryLeg
 from backend.app.services.financial_math.price_marks import AssetPriceSeries, ObservationKind, PriceObservation, build_asset_price_series
-from backend.app.services.portfolio.lots_analysis_service import LotsAnalysisService, _parse_transfer_pair_id, _rewards_at_no_cost
+from backend.app.services.portfolio.lots_analysis_service import LotsAnalysisService, _lot_opening_kinds, _parse_transfer_pair_id, _rewards_at_no_cost
 
 # --------------------------------------------------------------------------- #
 # Builders
@@ -5229,3 +5229,134 @@ class TestTheFallbackLotOfAMergedRewardAsksItsRate:
             events=[FifoEvent(kind="REWARD_MERGE", date=day, transaction_id=3, broker_id=1, quantity=D("7"), unit_price=D("0"))],
         )
         assert ("USD", day) not in resolver._needs
+
+
+# --------------------------------------------------------------------------- #
+# Project 79, STK-2c — the kind of the event that opened each lot (LotSummarySchema.opening_kind)
+# --------------------------------------------------------------------------- #
+
+
+async def _stk2c_lots(monkeypatch, rows: list[Transaction], allocation: RewardAllocation = RewardAllocation.OWN_LOT, *, shorting: bool = False) -> dict[int, object]:
+    """The FIFO block's lot summaries, by lot id, of the whole service on in-memory rows (LOT_SUMMARY only, up to 20 Mar)."""
+    response = await _service_on_rows(monkeypatch, rows, shorting=shorting).get_lots_analysis_methods(
+        user_id=1,
+        asset_id=7,
+        broker_ids=[1],
+        date_from=None,
+        date_to=_MAR_20,
+        target_currency="EUR",
+        selected_lot_ids=None,
+        requested_analyses=[LotAnalysisType.LOT_SUMMARY],
+        matching_methods=[LotMatchingMethod.FIFO],
+        reward_allocation=allocation,
+    )
+    block = response.methods[LotMatchingMethod.FIFO]
+    return {lot.lot_id: lot for lot in block.lots}
+
+
+class TestTheOpeningKindOfALot:
+    """STK-2c (project 79): every lot summary carries the kind of the event that opened it, ``opening_kind``.
+
+    The Lots table groups the lots a REWARD opened at one broker (``opening_kind == REWARD``), so the field must name the
+    reward and nothing else: a BUY lot reads BUY, an ADJUSTMENT +qty ADJUSTMENT_IN, a short lot SELL. In the MERGED view a
+    reward that found a lot opened none; one that found no lot held the day before opened a lot of its own, which reads
+    REWARD although its engine event is a REWARD_MERGE. Source: ``_lot_opening_kinds``, the first classified event of the
+    lot's opening transaction — the same source as the timeline's opening row (``TestTheOpeningRowOfARewardInKind``).
+    """
+
+    @pytest.mark.asyncio
+    async def test_a_buy_an_adjustment_in_and_a_reward_each_open_their_lot_under_their_own_kind(self, monkeypatch):
+        """OWN_LOT: BUY 1 on 10 Jan, ADJUSTMENT +5 (2) on 15 Mar, REWARD 3 on 1 Mar — three lots, three kinds."""
+        lots = await _stk2c_lots(monkeypatch, [_tx(1), _adjustment_in_at_90(), _stk3_reward()])
+        assert {lot_id: lot.opening_kind for lot_id, lot in lots.items()} == {
+            1: LotTimelineEventKind.BUY,
+            2: LotTimelineEventKind.ADJUSTMENT_IN,
+            3: LotTimelineEventKind.REWARD,
+        }
+
+    @pytest.mark.asyncio
+    async def test_a_short_lot_reads_sell(self, monkeypatch):
+        """Broker 1 allows shorting: 10 sold short on 10 Jan open a SHORT lot, whose opening event is the SELL."""
+        short = _tx(1, tx_type=TransactionType.SELL, quantity=D("-10"), amount=D("1000"))
+        lots = await _stk2c_lots(monkeypatch, [short], shorting=True)
+        [lot] = lots.values()
+        # Precondition: the engine opened a short lot, not a refused sale
+        assert lot.direction == "SHORT"
+        assert lot.opening_kind is LotTimelineEventKind.SELL
+
+    @pytest.mark.asyncio
+    async def test_merged_the_lots_the_reward_joined_stay_buy_and_it_opens_none(self, monkeypatch):
+        """MERGED on the STK-3 golden book: the reward joined lots 1 and 2, which keep their BUY; there is no lot 3."""
+        lots = await _stk2c_lots(monkeypatch, _stk3_golden(), RewardAllocation.MERGED)
+        assert {lot_id: lot.opening_kind for lot_id, lot in lots.items()} == {1: LotTimelineEventKind.BUY, 2: LotTimelineEventKind.BUY}
+
+    @pytest.mark.asyncio
+    async def test_guard_own_lot_on_the_same_book_the_reward_is_a_lot_of_kind_reward(self, monkeypatch):
+        """GUARD for the test above: the same rows in OWN_LOT give the reward its lot, of kind REWARD."""
+        lots = await _stk2c_lots(monkeypatch, _stk3_golden(), RewardAllocation.OWN_LOT)
+        assert {lot_id: lot.opening_kind for lot_id, lot in lots.items()} == {
+            1: LotTimelineEventKind.BUY,
+            2: LotTimelineEventKind.BUY,
+            3: LotTimelineEventKind.REWARD,
+        }
+
+    @pytest.mark.asyncio
+    async def test_merged_a_reward_with_no_lot_held_the_day_before_opens_a_lot_of_kind_reward(self, monkeypatch):
+        """MERGED, an airdrop alone: its event is a REWARD_MERGE, its fallback lot reads REWARD, never REWARD_MERGE."""
+        lots = await _stk2c_lots(monkeypatch, [_stk3_reward()], RewardAllocation.MERGED)
+        [lot] = lots.values()
+        assert (lot.lot_id, lot.opening_kind) == (3, LotTimelineEventKind.REWARD)
+
+    def test_the_hand_built_merged_fallback_through_the_lot_summaries(self):
+        """``_build_lot_summaries`` on a hand-built MERGED result: lot 4 opened by REWARD_MERGE 4 reads REWARD, lot 1 opened
+        by BUY 1 reads BUY; the merge of reward 3 into lot 1 does not change lot 1's kind."""
+        day, airdrop_day = date(2024, 3, 1), date(2024, 3, 5)
+        lots = [
+            _lot(1, opening_transaction_id=1),
+            _lot(4, opening_transaction_id=4, opening_date=airdrop_day, original_quantity=D("7"), opening_unit_price=D("0"), original_cost=D("0"), open_quantity=D("7")),
+        ]
+        events = [
+            FifoEvent(kind="BUY", date=date(2024, 1, 10), transaction_id=1, broker_id=1, quantity=D("100"), unit_price=D("10")),
+            FifoEvent(kind="REWARD_MERGE", date=day, transaction_id=3, broker_id=1, quantity=D("20"), unit_price=D("0")),
+            FifoEvent(kind="REWARD_MERGE", date=airdrop_day, transaction_id=4, broker_id=1, quantity=D("7"), unit_price=D("0")),
+        ]
+        result = replace(_engine_result(lots=lots, fragments=[_fragment(1), _fragment(4, fragment_id="frag-4", start_date=airdrop_day, quantity=D("7"))], events=events), reward_allocation=RewardAllocation.MERGED)
+        summaries = _svc()._build_lot_summaries(
+            engine_result=result,
+            lots_by_id={lot.lot_id: lot for lot in lots},
+            selected_ids=[1, 4],
+            fx_resolver=_resolver("EUR"),
+            market_prices={date(2024, 3, 10): D("12")},
+            price_series=_series(_quote(date(2024, 1, 10), D("10"))),
+            closures_by_lot={},
+            income_by_lot={},
+            fees_by_lot={},
+            taxes_by_lot={},
+            estimated_mode=False,
+            quote_base_quantity=1,
+            analysis_end=_MAR_20,
+        )
+        assert {row.lot_id: row.opening_kind for row in summaries} == {1: LotTimelineEventKind.BUY, 4: LotTimelineEventKind.REWARD}
+
+    def test_a_lot_whose_opening_transaction_has_no_event_reads_none(self):
+        """No classified event for the lot's opening transaction (the hand-built default): unknown, not a guess."""
+        row = TestBuildLotSummaries()._call()
+        assert row.opening_kind is None
+
+
+class TestLotOpeningKinds:
+    """``_lot_opening_kinds`` alone: the first classified event of each transaction, REWARD_MERGE read as REWARD."""
+
+    def _event(self, kind: str, transaction_id: int) -> FifoEvent:
+        return FifoEvent(kind=kind, date=date(2024, 3, 1), transaction_id=transaction_id, broker_id=1, quantity=D("1"), unit_price=D("1"))
+
+    def test_the_first_event_of_a_transaction_wins(self):
+        result = _engine_result(events=[self._event("SELL", 5), self._event("BUY", 5)])
+        assert _lot_opening_kinds(result) == {5: LotTimelineEventKind.SELL}
+
+    def test_reward_merge_reads_as_reward(self):
+        result = _engine_result(events=[self._event("REWARD_MERGE", 4), self._event("REWARD", 6), self._event("ADJUSTMENT_IN", 7)])
+        assert _lot_opening_kinds(result) == {4: LotTimelineEventKind.REWARD, 6: LotTimelineEventKind.REWARD, 7: LotTimelineEventKind.ADJUSTMENT_IN}
+
+    def test_no_events_no_kinds(self):
+        assert _lot_opening_kinds(_engine_result()) == {}
