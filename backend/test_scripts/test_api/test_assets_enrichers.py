@@ -469,7 +469,7 @@ async def test_post_with_a_profile_writes_user_rows_and_an_invalid_value_fails_t
 # =============================================================================
 
 #: The keys of an ``enricher_result`` event: the fields of ``FAEnricherRecognition``.
-RECOGNITION_KEYS = {"code", "identifier_type", "identifier", "status", "name", "page_url", "identifiers", "conflicts", "error"}
+RECOGNITION_KEYS = {"code", "identifier_type", "identifier", "status", "name", "page_url", "identifiers", "conflicts", "error", "params"}
 
 
 def _fake_isin() -> str:
@@ -530,6 +530,7 @@ async def test_recognize_streams_mockenrich_found_its_learned_lei_and_done(test_
     assert (result["identifier_type"], result["identifier"], result["status"]) == ("ISIN", isin, "found"), result
     assert result["name"] == f"Mock {isin}" and result["page_url"] == _mock_page("ISIN", isin), result
     assert result["identifiers"] == {"LEI": lei_of(isin)} and result["conflicts"] == {} and result["error"] is None, result
+    assert result["params"] == {}, f"no seed, no params: {result}"
     learned = _learned_events(events)
     assert [(event["identifier_type"], event["identifier"], event["source"]) for event in learned] == [("LEI", lei_of(isin), MOCK_CODE)], f"the LEI learned from mockenrich: {learned}"
     done = events[-1]
@@ -612,6 +613,78 @@ async def test_recognize_with_no_identifiers_is_a_422(test_server):
     assert resp.status_code == 422, f"empty identifiers: {resp.status_code} {resp.text}"
 
 
+@pytest.mark.asyncio
+async def test_recognize_accepts_seeds_and_a_seed_alone_asks_mockenrich_with_its_params_dropped(test_server):
+    """ENR-2. A seed of mockenrich's code, no identifiers: mockenrich is asked with the seed's identifier; it declares no
+    ``params_schema``, so the seed's params are dropped from the binding it answers for."""
+    ticker = f"SEED{uuid.uuid4().hex[:8].upper()}.MI"
+    seed = {"code": MOCK_CODE, "identifier_type": "TICKER", "identifier": ticker, "params": {"mic": "XMIL"}}
+    async with httpx.AsyncClient() as client:
+        await _login(client)
+        events = await _recognize(client, {"asset_type": "ETF", "identifiers": {}, "seeds": [seed], "codes": [MOCK_CODE]})
+        mixed = await _recognize(client, {"asset_type": "ETF", "identifiers": {"ISIN": _fake_isin()}, "seeds": [seed], "codes": [MOCK_CODE]})
+
+    results = _results(events, MOCK_CODE)
+    assert [(result["identifier_type"], result["identifier"], result["status"]) for result in results] == [("TICKER", ticker, "found")], f"mockenrich is asked with the seed: {events}"
+    assert set(results[0]) >= RECOGNITION_KEYS and results[0]["params"] == {}, f"undeclared params dropped: {results[0]}"
+    assert events[-1]["identifiers"] == {"TICKER": ticker} and events[-1]["found_order"] == [MOCK_CODE], f"done: {events[-1]}"
+    mixed_results = _results(mixed, MOCK_CODE)
+    assert len(mixed_results) == 1 and (mixed_results[0]["identifier_type"], mixed_results[0]["identifier"]) == ("TICKER", ticker), f"the seed goes first even with an ISIN: {mixed}"
+
+
+@pytest.mark.asyncio
+async def test_recognize_a_seed_isin_different_from_the_request_is_a_conflict_event(test_server):
+    isin, other = _fake_isin(), _fake_isin()
+    seed = {"code": MOCK_CODE, "identifier_type": "ISIN", "identifier": other}
+    async with httpx.AsyncClient() as client:
+        await _login(client)
+        events = await _recognize(client, {"asset_type": "ETF", "identifiers": {"ISIN": isin}, "seeds": [seed], "codes": [MOCK_CODE]})
+
+    results = _results(events, MOCK_CODE)
+    assert [(result["status"], result["conflicts"]) for result in results] == [("conflict", {"ISIN": other})], f"one conflict naming the seed's ISIN: {events}"
+    assert results[0]["params"] == {} and events[-1]["found_order"] == [], f"done: {events[-1]}"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "seed",
+    [
+        {"code": MOCK_CODE, "identifier_type": "TICKER", "identifier": "X", "extra": 1},
+        {"code": MOCK_CODE, "identifier_type": "TICKER", "identifier": ""},
+        {"code": "BAD CODE!", "identifier_type": "TICKER", "identifier": "X"},
+        {"code": MOCK_CODE, "identifier_type": "", "identifier": "X"},
+    ],
+    ids=["extra-key", "empty-identifier", "bad-code", "empty-type"],
+)
+async def test_recognize_a_malformed_seed_is_a_422(test_server, seed):
+    async with httpx.AsyncClient() as client:
+        await _login(client)
+        resp = await client.post(f"{API_BASE}/assets/enrichers/recognize", json={"asset_type": "ETF", "identifiers": {"ISIN": _fake_isin()}, "seeds": [seed]}, timeout=TIMEOUT)
+
+    assert resp.status_code == 422, f"malformed seed: {resp.status_code} {resp.text}"
+
+
+@pytest.mark.asyncio
+async def test_recognize_with_neither_identifiers_nor_seeds_is_a_422(test_server):
+    async with httpx.AsyncClient() as client:
+        await _login(client)
+        resp = await client.post(f"{API_BASE}/assets/enrichers/recognize", json={"asset_type": "ETF", "seeds": []}, timeout=TIMEOUT)
+
+    assert resp.status_code == 422, f"nothing to ask with: {resp.status_code} {resp.text}"
+
+
+@pytest.mark.asyncio
+async def test_test_route_answers_the_params_of_the_binding_it_was_given(test_server):
+    isin = _fake_isin()
+    async with httpx.AsyncClient() as client:
+        await _login(client)
+        resp = await client.post(f"{API_BASE}/assets/enrichers/{MOCK_CODE}/test", json={"binding": {"identifier_type": "ISIN", "identifier": isin, "mic": "XMIL"}}, timeout=TIMEOUT)
+
+    assert resp.status_code == 200, f"POST test: {resp.status_code} {resp.text}"
+    body = resp.json()
+    assert body["status"] == "found" and body["params"] == {"mic": "XMIL"}, f"the binding's extra keys come back as params: {body}"
+
+
 # =============================================================================
 # 6. B4: GET /assets/enrichers/{code}/search and POST /assets/enrichers/{code}/test
 # =============================================================================
@@ -657,6 +730,7 @@ async def test_test_route_recognizes_one_binding_on_mockenrich(test_server):
     assert (body["code"], body["identifier_type"], body["identifier"], body["status"]) == (MOCK_CODE, "ISIN", isin, "found"), body
     assert body["name"] == f"Mock {isin}" and body["page_url"] == _mock_page("ISIN", isin), body
     assert body["identifiers"] == {"LEI": lei_of(isin)} and body["conflicts"] == {} and body["error"] is None, body
+    assert set(body) >= RECOGNITION_KEYS and body["params"] == {}, f"a binding without extra keys has no params: {body}"
     print_success("mockenrich recognizes the binding")
 
 

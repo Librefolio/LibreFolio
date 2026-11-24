@@ -6,6 +6,7 @@ it (``GET /assets``, field ``enrichers``): one door to write, as for the profile
 
 import asyncio
 import json
+import math
 from collections.abc import AsyncIterator
 from typing import List
 
@@ -20,10 +21,11 @@ from backend.app.logging_config import get_logger
 from backend.app.schemas.assets.enrichers import FAEnricherBinding, FAEnricherRecognition, FAEnricherRecognizeRequest, FAEnrichersCatalogue, FAEnricherSearchResult, FAEnricherTestRequest
 from backend.app.services.enrichers.base import EnricherBinding, EnricherPlugin
 from backend.app.services.enrichers.bindings import default_order, enrichers_catalogue, installed_enrichers
-from backend.app.services.enrichers.recognize import IdentifierLearned, Recognized, RecognizeStatus, recognize_cascade
+from backend.app.services.enrichers.recognize import IdentifierLearned, Recognized, RecognizeStatus, Seed, recognize_cascade
 from backend.app.services.enrichers.registry import EnricherRegistry
 from backend.app.services.enrichers.usable import bind_settings, configured_enricher
 from backend.app.services.plugin_settings.readiness import plugins_readiness
+from backend.app.utils.runtime.cooldown import RateLimitedError
 
 logger = get_logger(__name__)
 
@@ -69,6 +71,7 @@ def _recognition(event: Recognized) -> FAEnricherRecognition:
         identifiers=dict(event.identifiers),
         conflicts=dict(event.conflicts),
         error=event.error,
+        params=dict(event.binding.params),
     )
 
 
@@ -88,7 +91,11 @@ async def _recognize_events(request: FAEnricherRecognizeRequest) -> AsyncIterato
             plugins.append(plugin)
     found_order: list[str] = []
     known = dict(request.identifiers)
-    async for event in recognize_cascade(request.asset_type, request.identifiers, plugins=plugins):
+    seeds = [Seed(code=seed.code, binding=EnricherBinding(identifier_type=seed.identifier_type, identifier=seed.identifier, params=dict(seed.params))) for seed in request.seeds]
+    for seed in request.seeds:
+        # A seed's identifier is known too; it never replaces the asset's own (a different ISIN is a conflict, R7)
+        known.setdefault(seed.identifier_type.strip().upper(), seed.identifier.strip())
+    async for event in recognize_cascade(request.asset_type, request.identifiers, plugins=plugins, seeds=seeds):
         if isinstance(event, IdentifierLearned):
             known[event.identifier_type] = event.identifier
             yield _sse({"event": "identifier_learned", "identifier_type": event.identifier_type, "identifier": event.identifier, "source": event.source})
@@ -108,11 +115,15 @@ async def recognize_enrichers(request: FAEnricherRecognizeRequest, current_user:
     Events, one ``data: {json}`` each, with an ``event`` key:
 
     - ``enricher_result``: one enricher's answer (``FAEnricherRecognition``: ``found``, ``not_found``, ``conflict`` or
-      ``error``);
+      ``error``), with the binding it answered for and its ``params`` (a seed's, ENR-2);
     - ``identifier_learned``: a strong identifier (ISIN, LEI) the cascade learned, and from which enricher;
     - ``done``: ``found_order`` (the enrichers found, as they answered), ``default_order`` (the order the asset's
       bindings would take: degree, then the price provider's enricher, then ``found_order``, then code) and
       ``identifiers`` (every identifier known at the end).
+
+    ``seeds`` (ENR-2): bindings to start from, the asset's price assignment. The enricher of a seed's code is asked
+    first with it, with the parameters it declares; a seed's identifier joins the cascade, a strong one different from
+    the asset's is a ``conflict`` of that enricher.
 
     Counted once on the probe's per-user limit (plan C0), however many enrichers it asks: past it, 429 before any event.
     """
@@ -120,15 +131,40 @@ async def recognize_enrichers(request: FAEnricherRecognizeRequest, current_user:
     return StreamingResponse(_recognize_events(request), media_type="text/event-stream", headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no", "Connection": "keep-alive"})
 
 
-@enricher_router.get("/enrichers/{code}/search", response_model=List[FAEnricherSearchResult], tags=["FA Enrichers"])
+#: The wait a source's refusal answers when the source named none: the per-user limit's window, a minute.
+_SOURCE_REFUSAL_RETRY_SECONDS = 60
+
+
+def source_refused(code: str, refused: RateLimitedError) -> HTTPException:
+    """The 429 ``RATE_LIMITED`` of a source that refused an enricher's call for too many requests, with ``Retry-After``
+    (the source's wait, else a minute): a refusal is never an empty result (ENR-3b). Logged once, here."""
+    seconds = max(1, math.ceil(refused.retry_after)) if refused.retry_after is not None else _SOURCE_REFUSAL_RETRY_SECONDS
+    logger.warning("Enricher source refused for too many requests", enricher=code, retry_after=seconds, exc_info=refused)
+    return HTTPException(
+        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+        detail={"error_code": "RATE_LIMITED", "retry_after": seconds, "message": "The source refused for too many requests: try again later"},
+        headers={"Retry-After": str(seconds)},
+    )
+
+
+@enricher_router.get(
+    "/enrichers/{code}/search",
+    response_model=List[FAEnricherSearchResult],
+    tags=["FA Enrichers"],
+    responses={429: {"description": "Too many probes by this user (`PROBE_RATE_LIMITED`), or the source refused the search for too many requests (`RATE_LIMITED`); both with `retry_after` and the `Retry-After` header"}},
+)
 async def search_enricher(code: str, q: str = Query(..., min_length=1, max_length=200), current_user: User = Depends(get_current_user)) -> List[FAEnricherSearchResult]:
     """One enricher's search by a word (the E7 window's «search»); 400 for an enricher that does not search; counted on the
-    probe's per-user limit (plan C0)."""
+    probe's per-user limit (plan C0). A source that refuses for too many requests answers 429 ``RATE_LIMITED`` with
+    ``Retry-After`` (ENR-3b)."""
     enforce_probe_limit(current_user.id)
     plugin = await _enricher(code)
     if not plugin.supports_search:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"The enricher '{code}' does not search")
-    results = await asyncio.to_thread(plugin.search, q)
+    try:
+        results = await asyncio.to_thread(plugin.search, q)
+    except RateLimitedError as refused:
+        raise source_refused(code, refused) from refused
     return [FAEnricherSearchResult(name=result.name, binding=FAEnricherBinding(identifier_type=result.binding.identifier_type, identifier=result.binding.identifier, **dict(result.binding.params)), asset_type=result.asset_type, page_url=result.page_url) for result in results]
 
 
@@ -146,4 +182,4 @@ async def test_enricher(code: str, request: FAEnricherTestRequest, current_user:
         logger.warning("Enricher test failed", enricher=code, exc_info=error)
         return FAEnricherRecognition(code=code, identifier_type=binding.identifier_type, identifier=binding.identifier, status=RecognizeStatus.ERROR.value, error=type(error).__name__)
     found = RecognizeStatus.FOUND if answer.found else RecognizeStatus.NOT_FOUND
-    return FAEnricherRecognition(code=code, identifier_type=binding.identifier_type, identifier=binding.identifier, status=found.value, name=answer.name, page_url=answer.page_url, identifiers=dict(answer.identifiers or {}))
+    return FAEnricherRecognition(code=code, identifier_type=binding.identifier_type, identifier=binding.identifier, status=found.value, name=answer.name, page_url=answer.page_url, identifiers=dict(answer.identifiers or {}), params=dict(extra))

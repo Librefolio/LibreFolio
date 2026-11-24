@@ -1658,6 +1658,16 @@ def services_enricher_rate_limit(verbose: bool = False, test_names: list = None)
     return run_command(cmd, "Enricher rate-limit tests", verbose=verbose)
 
 
+def services_enricher_search_refusal(verbose: bool = False, test_names: list = None) -> bool:
+    """Test that a source's refusal of an enricher's search is a 429 RATE_LIMITED with Retry-After (ENR-3b)."""
+    print_section("Services: Enricher Search Refusal")
+    print_info("Testing: api/v1/assets/enrichers.py (search_enricher, source_refused), services/enrichers/base.py (EnricherRateLimited)")
+    print_info("Tests: EnricherRateLimited(retry_after) -> 429 RATE_LIMITED, Retry-After = ceil(wait) >= 1, 60 when none named; another failure is not a 429; an answer is returned")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_enricher_search_refusal.py", test_names)
+    return run_command(cmd, "Enricher search refusal tests", verbose=verbose)
+
+
 def services_quote_base_suggestion(verbose: bool = False, test_names: list = None) -> bool:
     """Z-32 (d): a provider's quote base suggestion (FAQuoteBaseSuggestion) in its search results and in the probe's metadata."""
     print_section("Services: Quote Base Suggestion (Z-32 d)")
@@ -4156,6 +4166,16 @@ Note: No backend server required.
         # PURE: no DB, no server, no network. The route coroutines are called directly; probe_limiter() returns a private
         # SlidingWindowLimiter on a fake clock (or PROBES_BY_LIMIT starts empty per test), and the registry, the plugins,
         # the cascade, the profile reads, the manager's probe and the session are recording stubs, all with monkeypatch.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "enricher-search-refusal",
+        services_enricher_search_refusal,
+        name="Enricher Search Refusal",
+        desc="ENR-3b: GET /assets/enrichers/{code}/search turns an enricher's EnricherRateLimited (any RateLimitedError) into 429 with detail.error_code RATE_LIMITED, an int detail.retry_after = the Retry-After header = ceil(wait) >= 1 (60 when the source named none); another failure of the plugin is re-raised, not a 429; an answer and an empty list are returned as they are",
+        # PURE: no DB, no server, no network. The route coroutine is called directly with the enricher lookup and the probe
+        # limit replaced by stubs (monkeypatch): the shared backend serves only mockenrich, which does not search.
         isolation="pure",
     )
     add_test(

@@ -92,9 +92,11 @@ from backend.app.services.assets.profile.catalogue import normalize_value
 from backend.app.services.enrichers.base import (
     RATE_LIMITED,
     EnricherBinding,
+    EnricherRateLimited,
     EnricherReadItem,
     EnricherReadStatus,
     EnricherRecognition,
+    EnricherSearchResult,
     EnricherTerms,
 )
 from backend.app.services.enrichers.registry import EnricherRegistry
@@ -340,7 +342,7 @@ class FakeYahoo:
 
     def __getattr__(self, name: str) -> Any:
         _dunder(name)
-        pytest.fail(f"yf.{name} used: the enricher uses yf.Ticker only (no search in this lot, no download)")
+        pytest.fail(f"yf.{name} used: the enricher uses yf.Ticker and yf.Search only (no download)")
 
     def reads(self, symbol: str) -> list[str]:
         return [what for called, what in self.calls if called == symbol]
@@ -485,7 +487,7 @@ def test_declarations(yh):
     assert not getattr(cls, "test_only", False), "a real enricher, served outside test mode"
     instance = cls()
     assert instance.params_schema == [], "no extra parameters of a binding"
-    assert instance.supports_search is False, "no search in this lot"
+    assert instance.supports_search is True, "it searches by yf.Search (ENR-3b)"
 
 
 def test_coverage_and_voices(yh):
@@ -1152,3 +1154,144 @@ def test_recognize_is_paced_with_the_reads(yh, yahoo, pace, plugin):
     plugin.recognize(binding)
     list(plugin.read([binding]))
     assert pace.interval in pace.slept, f"recognize and read share the pace: {pace.slept}"
+
+
+# =============================================================================
+# ENR-3b: search by ``yf.Search``
+# =============================================================================
+
+
+class _FakeSearch:
+    """What ``yf.Search(text)`` returns: the ``quotes`` Yahoo answered."""
+
+    def __init__(self, quotes: Any) -> None:
+        self.quotes = quotes
+
+
+def _offer_search(yahoo: FakeYahoo, quotes: Any = None, error: BaseException | None = None) -> list[str]:
+    """Install ``yf.Search`` on the fake: it records the texts it is called with, then answers ``quotes`` or raises."""
+    texts: list[str] = []
+
+    def search(text: str, *args: Any, **kwargs: Any) -> _FakeSearch:
+        texts.append(text)
+        if error is not None:
+            raise error
+        return _FakeSearch(quotes)
+
+    yahoo.Search = search  # type: ignore[attr-defined]
+    return texts
+
+
+def _quote(symbol: str, quote_type: str = "EQUITY", **fields: Any) -> dict[str, Any]:
+    return {"symbol": symbol, "quoteType": quote_type, "isYahooFinance": True, **fields}
+
+
+def test_search_maps_quotes_to_ticker_bindings(plugin, yahoo, pace):
+    texts = _offer_search(
+        yahoo,
+        [
+            _quote("ENEL.MI", "EQUITY", longname="Enel SpA", shortname="ENEL"),
+            _quote("SWDA.MI", "ETF", shortname="ISHARESIV-CORE MSCI WORLD"),
+            _quote("0P0001OS3T.F", "MUTUALFUND"),
+        ],
+    )
+
+    results = plugin.search("  lab world  ")
+
+    assert texts == ["lab world"], "the text is stripped before the call"
+    expected = [
+        ("Enel SpA", "ENEL.MI", AssetType.STOCK),
+        ("ISHARESIV-CORE MSCI WORLD", "SWDA.MI", AssetType.ETF),
+        ("0P0001OS3T.F", "0P0001OS3T.F", AssetType.FUND),
+    ]
+    assert results == [EnricherSearchResult(name=name, binding=EnricherBinding("TICKER", symbol), asset_type=asset_type, page_url=_page(symbol)) for name, symbol, asset_type in expected]
+    assert yahoo.constructed == [], "search never builds a Ticker"
+
+
+def test_search_with_no_quotes_is_empty(plugin, yahoo, pace):
+    _offer_search(yahoo, [])
+    assert plugin.search("lab nothing") == []
+
+
+@pytest.mark.parametrize("text", ["", " ", "   ", "a", " b "])
+def test_search_of_a_short_or_blank_text_makes_no_call(plugin, yahoo, pace, text):
+    texts = _offer_search(yahoo, [_quote("ENEL.MI")])
+    assert plugin.search(text) == []
+    assert texts == [] and pace.slept == [], "no call to Yahoo, no pace spent"
+
+
+def test_search_skips_what_the_enricher_does_not_read(plugin, yahoo, pace):
+    _offer_search(
+        yahoo,
+        [
+            _quote("^FTSEMIB", "INDEX"),
+            _quote("EURUSD=X", "CURRENCY"),
+            _quote("BTC-USD", "CRYPTOCURRENCY"),
+            _quote("ES=F", "FUTURE"),
+            _quote("LAB.EXT", "EQUITY", isYahooFinance=False),
+            {"quoteType": "EQUITY", "isYahooFinance": True},
+            {"symbol": "LAB.NOTYPE", "isYahooFinance": True},
+            "not a mapping",
+            _quote("AAPL", "equity", longname="Apple Inc."),
+        ],
+    )
+    results = plugin.search("lab mixed")
+    assert [result.binding.identifier for result in results] == ["AAPL"], "only the readable listing is kept"
+    assert results[0].asset_type == AssetType.STOCK
+
+
+def test_search_takes_the_first_twenty_quotes(plugin, yahoo, pace):
+    _offer_search(yahoo, [_quote(f"LAB{index:02d}.MI") for index in range(30)])
+    results = plugin.search("lab many")
+    assert [result.binding.identifier for result in results] == [f"LAB{index:02d}.MI" for index in range(20)]
+
+
+def test_search_cut_applies_before_the_filter(plugin, yahoo, pace):
+    """The cut is on Yahoo's quotes, not on the kept ones: a readable quote after the twentieth is never reached."""
+    _offer_search(yahoo, [_quote(f"^LAB{index:02d}", "INDEX") for index in range(20)] + [_quote("LATE.MI")])
+    assert plugin.search("lab late") == []
+
+
+def test_search_refusal_is_enricher_rate_limited_with_the_source_wait(plugin, yahoo, pace):
+    class _Response:
+        status_code = 429
+        headers = {"Retry-After": "12"}
+
+    class _HTTPError(Exception):
+        response = _Response()
+
+    _offer_search(yahoo, error=_HTTPError("Too Many Requests"))
+    with pytest.raises(EnricherRateLimited) as raised:
+        plugin.search("lab refused")
+    assert raised.value.retry_after == 12.0
+    assert isinstance(raised.value.__cause__, _HTTPError), "raised from the library's error"
+
+
+def test_search_refusal_by_yfinances_own_error_is_enricher_rate_limited(plugin, yahoo, pace):
+    assert rate_limited_from_exception(RATE_LIMIT_ERROR(), CODE) is not None, "barrier: the core reads yfinance's refusal as a 429"
+    _offer_search(yahoo, error=RATE_LIMIT_ERROR())
+    with pytest.raises(EnricherRateLimited):
+        plugin.search("lab refused")
+
+
+def test_search_another_failure_is_reraised_as_it_is(plugin, yahoo, pace):
+    failure = ValueError("unexpected answer")
+    assert rate_limited_from_exception(failure, CODE) is None, "barrier: not a refusal"
+    _offer_search(yahoo, error=failure)
+    with pytest.raises(ValueError) as raised:
+        plugin.search("lab broken")
+    assert raised.value is failure
+
+
+def test_search_without_yfinance_raises(yh, monkeypatch):
+    monkeypatch.setattr(yh, "yf", None, raising=True)
+    with pytest.raises(RuntimeError, match="yfinance is not installed"):
+        yh.YahooFinanceEnricher().search("lab text")
+
+
+def test_search_is_paced_with_the_reads(yahoo, pace, plugin):
+    _offer_search(yahoo, [])
+    plugin.search("lab paced")
+    binding = _offer(yahoo, "enel")[0]
+    list(plugin.read([binding]))
+    assert pace.interval in pace.slept, f"a read after a search waits the interval: {pace.slept}"

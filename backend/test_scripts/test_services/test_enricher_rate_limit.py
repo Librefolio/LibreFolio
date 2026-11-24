@@ -250,7 +250,7 @@ def routes(monkeypatch: pytest.MonkeyPatch) -> Routes:
         events.append(("installed",))
         return [StubEnricher(code, events) for code in INSTALLED]
 
-    async def recognize_cascade(asset_type, identifiers, *, plugins=None):
+    async def recognize_cascade(asset_type, identifiers, *, plugins=None, seeds=()):
         events.append(("cascade", tuple(plugin.code for plugin in plugins or ())))
         for plugin in plugins or ():
             events.append(("asked", plugin.code))

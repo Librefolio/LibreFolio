@@ -254,7 +254,8 @@
       "enrichersError": "The enrichers could not be searched: choose them by hand.",
       "enrichersReview": "Check or change",
       "enrichersReading": "Their data are being read now.",
-      "enrichersReadingWaiting": "Too many requests: their data will be read by themselves in a moment."
+      "enrichersReadingWaiting": "Too many requests: their data will be read by themselves in a moment.",
+      "enrichersTickerOnly": "Found by its ticker alone, to check: {names}. Add it from «Enrichers» with «+»."
     },
     "provider": {
       "assignment": "Provider Assignment",

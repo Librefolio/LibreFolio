@@ -190,7 +190,7 @@ default order ask only the enrichers that cover the asset's type.
 
 | Method | Default | Description |
 |---|---|---|
-| `search(query)` | raises `NotImplementedError` | The assets the source finds for a word, as `EnricherSearchResult` (`name`, `binding`, `asset_type`, `page_url`). `supports_search` turns `True` by itself when you override it |
+| `search(query)` | raises `NotImplementedError` | The assets the source finds for a word, as `EnricherSearchResult` (`name`, `binding`, `asset_type`, `page_url`). `supports_search` turns `True` by itself when you override it. A refusal for too many requests raises `EnricherRateLimited` (with the source's `retry_after`), never an empty list |
 | `params_schema` | `[]` | A property: the extra parameters of a binding, which the enrichers window draws as a form ([Binding Parameters](#params)) |
 | `shutdown()` | no-op | Release what the plugin holds, at the server's shutdown |
 
@@ -441,7 +441,7 @@ window with `enrichersOnOpen`: the enrichers' window on top, for that opening on
 |---|---|---|
 | `GET /enrichers` | The catalogue: every served enricher with what it declares, `configured` and `missing_settings`, and the default order per asset type | Class attributes only, no call |
 | `POST /enrichers/recognize` | The cascade as Server-Sent Events: `enricher_result`, `identifier_learned`, then `done` (`found_order`, `default_order`, `identifiers`) | `recognize` |
-| `GET /enrichers/{code}/search?q=…` | One enricher's search; 400 for an enricher that does not search | `search` |
+| `GET /enrichers/{code}/search?q=…` | One enricher's search; 400 for an enricher that does not search; 429 `RATE_LIMITED` with `Retry-After` when the source refused (`EnricherRateLimited`) | `search` |
 | `POST /enrichers/{code}/test` | `recognize` one binding; writes nothing | `recognize` |
 
 - `{code}/search` and `{code}/test` answer **404** when the enricher is not served (not installed, test-only outside test
@@ -586,7 +586,7 @@ The real plugins are the best reference:
 | Plugin | Covers | Shows |
 |---|---|---|
 | `backend/app/services/enricher_providers/justetf/plugin.py` | ETFs and ETCs, by ISIN | A library call per page; `source_dates` for countries and sectors (the holdings date); a search over the site's full list; a sector table of the source's own words |
-| `backend/app/services/enricher_providers/yahoo_finance/plugin.py` (code `yfinance`) | Shares first, funds second, by ticker | `keys` used to skip a call; no ISIN returned by `recognize` |
+| `backend/app/services/enricher_providers/yahoo_finance/plugin.py` (code `yfinance`) | Shares first, funds second, by ticker | `keys` used to skip a call; no ISIN returned by `recognize`; a search with `yf.Search`, each result bound by the symbol with the market's suffix (`SWDA.MI`) |
 | `backend/app/services/enricher_providers/borsa_italiana/plugin.py` | Bonds, funds, Milan shares, by ISIN or internal fund code | `params_schema` with `x-i18n-key` labels; the binding's `language`; one library session per read; `management_fee`, not `ter`; `annual_coupon_rate` from `financial_math`; a share's second page (the company profile: `description`, `issuer_country`) read only when `keys` asks for its voices, its voices declared only when the installed library has the reader |
 | `backend/app/services/enricher_providers/esma/plugin.py` | Every instrument a European market trades, by ISIN, after the sources of each type | Our library `esma-registers` (ESMA's FIRDS register, one call per ISIN); the CFI code read as `legal_form`, a bond's `coupon_type` and `issuer_type`, a fund's `distribution_policy`; the LEI handed to the cascade; a register's «fixed rate» written as `coupon_rate` only when the CFI says fixed |
 | `backend/app/services/enricher_providers/mockenrich/plugin.py` | Test only | Fixed answers for every outcome (`MOCK_NOT_FOUND`, `MOCK_ERROR`, `MOCK_RATE_LIMITED`), no network |

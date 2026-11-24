@@ -134,7 +134,7 @@ describe('removing, putting back, reordering', () => {
     });
 
     it('a new enricher is added with the first identifier type it accepts, waiting for the identifier', () => {
-        const draft = state.addEnricher(state.draftFrom({}), 'gleif', null, 'LEI');
+        const draft = state.addEnricher(state.draftFrom({}), 'gleif', null, {accepted: ['LEI']});
         expect(state.resultConfig(draft).gleif).toEqual({identifier_type: 'LEI', identifier: ''});
     });
 
@@ -256,5 +256,215 @@ describe('the last read of the asset (E6c)', () => {
     it('is null for an asset never read', () => {
         expect(state.assetLastRead(config, {})).toBeNull();
         expect(state.assetLastRead({}, {justetf: {read_at: '2026-11-01T03:00:00+00:00', status: 'ok'}})).toBeNull();
+    });
+});
+
+describe('an enricher added with what the asset knows (ENR-1, R3)', () => {
+    const ISIN = 'IE00BK5BQT80';
+
+    it('from a recognition that found it: the binding it was found by', () => {
+        const found = recognition('yahoo', 'found', 'Vanguard', {identifier_type: 'TICKER', identifier: 'VWCE.DE'});
+        const draft = state.addEnricher(state.draftFrom({}), 'yahoo', found, {accepted: ['TICKER', 'ISIN'], identifiers: {ISIN}});
+        expect(state.resultConfig(draft).yahoo).toEqual({identifier_type: 'TICKER', identifier: 'VWCE.DE'});
+    });
+
+    it('from a recognition that did not find it: the binding it asked with, and the row says so until the identifier changes', () => {
+        const notFound = recognition('esma', 'not_found');
+        let draft = state.addEnricher(state.draftFrom({}), 'esma', notFound, {accepted: ['ISIN'], identifiers: {ISIN}});
+        expect(state.resultConfig(draft).esma).toEqual({identifier_type: 'ISIN', identifier: ISIN});
+        const recognitions = {esma: notFound};
+        expect(state.chosenRows(draft, context({recognitions}))[0].notFoundWith).toEqual({identifier_type: 'ISIN', identifier: ISIN});
+        draft = state.setBinding(draft, 'esma', {identifier_type: 'ISIN', identifier: 'IE00B3RBWM25'});
+        expect(state.chosenRows(draft, context({recognitions}))[0].notFoundWith).toBeNull();
+    });
+
+    it('a row with no recognition never says it was not found', () => {
+        const draft = state.addEnricher(state.draftFrom({}), 'esma', null, {accepted: ['ISIN'], identifiers: {ISIN}});
+        expect(state.chosenRows(draft, context())[0].notFoundWith).toBeNull();
+    });
+
+    it('with no recognition: the ISIN of the asset for an enricher that reads ISINs only', () => {
+        const draft = state.addEnricher(state.draftFrom({}), 'esma', null, {accepted: ['ISIN'], identifiers: {ISIN: ` ${ISIN} `, TICKER: 'VWCE'}});
+        expect(state.resultConfig(draft).esma).toEqual({identifier_type: 'ISIN', identifier: ISIN});
+        expect(state.draftIssues(draft, context())).toEqual({});
+    });
+
+    it('takes the first type it accepts, in its plugin order, that the asset holds', () => {
+        const identifiers = {ISIN, TICKER: 'VWCE'};
+        const tickerFirst = state.addEnricher(state.draftFrom({}), 'yahoo', null, {accepted: ['TICKER', 'ISIN'], identifiers});
+        expect(state.resultConfig(tickerFirst).yahoo).toEqual({identifier_type: 'TICKER', identifier: 'VWCE'});
+        const isinFirst = state.addEnricher(state.draftFrom({}), 'yahoo', null, {accepted: ['ISIN', 'TICKER'], identifiers});
+        expect(state.resultConfig(isinFirst).yahoo).toEqual({identifier_type: 'ISIN', identifier: ISIN});
+    });
+
+    it('skips an accepted type the asset holds blank', () => {
+        const draft = state.addEnricher(state.draftFrom({}), 'yahoo', null, {accepted: ['TICKER', 'ISIN'], identifiers: {TICKER: '  ', ISIN}});
+        expect(state.resultConfig(draft).yahoo).toEqual({identifier_type: 'ISIN', identifier: ISIN});
+    });
+
+    it('is empty, on the first type it accepts, when the asset holds none of them; with nothing known, fully empty', () => {
+        expect(state.assetBinding({accepted: ['LEI', 'ISIN'], identifiers: {TICKER: 'VWCE'}})).toEqual({identifier_type: 'LEI', identifier: ''});
+        expect(state.assetBinding({})).toEqual({identifier_type: '', identifier: ''});
+    });
+
+    it('a removed one keeps its parameters when put back, whatever the asset knows', () => {
+        let draft = state.removeEnricher(state.draftFrom(CONFIG), 'borsa_italiana');
+        draft = state.addEnricher(draft, 'borsa_italiana', null, {accepted: ['ISIN'], identifiers: {ISIN: 'IE00B3RBWM25'}});
+        expect(state.resultConfig(draft).borsa_italiana).toEqual(CONFIG.borsa_italiana);
+    });
+
+    it('🗑 makes the reason «removed», and «+» puts it back with the binding it had, even over a recognition', () => {
+        const recognitions = {justetf: recognition('justetf', 'found', 'Vanguard', {identifier_type: 'ISIN', identifier: 'IE00B3RBWM25'})};
+        let draft = state.removeEnricher(state.draftFrom(CONFIG), 'justetf');
+        const row = state.otherRows(draft, context({recognitions})).find((candidate) => candidate.code === 'justetf');
+        expect(row?.reason).toBe('removed');
+        expect(row?.binding).toEqual(CONFIG.justetf);
+        draft = state.addEnricher(draft, 'justetf', row?.recognition, {accepted: ['ISIN'], identifiers: {}});
+        expect(state.resultConfig(draft).justetf).toEqual(CONFIG.justetf);
+    });
+});
+
+describe('«Riconosci» proposal taken into the draft (ENR-1, R2)', () => {
+    const PROPOSAL = {
+        gleif: {identifier_type: 'LEI', identifier: 'EEXSPYGY7X8YAH8ZJF49'},
+        justetf: {identifier_type: 'ISIN', identifier: 'IE00BK5BQT80'},
+    };
+
+    it('an empty draft takes the proposal, in the proposal order', () => {
+        const draft = state.adoptProposal(state.draftFrom({}), PROPOSAL);
+        expect(Object.keys(state.resultConfig(draft))).toEqual(['gleif', 'justetf']);
+        expect(state.resultConfig(draft)).toEqual(PROPOSAL);
+    });
+
+    it('follows the proposal as it grows or shrinks, and keeps the bindings of what left (to put back)', () => {
+        let draft = state.adoptProposal(state.draftFrom({}), {justetf: PROPOSAL.justetf});
+        draft = state.adoptProposal(draft, PROPOSAL);
+        expect(draft.order).toEqual(['gleif', 'justetf']);
+        draft = state.adoptProposal(draft, {justetf: PROPOSAL.justetf});
+        expect(draft.order).toEqual(['justetf']);
+        expect(draft.bindings.gleif).toEqual(PROPOSAL.gleif);
+    });
+
+    it('an empty proposal empties the order', () => {
+        expect(state.adoptProposal(state.draftFrom({}), {}).order).toEqual([]);
+    });
+});
+
+describe('a ticker alone does not enter the list (ENR-1, R2)', () => {
+    it('entersAlone: found by an ISIN or a LEI yes; by a ticker, not found, conflict, none: no', () => {
+        expect(state.entersAlone(recognition('a', 'found'))).toBe(true);
+        expect(state.entersAlone(recognition('a', 'found', 'X', {identifier_type: 'LEI', identifier: 'L'}))).toBe(true);
+        expect(state.entersAlone(recognition('a', 'found', 'X', {identifier_type: 'TICKER', identifier: 'VWCE.DE'}))).toBe(false);
+        expect(state.entersAlone(recognition('a', 'not_found'))).toBe(false);
+        expect(state.entersAlone(recognition('a', 'conflict'))).toBe(false);
+        expect(state.entersAlone(null)).toBe(false);
+        expect(state.entersAlone(undefined)).toBe(false);
+    });
+
+    it('«Non in elenco» marks a ticker-only find, with its name and binding, and still lets it be added', () => {
+        const recognitions = {
+            yahoo: recognition('yahoo', 'found', 'Vanguard FTSE All-World UCITS', {identifier_type: 'TICKER', identifier: 'VWCE.DE'}),
+            gleif: recognition('gleif', 'found', 'Vanguard', {identifier_type: 'LEI', identifier: 'EEXSPYGY7X8YAH8ZJF49'}),
+        };
+        const rows = Object.fromEntries(state.otherRows(state.draftFrom({}), context({recognitions})).map((row) => [row.code, row]));
+        expect(rows.yahoo.reason).toBe('found');
+        expect(rows.yahoo.tickerOnly).toBe(true);
+        expect(rows.yahoo.canAdd).toBe(true);
+        expect(rows.yahoo.recognition?.name).toBe('Vanguard FTSE All-World UCITS');
+        expect(rows.yahoo.binding).toEqual({identifier_type: 'TICKER', identifier: 'VWCE.DE'});
+        expect(rows.gleif.tickerOnly).toBe(false);
+        expect(rows.esma.tickerOnly).toBe(false);
+    });
+});
+
+describe('the line of «Riconosci» (ENR-1, R1)', () => {
+    const COVERING = ['justetf', 'yahoo', 'esma'];
+    const answers = (...codes: string[]) => Object.fromEntries(codes.map((code) => [code, recognition(code, code === 'yahoo' ? 'not_found' : 'found')]));
+
+    it('nothing to say before it starts, when there is something to ask with', () => {
+        expect(state.recognitionLine('idle', {}, COVERING, true)).toBeNull();
+    });
+
+    it('counts on the enrichers that can answer: one accepting no identifier the asset holds is never asked, so «N of M» still ends at M', () => {
+        // Yahoo reads a ticker, the asset has an ISIN only: the cascade never answers for it
+        const line = state.recognitionLine('running', answers('justetf', 'esma'), COVERING, true, ['justetf', 'esma']);
+        expect(line).toMatchObject({state: 'running', answered: 2, asked: 2});
+        const yahooFound = {...answers('justetf'), yahoo: recognition('yahoo', 'found')};
+        expect(state.recognitionLine('done', yahooFound, COVERING, true, ['justetf'])?.found, 'a found one is named even outside the askable ones').toEqual(['justetf', 'yahoo']);
+    });
+
+    it('nothing to ask with: no_identifiers', () => {
+        expect(state.recognitionLine('idle', {}, COVERING, false)).toMatchObject({state: 'no_identifiers', asked: 3, found: []});
+    });
+
+    it('running: how many of the covering ones answered, counting no stranger', () => {
+        const line = state.recognitionLine('running', {...answers('justetf', 'yahoo'), gleif: recognition('gleif', 'found')}, COVERING, true);
+        expect(line).toEqual({state: 'running', answered: 2, asked: 3, found: ['justetf']});
+    });
+
+    it('done: found with who, in the catalogue order; none when nobody was', () => {
+        expect(state.recognitionLine('done', answers('esma', 'justetf', 'yahoo'), COVERING, true)).toEqual({state: 'found', answered: 3, asked: 3, found: ['justetf', 'esma']});
+        expect(state.recognitionLine('done', {yahoo: recognition('yahoo', 'not_found')}, COVERING, true)).toMatchObject({state: 'none', found: []});
+    });
+
+    it('refused and error say so, whatever else is known', () => {
+        expect(state.recognitionLine('refused', {}, COVERING, false)?.state).toBe('refused');
+        expect(state.recognitionLine('error', {}, COVERING, true)?.state).toBe('error');
+    });
+});
+
+describe('a conflict stays on the row (ENR-1)', () => {
+    const conflicting = () => ({...recognition('esma', 'conflict'), conflicts: {LEI: 'OTHERLEI0000000000AA'}}) as EnricherRecognition;
+
+    it('conflictWith copies what the source named while the binding is still the one asked with', () => {
+        const recognitions = {esma: conflicting()};
+        let draft = state.addEnricher(state.draftFrom({}), 'esma', recognitions.esma, {accepted: ['ISIN'], identifiers: {}});
+        const row = state.chosenRows(draft, context({recognitions}))[0];
+        expect(row.conflictWith).toEqual({LEI: 'OTHERLEI0000000000AA'});
+        expect(row.conflictWith).not.toBe(recognitions.esma.conflicts);
+        expect(row.notFoundWith).toBeNull();
+        draft = state.setBinding(draft, 'esma', {identifier_type: 'ISIN', identifier: 'IE00B3RBWM25'});
+        expect(state.chosenRows(draft, context({recognitions}))[0].conflictWith).toBeNull();
+    });
+
+    it('is null for a conflict that names nothing, and for an error', () => {
+        const empty = {esma: {...conflicting(), conflicts: {}} as EnricherRecognition, gleif: recognition('gleif', 'error', null, {identifier_type: 'LEI', identifier: 'L'})};
+        const draft = state.draftFrom({esma: {identifier_type: 'ISIN', identifier: 'IE00BK5BQT80'}, gleif: {identifier_type: 'LEI', identifier: 'L'}});
+        const rows = state.chosenRows(draft, context({recognitions: empty}));
+        expect(rows.map((row) => row.conflictWith)).toEqual([null, null]);
+    });
+});
+
+describe("the price assignment's symbol is trusted (ENR-2, R6)", () => {
+    const swda = (extra: Partial<EnricherRecognition> = {}) => ({...recognition('yahoo', 'found', 'iShares', {identifier_type: 'TICKER', identifier: 'SWDA.MI'}), ...extra}) as EnricherRecognition;
+
+    it('entersAlone: a ticker found enters only when its identifier is trusted', () => {
+        expect(state.entersAlone(swda(), ['SWDA.MI'])).toBe(true);
+        expect(state.entersAlone(swda(), ['SWDA'])).toBe(false);
+        expect(state.entersAlone(swda(), [])).toBe(false);
+        expect(state.entersAlone(swda())).toBe(false);
+        expect(state.entersAlone({...swda(), status: 'not_found'}, ['SWDA.MI'])).toBe(false);
+        expect(state.entersAlone({...swda(), status: 'conflict'}, ['SWDA.MI'])).toBe(false);
+        expect(state.entersAlone(recognition('a', 'found'), ['SWDA.MI']), 'an ISIN still enters').toBe(true);
+    });
+
+    it('recognitionBinding keeps the params, and the type and identifier win', () => {
+        expect(state.recognitionBinding(swda({params: {mic: 'XMIL'}}))).toEqual({mic: 'XMIL', identifier_type: 'TICKER', identifier: 'SWDA.MI'});
+        expect(state.recognitionBinding(swda({params: {identifier: 'X', identifier_type: 'Y'}}))).toEqual({identifier_type: 'TICKER', identifier: 'SWDA.MI'});
+        expect(state.recognitionBinding(swda())).toEqual({identifier_type: 'TICKER', identifier: 'SWDA.MI'});
+    });
+
+    it('addEnricher from a found recognition with params keeps them', () => {
+        const draft = state.addEnricher(state.draftFrom({}), 'yahoo', swda({params: {mic: 'XMIL'}}), {accepted: ['TICKER'], identifiers: {}});
+        expect(state.resultConfig(draft).yahoo).toEqual({mic: 'XMIL', identifier_type: 'TICKER', identifier: 'SWDA.MI'});
+    });
+
+    it('otherRows: tickerOnly is false for a trusted ticker, true for another', () => {
+        const recognitions = {yahoo: swda()};
+        const row = (trustedTickers?: string[]) => state.otherRows(state.draftFrom({}), context({recognitions, trustedTickers})).find((item) => item.code === 'yahoo');
+        expect(row(['SWDA.MI'])?.tickerOnly).toBe(false);
+        expect(row(['SWDA'])?.tickerOnly).toBe(true);
+        expect(row()?.tickerOnly).toBe(true);
+        expect(row(['SWDA.MI'])?.canAdd).toBe(true);
     });
 });

@@ -44,14 +44,29 @@
       "issueTypeNotAccepted": "Questo arricchitore non legge questo tipo di identificativo",
       "reasons": {
         "removed": "tolto da te",
-        "found": "trovato",
+        "found": "conosce l'asset",
         "searching": "in attesa: ricerca in corso…",
         "not_found": "con {type} {identifier} non trova niente",
         "conflict": "indica un altro asset",
         "error": "la fonte non ha risposto",
         "not_configured": "da configurare su questa istanza",
-        "not_covering": "non copre questo tipo di asset"
-      }
+        "not_covering": "non copre questo tipo di asset",
+        "foundByTicker": "trovato solo col ticker {ticker}: controlla che sia questo"
+      },
+      "notFoundWith": "Non trovato con {type} {identifier}: correggi o cerca",
+      "onlyType": "l'unico che {name} legge",
+      "line": {
+        "running": "Cerco chi conosce l'asset con i suoi identificativi… {answered} di {asked} hanno risposto",
+        "found": "{count, plural, one {# arricchitore conosce} other {# arricchitori conoscono}} l'asset: {names}.",
+        "foundAdopted": "Controlla l'ordine e premi «Usa questi arricchitori»: si salvano con l'asset.",
+        "foundOutside": "Quelli che non sono nel tuo elenco stanno in «Non in elenco», col «+».",
+        "none": "Nessun arricchitore conosce l'asset con i suoi identificativi: puoi aggiungerne uno qui sotto.",
+        "refused": "Troppe richieste alle fonti: attendo, la ricerca riparte da sola tra poco.",
+        "error": "Non è stato possibile cercare gli arricchitori: aggiungili a mano.",
+        "no_identifiers": "L'asset non ha identificativi da riconoscere: aggiungi gli arricchitori da «Non in elenco» qui sotto."
+      },
+      "conflictWith": "Identificativo diverso: la fonte indica {named}",
+      "price": "Prezzi"
     }
   }
 }

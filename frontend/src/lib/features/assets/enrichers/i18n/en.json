@@ -44,14 +44,29 @@
       "issueTypeNotAccepted": "This enricher does not read this identifier type",
       "reasons": {
         "removed": "removed by you",
-        "found": "found",
+        "found": "knows the asset",
         "searching": "waiting: search in progress…",
         "not_found": "with {type} {identifier} it finds nothing",
         "conflict": "it names another asset",
         "error": "the source did not answer",
         "not_configured": "to configure on this instance",
-        "not_covering": "does not cover this asset type"
-      }
+        "not_covering": "does not cover this asset type",
+        "foundByTicker": "found only with the ticker {ticker}: check it is this one"
+      },
+      "notFoundWith": "Nothing found with {type} {identifier}: correct it or search",
+      "onlyType": "the only one {name} reads",
+      "line": {
+        "running": "Looking for the enrichers that know this asset with its identifiers… {answered} of {asked} answered",
+        "found": "{count, plural, one {# enricher knows} other {# enrichers know}} the asset: {names}.",
+        "foundAdopted": "Check the order and press «Use these enrichers»: they are saved with the asset.",
+        "foundOutside": "The ones not in your list are under «Not in the list», with «+».",
+        "none": "No enricher knows the asset with its identifiers: you can add one below.",
+        "refused": "Too many requests to the sources: waiting, the search starts again by itself in a moment.",
+        "error": "The enrichers could not be searched: add them by hand.",
+        "no_identifiers": "The asset has no identifiers to recognise: add the enrichers from «Not in the list» below."
+      },
+      "conflictWith": "Different identifier: the source names {named}",
+      "price": "Prices"
     }
   }
 }

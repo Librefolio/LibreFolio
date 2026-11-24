@@ -33,6 +33,14 @@ const windowStandIn = vi.hoisted(() => {
     }
     return {mounts, AssetEnrichersModalStandIn};
 });
+const searchStandIn = vi.hoisted(() => {
+    const mounts: Array<Record<string, unknown>> = [];
+    function AssetSearchAutocompleteStandIn(_anchor: ChildNode, props: Record<string, unknown>): void {
+        mounts.push(props);
+    }
+    return {mounts, AssetSearchAutocompleteStandIn};
+});
+vi.mock('./AssetSearchAutocomplete.svelte', () => ({default: searchStandIn.AssetSearchAutocompleteStandIn}));
 vi.mock('./enrichers/AssetEnrichersModal.svelte', () => ({default: windowStandIn.AssetEnrichersModalStandIn}));
 
 vi.mock('$lib/api', async () => {
@@ -58,6 +66,8 @@ vi.mock('$lib/utils/providerHelpers', () => ({
     getAssetProviderName: vi.fn((c: string) => c),
     getAssetProviderIconUrl: vi.fn(() => null),
     isParametricProvider: vi.fn(() => false),
+    getAssetProviderAcceptedTypes: vi.fn(() => ['TICKER', 'ISIN']),
+    getAssetProviderParamKeys: vi.fn(() => ['mic']),
 }));
 vi.mock('$lib/stores/app/toastStore.svelte', () => ({toasts: {success: vi.fn(), error: vi.fn(), warning: vi.fn(), info: vi.fn()}}));
 vi.mock('$lib/stores/reference/assetStore', () => ({mergeAssets: vi.fn(), invalidateAfterMutation: vi.fn()}));
@@ -73,6 +83,7 @@ let calls: Call[] = [];
 const ISIN = 'IE00BK5BQT80';
 const JUSTETF = {identifier_type: 'ISIN', identifier: ISIN};
 const YAHOO = {identifier_type: 'TICKER', identifier: 'VWCE.DE'};
+const ESMA = {identifier_type: 'ISIN', identifier: ISIN};
 const PREFILL = {display_name: 'Vanguard FTSE All-World', asset_type: 'ETF', currency: 'EUR', identifier_isin: ISIN};
 const found = (code: string, binding: {identifier_type: string; identifier: string}) => ({event: 'enricher_result' as const, code, ...binding, status: 'found', name: `${code} name`, page_url: null, identifiers: {}, conflicts: {}, error: null});
 const done = (order: string[]) => ({event: 'done' as const, found_order: order, default_order: order, identifiers: {ISIN}});
@@ -81,7 +92,7 @@ const createFn = () => vi.mocked(zodiosApi.create_assets_bulk_api_v1_assets_post
 const patchFn = () => vi.mocked(zodiosApi.patch_assets_bulk_api_v1_assets_patch as never) as ReturnType<typeof vi.fn>;
 const button = () => screen.getByTestId('asset-modal-enrichers');
 const banner = () => screen.queryByTestId('asset-modal-enrichers-banner');
-const lastWindow = () => windowStandIn.mounts.at(-1) as Record<string, unknown> & {onapply: (config: Record<string, unknown>) => void};
+const lastWindow = () => windowStandIn.mounts.at(-1) as Record<string, unknown> & {onapply: (config: Record<string, unknown>) => void; oncancel: () => void};
 
 async function answer(call: Call, events: RecognizeEvent[], outcome: RecognizeOutcome = {kind: 'done', done: null}) {
     for (const event of events) call.onEvent(event);
@@ -94,6 +105,7 @@ beforeEach(async () => {
     vi.clearAllMocks();
     calls = [];
     windowStandIn.mounts.length = 0;
+    searchStandIn.mounts.length = 0;
     stream.recognizeEnrichers.mockReset().mockImplementation((request: RecognizeRequest, options: {onEvent: (event: RecognizeEvent) => void; signal: AbortSignal}) => new Promise<RecognizeOutcome>((finish) => calls.push({request, onEvent: options.onEvent, signal: options.signal, finish})));
     vi.mocked(zodiosApi.list_assets_api_v1_assets_query_get as never as ReturnType<typeof vi.fn>).mockResolvedValue([]);
     vi.mocked(zodiosApi.list_providers_api_v1_assets_provider_get).mockResolvedValue([]);
@@ -118,18 +130,33 @@ describe('at creation, «Riconosci» by itself', () => {
         createFn().mockResolvedValue({results: [{success: true, asset_id: 42}]} as never);
         render(AssetModal, {open: true, editMode: false, prefillData: PREFILL, initialNoProvider: true, oncreated: vi.fn()});
         await waitFor(() => expect(calls).toHaveLength(1));
-        expect(calls[0].request).toEqual({asset_type: 'ETF', identifiers: {ISIN}, price_provider_code: null});
+        expect(calls[0].request).toEqual({asset_type: 'ETF', identifiers: {ISIN}, price_provider_code: null, seeds: []});
         expect(banner()).toHaveAttribute('data-state', 'running');
 
-        await answer(calls[0], [found('yahoo_finance', YAHOO), found('justetf', JUSTETF), done(['justetf', 'yahoo_finance'])]);
+        await answer(calls[0], [found('esma', ESMA), found('justetf', JUSTETF), done(['justetf', 'esma'])]);
         await waitFor(() => expect(button()).toHaveAttribute('data-count', '2'));
         expect(banner()).toHaveAttribute('data-state', 'found');
 
         await fireEvent.click(screen.getByTestId('asset-modal-save'));
         await waitFor(() => expect(createFn()).toHaveBeenCalled());
         const sent = (createFn().mock.calls[0][0] as Array<Record<string, unknown>>)[0];
-        expect(Object.keys(sent.enrichers as object)).toEqual(['justetf', 'yahoo_finance']);
-        expect(sent.enrichers).toEqual({justetf: JUSTETF, yahoo_finance: YAHOO});
+        expect(Object.keys(sent.enrichers as object)).toEqual(['justetf', 'esma']);
+        expect(sent.enrichers).toEqual({justetf: JUSTETF, esma: ESMA});
+    });
+
+    it('never puts in by itself one found by a ticker alone (ENR-1, R2): the creation sends the others', async () => {
+        createFn().mockResolvedValue({results: [{success: true, asset_id: 44}]} as never);
+        render(AssetModal, {open: true, editMode: false, prefillData: PREFILL, initialNoProvider: true, oncreated: vi.fn()});
+        await waitFor(() => expect(calls).toHaveLength(1));
+
+        await answer(calls[0], [found('yahoo_finance', YAHOO), found('justetf', JUSTETF), done(['justetf', 'yahoo_finance'])]);
+        await waitFor(() => expect(banner()).toHaveAttribute('data-state', 'found'));
+        expect(button()).toHaveAttribute('data-count', '1');
+
+        await fireEvent.click(screen.getByTestId('asset-modal-save'));
+        await waitFor(() => expect(createFn()).toHaveBeenCalled());
+        const sent = (createFn().mock.calls[0][0] as Array<Record<string, unknown>>)[0];
+        expect(sent.enrichers).toEqual({justetf: JUSTETF});
     });
 
     it('asks nothing without an ISIN, and sends no enrichers', async () => {
@@ -169,6 +196,111 @@ describe('at creation, «Riconosci» by itself', () => {
         await waitFor(() => expect(calls).toHaveLength(1));
         await view.rerender({open: false, editMode: false, prefillData: PREFILL, initialNoProvider: true, oncreated: vi.fn()});
         await waitFor(() => expect(calls[0].signal.aborted).toBe(true));
+    });
+});
+
+const SWDA = {display_name: 'iShares Core MSCI World', asset_type: 'ETF', currency: 'EUR'};
+const PICK = {...SWDA, provider_code: 'yfinance', identifier: 'SWDA.MI', identifier_type: 'TICKER', provider_params: {mic: 'XMIL'}};
+const SEED = {code: 'yfinance', identifier_type: 'TICKER', identifier: 'SWDA.MI', params: {mic: 'XMIL'}};
+const info = (code: string, accepted: string[]) => ({code, name: code, icon: null, help_url: null, terms: 'open', accepted_identifier_types: accepted, params_schema: [], supports_search: false, voices: {ETF: ['ter']}, default_priority: {ETF: 10}, configured: true, missing_settings: []});
+const catalogue = (...codes: string[]) => vi.mocked(zodiosApi.list_enrichers_api_v1_assets_enrichers_get as never as ReturnType<typeof vi.fn>).mockResolvedValue({enrichers: codes.map((code) => info(code, ['TICKER', 'ISIN'])), default_order: {}});
+
+/** The user picks a search result: the price assignment is in the form, as the search's `onselect` sets it. */
+async function pickPrice() {
+    await waitFor(() => expect(searchStandIn.mounts.length).toBeGreaterThan(0));
+    (searchStandIn.mounts.at(-1) as {onselect: (result: unknown) => void}).onselect(PICK);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+}
+const lastCall = () => calls.at(-1) as Call;
+
+describe('the price assignment as a seed (ENR-2)', () => {
+    it('the request carries the price assignment as a seed, params included', async () => {
+        render(AssetModal, {open: true, editMode: false, prefillData: {...SWDA, identifier_isin: ISIN}, oncreated: vi.fn()});
+        await waitFor(() => expect(calls).toHaveLength(1));
+        expect(calls[0].request.seeds).toEqual([]);
+        await pickPrice();
+        await waitFor(() => expect(lastCall().request.seeds).toHaveLength(1));
+        expect(lastCall().request).toMatchObject({asset_type: 'ETF', price_provider_code: 'yfinance'});
+        expect(lastCall().request.seeds?.[0]).toMatchObject({code: 'yfinance', identifier_type: 'TICKER', identifier: 'SWDA.MI', params: {mic: 'XMIL'}});
+        expect(calls[0].signal.aborted, 'the new question replaces the old').toBe(true);
+    });
+
+    it('the window gets the price chip data and the trusted ticker', async () => {
+        render(AssetModal, {open: true, editMode: false, prefillData: {...SWDA, identifier_isin: ISIN}, oncreated: vi.fn()});
+        await waitFor(() => expect(calls).toHaveLength(1));
+        await pickPrice();
+        await waitFor(() => expect(calls.length).toBeGreaterThan(1));
+        await fireEvent.click(button());
+        await waitFor(() => expect(windowStandIn.mounts.length).toBeGreaterThan(0));
+        expect(lastWindow().price).toEqual({name: 'yfinance', identifier: 'SWDA.MI'});
+        expect(lastWindow().trustedTickers).toEqual(['SWDA.MI']);
+    });
+
+    it('no price assignment: the request has no seed and the window no price', async () => {
+        render(AssetModal, {open: true, editMode: false, prefillData: PREFILL, initialNoProvider: true, oncreated: vi.fn()});
+        await waitFor(() => expect(calls).toHaveLength(1));
+        await fireEvent.click(button());
+        await waitFor(() => expect(windowStandIn.mounts.length).toBeGreaterThan(0));
+        expect(calls[0].request.seeds).toEqual([]);
+        expect(lastWindow().price ?? null).toBeNull();
+        expect(lastWindow().trustedTickers).toEqual([]);
+    });
+
+    it("at creation a ticker found by the seed's symbol enters the list; one found by another ticker does not (the ENR-1 gap)", async () => {
+        render(AssetModal, {open: true, editMode: false, prefillData: {...SWDA, identifier_isin: ISIN}, oncreated: vi.fn()});
+        await waitFor(() => expect(calls).toHaveLength(1));
+        await pickPrice();
+        await waitFor(() => expect(lastCall().request.seeds).toHaveLength(1));
+        await answer(lastCall(), [found('yfinance', {identifier_type: 'TICKER', identifier: 'SWDA.MI'}), found('borsa_italiana', {identifier_type: 'TICKER', identifier: 'SWDA'}), done(['yfinance', 'borsa_italiana'])]);
+        await waitFor(() => expect(banner()).toHaveAttribute('data-state', 'found'));
+        expect(button()).toHaveAttribute('data-count', '1');
+        await fireEvent.click(button());
+        await waitFor(() => expect(windowStandIn.mounts.length).toBeGreaterThan(0));
+        expect(Object.keys(lastWindow().proposal as object)).toEqual(['yfinance']);
+    });
+
+    it("a seed's found params reach the proposal the window adopts", async () => {
+        render(AssetModal, {open: true, editMode: false, prefillData: {...SWDA, identifier_isin: ISIN}, oncreated: vi.fn()});
+        await waitFor(() => expect(calls).toHaveLength(1));
+        await pickPrice();
+        await waitFor(() => expect(lastCall().request.seeds).toHaveLength(1));
+        await answer(lastCall(), [{...found('yfinance', {identifier_type: 'TICKER', identifier: 'SWDA.MI'}), params: {mic: 'XMIL'}}, done(['yfinance'])]);
+        await waitFor(() => expect(button()).toHaveAttribute('data-count', '1'));
+        await fireEvent.click(button());
+        await waitFor(() => expect(windowStandIn.mounts.length).toBeGreaterThan(0));
+        expect(lastWindow().proposal).toEqual({yfinance: {mic: 'XMIL', identifier_type: 'TICKER', identifier: 'SWDA.MI'}});
+    });
+
+    it('at creation with no ISIN: nothing is asked while the form sits, the first opening of the window asks once with the seed, reopening asks nothing', async () => {
+        catalogue('yfinance');
+        render(AssetModal, {open: true, editMode: false, prefillData: SWDA, oncreated: vi.fn()});
+        await pickPrice();
+        await waitFor(() => expect(button()).toHaveAttribute('data-count', '0'));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        expect(calls, 'the form sitting asks nothing').toHaveLength(0);
+
+        await fireEvent.click(button());
+        await waitFor(() => expect(calls).toHaveLength(1));
+        expect(calls[0].request).toMatchObject({asset_type: 'ETF', price_provider_code: 'yfinance'});
+        expect(calls[0].request.seeds?.[0]).toMatchObject({code: 'yfinance', identifier_type: 'TICKER', identifier: 'SWDA.MI'});
+
+        lastWindow().oncancel();
+        await fireEvent.click(button());
+        await waitFor(() => expect(windowStandIn.mounts.length).toBeGreaterThan(1));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        expect(calls, 'reopening asks nothing more').toHaveLength(1);
+    });
+
+    it('at creation with a whole ISIN the question starts as before and opening the window asks nothing extra', async () => {
+        catalogue('yfinance');
+        render(AssetModal, {open: true, editMode: false, prefillData: {...SWDA, identifier_isin: ISIN}, oncreated: vi.fn()});
+        await waitFor(() => expect(calls).toHaveLength(1));
+        await pickPrice();
+        await waitFor(() => expect(calls).toHaveLength(2));
+        await fireEvent.click(button());
+        await waitFor(() => expect(windowStandIn.mounts.length).toBeGreaterThan(0));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        expect(calls).toHaveLength(2);
     });
 });
 

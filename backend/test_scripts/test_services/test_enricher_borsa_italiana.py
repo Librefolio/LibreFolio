@@ -158,6 +158,7 @@ from backend.app.services.assets.profile.catalogue import CATALOGUE, normalize_v
 from backend.app.services.enrichers.base import (
     RATE_LIMITED,
     EnricherBinding,
+    EnricherRateLimited,
     EnricherReadItem,
     EnricherReadStatus,
     EnricherRecognition,
@@ -1777,6 +1778,28 @@ def test_the_search_session_is_closed_when_cerca_raises(plugin, library, error):
         plugin.search("lab failing query")
     assert library.search_calls == [("lab failing query", "it")], "barrier: cerca was called"
     assert len(library.sessions) == 1, f"one session for the search: {library.sessions}"
+    _every_session_closed_once(library)
+
+
+def test_search_refusal_is_enricher_rate_limited_and_closes_the_session(plugin, library):
+    """ENR-3b: the library's refusal (a 403 from the site's firewall) is never an empty result; the session is closed."""
+    refusal = bis.RateLimitRaggiunto(WAF_MESSAGE)
+    library.answers["lab refused query"] = refusal
+    with pytest.raises(EnricherRateLimited) as raised:
+        plugin.search("lab refused query")
+    assert raised.value.__cause__ is refusal
+    assert raised.value.retry_after is None, "the site names no wait"
+    assert library.search_calls == [("lab refused query", "it")], "barrier: cerca was called"
+    assert len(library.sessions) == 1
+    _every_session_closed_once(library)
+
+
+@pytest.mark.parametrize("error", [bis.RicercaNonDisponibile("search blocked"), bis.ErroreConnessione("timeout")], ids=["unavailable", "connection"])
+def test_search_another_failure_is_not_a_refusal(plugin, library, error):
+    library.answers["lab failing query"] = error
+    with pytest.raises(type(error)) as raised:
+        plugin.search("lab failing query")
+    assert raised.value is error and not isinstance(raised.value, EnricherRateLimited)
     _every_session_closed_once(library)
 
 
