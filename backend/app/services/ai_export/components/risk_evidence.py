@@ -1,9 +1,11 @@
-"""AI Export risk evidence of the portfolio: where its risk is concentrated and the loss of a bad month (78 L8a).
+"""AI Export risk evidence of the portfolio: where its risk is concentrated, the loss of a bad month (78 L8a) and the
+pairs of holdings that move together (78 L8b).
 
-The two components feed the internal dataset `portfolio.risk_evidence`, required by
+The three components feed the internal dataset `portfolio.risk_evidence`, required by
 `portfolio.protection_strategies`. They compute nothing: one `RiskService.execute` call per request, cached by
-`BuildContext.db_resource`, runs the Risk analytics `risk_contribution` and `historical_var` (95 %, 30 calendar days)
-together, so both sections share one joint calendar and one measured window. The payloads copy the results.
+`BuildContext.db_resource`, runs the Risk analytics `risk_contribution`, `historical_var` (95 %, 30 calendar days) and
+`correlation` together, so the sections share one joint calendar and one measured window. The payloads copy the
+results; the only logic of their own is a selection, the pairs worth naming (`portfolio.correlated_pairs`).
 
 Rules, decided with the AI Export consultant on 23/11/2026 (journal, 78 `L8-analisi-implementazione.md`):
 
@@ -19,6 +21,12 @@ Rules, decided with the AI Export consultant on 23/11/2026 (journal, 78 `L8-anal
   `drawdown_context.py`.
 - **Percentages only**, with their base written beside them (`weight_basis`): the AI turns them into amounts on the net
   worth of the same scope, which the summary already carries.
+- **Pairs, not the matrix** (L8b): models ignore an N×N correlation matrix, and grouping holdings would be new math.
+  The section lists the most correlated pairs among the holdings that carry risk, and the least correlated ones, with
+  the thresholds written beside them, so an empty list reads «no pair reaches the threshold», not «no correlation».
+  A correlation has no scale: it says something only between holdings that carry risk, so the holdings are chosen by
+  their risk share (absolute value: a negative share is a hedge the user already holds), not by their weight
+  (decided with the consultant, 24/11/2026).
 """
 
 from __future__ import annotations
@@ -32,10 +40,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.logging_config import get_logger
 from backend.app.schemas.common import DateRangeModel, StrictModel
-from backend.app.schemas.risk.outputs import RiskContributionOutput, RiskVarCvarOutput
+from backend.app.schemas.risk.outputs import RiskContributionOutput, RiskCorrelationOutput, RiskVarCvarOutput
 from backend.app.schemas.risk.results import RiskAnalyticResult, RiskQueryResponse
 from backend.app.schemas.risk.scope import PortfolioRiskScope, RiskAnalyticRequest, RiskQueryRequest
-from backend.app.schemas.risk.vocabulary import RiskCompositionPolicy, RiskMode, RiskResultStatus, RiskScopeKind
+from backend.app.schemas.risk.vocabulary import RiskCompositionPolicy, RiskMode, RiskResultStatus, RiskScopeKind, RiskValueStatus
 from backend.app.services.ai_export.components.envelope import SectionEnvelope
 from backend.app.services.ai_export.components.payloads.portfolio_broker import counts_ownership_share
 from backend.app.services.ai_export.components.spec import ComponentSpec
@@ -53,6 +61,15 @@ BAD_MONTH_CONFIDENCE_LEVEL = 0.95
 BAD_MONTH_HORIZON_DAYS = 30
 """The bad month of the Dashboard's Risk tab (`MONTHLY_VAR_HORIZON_DAYS`): the same definition, on today's holdings."""
 
+PAIRS_MIN_RISK_SHARE_RATIO = 0.02
+"""A holding enters the pairs when its risk share, in absolute value, is at least this (fixed by hand, 78 L8b)."""
+PAIRS_MIN_CORRELATION = 0.8
+"""A pair is «moving together» at or above this correlation of daily returns."""
+PAIRS_MAX_HIGH = 8
+"""At most this many correlated pairs, the highest first."""
+PAIRS_LOW_COUNT = 3
+"""The least correlated pairs among the same holdings: where diversification works."""
+
 RISK_EVIDENCE_FOLLOWS_BROKER_FILTER = True
 """D10, the developer's to decide: True measures the export's broker filter, the scope of the positions printed beside
 these measures; False measures the whole portfolio, as the Dashboard's Risk tab and `portfolio.drawdown_summary` do.
@@ -60,6 +77,7 @@ Without a filter both give the same brokers. The one switch of that choice."""
 
 _CONTRIBUTION_INSTANCE_ID = "ai_export_risk_concentration"
 _BAD_MONTH_INSTANCE_ID = "ai_export_bad_month"
+_CORRELATION_INSTANCE_ID = "ai_export_correlated_pairs"
 _RISK_EVIDENCE_RESOURCE: ResourceKey[RiskQueryResponse] = ResourceKey("portfolio.risk_evidence_result", RiskQueryResponse)
 
 WEIGHT_BASIS = "Weights and losses are shares of the net worth of the exported scope (cash included) on composition_as_of. " "Cash and the holdings left out of the measures count as zero risk."
@@ -68,7 +86,17 @@ BAD_MONTH_SEMANTICS = (
     "Historical simulation on overlapping 30-day windows of today's holdings: consecutive windows share all but one " "observation, so the windows in the tail are a few independent episodes, not as many separate months. " "Losses are positive numbers; the worst window's return keeps its sign."
 )
 
+PAIRS_SEMANTICS = (
+    "Pearson correlation of the daily returns of today's holdings over the analyzed window, only between the holdings whose risk "
+    "share (absolute value, as in portfolio.risk_concentration) is at least min_risk_share_percent. Holdings below it were not "
+    "compared, so a missing pair does not mean they are uncorrelated. high_pairs: at most max_high_pairs pairs at or above "
+    "min_correlation, the highest first; an empty list means no compared pair reaches it. low_pairs: the least correlated of the other "
+    "compared pairs. Fewer than two holdings above the threshold leave both lists empty: nothing to compare, not a missing measure. "
+    "In each pair the first holding is the one with the larger risk share."
+)
+
 REASON_RISK_ERROR = "risk_execution_error"
+REASON_RISK_SHARES_UNAVAILABLE = "risk_shares_unavailable"
 REASON_RISK_MISSING = "risk_result_missing"
 
 
@@ -199,6 +227,44 @@ class PortfolioTailRiskPayload(_RiskEvidenceWindow):
         return self
 
 
+class CorrelatedPairRow(StrictModel):
+    """Two held assets and the correlation of their daily returns (a number between -1 and 1, not a percentage)."""
+
+    first_asset_id: int
+    second_asset_id: int
+    correlation: float = Field(ge=-1, le=1)
+
+
+class PortfolioCorrelatedPairsPayload(_RiskEvidenceWindow):
+    """The pairs of holdings that move together, and the least correlated ones (Risk `correlation`, today's holdings).
+
+    A selection of the correlation matrix, nothing more: the holdings whose absolute risk share reaches
+    `min_risk_share_ratio`, their pairs with a defined correlation (`considered_pair_count`), the highest at or above
+    `min_correlation` and the lowest of the rest. A pair whose correlation is undefined (a flat price series) is left
+    out, and the `flat_series` warning says so. Fewer than two such holdings is an empty selection, not a missing one.
+    """
+
+    min_risk_share_ratio: float = PAIRS_MIN_RISK_SHARE_RATIO
+    min_correlation: float = PAIRS_MIN_CORRELATION
+    max_high_pairs: int = PAIRS_MAX_HIGH
+    pairs_semantics: str = PAIRS_SEMANTICS
+    considered_asset_count: int | None = Field(default=None, ge=0)
+    considered_pair_count: int | None = Field(default=None, ge=0)
+    high_pairs: tuple[CorrelatedPairRow, ...] = ()
+    low_pairs: tuple[CorrelatedPairRow, ...] = ()
+
+    @model_validator(mode="after")
+    def _validate_status(self) -> PortfolioCorrelatedPairsPayload:
+        self._validate_window(("considered_asset_count", "considered_pair_count"))
+        if self.status in {RiskEvidenceStatus.UNAVAILABLE, RiskEvidenceStatus.FAILED} and (self.high_pairs or self.low_pairs):
+            raise ValueError("an unavailable correlated pairs section must not carry pairs")
+        if len(self.high_pairs) > self.max_high_pairs:
+            raise ValueError("high_pairs exceeds max_high_pairs")
+        if any(row.correlation < self.min_correlation for row in self.high_pairs):
+            raise ValueError("a high pair must reach min_correlation")
+        return self
+
+
 def _require_portfolio_scope(context: BuildContext) -> BuildScope:
     scope = context.scope
     if scope is None or scope.domain is not Domain.PORTFOLIO:
@@ -217,7 +283,7 @@ def _risk_scope(scope: BuildScope) -> PortfolioRiskScope:
 
 
 async def _load_risk_evidence(context: BuildContext, scope: BuildScope) -> RiskQueryResponse | None:
-    """The one Risk request of both sections, memoized; None (logged) when it could not be completed."""
+    """The one Risk request of the three sections, memoized; None (logged) when it could not be completed."""
 
     async def _loader(session: AsyncSession) -> RiskQueryResponse:
         request = RiskQueryRequest(
@@ -233,6 +299,7 @@ async def _load_risk_evidence(context: BuildContext, scope: BuildScope) -> RiskQ
                     analytic_code="historical_var",
                     parameters={"confidence_level": BAD_MONTH_CONFIDENCE_LEVEL, "horizon_days": BAD_MONTH_HORIZON_DAYS},
                 ),
+                RiskAnalyticRequest(instance_id=_CORRELATION_INSTANCE_ID, analytic_code="correlation"),
             ],
         )
         return await RiskService(session).execute(user_id=scope.user_id, request=request)
@@ -240,8 +307,8 @@ async def _load_risk_evidence(context: BuildContext, scope: BuildScope) -> RiskQ
     try:
         return await context.db_resource(_RISK_EVIDENCE_RESOURCE, _loader)
     except ResourceLoadError as error:
-        # Isolation boundary: a Risk failure becomes a `failed` section, never a failed snapshot. Both sections read
-        # the same memoized error, so its traceback is written once.
+        # Isolation boundary: a Risk failure becomes a `failed` section, never a failed snapshot. The sections read the
+        # same memoized error, so its traceback is written once.
         if traceback_reported(error):
             logger.warning("AI Export risk evidence not computed", logged_with_request_id=traceback_reporting_request(error))
         else:
@@ -342,6 +409,73 @@ async def _build_tail_risk(context: BuildContext, dependencies: Mapping[str, Sec
     )
 
 
+def select_correlated_pairs(output: RiskCorrelationOutput, risk_shares: Mapping[int, float]) -> tuple[int, int, tuple[CorrelatedPairRow, ...], tuple[CorrelatedPairRow, ...]]:
+    """The pairs worth naming: (holdings considered, pairs considered, high pairs, low pairs).
+
+    A selection of the matrix the Risk engine computed, never a new figure: the holdings whose risk share, in absolute
+    value, reaches `PAIRS_MIN_RISK_SHARE_RATIO`, each pair once with a defined correlation, the highest at or above
+    `PAIRS_MIN_CORRELATION` (at most `PAIRS_MAX_HIGH`), then the `PAIRS_LOW_COUNT` lowest among the pairs not already
+    listed. Ties fall back to the larger risk shares, then to the ids, so the selection is stable.
+    """
+    shares = {asset_id: abs(share) for asset_id, share in risk_shares.items()}
+    eligible = {asset_id for asset_id in output.asset_ids if shares.get(asset_id, 0.0) >= PAIRS_MIN_RISK_SHARE_RATIO}
+
+    def _ordered(first: int, second: int) -> tuple[int, int]:
+        return (first, second) if (-shares[first], first) <= (-shares[second], second) else (second, first)
+
+    pairs: dict[tuple[int, int], float] = {}
+    for cell in output.cells:
+        if cell.row_asset_id == cell.column_asset_id or cell.row_asset_id not in eligible or cell.column_asset_id not in eligible:
+            continue
+        if cell.status is not RiskValueStatus.OK or cell.value is None:
+            continue
+        pairs.setdefault(_ordered(cell.row_asset_id, cell.column_asset_id), cell.value)
+
+    def _row(pair: tuple[int, int]) -> CorrelatedPairRow:
+        return CorrelatedPairRow(first_asset_id=pair[0], second_asset_id=pair[1], correlation=pairs[pair])
+
+    def _share_key(pair: tuple[int, int]) -> tuple[float, int, int]:
+        return (-(shares[pair[0]] + shares[pair[1]]), pair[0], pair[1])
+
+    high = sorted((pair for pair, value in pairs.items() if value >= PAIRS_MIN_CORRELATION), key=lambda pair: (-pairs[pair], *_share_key(pair)))[:PAIRS_MAX_HIGH]
+    listed = set(high)
+    low = sorted((pair for pair in pairs if pair not in listed), key=lambda pair: (pairs[pair], *_share_key(pair)))[:PAIRS_LOW_COUNT]
+    return len(eligible), len(pairs), tuple(_row(pair) for pair in high), tuple(_row(pair) for pair in low)
+
+
+async def _build_correlated_pairs(context: BuildContext, dependencies: Mapping[str, SectionEnvelope]) -> PortfolioCorrelatedPairsPayload:
+    del dependencies
+    scope = _require_portfolio_scope(context)
+    response = await _load_risk_evidence(context, scope)
+    result = _result(response, _CORRELATION_INSTANCE_ID)
+    fields = _window_fields(result, scope)
+    if result is None or result.status not in {RiskResultStatus.OK, RiskResultStatus.PARTIAL} or not isinstance(result.output, RiskCorrelationOutput):
+        return PortfolioCorrelatedPairsPayload(**fields, **_unavailable_fields(result, subject="correlation of the holdings"))
+    contribution = _result(response, _CONTRIBUTION_INSTANCE_ID)
+    risk_shares: dict[int, float] = {}
+    if contribution is not None and contribution.status in {RiskResultStatus.OK, RiskResultStatus.PARTIAL} and isinstance(contribution.output, RiskContributionOutput):
+        risk_shares = {item.asset_id: item.percentage_contribution for item in contribution.output.items if item.percentage_contribution is not None}
+    if not risk_shares:
+        # The risk shares that choose the holdings come from `risk_contribution`; without them no selection is honest,
+        # and the weight is no stand-in under the same field.
+        unavailable = dict.fromkeys(("analyzed_start", "analyzed_end", "n_observations", "coverage_ratio"))
+        return PortfolioCorrelatedPairsPayload(
+            **{**fields, **unavailable},
+            status=RiskEvidenceStatus.UNAVAILABLE,
+            reason_code=REASON_RISK_SHARES_UNAVAILABLE,
+            message="The holdings' risk shares could not be measured, so the pairs worth naming cannot be chosen.",
+        )
+    considered_assets, considered_pairs, high, low = select_correlated_pairs(result.output, risk_shares)
+    return PortfolioCorrelatedPairsPayload(
+        **fields,
+        status=RiskEvidenceStatus(result.status.value),
+        considered_asset_count=considered_assets,
+        considered_pair_count=considered_pairs,
+        high_pairs=high,
+        low_pairs=low,
+    )
+
+
 PORTFOLIO_RISK_CONCENTRATION_COMPONENT = ComponentSpec(
     component_id="portfolio.risk_concentration",
     version=1,
@@ -360,22 +494,40 @@ PORTFOLIO_TAIL_RISK_COMPONENT = ComponentSpec(
     period_behavior=PeriodBehavior.AS_OF,
 )
 
+PORTFOLIO_CORRELATED_PAIRS_COMPONENT = ComponentSpec(
+    component_id="portfolio.correlated_pairs",
+    version=1,
+    domains=frozenset({Domain.PORTFOLIO}),
+    output_model=PortfolioCorrelatedPairsPayload,
+    builder=_build_correlated_pairs,
+    period_behavior=PeriodBehavior.AS_OF,
+)
+
 PORTFOLIO_RISK_EVIDENCE_COMPONENTS: tuple[ComponentSpec, ...] = (
     PORTFOLIO_RISK_CONCENTRATION_COMPONENT,
     PORTFOLIO_TAIL_RISK_COMPONENT,
+    PORTFOLIO_CORRELATED_PAIRS_COMPONENT,
 )
 
 
 __all__ = [
     "BAD_MONTH_CONFIDENCE_LEVEL",
     "BAD_MONTH_HORIZON_DAYS",
+    "PAIRS_LOW_COUNT",
+    "PAIRS_MAX_HIGH",
+    "PAIRS_MIN_CORRELATION",
+    "PAIRS_MIN_RISK_SHARE_RATIO",
+    "PORTFOLIO_CORRELATED_PAIRS_COMPONENT",
     "PORTFOLIO_RISK_CONCENTRATION_COMPONENT",
     "PORTFOLIO_RISK_EVIDENCE_COMPONENTS",
     "PORTFOLIO_TAIL_RISK_COMPONENT",
     "REASON_RISK_ERROR",
     "REASON_RISK_MISSING",
+    "REASON_RISK_SHARES_UNAVAILABLE",
     "RISK_EVIDENCE_FOLLOWS_BROKER_FILTER",
     "RISK_EVIDENCE_WINDOW_MONTHS",
+    "CorrelatedPairRow",
+    "PortfolioCorrelatedPairsPayload",
     "PortfolioRiskConcentrationPayload",
     "PortfolioTailRiskPayload",
     "RiskConcentrationRow",
@@ -383,4 +535,5 @@ __all__ = [
     "RiskEvidenceShortenedBy",
     "RiskEvidenceStatus",
     "risk_evidence_window",
+    "select_correlated_pairs",
 ]

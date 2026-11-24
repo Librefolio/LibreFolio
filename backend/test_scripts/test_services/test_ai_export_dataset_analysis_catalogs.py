@@ -182,16 +182,16 @@ class TestDatasetCatalog:
 
 
 class TestIntegratedComponentCatalog:
-    def test_production_registry_has_all_70_real_components_in_frozen_order(
+    def test_production_registry_has_all_71_real_components_in_frozen_order(
         self,
         component_registry: ComponentRegistry,
     ):
-        """D5 (plan 68): asset.profile is the 68th component (before D5: 67); 78 L8a adds the two risk evidence components."""
+        """D5 (plan 68): asset.profile is the 68th component (before D5: 67); 78 L8a adds two risk evidence components, L8b the third."""
         expected_order = tuple(spec.component_id for spec in ALL_FOUNDATION_COMPONENTS)
 
-        assert len(ALL_FOUNDATION_COMPONENTS) == 70
-        assert len(ALL_REAL_COMPONENTS) == 70
-        assert len(ALL_COMPONENTS) == 70
+        assert len(ALL_FOUNDATION_COMPONENTS) == 71
+        assert len(ALL_REAL_COMPONENTS) == 71
+        assert len(ALL_COMPONENTS) == 71
         assert component_registry.canonical_order == expected_order
         assert tuple(spec.component_id for spec in ALL_COMPONENTS) == expected_order
         assert all(spec.output_model is not FoundationComponentPayload for spec in component_registry)

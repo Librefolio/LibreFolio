@@ -1,9 +1,11 @@
-"""The AI Export risk evidence of the portfolio (78 L8a): `portfolio.risk_concentration` and `portfolio.tail_risk`.
+"""The AI Export risk evidence of the portfolio: `portfolio.risk_concentration`, `portfolio.tail_risk` (78 L8a) and
+`portfolio.correlated_pairs` (78 L8b).
 
 Covers the request the components send (today's holdings, 12 months up to the end of the period, the 95 % 30-day bad
-month, the broker filter behind its one switch), the copy of the Risk results into the payloads (figures, measured
-window, the holdings that shortened it, the holdings left out), the honest statuses (a Risk refusal is `unavailable`,
-a Risk error is `failed`, never an exception), one Risk call for both sections, the payload invariants, and the
+month, the correlation matrix, the broker filter behind its one switch), the copy of the Risk results into the payloads
+(figures, measured window, the holdings that shortened it, the holdings left out), the selection of the pairs (weight
+and correlation thresholds, caps, order, undefined cells), the honest statuses (a Risk refusal is `unavailable`, a
+Risk error is `failed`, never an exception), one Risk call for the three sections, the payload invariants, and the
 catalog wiring. `RiskService` is stubbed: the risk engine is reviewed and tested on its own.
 """
 
@@ -19,20 +21,26 @@ import backend.app.services.ai_export.components.risk_evidence as risk_evidence_
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.common import DateRangeModel
 from backend.app.schemas.portfolio.data_quality import DataQualityReport
-from backend.app.schemas.risk.outputs import RiskContributionItem, RiskContributionOutput, RiskVarCvarOutput, RiskWorstHorizonWindow
+from backend.app.schemas.risk.outputs import RiskContributionItem, RiskContributionOutput, RiskCorrelationOutput, RiskMatrixCell, RiskVarCvarOutput, RiskWorstHorizonWindow
 from backend.app.schemas.risk.results import RiskAnalyticResult, RiskError, RiskExcludedAsset, RiskQueryResponse, RiskResultMetadata, RiskWarning
-from backend.app.schemas.risk.vocabulary import RiskCompositionPolicy, RiskErrorCode, RiskMode, RiskResultStatus, RiskReturnBasis
+from backend.app.schemas.risk.vocabulary import RiskCompositionPolicy, RiskErrorCode, RiskMode, RiskResultStatus, RiskReturnBasis, RiskValueStatus
 from backend.app.services.ai_export.analyses.catalog import build_analysis_registry
 from backend.app.services.ai_export.components.catalog import build_component_registry
 from backend.app.services.ai_export.components.risk_evidence import (
     BAD_MONTH_SEMANTICS,
+    PAIRS_MAX_HIGH,
     REASON_RISK_ERROR,
+    REASON_RISK_SHARES_UNAVAILABLE,
     WEIGHT_BASIS,
+    CorrelatedPairRow,
+    PortfolioCorrelatedPairsPayload,
     PortfolioRiskConcentrationPayload,
     PortfolioTailRiskPayload,
     RiskEvidenceStatus,
+    _build_correlated_pairs,
     _build_risk_concentration,
     _build_tail_risk,
+    select_correlated_pairs,
 )
 from backend.app.services.ai_export.components.types import BuildScope, DetailLevel, Domain, PeriodBehavior
 from backend.app.services.ai_export.datasets.catalog import build_dataset_registry
@@ -43,6 +51,7 @@ PERIOD_END = date(2026, 11, 23)
 WINDOW_START = date(2025, 11, 23)
 CONTRIBUTION_ID = "ai_export_risk_concentration"
 BAD_MONTH_ID = "ai_export_bad_month"
+CORRELATION_ID = "ai_export_correlated_pairs"
 
 
 # =============================================================================
@@ -158,8 +167,29 @@ def _bad_month() -> RiskVarCvarOutput:
     )
 
 
-def _both_ok(**kwargs) -> RiskQueryResponse:
-    return RiskQueryResponse(items=[_result(CONTRIBUTION_ID, "risk_contribution", _contribution(), **kwargs), _result(BAD_MONTH_ID, "historical_var", _bad_month(), **kwargs)])
+def _matrix(values: dict[tuple[int, int], float | None], asset_ids: tuple[int, ...] = (1, 2, 3)) -> RiskCorrelationOutput:
+    """A symmetric matrix over `asset_ids`: 1 on the diagonal, `values` (either order) elsewhere; None is undefined."""
+    cells = []
+    for row in asset_ids:
+        for column in asset_ids:
+            value = 1.0 if row == column else values.get((row, column), values.get((column, row)))
+            status = RiskValueStatus.OK if value is not None else RiskValueStatus.UNDEFINED
+            cells.append(RiskMatrixCell(row_asset_id=row, column_asset_id=column, value=value, observations=250, coverage=0.98, status=status))
+    return RiskCorrelationOutput(asset_ids=list(asset_ids), cells=cells)
+
+
+def _correlation() -> RiskCorrelationOutput:
+    return _matrix({(1, 2): 0.92, (1, 3): 0.85, (2, 3): 0.10})
+
+
+def _both_ok(contribution: RiskContributionOutput | None = None, **kwargs) -> RiskQueryResponse:
+    return RiskQueryResponse(
+        items=[
+            _result(CONTRIBUTION_ID, "risk_contribution", contribution or _contribution(), **kwargs),
+            _result(BAD_MONTH_ID, "historical_var", _bad_month(), **kwargs),
+            _result(CORRELATION_ID, "correlation", _correlation(), **kwargs),
+        ]
+    )
 
 
 # =============================================================================
@@ -175,8 +205,9 @@ class TestRiskRequest:
 
         await _build_risk_concentration(context, {})
         await _build_tail_risk(context, {})
+        await _build_correlated_pairs(context, {})
 
-        assert len(_FakeRiskService.captured) == 1, "both sections must share one Risk call (one joint calendar, one window)"
+        assert len(_FakeRiskService.captured) == 1, "the three sections must share one Risk call (one joint calendar, one window)"
         call = _FakeRiskService.captured[0]
         request = call["request"]
         assert call["user_id"] == 42
@@ -185,8 +216,9 @@ class TestRiskRequest:
         assert request.date_range == DateRangeModel(start=WINDOW_START, end=PERIOD_END)
         assert request.target_currency == "EUR"
         analytics = {item.analytic_code: item for item in request.analytics}
-        assert set(analytics) == {"risk_contribution", "historical_var"}
+        assert set(analytics) == {"risk_contribution", "historical_var", "correlation"}
         assert analytics["historical_var"].parameters == {"confidence_level": 0.95, "horizon_days": 30}
+        assert analytics["correlation"].parameters == {}
         assert request.scope.broker_ids is None
         assert request.scope.apply_ownership_share is True
 
@@ -267,6 +299,165 @@ class TestTailRisk:
         assert payload.value_at_risk_loss_ratio is None and payload.worst_window_start is None
 
 
+def _pairs(rows: tuple[CorrelatedPairRow, ...]) -> list[tuple[int, int, float]]:
+    return [(row.first_asset_id, row.second_asset_id, row.correlation) for row in rows]
+
+
+class TestCorrelatedPairs:
+    @pytest.mark.asyncio
+    async def test_names_the_pairs_that_move_together_and_the_least_correlated(self, session):
+        _FakeRiskService.response_factory = lambda request: _both_ok()
+
+        payload = await _build_correlated_pairs(_context(session, _scope()), {})
+
+        assert payload.status is RiskEvidenceStatus.OK
+        assert (payload.analyzed_start, payload.analyzed_end, payload.n_observations) == (date(2025, 11, 24), PERIOD_END, 250)
+        assert (payload.min_risk_share_ratio, payload.min_correlation, payload.max_high_pairs) == (0.02, 0.8, 8)
+        assert (payload.considered_asset_count, payload.considered_pair_count) == (3, 3)
+        # The larger risk share comes first; the highest correlation first among the high pairs.
+        assert _pairs(payload.high_pairs) == [(1, 2, 0.92), (1, 3, 0.85)]
+        assert _pairs(payload.low_pairs) == [(2, 3, 0.10)]
+        assert "empty" in payload.pairs_semantics and "not compared" in payload.pairs_semantics
+
+    def test_a_holding_with_little_risk_and_an_undefined_pair_stay_out(self):
+        # Asset 4 carries 1 % of the risk: below the threshold, its 0.99 with asset 1 is not named. The pair 2-3 is undefined.
+        output = _matrix({(1, 2): 0.81, (1, 3): 0.30, (2, 3): None, (1, 4): 0.99, (2, 4): 0.5, (3, 4): 0.5}, asset_ids=(1, 2, 3, 4))
+        risk_shares = {1: 0.60, 2: 0.25, 3: 0.10, 4: 0.01}
+
+        assets, pairs, high, low = select_correlated_pairs(output, risk_shares)
+
+        assert (assets, pairs) == (3, 2)
+        assert _pairs(high) == [(1, 2, 0.81)]
+        assert _pairs(low) == [(1, 3, 0.30)]
+
+    def test_caps_the_high_pairs_and_takes_the_lowest_among_the_rest(self):
+        # Six holdings, every pair correlated: 15 pairs, the 8 highest named, the 3 lowest of the other 7.
+        asset_ids = (1, 2, 3, 4, 5, 6)
+        values = {}
+        step = 0
+        for first in asset_ids:
+            for second in asset_ids:
+                if first < second:
+                    values[(first, second)] = round(0.80 + 0.01 * step, 2)
+                    step += 1
+        risk_shares = dict.fromkeys(asset_ids, 0.1)
+
+        assets, pairs, high, low = select_correlated_pairs(_matrix(values, asset_ids=asset_ids), risk_shares)
+
+        assert (assets, pairs) == (6, 15)
+        assert len(high) == PAIRS_MAX_HIGH
+        assert [row.correlation for row in high] == sorted((row.correlation for row in high), reverse=True)
+        assert [row.correlation for row in low] == [0.80, 0.81, 0.82]
+        assert not {(row.first_asset_id, row.second_asset_id) for row in high} & {(row.first_asset_id, row.second_asset_id) for row in low}
+
+    def test_a_negative_risk_share_counts_by_its_size(self):
+        # Asset 2 moves against the others (a hedge already held): -15 % of the risk is in, by its absolute value.
+        output = _matrix({(1, 2): -0.85, (1, 3): 0.95, (2, 3): 0.10})
+        risk_shares = {1: 0.90, 2: -0.15, 3: 0.01}
+
+        assets, pairs, high, low = select_correlated_pairs(output, risk_shares)
+
+        assert (assets, pairs) == (2, 1)
+        assert high == ()
+        assert _pairs(low) == [(1, 2, -0.85)]
+
+    def test_fewer_than_two_holdings_with_risk_is_an_empty_selection(self):
+        output = _matrix({(1, 2): 0.95, (1, 3): 0.90, (2, 3): 0.99})
+
+        assert select_correlated_pairs(output, {1: 0.99, 2: 0.006, 3: 0.004}) == (1, 0, (), ())
+
+    @pytest.mark.asyncio
+    async def test_one_holding_with_risk_keeps_the_status_and_empty_lists(self, session):
+        contribution = _contribution().model_copy(update={"items": [item.model_copy(update={"percentage_contribution": share}) for item, share in zip(_contribution().items, (0.005, 0.99, 0.005), strict=True)]})
+        _FakeRiskService.response_factory = lambda request: _both_ok(contribution=contribution)
+
+        payload = await _build_correlated_pairs(_context(session, _scope()), {})
+
+        assert payload.status is RiskEvidenceStatus.OK and payload.reason_code is None
+        assert (payload.considered_asset_count, payload.considered_pair_count) == (1, 0)
+        assert payload.high_pairs == () and payload.low_pairs == ()
+
+    def test_todays_admin_rows(self):
+        # The test admin's Dashboard on 24/11/2026 (78 L8b): Bitcoin (6), Ethereum (7) and Apple (1) carry risk; the two
+        # real estate loans (4, 5) weigh 25 % but carry 0.6 % of it, so their 0.9352 is not named, and Ethereum's 0.8 %
+        # of weight no longer keeps the Bitcoin-Ethereum pair out.
+        values = {
+            (1, 2): -0.0537,
+            (1, 3): 0.0277,
+            (1, 4): -0.0551,
+            (1, 5): -0.0639,
+            (1, 6): -0.0104,
+            (1, 7): -0.0166,
+            (2, 3): 0.0136,
+            (2, 4): -0.0198,
+            (2, 5): -0.0466,
+            (2, 6): -0.0062,
+            (2, 7): 0.0103,
+            (3, 4): 0.0396,
+            (3, 5): 0.064,
+            (3, 6): -0.0307,
+            (3, 7): -0.0407,
+            (4, 5): 0.9352,
+            (4, 6): 0.0914,
+            (4, 7): 0.0585,
+            (5, 6): 0.0937,
+            (5, 7): 0.0811,
+            (6, 7): 0.8223,
+        }
+        risk_shares = {1: 0.030875, 2: 0.000494, 3: 0.000716, 4: 0.004191, 5: 0.002172, 6: 0.925589, 7: 0.035964}
+
+        assets, pairs, high, low = select_correlated_pairs(_matrix(values, asset_ids=(1, 2, 3, 4, 5, 6, 7)), risk_shares)
+
+        assert (assets, pairs) == (3, 3)
+        assert _pairs(high) == [(6, 7, 0.8223)]
+        assert _pairs(low) == [(7, 1, -0.0166), (6, 1, -0.0104)]
+
+    def test_todays_test_user_rows(self):
+        # The test user: Bitcoin (3) and Ethereum (4) carry 99.9 % of the risk, one pair and no low one.
+        values = {(1, 2): -0.0537, (1, 3): -0.0104, (1, 4): -0.0166, (2, 3): -0.0062, (2, 4): 0.0103, (3, 4): 0.8223}
+        risk_shares = {3: 0.961267, 4: 0.037446, 1: 0.001043, 2: 0.000244}
+
+        assets, pairs, high, low = select_correlated_pairs(_matrix(values, asset_ids=(1, 2, 3, 4)), risk_shares)
+
+        assert (assets, pairs) == (2, 1)
+        assert _pairs(high) == [(3, 4, 0.8223)]
+        assert low == ()
+
+    @pytest.mark.asyncio
+    async def test_without_measured_risk_shares_no_pair_is_chosen(self, session):
+        contribution = _contribution().model_copy(update={"items": [item.model_copy(update={"percentage_contribution": None}) for item in _contribution().items]})
+        _FakeRiskService.response_factory = lambda request: _both_ok(contribution=contribution)
+
+        payload = await _build_correlated_pairs(_context(session, _scope()), {})
+
+        assert (payload.status, payload.reason_code) == (RiskEvidenceStatus.UNAVAILABLE, REASON_RISK_SHARES_UNAVAILABLE)
+        assert payload.high_pairs == () and payload.low_pairs == () and payload.considered_pair_count is None
+
+    @pytest.mark.asyncio
+    async def test_without_the_risk_contribution_no_pair_is_chosen(self, session):
+        _FakeRiskService.response_factory = lambda request: RiskQueryResponse(
+            items=[
+                _refused(CONTRIBUTION_ID, "risk_contribution", RiskErrorCode.DATA_UNAVAILABLE),
+                _result(BAD_MONTH_ID, "historical_var", _bad_month()),
+                _result(CORRELATION_ID, "correlation", _correlation()),
+            ]
+        )
+
+        payload = await _build_correlated_pairs(_context(session, _scope()), {})
+
+        assert (payload.status, payload.reason_code) == (RiskEvidenceStatus.UNAVAILABLE, REASON_RISK_SHARES_UNAVAILABLE)
+        assert payload.high_pairs == () and payload.low_pairs == () and payload.considered_pair_count is None
+
+    @pytest.mark.asyncio
+    async def test_too_short_a_history_is_unavailable_with_the_reason(self, session):
+        _FakeRiskService.response_factory = lambda request: RiskQueryResponse(items=[_refused(instance, code, RiskErrorCode.INSUFFICIENT_HISTORY) for instance, code in ((CONTRIBUTION_ID, "risk_contribution"), (BAD_MONTH_ID, "historical_var"), (CORRELATION_ID, "correlation"))])
+
+        payload = await _build_correlated_pairs(_context(session, _scope()), {})
+
+        assert (payload.status, payload.reason_code) == (RiskEvidenceStatus.UNAVAILABLE, RiskErrorCode.INSUFFICIENT_HISTORY.value)
+        assert payload.high_pairs == () and payload.analyzed_start is None
+
+
 class TestNeverAFailedSnapshot:
     @pytest.mark.asyncio
     async def test_a_risk_error_fails_both_sections_without_raising_and_runs_once(self, session):
@@ -278,9 +469,10 @@ class TestNeverAFailedSnapshot:
 
         concentration = await _build_risk_concentration(context, {})
         tail = await _build_tail_risk(context, {})
+        pairs = await _build_correlated_pairs(context, {})
 
-        assert len(_FakeRiskService.captured) == 1, "the failed call is memoized, not retried by the second section"
-        for payload in (concentration, tail):
+        assert len(_FakeRiskService.captured) == 1, "the failed call is memoized, not retried by the other sections"
+        for payload in (concentration, tail, pairs):
             assert payload.status is RiskEvidenceStatus.FAILED
             assert payload.reason_code == REASON_RISK_ERROR
             assert (payload.requested_start, payload.requested_end) == (WINDOW_START, PERIOD_END)
@@ -339,6 +531,21 @@ class TestPayloadInvariants:
                 )
             )
 
+    def test_a_high_pair_reaches_the_threshold(self):
+        with pytest.raises(ValueError, match="min_correlation"):
+            PortfolioCorrelatedPairsPayload(
+                **_window(
+                    status=RiskEvidenceStatus.OK,
+                    analyzed_start=WINDOW_START,
+                    analyzed_end=PERIOD_END,
+                    n_observations=250,
+                    coverage_ratio=1.0,
+                    considered_asset_count=2,
+                    considered_pair_count=1,
+                    high_pairs=(CorrelatedPairRow(first_asset_id=1, second_asset_id=2, correlation=0.5),),
+                )
+            )
+
     def test_losses_are_positive(self):
         with pytest.raises(ValueError):
             PortfolioTailRiskPayload(**_window(status=RiskEvidenceStatus.OK, value_at_risk_loss_ratio=-0.07))
@@ -355,12 +562,13 @@ class TestCatalogWiring:
         datasets = build_dataset_registry(components)
         analyses = build_analysis_registry(datasets)
 
-        for component_id in ("portfolio.risk_concentration", "portfolio.tail_risk"):
+        component_ids = ("portfolio.risk_concentration", "portfolio.tail_risk", "portfolio.correlated_pairs")
+        for component_id in component_ids:
             spec = components.get(component_id)
             assert spec.version == 1 and spec.period_behavior is PeriodBehavior.AS_OF
         dataset = datasets.get("portfolio.risk_evidence")
         assert dataset.version == 2
-        assert dataset.required_component_ids == ("portfolio.risk_concentration", "portfolio.tail_risk")
+        assert dataset.required_component_ids == component_ids
         assert dataset.period_semantics is PeriodBehavior.AS_OF
         assert dataset.visibility.value == "internal"
         assert "portfolio.risk_evidence" in analyses.get("portfolio.protection_strategies").required_dataset_ids

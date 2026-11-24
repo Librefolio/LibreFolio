@@ -551,9 +551,9 @@ def _patch_drawdown(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def _patch_risk_evidence(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Keeps the risk evidence (78 L8a) off the database: Risk answers «too short a history» for both analytics.
+    """Keeps the risk evidence (78 L8a, L8b) off the database: Risk answers «too short a history» for every analytic.
 
-    `portfolio.risk_concentration` and `portfolio.tail_risk` run `RiskService.execute` on the context's session; on the
+    `portfolio.risk_concentration`, `portfolio.tail_risk` and `portfolio.correlated_pairs` run `RiskService.execute` on the context's session; on the
     tableless session it fails with `no such table` and the sections report `failed`, an accidental path again. An
     `unavailable` answer is a real Risk answer, and keeps the section's contract under test without a database.
     """
@@ -710,10 +710,10 @@ def _setup_broker_scenario(monkeypatch: pytest.MonkeyPatch, scope: BuildScope, b
 
 class TestPortfolioBrokerFragmentSanity:
     def test_exact_component_counts(self):
-        assert len(PORTFOLIO_BROKER_COMPONENTS) == 43
-        assert PORTFOLIO_REAL_COMPONENT_COUNT == 23
+        assert len(PORTFOLIO_BROKER_COMPONENTS) == 44
+        assert PORTFOLIO_REAL_COMPONENT_COUNT == 24
         assert BROKER_REAL_COMPONENT_COUNT == 20
-        assert len(PORTFOLIO_REAL_COMPONENT_IDS) == 23
+        assert len(PORTFOLIO_REAL_COMPONENT_IDS) == 24
         assert len(BROKER_REAL_COMPONENT_IDS) == 20
 
     def test_no_duplicate_component_ids(self):
@@ -746,9 +746,10 @@ class TestPortfolioBrokerFragmentSanity:
             "portfolio.drawdown_summary",
             # AI adequacy remediation: income timeline evidence
             "portfolio.income_timeline",
-            # 78 L8a: the risk evidence of today's holdings
+            # 78 L8a, L8b: the risk evidence of today's holdings
             "portfolio.risk_concentration",
             "portfolio.tail_risk",
+            "portfolio.correlated_pairs",
         }
         assert set(PORTFOLIO_REAL_COMPONENT_IDS) == expected
 
@@ -822,7 +823,7 @@ class TestComponentRegistryConstruction:
     def test_merged_registry_has_68_components(self):
         registry = build_portfolio_broker_component_registry()
         # D5 (plan 68): asset.profile is the 68th component (before D5: 67)
-        assert len(registry) == 70
+        assert len(registry) == 71
 
     def test_pb_component_ids_resolve_to_real_specs(self):
         registry = build_portfolio_broker_component_registry()
@@ -1609,7 +1610,7 @@ class TestImportCycleSafety:
         assert result.returncode == 0, f"fresh-process registry construction failed:\nstdout={result.stdout}\nstderr={result.stderr}"
         # D5 (plan 68): asset.profile is the 68th component (before D5: "67 40 11"); 78 L3: the 12th analysis; 78 L8a: two
         # risk evidence components and the internal portfolio.risk_evidence dataset
-        assert result.stdout.strip() == "70 41 12"
+        assert result.stdout.strip() == "71 41 12"
 
 
 # =============================================================================

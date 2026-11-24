@@ -136,13 +136,13 @@ PORTFOLIO_BROKER_COMPONENTS: tuple[ComponentSpec, ...] = (
 )
 
 # 10 Portfolio financial + 4 full technical + 4 context + 2 drawdown + 1 income
-# timeline + 2 risk evidence (78 L8a) = 23; 9 Broker financial + 4 full technical + 3 context + 1 drawdown +
-# 2 concentration + 1 cost efficiency = 20; combined = 43. Asserted at import time
+# timeline + 3 risk evidence (78 L8a, L8b) = 24; 9 Broker financial + 4 full technical + 3 context + 1 drawdown +
+# 2 concentration + 1 cost efficiency = 20; combined = 44. Asserted at import time
 # so any future drift in the source waves' tuples fails immediately, not deep
 # inside a test.
 PORTFOLIO_REAL_COMPONENT_IDS: tuple[str, ...] = tuple(spec.component_id for spec in PORTFOLIO_BROKER_COMPONENTS if Domain.PORTFOLIO in spec.domains)
 BROKER_REAL_COMPONENT_IDS: tuple[str, ...] = tuple(spec.component_id for spec in PORTFOLIO_BROKER_COMPONENTS if Domain.BROKER in spec.domains)
-PORTFOLIO_REAL_COMPONENT_COUNT = 23
+PORTFOLIO_REAL_COMPONENT_COUNT = 24
 BROKER_REAL_COMPONENT_COUNT = 20
 
 if len(PORTFOLIO_BROKER_COMPONENTS) != PORTFOLIO_REAL_COMPONENT_COUNT + BROKER_REAL_COMPONENT_COUNT:
