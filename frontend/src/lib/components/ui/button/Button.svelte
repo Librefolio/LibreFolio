@@ -15,13 +15,19 @@
   - `pressed` → a toggle (`aria-pressed`); `menu` → `aria-haspopup`, `aria-expanded`, the ▾, the snippet rendered
     right after the button while `open`.
   - `href` → an `<a>` with the same look; its long press stays the browser's (open in a new tab, copy the link).
+  - BTN-2·0 (the consultant's C1–C9): `tone` (a state's colour: `ghost` in it, the `chip` of a banner, the `pressed`
+    fill), `tint` (on a fill of that state), `pill`, `size="xs"`, `truncate` (the word cuts, and the name shows while it
+    is cut), `dense` (24 px target), `expanded` (a disclosure: `aria-expanded` and a turning ▾; never with `menu`),
+    `leading` (a logo or a flag instead of the icon) and `children` (a rich word: `label` stays the name, always in
+    `aria-label`). Inside a `ButtonGroup` the button is a segment.
   - `class` takes size and position only (`w-full`, `ml-auto`), never a colour: the gate refuses colour roles there.
   - Every `data-*` (the `data-testid` first) lands on the `<button>` itself.
 -->
 <script lang="ts">
     import type {Component, Snippet} from 'svelte';
     import {ChevronDown, LoaderCircle} from 'lucide-svelte';
-    import {buttonClasses, ICON_PX, WORD_HIDDEN_BELOW, type ButtonDisplay, type ButtonSize, type ButtonVariant, type WordThreshold} from './buttonClasses';
+    import {buttonClasses, ICON_PX, WORD_HIDDEN_BELOW, type ButtonDisplay, type ButtonSize, type ButtonTone, type ButtonVariant, type WordThreshold} from './buttonClasses';
+    import {insideButtonGroup} from './buttonGroup';
     import {pressable, type TipPosition} from './pressable.svelte';
 
     interface Props {
@@ -45,6 +51,22 @@
         compact?: boolean;
         variant?: ButtonVariant;
         size?: ButtonSize;
+        /** A state's colour: `ghost` in it, the `chip` of a banner (mandatory there), the `pressed` fill. */
+        tone?: ButtonTone;
+        /** The button stands on a fill of that state (a toast, a banner): the fill's text, the hover a step down. */
+        tint?: ButtonTone;
+        /** Fully rounded. */
+        pill?: boolean;
+        /** The word may cut; the name shows (long press, rest, Tab) while it is cut. */
+        truncate?: boolean;
+        /** Inside a field or beside a neighbour: the finger's target is 24 px, not 40. */
+        dense?: boolean;
+        /** A disclosure: `aria-expanded` and a ▾ that turns while open. Never with `menu`, which has its own. */
+        expanded?: boolean;
+        /** What stands before the word instead of an icon: a logo, a flag (hidden from the reader: `label` names it). */
+        leading?: Snippet;
+        /** A rich word (HTML, flags) instead of the plain one: `label` stays the name, and `aria-label` carries it. */
+        children?: Snippet;
         /** An explanation in the tooltip, under the name (plain text; `math` for `$…$`). */
         help?: string;
         math?: boolean;
@@ -92,6 +114,14 @@
         compact = false,
         variant = 'secondary',
         size = 'md',
+        tone,
+        tint,
+        pill = false,
+        truncate = false,
+        dense = false,
+        expanded,
+        leading,
+        children,
         help,
         math = false,
         disabled = false,
@@ -114,7 +144,15 @@
         ...rest
     }: Props = $props();
 
-    let shown = $derived<ButtonDisplay>(display ?? (Icon ? 'icon-text' : 'text'));
+    /** Checked once, at mount: a caller passes either a menu or a disclosure, never both, and never switches. */
+    function assertMenuOrDisclosure(): void {
+        if (menu && expanded !== undefined) throw new Error('Button: `expanded` and `menu` never go together — `menu` has its own aria-expanded');
+    }
+    assertMenuOrDisclosure();
+
+    /** Inside a `ButtonGroup`: a segment. */
+    const segment = insideButtonGroup();
+    let shown = $derived<ButtonDisplay>(display ?? (Icon || leading ? 'icon-text' : 'text'));
     /** Disabled with a reason: reachable, never natively disabled. */
     let offWithReason = $derived(!!reason);
     /** Disabled without a reason, but an icon: reachable for its name (decided by `display`, never by the width). */
@@ -124,19 +162,27 @@
     let nativeDisabled = $derived(disabled && !reachableOff);
     let word = $derived(busy && busyLabel ? busyLabel : (shortLabel ?? label));
     /** The word's own class: hidden for an icon, below the threshold for `auto`. */
-    let wordClass = $derived(shown === 'auto' ? (compact ? 'hidden' : hideWordBelow ? WORD_HIDDEN_BELOW[hideWordBelow] : '') : '');
+    let hideClass = $derived(shown === 'auto' ? (compact ? 'hidden' : hideWordBelow ? WORD_HIDDEN_BELOW[hideWordBelow] : '') : '');
+    let wordClass = $derived(truncate ? `${hideClass} truncate`.trim() : hideClass);
+    /** A rich word, unless the busy word takes its place. */
+    let richWord = $derived(!!children && !(busy && busyLabel));
     let hasWord = $derived(shown !== 'icon' && !(shown === 'auto' && compact));
     let iconOnly = $derived(shown === 'icon');
-    let classes = $derived(`${buttonClasses({variant, size, shape: iconOnly ? 'icon' : 'default', pressed})} ${className}`.trim());
+    let classes = $derived(`${buttonClasses({variant, size, shape: iconOnly ? 'icon' : 'default', pressed, tone, tint, segment, pill, truncate, dense})} ${className}`.trim());
     let px = $derived(ICON_PX[size]);
     /** The accessible name: given whenever the word in view is not the label, or may be hidden. */
-    let ariaLabel = $derived(shown === 'text' || shown === 'icon-text' ? (word === label ? undefined : label) : label);
+    let ariaLabel = $derived(richWord ? label : shown === 'text' || shown === 'icon-text' ? (word === label ? undefined : label) : label);
+    let ariaExpanded = $derived<'true' | 'false' | undefined>(menu ? (open ? 'true' : 'false') : expanded === undefined ? undefined : expanded ? 'true' : 'false');
+    /** The ▾ of a menu or a disclosure, turned while open. */
+    let chevron = $derived(menu ? open : expanded);
 
     let wordElement: HTMLSpanElement | undefined = $state(undefined);
 
     /** Whether the word is in view now (read at the moment the name would open). */
     function wordVisible(): boolean {
-        if (shown === 'text' || shown === 'icon-text') return shortLabel === undefined || shortLabel === label;
+        // A cut word does not show the name: the name opens (C7). Measured when the name would open.
+        if (truncate && wordElement && wordElement.scrollWidth > wordElement.clientWidth) return false;
+        if (shown === 'text' || shown === 'icon-text') return richWord || shortLabel === undefined || shortLabel === label;
         if (!hasWord || !wordElement) return false;
         return wordElement.getClientRects().length > 0;
     }
@@ -162,17 +208,21 @@
 {#snippet content()}
     {#if busy}
         <LoaderCircle size={px} class="lf-btn-spin shrink-0" aria-hidden="true" />
+    {:else if leading}
+        <span class="inline-flex shrink-0 items-center" aria-hidden="true" data-lf-leading>{@render leading()}</span>
     {:else if Icon}
         <Icon size={px} class="shrink-0" aria-hidden="true" />
     {/if}
     {#if shown !== 'icon'}
-        <span bind:this={wordElement} class={wordClass} data-lf-word>{word}</span>
+        <span bind:this={wordElement} class={wordClass} data-lf-word>
+            {#if richWord && children}{@render children()}{:else}{word}{/if}
+        </span>
     {/if}
     {#if badge}
         {@render badge()}
     {/if}
-    {#if menu}
-        <ChevronDown size={px - 2} class="shrink-0" aria-hidden="true" />
+    {#if chevron !== undefined}
+        <ChevronDown size={px - 2} class="shrink-0 transition-transform {chevron ? 'rotate-180' : ''}" aria-hidden="true" data-lf-chevron />
     {/if}
 {/snippet}
 
@@ -190,7 +240,7 @@
         aria-busy={busy ? 'true' : undefined}
         aria-pressed={pressed === undefined ? undefined : pressed ? 'true' : 'false'}
         aria-haspopup={menu ? 'menu' : undefined}
-        aria-expanded={menu ? (open ? 'true' : 'false') : undefined}
+        aria-expanded={ariaExpanded}
         aria-label={ariaLabel}
         data-disabled-reason={offWithReason ? reasonCode : undefined}
         use:pressable={pressOptions}

@@ -22,9 +22,12 @@
 import {afterEach, beforeAll, beforeEach, describe, expect, it, vi} from 'vitest';
 import {createRawSnippet, flushSync} from 'svelte';
 import {Pencil, Trash2} from 'lucide-svelte';
-import {cleanup, fireEvent, render, screen, setupI18n} from '$test/component';
+import {cleanup, fireEvent, render, screen, setupI18n, within} from '$test/component';
 import Button from './Button.svelte';
 import LegacyButtonHost from './__tests__/LegacyButtonHost.svelte';
+import ButtonGroupHarness from './__tests__/ButtonGroupHarness.svelte';
+import CloseButton from './CloseButton.svelte';
+import {buttonClasses} from './buttonClasses';
 import {HOVER_DELAY_MS, LONG_PRESS_CLICK_WINDOW_MS, LONG_PRESS_MS, MOVE_TOLERANCE_PX} from './pressable.svelte';
 
 beforeAll(async () => {
@@ -494,5 +497,124 @@ describe('Button — inside a legacy (non-runes) parent', () => {
         render(LegacyButtonHost, {props: {onpress}});
         await fireEvent.click(screen.getByTestId('legacy-host-button'));
         expect(onpress).toHaveBeenCalledTimes(1);
+    });
+});
+
+describe('Button — a disclosure and a menu: aria-expanded and the turning chevron (BTN-2·0, C6)', () => {
+    const chevron = (button: HTMLElement) => button.querySelector('[data-lf-chevron]');
+
+    it('expanded false/true → aria-expanded, and the chevron turns while open', async () => {
+        const {button, rerender} = renderButton({label: 'Details', expanded: false});
+        expect(button).toHaveAttribute('aria-expanded', 'false');
+        expect(chevron(button)).not.toBeNull();
+        expect(chevron(button)?.classList.contains('rotate-180')).toBe(false);
+        await rerender({label: 'Details', expanded: true, 'data-testid': 'probe-btn'});
+        expect(screen.getByTestId('probe-btn')).toHaveAttribute('aria-expanded', 'true');
+        expect(chevron(screen.getByTestId('probe-btn'))?.classList.contains('rotate-180')).toBe(true);
+    });
+
+    it('without expanded or menu there is no aria-expanded and no chevron', () => {
+        const {button} = renderButton({label: 'Save'});
+        expect(button.hasAttribute('aria-expanded')).toBe(false);
+        expect(chevron(button)).toBeNull();
+    });
+
+    it('a menu: the chevron turns with open', async () => {
+        const menu = createRawSnippet(() => ({render: () => '<div data-testid="probe-menu">menu</div>'}));
+        const {button} = renderButton({label: 'More', menu});
+        expect(chevron(button)?.classList.contains('rotate-180')).toBe(false);
+        await fireEvent.click(button);
+        expect(button).toHaveAttribute('aria-expanded', 'true');
+        expect(chevron(button)?.classList.contains('rotate-180')).toBe(true);
+    });
+
+    it('menu and expanded together: mounting throws', () => {
+        const menu = createRawSnippet(() => ({render: () => '<div>menu</div>'}));
+        expect(() => render(Button, {props: {label: 'Both', menu, expanded: false}})).toThrow(/expanded/);
+    });
+});
+
+describe('Button — leading and children (BTN-2·0)', () => {
+    const leading = createRawSnippet(() => ({render: () => '<span data-testid="probe-flag">🇮🇹</span>'}));
+    const rich = createRawSnippet(() => ({render: () => '<span data-testid="probe-rich"><b>12</b> rows</span>'}));
+
+    it('leading replaces the icon, hidden from readers', () => {
+        const {button} = renderButton({label: 'Italy', icon: Pencil, leading});
+        const box = button.querySelector('[data-lf-leading]');
+        expect(box).not.toBeNull();
+        expect(box).toHaveAttribute('aria-hidden', 'true');
+        expect(within(box as HTMLElement).getByTestId('probe-flag')).toBeInTheDocument();
+        expect(button.querySelectorAll('svg'), 'the icon is replaced').toHaveLength(0);
+    });
+
+    it('busy: the spinner takes the leading’s place', () => {
+        const {button} = renderButton({label: 'Italy', leading, busy: true});
+        expect(button.querySelector('[data-lf-leading]')).toBeNull();
+        expect(button.querySelector('.lf-btn-spin')).not.toBeNull();
+    });
+
+    it('children replace the word, and the label stays the name (aria-label)', () => {
+        const {button} = renderButton({label: 'Show 12 rows', children: rich});
+        expect(within(button).getByTestId('probe-rich')).toBeInTheDocument();
+        expect(button).toHaveAttribute('aria-label', 'Show 12 rows');
+        expect(button.querySelector('[data-lf-word]')?.textContent?.trim()).toBe('12 rows');
+    });
+
+    it('busy with a busy word: the busy word, not the children', () => {
+        const {button} = renderButton({label: 'Show 12 rows', children: rich, busy: true, busyLabel: 'Loading…'});
+        expect(within(button).queryByTestId('probe-rich')).toBeNull();
+        expect(button.textContent).toContain('Loading…');
+    });
+});
+
+describe('Button — inside a ButtonGroup: a segment (BTN-2·0, C2)', () => {
+    it('the group is a named group; its buttons are segments, toggles with aria-pressed; one outside is not', () => {
+        render(ButtonGroupHarness, {props: {mode: 'list'}});
+        const group = screen.getByTestId('probe-group');
+        expect(group).toHaveAttribute('role', 'group');
+        expect(group).toHaveAttribute('aria-label', 'View');
+        for (const id of ['probe-grid', 'probe-list']) {
+            const segment = screen.getByTestId(id);
+            expect(group.contains(segment)).toBe(true);
+            expect(segment.className).toBe(buttonClasses({segment: true, pressed: id === 'probe-list'}));
+            expect(segment.classList.contains('lf-btn-segment')).toBe(true);
+        }
+        expect(screen.getByTestId('probe-list')).toHaveAttribute('aria-pressed', 'true');
+        expect(screen.getByTestId('probe-grid')).toHaveAttribute('aria-pressed', 'false');
+        expect(screen.getByTestId('probe-outside').classList.contains('lf-btn-segment'), 'the context stops at the group').toBe(false);
+    });
+});
+
+describe('CloseButton — variant and tint (BTN-2·0)', () => {
+    it('variant="bar-ghost" draws the bar’s ✕; tint="warning" the ✕ on a warning fill', () => {
+        render(CloseButton, {props: {variant: 'bar-ghost', 'data-testid': 'probe-bar-close'}});
+        expect(screen.getByTestId('probe-bar-close').className).toBe(buttonClasses({variant: 'bar-ghost', size: 'md', shape: 'icon'}));
+        render(CloseButton, {props: {tint: 'warning', 'data-testid': 'probe-tint-close'}});
+        expect(screen.getByTestId('probe-tint-close').className).toBe(buttonClasses({variant: 'ghost', size: 'md', shape: 'icon', tint: 'warning'}));
+    });
+});
+
+describe('Button — a cut word shows the name (BTN-2·0, C7)', () => {
+    function cutWord(button: HTMLElement, scroll: number, client: number) {
+        const word = button.querySelector<HTMLElement>('[data-lf-word]')!;
+        expect(word.classList.contains('truncate'), 'truncate cuts the word').toBe(true);
+        Object.defineProperty(word, 'scrollWidth', {configurable: true, value: scroll});
+        Object.defineProperty(word, 'clientWidth', {configurable: true, value: client});
+    }
+
+    it('a word wider than its box: a mouse rest shows the name', async () => {
+        const {button} = renderButton({label: 'A rather long portfolio name', truncate: true});
+        cutWord(button, 240, 120);
+        pointer(button, 'pointerenter', 'mouse');
+        await advance(HOVER_DELAY_MS);
+        expect(tooltip()?.textContent?.trim()).toBe('A rather long portfolio name');
+    });
+
+    it('a word that fits: nothing, the word is the name', async () => {
+        const {button} = renderButton({label: 'A rather long portfolio name', truncate: true});
+        cutWord(button, 120, 120);
+        pointer(button, 'pointerenter', 'mouse');
+        await advance(HOVER_DELAY_MS + 200);
+        expect(tooltip()).toBeNull();
     });
 });
