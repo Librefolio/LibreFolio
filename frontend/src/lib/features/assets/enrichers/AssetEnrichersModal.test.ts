@@ -441,3 +441,83 @@ describe('AssetEnrichersModal — the price assignment chip (ENR-2)', () => {
         expect(screen.getByTestId('enricher-other-yahoo').dataset.tickerOnly).toBe('true');
     });
 });
+
+describe('AssetEnrichersModal — «Cerca online» (ENR-3)', () => {
+    const FOUND_ISIN = 'IE00B4L5Y983';
+    const YAHOO_ONLY = {yahoo: {identifier_type: 'TICKER', identifier: 'VWRA.L'}};
+    const searchResult = (code: string, identifier: string) => ({event: 'enricher_results', code, status: 'ok', via: 'search', results: [{name: `${code} result`, binding: {identifier_type: 'ISIN', identifier}}], accepted_identifier_types: ['ISIN'], retry_after: null, error_code: null});
+    /** A «Cerca online» that answers esma with a result, and nobody else. */
+    const onlineAnswering = (identifier: string) =>
+        vi.fn(async (request: {q: string; codes: string[]}, options: {onEvent: (event: unknown) => void}) => {
+            if (request.q !== identifier && request.codes.includes('esma')) options.onEvent(searchResult('esma', identifier));
+            return {kind: 'done'};
+        });
+    const NO_ISIN = {name: 'Vanguard FTSE All-World', assetType: 'ETF', identifiers: {TICKER: 'VWRA'}};
+
+    async function searchAndAdd(searchOnline: ReturnType<typeof onlineAnswering>) {
+        await fireEvent.click(screen.getAllByTestId(/^enrichers-search-suggestion-/)[0]);
+        await waitFor(() => expect(screen.getByTestId('enrichers-search').dataset.status).toBe('done'));
+        const add = screen.getAllByTestId(/^enrichers-search-add-/).find((button) => button.dataset.testid?.includes('-esma-'));
+        expect(add, 'esma has a row to add').toBeDefined();
+        await fireEvent.click(add as HTMLElement);
+        expect(searchOnline).toHaveBeenCalled();
+    }
+
+    it('mounts the search on top of the window', () => {
+        mount();
+        expect(screen.getByTestId('enrichers-search')).toBeInTheDocument();
+        expect(screen.getByTestId('enrichers-search-input')).toBeInTheDocument();
+    });
+
+    it('«+» on a result puts the code in «Scelti», the row closed, and out of «Non in elenco» and the pills', async () => {
+        const searchOnline = onlineAnswering(FOUND_ISIN);
+        mount({config: YAHOO_ONLY, asset: NO_ISIN, searchOnline});
+        expect(other('esma').dataset.reason).toBe('new');
+        expect(screen.getByTestId('enrichers-search-pill-esma')).toBeInTheDocument();
+
+        await searchAndAdd(searchOnline);
+        await waitFor(() => expect(screen.getByTestId('enricher-row-esma')).toBeInTheDocument());
+        expect(chosen('esma').dataset.expanded).toBe('false');
+        expect(chosen('esma').dataset.position).toBe('2');
+        expect(screen.queryByTestId('enricher-other-esma')).toBeNull();
+        expect(screen.queryByTestId('enrichers-search-pill-esma')).toBeNull();
+        // The search stays open
+        expect(screen.getByTestId('enrichers-search')).toBeInTheDocument();
+    });
+
+    it('hands back the ISIN of a binding added from the search when the asset has none (R7)', async () => {
+        const searchOnline = onlineAnswering(FOUND_ISIN);
+        const {onapply} = mount({config: YAHOO_ONLY, asset: NO_ISIN, searchOnline});
+        await searchAndAdd(searchOnline);
+        await waitFor(() => expect(screen.getByTestId('enricher-row-esma')).toBeInTheDocument());
+        const config = await apply(onapply);
+        expect(config.esma).toEqual({identifier_type: 'ISIN', identifier: FOUND_ISIN});
+        expect(onapply.mock.calls[0][1]).toEqual({identifiers: {ISIN: FOUND_ISIN}});
+    });
+
+    it('hands back nothing when the asset has the ISIN already', async () => {
+        const searchOnline = onlineAnswering('IE00BK5BQT80');
+        const {onapply} = mount({config: YAHOO_ONLY, searchOnline});
+        await searchAndAdd(searchOnline);
+        await waitFor(() => expect(screen.getByTestId('enricher-row-esma')).toBeInTheDocument());
+        await apply(onapply);
+        expect(onapply.mock.calls[0][1]).toEqual({identifiers: {}});
+    });
+
+    it('hands back nothing for a code that came from «Non in elenco», nor for a search result removed again', async () => {
+        const searchOnline = onlineAnswering(FOUND_ISIN);
+        const {onapply} = mount({config: YAHOO_ONLY, asset: NO_ISIN, searchOnline});
+        await fireEvent.click(screen.getByTestId('enricher-add-esma'));
+        await fireEvent.change(screen.getByTestId('enricher-identifier-esma'), {target: {value: FOUND_ISIN}});
+        await apply(onapply);
+        expect(onapply.mock.calls[0][1]).toEqual({identifiers: {}});
+
+        cleanup();
+        const second = mount({config: YAHOO_ONLY, asset: NO_ISIN, searchOnline});
+        await searchAndAdd(searchOnline);
+        await waitFor(() => expect(screen.getByTestId('enricher-row-esma')).toBeInTheDocument());
+        await fireEvent.click(screen.getByTestId('enricher-remove-esma'));
+        await apply(second.onapply);
+        expect(second.onapply.mock.calls[0][1]).toEqual({identifiers: {}});
+    });
+});

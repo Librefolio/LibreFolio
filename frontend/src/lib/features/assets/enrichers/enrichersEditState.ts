@@ -343,6 +343,129 @@ export function otherRows(draft: EnrichersDraft, context: EnrichersContext): Oth
 }
 
 // =============================================================================
+// «Cerca online» (ENR-3)
+// =============================================================================
+
+/** One result of the search across enrichers: a binding ready to add (`EnricherSearchHit` of the stream). */
+export interface SearchHit {
+    name: string;
+    binding: EnricherBinding;
+    asset_type?: string | null;
+    page_url?: string | null;
+    market?: string | null;
+}
+
+/** One enricher's answer to the search across enrichers. */
+export interface SearchAnswer {
+    code: string;
+    status: string;
+    via: string | null;
+    results: SearchHit[];
+    accepted_identifier_types: string[];
+}
+
+/** A pill of the search: an enricher it asks (it covers the type and is not chosen), on or off. */
+export interface SearchPill {
+    code: string;
+    info: EnricherInfo;
+    on: boolean;
+    /** No search of its own: it answers an identifier of its types only (R12, «solo ISIN»). */
+    identifierOnly: boolean;
+}
+
+/** A row of the search's results. */
+export interface SearchRow {
+    code: string;
+    hit: SearchHit;
+    /** R13: the result names an ISIN different from the asset's or from one already chosen; `against` says whose. */
+    conflict: {isin: string; against: string} | null;
+}
+
+function covers(info: EnricherInfo, assetType: string): boolean {
+    return (info.default_priority as Record<string, number | null | undefined>)[assetType] != null && info.configured !== false;
+}
+
+/** The pills (R10): the enrichers that cover the asset's type and are not chosen, on unless turned off. */
+export function searchPills(draft: EnrichersDraft, catalogue: EnricherInfo[], assetType: string, off: ReadonlySet<string>): SearchPill[] {
+    return catalogue.filter((info) => covers(info, assetType) && !draft.order.includes(info.code)).map((info) => ({code: info.code, info, on: !off.has(info.code), identifierOnly: !info.supports_search}));
+}
+
+/** The chosen enrichers that cover the type: not searched, named under the pills («In elenco, non si cercano»). */
+export function searchExcluded(draft: EnrichersDraft, catalogue: EnricherInfo[], assetType: string): EnricherInfo[] {
+    return draft.order.map((code) => catalogue.find((info) => info.code === code)).filter((info): info is EnricherInfo => !!info && covers(info, assetType));
+}
+
+/** The ISINs a result must agree with (R13): the asset's, then each chosen binding's, with whose it is. */
+function knownIsins(draft: EnrichersDraft, assetIdentifiers: Record<string, string>): {isin: string; against: string}[] {
+    const known: {isin: string; against: string}[] = [];
+    const own = assetIdentifiers.ISIN?.trim().toUpperCase();
+    if (own) known.push({isin: own, against: 'asset'});
+    for (const code of draft.order) {
+        const binding = draft.bindings[code];
+        if (binding?.identifier_type === 'ISIN' && binding.identifier) known.push({isin: binding.identifier.trim().toUpperCase(), against: code});
+    }
+    return known;
+}
+
+/**
+ * The rows of the search (R11, R13): every result of an enricher that answered and is not chosen, in the order the
+ * answers are given; a result naming an ISIN different from the asset's or a chosen one's says so.
+ */
+export function searchRows(answers: SearchAnswer[], draft: EnrichersDraft, assetIdentifiers: Record<string, string>): SearchRow[] {
+    const known = knownIsins(draft, assetIdentifiers);
+    const rows: SearchRow[] = [];
+    for (const answer of answers) {
+        if (answer.status !== 'ok' || draft.order.includes(answer.code)) continue;
+        for (const hit of answer.results) {
+            const isin = hit.binding.identifier_type === 'ISIN' ? hit.binding.identifier.trim().toUpperCase() : null;
+            const other = isin ? known.find((entry) => entry.isin !== isin) : undefined;
+            rows.push({code: answer.code, hit, conflict: other && isin ? {isin: other.isin, against: other.against} : null});
+        }
+    }
+    return rows;
+}
+
+/** Put a search result in the list (R11): at the end, with the result's binding; the row stays closed. */
+export function addFromSearch(draft: EnrichersDraft, code: string, binding: EnricherBinding): EnrichersDraft {
+    if (draft.order.includes(code)) return draft;
+    return {order: [...draft.order, code], bindings: {...draft.bindings, [code]: {...binding}}};
+}
+
+/**
+ * The question to ask after a result is added (R12): its ISIN to the enrichers without a search that accept an ISIN,
+ * cover the type and are not chosen; null when there is no ISIN, nobody to ask, or that ISIN was asked already.
+ */
+export function isinFollowUp(binding: EnricherBinding, draft: EnrichersDraft, catalogue: EnricherInfo[], assetType: string, asked: ReadonlySet<string>): {isin: string; codes: string[]} | null {
+    if (binding.identifier_type !== 'ISIN' || !binding.identifier) return null;
+    const isin = binding.identifier.trim().toUpperCase();
+    if (asked.has(isin)) return null;
+    const codes = catalogue.filter((info) => covers(info, assetType) && !info.supports_search && !draft.order.includes(info.code) && info.accepted_identifier_types.includes('ISIN')).map((info) => info.code);
+    return codes.length ? {isin, codes} : null;
+}
+
+/** The identifier types R7 proposes for the asset: the global ones, the same in every source. Never a ticker: the
+ *  asset's TICKER column is the bare one (R2, R6), and a listing's symbol (`SWDA.MI`) lives in its binding. */
+const SUGGESTED_TYPES: readonly string[] = ['ISIN', 'LEI'];
+
+/**
+ * The identifiers the search found, proposed for the asset's empty columns (R7): the ISIN or LEI binding of each
+ * enricher added from the search, for a column in `columnTypes` the asset has no value for; never one that would
+ * overwrite, never a ticker.
+ */
+export function suggestedIdentifiers(draft: EnrichersDraft, fromSearch: Iterable<string>, assetIdentifiers: Record<string, string>, columnTypes: readonly string[]): Record<string, string> {
+    const suggested: Record<string, string> = {};
+    for (const code of fromSearch) {
+        if (!draft.order.includes(code)) continue;
+        const binding = draft.bindings[code];
+        const type = binding?.identifier_type;
+        if (!type || !binding.identifier || !SUGGESTED_TYPES.includes(type) || !columnTypes.includes(type)) continue;
+        if ((assetIdentifiers[type] ?? '').trim() || type in suggested) continue;
+        suggested[type] = binding.identifier;
+    }
+    return suggested;
+}
+
+// =============================================================================
 // The line of «Riconosci» in the enrichers' window (ENR-1)
 // =============================================================================
 

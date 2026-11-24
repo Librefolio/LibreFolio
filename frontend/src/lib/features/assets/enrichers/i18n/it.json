@@ -63,10 +63,30 @@
         "none": "Nessun arricchitore conosce l'asset con i suoi identificativi: puoi aggiungerne uno qui sotto.",
         "refused": "Troppe richieste alle fonti: attendo, la ricerca riparte da sola tra poco.",
         "error": "Non è stato possibile cercare gli arricchitori: aggiungili a mano.",
-        "no_identifiers": "L'asset non ha identificativi da riconoscere: aggiungi gli arricchitori da «Non in elenco» qui sotto."
+        "no_identifiers": "L'asset non ha identificativi da riconoscere: aggiungi gli arricchitori dal cerca qui sopra."
       },
       "conflictWith": "Identificativo diverso: la fonte indica {named}",
-      "price": "Prezzi"
+      "price": "Prezzi",
+      "search": {
+        "title": "Cerca online",
+        "suggestions": "Suggerimenti:",
+        "placeholder": "Nome, ISIN o ticker…",
+        "pills": "Arricchitori:",
+        "identifierOnly": "solo {types}",
+        "excluded": "In elenco, non si cercano: {names}. Uno sbagliato? Toglilo con 🗑 e torna cercabile.",
+        "none": "{name}: nessun risultato per «{q}»",
+        "identifierHint": "{name}: scrivi un identificativo ({types}), o aggiungi un risultato che lo porta",
+        "refusedOne": "{name}: troppe richieste, riprova tra poco",
+        "failedOne": "{name}: la fonte non ha risposto",
+        "refused": "Troppe ricerche: aspetta un momento e riscrivi.",
+        "failed": "La ricerca non è riuscita: riprova.",
+        "withIsinTyped": "con l'ISIN scritto",
+        "withIsinOf": "con l'ISIN di {name}",
+        "conflict": "ISIN diverso da {whose}: {isin}",
+        "whoseAsset": "quello dell'asset",
+        "confirmAdd": "Aggiungi comunque",
+        "added": "{name} aggiunto all'elenco (#{n})"
+      }
     }
   }
 }

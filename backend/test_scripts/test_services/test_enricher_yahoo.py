@@ -1208,6 +1208,26 @@ def test_search_maps_quotes_to_ticker_bindings(plugin, yahoo, pace):
     assert yahoo.constructed == [], "search never builds a Ticker"
 
 
+@pytest.mark.parametrize(
+    ("fields", "market"),
+    [
+        ({"exchDisp": "Milan", "exchange": "MIL"}, "Milan"),
+        ({"exchange": "MIL"}, "MIL"),
+        ({"exchDisp": "  Milan  "}, "Milan"),
+        ({"exchDisp": "", "exchange": "NMS"}, "NMS"),
+        ({"exchDisp": "   ", "exchange": "  "}, None),
+        ({}, None),
+    ],
+    ids=["display-name-wins", "exchange-code-fallback", "stripped", "blank-display-falls-back", "blank-both", "none-said"],
+)
+def test_search_result_market_is_the_exchange_display_name_else_its_code(plugin, yahoo, pace, fields, market):
+    """ENR-3: two listings of one fund are told apart by the market Yahoo names; absent when it names none."""
+    _offer_search(yahoo, [_quote("SWDA.MI", "ETF", shortname="LAB WORLD", **fields)])
+    (result,) = plugin.search("lab market")
+    assert result.binding.identifier == "SWDA.MI", "barrier: the quote was kept"
+    assert result.market == market
+
+
 def test_search_with_no_quotes_is_empty(plugin, yahoo, pace):
     _offer_search(yahoo, [])
     assert plugin.search("lab nothing") == []

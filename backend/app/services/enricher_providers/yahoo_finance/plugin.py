@@ -272,7 +272,8 @@ class YahooFinanceEnricher(EnricherPlugin):
                 continue
             binding = EnricherBinding(identifier_type=_TICKER, identifier=symbol)
             name = _text(quote.get("longname")) or _text(quote.get("shortname")) or symbol
-            results.append(EnricherSearchResult(name=name, binding=binding, asset_type=asset_type, page_url=self.page_url(binding)))
+            market = _text(quote.get("exchDisp")) or _text(quote.get("exchange"))
+            results.append(EnricherSearchResult(name=name, binding=binding, asset_type=asset_type, page_url=self.page_url(binding), market=market))
         return results
 
     def _fund_sectors(self, ticker: Any, symbol: str) -> dict[str, str] | None:

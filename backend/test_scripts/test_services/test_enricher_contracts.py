@@ -29,7 +29,8 @@ Under test: ``backend/app/services/enrichers/base.py`` (the contract, its docstr
    registry loaded the class from): ``recognize`` finds any identifier but those starting with ``UNKNOWN_PREFIX``, names
    it ``Mock <identifier>``, and an ISIN brings the LEI ``lei_of(isin)``; ``read`` yields one item per binding, in order,
    ``OK`` with ``READ_VALUES`` plus a description and ``SOURCE_DATE``, ``NOT_FOUND``, ``ERROR``, and ``ERROR`` with
-   ``RATE_LIMITED`` and ``RATE_LIMITED_RETRY_AFTER``; ``page_url`` is an address; it does not search; it is ``test_only``,
+   ``RATE_LIMITED`` and ``RATE_LIMITED_RETRY_AFTER``; ``page_url`` is an address; it searches (ENR-3: a text starting with ``UNKNOWN_PREFIX`` finds nothing, any other one result
+   ``Mock <text>`` bound by ISIN when the text has an ISIN's form, else by TICKER, upper case, ``market`` "MOCK"); it is ``test_only``,
    so outside test mode the registry neither lists it nor finds it.
 
 Red reason before the registry's checks are written: ``EnricherRegistry._validate_plugin_class`` raises
@@ -65,6 +66,7 @@ from backend.app.services.enrichers.base import (
     EnricherReadItem,
     EnricherReadStatus,
     EnricherRecognition,
+    EnricherSearchResult,
     EnricherTerms,
 )
 from backend.app.services.enrichers.registry import EnricherDeclarationError, EnricherRegistry
@@ -440,16 +442,44 @@ def test_enricher_rate_limited_is_the_cores_refusal_marker():
     assert EnricherRateLimited("refused").retry_after is None, "the source named no wait"
 
 
-def test_mockenrich_has_a_page_and_does_not_search(monkeypatch):
+def test_mockenrich_has_a_page(monkeypatch):
     mock, _module = _mock(monkeypatch)
     binding = EnricherBinding("ISIN", "IE00B4L5Y983")
 
     url = mock.page_url(binding)
 
     assert isinstance(url, str) and url.startswith("https://") and binding.identifier in url
-    assert mock.supports_search is False
-    with pytest.raises(NotImplementedError):
-        mock.search("World")
+
+
+def test_mockenrich_searches_one_result_bound_by_ticker_or_isin(monkeypatch):
+    """ENR-3: the mock's search, as its module docstring states it; the binding's type is one the plugin accepts."""
+    mock, _module = _mock(monkeypatch)
+    assert mock.supports_search is True
+
+    ticker = mock.search("  World ")
+    isin = mock.search("ie00b4l5y983")
+
+    for results in (ticker, isin):
+        assert len(results) == 1 and all(isinstance(result, EnricherSearchResult) for result in results)
+        assert results[0].market == "MOCK"
+        assert results[0].binding.identifier_type in mock.accepted_identifier_types
+        assert results[0].page_url == mock.page_url(results[0].binding)
+    assert (ticker[0].name, ticker[0].binding) == ("Mock World", EnricherBinding("TICKER", "WORLD"))
+    assert (isin[0].name, isin[0].binding) == ("Mock ie00b4l5y983", EnricherBinding("ISIN", "IE00B4L5Y983"))
+
+
+@pytest.mark.parametrize("text", ["UNKNOWN", "unknown thing", "  Unknown-1", "UNKNOWNFUND", "", "   "], ids=["bare", "lower", "padded", "glued", "empty", "blank"])
+def test_mockenrich_search_finds_nothing_for_unknown_or_blank(monkeypatch, text):
+    mock, _module = _mock(monkeypatch)
+    assert mock.search(text) == []
+
+
+def test_mockenrich_search_isin_form_has_no_check_digit(monkeypatch):
+    """The form only (the tests' ISINs are made up): a made-up ISIN is bound by ISIN, a short or odd text by ticker."""
+    mock, _module = _mock(monkeypatch)
+    assert mock.search("XS0LABSEARC1")[0].binding.identifier_type == "ISIN"
+    for text in ("XS0LABSEARC", "XS0LABSEARC12", "1S0LABSEARC1", "XS0 LABSEARC1"):
+        assert mock.search(text)[0].binding.identifier_type == "TICKER", text
 
 
 def test_mockenrich_is_withheld_outside_test_mode(monkeypatch):

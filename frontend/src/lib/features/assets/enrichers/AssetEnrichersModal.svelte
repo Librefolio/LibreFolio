@@ -15,6 +15,10 @@
   on top of the window) and its proposal. A window opened «to adopt» (`adopt`: an asset with no enrichers, or a new one
   whose list the user has not applied yet) takes the proposal into its draft while the user has not touched the list
   (ENR-1, R2); after a touch, what is found later waits in «Non in elenco».
+
+  «Cerca online» sits on top, under the asset's box (ENR-3, `EnricherOnlineSearch`): a result's «+» puts its binding at
+  the end of the list, the row closed. At «Usa questi arricchitori» the identifiers those results carry are handed back
+  for the asset's empty columns (R7, `suggestedIdentifiers`): the asset window shows them as suggested rows.
 -->
 <script lang="ts">
     import {_ as t} from '$lib/i18n';
@@ -27,11 +31,15 @@
     import {fetchPluginEntry, type PluginSettingsEntry} from '$lib/features/plugin-settings/pluginSettingsApi';
     import {assetTypeBadgeClass} from '$lib/utils/assetTypes';
     import type {ProfileVoice} from '$lib/features/assets/profile/profileStore';
+    import {IDENTIFIER_TYPES} from '$lib/utils/assetTypes';
     import EnricherChosenRow from './EnricherChosenRow.svelte';
+    import EnricherOnlineSearch from './EnricherOnlineSearch.svelte';
+    import type {EnricherSearchEvent, EnricherSearchOutcome, EnricherSearchRequest} from './enricherSearchStream';
     import EnricherTile from './EnricherTile.svelte';
     import {searchEnricher, testEnricher, type SearchCall, type TestCall} from './enricherCalls';
     import {
         addEnricher,
+        addFromSearch,
         adoptProposal,
         chosenRows,
         draftFrom,
@@ -41,6 +49,7 @@
         reorder,
         resultConfig,
         setBinding,
+        suggestedIdentifiers,
         topicsOf,
         type ChosenRow,
         type EnricherBinding,
@@ -51,6 +60,7 @@
         type EnrichersDraft,
         type OtherRow,
         type RecognitionLine,
+        type SearchHit,
     } from './enrichersEditState';
 
     interface Props {
@@ -79,10 +89,13 @@
         /** The tickers a found one may enter by: the price assignment's symbol (ENR-2, R6). */
         trustedTickers?: string[];
         zIndex?: number;
-        onapply: (config: Record<string, EnricherBinding>) => void;
+        /** The list chosen, and the identifiers the search's results carry for the asset's empty columns (R7). */
+        onapply: (config: Record<string, EnricherBinding>, extras?: {identifiers: Record<string, string>}) => void;
         oncancel?: () => void;
         search?: SearchCall;
         test?: TestCall;
+        /** «Cerca online»'s call (a test passes its own). */
+        searchOnline?: (request: EnricherSearchRequest, options: {onEvent: (event: EnricherSearchEvent) => void; signal?: AbortSignal}) => Promise<EnricherSearchOutcome>;
         /** The settings of an enricher as the caller may see them; null when it may not (no «Configura», as for the price
          *  providers, N3). */
         loadSettings?: (code: string) => Promise<PluginSettingsEntry | null>;
@@ -107,6 +120,7 @@
         oncancel,
         search = searchEnricher,
         test = testEnricher,
+        searchOnline = undefined,
         loadSettings = (code) => fetchPluginEntry('enricher', code),
     }: Props = $props();
 
@@ -148,6 +162,7 @@
                 draft = draftFrom(config);
                 touched = false;
                 adopting = adopt;
+                fromSearch = new Set();
                 expanded = null;
             }
             wasOpen = isOpen;
@@ -162,6 +177,14 @@
             if (adopting && !touched) draft = adoptProposal(draft, next);
         });
     });
+
+    /** The codes added from «Cerca online»: their identifiers are proposed for the asset's empty columns (R7). */
+    let fromSearch = $state<Set<string>>(new Set());
+
+    function addSearchHit(code: string, hit: SearchHit): void {
+        change(addFromSearch(draft, code, hit.binding));
+        fromSearch = new Set(fromSearch).add(code);
+    }
 
     /** A change of the user's: from now on the list is theirs. */
     function change(next: EnrichersDraft): void {
@@ -199,7 +222,7 @@
 
     function apply(): void {
         if (!valid) return;
-        onapply(resultConfig(draft));
+        onapply(resultConfig(draft), {identifiers: suggestedIdentifiers(draft, fromSearch, asset.identifiers, IDENTIFIER_TYPES)});
         open = false;
     }
 
@@ -250,6 +273,8 @@
                     </div>
                 {/if}
             </div>
+
+            <EnricherOnlineSearch catalogue={liveCatalogue} assetType={asset.assetType} {draft} assetIdentifiers={asset.identifiers} assetName={asset.name} onadd={addSearchHit} {...searchOnline ? {search: searchOnline} : {}} />
 
             {#if line}
                 <div data-testid="enrichers-recognition" data-state={line.state} data-answered={line.answered} data-asked={line.asked}>

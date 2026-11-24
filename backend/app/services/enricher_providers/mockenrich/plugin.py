@@ -6,11 +6,15 @@ What it answers, so the tests of the core can drive it:
   ``Mock <identifier>``, and an ISIN also brings the LEI ``lei_of(isin)``;
 - ``read``: an identifier equal to ``NOT_FOUND_IDENTIFIER`` is not found, ``ERROR_IDENTIFIER`` fails,
   ``RATE_LIMITED_IDENTIFIER`` is refused for too many requests (``retry_after`` ``RATE_LIMITED_RETRY_AFTER``); any
-  other gives ``READ_VALUES`` plus its own description, with ``SOURCE_DATE``.
+  other gives ``READ_VALUES`` plus its own description, with ``SOURCE_DATE``;
+- ``search`` (ENR-3): a text starting with ``UNKNOWN_PREFIX`` finds nothing; any other finds one result, ``Mock
+  <text>``, bound by ISIN when the text has an ISIN's form (``ISIN_FORM``, no check digit: the tests' ISINs are made
+  up), else by TICKER, upper case; no parameters (the mock declares none).
 """
 
 from __future__ import annotations
 
+import re
 from collections.abc import Iterable, Iterator
 from datetime import date
 
@@ -22,12 +26,15 @@ from backend.app.services.enrichers.base import (
     EnricherReadItem,
     EnricherReadStatus,
     EnricherRecognition,
+    EnricherSearchResult,
     EnricherTerms,
 )
 from backend.app.services.enrichers.registry import EnricherRegistry
 from backend.app.services.platform.provider_registry import register_provider
 
 UNKNOWN_PREFIX = "UNKNOWN"
+#: The form of an ISIN, without the check digit: the tests make theirs up.
+ISIN_FORM = re.compile(r"[A-Z]{2}[A-Z0-9]{9}[0-9]")
 NOT_FOUND_IDENTIFIER = "MOCK_NOT_FOUND"
 ERROR_IDENTIFIER = "MOCK_ERROR"
 RATE_LIMITED_IDENTIFIER = "MOCK_RATE_LIMITED"
@@ -91,6 +98,14 @@ class MockEnricher(EnricherPlugin):
             else:
                 values = {**READ_VALUES, "description": f"Mock description of {binding.identifier}"}
                 yield EnricherReadItem(index=index, status=EnricherReadStatus.OK, values=values, source_date=SOURCE_DATE)
+
+    def search(self, query: str) -> list[EnricherSearchResult]:
+        text = query.strip()
+        if not text or text.upper().startswith(UNKNOWN_PREFIX):
+            return []
+        upper = text.upper()
+        binding = EnricherBinding(identifier_type="ISIN" if ISIN_FORM.fullmatch(upper) else "TICKER", identifier=upper)
+        return [EnricherSearchResult(name=f"Mock {text}", binding=binding, page_url=self.page_url(binding), market="MOCK")]
 
     def page_url(self, binding: EnricherBinding) -> str | None:
         return f"https://mockenrich.invalid/{binding.identifier}"

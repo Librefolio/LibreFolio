@@ -52,11 +52,11 @@ export type RecognizeEvent = EnricherResultEvent | IdentifierLearnedEvent | Reco
 export type RecognizeOutcome = {kind: 'done'; done: RecognizeDoneEvent | null} | {kind: 'refused'; retryAfter: number | null} | {kind: 'aborted'};
 
 /** A parser of a Server-Sent Events stream: bytes in, whole JSON events out. */
-export function createSseParser(): {push: (chunk: Uint8Array) => RecognizeEvent[]; end: () => RecognizeEvent[]} {
+export function createSseParser<T = RecognizeEvent>(): {push: (chunk: Uint8Array) => T[]; end: () => T[]} {
     const decoder = new TextDecoder();
     let buffer = '';
-    function events(): RecognizeEvent[] {
-        const out: RecognizeEvent[] = [];
+    function events(): T[] {
+        const out: T[] = [];
         let cut = buffer.indexOf('\n\n');
         while (cut >= 0) {
             const block = buffer.slice(0, cut);
@@ -68,7 +68,7 @@ export function createSseParser(): {push: (chunk: Uint8Array) => RecognizeEvent[
                 .join('\n');
             if (data) {
                 try {
-                    out.push(JSON.parse(data) as RecognizeEvent);
+                    out.push(JSON.parse(data) as T);
                 } catch {
                     // Not an event: skipped
                 }
@@ -90,11 +90,11 @@ export function createSseParser(): {push: (chunk: Uint8Array) => RecognizeEvent[
     };
 }
 
-function isAbort(error: unknown, signal: AbortSignal | undefined): boolean {
+export function isAbort(error: unknown, signal: AbortSignal | undefined): boolean {
     return signal?.aborted === true || (error instanceof DOMException && error.name === 'AbortError');
 }
 
-async function retryAfterOf(response: Response): Promise<number | null> {
+export async function retryAfterOf(response: Response): Promise<number | null> {
     try {
         const detail = ((await response.json()) as {detail?: {retry_after?: unknown}})?.detail;
         if (typeof detail?.retry_after === 'number') return detail.retry_after;

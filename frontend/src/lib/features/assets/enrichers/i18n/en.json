@@ -63,10 +63,30 @@
         "none": "No enricher knows the asset with its identifiers: you can add one below.",
         "refused": "Too many requests to the sources: waiting, the search starts again by itself in a moment.",
         "error": "The enrichers could not be searched: add them by hand.",
-        "no_identifiers": "The asset has no identifiers to recognise: add the enrichers from «Not in the list» below."
+        "no_identifiers": "The asset has no identifiers to recognise: add the enrichers from the search above."
       },
       "conflictWith": "Different identifier: the source names {named}",
-      "price": "Prices"
+      "price": "Prices",
+      "search": {
+        "title": "Search online",
+        "suggestions": "Suggestions:",
+        "placeholder": "Name, ISIN or ticker…",
+        "pills": "Enrichers:",
+        "identifierOnly": "{types} only",
+        "excluded": "In your list, not searched: {names}. A wrong one? Remove it with 🗑 and it can be searched again.",
+        "none": "{name}: no results for «{q}»",
+        "identifierHint": "{name}: type an identifier ({types}), or add a result that carries one",
+        "refusedOne": "{name}: too many requests, try again in a moment",
+        "failedOne": "{name}: the source did not answer",
+        "refused": "Too many searches: wait a moment and type again.",
+        "failed": "The search did not work: try again.",
+        "withIsinTyped": "with the ISIN typed",
+        "withIsinOf": "with the ISIN of {name}",
+        "conflict": "ISIN different from {whose}: {isin}",
+        "whoseAsset": "the asset",
+        "confirmAdd": "Add anyway",
+        "added": "{name} added to the list (#{n})"
+      }
     }
   }
 }

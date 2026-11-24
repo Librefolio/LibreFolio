@@ -1992,10 +1992,14 @@
         price={priceSeed ? {name: getAssetProviderName(priceSeed.code), identifier: priceSeed.identifier} : null}
         trustedTickers={recognition.trustedTickers}
         zIndex={zIndex + 30}
-        onapply={(config) => {
+        onapply={(config, extras) => {
             enrichersConfig = config;
             enrichersChosen = true;
             enrichersModalOpen = false;
+            // R7: what the search found goes to the asset's empty columns only, as suggested rows saved with the asset
+            for (const [type, value] of Object.entries(extras?.identifiers ?? {})) {
+                if (!identifierValue(identifierRows, type).trim()) identifierRows = withIdentifier(identifierRows, type, value);
+            }
         }}
         oncancel={() => (enrichersModalOpen = false)}
     />

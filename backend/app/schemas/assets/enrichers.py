@@ -14,10 +14,11 @@ import re
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from backend.app.db.models import AssetType
 from backend.app.schemas.common import StrictModel
+from backend.app.utils.json_utils import ensure_json_safe
 
 #: An enricher code: the key of a binding in ``config``.
 ENRICHER_CODE = re.compile(r"[a-z][a-z0-9_]{0,63}")
@@ -84,6 +85,12 @@ class FAEnricherSeed(StrictModel):
     identifier: str = Field(..., min_length=1, max_length=256, description="How the source names the asset")
     params: Dict[str, Any] = Field(default_factory=dict, description="The source's parameters (Borsa Italiana's mic, platform, codice_fondo…); an enricher keeps only the ones it declares")
 
+    @field_validator("params", mode="before")
+    @classmethod
+    def params_json_safe(cls, v: Any) -> Any:
+        """Free-form JSON (H-32): no number that is not finite, anywhere inside; the error names the path, never the value."""
+        return ensure_json_safe(v, "params")
+
 
 class FAEnricherRecognizeRequest(StrictModel):
     """``POST /assets/enrichers/recognize``: «recognize» in cascade from the identifiers known (plan B4), also before
@@ -124,6 +131,7 @@ class FAEnricherSearchResult(StrictModel):
     binding: FAEnricherBinding
     asset_type: Optional[AssetType] = None
     page_url: Optional[str] = None
+    market: Optional[str] = Field(None, description="The market the result is listed on, as the source names it (ENR-3); absent when the source does not say")
 
 
 class FAEnricherTestRequest(StrictModel):

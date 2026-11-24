@@ -63,10 +63,30 @@
         "none": "Aucun enrichisseur ne connaît l'actif avec ses identifiants : vous pouvez en ajouter un ci-dessous.",
         "refused": "Trop de requêtes vers les sources : en attente, la recherche repart d’elle-même dans un instant.",
         "error": "Impossible de rechercher les enrichisseurs : ajoutez-les à la main.",
-        "no_identifiers": "L'actif n'a pas d'identifiants à reconnaître : ajoutez les enrichisseurs depuis « Pas dans la liste » ci-dessous."
+        "no_identifiers": "L'actif n'a pas d'identifiants à reconnaître : ajoutez les enrichisseurs depuis la recherche ci-dessus."
       },
       "conflictWith": "Identifiant différent : la source indique {named}",
-      "price": "Prix"
+      "price": "Prix",
+      "search": {
+        "title": "Rechercher en ligne",
+        "suggestions": "Suggestions :",
+        "placeholder": "Nom, ISIN ou ticker…",
+        "pills": "Enrichisseurs :",
+        "identifierOnly": "{types} seulement",
+        "excluded": "Dans votre liste, non recherchés : {names}. Un mauvais ? Retirez-le avec 🗑 et il redevient recherchable.",
+        "none": "{name} : aucun résultat pour « {q} »",
+        "identifierHint": "{name} : saisissez un identifiant ({types}), ou ajoutez un résultat qui en porte un",
+        "refusedOne": "{name} : trop de requêtes, réessayez dans un instant",
+        "failedOne": "{name} : la source n’a pas répondu",
+        "refused": "Trop de recherches : attendez un instant et saisissez de nouveau.",
+        "failed": "La recherche a échoué : réessayez.",
+        "withIsinTyped": "avec l’ISIN saisi",
+        "withIsinOf": "avec l’ISIN de {name}",
+        "conflict": "ISIN différent de {whose} : {isin}",
+        "whoseAsset": "celui de l’actif",
+        "confirmAdd": "Ajouter quand même",
+        "added": "{name} ajouté à la liste (#{n})"
+      }
     }
   }
 }

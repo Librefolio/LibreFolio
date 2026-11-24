@@ -191,6 +191,30 @@ describe('at creation, «Riconosci» by itself', () => {
         expect(button()).toHaveAttribute('data-count', '1');
     });
 
+    it('an ISIN the search suggested asks «Riconosci» once, and what it finds stays out of the list the user applied (ENR-3, R7)', async () => {
+        render(AssetModal, {open: true, editMode: false, prefillData: {...PREFILL, identifier_isin: null}, initialNoProvider: true, oncreated: vi.fn()});
+        await fireEvent.click(button());
+        await waitFor(() => expect(windowStandIn.mounts.length).toBeGreaterThan(0));
+        expect(calls).toHaveLength(0);
+        const apply = lastWindow().onapply as unknown as (config: Record<string, unknown>, extras: {identifiers: Record<string, string>}) => void;
+        apply({justetf: JUSTETF}, {identifiers: {ISIN}});
+        await waitFor(() => expect(button()).toHaveAttribute('data-count', '1'));
+
+        // The suggested ISIN is a whole ISIN in the form: one question
+        await waitFor(() => expect(calls).toHaveLength(1));
+        expect(calls[0].request.identifiers).toEqual({ISIN});
+        await answer(calls[0], [found('justetf', JUSTETF), found('esma', ESMA), done(['justetf', 'esma'])]);
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        expect(button(), 'the list was applied: what is found later waits in «Non in elenco»').toHaveAttribute('data-count', '1');
+
+        // The same ISIN again asks nothing
+        await fireEvent.click(button());
+        await waitFor(() => expect(windowStandIn.mounts.length).toBeGreaterThan(1));
+        (lastWindow().onapply as unknown as typeof apply)({justetf: JUSTETF}, {identifiers: {ISIN}});
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        expect(calls).toHaveLength(1);
+    });
+
     it('drops the answers in flight when the window closes', async () => {
         const view = render(AssetModal, {open: true, editMode: false, prefillData: PREFILL, initialNoProvider: true, oncreated: vi.fn()});
         await waitFor(() => expect(calls).toHaveLength(1));
@@ -332,6 +356,47 @@ describe('in edit mode', () => {
         await waitFor(() => expect(patchFn()).toHaveBeenCalled());
         const sent = (patchFn().mock.calls[0][0] as Array<Record<string, unknown>>)[0];
         expect(Object.keys(sent.enrichers as object)).toEqual(['yahoo_finance', 'justetf']);
+    });
+
+    describe('the identifiers the search found (ENR-3, R7)', () => {
+        const FOUND = 'IE00B4L5Y983';
+        const open = async (editData: Record<string, unknown>) => {
+            patchFn().mockResolvedValue({results: [{success: true, asset_id: 7}], success_count: 1} as never);
+            render(AssetModal, {open: true, editMode: true, editData: editData as never, onupdated: vi.fn()});
+            await waitFor(() => expect(button()).toHaveAttribute('data-count', '1'));
+            await fireEvent.click(button());
+            await waitFor(() => expect(windowStandIn.mounts.length).toBeGreaterThan(0));
+        };
+        const apply = (extras: {identifiers: Record<string, string>}) => (lastWindow().onapply as unknown as (config: Record<string, unknown>, extras: unknown) => void)({justetf: JUSTETF, yahoo_finance: YAHOO}, extras);
+        const save = async () => {
+            await fireEvent.click(screen.getByTestId('asset-modal-save'));
+            await waitFor(() => expect(patchFn()).toHaveBeenCalled());
+            return (patchFn().mock.calls[0][0] as Array<Record<string, unknown>>)[0];
+        };
+
+        it('an ISIN found fills the empty column, saved with the asset', async () => {
+            await open({...EDIT, identifier_isin: null});
+            apply({identifiers: {ISIN: FOUND}});
+            await waitFor(() => expect(button()).toHaveAttribute('data-count', '2'));
+            const sent = await save();
+            expect(sent.identifier_isin).toBe(FOUND);
+        });
+
+        it('never overwrites an ISIN the asset has', async () => {
+            await open(EDIT);
+            apply({identifiers: {ISIN: FOUND}});
+            await waitFor(() => expect(button()).toHaveAttribute('data-count', '2'));
+            const sent = await save();
+            expect(sent.identifier_isin).toBe(ISIN);
+        });
+
+        it('a window that found nothing leaves the identifiers as they are', async () => {
+            await open({...EDIT, identifier_isin: null});
+            apply({identifiers: {}});
+            await waitFor(() => expect(button()).toHaveAttribute('data-count', '2'));
+            const sent = await save();
+            expect(sent.identifier_isin).toBeNull();
+        });
     });
 
     it('opens with the enrichers window on top when asked (the tab\u2019s «Configura», E6c), and only then', async () => {

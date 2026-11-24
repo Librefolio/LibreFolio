@@ -63,10 +63,30 @@
         "none": "Ningún enriquecedor conoce el activo con sus identificadores: puedes añadir uno aquí abajo.",
         "refused": "Demasiadas solicitudes a las fuentes: esperando, la búsqueda se reanuda sola en un momento.",
         "error": "No se pudieron buscar los enriquecedores: añádelos a mano.",
-        "no_identifiers": "El activo no tiene identificadores que reconocer: añade los enriquecedores desde «Fuera de la lista» aquí abajo."
+        "no_identifiers": "El activo no tiene identificadores que reconocer: añade los enriquecedores desde la búsqueda de arriba."
       },
       "conflictWith": "Identificador distinto: la fuente indica {named}",
-      "price": "Precios"
+      "price": "Precios",
+      "search": {
+        "title": "Buscar en línea",
+        "suggestions": "Sugerencias:",
+        "placeholder": "Nombre, ISIN o ticker…",
+        "pills": "Enriquecedores:",
+        "identifierOnly": "solo {types}",
+        "excluded": "En tu lista, no se buscan: {names}. ¿Uno equivocado? Quítalo con 🗑 y vuelve a poder buscarse.",
+        "none": "{name}: ningún resultado para «{q}»",
+        "identifierHint": "{name}: escribe un identificador ({types}), o añade un resultado que lo lleve",
+        "refusedOne": "{name}: demasiadas solicitudes, reinténtalo en un momento",
+        "failedOne": "{name}: la fuente no respondió",
+        "refused": "Demasiadas búsquedas: espera un momento y vuelve a escribir.",
+        "failed": "La búsqueda no funcionó: reinténtalo.",
+        "withIsinTyped": "con el ISIN escrito",
+        "withIsinOf": "con el ISIN de {name}",
+        "conflict": "ISIN distinto de {whose}: {isin}",
+        "whoseAsset": "el del activo",
+        "confirmAdd": "Añadir igualmente",
+        "added": "{name} añadido a la lista (#{n})"
+      }
     }
   }
 }

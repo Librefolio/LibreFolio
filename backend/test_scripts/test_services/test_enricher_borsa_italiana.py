@@ -82,7 +82,8 @@ What it promises, pinned here with no network:
 
 5. **search**: ``cerca(query, lingua="it", sessione=…)``, the session closed exactly once, also when ``cerca``
    raises (correction C2b-1; recognize's session is the library's own, unpinned); one result per hit, bound by ISIN with the hit's ``mic``,
-   ``BOND`` for a bond, ``STOCK`` for a share, ``None`` otherwise, with the plugin's page of that binding.
+   ``BOND`` for a bond, ``STOCK`` for a share, ``None`` otherwise, with the plugin's page of that binding and the hit's MIC as its
+   ``market`` (ENR-3: two listings of one fund told apart).
 
 6. **page_url**: ``https://www.borsaitaliana.it/borsa/search/scheda.html?code=<ISIN>&lang=<language>``, then
    ``&mic=…`` and ``&platform=…`` when the binding has them (the price plugin's form). A fund binding (C2b):
@@ -1773,8 +1774,21 @@ def test_search(plugin, library):
     expected = []
     for hit, asset_type in SEARCH_HITS:
         binding = EnricherBinding("ISIN", hit.isin, params={"mic": hit.mic})
-        expected.append(EnricherSearchResult(name=hit.nome, binding=binding, asset_type=asset_type, page_url=plugin.page_url(binding)))
+        expected.append(EnricherSearchResult(name=hit.nome, binding=binding, asset_type=asset_type, page_url=plugin.page_url(binding), market=hit.mic))
     assert results == expected, f"one result per hit, in order:\n got      {results}\n expected {expected}"
+
+
+def test_search_market_is_the_mic_of_the_hit(plugin, library):
+    library.answers["lab market"] = [hit for hit, _ in SEARCH_HITS]
+    results = plugin.search("lab market")
+    assert [(result.binding.identifier, result.market) for result in results] == [(hit.isin, hit.mic) for hit, _ in SEARCH_HITS]
+    assert [result.market for result in results] == ["MOTX", "MTAA", "ETFP", "ETFP"]
+
+
+def test_search_market_is_absent_when_the_hit_names_no_mic(plugin, library):
+    library.answers["lab nomic"] = [_hit("IT0003128367", "  ", "Enel", "Azione", "Euronext Milan")]
+    (result,) = plugin.search("lab nomic")
+    assert result.market is None
 
 
 def test_search_with_no_hit(plugin, library):

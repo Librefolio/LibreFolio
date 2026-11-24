@@ -6,7 +6,7 @@ with ``retry_after``, in seconds, or None). The route (``search_enricher``) turn
 60 when the source named none (``source_refused``). Any other failure of the plugin is not a 429: it goes out of the
 route as it is (the app's handlers answer it).
 
-Called directly, never through the shared backend: the lane serves only ``mockenrich``, which does not search, and a test
+Called directly, never through the shared backend: the lane serves only ``mockenrich``, whose search is a mock rule, and a test
 cannot put a plugin in that process's registry. The route is called as a coroutine with the enricher lookup replaced by a
 stub plugin (``monkeypatch``) and the per-user probe limit off, so the shared limiter is never consumed. No assertion
 reads the message text.
