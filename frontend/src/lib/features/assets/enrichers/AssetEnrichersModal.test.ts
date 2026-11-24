@@ -410,3 +410,34 @@ describe('AssetEnrichersModal — «Non in elenco» after «Riconosci» (ENR-1)'
         expect(screen.queryByTestId('enricher-not-found-with-esma')).toBeNull();
     });
 });
+
+describe('AssetEnrichersModal — the price assignment chip (ENR-2)', () => {
+    it('renders the provider name and the identifier when given', () => {
+        mount({price: {name: 'Yahoo Finance', identifier: 'SWDA.MI'}});
+        const chip = screen.getByTestId('enrichers-asset-price');
+        expect(chip.textContent).toContain('Yahoo Finance');
+        expect(chip.textContent).toContain('SWDA.MI');
+    });
+
+    it('renders it even for an asset with no identifiers', () => {
+        mount({price: {name: 'Yahoo Finance', identifier: 'SWDA.MI'}, asset: {name: 'X', assetType: 'ETF', identifiers: {}}});
+        expect(screen.getByTestId('enrichers-asset-price')).toBeInTheDocument();
+    });
+
+    it('absent when there is none', () => {
+        mount();
+        expect(screen.queryByTestId('enrichers-asset-price')).toBeNull();
+        cleanup();
+        mount({price: null});
+        expect(screen.queryByTestId('enrichers-asset-price')).toBeNull();
+    });
+
+    it('a ticker found by the price symbol is not «ticker only» in «Non in elenco»; another is', () => {
+        const swda = (identifier: string) => ({code: 'yahoo', status: 'found', identifier_type: 'TICKER', identifier, name: 'iShares', page_url: null, identifiers: {}, conflicts: {}, error: null});
+        mount({recognitions: {yahoo: swda('SWDA.MI')}, trustedTickers: ['SWDA.MI'], config: {}});
+        expect(screen.getByTestId('enricher-other-yahoo').dataset.tickerOnly).toBeUndefined();
+        cleanup();
+        mount({recognitions: {yahoo: swda('SWDA')}, trustedTickers: ['SWDA.MI'], config: {}});
+        expect(screen.getByTestId('enricher-other-yahoo').dataset.tickerOnly).toBe('true');
+    });
+});

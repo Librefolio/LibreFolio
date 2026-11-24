@@ -434,3 +434,37 @@ describe('a conflict stays on the row (ENR-1)', () => {
         expect(rows.map((row) => row.conflictWith)).toEqual([null, null]);
     });
 });
+
+describe("the price assignment's symbol is trusted (ENR-2, R6)", () => {
+    const swda = (extra: Partial<EnricherRecognition> = {}) => ({...recognition('yahoo', 'found', 'iShares', {identifier_type: 'TICKER', identifier: 'SWDA.MI'}), ...extra}) as EnricherRecognition;
+
+    it('entersAlone: a ticker found enters only when its identifier is trusted', () => {
+        expect(state.entersAlone(swda(), ['SWDA.MI'])).toBe(true);
+        expect(state.entersAlone(swda(), ['SWDA'])).toBe(false);
+        expect(state.entersAlone(swda(), [])).toBe(false);
+        expect(state.entersAlone(swda())).toBe(false);
+        expect(state.entersAlone({...swda(), status: 'not_found'}, ['SWDA.MI'])).toBe(false);
+        expect(state.entersAlone({...swda(), status: 'conflict'}, ['SWDA.MI'])).toBe(false);
+        expect(state.entersAlone(recognition('a', 'found'), ['SWDA.MI']), 'an ISIN still enters').toBe(true);
+    });
+
+    it('recognitionBinding keeps the params, and the type and identifier win', () => {
+        expect(state.recognitionBinding(swda({params: {mic: 'XMIL'}}))).toEqual({mic: 'XMIL', identifier_type: 'TICKER', identifier: 'SWDA.MI'});
+        expect(state.recognitionBinding(swda({params: {identifier: 'X', identifier_type: 'Y'}}))).toEqual({identifier_type: 'TICKER', identifier: 'SWDA.MI'});
+        expect(state.recognitionBinding(swda())).toEqual({identifier_type: 'TICKER', identifier: 'SWDA.MI'});
+    });
+
+    it('addEnricher from a found recognition with params keeps them', () => {
+        const draft = state.addEnricher(state.draftFrom({}), 'yahoo', swda({params: {mic: 'XMIL'}}), {accepted: ['TICKER'], identifiers: {}});
+        expect(state.resultConfig(draft).yahoo).toEqual({mic: 'XMIL', identifier_type: 'TICKER', identifier: 'SWDA.MI'});
+    });
+
+    it('otherRows: tickerOnly is false for a trusted ticker, true for another', () => {
+        const recognitions = {yahoo: swda()};
+        const row = (trustedTickers?: string[]) => state.otherRows(state.draftFrom({}), context({recognitions, trustedTickers})).find((item) => item.code === 'yahoo');
+        expect(row(['SWDA.MI'])?.tickerOnly).toBe(false);
+        expect(row(['SWDA'])?.tickerOnly).toBe(true);
+        expect(row()?.tickerOnly).toBe(true);
+        expect(row(['SWDA.MI'])?.canAdd).toBe(true);
+    });
+});
