@@ -18,6 +18,9 @@
     import {formatPercent as sharedFormatPercent} from '$lib/utils/core/formatPercent';
     import {filterStates, findBroker, formatLotQuantityCell, formatLotQuantityMasked, primaryState, ratioOrNull, sameIdSet, secondaryStates, sumCompleteOrNull, sumNumeric, weightedAverageCompleteOrNull} from './unifiedLotsTableHelpers';
     import {isUnknownOrNonZero} from './lotChartShared';
+    import {compareRowsByColumn, formatCellDate} from '$lib/components/table/dataTableLogic';
+    import type {SortState} from '$lib/components/table/types';
+    import {arrangeRows, groupRewardLots, groupSelection, lotRowsOf, lotsAfterTableSelection, tableRowIdsFor} from './rewardLotGroups';
     import {SIGN_TEXT} from '$lib/theme/toneClasses';
 
     type LotSummarySchema = z.infer<typeof schemas.LotSummarySchema>;
@@ -68,6 +71,9 @@
         netTotalReturn: number | null;
         netMetricsStatus: 'AVAILABLE' | 'UNAVAILABLE';
         relativeReturn: number | null;
+        /** STK-2c: the group row of a broker's reward lots (its own id, its lots' sums), or a lot shown under one. */
+        groupHead?: {size: number; firstDate: string; lastDate: string};
+        groupChildOf?: string;
     }
 
     const PRIMARY_STATE_ORDER: PrimaryLotState[] = ['OPEN', 'PARTIALLY_CLOSED', 'CLOSED', 'DEGRADED'];
@@ -82,6 +88,13 @@
     let appliedSelectionRowIds = $state<string[]>([]);
 
     export function navigateToRowId(rowId: string): void {
+        // A lot inside a closed reward group has no row until the group opens (STK-2c)
+        const group = [...rewardGroups.entries()].find(([, members]) => members.some((row) => row.rowId === rowId))?.[0];
+        if (group && !expandedGroups.has(group)) {
+            expandedGroups = new Set([...expandedGroups, group]);
+            void tick().then(() => tableRef?.navigateToRowId(rowId));
+            return;
+        }
         tableRef?.navigateToRowId(rowId);
     }
 
@@ -130,8 +143,24 @@
         return `--broker-bg:${color.bg};--broker-text:${color.text};--broker-dark-bg:${color.darkBg};--broker-dark-text:${color.darkText};--broker-vivid:${color.vivid};--broker-vivid-light:${color.vividLight};`;
     }
 
-    function getRowClass(_row: DisplayRow): string {
-        return 'lot-row-tinted';
+    function getRowClass(row: DisplayRow): string {
+        if (row.groupHead) return 'reward-group-row';
+        return row.groupChildOf ? 'lot-row-tinted reward-group-child' : 'lot-row-tinted';
+    }
+
+    /** The first cell of a group row (STK-2c): the open/close chevron, the rewards dot, «N rewards» and the dates. */
+    function groupHeadCell(row: DisplayRow): HtmlCell {
+        const head = row.groupHead!;
+        const open = expandedGroups.has(row.rowId);
+        const title = translateOr((key) => $_(key, {values: {n: head.size}}), 'brokers.lots.rewardGroup.title', `${head.size} rewards`);
+        const toggle = label(open ? 'brokers.lots.rewardGroup.close' : 'brokers.lots.rewardGroup.open', open ? 'Hide the reward lots' : 'Show the reward lots');
+        const day = (value: string): string => formatCellDate(value, 'date', {today: $_('date.today') || 'Today', yesterday: $_('date.yesterday') || 'Yesterday'});
+        const dates = head.firstDate === head.lastDate ? day(head.firstDate) : `${day(head.firstDate)} → ${day(head.lastDate)}`;
+        return {
+            type: 'html',
+            html: `<span class="inline-flex items-start gap-1.5" data-testid="reward-group-head" data-group-id="${escapeHtml(row.rowId)}" data-state="${open ? 'open' : 'closed'}" aria-expanded="${open}" title="${escapeHtml(toggle)}"><span class="w-3 text-lf-secondary" aria-hidden="true">${open ? '▾' : '▸'}</span><span class="reward-group-dot mt-1.5 inline-block size-2 shrink-0 rounded-full" aria-hidden="true"></span><span class="flex flex-col"><span class="font-semibold text-lf-primary">${escapeHtml(title)}</span><span class="text-xs text-lf-muted tabular-nums">${escapeHtml(dates)}</span></span></span>`,
+            onClick: () => toggleGroup(row.rowId),
+        };
     }
 
     const getBroker = (brokerId: number | null | undefined): BrokerLike | null => findBroker(brokerId, brokers);
@@ -347,7 +376,82 @@
         }),
     );
 
-    let visibleRows = $derived(rows);
+    // STK-2c: the reward lots of one broker as one row, open or closed (rewardLotGroups.ts). Without groups the table
+    // is exactly what it was: the rows as given, sorted by the table itself.
+    let rewardGroups = $derived(groupRewardLots(rows, (row) => row.lot.opening_kind === 'REWARD'));
+    let expandedGroups = $state<Set<string>>(new Set());
+    let sortState = $state<SortState | null>(null);
+
+    function toggleGroup(groupId: string): void {
+        const next = new Set(expandedGroups);
+        if (next.has(groupId)) next.delete(groupId);
+        else next.add(groupId);
+        expandedGroups = next;
+    }
+
+    /** A group's row: its lots' column sums and the return of those sums (D-MF6(b), as the totals row); no unit price. */
+    function groupHeadRow(groupId: string, members: readonly DisplayRow[]): DisplayRow {
+        const first = members[0];
+        const states = Array.from(new Set(members.flatMap((row) => row.filterStates)));
+        const primaries = new Set(members.map((row) => row.primaryState));
+        const totalPnl = sumCompleteOrNull(members, (row) => row.totalPnl);
+        const openingValue = sumCompleteOrNull(members, (row) => row.openingValue);
+        const netTotalPnl = sumCompleteOrNull(members, (row) => row.netTotalPnl);
+        return {
+            ...first,
+            rowId: groupId,
+            lotId: -1,
+            openingDate: first.openingDate,
+            primaryState: primaries.size === 1 ? first.primaryState : 'PARTIALLY_CLOSED',
+            secondaryStates: secondaryStates(states),
+            filterStates: states,
+            brokerFilterValues: Array.from(new Set(members.flatMap((row) => row.brokerFilterValues))),
+            custodySlices: [],
+            custodySearchText: '',
+            openingUnitPrice: null,
+            quantityOpen: sumNumeric(members, (row) => row.quantityOpen),
+            quantityOriginal: sumNumeric(members, (row) => row.quantityOriginal),
+            openingValue,
+            currentValue: sumCompleteOrNull(members, (row) => row.currentValue),
+            assetIncome: sumCompleteOrNull(members, (row) => row.assetIncome),
+            totalPnl,
+            totalReturn: ratioOrNull(totalPnl, openingValue),
+            annualizedReturn: null,
+            allocatedFees: sumCompleteOrNull(members, (row) => row.allocatedFees),
+            allocatedTaxes: sumCompleteOrNull(members, (row) => row.allocatedTaxes),
+            netTotalPnl,
+            netTotalReturn: ratioOrNull(netTotalPnl, openingValue),
+            netMetricsStatus: members.some((row) => row.netMetricsStatus === 'UNAVAILABLE') ? 'UNAVAILABLE' : 'AVAILABLE',
+            relativeReturn: null,
+            groupHead: {size: members.length, firstDate: first.openingDate, lastDate: members[members.length - 1].openingDate},
+        };
+    }
+
+    /** The top-level rows in the lots' own order: each group's head where its first lot was, its other lots left out. */
+    function topLevelRows(): DisplayRow[] {
+        const heads = new Map(groupHeads.map((head) => [head.rowId, head]));
+        const groupOf = new Map([...rewardGroups.entries()].flatMap(([groupId, members]) => members.map((row) => [row.lotId, groupId] as const)));
+        const placed = new Set<string>();
+        const top: DisplayRow[] = [];
+        for (const row of rows) {
+            const groupId = groupOf.get(row.lotId);
+            if (groupId == null) top.push(row);
+            else if (!placed.has(groupId)) {
+                placed.add(groupId);
+                top.push(heads.get(groupId)!);
+            }
+        }
+        return top;
+    }
+
+    let groupHeads = $derived([...rewardGroups.entries()].map(([groupId, members]) => groupHeadRow(groupId, members)));
+    let childRows = $derived(new Map([...rewardGroups.entries()].map(([groupId, members]) => [groupId, members.map((row) => ({...row, groupChildOf: groupId}))])));
+    let sortComparator = $derived.by<((a: DisplayRow, b: DisplayRow) => number) | undefined>(() => {
+        const state = sortState;
+        const column = state ? baseColumns.find((candidate) => candidate.id === state.columnId) : undefined;
+        return state && column ? (a, b) => compareRowsByColumn(column, a, b, state.direction) : undefined;
+    });
+    let visibleRows = $derived(rewardGroups.size === 0 ? rows : arrangeRows(topLevelRows(), childRows, expandedGroups, sortComparator));
 
     let statusEnumOptions = $derived.by<EnumOption[]>(() =>
         STATUS_FILTER_VALUES.map((state) => ({
@@ -376,25 +480,26 @@
             label: () => label('brokers.lots.viewLotDetail', 'View lot detail'),
             onClick: (row) => onCustodyCellClick?.(row.lot),
             // A page that cannot open it does not offer it (77 SEL-M, Q-SEL-12)
-            visible: () => onCustodyCellClick != null,
+            visible: (row) => onCustodyCellClick != null && !row.groupHead,
         },
         {
             id: 'lot-view-gantt-action',
             icon: BarChart3,
             label: () => label('brokers.lots.viewGanttLot', 'Go to lot in Gantt'),
             onClick: (row) => onViewGanttLot?.(row.lotId),
-            visible: () => onViewGanttLot != null,
+            visible: (row) => onViewGanttLot != null && !row.groupHead,
         },
         {
             id: 'lot-goto-opening-transaction-action',
             icon: ExternalLink,
             label: () => label('brokers.lots.goToOpeningTransaction', 'Go to opening transaction'),
             onClick: (row) => onGotoOpeningTransaction?.(row.lot),
-            visible: () => onGotoOpeningTransaction != null,
+            visible: (row) => onGotoOpeningTransaction != null && !row.groupHead,
         },
         {
             id: 'lot-copy-id-action',
             icon: Copy,
+            visible: (row) => !row.groupHead,
             label: () => label('brokers.lots.copyLotIdentifier', 'Copy lot identifier'),
             onClick: async (row) => {
                 try {
@@ -450,11 +555,11 @@
         };
     }
 
-    let columns = $derived.by<ColumnDef<DisplayRow>[]>(() => [
+    let baseColumns = $derived.by<ColumnDef<DisplayRow>[]>(() => [
         {
             id: 'opening-date',
             header: () => label('brokers.lots.openingDate', 'Opening Date'),
-            cell: (row) => ({type: 'date', value: row.openingDate, format: 'date'}),
+            cell: (row) => (row.groupHead ? groupHeadCell(row) : {type: 'date', value: row.openingDate, format: 'date'}),
             type: 'date',
             width: 140,
             minWidth: 130,
@@ -681,12 +786,17 @@
         },
     ]);
 
+    // With groups the rows reach the table already in order: its own sort keeps them (stable), the header still shows it.
+    let columns = $derived(rewardGroups.size === 0 ? baseColumns : baseColumns.map((column) => (column.sortable === false ? column : {...column, sortFn: () => 0})));
+
     let effectiveSelectedLotIds = $derived(selectedLotIds ?? internalSelectedLotIds);
-    let effectiveSelectedRowIds = $derived(effectiveSelectedLotIds.map((lotId) => String(lotId)));
+    // STK-2c: the selection is the set of lot ids; the table's rows show it (a group row when all its lots are selected)
+    let effectiveSelectedRowIds = $derived(tableRowIdsFor(effectiveSelectedLotIds, visibleRows, rewardGroups));
     let emptyMessage = $derived(label('brokers.lots.noUnifiedLots', 'No lots match current filters'));
 
     function handleTableSelectionChange(selectedIds: string[]): void {
-        const lotIds = selectedIds.map((id) => Number.parseInt(id, 10)).filter((id) => Number.isFinite(id));
+        // A group row checked or unchecked takes all its lots; the lots no row shows (a closed group's) keep their state
+        const lotIds = lotsAfterTableSelection(effectiveSelectedLotIds, appliedSelectionRowIds, selectedIds, rewardGroups);
         appliedSelectionRowIds = [...selectedIds];
         if (!syncingSelection && selectedLotIds === undefined) {
             internalSelectedLotIds = lotIds;
@@ -771,10 +881,15 @@
             tableLayout="fixed"
             defaultPageSize={25}
             {emptyMessage}
-            footerCells={buildFooterCells}
+            footerCells={(footerRows: DisplayRow[]) => buildFooterCells(lotRowsOf(footerRows, rewardGroups))}
+            getRowSelectionState={(row: DisplayRow) => (row.groupHead && groupSelection(rewardGroups.get(row.rowId) ?? [], new Set(effectiveSelectedLotIds)) === 'partial' ? 'partial' : null)}
+            opensPage={(row: DisplayRow) => !row.groupChildOf}
+            onSortChange={(state) => (sortState = state)}
             onSelectionChange={handleTableSelectionChange}
-            onRowClick={(row) => tableRef?.toggleRowSelectionById(row.rowId)}
-            onRowDoubleClick={(row) => onRowDoubleClick?.(row.lotId)}
+            onRowClick={(row) => (row.groupHead ? toggleGroup(row.rowId) : tableRef?.toggleRowSelectionById(row.rowId))}
+            onRowDoubleClick={(row) => {
+                if (!row.groupHead) onRowDoubleClick?.(row.lotId);
+            }}
         />
     </div>
 </section>
@@ -807,6 +922,23 @@
         /* On the selection tint the muted text falls under 4.5:1 (design system, rule 5; TC-15). */
         .unified-lots-table-wrap tr.lot-row-tinted.highlighted > td .text-lf-muted {
             color: var(--lf-text-secondary);
+        }
+        /* STK-2c: the reward lots group — the rewards colour of the charts (--lf-cat-index), as in the approved mockup */
+        .unified-lots-table-wrap tr.reward-group-row > td {
+            background: var(--lf-cat-index-soft);
+            cursor: pointer;
+        }
+        .unified-lots-table-wrap tr.reward-group-row > td:first-child {
+            box-shadow: inset 3px 0 0 var(--lf-cat-index);
+        }
+        .unified-lots-table-wrap tr.reward-group-child > td:first-child {
+            box-shadow: inset 3px 0 0 color-mix(in srgb, var(--lf-cat-index) 45%, transparent);
+        }
+        .unified-lots-table-wrap tr.reward-group-child > td:nth-child(2) {
+            padding-left: 2rem;
+        }
+        .unified-lots-table-wrap .reward-group-dot {
+            background: var(--lf-cat-index);
         }
         .unified-lots-table-wrap tr.lot-row-tinted:hover > td {
             background: color-mix(in srgb, var(--broker-vivid-light, transparent) 68%, var(--lf-surface-card));
