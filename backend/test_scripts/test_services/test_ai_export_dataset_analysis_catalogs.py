@@ -310,7 +310,7 @@ class TestIntegratedComponentCatalog:
         "component_id",
         ["portfolio.drawdown_summary", "portfolio.asset_drawdown_snapshot", "broker.drawdown_summary", "asset.drawdown_summary"],
     )
-    def test_drawdown_components_are_version_2_on_both_sides_of_the_catalog(
+    def test_drawdown_components_versions_on_both_sides_of_the_catalog(
         self,
         component_registry: ComponentRegistry,
         component_id: str,
@@ -320,7 +320,9 @@ class TestIntegratedComponentCatalog:
         placeholder, which the replacement validation requires to be equal. The payload shape does not change:
         schema_version stays 1. Pins the numbers, so a bump on one side only cannot stay green.
 
-        Before MF-D2: version 1 on the three sides."""
+        Before MF-D2: version 1 on the three sides. 78 L10: `portfolio.drawdown_summary` measures the export's brokers
+        instead of every accessible one, a builder change: version 3, the one bump of release 1.4 (1.3.0 shipped 2)."""
+        expected_version = 3 if component_id == "portfolio.drawdown_summary" else 2
         placeholder = next(spec for spec in ALL_FOUNDATION_COMPONENTS if spec.component_id == component_id)
         real = next(spec for spec in ALL_REAL_COMPONENTS if spec.component_id == component_id)
         registered = component_registry.get(component_id)
@@ -336,9 +338,9 @@ class TestIntegratedComponentCatalog:
             "registered version": registered.version,
             "schema_version": real.schema_version,
         } == {
-            "placeholder version": 2,
-            "real version": 2,
-            "registered version": 2,
+            "placeholder version": expected_version,
+            "real version": expected_version,
+            "registered version": expected_version,
             "schema_version": 1,
         }
 

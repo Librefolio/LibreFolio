@@ -19,11 +19,13 @@ export interface AiExportEntityDirectory {
     readonly brokers: readonly z.output<typeof schemas.AiExportBrokerDirectoryEntry>[];
     readonly fx_pairs: readonly z.output<typeof schemas.AiExportFxPairDirectoryEntry>[];
 }
-export type AiExportSnapshotResponse = Omit<GeneratedAiExportSnapshotResponse, 'analysis_contract' | 'technical_sampling' | 'event_selection' | 'entity_directory' | 'meta'> & {
+export type AiExportSnapshotResponse = Omit<GeneratedAiExportSnapshotResponse, 'analysis_contract' | 'technical_sampling' | 'event_selection' | 'entity_directory' | 'export_scope' | 'meta'> & {
     analysis_contract?: z.output<typeof schemas.AiExportAnalysisContract> | null;
     technical_sampling?: AiExportTechnicalSamplingManifest | null;
     event_selection?: z.output<typeof schemas.AiExportEventSelectionManifest> | null;
     entity_directory: AiExportEntityDirectory;
+    /** 78 L10: which of the user's brokers a Portfolio export covers, only when it leaves an owned one out. */
+    export_scope?: z.output<typeof schemas.AiExportExportScope> | null;
     meta: Omit<GeneratedAiExportSnapshotMeta, 'history_coverage'> & {
         history_coverage?: z.output<typeof schemas.AiExportHistoryCoverage> | null;
     };
@@ -269,6 +271,8 @@ export function normalizeAiExportSnapshotResponse(response: GeneratedAiExportSna
     if (Array.isArray(eventSelection)) throw new TypeError('AI Export event_selection must not be an array');
     const historyCoverage = response.meta.history_coverage;
     if (Array.isArray(historyCoverage)) throw new TypeError('AI Export meta.history_coverage must not be an array');
+    const exportScope = response.export_scope;
+    if (Array.isArray(exportScope)) throw new TypeError('AI Export export_scope must not be an array');
     const normalizedTechnicalSampling: AiExportTechnicalSamplingManifest | null | undefined = technicalSampling
         ? {
               ...technicalSampling,
@@ -282,6 +286,7 @@ export function normalizeAiExportSnapshotResponse(response: GeneratedAiExportSna
         analysis_contract: analysisContract,
         technical_sampling: normalizedTechnicalSampling,
         event_selection: eventSelection,
+        export_scope: exportScope,
         meta: {
             ...response.meta,
             history_coverage: historyCoverage,

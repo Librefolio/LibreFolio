@@ -1720,6 +1720,8 @@ describe('AI Export compact Snapshot Data renderer', () => {
 
         it.each([
             ['portfolio.drawdown_summary', 2],
+            // 78 L10: the export's brokers instead of every accessible one; the payload's shape is unchanged
+            ['portfolio.drawdown_summary', 3],
             ['broker.drawdown_summary', 2],
             ['asset.drawdown_summary', 2],
             ['portfolio.asset_drawdown_snapshot', 2],
@@ -1736,7 +1738,7 @@ describe('AI Export compact Snapshot Data renderer', () => {
         });
 
         it.each([
-            ['portfolio.drawdown_summary v3', 'portfolio.drawdown_summary', 3, 1],
+            ['portfolio.drawdown_summary v4', 'portfolio.drawdown_summary', 4, 1],
             ['broker.drawdown_summary v3', 'broker.drawdown_summary', 3, 1],
             ['asset.drawdown_summary v3', 'asset.drawdown_summary', 3, 1],
             ['portfolio.asset_drawdown_snapshot v3', 'portfolio.asset_drawdown_snapshot', 3, 1],

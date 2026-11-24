@@ -116,6 +116,20 @@ A scoped Broker may have no current position. A period contributor may be
 historical-only. The Entity Directory includes every scoped Broker, including
 all-accessible requests that did not send an explicit Broker filter.
 
+**The Export Scope fact (78 L10).** A Portfolio snapshot carries `export_scope`
+only when its brokers leave out at least one broker the user owns: role owner,
+share above zero, the Dashboard's own rule (`getOwnedBrokers`), so the list the
+Dashboard sends without a filter never produces it. It holds
+`included_broker_ids` (named in the Entity Directory) and `excluded_brokers`,
+exactly the owned brokers left out, with their names (developer decision D12
+(b): a broker is filtered out to give the AI filtered data, not to hide it). A
+broker only shared with the user, or owned at a zero share, is never listed as
+excluded. The excluded brokers are not in the Entity Directory, whose BROKERS
+table stays the legend of what the data covers. An API request may include a
+broker only shared with the user. The renderer opens every prompt of such a snapshot,
+analysis or Export Data, with a fixed «Export Scope» sentence and the data
+serialized safely under it; without the fact the prompt is unchanged.
+
 ## 🔐 Authentication and Failures
 
 `GET /api/v1/ai-export/catalog` is static and user-data-free.

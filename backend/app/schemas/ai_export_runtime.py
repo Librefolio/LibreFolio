@@ -491,12 +491,40 @@ class AiExportEventSelectionManifest(AiExportModel):
     ] = ("entity_id", "annotation_key")
 
 
+class AiExportExportScope(AiExportModel):
+    """Which of the user's brokers a Portfolio export covers, when it leaves some out (78 L10).
+
+    Present only when the export's brokers leave out at least one broker the user owns (role owner, share above
+    zero: the brokers the Dashboard sends without a filter), so an unfiltered export carries none and its prompt is
+    unchanged. `included_broker_ids` are the export's brokers, named in `entity_directory`. `excluded_brokers` are
+    the owned brokers left out, by name (developer, D12 (b): a broker is filtered out to give the AI filtered data,
+    not to hide it). They are not in `entity_directory`, which names only what the data covers. The excluded brokers
+    are exactly the owned ones outside the export: a broker only shared with the user, or owned at a zero share, never
+    appears. The included ones need not be owned (an API request may include a broker shared with the user).
+    """
+
+    included_broker_ids: tuple[PositiveInt, ...] = Field(..., min_length=1)
+    excluded_brokers: tuple[AiExportBrokerDirectoryEntry, ...] = Field(..., min_length=1)
+
+    @model_validator(mode="after")
+    def validate_export_scope(self) -> Self:
+        if list(self.included_broker_ids) != sorted(set(self.included_broker_ids)):
+            raise ValueError("included_broker_ids must be unique and sorted")
+        excluded_ids = [broker.broker_id for broker in self.excluded_brokers]
+        if excluded_ids != sorted(set(excluded_ids)):
+            raise ValueError("excluded_brokers must be unique and sorted by broker_id")
+        if set(excluded_ids) & set(self.included_broker_ids):
+            raise ValueError("a broker cannot be both included and excluded")
+        return self
+
+
 class AiExportSnapshotResponse(AiExportModel):
     domain: AiExportDomain
     selection: AiExportSelection
     detail_level: AiExportDetailLevel
     target: AiExportTargetReference
     entity_directory: AiExportEntityDirectory = Field(default_factory=AiExportEntityDirectory)
+    export_scope: AiExportExportScope | None = None
     meta: AiExportSnapshotMeta
     dataset_manifest: tuple[AiExportDatasetManifestEntry, ...] = Field(..., min_length=1)
     analysis_contract: AiExportAnalysisContract | None = None
@@ -529,6 +557,17 @@ class AiExportSnapshotResponse(AiExportModel):
         }[self.domain]
         if self.target.kind != expected_target_kind:
             raise ValueError("target kind must match response domain")
+        return self
+
+    @model_validator(mode="after")
+    def validate_export_scope_fact(self) -> Self:
+        if self.export_scope is None:
+            return self
+        if self.domain != AiExportDomain.PORTFOLIO:
+            raise ValueError("export_scope belongs to a portfolio export only")
+        named = {broker.broker_id for broker in self.entity_directory.brokers}
+        if not set(self.export_scope.included_broker_ids) <= named:
+            raise ValueError("export_scope.included_broker_ids must be named in entity_directory")
         return self
 
 
@@ -621,6 +660,7 @@ __all__ = [
     "AiExportDomain",
     "AiExportEntityNotFoundProblem",
     "AiExportEventSelectionManifest",
+    "AiExportExportScope",
     "AiExportFxPairTargetReference",
     "AiExportFxSnapshotRequest",
     "AiExportHistoryCoverage",

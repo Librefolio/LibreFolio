@@ -120,7 +120,7 @@ _PORTFOLIO_COMPONENTS: tuple[ComponentSpec, ...] = (
     _component(Domain.PORTFOLIO, "event_digest", "Aggregate recent technical event digest", period_behavior=PeriodBehavior.WINDOWED),
     _component(Domain.PORTFOLIO, "fifo_summary", "FIFO summary", version=3, period_behavior=PeriodBehavior.WINDOWED),
     _component(Domain.PORTFOLIO, "fifo_lots", "FIFO open/partial/closed lots", version=3, dependencies=("portfolio.fifo_summary",), period_behavior=PeriodBehavior.WINDOWED),
-    _component(Domain.PORTFOLIO, "drawdown_summary", "Portfolio drawdown context", version=2, period_behavior=PeriodBehavior.WINDOWED),
+    _component(Domain.PORTFOLIO, "drawdown_summary", "Portfolio drawdown context", version=3, period_behavior=PeriodBehavior.WINDOWED),
     _component(Domain.PORTFOLIO, "income_timeline", "Realized income timeline evidence", version=3, period_behavior=PeriodBehavior.WINDOWED),
     # 78 L8a: the risk evidence of today's holdings over their own 12-month window (`risk_evidence.py`)
     _component(Domain.PORTFOLIO, "risk_concentration", "Risk concentration of today's holdings", period_behavior=PeriodBehavior.AS_OF),
