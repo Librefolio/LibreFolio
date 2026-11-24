@@ -373,6 +373,16 @@ def external_brim_scalable(verbose: bool = False, test_names: list = None) -> bo
     return run_command(cmd, "BRIM Scalable Capital tests", verbose=verbose)
 
 
+def external_brim_xtb(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the XTB plugin: the History report workbook, the only format it reads since 2.0.0 (lane 83)."""
+    print_section("External: BRIM XTB Tests")
+    print_info("Testing: broker_xtb — the History report workbook (.xlsx)")
+    print_info("Tests: samples, account currency, sub-account transfers, partial fills, rows left out, positions outside the period")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_external/test_brim_xtb.py", test_names or None)
+    return run_command(cmd, "BRIM XTB tests", verbose=verbose)
+
+
 def external_brim_row_skips(verbose: bool = False, test_names: list = None) -> bool:
     """Test the rows BRIM plugins leave out: known quietly, unknown loudly (W-B86)."""
     print_section("External: BRIM Row Skips Tests")
@@ -606,6 +616,17 @@ These tests verify external API integrations:
         desc="Test the Scalable Capital plugins (broker and overnight account)",
         prereq="Sample files in test fixtures",
         tests="Recognition, refusals with a code, PRIME and exporter samples, legs, notices, synthetic edge cases, linked charges",
+    )
+    add_test(
+        cat,
+        "brim-xtb",
+        external_brim_xtb,
+        name="BRIM XTB",
+        desc="Test the XTB plugin: the History report workbook (.xlsx only)",
+        prereq="Sample files in test fixtures",
+        tests="Samples, account currency from Open Positions, sub-account transfer pairs, partial fills, RowSkips, positions outside the period, the old CSV refused",
+        # PURE: the samples and workbooks/CSVs written in tmp_path; no server, no database.
+        isolation="pure",
     )
     add_test(
         cat,
