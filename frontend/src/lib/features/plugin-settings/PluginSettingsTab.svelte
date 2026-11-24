@@ -47,6 +47,8 @@
     const matching = $derived(entries.filter((entry) => entryMatches(entry, words, $_, $currentLanguage)));
     const navEntries = $derived(pluginMenu(entries, selected, matching).map((item) => ({id: item.id, icon: MENU_ICONS[item.id], label: $_(MENU_TITLE_KEYS[item.id]), count: item.count, dot: item.dot})));
     const shown = $derived(filterByMenu(matching, selected));
+    /** The shared groups the search finds: «All» does not list them (81 U37), so a search that finds only them offers «Shared». */
+    const sharedMatching = $derived(matching.filter((entry) => entry.family === 'group').length);
 
     /** The addresses this page wrote and has not seen land yet: when one lands it is the page's own echo, not a new
      * address, and reading it would take back what was typed since (a fast typist, navigations landing late). */
@@ -204,6 +206,11 @@
                         {#if selected !== 'all' && matching.length > 0}
                             <button class="mt-3 text-sm text-lf-link hover:underline" data-testid="plugin-settings-search-all" onclick={() => choose('all')} type="button">
                                 {$_('pluginSettings.search.searchAll', {values: {count: matching.length}})}
+                            </button>
+                        {/if}
+                        {#if selected === 'all' && sharedMatching > 0}
+                            <button class="mt-3 text-sm text-lf-link hover:underline" data-testid="plugin-settings-search-shared" onclick={() => choose('group')} type="button">
+                                {$_('pluginSettings.search.inShared', {values: {count: sharedMatching}})}
                             </button>
                         {/if}
                     </div>
