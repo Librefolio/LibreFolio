@@ -1521,6 +1521,7 @@ hooks:
   - hooks/jsonld.py
   - hooks/fr_typography.py
   - hooks/search_language_split.py
+  - hooks/developer_english_only.py
   - hooks/minify_html.py
 
 extra_css:

@@ -276,6 +276,15 @@ def utils_docs_minify_html(verbose: bool = False, test_names: list = None) -> bo
     return run_command(cmd, "Docs minify HTML tests", verbose=verbose)
 
 
+def utils_docs_developer_english_only(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the hook that builds the developer manual once, in English (lane 84-E)."""
+    print_section("Utils: Docs developer English only")
+    print_info("Testing: mkdocs_src/hooks/developer_english_only.py, and a copy of a few real pages (when the site is built)")
+    print_info("Tests: copies become redirects, links go to the English pages, sitemap and hreflang stop naming them, a translated page stays, idempotent")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_docs_developer_english_only.py", test_names)
+    return run_command(cmd, "Docs developer English only tests", verbose=verbose)
+
+
 def utils_docs_mermaid_colours(verbose: bool = False, test_names: list = None) -> bool:
     """Test that a Mermaid node with its own fill also sets its text colour (E9C)."""
     print_section("Utils: Docs Mermaid Colours")
@@ -806,6 +815,15 @@ Tests for utility modules and helper functions:
         name="Docs minify HTML",
         desc="mkdocs_src/hooks/minify_html.py: after the build every page loses Material's indentation and blank lines (387 → 242 MB of HTML) and keeps the same DOM; whitespace stays inside pre, code, kbd, textarea, script, style and inside a tag; idempotent; skipped for serve and for the nested per-language build; a sample of the built site (when there is one) is the same DOM",
         # Strings and files in tmp_path, the built site read only: no DB, no server, no network, no repo writes.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "docs-developer-english-only",
+        utils_docs_developer_english_only,
+        name="Docs developer English only",
+        desc="mkdocs_src/hooks/developer_english_only.py: after the build the copies of the English-only developer manual under it/fr/es become redirect pages to the English page (113 MB of HTML saved), the links of the other pages lead straight to the English pages, sitemap.xml(.gz) and the hreflang alternates stop naming the copies; a page with a <name>.<lang>.md source stays; idempotent; skipped for serve and the nested per-language build",
+        # Trees in tmp_path and a copy of a few real pages (read only): no DB, no server, no network, no repo writes.
         isolation="pure",
     )
     add_test(
