@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import time
 from datetime import date, timedelta
+from decimal import Decimal
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -77,12 +78,13 @@ def _tomorrows(before: date, after: date) -> set[date]:
 
 
 def _mock_session() -> AsyncMock:
-    """A session whose user can reach no broker: a portfolio scope over every accessible broker is then empty."""
+    """A session whose user owns one broker (id 1, share 1): a portfolio request without brokers reads it (78 L10b)."""
     session = AsyncMock(spec=AsyncSession)
 
     async def _execute(statement):  # noqa: ARG001
         result = MagicMock()
-        result.scalars.return_value.all.return_value = []
+        result.scalars.return_value.all.return_value = [1]
+        result.all.return_value = [(1, Decimal("1"))]
         return result
 
     session.execute.side_effect = _execute

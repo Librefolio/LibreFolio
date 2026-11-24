@@ -4,8 +4,9 @@ WHAT. ``AiExportSnapshotResponse.export_scope`` is present only when a Portfolio
 the user owns, and then says which brokers it includes and which owned brokers stay out, by name (developer, D12 (b)).
 Without it the prompt renders exactly as before L10.
 
-WHY. The Dashboard sends its owned brokers when nothing is filtered, and the backend widens a request without brokers to
-every accessible one (``prepare_request``). «The user's brokers» must therefore be the OWNED ones, by the Dashboard's own
+WHY. The Dashboard sends its owned brokers when nothing is filtered, and since 78 L10b the backend reads a request
+without brokers as the owned ones too (``prepare_request``; until then every accessible one). «The user's brokers» must
+therefore be the OWNED ones, by the Dashboard's own
 rule (``getOwnedBrokers``: role owner, share above zero): with «accessible», a user with a broker shared by someone
 else would see the block with no filter at all, naming someone else's broker.
 
@@ -15,7 +16,8 @@ the real ``AiExportSnapshotService`` with one stub component that names no broke
 scope's brokers only.
 
 - ES-01: the Dashboard's unfiltered list (B1, B2) → no fact.
-- ES-02: a request with no brokers (the API widens it to the accessible ones, B1–B5) → no fact.
+- ES-02: a request with no brokers (78 L10b: the owned ones, B1 and B2) → no fact, and the entity directory names only
+  B1 and B2.
 - ES-03: a filter on B1 → included [B1], B2 left out by name; only B1 in the entity directory.
 - ES-04: an API request including a shared broker (B1, B4) → included [B1, B4], B2 left out: a shared broker can be
   included, never listed as left out.
@@ -176,7 +178,9 @@ async def test_es01_the_dashboards_unfiltered_list_carries_no_fact(book):
 @pytest.mark.asyncio
 async def test_es02_a_request_without_brokers_carries_no_fact(book):
     response = await _snapshot(book, _portfolio_request(book))
-    assert response.export_scope is None, "widened to every accessible broker: no owned broker is left out"
+    assert response.export_scope is None, "the owned brokers: no owned broker is left out"
+    # 78 L10b: the owned brokers, never every accessible one (B3 at share 0, B4 viewer, B5 editor stay out)
+    assert {entry.broker_id for entry in response.entity_directory.brokers} == {book.brokers["B1"], book.brokers["B2"]}
 
 
 @pytest.mark.asyncio

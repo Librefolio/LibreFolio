@@ -28,7 +28,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.app.db.session import get_async_engine
 from backend.app.services.ai_export.components.catalog import build_component_registry
 from backend.app.services.ai_export.components.resources import PORTFOLIO_LOTS_RESULTS_RESOURCE
-from backend.app.services.ai_export.components.types import BuildScope, DetailLevel, Domain
+from backend.app.services.ai_export.components.types import BrokerScopeSource, BuildScope, DetailLevel, Domain
 from backend.app.services.ai_export.dependencies import BuildContext, build_bucket_plan_for_scope
 from backend.test_scripts.test_services._scope_boundary_books import L2_DATE_TO, seed_l2
 
@@ -66,6 +66,10 @@ async def test_t8_portfolio_fifo_summary_shows_the_units_in_transit_on_the_perio
         period_start=date(2025, 1, 1),
         period_end=L2_DATE_TO,
         target_currency="EUR",
+        # 78 L10b: the whole portfolio is U's owned brokers, A and B, named (an empty scope means no broker).
+        broker_scope=(book.broker_a.id, book.broker_b.id),
+        broker_scope_source=BrokerScopeSource.OWNED,
+        owned_broker_ids=(book.broker_a.id, book.broker_b.id),
     )
     context = BuildContext(build_component_registry(), request_id=scope.request_id, scope=scope, bucket_plan=build_bucket_plan_for_scope(scope), session=session)
 

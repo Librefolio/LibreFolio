@@ -58,7 +58,7 @@ from backend.app.db.session import get_async_engine
 from backend.app.services.ai_export.components.asset_resources import ASSET_LOTS_RESOURCE
 from backend.app.services.ai_export.components.catalog import build_component_registry
 from backend.app.services.ai_export.components.resources import BROKER_LOTS_RESULTS_RESOURCE, PORTFOLIO_LOTS_RESULTS_RESOURCE
-from backend.app.services.ai_export.components.types import BuildScope, DetailLevel, Domain
+from backend.app.services.ai_export.components.types import BrokerScopeSource, BuildScope, DetailLevel, Domain
 from backend.app.services.ai_export.dependencies import BuildContext, build_bucket_plan_for_scope
 from backend.test_scripts.test_services._scope_boundary_books import add_prices, asset_row, new_asset, new_broker, new_user
 
@@ -119,9 +119,11 @@ def _scope(book: Book, domain: str, *, asset: Asset | None = None) -> BuildScope
     common = {"request_id": f"j12-{domain}-{uuid4().hex}", "user_id": book.owner.id, "detail_level": DetailLevel.STANDARD, "period_start": PERIOD_START, "period_end": PERIOD_END, "target_currency": "EUR"}
     if domain == "broker":
         return BuildScope(domain=Domain.BROKER, broker_id=book.broker.id, broker_scope=(book.broker.id,), **common)
+    # 78 L10b: no broker list means the owned brokers; the book's owner owns its broker (an empty scope means no broker).
+    owned = {"broker_scope": (book.broker.id,), "broker_scope_source": BrokerScopeSource.OWNED, "owned_broker_ids": (book.broker.id,)}
     if domain == "asset":
-        return BuildScope(domain=Domain.ASSET, asset_id=asset.id, **common)
-    return BuildScope(domain=Domain.PORTFOLIO, **common)
+        return BuildScope(domain=Domain.ASSET, asset_id=asset.id, **owned, **common)
+    return BuildScope(domain=Domain.PORTFOLIO, **owned, **common)
 
 
 def _context(session: AsyncSession, scope: BuildScope) -> BuildContext:

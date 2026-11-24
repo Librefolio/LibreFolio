@@ -69,7 +69,7 @@ from backend.app.db.models import Asset, AssetType, Broker, BrokerUserAccess, Pr
 from backend.app.services.ai_export.components.catalog import build_component_registry
 from backend.app.services.ai_export.components.portfolio_financial import PortfolioAllocationsCashPayload, _build_portfolio_allocations_cash
 from backend.app.services.ai_export.components.risk_evidence import PortfolioRiskConcentrationPayload, RiskEvidenceStatus, _build_risk_concentration
-from backend.app.services.ai_export.components.types import BuildScope, DetailLevel, Domain
+from backend.app.services.ai_export.components.types import BrokerScopeSource, BuildScope, DetailLevel, Domain
 from backend.app.services.ai_export.dependencies import BuildContext, build_bucket_plan_for_scope
 from backend.app.services.assets import price_query
 from backend.app.services.financial_math.portfolio.allocation_view import LIQUIDITY
@@ -181,7 +181,11 @@ class _Build:
 
 
 async def _build(book: _Book, *broker_labels: str) -> _Build:
-    """`portfolio.risk_concentration` and `portfolio.allocations_cash` of one build over ``broker_labels`` (none: all)."""
+    """`portfolio.risk_concentration` and `portfolio.allocations_cash` of one build over ``broker_labels``.
+
+    No label: the whole portfolio, the owned brokers (78 L10b: named, never an empty scope, which means no broker).
+    """
+    owned = tuple(book.broker_ids.values())
     scope = BuildScope(
         request_id=f"l8c-cash-share-{'-'.join(broker_labels) or 'all'}",
         user_id=book.user_id,
@@ -190,7 +194,9 @@ async def _build(book: _Book, *broker_labels: str) -> _Build:
         period_start=PERIOD_START,
         period_end=PERIOD_END,
         target_currency=EUR,
-        broker_scope=tuple(book.broker_ids[label] for label in broker_labels),
+        broker_scope=tuple(book.broker_ids[label] for label in broker_labels) or owned,
+        broker_scope_source=BrokerScopeSource.REQUESTED if broker_labels else BrokerScopeSource.OWNED,
+        owned_broker_ids=owned,
     )
     async with AsyncSession(book.engine, expire_on_commit=False) as session:
         context = BuildContext(build_component_registry(), request_id=scope.request_id, scope=scope, bucket_plan=build_bucket_plan_for_scope(scope), session=session)

@@ -125,7 +125,7 @@ from backend.app.schemas.common import OpenDateRangeModel
 from backend.app.schemas.portfolio.report import PortfolioReportQuery
 from backend.app.services.ai_export.components.catalog import build_component_registry
 from backend.app.services.ai_export.components.portfolio_financial import PORTFOLIO_PERFORMANCE_COMPONENT, PORTFOLIO_POSITIONS_COMPONENT, PORTFOLIO_SUMMARY_COMPONENT
-from backend.app.services.ai_export.components.types import BuildScope, DetailLevel, Domain
+from backend.app.services.ai_export.components.types import BrokerScopeSource, BuildScope, DetailLevel, Domain
 from backend.app.services.ai_export.dependencies import BuildContext, build_bucket_plan_for_scope
 from backend.app.services.financial_math.portfolio.engine import PortfolioCalculationEngine
 from backend.app.services.financial_math.portfolio.models import DailyStates, PortfolioCalculationResult, StateSegment
@@ -894,7 +894,18 @@ def _full_report_query(book: _Book) -> PortfolioReportQuery:
 
 
 def _portfolio_scope(book: _Book) -> BuildScope:
-    return BuildScope(request_id=f"j45b-{uuid4().hex[:8]}", user_id=book.user_id, domain=Domain.PORTFOLIO, detail_level=DetailLevel.STANDARD, period_start=D2, period_end=END, target_currency=EUR, broker_scope=())
+    return BuildScope(
+        request_id=f"j45b-{uuid4().hex[:8]}",
+        user_id=book.user_id,
+        domain=Domain.PORTFOLIO,
+        detail_level=DetailLevel.STANDARD,
+        period_start=D2,
+        period_end=END,
+        target_currency=EUR,
+        broker_scope=tuple(sorted(book.broker_ids.values())),
+        broker_scope_source=BrokerScopeSource.OWNED,
+        owned_broker_ids=tuple(sorted(book.broker_ids.values())),
+    )  # 78 L10b: the owned brokers, named
 
 
 class TestTheSharedResultIsNotMutatedByItsConsumers:

@@ -355,7 +355,10 @@ class TestIntegratedComponentCatalog:
     ):
         """T-U9 + MF-C2 + F-AI (b) (wave 6): the allocation, concentration and effect-row components move to version 2 — on the real spec AND on
         its frozen placeholder, which the replacement validation requires to be equal. The payload shape does not change:
-        schema_version stays 1. `broker.allocation_concentration` carries no slice and stays at version 1."""
+        schema_version stays 1. `broker.allocation_concentration` carries no slice and stays at version 1. 78 L10b: the
+        comparison's portfolio side becomes the owned brokers, whole, and a broker not owned is unavailable: a builder
+        change, so `broker.concentration_comparison` is at version 3, the one bump of release 1.4 (1.3.0 shipped 2)."""
+        expected_version = 3 if component_id == "broker.concentration_comparison" else 2
         placeholder = next(spec for spec in ALL_FOUNDATION_COMPONENTS if spec.component_id == component_id)
         real = next(spec for spec in ALL_REAL_COMPONENTS if spec.component_id == component_id)
         registered = component_registry.get(component_id)
@@ -363,9 +366,9 @@ class TestIntegratedComponentCatalog:
         validate_portfolio_broker_replacements(PORTFOLIO_BROKER_COMPONENTS, placeholders=ALL_FOUNDATION_COMPONENTS)
         assert registered is real
         assert {"placeholder": placeholder.version, "real": real.version, "registered": registered.version, "schema_version": real.schema_version} == {
-            "placeholder": 2,
-            "real": 2,
-            "registered": 2,
+            "placeholder": expected_version,
+            "real": expected_version,
+            "registered": expected_version,
             "schema_version": 1,
         }
         untouched = next(spec for spec in ALL_REAL_COMPONENTS if spec.component_id == "broker.allocation_concentration")

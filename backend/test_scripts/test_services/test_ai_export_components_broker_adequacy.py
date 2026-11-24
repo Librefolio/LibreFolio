@@ -61,6 +61,10 @@ def _money(amount: object, code: str = CURRENCY) -> Currency:
     return Currency(code=code, amount=Decimal(str(amount)))
 
 
+_OWNED_BROKERS: tuple[int, ...] = (7, 8)
+"""78 L10b: the brokers the test user owns; the comparison's portfolio side reads them, whole."""
+
+
 def _scope(**overrides) -> BuildScope:
     defaults = {
         "request_id": "req-1",
@@ -72,6 +76,8 @@ def _scope(**overrides) -> BuildScope:
         "target_currency": CURRENCY,
         "broker_id": 7,
         "broker_scope": (7,),
+        # 78 L10b: the user owns broker 7 and broker 8; the comparison's portfolio side is the owned brokers, whole.
+        "owned_broker_ids": _OWNED_BROKERS,
     }
     defaults.update(overrides)
     return BuildScope(**defaults)
@@ -230,11 +236,11 @@ def _patch_report(monkeypatch, report: PortfolioReportResponse) -> list[int]:
 
 
 def _patch_split_report(monkeypatch, *, broker_report: PortfolioReportResponse, portfolio_report: PortfolioReportResponse) -> dict[str, int]:
-    """Returns the broker-filtered report when query.broker_ids is set, the whole-portfolio one when None."""
+    """Returns the broker's report on its own broker, the portfolio's on the owned brokers (78 L10b: never None)."""
     counts = {"broker": 0, "portfolio": 0}
 
     async def _fake(self, user_id, query):  # noqa: ARG001
-        if query.broker_ids:
+        if query.broker_ids != list(_OWNED_BROKERS):
             counts["broker"] += 1
             return broker_report
         counts["portfolio"] += 1
@@ -460,7 +466,7 @@ class TestConcentrationComparison:
 
         async def _fake(self, user_id, query):  # noqa: ARG001
             queries.append(query)
-            return broker_report if query.broker_ids else portfolio_report
+            return portfolio_report if query.broker_ids == list(_OWNED_BROKERS) else broker_report
 
         monkeypatch.setattr(PortfolioService, "get_report", _fake)
         context = _make_context(scope, _registry(), _make_async_session())
@@ -472,7 +478,7 @@ class TestConcentrationComparison:
         # Whole broker over whole portfolio: 10 000 / 17 000.
         assert Decimal(payload["broker_share_of_portfolio_market_value_percent"]).quantize(Decimal("0.01")) == Decimal("58.82")
         # The probe found the portfolio side undeclared: a reader compared it with the Dashboard's (share-reduced) portfolio.
-        assert payload["amounts_basis"] == "all_brokers_whole"
+        assert payload["amounts_basis"] == "owned_brokers_whole"
 
     @pytest.mark.asyncio
     async def test_whole_portfolio_loaded_once_and_shared_with_other_broker_components(self, monkeypatch):

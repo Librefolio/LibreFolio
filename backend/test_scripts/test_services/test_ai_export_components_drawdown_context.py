@@ -41,7 +41,7 @@ from backend.app.services.ai_export.components.drawdown_context import (
 )
 from backend.app.services.ai_export.components.envelope import SectionEnvelope
 from backend.app.services.ai_export.components.payloads.portfolio_broker import export_risk_scope
-from backend.app.services.ai_export.components.types import BuildScope, DetailLevel, Domain
+from backend.app.services.ai_export.components.types import BrokerScopeSource, BuildScope, DetailLevel, Domain
 from backend.app.services.ai_export.datasets.catalog import build_dataset_registry
 from backend.app.services.ai_export.dependencies import BuildContext, build_bucket_plan_for_scope
 
@@ -161,7 +161,12 @@ def _context(session: AsyncSession, scope: BuildScope) -> BuildContext:
     return BuildContext(build_component_registry(), request_id=scope.request_id, scope=scope, bucket_plan=bucket_plan, session=session)
 
 
-def _portfolio_scope(*, broker_scope: tuple[int, ...] = (), target: str = "EUR") -> BuildScope:
+_OWNED_BROKERS: tuple[int, ...] = (1, 2)
+"""78 L10b: the whole portfolio is the owned brokers, named (an empty scope means no broker)."""
+
+
+def _portfolio_scope(*, broker_scope: tuple[int, ...] | None = None, target: str = "EUR") -> BuildScope:
+    """The whole portfolio (the owned brokers) without `broker_scope`; a filter with it."""
     return BuildScope(
         request_id="req-portfolio-drawdown",
         user_id=42,
@@ -170,7 +175,9 @@ def _portfolio_scope(*, broker_scope: tuple[int, ...] = (), target: str = "EUR")
         period_start=PERIOD_START,
         period_end=PERIOD_END,
         target_currency=target,
-        broker_scope=broker_scope,
+        broker_scope=_OWNED_BROKERS if broker_scope is None else broker_scope,
+        broker_scope_source=BrokerScopeSource.OWNED if broker_scope is None else BrokerScopeSource.REQUESTED,
+        owned_broker_ids=_OWNED_BROKERS,
     )
 
 
@@ -236,7 +243,8 @@ class TestPortfolioDrawdown:
         request = call["request"]
         assert call["user_id"] == 42
         assert request.scope.kind == RiskScopeKind.PORTFOLIO
-        assert request.scope.broker_ids is None
+        # 78 L10b: the whole portfolio passes its brokers, never `None` (every accessible broker).
+        assert request.scope.broker_ids == list(_OWNED_BROKERS)
         # The portfolio page counts an owner's share of every broker (R11 changes the broker page only).
         assert request.scope.apply_ownership_share is True
         assert request.target_currency == "EUR"
@@ -244,8 +252,8 @@ class TestPortfolioDrawdown:
         assert [a.analytic_code for a in request.analytics] == ["drawdown_summary"]
         # Full-history start (E1): the resolved inception, earlier than the period.
         assert request.date_range.start == date(2019, 6, 15) and request.date_range.end == PERIOD_END
-        # The sentinel was resolved for the whole accessible portfolio (no broker filter).
-        assert _FakeDateSentinels.captured[0]["broker_ids"] is None
+        # The sentinel was resolved on the owned brokers, the whole portfolio (78 L10b).
+        assert _FakeDateSentinels.captured[0]["broker_ids"] == list(_OWNED_BROKERS)
 
         assert payload.status == DrawdownContextStatus.OK
         assert payload.return_basis == "twrr"
