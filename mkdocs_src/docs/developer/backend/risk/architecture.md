@@ -940,7 +940,7 @@ class MyAnalytic(RiskAnalytic):
 | Plugin folders and their translations | `test_utilities/test_plugin_layout_gate.py`, `test_utilities/test_plugin_i18n_ownership_gate.py` | `utils gate-plugin-layout`, `utils gate-plugin-i18n-ownership` |
 | Schemas | `test_schemas/test_risk_schemas.py` | `schemas risk` |
 | API | `test_api/test_risk_api.py` | `api risk` |
-| End-to-end | `frontend/e2e/portfolio/risk-analysis.spec.ts`, `risk-lab.spec.ts`, `risk-asset-detail.spec.ts`, `risk-benchmark-shared.spec.ts` | `front-portfolio risk`, `front-portfolio risk-lab`, `front-portfolio risk-asset-detail`, `front-portfolio risk-benchmark-shared` |
+| End-to-end | `frontend/e2e/portfolio/risk-analysis.spec.ts`, `risk-lab.spec.ts`, `risk-asset-detail.spec.ts` | `front-portfolio risk`, `front-portfolio risk-lab`, `front-portfolio risk-asset-detail` |
 
 The backend paths are relative to `backend/test_scripts/`.
 
