@@ -9,8 +9,9 @@
  *   each, «not available» without one;
  * - a row with a value opens the voice's history (E6) when the page handles it; otherwise it is plain text;
  * - BI-PROF: the company's `website` with an http(s) address is a link opened apart (`target=_blank`,
- *   `rel=noopener noreferrer`), also when the page handles the history (the link wins: no history control on that row);
- *   any other text of it, and an address in another voice, is not a link.
+ *   `rel=noopener noreferrer`); when the page handles the history, a clock beside the link (never the link itself) opens
+ *   it, with the same `-history` test id as every other row; any other text of it, and an address in another voice, is
+ *   not a link.
  */
 import {beforeAll, describe, expect, it, vi} from 'vitest';
 import {fireEvent, render, screen, setupI18n, within} from '$test/component';
@@ -146,12 +147,53 @@ describe('ProfileDetails', () => {
         expect(row).toHaveTextContent(get(_)('assets.profile.voices.website'));
     });
 
-    it('keeps the website a link when the page handles the history: that row has no history control', () => {
+    it('opens the history of a website link from a clock beside it, never from the link (BI-PROF 2b)', async () => {
         const onhistory = vi.fn();
-        render(ProfileDetails, {props: {groups: websiteGroups(), texts: {website: 'https://www.enel.com', industry: 'Utilities'}, isin: null, ticker: null, onhistory}});
-        expect(screen.getByTestId('profile-detail-website-link')).toHaveAttribute('href', 'https://www.enel.com');
+        const address = 'https://www.enel.com';
+        render(ProfileDetails, {props: {groups: websiteGroups(), texts: {website: address, industry: 'Utilities'}, isin: null, ticker: null, onhistory}});
+        const row = screen.getByTestId('profile-detail-website');
+        const link = within(row).getByTestId('profile-detail-website-link');
+        expect(link.tagName).toBe('A');
+        expect(link).toHaveAttribute('href', address);
+        expect(link).toHaveAttribute('target', '_blank');
+        expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+
+        const clock = within(row).getByTestId('profile-detail-website-history');
+        expect(clock.tagName, 'the history control is a button').toBe('BUTTON');
+        expect(clock, 'the history control is not the link').not.toBe(link);
+        expect(link.contains(clock), 'the history control sits beside the link, not inside it').toBe(false);
+        expect(clock.contains(link), 'the link is not inside the history control').toBe(false);
+        const name = get(_)('assets.profile.tab.history', {values: {voice: get(_)('assets.profile.voices.website')}});
+        expect(clock).toHaveAttribute('aria-label', name);
+        expect(within(row).getAllByTestId('profile-detail-website-history'), 'one history control on the row').toHaveLength(1);
+
+        await fireEvent.click(link);
+        expect(onhistory, 'following the link opens no history').not.toHaveBeenCalled();
+        await fireEvent.click(clock);
+        expect(onhistory).toHaveBeenCalledTimes(1);
+        expect(onhistory).toHaveBeenCalledWith('website');
+
+        await fireEvent.click(screen.getByTestId('profile-detail-industry-history'));
+        expect(onhistory, 'the other rows of the group keep their value as the history control').toHaveBeenLastCalledWith('industry');
+        expect(screen.getByTestId('profile-detail-industry-history')).toHaveTextContent('Utilities');
+    });
+
+    it('draws no clock beside the website link without a handler', () => {
+        render(ProfileDetails, {props: {groups: websiteGroups(), texts: {website: 'https://www.enel.com', industry: 'Utilities'}, isin: null, ticker: null}});
+        expect(screen.getByTestId('profile-detail-website-link'), 'barrier: the website is a link').toHaveAttribute('href', 'https://www.enel.com');
         expect(screen.queryByTestId('profile-detail-website-history')).toBeNull();
-        expect(screen.getByTestId('profile-detail-industry-history'), 'barrier: the other rows of the group open their history').toBeInTheDocument();
+        expect(screen.queryByTestId('profile-detail-industry-history')).toBeNull();
+    });
+
+    it('keeps a website that is not a web address an ordinary row: its value opens the history', async () => {
+        const onhistory = vi.fn();
+        render(ProfileDetails, {props: {groups: websiteGroups(), texts: {website: 'www.enel.com', industry: 'Utilities'}, isin: null, ticker: null, onhistory}});
+        expect(screen.queryByTestId('profile-detail-website-link')).toBeNull();
+        const control = screen.getByTestId('profile-detail-website-history');
+        expect(control).toHaveTextContent('www.enel.com');
+        await fireEvent.click(control);
+        expect(onhistory).toHaveBeenCalledTimes(1);
+        expect(onhistory).toHaveBeenCalledWith('website');
     });
 
     it.each(['javascript:alert(1)', 'mailto:investor.relations@enel.com', 'www.enel.com'])('writes a website %j that is not an http address as text, never a link', (text) => {
