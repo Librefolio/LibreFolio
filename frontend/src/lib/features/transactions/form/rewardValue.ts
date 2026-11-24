@@ -1,61 +1,64 @@
 /**
- * The value on receipt the transaction form suggests for a REWARD (project 79, STK-2a): the asset's close of the day,
- * or the last one before it, from its stored price history. A suggestion only: the form fills an empty field with it,
- * marks it «from price history», and never overwrites a value the user typed. Without a stored price it suggests
- * nothing: no value is ever invented.
- *
- * The close is per `quote_base_quantity` units (a bond quoted per 100); the cost basis is per unit, so the close is
- * divided by the base through the form's one helper for it (`unitPriceFromAmount`), the declared frontend exception
- * of `txTradeAmount.ts`.
+ * The value on receipt of a REWARD, read from the asset's stored price history (project 79): the transaction form's
+ * suggestion (STK-2a) and the bulk workspace's «fill from price history» (STK-4b) ask the same backend reader,
+ * `POST /assets/prices/reward-values`. Its rule is the domain consultant's: the close of that very day, never the day
+ * before or after, per unit (the backend divides by the quote base), in the price's own currency. Without a close that
+ * day nothing is suggested: no value is ever invented.
  */
 
 import {zodiosApi} from '$lib/api';
-import {unitPriceFromAmount} from './txTradeAmount';
 
-/** A suggested value on receipt: per unit, in the price's currency, with the day of the close it comes from. */
+/** A value on receipt read from the price history: per unit, in the price's currency, with the day of the close. */
 export interface RewardValueSuggestion {
     code: string;
     amount: string;
-    /** The day of the close read: the reward's day, or an earlier one when the history has a gap. */
+    /** The day of the close read: always the reward's own day. */
     priceDate: string;
 }
 
-/** The price points the suggestion reads: the shape of `FAPricePoint` it needs. */
-export interface RewardPricePoint {
+/** What the history gives for one reward: a value, no close that day, or no stored price at all. */
+export type RewardValueStatus = 'FILLED' | 'NO_PRICE_THAT_DAY' | 'NO_HISTORY';
+
+/** One reward asked for. */
+export interface RewardValueRequest {
+    assetId: number;
     date: string;
-    close: string | number | null | undefined;
-    currency: string | null | undefined;
 }
 
-/**
- * The suggestion from the points a one-day price query returned (the backend fills a gap backward): the last point dated
- * on or before `date` with a positive close and a currency, per unit. `null` when there is none.
- */
-export function rewardValueFromPoints(points: readonly RewardPricePoint[], date: string, quoteBaseQuantity: number | null | undefined): RewardValueSuggestion | null {
-    let best: RewardPricePoint | null = null;
-    for (const point of points) {
-        if (point.date > date || !point.currency || point.close == null) continue;
-        const close = String(point.close).trim();
-        if (close === '' || !(Number(close) > 0)) continue;
-        if (best == null || point.date >= best.date) best = point;
-    }
-    if (best == null || !best.currency) return null;
-    const close = String(best.close).trim();
-    const base = Number.isInteger(quoteBaseQuantity) && (quoteBaseQuantity ?? 0) > 1 ? (quoteBaseQuantity as number) : 1;
-    const amount = base === 1 ? close : unitPriceFromAmount(String(base), close, 1);
-    return {code: best.currency, amount, priceDate: best.date};
+/** The answer for one reward, in the order asked. */
+export interface RewardValueAnswer extends RewardValueRequest {
+    status: RewardValueStatus;
+    suggestion: RewardValueSuggestion | null;
 }
 
-/** The suggestion for `assetId` on `date` (ISO day), read from its stored prices; `null` without one or on a failed read. */
-export async function fetchRewardValue(assetId: number, date: string, quoteBaseQuantity: number | null | undefined): Promise<RewardValueSuggestion | null> {
+/** The most items one request carries (the backend's `MAX_BULK_ITEMS`); a longer list goes in several requests. */
+export const REWARD_VALUES_BATCH = 1000;
+
+type RawAnswer = {asset_id: number; date: string; status: RewardValueStatus; value?: {code: string; amount: string | number} | null};
+
+function toAnswer(raw: RawAnswer): RewardValueAnswer {
+    const value = raw.status === 'FILLED' && raw.value ? {code: raw.value.code, amount: String(raw.value.amount), priceDate: raw.date} : null;
+    return {assetId: raw.asset_id, date: raw.date, status: value ? 'FILLED' : raw.status === 'FILLED' ? 'NO_PRICE_THAT_DAY' : raw.status, suggestion: value};
+}
+
+/** The values on receipt of `requests`, in their order; `null` when a request fails (the API client logs it). */
+export async function fetchRewardValues(requests: readonly RewardValueRequest[]): Promise<RewardValueAnswer[] | null> {
+    const answers: RewardValueAnswer[] = [];
     try {
-        const response = await zodiosApi.query_prices_bulk_api_v1_assets_prices_query_post([{asset_id: assetId, date_range: {start: date, end: date}, include_price: true, include_events: false}] as never);
-        const items = (response as {items?: {asset_id: number; prices?: RewardPricePoint[]}[]}).items ?? [];
-        const item = items.find((candidate) => candidate.asset_id === assetId);
-        return item ? rewardValueFromPoints(item.prices ?? [], date, quoteBaseQuantity) : null;
+        for (let start = 0; start < requests.length; start += REWARD_VALUES_BATCH) {
+            const batch = requests.slice(start, start + REWARD_VALUES_BATCH).map((request) => ({asset_id: request.assetId, date: request.date}));
+            const response = await zodiosApi.query_reward_values_api_v1_assets_prices_reward_values_post(batch as never);
+            answers.push(...((response as {items?: RawAnswer[]}).items ?? []).map(toAnswer));
+        }
     } catch {
-        // A suggestion that cannot be read is no suggestion: the field stays empty and the missing-value warning shows.
-        // The API client has already written the failure to the console (apiErrorConsole).
+        // A failed read fills nothing: the caller says so. The API client has already written it to the console (apiErrorConsole).
         return null;
     }
+    return answers;
+}
+
+/** The suggestion for `assetId` on `date` (ISO day); `null` without a close that day or on a failed read. */
+export async function fetchRewardValue(assetId: number, date: string): Promise<RewardValueSuggestion | null> {
+    const answers = await fetchRewardValues([{assetId, date}]);
+    return answers?.find((answer) => answer.assetId === assetId && answer.date === date)?.suggestion ?? null;
 }
