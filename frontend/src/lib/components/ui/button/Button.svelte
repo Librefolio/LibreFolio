@@ -32,11 +32,16 @@
         /** A lucide icon. */
         // eslint-disable-next-line @typescript-eslint/no-explicit-any -- lucide-svelte icons are legacy class components
         icon?: Component<any> | (new (...args: any[]) => any);
-        /** `text`, `icon-text` (default with an icon), `icon`, `auto` (the word hides below `hideWordBelow`, or while `compact`). */
+        /**
+         * `text`, `icon-text` (default with an icon), `icon`, `auto` (the word hides below `hideWordBelow`, or while
+         * `compact`). `auto` never picks a width of its own and measures nothing: it carries the rule the button already
+         * had — the page toolbar's decision (`compact`) or the class it was written with (`hideWordBelow`). With neither,
+         * the word always shows.
+         */
         display?: ButtonDisplay;
-        /** `display="auto"`: the viewport breakpoint or the container size under which the word hides. */
+        /** `display="auto"`: the class the button had, as a threshold: `sm` is `hidden sm:inline`, `@2xl` a container under 42rem. */
         hideWordBelow?: WordThreshold;
-        /** `display="auto"`: the parent measured its room and hides the word (PageToolbar's `showActionLabels`). */
+        /** `display="auto"`: the parent decided the word hides — `compact={!showActionLabels}` of PageToolbar (`createResponsiveLayout`). */
         compact?: boolean;
         variant?: ButtonVariant;
         size?: ButtonSize;

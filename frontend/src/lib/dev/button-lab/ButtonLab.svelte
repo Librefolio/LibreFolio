@@ -11,6 +11,7 @@
     import CloseButton from '$lib/components/ui/button/CloseButton.svelte';
     import DataTable from '$lib/components/table/DataTable.svelte';
     import type {ColumnDef, RowAction} from '$lib/components/table/types';
+    import {createResponsiveLayout} from '$lib/utils/layout/responsiveLayout.svelte';
 
     interface LogEntry {
         id: number;
@@ -26,6 +27,17 @@
     }
 
     let width = $state(360);
+    /** The page toolbar's own mechanism (PageToolbar): one ResizeObserver, the words hide under `labelHideActions`. The
+     *  Button takes the decision through `compact`; it measures nothing itself. Only that threshold matters here. */
+    const AUTO_LABEL_HIDE_PX = 360;
+    const autoLayout = createResponsiveLayout({oneRow: 0, denseRow: 0, stackFilters: 0, oneColumn: 0, labelHideActions: AUTO_LABEL_HIDE_PX, labelHideTabs: 0});
+    let autoBox = $state<HTMLDivElement | null>(null);
+    $effect(() => {
+        const el = autoBox;
+        if (!el) return;
+        autoLayout.attach(el);
+        return () => autoLayout.detach();
+    });
     let busy = $state(false);
     let starred = $state(false);
     let selection = $state<string[]>([]);
@@ -96,18 +108,20 @@
     </section>
 
     <section class="mb-6">
-        <h2 class="mb-2 font-medium">Words that hide (container under 42rem)</h2>
+        <h2 class="mb-2 font-medium">Words that hide (the toolbar's showActionLabels, under {AUTO_LABEL_HIDE_PX}px)</h2>
         <label class="mb-2 flex items-center gap-2 text-sm">
             width <input type="range" min="240" max="900" bind:value={width} data-testid="lab-width" />
             {width}px
         </label>
-        <div class="@container rounded-lg border border-lf-subtle p-2" style="width: {width}px; max-width: 100%">
+        <div bind:this={autoBox} class="rounded-lg border border-lf-subtle p-2" style="width: {width}px; max-width: 100%" data-testid="lab-auto-box" data-labels={autoLayout.showActionLabels ? 'shown' : 'hidden'}>
             <div class="flex gap-2">
-                <Button label="Add goal" icon={Plus} display="auto" hideWordBelow="@2xl" variant="primary" onclick={() => note('action: add goal')} data-testid="lab-auto-add" />
-                <Button label="Suggest" icon={Sparkles} display="auto" hideWordBelow="@2xl" onclick={() => note('action: suggest')} data-testid="lab-auto-suggest" />
-                <Button label="Reset all" icon={RefreshCw} display="auto" hideWordBelow="@2xl" variant="danger" onclick={() => note('action: reset')} data-testid="lab-auto-reset" />
+                <Button label="Add goal" icon={Plus} display="auto" compact={!autoLayout.showActionLabels} variant="primary" onclick={() => note('action: add goal')} data-testid="lab-auto-add" />
+                <Button label="Suggest" icon={Sparkles} display="auto" compact={!autoLayout.showActionLabels} onclick={() => note('action: suggest')} data-testid="lab-auto-suggest" />
+                <Button label="Reset all" icon={RefreshCw} display="auto" compact={!autoLayout.showActionLabels} variant="danger" onclick={() => note('action: reset')} data-testid="lab-auto-reset" />
             </div>
         </div>
+        <p class="mt-3 mb-2 text-sm text-lf-muted">The other rule of today, a word hidden on a narrow screen (<code>hidden sm:inline</code>), is the same class: <code>hideWordBelow="sm"</code>.</p>
+        <Button label="Import" icon={Download} display="auto" hideWordBelow="sm" onclick={() => note('action: import')} data-testid="lab-auto-sm" />
     </section>
 
     <section class="mb-6">
