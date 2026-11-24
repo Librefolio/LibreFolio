@@ -168,6 +168,8 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 - **L'editor del Broker nello scenario usa il pannello del profilo operativo**: commissioni di acquisto e di vendita con minimo, percentuale, massimo e parte fissa, valuta per valuta.
 - **Quando il solver si ferma per un errore numerico** dopo aver trovato un piano, il risultato ora lo dice in una nota: il piano è valido e si può eseguire, e può esisterne uno migliore.
 - Nella pagina Strumenti il titolo di uno strumento va a capo tra le parole, e il link alla documentazione resta accanto, come icona.
+- **AI Export: «Note per l'AI» diventa «La tua domanda».** Quello che scrivi lì è la domanda a cui l'AI risponde per prima, in ogni analisi.
+- **L'AI Export conta solo i broker che possiedi.** Gli export di asset e cambi, e un export senza filtro sui broker, leggono i broker che possiedi, ciascuno alla tua quota, come la Dashboard; i broker condivisi con te restano fuori. Il confronto di un broker lo misura sui tuoi broker. Se non possiedi nessun broker, le analisi che leggono posizioni o esposizione lo dicono, e quelle di solo mercato restano disponibili.
 
 ### 🐛 Corretto
 
@@ -237,6 +239,7 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 - AI Export: il componente `asset.identity` passa alla versione 2 e non porta più la classificazione dell'asset (paesi e settori); un componente nuovo, `asset.profile`, porta i dati del profilo dell'asset con la data di ogni valore, dovunque si esporta `asset.identity`. Un prompt o uno strumento che leggeva la classificazione da `asset.identity` ora la legge da `asset.profile`. I paesi e i settori impostati nella 1.3 valgono dal primo giorno dell'asset in LibreFolio (creazione, primo prezzo o prima transazione), così l'export di un periodo passato li riporta ancora.
 - The PAC allocator's Tool contract is now 2.0.0: a route no longer takes a required purchase (set a minimum on the target entry instead), the request names its `operation` (`plan` or `preview`), and the solution carries `plan_accounts`.
 - **XTB: il vecchio export CSV non viene più letto; esporta il report Excel.** XTB non offre più il CSV *Cash Operations* di xStation 5. Le transazioni già importate da un CSV restano come sono.
+- AI Export API: a snapshot request without `broker_ids` reads the brokers you own (before: every broker you can access); `asset.position_scope` v2 says `OWNED_BROKERS` / `REQUESTED_BROKERS` (before `WHOLE_ACCESSIBLE_PORTFOLIO` / `SCOPED_BROKERS`); `broker.concentration_comparison` v3 says `owned_brokers_whole` and is unavailable (`broker_not_owned`) on a broker you do not own; a new 422 reason, `no_owned_brokers`.
 
 ## [1.3.0] - 2026-11-10
 
