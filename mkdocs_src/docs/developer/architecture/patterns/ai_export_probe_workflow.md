@@ -108,8 +108,9 @@ USER|SELECTION_ID|PERIOD|DETAIL|SCOPE
 
 Current scope selectors include:
 
-- `all` for the whole Portfolio scope;
-- `broker=<display name>` for one exact accessible Broker;
+- `all` for the whole Portfolio scope: the Brokers the probed user owns (role
+  owner, share above zero), the Dashboard's unfiltered portfolio (78 L10b);
+- `broker=<display name>` for one exact owned Broker;
 - `representative` for the probe's deterministic representative scope in the
   selected domain.
 
@@ -233,7 +234,7 @@ Portfolio prompts distinguish:
 
 A scoped Broker may have no current position. A historical contributor may differ
 from the current-position universe. The Entity Directory must contain every scoped
-Broker, including all-accessible requests without an explicit Broker filter.
+Broker; a request without an explicit Broker filter is scoped to the owned Brokers.
 
 ## 🧠 Qualitative Review and Task Adequacy
 

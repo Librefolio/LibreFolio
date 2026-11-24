@@ -55,7 +55,7 @@ sequenceDiagram
     A-->>F: 8 datasets + 12 analyses, V1 identities
     U->>F: Export Data or Request Analysis
     F->>A: POST /snapshot with selected V1 contract
-    A->>R: Authenticated request + accessible broker scope
+    A->>R: Authenticated request + broker scope (owned when none is named)
     R->>S: Load authoritative resources
     S-->>R: Financial and technical facts
     R-->>A: Ordered component envelopes + manifests
@@ -113,8 +113,28 @@ Portfolio snapshots distinguish three Broker universes:
 | `broker_scope`                    | The scoped universe rendered as B# references.                |
 
 A scoped Broker may have no current position. A period contributor may be
-historical-only. The Entity Directory includes every scoped Broker, including
-all-accessible requests that did not send an explicit Broker filter.
+historical-only. The Entity Directory includes every scoped Broker.
+
+**A request without brokers reads the user's own (78 L10b, D13).** A Portfolio,
+Asset or FX request that sends no `broker_ids` is scoped to the brokers the user
+owns (role owner, share above zero: the Dashboard's rule), each at the user's
+share; never to every accessible broker, which would bring in the brokers only
+shared with the user. `BuildScope.broker_scope_source` records where the scope came
+from (`owned` or `requested`), and `asset.position_scope` says it in
+`portfolio_role.broker_scope_mode` (`OWNED_BROKERS` or `REQUESTED_BROKERS`). An
+explicit list is the user's choice and may include a shared broker. An empty scope
+means **no broker**: every reader takes the scope's brokers through
+`scope_broker_ids` (`components/broker_scope.py`), which refuses an empty one,
+because the services below read `None` or `[]` as «every accessible broker».
+
+**A user who owns no broker.** A selection that reads brokers (every Portfolio
+selection; an Asset or FX one whose components read positions or exposure:
+`asset.position_and_history`, `asset.position_review`, `fx.market_and_exposure`,
+`fx.exposure_impact`) is refused before the build with `422
+selection_not_applicable`, `reason_code` `no_owned_brokers`, and the panel says why.
+The market-only selections stay available. For a market-only analysis the snapshot
+lists, in `unavailable_dataset_ids`, the suggested datasets the user cannot select,
+and «Additional LibreFolio Data» leaves them out.
 
 **The Export Scope fact (78 L10).** A Portfolio snapshot carries `export_scope`
 only when its brokers leave out at least one broker the user owns: role owner,
@@ -143,6 +163,7 @@ serialized safely under it; without the fact the prompt is unchanged.
 | `422` | `unsupported_selection`    | Dataset or analysis is unknown or belongs to another domain.            |
 | `422` | `selection_not_applicable` | Runtime facts do not satisfy an analysis applicability rule.            |
 | `422` | `selection_not_applicable` | `reason_code` `too_many_price_days`: the prices a required component reads exceed one request's budget (J-50). |
+| `422` | `selection_not_applicable` | `reason_code` `no_owned_brokers`: the selection reads brokers, the request names none and the user owns none (78 L10b). |
 | `503` | `snapshot_source_failure`  | A required component raised while building.                             |
 
 Required failures fail closed. Optional failures may be omitted and remain

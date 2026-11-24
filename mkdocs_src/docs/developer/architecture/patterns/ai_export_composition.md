@@ -106,8 +106,10 @@ Two fields state which amounts a number is, so the AI does not apply a share twi
   full amounts, as the broker page does, whatever the role. An owner's own part is one multiplication away
   (`owner_stake_ratio`); an editor or a viewer has no stake to apply.
 - `amounts_basis` of the `broker.concentration_comparison` (inside `broker.concentration_evidence`) is always
-  `all_brokers_whole`: both sides, the broker and the portfolio, count every broker whole. It is not the Dashboard's
-  portfolio, where an owner's share reduces each broker.
+  `owned_brokers_whole` (v3, 78 L10b): the portfolio side is the brokers the user owns, and both sides count each
+  broker whole. It is not the Dashboard's portfolio, where an owner's share reduces each broker. On a broker the user
+  does not own the comparison is unavailable, `reason_code` `broker_not_owned`: that broker is no part of the user's
+  portfolio.
 
 Each `*.all_data` union is composed only from its domain's canonical complete
 datasets:
@@ -993,8 +995,9 @@ The options panel decides what is requested and when the copy happens
   explicit owned-Broker set (`getOwnedBrokers`: `OWNER` role with a share above 0 or
   unset, narrowed by the Broker filter), so the backend never widens a Portfolio
   request. The Broker page sends its `broker_id`. Asset and FX pages send no
-  `broker_ids`, so the backend scopes them to every Broker the user can access
-  (`BrokerUserAccess`, any role).
+  `broker_ids`, so the backend scopes them to the Brokers the user owns, by the
+  same rule, each at the user's share (78 L10b); a user who owns none gets the
+  market-only selections, and a `422` `no_owned_brokers` for the others.
 - **Defaults**: Dashboard `portfolio.pac_planning`, Broker `broker.review`, Asset
   `asset.market_analysis`, FX `fx.pair_analysis`; detail `standard` when the
   selection supports it (`resolveDefaultDetailLevel`); period `3m`.
