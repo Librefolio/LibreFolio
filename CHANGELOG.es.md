@@ -150,6 +150,7 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 
 ### 🐛 Corregido
 
+- Investimental (beta): una orden ejecutada en varias partes se importa con toda la cantidad y todo el importe ejecutados; antes solo entraba su última parte (una orden de venta de 210 participaciones llegaba como 64). Si ya importaste una orden así, borra una vez esa transacción e importa de nuevo el archivo: la transacción corregida llega como nueva. Un archivo que empieza con una orden ya en curso no puede dar su cantidad total: esa orden se deja fuera, y un aviso muestra lo que tiene el archivo para que la introduzcas a mano.
 - En el móvil, la ventana de una transacción ya no se desplaza de lado cuando el activo tiene un nombre largo: los campos vuelven a caber en la pantalla, al verla y al editarla. El defecto ya estaba en la 1.3.0.
 - Una transacción abierta en modo lectura desde la pestaña Transacciones de un bróker ahora ofrece el lápiz para editarla, como en la página Transacciones, a quien puede editar ese bróker.
 - Los números de página de la lista Archivos se quedan al pie de la ventana mientras te desplazas, como en las demás páginas, y la barra de selección al pie de una página ya no tapa los números de página de una tabla.

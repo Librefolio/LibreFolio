@@ -150,6 +150,7 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 
 ### 🐛 Corretto
 
+- Investimental (beta): un ordine eseguito in più parti si importa con tutta la quantità e tutto l'importo eseguiti; prima entrava solo l'ultima parte (un ordine di vendita di 210 quote arrivava come 64). Se hai già importato un ordine così, cancella una volta quella transazione e reimporta il file: la transazione corretta arriva come nuova. Un file che comincia con un ordine già avviato non può dare la sua quantità intera: quell'ordine resta fuori, e un avviso mostra cosa c'è nel file, perché tu lo inserisca a mano.
 - Sul telefono la finestra della transazione non scorre più di lato quando l'asset ha un nome lungo: i campi tornano a stare nello schermo, in visualizza e in modifica. Il difetto c'era già nella 1.3.0.
 - Una transazione aperta in visualizza dal tab Transazioni di un broker ora offre la matita per modificarla, come nella pagina Transazioni, a chi può modificare quel broker.
 - I numeri di pagina dell'elenco File restano in fondo alla finestra mentre scorri, come nelle altre pagine, e la barra della selezione in fondo a una pagina non copre più i numeri di pagina di una tabella.
