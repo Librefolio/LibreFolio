@@ -1,5 +1,5 @@
 """
-Test Suite: the XTB plugin — ``broker_xtb`` 2.0.0, the History report workbook (lane 83)
+Test Suite: the XTB plugin — ``broker_xtb`` 2.1.0, the History report workbook (lane 83, lot 83-B)
 
 XTB exports a «History report» workbook (``.xlsx``): its *Cash Operations* sheet is the only source of transactions, its
 *Open Positions* summary names the account currency, its *Closed Positions* sheet is never read. The older Cash Operations
@@ -17,7 +17,11 @@ What is pinned:
   without its opposite, the account currency missing or ambiguous (two ``BRIMParseError`` codes), the currency read from
   the summary, a sale, the cash taken verbatim from ``Amount`` on an instrument quoted in another currency, the
   ``xtb_positions_outside_period`` info notice (the open volume of a ticker summed over its sub-accounts) and the CFD
-  positions it never compares, a workbook with no importable row.
+  positions it never compares, a workbook with no importable row;
+- C. the sign of the cash (lot 83-B, 2.1.0): the cash is the ``Amount`` as written, never flipped. A tax with a positive
+  amount is an INTEREST «Tax refund» (on its asset when the row has a Ticker) listed in one ``xtb_tax_refund`` info notice;
+  any other sign that does not fit the type is a row not recognised; an amount of 0 is not recognised on a purchase or a
+  sale and left out without a word on a cash row; a file mixing normal rows and a refund changes nothing else.
 
 ``test_brim_row_skips.py`` lists XTB in its contract with this file as its own test (its samples are read as text lines).
 
@@ -57,6 +61,7 @@ ROWS_UNREADABLE = "rows_unreadable"
 OUTSIDE_PERIOD = "xtb_positions_outside_period"
 CURRENCY_MISSING = "xtb_account_currency_missing"
 CURRENCY_AMBIGUOUS = "xtb_account_currency_ambiguous"
+TAX_REFUND = "xtb_tax_refund"
 
 CASH_SHEET = "Cash Operations"
 OPEN_SHEET = "Open Positions"
@@ -580,6 +585,156 @@ class TestWorkbookRules:
 
         assert not [tx for tx in out.transactions if (tx.description or "").startswith("Total")]
         assert out.warnings == [], _summary(out)
+
+
+# =============================================================================
+# C. THE SIGN OF THE CASH (lot 83-B)
+# =============================================================================
+
+D1 = T0 + timedelta(days=10)
+
+# The extra rows of the mixed file: each normal-signed one is imported with the Amount as written; the refund is the only notice.
+MIXED_EXTRA: Tuple[Cash, ...] = (
+    Cash("Dividend", D1, 3.12, "LFD.US USD 0.2630/ SHR", "Invented Dividend Co", "LFD.US", "STC"),
+    Cash("Withholding tax", D1, -0.47, "LFD.US USD WHT 15%", "Invented Dividend Co", "LFD.US", "STC"),
+    Cash("Withholding tax", D1 + timedelta(days=30), 0.47, "LFD.US USD WHT refund", "Invented Dividend Co", "LFD.US", "STC"),
+    Cash("Free funds interests", D1, 1.1, "Free-funds Interest 2025-03"),
+    Cash("Free funds interests tax", D1, -0.21, "Free-funds Interest Tax 2025-03"),
+    Cash("Commission", D1, -2.0, "Invented commission"),
+    Cash("Withdrawal", D1, -100.0, "Invented withdrawal"),
+)
+
+
+def _subfolder(tmp_path: Path, name: str) -> Path:
+    """A fresh folder under ``tmp_path``: the baseline and the variant of one test each get their own workbook."""
+    folder = tmp_path / name
+    folder.mkdir()
+    return folder
+
+
+def _row_key(out: BRIMParseOutput, tx) -> Tuple[str, Any, Decimal, Decimal, str, Optional[str], str]:
+    return (tx.type.value, tx.date, tx.quantity, tx.cash.amount, tx.cash.code, _symbol_of(out, tx.asset_id), tx.description or "")
+
+
+class TestCashSign:
+    """The cash keeps the sign of ``Amount``: a tax given back is a refund, every other wrong sign is a row to look at."""
+
+    @pytest.mark.parametrize(
+        ("row", "symbol"),
+        [
+            (Cash("Withholding tax", D1, 0.52, "LFD.US USD WHT refund", "Invented Dividend Co", "LFD.US", "STC"), "LFD.US"),
+            (Cash("Free funds interests tax", D1, 0.3, "Free-funds Interest Tax correction"), None),
+        ],
+        ids=["with-ticker", "no-ticker"],
+    )
+    def test_a_positive_tax_is_an_interest_tax_refund_with_an_info_notice(self, tmp_path: Path, row: Cash, symbol: Optional[str]):
+        built = _base(tmp_path, row)
+        line = built.cash_lines[-1]
+
+        out = _parse(built.path)
+
+        assert len(out.transactions) == BASE_TRANSACTIONS + 1
+        refund = _by_comment(out, row.comment)
+        assert refund.type == TransactionType.INTEREST
+        assert (refund.quantity, refund.cash.amount, refund.cash.code) == (Decimal("0"), Decimal(repr(row.amount)), "EUR")
+        assert (refund.description or "").startswith("Tax refund: "), refund.description
+        assert _symbol_of(out, refund.asset_id) == symbol
+
+        assert [notice.code for notice in out.warnings] == [TAX_REFUND], _summary(out)
+        notice = out.warnings[0]
+        assert notice.severity == "info" and notice.context == {"count": 1}
+        evidence = notice.evidence[0]
+        assert evidence.headers == CASH_HEADER
+        assert evidence.row_numbers == [line]
+        cells = dict(zip(CASH_HEADER, evidence.rows[0], strict=True))
+        assert (cells["Type"], cells["Ticker"], cells["Amount"], cells["Comment"]) == (row.type, row.ticker or "", repr(row.amount), row.comment)
+
+    @pytest.mark.parametrize(
+        ("row", "tx_type", "sign"),
+        [
+            (Cash("Dividend", D1, -1.5, "LFD.US USD 0.1000/ SHR", "Invented Dividend Co", "LFD.US", "STC"), TransactionType.DIVIDEND, "negative"),
+            (Cash("Free funds interests", D1, -0.3, "Corr Free-funds Interest 2025-02"), TransactionType.INTEREST, "negative"),
+            (Cash("Deposit", D1, -100.0, "Invented deposit reversal"), TransactionType.DEPOSIT, "negative"),
+            (Cash("Commission", D1, 2.0, "Invented commission refund"), TransactionType.FEE, "positive"),
+            (Cash("Withdrawal", D1, 50.0, "Invented withdrawal reversal"), TransactionType.WITHDRAWAL, "positive"),
+            (Cash("Stock purchase", D1, 100.0, "OPEN BUY 1 @ 100.00", "Invented Fund A", "LFA.DE", "ETF"), TransactionType.BUY, "positive"),
+            (Cash("Stock sale", D1, -100.0, "CLOSE BUY 1 @ 100.00", "Invented Fund A", "LFA.DE", "ETF"), TransactionType.SELL, "negative"),
+        ],
+        ids=["dividend-negative", "interest-negative", "deposit-negative", "fee-positive", "withdrawal-positive", "purchase-positive", "sale-negative"],
+    )
+    def test_any_other_sign_that_does_not_fit_is_not_recognized(self, tmp_path: Path, row: Cash, tx_type: TransactionType, sign: str):
+        built = _base(tmp_path, row)
+        line = built.cash_lines[-1]
+
+        out = _parse(built.path)
+
+        assert len(out.transactions) == BASE_TRANSACTIONS, "the row gives no transaction, never a flipped one"
+        assert _lines_of(out, ROWS_NOT_RECOGNIZED) == [line], _summary(out)
+        reason = _reason_of(out, ROWS_NOT_RECOGNIZED, line).lower()
+        assert tx_type.value.lower() in reason and f"{sign} amount" in reason, reason
+        assert (_notices(out, ROWS_NOT_RECOGNIZED)[0].context or {}).get("report_issue") is True
+        assert [notice.code for notice in out.warnings] == [ROWS_NOT_RECOGNIZED], _summary(out)
+
+    @pytest.mark.parametrize(
+        "row",
+        [
+            Cash("Stock purchase", D1, 0, "OPEN BUY 1 @ 100.00", "Invented Fund A", "LFA.DE", "ETF"),
+            Cash("Stock sale", D1, 0.0, "CLOSE BUY 1 @ 100.00", "Invented Fund A", "LFA.DE", "ETF"),
+        ],
+        ids=["purchase", "sale"],
+    )
+    def test_a_trade_of_amount_zero_is_not_recognized(self, tmp_path: Path, row: Cash):
+        built = _base(tmp_path, row)
+        line = built.cash_lines[-1]
+
+        out = _parse(built.path)
+
+        assert len(out.transactions) == BASE_TRANSACTIONS
+        assert _lines_of(out, ROWS_NOT_RECOGNIZED) == [line], _summary(out)
+        assert "amount 0" in _reason_of(out, ROWS_NOT_RECOGNIZED, line).lower()
+
+    @pytest.mark.parametrize(
+        "row",
+        [
+            Cash("Deposit", D1, 0, "Invented deposit of nothing"),
+            Cash("Dividend", D1, 0.0, "LFD.US USD 0.0000/ SHR", "Invented Dividend Co", "LFD.US", "STC"),
+            Cash("Withholding tax", D1, 0, "LFD.US USD WHT 0%", "Invented Dividend Co", "LFD.US", "STC"),
+            Cash("Free funds interests", D1, 0.0, "Free-funds Interest 2025-03"),
+        ],
+        ids=["deposit", "dividend", "tax", "interest"],
+    )
+    def test_a_cash_row_of_amount_zero_is_left_out_without_a_word(self, tmp_path: Path, row: Cash):
+        base = _parse(_base(_subfolder(tmp_path, "base")).path)
+        out = _parse(_base(tmp_path, row).path)
+
+        assert sorted(_row_key(out, tx) for tx in out.transactions) == sorted(_row_key(base, tx) for tx in base.transactions)
+        assert out.warnings == [], _summary(out)
+
+    def test_normal_rows_and_a_refund_together_change_nothing_else(self, tmp_path: Path):
+        """A dividend, its withholding, the withholding given back a month later, an interest and its tax, a commission and a
+        withdrawal on top of the baseline: the baseline's transactions are unchanged, each normal row is imported with its Amount
+        as written, the refund is an INTEREST, and the only notice is the refund's."""
+        base = _parse(_base(_subfolder(tmp_path, "base")).path)
+        built = _base(tmp_path, *MIXED_EXTRA)
+        refund_line = built.cash_lines[len(BASE_CASH) + 2]
+
+        out = _parse(built.path)
+
+        added = Counter(_row_key(out, tx) for tx in out.transactions) - Counter(_row_key(base, tx) for tx in base.transactions)
+        assert sum(added.values()) == len(MIXED_EXTRA) == len(out.transactions) - len(base.transactions), "every baseline transaction is still there, plus one per extra row"
+        assert Counter(key[0] for key in added.elements()) == Counter({"DIVIDEND": 1, "TAX": 2, "INTEREST": 2, "FEE": 1, "WITHDRAWAL": 1})
+
+        for row in MIXED_EXTRA:
+            tx = _by_comment(out, row.comment)
+            assert tx.cash.amount == Decimal(repr(row.amount)), f"{row.comment}: cash {tx.cash.amount}, Amount {row.amount}"
+            assert tx.cash.code == "EUR"
+        assert _by_comment(out, "LFD.US USD WHT refund").type == TransactionType.INTEREST
+        assert _by_comment(out, "LFD.US USD WHT 15%").type == TransactionType.TAX
+        assert _symbol_of(out, _by_comment(out, "Invented commission").asset_id) is None
+
+        assert [notice.code for notice in out.warnings] == [TAX_REFUND], _summary(out)
+        assert out.warnings[0].context == {"count": 1}
+        assert out.warnings[0].evidence[0].row_numbers == [refund_line]
 
 
 if __name__ == "__main__":
