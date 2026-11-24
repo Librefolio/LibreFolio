@@ -12,7 +12,7 @@ from uuid import uuid4
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.app.db.models import Asset, Broker, BrokerUserAccess
+from backend.app.db.models import Asset, Broker, BrokerUserAccess, UserRole
 from backend.app.schemas.ai_export_runtime import (
     AI_EXPORT_CATALOG_VERSION,
     AI_EXPORT_SCHEMA_VERSION,
@@ -36,6 +36,7 @@ from backend.app.schemas.ai_export_runtime import (
     AiExportDomain,
     AiExportEntityDirectory,
     AiExportEventSelectionManifest,
+    AiExportExportScope,
     AiExportFxPairDirectoryEntry,
     AiExportFxPairTargetReference,
     AiExportFxSnapshotRequest,
@@ -460,6 +461,29 @@ class AiExportSnapshotService:
         result = await self.db.execute(select(BrokerUserAccess.broker_id).where(BrokerUserAccess.user_id == user_id))
         return tuple(sorted(set(result.scalars().all())))
 
+    async def _owned_broker_ids(self, user_id: int) -> frozenset[int]:
+        """The brokers the user owns: role owner and a share above zero (78 L10).
+
+        The Dashboard's own rule (`getOwnedBrokers`): the list it sends without a filter, so an unfiltered Dashboard
+        export never leaves out an owned broker. A broker owned at a zero share counts nothing and is not the user's
+        here; a broker only shared with the user (viewer, editor) is someone else's.
+        """
+        result = await self.db.execute(select(BrokerUserAccess.broker_id, BrokerUserAccess.share_percentage).where(BrokerUserAccess.user_id == user_id, BrokerUserAccess.role == UserRole.OWNER))
+        return frozenset(broker_id for broker_id, share in result.all() if share is None or share > 0)
+
+    async def _export_scope(self, request: AiExportSnapshotRequest, broker_scope: tuple[int, ...], *, user_id: int) -> AiExportExportScope | None:
+        """The scope fact of a Portfolio export that leaves out an owned broker, the left-out ones by name (D12 (b)); None otherwise (78 L10)."""
+        if not isinstance(request, AiExportPortfolioSnapshotRequest):
+            return None
+        owned = await self._owned_broker_ids(user_id)
+        excluded = owned.difference(broker_scope)
+        if not excluded:
+            return None
+        rows = (await self.db.execute(select(Broker).where(Broker.id.in_(sorted(excluded))))).scalars()
+        names = {broker.id: broker.name for broker in rows if broker.id is not None}
+        excluded_brokers = tuple(AiExportBrokerDirectoryEntry(broker_id=broker_id, display_name=names[broker_id]) for broker_id in sorted(excluded) if broker_id in names)
+        return AiExportExportScope(included_broker_ids=tuple(sorted(broker_scope)), excluded_brokers=excluded_brokers)
+
     def _resolve_selection(
         self,
         request: AiExportSnapshotRequest,
@@ -671,6 +695,7 @@ class AiExportSnapshotService:
         entity_directory: AiExportEntityDirectory,
         meta: AiExportSnapshotMeta,
         dataset_manifest: tuple[AiExportDatasetManifestEntry, ...],
+        export_scope: AiExportExportScope | None = None,
         analysis_contract: AiExportAnalysisContract | None,
         technical_sampling: AiExportTechnicalSamplingManifest | None,
         event_selection: AiExportEventSelectionManifest | None,
@@ -689,6 +714,7 @@ class AiExportSnapshotService:
             detail_level=detail_level,
             target=target,
             entity_directory=entity_directory,
+            export_scope=export_scope,
             meta=meta,
             dataset_manifest=dataset_manifest,
             analysis_contract=analysis_contract,
@@ -845,6 +871,8 @@ class AiExportSnapshotService:
             broker_scope=prepared.broker_scope,
         )
 
+        export_scope = await self._export_scope(request, prepared.broker_scope, user_id=prepared.scope.user_id)
+
         generated_at = datetime.now(UTC)
         history_coverage = await _fx_history_coverage(context) if isinstance(request, AiExportFxSnapshotRequest) and _requires_fx_history_coverage(dataset_manifest) else None
         meta = AiExportSnapshotMeta(
@@ -863,6 +891,7 @@ class AiExportSnapshotService:
             detail_level=request.detail_level,
             target=_target_reference(request),
             entity_directory=entity_directory,
+            export_scope=export_scope,
             meta=meta,
             dataset_manifest=dataset_manifest,
             analysis_contract=analysis_contract,

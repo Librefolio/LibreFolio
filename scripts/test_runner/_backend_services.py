@@ -36,6 +36,8 @@ AI_EXPORT_SERVICE_TEST_PATHS = (
     "backend/test_scripts/test_services/test_ai_export_components_technical.py",
     "backend/test_scripts/test_services/test_ai_export_composer.py",
     "backend/test_scripts/test_services/test_ai_export_dataset_analysis_catalogs.py",
+    "backend/test_scripts/test_services/test_ai_export_drawdown_broker_scope.py",
+    "backend/test_scripts/test_services/test_ai_export_export_scope.py",
     "backend/test_scripts/test_services/test_ai_export_fifo_failed_reconstruction.py",
     "backend/test_scripts/test_services/test_ai_export_linked_charges.py",
     "backend/test_scripts/test_services/test_ai_export_portfolio_fifo_summary_in_transit.py",
