@@ -33,12 +33,22 @@ from typing import Any, ClassVar
 
 from backend.app.db.models import AssetType
 from backend.app.services.plugin_settings.contract import PluginSettingsMixin
+from backend.app.utils.runtime.cooldown import RateLimitedError
 
 #: The identifier types strong enough to start another search in the cascade (plan §3.2, round 18).
 STRONG_IDENTIFIER_TYPES: frozenset[str] = frozenset({"ISIN", "LEI"})
 
 #: The error code of a read refused for too many requests: the one the scheduler knows (``scheduler/jobs.py``).
 RATE_LIMITED = "RATE_LIMITED"
+
+
+class EnricherRateLimited(RateLimitedError):
+    """The source refused a call of the enricher for too many requests (a ``search``; ENR-3b).
+
+    ``retry_after`` is the wait the source asked for, in seconds, None when it did not say. The enrichers' routes answer
+    it with a 429 ``RATE_LIMITED`` and ``Retry-After``: a refusal is never an empty result. A plugin raises it from the
+    library's error (``raise EnricherRateLimited(...) from error``) and never retries in its thread.
+    """
 
 
 class EnricherTerms(StrEnum):
@@ -149,7 +159,8 @@ class EnricherPlugin(PluginSettingsMixin, ABC):
         return type(self).search is not EnricherPlugin.search
 
     def search(self, query: str) -> list[EnricherSearchResult]:
-        """The assets the source finds for ``query``; optional."""
+        """The assets the source finds for ``query``; optional. A refusal for too many requests raises
+        ``EnricherRateLimited``, never an empty list (ENR-3b)."""
         raise NotImplementedError(f"{self.code} does not search")
 
     @abstractmethod

@@ -41,6 +41,7 @@ from backend.app.services.enrichers.base import (
     RATE_LIMITED,
     EnricherBinding,
     EnricherPlugin,
+    EnricherRateLimited,
     EnricherReadItem,
     EnricherReadStatus,
     EnricherRecognition,
@@ -557,6 +558,8 @@ class BorsaItalianaEnricher(EnricherPlugin):
         try:
             _PACER.wait()
             hits = cerca(query, lingua="it", sessione=session)
+        except RateLimitRaggiunto as error:
+            raise EnricherRateLimited("Borsa Italiana refused the search for too many requests") from error
         finally:
             session.chiudi()
         results: list[EnricherSearchResult] = []
