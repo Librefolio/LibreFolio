@@ -35,7 +35,7 @@ ONBOARDING_FLOW_VERSIONS: Mapping[OnboardingFlow, int] = {
     OnboardingFlow.IMPORT_GUIDE: 1,
     OnboardingFlow.BROKER_PAGE_GUIDE: 1,
     OnboardingFlow.BROKER_GUIDE: 1,
-    OnboardingFlow.BROKER_DETAIL_GUIDE: 1,
+    OnboardingFlow.BROKER_DETAIL_GUIDE: 2,  # 2: the «Allocazione» tab step (lane 80, F2)
     OnboardingFlow.FX_PAGE_GUIDE: 1,
     OnboardingFlow.FX_GUIDE: 1,
     OnboardingFlow.FX_DETAIL_GUIDE: 1,

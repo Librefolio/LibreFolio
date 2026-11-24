@@ -377,8 +377,6 @@ const PREVIEW_TOLERATED = new Set(['targetTotalNotHundred', 'limitInvalid', 'lim
 export interface BuildOptions {
     /** `preview`: the request of the scenario preview, built from a draft still being typed (the tolerated problems pass). */
     operation?: 'plan' | 'preview';
-    /** The preview only: the «custom» fidelity as the euros typed on the reference row (the preview turns them into λ). */
-    customReferenceAmount?: string | null;
 }
 
 /**
@@ -570,7 +568,6 @@ export function buildRequest(draft: PlannerDraft, now: Date = new Date(), option
     // The Rebalancer (F3a of project 67, step 11): positions, the Brokers that only hold them, cash entries, the fidelity;
     // `invest_only` always before F3b (S1), and no funding route (contract §5.4).
     const rebalancer = draft.profile.toolCode === 'portfolio_rebalancer';
-    const reference = options.customReferenceAmount ? canonicalInput(options.customReferenceAmount) : null;
     const holdings = rebalancer ? rebalancerHoldings(draft, copied, manual) : [];
     const heldOnly = rebalancer ? positionOnlyBrokers(draft, copied) : [];
     if (late.items.length > 0) return {ok: false, problems: late.items};
@@ -597,7 +594,6 @@ export function buildRequest(draft: PlannerDraft, now: Date = new Date(), option
                   order_routes: orderRoutes,
                   policy: 'invest_only',
                   target_fidelity: wireFidelity(data.fidelity, preview),
-                  ...field('custom_reference_amount', preview && reference !== null ? {amount: reference, currency: data.valuationCurrency} : null),
               }
             : {...head, ...field('funding_routes', nonEmpty(fundingRoutes)), target_weights: [...assetTargets, ...pacCashLimitEntries(draft)], order_routes: orderRoutes, policy: data.policy}
     ) as PlannerRequest;
@@ -662,7 +658,6 @@ export function stepOfWirePath(path: readonly (string | number)[]): PlannerStep 
             return 'fx';
         case 'policy':
         case 'target_fidelity':
-        case 'custom_reference_amount':
             return 'strategy';
         default:
             return 'scenario';

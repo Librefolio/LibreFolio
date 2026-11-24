@@ -90,6 +90,7 @@
 
 ## Decisions
 
+| [[decisions/allocation-filter-by-content-own-endpoint]] | **Project 80, issue #89.** The «Allocazione» tab (Dashboard and broker pages) filters by content (`asset_type_content`), while its charts keep the family; its own `POST /portfolio/allocation` reads the page's cached engine run (no replay); `allocation_view.py` on the replay's own split; base + outside + excluded = NAV, always declared | 2026-11-24 | dashboard, allocation, asset-types, financial-math, api |
 | [[decisions/storage-limit-enforced]] | **Wave 8 (C8).** The space limit is enforced: uploads, broker reports, manual backups (after the clean-up) and restores refused past it with a 507 and the numbers to fix it; automatic, panel and command-line backups always made; transactions, prices and the database never stopped. | 2026-11-06 | backup, storage, restore, limits |
 | [[decisions/restore-waits-and-restores-from-kept-backup]] | **Wave 9 (C9).** Waiting restore checks listed by the server for any tab or device; a check refused for space deleted at once; restore from a kept backup without download; password verified on the opened copy; avatars and a parts bar. | 2026-11-07 | backup, restore, security |
 | [[decisions/pnl-day-change-against-yesterdays-nav]] | **Wave 9 (R9, D8).** The P&L day change shown as a share of yesterday's NAV; `pnl_change_1d_vs_total_pnl_percent` removed from the API without deprecation (it exploded near zero). | 2026-11-07 | dashboard, kpi, api, breaking-change |

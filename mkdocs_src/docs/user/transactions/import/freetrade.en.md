@@ -28,4 +28,7 @@ To export your transaction statement from Freetrade:
 
 - UK-based broker.
 - Supports equity and ETF trades, dividends, cash deposits, and withdrawals.
+- A **free share** (`FREESHARE_ORDER`) is imported as a **Reward** transaction: the share you received, with no cash, at
+  the `Price per Share in Account Currency` of the file. That value is both its purchase cost and your income. Before this
+  change it was a purchase that took cash from the account, cash that never left it.
 - Full multi-currency support for GBP, EUR, and USD assets.

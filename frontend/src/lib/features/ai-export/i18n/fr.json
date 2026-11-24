@@ -21,8 +21,8 @@
     "period": "Période IA",
     "periodHelp": "Période d’export indépendante se terminant à la date de l’instantané.",
     "periodCustom": "Personnalisé",
-    "userNotes": "Notes pour l’IA",
-    "userNotesPlaceholder": "Ajoutez un contexte ou des questions facultatives…",
+    "userNotes": "Votre question",
+    "userNotesPlaceholder": "Facultative. Posez votre question, ou ajoutez le contexte que l’IA doit connaître…",
     "payloadStats": "Taille du prompt final",
     "payloadStatsHelp": "Estimation du texte qui sera effectivement copié dans le presse-papiers.",
     "tokenSeverity": {
@@ -57,11 +57,15 @@
         },
         "performance_market_drivers": {
           "display": "Performance et facteurs de marché",
-          "description": "Explique la performance du portefeuille et recherche des facteurs de marché datés pour chaque actif détenu."
+          "description": "Explique ce qui a fait bouger le résultat du portefeuille sur la période, avec des actualités de marché datées pour les mouvements qui comptent."
         },
         "fiscal_lots": {
           "display": "Stratégies de compensation des moins-values",
           "description": "Étudie comment des moins-values disponibles ou proches de l’expiration pourraient compenser des gains éligibles à partir des lots FIFO économiques, après clarification du relevé fiscal officiel, du pays, du régime, des échéances et des règles applicables."
+        },
+        "protection_strategies": {
+          "display": "Stratégies de protection",
+          "description": "Évalue s'il est judicieux de protéger le portefeuille aujourd'hui et, seulement dans ce cas, avec quelle stratégie."
         }
       },
       "broker": {
@@ -71,7 +75,7 @@
         },
         "performance_market_drivers": {
           "display": "Performance et facteurs de marché",
-          "description": "Explique la performance du courtier sélectionné et recherche des facteurs de marché datés pour chaque actif détenu."
+          "description": "Explique ce qui a fait bouger le résultat du courtier sélectionné sur la période, avec des actualités de marché datées pour les mouvements qui comptent."
         },
         "fiscal_lots": {
           "display": "Stratégies de compensation des moins-values",
@@ -183,6 +187,10 @@
         "all_data": {
           "display": "Toutes les données du portefeuille",
           "description": "Union dédupliquée de tous les jeux de données applicables au portefeuille."
+        },
+        "risk_evidence": {
+          "display": "Éléments de Risque du Portefeuille",
+          "description": "Mesures de risque déterministes sur les positions actuelles, sur une fenêtre allant jusqu'à 12 mois qui ne dépend pas de la période IA : où le risque se concentre, la perte d'un mauvais mois et les paires de positions qui évoluent ensemble, avec fenêtre mesurée, couverture et exclusions."
         }
       },
       "broker": {
@@ -307,6 +315,7 @@
     "tooManyPriceDays": "Cette exportation lirait trop de jours de prix. Choisissez une période plus courte.",
     "replyInstructions": {
       "dataReceived": "Données reçues, je suis prêt à entendre vos questions."
-    }
+    },
+    "noOwnedBrokers": "Vous ne possédez aucun courtier : cette sélection lit vos positions et vos liquidités, et celles des courtiers partagés avec vous ne sont pas incluses."
   }
 }

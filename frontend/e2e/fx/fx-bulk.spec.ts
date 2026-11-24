@@ -88,6 +88,32 @@ test.describe('FX list-view bulk actions', () => {
         expect(lastRow.y + lastRow.height, 'the last row ends above the dock').toBeLessThanOrEqual(dockBox.y + 1);
     });
 
+    // 81 U20 — the bar at the top of the table sits on its right edge, and so does the hint before anything is ticked: one edge
+    // the bar grows from, so nothing jumps when it appears. At the three widths of the photos (a desktop, a tablet, a phone).
+    for (const width of [1280, 768, 390]) {
+        test(`the selection bar and the hint above the table sit on its right edge at ${width} px (81 U20)`, async ({page}, testInfo) => {
+            await page.setViewportSize({width, height: 900});
+            const top = page.getByTestId('dt-selection-top');
+            const rightEdge = async (target: Locator): Promise<number> => {
+                const box = await target.boundingBox();
+                if (!box) throw new Error('The element must be on screen to be measured.');
+                return box.x + box.width;
+            };
+            const hint = page.getByTestId('selection-toolbar-hint');
+            await expect(hint).toBeVisible();
+            const edge = await rightEdge(top);
+            expect(Math.abs((await rightEdge(hint)) - edge), 'the hint ends on the right edge of the table').toBeLessThanOrEqual(2);
+            await testInfo.attach(`hint-${width}`, {body: await top.screenshot(), contentType: 'image/png'});
+
+            await selectAllRows(page);
+            const bar = page.getByTestId('selection-toolbar');
+            await expect(bar).toHaveAttribute('data-variant', 'top');
+            const lastAction = bar.locator(':scope > *').last();
+            expect(Math.abs((await rightEdge(lastAction)) - edge), 'the bar ends on the right edge of the table').toBeLessThanOrEqual(2);
+            await testInfo.attach(`bar-${width}`, {body: await top.screenshot(), contentType: 'image/png'});
+        });
+    }
+
     // Q-SEL-17: «Sync» takes the pairs with a provider only, and says how many.
     test('the sync action counts the pairs with a provider, the others every selected pair', async ({page}) => {
         await selectAllRows(page);

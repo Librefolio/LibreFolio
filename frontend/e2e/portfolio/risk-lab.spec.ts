@@ -2935,7 +2935,7 @@ interface BenchmarkCast {
  * first asset flagged `is_benchmark` and the selection the first ones that are not, so the
  * reference is outside the selection by construction. `populate_mock_data.py` creates those
  * before any spec runs, so a neighbour's freshly created asset — which may be deleted under us —
- * is never one of them; `risk-benchmark-shared.spec.ts` picks the same way.
+ * is never one of them.
  *
  * Outside it on purpose, no longer by necessity: since D371 a selected benchmark is applied too —
  * benchmark picker (c) and (f) take theirs from the selection — but drawn once, as its own row's dot,
@@ -2975,7 +2975,7 @@ async function readStorage(page: Page, key: string): Promise<string | null> {
  * Written from the page the login left open, on the app's origin, and read by a runtime that
  * starts afterwards: both stores keep their value at module scope and read storage once per
  * account, so only the full document load of {@link openLabOn} is sure to see the seed — the
- * pattern of `storeBenchmark` in `risk-benchmark-shared.spec.ts`. Only the user-scoped spelling
+ * pattern the Dashboard's benchmark specs use. Only the user-scoped spelling
  * of each key is written, on purpose: the `(app)` layout renders after `/auth/me` has resolved,
  * so that is the key the picker must read, and a picker that opened on any other would be the
  * defect. "Nothing stored" is written too — as a removal — so it is a fact of the test rather
@@ -3014,7 +3014,7 @@ async function openLabOn(page: Page, selection: readonly number[]): Promise<void
 /**
  * Open the lab's benchmark picker and end with it open.
  *
- * Copied from `risk-benchmark-shared.spec.ts` and pointed at this page's testid.
+ * A copy of the Dashboard's picker helper, pointed at this page's testid.
  * `SearchSelect.openDropdown()` ignores a click landing within 200 ms of its last close (a guard
  * against touch double-fire), and nothing on the page says the guard is armed: so this asks for
  * the end state and clicks only while it is not there, retrying until the list is open — never a

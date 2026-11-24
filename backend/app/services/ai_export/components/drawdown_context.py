@@ -17,12 +17,16 @@ Scope/basis rules (see the ``ai-adequacy-v1-drawdown-export`` design):
   loads are sparse-safe), PORTFOLIO scope from the user's earliest accessible
   transaction (the engine emits one history point per day in the range).
 
-- ``portfolio.drawdown_summary``: Risk ``PortfolioRiskScope`` with
-  ``broker_ids=None`` (whole portfolio) in the ``BuildScope`` target currency;
-  the Risk service resolves this to a TWRR / ``historical_twrr`` basis.
-- ``broker.drawdown_summary``: Risk ``PortfolioRiskScope`` restricted to the
-  exact selected broker ID(s) (``BuildScope.broker_scope``), also TWRR /
-  ``historical_twrr``.
+- ``portfolio.drawdown_summary``: Risk ``PortfolioRiskScope`` on the export's
+  own brokers (``BuildScope.broker_scope``, the brokers of the positions), with
+  the owner's share of each, in the ``BuildScope`` target currency; the Risk
+  service resolves this to a TWRR / ``historical_twrr`` basis. Until 78 L10 it
+  was ``broker_ids=None``: every broker the user could access, a broker filter
+  or a broker only shared with the user included (version 3).
+- ``broker.drawdown_summary``: the same scope, the selected broker counted whole
+  (R11), also TWRR / ``historical_twrr``.
+- Both read the scope from ``export_risk_scope``, the one function that the risk
+  evidence (``risk_evidence.py``) reads too.
 - ``asset.drawdown_summary``: Risk ``AssetRiskScope`` computed in the asset's
   **native observed price currency** (declared dependency on
   ``asset.market_snapshot`` -> ``observed.native_price.code``) so the basis
@@ -55,8 +59,9 @@ from backend.app.schemas.risk.results import RiskAnalyticResult
 from backend.app.schemas.risk.scope import AssetRiskScope, PortfolioRiskScope, RiskAnalyticRequest, RiskQueryRequest
 from backend.app.schemas.risk.vocabulary import RiskDrawdownRecoveryStatus, RiskMode, RiskResultStatus, RiskScopeKind
 from backend.app.services.ai_export.components.asset_payloads import AssetMarketSnapshotPayload
+from backend.app.services.ai_export.components.broker_scope import scope_broker_ids
 from backend.app.services.ai_export.components.envelope import SectionEnvelope
-from backend.app.services.ai_export.components.payloads.portfolio_broker import counts_ownership_share
+from backend.app.services.ai_export.components.payloads.portfolio_broker import export_risk_scope
 from backend.app.services.ai_export.components.spec import ComponentSpec
 from backend.app.services.ai_export.components.technical_shared import (
     PORTFOLIO_TECHNICAL_UNIVERSE_KWARGS,
@@ -329,7 +334,7 @@ async def _execute_drawdown(
                 OpenDateRangeModel(start="min", end=scope.period_end),
                 scope.user_id,
                 session,
-                broker_ids=list(scope.broker_scope) or None,
+                broker_ids=scope_broker_ids(scope, reader="drawdown history start"),
             )
             inception = resolved.start if resolved is not None and isinstance(resolved.start, Date) else None
             start = min(inception, scope.period_start) if inception is not None else scope.period_start
@@ -367,7 +372,7 @@ async def _build_portfolio_drawdown(context: BuildContext, dependencies: Mapping
         context,
         scope,
         resource_key=_PORTFOLIO_DRAWDOWN_RESULT_RESOURCE,
-        risk_scope=PortfolioRiskScope(kind=RiskScopeKind.PORTFOLIO, broker_ids=None),
+        risk_scope=export_risk_scope(scope),
         target_currency=scope.target_currency,
     )
 
@@ -384,7 +389,7 @@ async def _build_broker_drawdown(context: BuildContext, dependencies: Mapping[st
         scope,
         resource_key=_BROKER_DRAWDOWN_RESULT_RESOURCE,
         # R11: the broker page counts the broker whole, so the stress impacts and the scope value match it.
-        risk_scope=PortfolioRiskScope(kind=RiskScopeKind.PORTFOLIO, broker_ids=list(scope.broker_scope), apply_ownership_share=counts_ownership_share(scope)),
+        risk_scope=export_risk_scope(scope),
         target_currency=scope.target_currency,
     )
 
@@ -571,7 +576,7 @@ async def _build_portfolio_asset_drawdown_snapshot(
 
 PORTFOLIO_DRAWDOWN_SUMMARY_COMPONENT = ComponentSpec(
     component_id="portfolio.drawdown_summary",
-    version=2,
+    version=3,
     domains=frozenset({Domain.PORTFOLIO}),
     output_model=DrawdownContextPayload,
     builder=_build_portfolio_drawdown,

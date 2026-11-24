@@ -12,8 +12,10 @@ honestly-typed income *timeline* built from the recorded income transactions -
 
 Design invariants:
 
-- **Realized history only.** Only ``DIVIDEND``/``INTEREST`` transactions that
-  actually exist in the ledger are included. There is no bond forecast, no
+- **Realized history only.** Only income transactions that actually exist in the
+  ledger are included: ``DIVIDEND``/``INTEREST`` (cash) and ``REWARD`` (income in kind,
+  its value on receipt, project 79), with the one income rule of
+  ``financial_math.income`` (``INCOME_TYPES``, ``income_value``). There is no bond forecast, no
   future coupon, no yield/accrual projection, no invented income.
 - **Permissioned + windowed.** Rows are restricted to brokers the requesting
   user actually has access to (``resolve_accessible_broker_ids`` intersected
@@ -68,6 +70,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import BrokerUserAccess, Transaction, TransactionType
 from backend.app.schemas.common import Currency, CurrencyCode, StrictModel
+from backend.app.services.ai_export.components.broker_scope import scope_broker_ids
 from backend.app.services.ai_export.components.envelope import SectionEnvelope
 from backend.app.services.ai_export.components.payloads.portfolio_broker import (
     counts_ownership_share,
@@ -78,11 +81,12 @@ from backend.app.services.ai_export.components.payloads.portfolio_broker import 
 from backend.app.services.ai_export.components.spec import ComponentSpec
 from backend.app.services.ai_export.components.types import BuildScope, Domain, PeriodBehavior, ResourceKey
 from backend.app.services.ai_export.dependencies import BuildContext, ResourceLoadError
+from backend.app.services.financial_math.income import INCOME_TYPES, income_value
 from backend.app.services.financial_math.native_cash import broker_shares
 from backend.app.services.fx.conversion import convert_bulk
 
-# Only these two ledger types are realized cash income (see `TransactionType`).
-_INCOME_TYPES: frozenset[TransactionType] = frozenset({TransactionType.DIVIDEND, TransactionType.INTEREST})
+# The ledger types that earn income: the one list of `financial_math.income` (cash DIVIDEND/INTEREST, REWARD in kind)
+_INCOME_TYPES: tuple[TransactionType, ...] = tuple(TransactionType(code) for code in sorted(INCOME_TYPES))
 
 # Component-local bound for the STANDARD detail level's dated-row window: the most
 # recent N income rows are exposed verbatim; older rows are summarised only
@@ -99,6 +103,8 @@ REASON_RATE_NOT_FOUND = "fx_rate_not_found"
 # Machine-readable reason the whole timeline could not be sourced.
 REASON_LEDGER_QUERY_FAILED = "income_ledger_query_failed"
 REASON_CONVERSION_FAILED = "income_conversion_failed"
+# A recorded income transaction whose value is unknown (a REWARD without its value on receipt): never counted as zero
+REASON_INCOME_VALUE_MISSING = "income_value_missing"
 
 # Deterministic provenance source tag for a converted row.
 CONVERSION_SOURCE = "fx_convert_bulk"
@@ -106,6 +112,10 @@ CONVERSION_SOURCE = "fx_convert_bulk"
 
 class IncomeTimelineScopeError(RuntimeError):
     """Raised when the income timeline builder is invoked without a Portfolio `BuildScope`."""
+
+
+class _IncomeValueMissingError(ValueError):
+    """A recorded income transaction has no known value: the timeline fails with its reason instead of a zero."""
 
 
 class IncomeTimelineStatus(StrEnum):
@@ -137,8 +147,9 @@ class _IncomeRecord:
     asset_id: int | None
     broker_id: int
     income_type: TransactionType
-    amount: Decimal  # amount * share, signed, in `currency`
+    amount: Decimal  # income value * share, signed, in `currency`
     currency: str
+    units: Decimal | None = None  # a REWARD's units received * share; None for cash income
 
 
 @dataclass(frozen=True, slots=True)
@@ -188,6 +199,7 @@ class IncomeTimelineRow(StrictModel):
     asset_name: str | None = None
     asset_ticker: str | None = None
     native_amount: Currency
+    units: Decimal | None = Field(None, description="A REWARD's units received, times the broker share; absent for cash income")
     target_amount: Currency | None = None
     conversion: ConversionProvenance | None = None
     conversion_reason: str | None = None
@@ -223,6 +235,7 @@ class AggregatedIncomeRow(StrictModel):
     asset_ticker: str | None = None
     transaction_count: int = Field(ge=1)
     native_amounts: tuple[Currency, ...]
+    units: Decimal | None = Field(None, description="REWARD buckets only: the units received in the bucket, times the broker share")
     target_amount: Currency | None = None
     conversion_complete: bool
 
@@ -240,6 +253,7 @@ class IncomeTimelineSummary(StrictModel):
     transaction_count: int = Field(ge=0)
     dividend_count: int = Field(ge=0)
     interest_count: int = Field(ge=0)
+    reward_count: int = Field(ge=0)
     distinct_asset_count: int = Field(ge=0)
     distinct_broker_count: int = Field(ge=0)
     earliest_date: Date | None = None
@@ -343,10 +357,7 @@ async def _load_income_records(context: BuildContext, scope: BuildScope) -> _Inc
 
     async def _loader(session: AsyncSession) -> _IncomeTimelineData:
         accessible = set(await resolve_accessible_broker_ids(session, scope.user_id))
-        if scope.broker_scope:
-            effective = sorted(b for b in scope.broker_scope if b in accessible)
-        else:
-            effective = sorted(accessible)
+        effective = sorted(b for b in scope_broker_ids(scope, reader="income timeline") if b in accessible)
         if not effective:
             return _IncomeTimelineData()
 
@@ -369,19 +380,22 @@ async def _load_income_records(context: BuildContext, scope: BuildScope) -> _Inc
         records: list[_IncomeRecord] = []
         asset_ids: set[int] = set()
         for tx in txns:
-            if tx.currency is None or tx.amount is None:
-                raise ValueError("recorded income transaction is missing amount or currency")
+            value = income_value(tx)
+            if value is None:
+                raise _IncomeValueMissingError("recorded income transaction has no known value (amount, or a REWARD's value on receipt)")
             share = shares.get(tx.broker_id)
             if share is None:
                 raise ValueError("accessible income transaction has no ownership-share record")
+            in_kind = tx.type is TransactionType.REWARD
             records.append(
                 _IncomeRecord(
                     date=tx.date,
                     asset_id=tx.asset_id,
                     broker_id=tx.broker_id,
                     income_type=tx.type,
-                    amount=tx.amount * share,
-                    currency=tx.currency,
+                    amount=value.amount * share,
+                    currency=value.currency,
+                    units=tx.quantity * share if in_kind and tx.quantity is not None else None,
                 )
             )
             if tx.asset_id is not None:
@@ -450,6 +464,7 @@ def _build_row(record: _IncomeRecord, data: _IncomeTimelineData, conversion: obj
             asset_name=asset_name,
             asset_ticker=asset_ticker,
             native_amount=native,
+            units=record.units,
             conversion_reason=REASON_RATE_NOT_FOUND,
         )
 
@@ -463,6 +478,7 @@ def _build_row(record: _IncomeRecord, data: _IncomeTimelineData, conversion: obj
         asset_name=asset_name,
         asset_ticker=asset_ticker,
         native_amount=native,
+        units=record.units,
         target_amount=Currency(code=converted.code, amount=converted.amount),
         conversion=ConversionProvenance(
             rate_date=rate_date,
@@ -506,6 +522,7 @@ def _build_summary(
         transaction_count=len(records),
         dividend_count=sum(1 for r in records if r.income_type is TransactionType.DIVIDEND),
         interest_count=sum(1 for r in records if r.income_type is TransactionType.INTEREST),
+        reward_count=sum(1 for r in records if r.income_type is TransactionType.REWARD),
         distinct_asset_count=len({r.asset_id for r in records if r.asset_id is not None}),
         distinct_broker_count=len({r.broker_id for r in records}),
         earliest_date=min(dates) if dates else None,
@@ -530,6 +547,7 @@ def _build_aggregated_rows(
         native: dict[str, Decimal] = field(default_factory=dict)
         target_total: Decimal = Decimal("0")
         all_converted: bool = True
+        units: Decimal | None = None
 
     buckets: dict[tuple[str, int, str], _Bucket] = {}
     for record, conversion in zip(records, conversions, strict=True):
@@ -538,6 +556,8 @@ def _build_aggregated_rows(
         bucket = buckets.setdefault(key, _Bucket())
         bucket.count += 1
         bucket.native[record.currency] = bucket.native.get(record.currency, Decimal("0")) + record.amount
+        if record.units is not None:
+            bucket.units = (bucket.units or Decimal("0")) + record.units
         if conversion is None:
             bucket.all_converted = False
         else:
@@ -555,6 +575,7 @@ def _build_aggregated_rows(
                 asset_ticker=data.asset_tickers.get(asset_id) if asset_id is not None else None,
                 transaction_count=bucket.count,
                 native_amounts=tuple(Currency(code=code, amount=amount) for code, amount in sorted(bucket.native.items())),
+                units=bucket.units,
                 target_amount=(Currency(code=target_currency, amount=bucket.target_total) if bucket.all_converted else None),
                 conversion_complete=bucket.all_converted,
             )
@@ -592,7 +613,14 @@ async def _build_portfolio_income_timeline(context: BuildContext, dependencies: 
 
     try:
         data = await _load_income_records(context, scope)
-    except ResourceLoadError:
+    except ResourceLoadError as exc:
+        if isinstance(exc.cause, _IncomeValueMissingError):
+            return IncomeTimelinePayload(
+                status=IncomeTimelineStatus.FAILED,
+                detail_level=detail,
+                reason_code=REASON_INCOME_VALUE_MISSING,
+                message="A recorded income transaction in the selected scope and period has no known value (a reward without its value on receipt); the timeline is not built rather than counting it as zero.",
+            )
         return IncomeTimelinePayload(
             status=IncomeTimelineStatus.FAILED,
             detail_level=detail,
@@ -647,7 +675,7 @@ async def _build_portfolio_income_timeline(context: BuildContext, dependencies: 
 
 PORTFOLIO_INCOME_TIMELINE_COMPONENT = ComponentSpec(
     component_id="portfolio.income_timeline",
-    version=2,
+    version=3,
     domains=frozenset({Domain.PORTFOLIO}),
     output_model=IncomeTimelinePayload,
     builder=_build_portfolio_income_timeline,
@@ -662,6 +690,7 @@ __all__ = [
     "PORTFOLIO_INCOME_TIMELINE_COMPONENT",
     "PORTFOLIO_INCOME_TIMELINE_COMPONENTS",
     "REASON_CONVERSION_FAILED",
+    "REASON_INCOME_VALUE_MISSING",
     "REASON_LEDGER_QUERY_FAILED",
     "REASON_RATE_NOT_FOUND",
     "AggregatedIncomeRow",

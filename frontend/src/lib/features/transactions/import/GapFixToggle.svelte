@@ -6,6 +6,8 @@
   and its tests can tell the corrections apart. The step owns the selection: a click only asks.
 -->
 <script lang="ts">
+    import Switch from '$lib/components/ui/input/Switch.svelte';
+
     interface Props {
         pressed: boolean;
         label: string;
@@ -21,22 +23,20 @@
 
 <div class="flex justify-center">
     <!-- colour: closest role, to review: the on track was emerald-500 (a success green); switch role bg-lf-checked, alt bg-lf-success -->
-    <button
-        type="button"
-        class="relative inline-flex h-5 w-9 cursor-pointer items-center rounded-full transition-colors {pressed ? 'bg-lf-checked' : 'bg-lf-switch-off'}"
-        aria-pressed={pressed ? 'true' : 'false'}
-        aria-label={label}
+    <Switch
+        size="sm"
+        semantics="pressed"
+        checked={pressed}
+        {label}
         title={label}
-        onclick={(event) => {
+        onchange={(_next, event) => {
             event.stopPropagation();
             onToggle();
         }}
-        data-testid="gapfix-proposal-toggle"
+        testId="gapfix-proposal-toggle"
         data-key={proposalKey}
         data-type={type}
         data-date={date}
         data-point={point}
-    >
-        <span class="inline-block h-3.5 w-3.5 rounded-full shadow-sm transition-transform {pressed ? 'translate-x-[18px] bg-lf-switch-knob-on' : 'translate-x-[3px] bg-lf-switch-knob-off border border-lf-input'}"></span>
-    </button>
+    />
 </div>

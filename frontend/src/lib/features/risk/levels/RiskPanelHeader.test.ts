@@ -248,6 +248,25 @@ describe('RiskPanelHeader — the period beside the title (RN-11, Q14)', () => {
     });
 });
 
+describe('RiskPanelHeader — the risk-free rate field (81 U25)', () => {
+    // The field sits beside «Compare with» (L3) on Dashboard and Broker; the header draws it only where no L3 is drawn,
+    // the single asset, whose semi-deviation is still measured against the rate.
+    it('draws no field by default: on a portfolio the rate sits in L3, beside the benchmark picker', () => {
+        const {controller} = fakeController([]);
+        render(RiskPanelHeader, {props: {controller, dateStart: '2026-01-01', dateEnd: '2026-06-30', targetCurrency: 'EUR', showActions: false}});
+
+        expect(screen.queryByTestId('risk-period')).not.toBeNull();
+        expect(screen.queryByTestId('risk-free-rate'), 'the rate field is drawn under the period line of a portfolio').toBeNull();
+    });
+
+    it('draws the field under the period line when asked: the asset, which has no L3', () => {
+        const {controller} = fakeController([]);
+        render(RiskPanelHeader, {props: {controller, dateStart: '2026-01-01', dateEnd: '2026-06-30', targetCurrency: 'EUR', showActions: false, riskFreeRate: true}});
+
+        expect(screen.getAllByTestId('risk-free-rate'), 'one field, under the period line').toHaveLength(1);
+    });
+});
+
 describe('RiskPanelHeader — the docs icon beside the title (RN-13, B1)', () => {
     it('opens the risk tab’s user page, beside the title', async () => {
         const open = vi.spyOn(window, 'open').mockReturnValue(null);

@@ -7,7 +7,11 @@
  *   unavailable); the text of a row is the one it is given, only with a value;
  * - the identity group adds the asset's ISIN and ticker, which are the asset's identifiers, not profile voices: a row
  *   each, «not available» without one;
- * - a row with a value opens the voice's history (E6) when the page handles it; otherwise it is plain text.
+ * - a row with a value opens the voice's history (E6) when the page handles it; otherwise it is plain text;
+ * - BI-PROF: the company's `website` with an http(s) address is a link opened apart (`target=_blank`,
+ *   `rel=noopener noreferrer`); when the page handles the history, a clock beside the link (never the link itself) opens
+ *   it, with the same `-history` test id as every other row; any other text of it, and an address in another voice, is
+ *   not a link.
  */
 import {beforeAll, describe, expect, it, vi} from 'vitest';
 import {fireEvent, render, screen, setupI18n, within} from '$test/component';
@@ -16,6 +20,10 @@ import type {DetailGroup, ProfileCell} from './profileTabState';
 import ProfileDetails from './ProfileDetails.svelte';
 import {get} from 'svelte/store';
 import {_} from '$lib/i18n';
+
+function websiteGroups(): DetailGroup[] {
+    return [{group: 'company', cells: [cell('website', 'value'), cell('industry', 'value')]}];
+}
 
 function cell(key: string, state: ProfileCell['state']): ProfileCell {
     const step = state === 'unavailable' ? null : ({date: '2026-01-01', through: '2026-11-17', value: state === 'value' ? 'x' : null, source: 'justetf', update_id: 1} as ProfileStep);
@@ -83,6 +91,26 @@ describe('ProfileDetails', () => {
         expect(rows[1]).toContain('123456789');
     });
 
+    // 81 U26b: the asset's «other» identifiers are free values, not a typed id: one row «Other identifiers» with a chip
+    // each (the look of «Modifica asset»'s tag input, read-only), in monospace, never one row per value labelled «other».
+    it('shows the free identifiers as chips in one row, read-only and in monospace', () => {
+        render(ProfileDetails, {props: {groups: GROUPS, texts: TEXTS, isin: null, ticker: 'VWCE', softIdentifiers: ['WKN A2PKXG', 'LU-0001']}});
+        const identity = screen.getByTestId('profile-details-group-identity');
+        const row = within(identity).getByTestId('profile-detail-soft-identifiers');
+        const chips = within(row).getAllByTestId(/^profile-detail-soft-identifier-/);
+        expect(chips.map((chip) => chip.textContent?.trim())).toEqual(['WKN A2PKXG', 'LU-0001']);
+        for (const chip of chips) {
+            expect(chip.className, 'the value is not in monospace').toContain('font-mono');
+            expect(chip.querySelector('button'), 'a read-only chip has no remove control').toBeNull();
+        }
+        expect(within(identity).queryAllByTestId(/^profile-detail-identifier-/), 'a row per free value is still drawn').toHaveLength(0);
+    });
+
+    it('draws no free-identifiers row when the asset has none', () => {
+        render(ProfileDetails, {props: {groups: GROUPS, texts: TEXTS, isin: null, ticker: null}});
+        expect(screen.queryByTestId('profile-detail-soft-identifiers')).toBeNull();
+    });
+
     it('opens the history of a voice with a value, when the page handles it', async () => {
         const onhistory = vi.fn();
         render(ProfileDetails, {props: {groups: GROUPS, texts: TEXTS, isin: null, ticker: null, onhistory}});
@@ -102,5 +130,85 @@ describe('ProfileDetails', () => {
         expect(screen.getByTestId('profile-detail-fund_provider-stale')).toHaveTextContent('Confirmed on 18/09/2026, not up to date');
         expect(screen.getByTestId('profile-detail-legal_form')).toHaveAttribute('data-stale', 'false');
         expect(screen.queryByTestId('profile-detail-legal_form-stale')).toBeNull();
+    });
+
+    it('shows the company website as a link opened in a new tab (BI-PROF)', () => {
+        const address = 'https://www.enel.com/investors/overview';
+        render(ProfileDetails, {props: {groups: websiteGroups(), texts: {website: address, industry: 'Utilities'}, isin: null, ticker: null}});
+        const row = screen.getByTestId('profile-detail-website');
+        expect(row).toHaveAttribute('data-state', 'value');
+        const link = within(row).getByTestId('profile-detail-website-link');
+        expect(link.tagName).toBe('A');
+        expect(link).toHaveAttribute('href', address);
+        expect(link).toHaveAttribute('target', '_blank');
+        expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+        expect(link).toHaveAttribute('title', get(_)('assets.profile.tab.openWebsite'));
+        expect(link).toHaveTextContent(address);
+        expect(row).toHaveTextContent(get(_)('assets.profile.voices.website'));
+    });
+
+    it('opens the history of a website link from a clock beside it, never from the link (BI-PROF 2b)', async () => {
+        const onhistory = vi.fn();
+        const address = 'https://www.enel.com';
+        render(ProfileDetails, {props: {groups: websiteGroups(), texts: {website: address, industry: 'Utilities'}, isin: null, ticker: null, onhistory}});
+        const row = screen.getByTestId('profile-detail-website');
+        const link = within(row).getByTestId('profile-detail-website-link');
+        expect(link.tagName).toBe('A');
+        expect(link).toHaveAttribute('href', address);
+        expect(link).toHaveAttribute('target', '_blank');
+        expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+
+        const clock = within(row).getByTestId('profile-detail-website-history');
+        expect(clock.tagName, 'the history control is a button').toBe('BUTTON');
+        expect(clock, 'the history control is not the link').not.toBe(link);
+        expect(link.contains(clock), 'the history control sits beside the link, not inside it').toBe(false);
+        expect(clock.contains(link), 'the link is not inside the history control').toBe(false);
+        const name = get(_)('assets.profile.tab.history', {values: {voice: get(_)('assets.profile.voices.website')}});
+        expect(clock).toHaveAttribute('aria-label', name);
+        expect(within(row).getAllByTestId('profile-detail-website-history'), 'one history control on the row').toHaveLength(1);
+
+        await fireEvent.click(link);
+        expect(onhistory, 'following the link opens no history').not.toHaveBeenCalled();
+        await fireEvent.click(clock);
+        expect(onhistory).toHaveBeenCalledTimes(1);
+        expect(onhistory).toHaveBeenCalledWith('website');
+
+        await fireEvent.click(screen.getByTestId('profile-detail-industry-history'));
+        expect(onhistory, 'the other rows of the group keep their value as the history control').toHaveBeenLastCalledWith('industry');
+        expect(screen.getByTestId('profile-detail-industry-history')).toHaveTextContent('Utilities');
+    });
+
+    it('draws no clock beside the website link without a handler', () => {
+        render(ProfileDetails, {props: {groups: websiteGroups(), texts: {website: 'https://www.enel.com', industry: 'Utilities'}, isin: null, ticker: null}});
+        expect(screen.getByTestId('profile-detail-website-link'), 'barrier: the website is a link').toHaveAttribute('href', 'https://www.enel.com');
+        expect(screen.queryByTestId('profile-detail-website-history')).toBeNull();
+        expect(screen.queryByTestId('profile-detail-industry-history')).toBeNull();
+    });
+
+    it('keeps a website that is not a web address an ordinary row: its value opens the history', async () => {
+        const onhistory = vi.fn();
+        render(ProfileDetails, {props: {groups: websiteGroups(), texts: {website: 'www.enel.com', industry: 'Utilities'}, isin: null, ticker: null, onhistory}});
+        expect(screen.queryByTestId('profile-detail-website-link')).toBeNull();
+        const control = screen.getByTestId('profile-detail-website-history');
+        expect(control).toHaveTextContent('www.enel.com');
+        await fireEvent.click(control);
+        expect(onhistory).toHaveBeenCalledTimes(1);
+        expect(onhistory).toHaveBeenCalledWith('website');
+    });
+
+    it.each(['javascript:alert(1)', 'mailto:investor.relations@enel.com', 'www.enel.com'])('writes a website %j that is not an http address as text, never a link', (text) => {
+        render(ProfileDetails, {props: {groups: websiteGroups(), texts: {website: text, industry: 'Utilities'}, isin: null, ticker: null}});
+        const row = screen.getByTestId('profile-detail-website');
+        expect(row).toHaveAttribute('data-state', 'value');
+        expect(row).toHaveTextContent(text);
+        expect(screen.queryByTestId('profile-detail-website-link')).toBeNull();
+        expect(row.querySelector('a')).toBeNull();
+    });
+
+    it('never makes a link of an address in another voice', () => {
+        render(ProfileDetails, {props: {groups: websiteGroups(), texts: {website: 'https://www.enel.com', industry: 'https://example.com'}, isin: null, ticker: null}});
+        expect(screen.getByTestId('profile-detail-website-link'), 'barrier: the website is a link').toBeInTheDocument();
+        expect(screen.getByTestId('profile-detail-industry').querySelector('a')).toBeNull();
+        expect(screen.getAllByTestId('profile-detail-website-link')).toHaveLength(1);
     });
 });

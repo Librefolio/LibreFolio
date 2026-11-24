@@ -597,7 +597,11 @@ async def _stream(client: httpx.AsyncClient, *items: dict) -> list[dict]:
 @pytest.mark.parametrize(("tool_code", "parameters", "searches"), [pytest.param(TOOL_CODE, _buying_request, 5, id="pac"), pytest.param(REBALANCER_TOOL_CODE, reb.t4, 3, id="rebalancer-t4")])
 async def test_compute_forwards_progress_to_the_context(test_server, tool_code, parameters, searches):
     """V2 test 8 (project 67): the plugin hands ``report_progress`` to the engine, and a served plan streams its phases in
-    order — validate, model, search «n of m», verify, report — then the result of ``/compute`` for the same request."""
+    order — validate, model, search «n of m», verify, report — then the result of ``/compute`` for the same request.
+
+    On a server with fewer usable CPUs than the Rebalancer's searches, «n of m» counts every turn's stages (TURNI 4d): the
+    turns are read off the served plan's window, 30 s per turn and 5 s of grace between turns, never guessed from the
+    machine that runs the test. The PAC runs one turn."""
     async with _tool_user() as client:
         descriptor = await _served_descriptor(client, tool_code)
         plan_policy = next(policy for policy in descriptor["operations"] if policy["operation"] == "plan")
@@ -609,7 +613,9 @@ async def test_compute_forwards_progress_to_the_context(test_server, tool_code, 
     assert plan_policy["progress_phases"] == ["validate", "model", "search", "verify", "report"]
     *progress, last = lines
     assert {line["correlation_id"] for line in progress} == {item["correlation_id"]}
-    expected = [("validate", None, None), ("model", None, None), *(("search", step, searches) for step in range(1, searches + 1)), ("verify", None, None), ("report", None, None)]
+    turns = (plan_policy["engine_timeout_ms"] + 5_000) // 35_000
+    whole = searches * turns
+    expected = [("validate", None, None), ("model", None, None), *(("search", step, whole) for step in range(1, whole + 1)), ("verify", None, None), ("report", None, None)]
     assert [(line["phase"], line["step"], line["total"]) for line in progress] == expected
     assert last["kind"] == "result"
     (streamed,) = last["response"]["results"]
@@ -641,7 +647,7 @@ async def test_rebalancer_compute_rejects_a_pac_request_and_invest_and_sell(test
 @pytest.mark.asyncio
 async def test_preview_over_http(test_server):
     """B4 test 14 (contract §11): ``operation="preview"`` through ``POST /tools/compute`` gives, for each service, exactly the
-    numbers the preview computes in process: the PAC's total, the Rebalancer's F, items and table."""
+    numbers the preview computes in process: the PAC's total, the Rebalancer's F, items and the λ of its fidelity levels."""
     pac_payload = {**_buying_request(), "operation": "preview"}
     rebalancer_payload = {**reb.t4(), "operation": "preview"}
     async with _tool_user() as client:

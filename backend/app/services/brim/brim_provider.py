@@ -41,7 +41,7 @@ from backend.app.schemas.brim import (
 from backend.app.schemas.transactions.transactions import TXCreateItem
 from backend.app.schemas.transactions.type_metadata import charge_types
 from backend.app.services.plugin_settings.contract import PluginSettingsMixin
-from backend.app.services.transactions.charges import charge_link_issue
+from backend.app.services.transactions.charges import ChargeIssue, charge_link_issue
 from backend.app.utils.pydantic_errors import error_params, loc_to_field
 
 logger = structlog.get_logger(__name__)
@@ -614,12 +614,7 @@ class BRIMProvider(PluginSettingsMixin, ABC):
         if not any(tx is parent for tx in transactions):
             raise ValueError("_create_linked_charge: the parent must be a row of this output (transactions)")
         # The asset is filled only when the plugin left it out (or None): never changed, never removed.
-        charge_asset = kwargs.get("asset_id")
-        if charge_asset is None:
-            charge_asset = parent.asset_id
-        charge_view = _link_view(charge_type, parent.broker_id, charge_asset, kwargs.get("link_uuid"))
-        parent_view = _link_view(parent.type, parent.broker_id, parent.asset_id, parent.link_uuid)
-        issue = charge_link_issue(cast(Any, charge_view), cast(Any, parent_view), 0)
+        charge_asset, issue = self._charge_link_check(charge_type, kwargs.get("asset_id"), kwargs.get("link_uuid"), parent)
         if issue is not None:
             logger.debug("BRIM charge created without its link", provider=self.provider_code, row=row_num, parent_type=str(parent.type), code=issue[1])
             # Free: the plugin's own values; a broker it left out is the parent's (the same file, the same broker).
@@ -627,6 +622,55 @@ class BRIMProvider(PluginSettingsMixin, ABC):
         parent_ref = self._ensure_ref(parent, transactions)
         linked = {**kwargs, "broker_id": parent.broker_id, "asset_id": charge_asset, "parent_ref": parent_ref}
         return self._create_transaction(row_num, transactions, validation_issues, context=context, **linked)
+
+    def _create_charge_of(
+        self,
+        parent: Optional[TXCreateItem],
+        row_num: int,
+        transactions: List[TXCreateItem],
+        validation_issues: List[BRIMValidationIssue],
+        *,
+        context: Optional[str] = None,
+        **kwargs,
+    ) -> Optional[TXCreateItem]:
+        """A FEE or a TAX born from the row of ``parent`` (project 66, P4): linked to it through ``_create_linked_charge``
+        when the plugin created the parent, created free (as before the link existed) when the parent was refused and is
+        ``None``. The same-row pattern of a plugin: ``parent = self._create_transaction(...)``, then one call per charge.
+        """
+        if parent is None:
+            return self._create_transaction(row_num, transactions, validation_issues, context=context, **kwargs)
+        return self._create_linked_charge(row_num, transactions, validation_issues, parent, context=context, **kwargs)
+
+    @staticmethod
+    def _charge_link_check(charge_type: Any, charge_asset: Optional[int], charge_link_uuid: Optional[str], parent: TXCreateItem) -> Tuple[Optional[int], Optional[ChargeIssue]]:
+        """The asset a charge would carry under ``parent`` (its own, or the parent's when it has none) and the reason the
+        link is refused, ``None`` when it is valid: ``charge_link_issue`` on the incoming rows, the one place the rules live."""
+        asset = charge_asset if charge_asset is not None else parent.asset_id
+        charge_view = _link_view(charge_type, parent.broker_id, asset, charge_link_uuid)
+        parent_view = _link_view(parent.type, parent.broker_id, parent.asset_id, parent.link_uuid)
+        return asset, charge_link_issue(cast(Any, charge_view), cast(Any, parent_view), 0)
+
+    def _link_existing_charge(self, charge: TXCreateItem, parent: TXCreateItem, transactions: List[TXCreateItem], *, row_num: int = 0) -> bool:
+        """Link a FEE or a TAX already in ``transactions`` to ``parent``, a row of the same output (project 66, P2b).
+
+        For a file that lists a charge before its parent, or matches them only once every row is read: the plugin keeps
+        its output order and links afterwards. The rules are those of ``_create_linked_charge``: the asset is filled only
+        when the charge has none, the check runs on the charge's real values, and a refused link leaves the charge free
+        and untouched (``False``). A valid link gives the charge the parent's broker and ``parent_ref``. A charge or a
+        parent not in ``transactions``, or a charge type other than FEE or TAX, is a programming error (``ValueError``).
+        """
+        if charge.type not in charge_types():
+            raise ValueError(f"_link_existing_charge links a FEE or a TAX, not {charge.type!r}")
+        if not any(tx is charge for tx in transactions) or not any(tx is parent for tx in transactions):
+            raise ValueError("_link_existing_charge: the charge and the parent must be rows of this output (transactions)")
+        asset, issue = self._charge_link_check(charge.type, charge.asset_id, charge.link_uuid, parent)
+        if issue is not None:
+            logger.debug("BRIM charge left without its link", provider=self.provider_code, row=row_num, parent_type=str(parent.type), code=issue[1])
+            return False
+        charge.asset_id = asset
+        charge.broker_id = parent.broker_id
+        charge.parent_ref = self._ensure_ref(parent, transactions)
+        return True
 
     @staticmethod
     def _ensure_ref(parent: TXCreateItem, transactions: List[TXCreateItem]) -> str:

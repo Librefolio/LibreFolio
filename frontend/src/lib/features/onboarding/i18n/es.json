@@ -317,6 +317,10 @@
         "info": {
           "title": "Información y uso compartido",
           "description": "Revisa los metadatos de la cuenta y gestiona quién puede ver o editar este bróker."
+        },
+        "allocation": {
+          "title": "Asignación y filtros",
+          "description": "La asignación reparte el valor de la cuenta por sector, zona, tipo o activo, y permite quedarse solo con algunas clases o dejar activos y partidas fuera del 100 %."
         }
       }
     },

@@ -16,23 +16,23 @@ The component runtime contains:
 
 | Domain    | Components | Registered datasets | Registered analyses | Public data | Public analyses | Page      |
 | --------- | ---------: | ------------------: | ------------------: | ----------: | --------------: | --------- |
-| Portfolio |         21 |                  12 |                   4 |           2 |               4 | Dashboard |
+| Portfolio |         24 |                  13 |                   5 |           2 |               5 | Dashboard |
 | Broker    |         20 |                  12 |                   3 |           2 |               3 | Broker    |
 | Asset     |         15 |                   8 |                   2 |           2 |               2 | Asset     |
 | FX        |         12 |                   8 |                   2 |           2 |               2 | FX        |
-| **Total** |     **68** |              **40** |              **11** |       **8** |          **11** |           |
+| **Total** |     **71** |              **41** |              **12** |       **8** |          **12** |           |
 
 Components are the smallest buildable facts. Datasets can be `public` or
-`internal`; visibility defaults to `internal`. The eleven registered Analyses are
+`internal`; visibility defaults to `internal`. The twelve registered Analyses are
 all public and may compose internal datasets. Direct requests accept only public
 selection IDs.
 
 ```mermaid
 flowchart LR
-    S["Authoritative sources and engines"] --> C["68 granular components"]
-    C --> D["40 registered datasets"]
+    S["Authoritative sources and engines"] --> C["71 granular components"]
+    C --> D["41 registered datasets"]
     D --> E["8 public Export Data"]
-    D --> A["11 public Analyses<br/>+ frontend contracts"]
+    D --> A["12 public Analyses<br/>+ frontend contracts"]
     A --> P["Request Analysis<br/>full prompt"]
 ```
 
@@ -52,10 +52,10 @@ sequenceDiagram
     participant C as Clipboard
 
     F->>A: GET /catalog
-    A-->>F: 8 datasets + 11 analyses, V1 identities
+    A-->>F: 8 datasets + 12 analyses, V1 identities
     U->>F: Export Data or Request Analysis
     F->>A: POST /snapshot with selected V1 contract
-    A->>R: Authenticated request + accessible broker scope
+    A->>R: Authenticated request + broker scope (owned when none is named)
     R->>S: Load authoritative resources
     S-->>R: Financial and technical facts
     R-->>A: Ordered component envelopes + manifests
@@ -113,8 +113,42 @@ Portfolio snapshots distinguish three Broker universes:
 | `broker_scope`                    | The scoped universe rendered as B# references.                |
 
 A scoped Broker may have no current position. A period contributor may be
-historical-only. The Entity Directory includes every scoped Broker, including
-all-accessible requests that did not send an explicit Broker filter.
+historical-only. The Entity Directory includes every scoped Broker.
+
+**A request without brokers reads the user's own (78 L10b, D13).** A Portfolio,
+Asset or FX request that sends no `broker_ids` is scoped to the brokers the user
+owns (role owner, share above zero: the Dashboard's rule), each at the user's
+share; never to every accessible broker, which would bring in the brokers only
+shared with the user. `BuildScope.broker_scope_source` records where the scope came
+from (`owned` or `requested`), and `asset.position_scope` says it in
+`portfolio_role.broker_scope_mode` (`OWNED_BROKERS` or `REQUESTED_BROKERS`). An
+explicit list is the user's choice and may include a shared broker. An empty scope
+means **no broker**: every reader takes the scope's brokers through
+`scope_broker_ids` (`components/broker_scope.py`), which refuses an empty one,
+because the services below read `None` or `[]` as «every accessible broker».
+
+**A user who owns no broker.** A selection that reads brokers (every Portfolio
+selection; an Asset or FX one whose components read positions or exposure:
+`asset.position_and_history`, `asset.position_review`, `fx.market_and_exposure`,
+`fx.exposure_impact`) is refused before the build with `422
+selection_not_applicable`, `reason_code` `no_owned_brokers`, and the panel says why.
+The market-only selections stay available. For a market-only analysis the snapshot
+lists, in `unavailable_dataset_ids`, the suggested datasets the user cannot select,
+and «Additional LibreFolio Data» leaves them out.
+
+**The Export Scope fact (78 L10).** A Portfolio snapshot carries `export_scope`
+only when its brokers leave out at least one broker the user owns: role owner,
+share above zero, the Dashboard's own rule (`getOwnedBrokers`), so the list the
+Dashboard sends without a filter never produces it. It holds
+`included_broker_ids` (named in the Entity Directory) and `excluded_brokers`,
+exactly the owned brokers left out, with their names (developer decision D12
+(b): a broker is filtered out to give the AI filtered data, not to hide it). A
+broker only shared with the user, or owned at a zero share, is never listed as
+excluded. The excluded brokers are not in the Entity Directory, whose BROKERS
+table stays the legend of what the data covers. An API request may include a
+broker only shared with the user. The renderer opens every prompt of such a snapshot,
+analysis or Export Data, with a fixed «Export Scope» sentence and the data
+serialized safely under it; without the fact the prompt is unchanged.
 
 ## 🔐 Authentication and Failures
 
@@ -129,6 +163,7 @@ all-accessible requests that did not send an explicit Broker filter.
 | `422` | `unsupported_selection`    | Dataset or analysis is unknown or belongs to another domain.            |
 | `422` | `selection_not_applicable` | Runtime facts do not satisfy an analysis applicability rule.            |
 | `422` | `selection_not_applicable` | `reason_code` `too_many_price_days`: the prices a required component reads exceed one request's budget (J-50). |
+| `422` | `selection_not_applicable` | `reason_code` `no_owned_brokers`: the selection reads brokers, the request names none and the user owns none (78 L10b). |
 | `503` | `snapshot_source_failure`  | A required component raised while building.                             |
 
 Required failures fail closed. Optional failures may be omitted and remain

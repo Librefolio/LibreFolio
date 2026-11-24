@@ -381,3 +381,30 @@ describe('BrokerCard — the gain/loss percentage in the UI language', () => {
         expect(gainLossPercent(), 'fr → en in place — today’s text again').toBe(ENGLISH);
     });
 });
+
+// ---------------------------------------------------------------------------
+// 81 U24: the footer sits at the bottom of the card
+// ---------------------------------------------------------------------------
+
+describe('BrokerCard — the footer at the bottom of the card (81 U24)', () => {
+    /**
+     * In a grid row the card is stretched to the tallest card of the row. A card whose body is shorter (a broker with no cash balance
+     * has one line of text where the others have chips) left a band of the card's own colour under its footer. The card is a column
+     * (`flex-col`, `h-full`): its body takes what is left (`flex-1`) and the footer is the last child, so it ends on the card's bottom.
+     * Measuring where it ends needs a layout engine: that is the E2E's subject (`brokers.spec.ts`); here, the structure that does it.
+     */
+    it('the card is a full-height column: its body grows, its footer is the last thing in it', () => {
+        render(BrokerCard, {broker: {...BROKER}, summary: {...structuredClone(SUMMARY), cash_balances: []}, assetCount: 0, targetCurrency: TARGET_CURRENCY});
+
+        const root = screen.getByTestId(`broker-card-${BROKER.id}`);
+        const body = screen.getByTestId(`broker-card-body-${BROKER.id}`);
+        const footer = screen.getByTestId(`broker-card-footer-${BROKER.id}`);
+
+        expect(root.classList.contains('flex'), 'the card lays its parts out as a flex column').toBe(true);
+        expect(root.classList.contains('flex-col')).toBe(true);
+        expect(root.classList.contains('h-full'), 'it fills the grid cell').toBe(true);
+        expect(body.classList.contains('flex-1'), 'the body takes the room that is left').toBe(true);
+        expect(root.lastElementChild, 'the footer is the last part of the card').toBe(footer);
+        expect(footer.parentElement).toBe(root);
+    });
+});

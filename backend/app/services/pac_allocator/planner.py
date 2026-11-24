@@ -236,21 +236,23 @@ def plan_rebalancing(
     *,
     checkpoint: Checkpoint | None = None,
     solver_time_budget_seconds: float | None = None,
+    solver_window_seconds: float | None = None,
     progress: ProgressReporter | None = None,
     seeds: tuple[int, ...] | None = None,
 ) -> RebalancerPlannerResult:
     """Plan a rebalancing and return a wire result: ``plan_pac_allocation``'s body, with the Rebalancer's product.
 
     The same promises: a planning outcome is a result, never an exception; the same two defects of the search propagate;
-    ``solver_time_budget_seconds`` is the caller's engine window. The basis publishes the request's fidelity as the request
+    ``solver_time_budget_seconds`` is one run's limit and ``solver_window_seconds`` the whole window of its turns (lot
+    TURNI; None: the limit itself). The basis publishes the request's fidelity as the request
     wrote it (a level, a custom ``λ``, «Target first»), which the exact scenario keeps only as ``λ``. ``seeds`` fixes the
     three runs' seeds (lot SEEDS, ``plan_exact_scenario``); None draws them.
     """
     product = _rebalancer_product(request.target_fidelity)
-    return _plan(request, normalize_rebalancer_plan, product, checkpoint=checkpoint, solver_time_budget_seconds=solver_time_budget_seconds, progress=progress, seeds=seeds)
+    return _plan(request, normalize_rebalancer_plan, product, checkpoint=checkpoint, solver_time_budget_seconds=solver_time_budget_seconds, solver_window_seconds=solver_window_seconds, progress=progress, seeds=seeds)
 
 
-def _plan(request, normalize, product: _Product, *, checkpoint: Checkpoint | None, solver_time_budget_seconds: float | None, progress: ProgressReporter | None = None, seeds: tuple[int, ...] | None = None):
+def _plan(request, normalize, product: _Product, *, checkpoint: Checkpoint | None, solver_time_budget_seconds: float | None, solver_window_seconds: float | None = None, progress: ProgressReporter | None = None, seeds: tuple[int, ...] | None = None):
     """The one body of both service functions: normalize, then a failure result or the plan. ``progress`` hears the phases
     (V2, ``progress.py``); a failure stops at ``validate``, the phase it is born in."""
     check_budget(checkpoint)
@@ -262,7 +264,7 @@ def _plan(request, normalize, product: _Product, *, checkpoint: Checkpoint | Non
     if not normalized.ready or normalized.normalized is None:
         return _failure_result(normalized.availability, snapshot, list(normalized.issues), product)
 
-    return plan_exact_scenario(normalized.normalized, issues=tuple(normalized.issues), checkpoint=checkpoint, solver_time_budget_seconds=solver_time_budget_seconds, product=product, progress=progress, seeds=seeds).result
+    return plan_exact_scenario(normalized.normalized, issues=tuple(normalized.issues), checkpoint=checkpoint, solver_time_budget_seconds=solver_time_budget_seconds, solver_window_seconds=solver_window_seconds, product=product, progress=progress, seeds=seeds).result
 
 
 def plan_exact_scenario(
@@ -271,6 +273,7 @@ def plan_exact_scenario(
     issues: tuple[PlannerIssue, ...] = (),
     checkpoint: Checkpoint | None = None,
     solver_time_budget_seconds: float | None = None,
+    solver_window_seconds: float | None = None,
     product: _Product | None = None,
     progress: ProgressReporter | None = None,
     seeds: tuple[int, ...] | None = None,
@@ -294,6 +297,10 @@ def plan_exact_scenario(
     above with its own seed, in parallel (``seed_runs``), and publishes the run ``proof.merge_seeded_runs`` chooses: the
     lowest plan, «proven» only when two runs closed on it. ``seeds`` fixes them; None takes the test configuration's or
     three fresh random ones. One seed, or none (the PAC, which keeps SCIP's own), is one run, as before.
+
+    Lot TURNI of project 67 (specification §16.22): ``solver_time_budget_seconds`` is one run's limit and
+    ``solver_window_seconds`` the whole window its turns live in; a run that starts later has the smaller of its limit and
+    the time left in the window (``seed_runs``). None for the window is the limit itself: a later run has the time left.
     """
     product = product or (_rebalancer_product(None) if scenario.product == "rebalancer" else _PAC)
     report_phase(progress, "model")
@@ -305,11 +312,11 @@ def plan_exact_scenario(
     budget = DEFAULT_SOLVER_TIME_BUDGET_SECONDS if solver_time_budget_seconds is None else solver_time_budget_seconds
 
     def one_run(seed: int, forward: ProgressReporter | None, run_budget: float) -> _RunOutcome:
-        # A run started later on a machine with fewer usable CPUs than runs has the time left (lot SEEDS-c).
+        # ``run_budget`` is this run's own limit: the whole limit in its turn, or what the window has left (lot TURNI).
         return _single_run(scenario, view, issues, None, run_budget, product, forward, seed=seed)
 
     # «Impossible» needs two runs: after one, the next starts even with no time left (lot SEEDS-c).
-    runs = run_seeds(one_run, seeds=run_seeds_of, time_budget_seconds=budget, checkpoint=checkpoint, progress=progress, start_next_after=_answered_impossible)
+    runs = run_seeds(one_run, seeds=run_seeds_of, time_budget_seconds=budget, window_seconds=solver_window_seconds, checkpoint=checkpoint, progress=progress, start_next_after=_answered_impossible)
     report_phase(progress, "verify")
     check_budget(checkpoint)
     published = _merged_report(runs, scenario)

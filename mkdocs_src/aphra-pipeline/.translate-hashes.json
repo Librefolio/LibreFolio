@@ -5283,11 +5283,11 @@
     }
   },
   "user/transactions/index.en.md": {
-    "md5": "7aaca70310224b3cbfbdbe1479cb4962",
+    "md5": "ed4d940e4781c415cd7427e5282011e5",
     "langs_done": [
-      "it",
+      "es",
       "fr",
-      "es"
+      "it"
     ],
     "last_translated": "2026-11-05T11:22:23.229014+00:00",
     "analysis": "[{\"name\": \"Transactions\", \"keywords\": [\"LibreFolio transactions page portfolio ledger UI feature\"]}, {\"name\": \"movement in your portfolio\", \"keywords\": [\"portfolio transaction movement cash flow finance terminology\"]}, {\"name\": \"portfolio\", \"keywords\": [\"financial portfolio investments holdings definition\"]}, {\"name\": \"purchases, sales\", \"keywords\": [\"purchase sale transaction financial securities trade\"]}, {\"name\": \"dividends, fees, transfers\", \"keywords\": [\"dividend fee transfer investment transaction types\"]}, {\"name\": \"cash in or out\", \"keywords\": [\"cash inflow outflow portfolio transaction\"]}, {\"name\": \"positions, performance and costs\", \"keywords\": [\"portfolio positions performance costs financial metrics\"]}, {\"name\": \"ledger\", \"keywords\": [\"accounting ledger transaction record portfolio\"]}, {\"name\": \"broker\", \"keywords\": [\"broker brokerage financial intermediary portfolio\"]}, {\"name\": \"asset\", \"keywords\": [\"financial asset instrument security definition\"]}, {\"name\": \"Transactions tab\", \"keywords\": [\"broker transactions tab UI navigation LibreFolio\"]}, {\"name\": \"sort\", \"keywords\": [\"sort table column UI data ordering\"]}, {\"name\": \"filter\", \"keywords\": [\"filter table column UI query\"]}, {\"name\": \"column header\", \"keywords\": [\"table column header UI sort\"]}, {\"name\": \"date filter From/To\", \"keywords\": [\"date range filter from to UI transaction\"]}, {\"name\": \"page address\", \"keywords\": [\"URL page address query parameters bookmark\"]}, {\"name\": \"bookmark\", \"keywords\": [\"browser bookmark URL saved view\"]}, {\"name\": \"double-click / right-click\", \"keywords\": [\"double click right click UI interaction localization\"]}, {\"name\": \"read-only\", \"keywords\": [\"read only UI field transaction view\"]}, {\"name\": \"pencil\", \"keywords\": [\"pencil icon edit UI action\"]}, {\"name\": \"row actions\", \"keywords\": [\"row actions table UI menu\"]}, {\"name\": \"Unit price\", \"keywords\": [\"unit price financial transaction amount per unit\"]}, {\"name\": \"amount\", \"keywords\": [\"transaction amount total value finance\"]}, {\"name\": \"quantity\", \"keywords\": [\"quantity units financial transaction securities\"]}, {\"name\": \"trade\", \"keywords\": [\"trade transaction securities finance definition\"]}, {\"name\": \"quote base\", \"keywords\": [\"quote base currency asset pricing financial data\"]}, {\"name\": \"legs of a linked pair\", \"keywords\": [\"leg linked transaction pair finance definition\"]}, {\"name\": \"bulk editor\", \"keywords\": [\"bulk editor UI transactions LibreFolio\"]}, {\"name\": \"linked pair\", \"keywords\": [\"linked transactions pair transfer exchange finance\"]}, {\"name\": \"partner row\", \"keywords\": [\"partner row linked transaction UI\"]}, {\"name\": \"Add Transaction\", \"keywords\": [\"Add Transaction button UI LibreFolio\"]}, {\"name\": \"bulk workspace\", \"keywords\": [\"bulk workspace UI transactions LibreFolio draft rows\"]}, {\"name\": \"New transaction\", \"keywords\": [\"new transaction form UI LibreFolio\"]}, {\"name\": \"Transaction Form\", \"keywords\": [\"transaction form fields transaction types LibreFolio\"]}, {\"name\": \"Apply\", \"keywords\": [\"Apply button form UI\"]}, {\"name\": \"Save All\", \"keywords\": [\"Save All bulk save UI transactions\"]}, {\"name\": \"Import Wizard\", \"keywords\": [\"import wizard broker import UI workflow\"]}, {\"name\": \"Clone\", \"keywords\": [\"clone transaction copy row UI finance\"]}, {\"name\": \"Viewer\", \"keywords\": [\"Viewer role permissions broker UI\"]}, {\"name\": \"Editor\", \"keywords\": [\"Editor role permissions broker UI\"]}, {\"name\": \"selection bar\", \"keywords\": [\"selection bar bulk actions UI table\"]}, {\"name\": \"Link / Unlink\", \"keywords\": [\"link unlink transactions pair UI\"]}, {\"name\": \"Promote pair\", \"keywords\": [\"Promote pair transaction UI LibreFolio\"]}, {\"name\": \"Adjustments\", \"keywords\": [\"adjustment transaction type portfolio finance\"]}, {\"name\": \"Asset Transfer\", \"keywords\": [\"asset transfer transaction type portfolio\"]}, {\"name\": \"Withdrawal\", \"keywords\": [\"withdrawal cash transaction portfolio\"]}, {\"name\": \"Deposit\", \"keywords\": [\"deposit cash transaction portfolio\"]}, {\"name\": \"Currency Exchange\", \"keywords\": [\"currency exchange transaction type portfolio\"]}, {\"name\": \"Cash Transfer\", \"keywords\": [\"cash transfer transaction type portfolio\"]}, {\"name\": \"Confirm promotion\", \"keywords\": [\"confirm promotion dialog UI transaction pair\"]}, {\"name\": \"Split pair\", \"keywords\": [\"split pair unlink transaction UI\"]}, {\"name\": \"Outgoing Adjustments\", \"keywords\": [\"outgoing adjustments transaction type cost basis\"]}, {\"name\": \"realized loss\", \"keywords\": [\"realized loss finance cost basis transaction\"]}, {\"name\": \"cost\", \"keywords\": [\"cost basis transaction portfolio finance\"]}, {\"name\": \"event\", \"keywords\": [\"corporate action event dividend split finance\"]}, {\"name\": \"price adjustment\", \"keywords\": [\"price adjustment corporate action event finance\"]}, {\"name\": \"interest payment / interest event\", \"keywords\": [\"interest payment interest event finance transaction\"]}, {\"name\": \"Relink events\", \"keywords\": [\"relink events transactions UI dividends\"]}, {\"name\": \"provider\", \"keywords\": [\"data provider financial API integration event\"]}, {\"name\": \"Linked Event\", \"keywords\": [\"Linked Event field transaction form UI\"]}, {\"name\": \"booked\", \"keywords\": [\"booked dividend accounting record transaction\"]}, {\"name\": \"credited\", \"keywords\": [\"credited dividend broker cash payment\"]}, {\"name\": \"downloaded\", \"keywords\": [\"downloaded event data provider sync\"]}, {\"name\": \"same date / same day\", \"keywords\": [\"same date same day event transaction matching\"]}, {\"name\": \"matching type\", \"keywords\": [\"matching type event transaction type finance\"]}, {\"name\": \"Link every row with one event\", \"keywords\": [\"link rows one event bulk action UI\"]}, {\"name\": \"single save\", \"keywords\": [\"single save atomic transaction batch UI\"]}, {\"name\": \"draft rows\", \"keywords\": [\"draft rows workspace unsaved changes UI\"]}, {\"name\": \"new/edit/del\", \"keywords\": [\"new edit del row status UI abbreviations\"]}, {\"name\": \"grid\", \"keywords\": [\"data grid table UI workspace\"]}, {\"name\": \"Reset All / Reset selected / Delete selected\", \"keywords\": [\"reset delete selected bulk actions UI\"]}, {\"name\": \"tick\", \"keywords\": [\"tick checkbox select row UI localization\"]}, {\"name\": \"checked\", \"keywords\": [\"checked validation row errors UI\"]}, {\"name\": \"Validation errors were found\", \"keywords\": [\"validation errors message UI transactions\"]}, {\"name\": \"Validate now\", \"keywords\": [\"Validate now button UI form validation\"]}, {\"name\": \"Merge\", \"keywords\": [\"merge transactions pair UI\"]}, {\"name\": \"Merge all (N)\", \"keywords\": [\"Merge all N bulk action UI transactions\"]}, {\"name\": \"All left / All right / Combine\", \"keywords\": [\"All left All right Combine merge choice UI\"]}, {\"name\": \"banner\", \"keywords\": [\"banner notification UI validation message\"]}, {\"name\": \"amber\", \"keywords\": [\"amber warning severity banner UI color\"]}, {\"name\": \"auto-derived fields\", \"keywords\": [\"auto derived fields validation import UI\"]}, {\"name\": \"Review / Save anyway\", \"keywords\": [\"Review Save anyway dialog UI validation\"]}, {\"name\": \"stock splits\", \"keywords\": [\"stock split corporate action finance\"]}, {\"name\": \"Split event\", \"keywords\": [\"Split event corporate action finance transaction\"]}, {\"name\": \"Balance problems\", \"keywords\": [\"balance problems validation accounting UI\"]}, {\"name\": \"unsaved changes\", \"keywords\": [\"unsaved changes prompt UI workspace\"]}, {\"name\": \"Contextual guides\", \"keywords\": [\"contextual guides onboarding UI UX\"]}, {\"name\": \"Onboarding and guides\", \"keywords\": [\"onboarding guides settings UX terminology\"]}, {\"name\": \"Settings → Preferences → Onboarding and guides\", \"keywords\": [\"settings preferences onboarding guides navigation path UI\"]}, {\"name\": \"Got it\", \"keywords\": [\"Got it button guide UI\"]}, {\"name\": \"Replay\", \"keywords\": [\"replay guide UI onboarding\"]}, {\"name\": \"BRIM import workflow\", \"keywords\": [\"BRIM import workflow broker import LibreFolio\"]}, {\"name\": \"Transaction Types\", \"keywords\": [\"transaction types financial theory portfolio\"]}, {\"name\": \"financial theory\", \"keywords\": [\"financial theory transaction types instruments\"]}, {\"name\": \"LibreFolio\", \"keywords\": [\"LibreFolio open source portfolio tracker brand\"]}, {\"name\": \"Revolut and Trading212\", \"keywords\": [\"Revolut Trading212 broker brand names\"]}, {\"name\": \"in one go\", \"keywords\": [\"in one go idiom at once bulk action\"]}, {\"name\": \"brings its partner along\", \"keywords\": [\"bring partner along idiom linked transaction pair\"]}, {\"name\": \"takes the units out without a value\", \"keywords\": [\"take units out without value outgoing adjustment cost basis\"]}, {\"name\": \"goes on\", \"keywords\": [\"goes on idiom proceed save anyway\"]}, {\"name\": \"first kind\", \"keywords\": [\"first kind category rows event linking\"]}, {\"name\": \"once it is in\", \"keywords\": [\"once it is in idiom added workspace transaction\"]}]",
@@ -5302,7 +5302,9 @@
         "critique": "<translation_critique>\n<improvements>\n1. **Terminologia obbligatoria: `bulk workspace` → `workspace bulk`.** La traduzione usa sistematicamente “area di lavoro in blocco”, ma il glossario impone “workspace bulk”. Correggere tutte le occorrenze nel testo leggibile, per esempio:\n   - `[area di lavoro in blocco](#bulk-workspace)` → `[workspace bulk](#bulk-workspace)`\n   - `## 🧰 L'area di lavoro in blocco` → `## 🧰 Il workspace bulk`\n   - `apre l'area di lavoro in blocco` → `apre il workspace bulk`\n   - `L'area di lavoro è una griglia...` → `Il workspace bulk è una griglia...`\n   - `Righe dell'area di lavoro: …` → `Righe del workspace: …`\n   - alt `Area di lavoro in blocco con...` → `Workspace bulk con...`\n\n2. **Terminologia obbligatoria: `bulk editor` → `editor bulk`.** `L'editor in blocco ha la stessa colonna.` → `L'editor bulk ha la stessa colonna.`\n\n3. **Terminologia obbligatoria: `cash transfer` → `giroconto`.** `Trasferimento di liquidità` → `Giroconto`. Non è una variante stilistica: è un mapping mandatorio del glossario.\n\n4. **Terminologia obbligatoria: `asset transfer` → `trasferimento asset`.** `Trasferimento di asset` → `Trasferimento asset` in entrambe le occorrenze: “Due Rettifiche diventano un Trasferimento asset” e “Un Trasferimento asset diventa due Rettifiche”.\n\n5. **Terminologia obbligatoria: `price adjustment` → `rettifica prezzo`.** `una rettifica di prezzo` → `una rettifica prezzo`.\n\n6. **Terminologia obbligatoria: `split` (corporate action) → `split`.** Nell’avviso, `frazionamenti azionari` → `split azionari` oppure semplicemente `split`.\n\n7. **Terminologia obbligatoria: `onboarding` e `replay`.** `Puoi riprodurre qualsiasi guida da [Impostazioni → Preferenze → Onboarding e guide]` → `Puoi ripetere qualsiasi guida da [Impostazioni → Preferenze → Primo utilizzo e guide]`. Questo corregge sia `replay → ripetere` sia `onboarding → primo utilizzo`.\n\n8. **Grammatica della frase iniziale.** `Le transazioni sono ogni movimento del tuo portafoglio` ha un disallineamento di numero ed è innaturale. Meglio: `Le transazioni rappresentano ogni movimento del tuo portafoglio` oppure `Le transazioni sono tutti i movimenti del tuo portafoglio`.\n\n9. **“newest first” reso in modo incompleto.** `elenca ... dalla più recente` è ambiguo. Meglio: `elenca ... dalla più recente alla più vecchia`.\n\n10. **Semantica: “Some operations are two linked transactions”.** `Alcune operazioni sono due transazioni collegate` è troppo letterale. Meglio: `Alcune operazioni consistono in due transazioni collegate`.\n\n11. **Grammatica nell’admonition e nella frase sul candidato.** `L'evento deve essere alla stessa data` → `L'evento deve avere la stessa data`. Inoltre `Un candidato viene proposto solo se è **lo stesso giorno** della transazione` → `Un candidato viene proposto solo se cade **lo stesso giorno** della transazione` oppure `solo se è **nello stesso giorno**`.\n\n12. **Etichette di stato lasciate in inglese.** `contrassegnate **new**, **edit** o **del**` non è testo tecnico non traducibile: sono etichette leggibili. Se corrispondono all’interfaccia italiana, usare per esempio `contrassegnate come **nuova**, **modifica** o **eliminazione**`.\n\n13. **“one of each” reso in modo impreciso.** `due righe nuove, due già salvate, o una di ciascun tipo` → `due righe nuove, due righe già salvate, oppure una nuova e una già salvata`.\n\n14. **Errore grammaticale con `di **Salva comunque**`.** `**Salva tutto** prima ti chiede di **Esamina**rli oppure di **Salva comunque**` è scorretto perché `di` non può introdurre il label imperativo del pulsante. Correggere in: `**Salva tutto** ti chiede prima di **Esaminarli** oppure di premere **Salva comunque**`.\n\n15. **Errore grammaticale con i nomi dei pulsanti.** `Dopo un salvataggio, una **Promuovi coppia** o una **Dividi coppia**, la pagina...` e `Se una **Promuovi coppia** o una **Dividi coppia** viene rifiutata...` trattano etichette imperative come nomi femminili. Riformulare per esempio: `Dopo un salvataggio, un'operazione **Promuovi coppia** o **Dividi coppia** azzera la selezione...` e `Se un'operazione **Promuovi coppia** o **Dividi coppia** viene rifiutata...`.\n\n16. **Migliorie minori di chiarezza.** `clicca una riga per andare a quella riga` è ripetitivo: meglio `clicca una voce per andare alla riga corrispondente`. `nell'ordine di ordinamento corrente` → `nell'ordine corrente`. `Clicca un banner per aprire il suo elenco` → `Clicca un banner per espanderne l'elenco`.\n\n17. **Ruoli e coerenza terminologica minore.** `sui broker in cui sei almeno un Editor` è più naturale come `sui broker in cui hai almeno il ruolo di editor` oppure `sui broker in cui sei almeno editor`.\n\nNota strutturale: non risultano rotture strutturali oggettive; ancore dei titoli, destinazioni dei link, tabella, admonition e blocchi HTML sono preservati. Le correzioni sopra relative a link e alt riguardano solo il testo localizzato, non i target o gli attributi tecnici.\n</improvements>\n</translation_critique>",
         "structural_diff": "",
         "structural_issues": 0,
-        "elapsed_s": 623.5
+        "elapsed_s": 623.5,
+        "stamped_at": "2026-11-24T16:27:35.237310+00:00",
+        "stamped_by": "translate-stamp"
       },
       "fr": {
         "translated_at": "2026-11-05T11:22:23.228992+00:00",
@@ -5315,7 +5317,9 @@
         "structural_issues": 0,
         "elapsed_s": 850.6,
         "final_structural_diff": "## STRUCTURAL DIFF REPORT (source vs translation)\n\nIssues found: 2\n\n1. LINK_URLS: URL set differs.\n  Missing in translation: ['../assets/create-edit.md#changing-the-currency']\n2. LINK_COUNT: source=14, translated=13 (Δ-1)\n  L59: src=1 trn=0\n    EN: A dividend, an interest payment or an adjustment can be linked to the asset's **event** (the dividend the provider annou\n    TR: Un dividende, un paiement d'intérêts ou un ajustement peut être lié à l'**événement** de l'actif (le dividende annoncé p\n\nSOURCE_OUTLINE (for reference):\n  # 💸 Transactions\n    ## 🔎 Find and open a transaction\n    ## ➕ Add or import transactions\n    ## ✏️ Edit, clone or delete transactions\n    ## 🔗 Link or unlink a pair {: #link-pairs }\n    ## 🔁 Relink events {: #relink-events }\n    ## 🧰 The bulk workspace {: #bulk-workspace }\n    ## 🧭 Contextual guides\n    ## 🔗 Related",
-        "final_structural_issues": 2
+        "final_structural_issues": 2,
+        "stamped_at": "2026-11-24T16:27:35.237310+00:00",
+        "stamped_by": "translate-stamp"
       },
       "es": {
         "translated_at": "2026-11-05T11:22:23.229014+00:00",
@@ -5328,7 +5332,9 @@
         "structural_issues": 0,
         "elapsed_s": 224.4,
         "final_structural_diff": "## STRUCTURAL DIFF REPORT (source vs translation)\n\nIssues found: 1\n\n1. BOLD_MARKERS: source=94, translated=93 (Δ-1)\n  L73: src=1 trn=0\n    EN: A candidate is proposed only if it is **on the same day** as the transaction. It must be the same asset too, and of the \n    TR: Un candidato solo se propone si es del mismo día que la transacción. También debe ser el mismo activo y del tipo corresp\n\nSOURCE_OUTLINE (for reference):\n  # 💸 Transactions\n    ## 🔎 Find and open a transaction\n    ## ➕ Add or import transactions\n    ## ✏️ Edit, clone or delete transactions\n    ## 🔗 Link or unlink a pair {: #link-pairs }\n    ## 🔁 Relink events {: #relink-events }\n    ## 🧰 The bulk workspace {: #bulk-workspace }\n    ## 🧭 Contextual guides\n    ## 🔗 Related",
-        "final_structural_issues": 1
+        "final_structural_issues": 1,
+        "stamped_at": "2026-11-24T16:27:35.237310+00:00",
+        "stamped_by": "translate-stamp"
       }
     }
   },
@@ -5425,7 +5431,7 @@
     }
   },
   "user/transactions/import/index.en.md": {
-    "md5": "e7ca1c78a979d214dd601ebfee5a4c7b",
+    "md5": "e8fa7fd0c64f6777b742158c5d618886",
     "langs_done": [
       "es",
       "fr",
@@ -5445,7 +5451,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 184.8,
-        "stamped_at": "2026-11-05T10:41:18.031300+00:00",
+        "stamped_at": "2026-11-24T09:47:47.574287+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -5458,7 +5464,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 142.0,
-        "stamped_at": "2026-11-05T10:41:18.031300+00:00",
+        "stamped_at": "2026-11-24T09:47:47.574287+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -5471,7 +5477,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 126.6,
-        "stamped_at": "2026-11-05T10:41:18.031300+00:00",
+        "stamped_at": "2026-11-24T09:47:47.574287+00:00",
         "stamped_by": "translate-stamp"
       }
     }
@@ -7460,7 +7466,7 @@
     }
   },
   "user/transactions/import/investimental.en.md": {
-    "md5": "c866c00f5df9b943631b37960b629f59",
+    "md5": "19ffe4a83e02b3c38af67129a0c3bc59",
     "langs_done": [
       "es",
       "fr",
@@ -7469,15 +7475,15 @@
     "last_translated": "2026-07-22T10:06:25.975277+00:00",
     "langs": {
       "it": {
-        "stamped_at": "2026-07-22T10:06:25.975277+00:00",
+        "stamped_at": "2026-11-24T02:30:16.727162+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
-        "stamped_at": "2026-07-22T10:06:25.975277+00:00",
+        "stamped_at": "2026-11-24T02:30:16.727162+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
-        "stamped_at": "2026-07-22T10:06:25.975277+00:00",
+        "stamped_at": "2026-11-24T02:30:16.727162+00:00",
         "stamped_by": "translate-stamp"
       }
     }
@@ -12245,7 +12251,7 @@
     }
   },
   "admin/connection_proxy.en.md": {
-    "md5": "4cd6041399889101449bd0508ed0c180",
+    "md5": "4c00c623d9a72c42edfdfeea07c07957",
     "langs_done": [
       "es",
       "fr",
@@ -12265,7 +12271,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 1043.0,
-        "stamped_at": "2026-11-09T11:40:20.203946+00:00",
+        "stamped_at": "2026-11-21T15:54:28.297281+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -12278,7 +12284,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 1201.7,
-        "stamped_at": "2026-11-09T11:40:20.203946+00:00",
+        "stamped_at": "2026-11-21T15:54:28.297281+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -12291,7 +12297,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 1170.3,
-        "stamped_at": "2026-11-09T11:40:20.203946+00:00",
+        "stamped_at": "2026-11-21T15:54:28.297281+00:00",
         "stamped_by": "translate-stamp"
       }
     }

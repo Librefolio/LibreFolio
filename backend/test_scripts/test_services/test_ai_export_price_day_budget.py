@@ -41,7 +41,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engin
 from sqlalchemy.pool import NullPool
 
 from backend.app.db.base import SQLModel  # imports every model, and backend.app.db.session with its PRAGMA listener
-from backend.app.db.models import Asset, AssetType, PriceHistory, User
+from backend.app.db.models import Asset, AssetType, Broker, BrokerUserAccess, PriceHistory, User, UserRole
 from backend.app.schemas.ai_export_runtime import (
     AI_EXPORT_CATALOG_VERSION,
     AiExportAnalysisSelection,
@@ -108,12 +108,18 @@ def lower_budget(monkeypatch: pytest.MonkeyPatch) -> Callable[[int], None]:
 
 
 async def _book(engine: AsyncEngine) -> Book:
-    """A user, and an EUR asset with a close on every day from 1 January to 30 June 2024, a different one each day."""
+    """A user who owns one empty broker, and an EUR asset with a close on every day from 1 January to 30 June 2024.
+
+    The broker (78 L10b): a selection that reads positions needs a broker the user owns, or it is refused before the
+    build (`no_owned_brokers`). It holds no transaction, so the user still holds no position.
+    """
     async with AsyncSession(engine, expire_on_commit=False) as session:
         user = User(username="j50_ai_export", email="j50_ai_export@test.com", hashed_password="fakehash", is_active=True)
         asset = Asset(display_name="J50 AI Export asset", currency="EUR", asset_type=AssetType.STOCK)
-        session.add_all([user, asset])
+        broker = Broker(name="J50 AI Export broker")
+        session.add_all([user, asset, broker])
         await session.flush()
+        session.add(BrokerUserAccess(broker_id=broker.id, user_id=user.id, role=UserRole.OWNER, share_percentage=Decimal("1")))
         day, n = date(2024, 1, 1), 0
         while day <= date(2024, 6, 30):
             session.add(PriceHistory(asset_id=asset.id, date=day, close=Decimal(100) + Decimal(n % 7) + Decimal(n) / 10, currency="EUR", source_plugin_key="MANUAL"))

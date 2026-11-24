@@ -21,6 +21,7 @@ from backend.app.schemas.portfolio.data_quality import MissingPriceAsset, StaleP
 from backend.app.schemas.portfolio.summary import AllocationItem, AssetAllocationItem, BrokerBreakdown, HoldingGroupGainLoss, PortfolioHolding, PortfolioSummary
 from backend.app.schemas.wac import WACMissingPairInfo
 from backend.app.services.financial_math.holding_window import oldest_open_lot_date, quantity_moves
+from backend.app.services.financial_math.income import INCOME_TYPES
 from backend.app.services.financial_math.portfolio import period as period_math
 from backend.app.services.financial_math.portfolio.asset_groups import HoldingFacts, group_by_asset, group_holdings, group_yield_on_cost
 from backend.app.services.financial_math.returns import (
@@ -143,8 +144,9 @@ class PortfolioSummaryMixin:
         _total_deposited = period_flows.absolute_by_type.get(TransactionType.DEPOSIT, Decimal("0"))
         _total_withdrawn = period_flows.absolute_by_type.get(TransactionType.WITHDRAWAL, Decimal("0"))
         # Signed: a legacy negative DIVIDEND/INTEREST correction must reduce period_income,
-        # not be folded into the "Other" reconciliation residual via abs() (plan §4.4).
-        _income_accum = Decimal("0") + period_flows.signed_by_type.get(TransactionType.DIVIDEND, Decimal("0")) + period_flows.signed_by_type.get(TransactionType.INTEREST, Decimal("0"))
+        # not be folded into the "Other" reconciliation residual via abs() (plan §4.4). A REWARD is income in kind
+        # (financial_math.income): its value at receipt, with no cash.
+        _income_accum = sum((period_flows.signed_by_type.get(income_type, Decimal("0")) for income_type in sorted(INCOME_TYPES)), Decimal("0"))
         _fees_accum = period_flows.absolute_by_type.get(TransactionType.FEE, Decimal("0"))
         _taxes_accum = period_flows.absolute_by_type.get(TransactionType.TAX, Decimal("0"))
         _fees_taxes_accum = Decimal("0") + _fees_accum + _taxes_accum

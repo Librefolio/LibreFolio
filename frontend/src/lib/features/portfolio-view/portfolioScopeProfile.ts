@@ -9,13 +9,13 @@
  *
  * Pure: no store, no network, no component state.
  */
-import {ArrowRightLeft, Briefcase, Info, Shield, TrendingUp} from 'lucide-svelte';
+import {ArrowRightLeft, Briefcase, Info, PieChart, Shield, TrendingUp} from 'lucide-svelte';
 import type {ComponentType} from 'svelte';
 import type {LayoutThresholds} from '$lib/utils/layout/responsiveLayout.svelte';
 
 export type PortfolioViewScope = {kind: 'portfolio'} | {kind: 'broker'; brokerId: number};
 
-export const PORTFOLIO_TAB_IDS = ['panoramica', 'posizioni', 'rischio', 'transazioni', 'info'] as const;
+export const PORTFOLIO_TAB_IDS = ['panoramica', 'posizioni', 'allocazione', 'rischio', 'transazioni', 'info'] as const;
 export type PortfolioTabId = (typeof PORTFOLIO_TAB_IDS)[number];
 export const DEFAULT_PORTFOLIO_TAB: PortfolioTabId = 'panoramica';
 
@@ -34,6 +34,7 @@ export interface PortfolioScopeTestIds {
     currency: string;
     overviewTab: string;
     positionsTab: string;
+    allocationTab: string;
     riskTab: string;
     transactionsTab: string;
     cashBalances: string;
@@ -69,6 +70,7 @@ const DASHBOARD_TESTIDS: PortfolioScopeTestIds = {
     currency: 'dashboard-target-currency',
     overviewTab: 'dashboard-overview-tab',
     positionsTab: 'dashboard-positions-tab',
+    allocationTab: 'dashboard-allocation-tab',
     riskTab: 'dashboard-risk-tab',
     transactionsTab: 'dashboard-transactions-tab',
     cashBalances: 'dashboard-cash-balances',
@@ -83,6 +85,7 @@ const BROKER_TESTIDS: PortfolioScopeTestIds = {
     currency: 'broker-detail-target-currency',
     overviewTab: 'broker-overview-tab',
     positionsTab: 'broker-holdings',
+    allocationTab: 'broker-allocation-tab',
     riskTab: 'broker-risk-tab',
     transactionsTab: 'broker-transactions-tab',
     cashBalances: 'broker-cash-balances',
@@ -92,6 +95,7 @@ const BROKER_TESTIDS: PortfolioScopeTestIds = {
 const DASHBOARD_TABS: readonly PortfolioScopeTab[] = [
     {id: 'panoramica', icon: Briefcase, testId: 'dashboard-tab-panoramica'},
     {id: 'posizioni', icon: TrendingUp, testId: 'dashboard-tab-posizioni'},
+    {id: 'allocazione', icon: PieChart, testId: 'dashboard-tab-allocazione'},
     {id: 'rischio', icon: Shield, testId: 'dashboard-tab-risk'},
     {id: 'transazioni', icon: ArrowRightLeft, testId: 'dashboard-tab-transazioni'},
 ];
@@ -99,6 +103,7 @@ const DASHBOARD_TABS: readonly PortfolioScopeTab[] = [
 const BROKER_TABS: readonly PortfolioScopeTab[] = [
     {id: 'panoramica', icon: Briefcase, testId: 'broker-tab-panoramica', guideAnchor: 'broker.detail.overview'},
     {id: 'posizioni', icon: TrendingUp, testId: 'broker-tab-posizioni', guideAnchor: 'broker.detail.positions'},
+    {id: 'allocazione', icon: PieChart, testId: 'broker-tab-allocazione', guideAnchor: 'broker.detail.allocation'},
     {id: 'rischio', icon: Shield, testId: 'broker-tab-risk'},
     {id: 'transazioni', icon: ArrowRightLeft, testId: 'broker-tab-transazioni', guideAnchor: 'broker.detail.transactions'},
     {id: 'info', icon: Info, testId: 'broker-tab-info', guideAnchor: 'broker.detail.info'},
@@ -133,7 +138,10 @@ export function portfolioScopeProfile(scope: PortfolioViewScope): PortfolioScope
         rootGuideAnchor: 'page.dashboard',
         rootSpacing: 'space-y-4',
         toolbar: {
-            thresholds: {oneRow: 1000, denseRow: 990, stackFilters: 510, oneColumn: 390, noExtraLabel: 410, labelHideActions: 210, labelHideTabs: 460},
+            // `labelHideTabs`: 460 for four tabs, 570 for five (the Allocazione tab, lane 80). The label of every tab shrinks to
+            // 75 % before it hides, so the floor is the sum of the five tabs at that size: 512 px in French, the widest, against 414
+            // for the four (measured 23/11/2026); the old margin (+11 %) gives 570. The broker's 660 already holds its six (586 → 651).
+            thresholds: {oneRow: 1000, denseRow: 990, stackFilters: 510, oneColumn: 390, noExtraLabel: 410, labelHideActions: 210, labelHideTabs: 570},
             debugName: 'dashboard',
             pickerMaxWidthTwoRow: undefined,
         },

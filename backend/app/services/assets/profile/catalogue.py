@@ -26,7 +26,7 @@ import pycountry
 from pydantic import ValidationError
 
 from backend.app.schemas.assets.metadata import FAGeographicArea, FASectorArea
-from backend.app.schemas.assets.profile import FAProfileVoice, ProfileGroup, ProfileMapKeys, ProfileShape, ProfileSign, ProfileTopic
+from backend.app.schemas.assets.profile import FAProfileVoice, ProfileGroup, ProfileMapKeys, ProfilePeriod, ProfileShape, ProfileSign, ProfileTopic
 from backend.app.schemas.common import check_decimal_exponent, iso_currency_code
 from backend.app.utils.asset.geo import normalize_country_to_iso3
 from backend.app.utils.asset.sector import normalize_sector
@@ -98,6 +98,11 @@ _VOICES: tuple[FAProfileVoice, ...] = (
     # The company (its sector is the «sector» map above, one sector at 100 %)
     _voice("industry", ProfileShape.TEXT, topic=_T.SECTORS, groups=_COMPANY),
     _voice("issuer_country", ProfileShape.COUNTRY, topic=_T.ISSUER, groups=_COMPANY),
+    # The company's own site, and its two headline figures of the last fiscal year (BI-PROF): each figure is dated by
+    # the end of its fiscal year (``source_date``), which the tab shows beside it
+    _voice("website", ProfileShape.TEXT, topic=_T.ISSUER, groups=_COMPANY),
+    _voice("revenue", ProfileShape.AMOUNT, topic=_T.FINANCIALS, sign=_NON_NEGATIVE, groups=_COMPANY, period=ProfilePeriod.FISCAL_YEAR),
+    _voice("net_income", ProfileShape.AMOUNT, topic=_T.FINANCIALS, sign=ProfileSign.ANY, groups=_COMPANY, period=ProfilePeriod.FISCAL_YEAR),
     # The bond
     _voice("coupon_period_rate", ProfileShape.PERCENTAGE, topic=_T.COUPONS, sign=_NON_NEGATIVE, groups=_BOND),
     _voice("coupon_frequency", ProfileShape.CHOICE, topic=_T.COUPONS, groups=_BOND, choices=("monthly", "quarterly", "semiannual", "annual", "at_maturity")),

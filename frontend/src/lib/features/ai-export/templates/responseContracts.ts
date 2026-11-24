@@ -5,20 +5,48 @@ export interface AiExportResponseContractSection {
     readonly requirements: readonly string[];
 }
 
-export interface AiExportResponseContractTemplate {
+interface AiExportResponseContractIdentity {
     readonly id: string;
     readonly version: 1;
     readonly analysisId: AiExportAnalysisId;
+}
+
+/** Today's shape: the sections the answer must follow, in order. */
+export interface AiExportSectionsResponseContract extends AiExportResponseContractIdentity {
+    readonly shape: 'sections';
     readonly sections: readonly AiExportResponseContractSection[];
 }
+
+/**
+ * The new shape (plan 78, L1): no sections any more. The contract keeps its identity (the backend handshake protects it)
+ * and carries the analysis's usual follow-up questions, which «How to Answer» offers at the end of the first reply.
+ */
+export interface AiExportFollowUpsResponseContract extends AiExportResponseContractIdentity {
+    readonly shape: 'follow_ups';
+    readonly followUps: string;
+}
+
+export type AiExportResponseContractTemplate = AiExportSectionsResponseContract | AiExportFollowUpsResponseContract;
 
 function section(title: string, ...requirements: readonly string[]): AiExportResponseContractSection {
     return {title, requirements};
 }
 
-function contract(analysisId: AiExportAnalysisId, sections: readonly AiExportResponseContractSection[]): AiExportResponseContractTemplate {
-    return {id: `${analysisId}.response`, version: 1, analysisId, sections};
+function contract(analysisId: AiExportAnalysisId, sections: readonly AiExportResponseContractSection[]): AiExportSectionsResponseContract {
+    return {id: `${analysisId}.response`, version: 1, analysisId, shape: 'sections', sections};
 }
+
+function followUps(analysisId: AiExportAnalysisId, line: string): AiExportFollowUpsResponseContract {
+    return {id: `${analysisId}.response`, version: 1, analysisId, shape: 'follow_ups', followUps: line};
+}
+
+/** The market-driver analyses' usual follow-ups: version 7 of `78_aiExportPrompts/bozze-AIX.md`, copied as written. */
+const PERFORMANCE_MARKET_DRIVER_FOLLOW_UPS =
+    "Usual follow-ups for this analysis: the secondary causes with their evidence; the earlier episodes of the same move; what remains unexplained, holding by holding; the detail of one holding; the sources one by one with their quality; how the period's result splits into realised and unrealised, income and new money.";
+
+/** Protection Strategies' usual follow-ups (78 L8a): version 6 of `78_aiExportPrompts/bozze-AIX.md`, copied as written. */
+const PROTECTION_STRATEGIES_FOLLOW_UPS =
+    "Usual follow-ups for this analysis: the risk measures holding by holding; the hedging instruments the user's brokers offer, with the capital each needs and its costs; what a hedge of a given size would cost and avoid here; what funding a hedge by selling holdings really amounts to; the tax side of each option under the user's regime; the signals to watch so as to decide earlier next time; the detail of one holding.";
 
 const facts = section('Key Facts', 'Cite only the supplied facts your conclusions rely on, briefly, with their units, currencies, signs, dates, periods, scope, coverage, and data-quality limits where they matter. Do not restate or summarize the rest of the Snapshot Data.');
 const evidence = section('Evidence and Interpretation', 'Connect conclusions to supplied evidence. Separate observation, calculation, interpretation, assumption, and uncertainty; never invent missing evidence.');
@@ -38,37 +66,6 @@ const drawdownContext = section(
     'Use only supplied current and maximum peak-relative drawdown, episode dates, recovery status, recovered or remaining-to-peak percentages, duration, calculation basis, coverage, and data-quality status.',
     'Never infer a missing Risk metric from Drawdown. Drawdown is historical and not by itself a forecast, buy/sell signal, volatility measure, Sharpe ratio, VaR, or broader Risk metric.',
 );
-
-const performanceResearch = [
-    section(
-        'Held Asset Movement Inventory',
-        'Cover every held Asset by display name. State supplied movement and date window, extrema, weight or value relevance, performance contribution when available, technical context, coverage, and missing-history limits.',
-        'Do not silently drop an Asset, treat partial history as flat, or infer an intraperiod path that the supplied observations do not show.',
-    ),
-    section(
-        'Dated Web Research and Source Quality',
-        'For every held Asset, research the matching date windows and provide publisher, title, URL, publication date, access date, source type, and the Asset or period the source may explain.',
-        'Prefer primary issuer, exchange, regulator, central-bank, government, and official-statistical sources, then established financial reporting. Identify lower-quality secondary commentary and conflicting evidence.',
-        'If research cannot be completed, mark that Asset research-incomplete and do not fabricate a driver.',
-    ),
-    section(
-        'Per-Asset Short- and Long-Horizon Thesis',
-        'For every held Asset, provide one short-horizon thesis and one long-horizon thesis, even when the correct conclusion is that evidence is insufficient.',
-        'Each thesis must identify evidence, chronology, candidate mechanism, counter-evidence, uncertainty, and invalidation conditions. Keep it explanatory, not a price forecast or recommendation.',
-    ),
-    section(
-        'Movement-to-Driver Assessment',
-        'Separate issuer-specific, sector or industry, macro, rates, currency, commodity, policy, and broad-market candidate drivers.',
-        'Label every proposed link exactly as supported, plausible, inferred, speculative, or unexplained. Explain the source quality, timing fit, directional fit, and counter-evidence behind the label.',
-        'Use supported only for strong dated evidence of the link; plausible for a credible mechanism without direct causal proof; inferred for a synthesis of indirect evidence; speculative for weak or uncorroborated links; unexplained when evidence remains insufficient or conflicting.',
-    ),
-    section(
-        'Chronology, Correlation, and Causality',
-        'State the event and movement chronology explicitly. Distinguish temporal sequence and correlation from causal evidence; coincidence or co-movement alone never proves causation.',
-        'Identify shared cross-Asset drivers only when dated evidence supports a common link.',
-    ),
-    section('Unexplained Movements', 'List every material movement whose dated evidence is absent, conflicting, too broad, temporally mismatched, or otherwise insufficient. Never invent a completing narrative.'),
-] as const;
 
 const fiscalSections = [
     section(
@@ -132,13 +129,9 @@ export const AI_EXPORT_RESPONSE_CONTRACTS: Readonly<Record<AiExportAnalysisId, A
         evidence,
         limits,
     ]),
-    'portfolio.performance_market_drivers': contract('portfolio.performance_market_drivers', [
-        facts,
-        section('Portfolio Result Reconciliation', 'Separate realized and unrealized P&L, income, fees, taxes, external flows, TWRR, MWRR, ROI, residuals, and coverage using their supplied semantics.'),
-        ...performanceResearch,
-        limits,
-    ]),
+    'portfolio.performance_market_drivers': followUps('portfolio.performance_market_drivers', PERFORMANCE_MARKET_DRIVER_FOLLOW_UPS),
     'portfolio.fiscal_lots': contract('portfolio.fiscal_lots', [facts, ...fiscalSections, limits]),
+    'portfolio.protection_strategies': followUps('portfolio.protection_strategies', PROTECTION_STRATEGIES_FOLLOW_UPS),
     'broker.review': contract('broker.review', [
         facts,
         section('Holdings, Cash, and Concentration', 'Describe only the selected broker scope. Separate position, asset type, sector, geography, currency, and cash dimensions and disclose coverage gaps.'),
@@ -148,12 +141,7 @@ export const AI_EXPORT_RESPONSE_CONTRACTS: Readonly<Record<AiExportAnalysisId, A
         drawdownContext,
         limits,
     ]),
-    'broker.performance_market_drivers': contract('broker.performance_market_drivers', [
-        facts,
-        section('Broker Result Reconciliation', 'Separate realized and unrealized P&L, income, fees, taxes, external flows, return measures, residuals, and coverage inside the selected broker scope.'),
-        ...performanceResearch,
-        limits,
-    ]),
+    'broker.performance_market_drivers': followUps('broker.performance_market_drivers', PERFORMANCE_MARKET_DRIVER_FOLLOW_UPS),
     'broker.fiscal_lots': contract('broker.fiscal_lots', [facts, ...fiscalSections, limits]),
     'asset.position_review': contract('asset.position_review', [
         facts,

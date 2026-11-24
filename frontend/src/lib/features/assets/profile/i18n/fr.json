@@ -39,7 +39,10 @@
         "issuer_type": "Type d'émetteur",
         "issuer_lei": "LEI de l'émetteur",
         "outstanding_amount": "Encours",
-        "reference_price_date": "Date du prix de référence"
+        "reference_price_date": "Date du prix de référence",
+        "website": "Site web",
+        "revenue": "Chiffre d'affaires",
+        "net_income": "Résultat net"
       },
       "choices": {
         "replication": {
@@ -119,7 +122,8 @@
         "size": "taille",
         "legal_form": "forme juridique",
         "issuer": "émetteur",
-        "description": "description"
+        "description": "description",
+        "financials": "résultats financiers"
       },
       "edit": {
         "title": "Données du profil",
@@ -190,7 +194,9 @@
         "companySector": "Secteur",
         "staleConfirmed": "Confirmé le {date}, pas à jour",
         "noEnrichersText": "Les données de cet onglet ont été saisies à la main ou sont arrivées à la création de l'actif : rien ne les met à jour.",
-        "configureHint": "Ouvre la fenêtre de l'actif, avec celle des enrichisseurs par-dessus"
+        "configureHint": "Ouvre la fenêtre de l'actif, avec celle des enrichisseurs par-dessus",
+        "fiscalYear": "exercice {year}",
+        "openWebsite": "Ouvrir le site dans un nouvel onglet"
       },
       "row": {
         "pending": "{count, plural, one {# modification en attente} other {# modifications en attente}}"
@@ -214,7 +220,8 @@
         "loadFailed": "Impossible de lire les modifications.",
         "empty": "Aucune modification pour l’instant.",
         "who": {
-          "deletedUser": "un utilisateur supprimé"
+          "deletedUser": "un utilisateur supprimé",
+          "system": "Système"
         },
         "what": {
           "first": "Première valeur lue : {to}.",

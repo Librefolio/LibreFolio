@@ -1,41 +1,48 @@
 """
 XTB Broker Report Import Plugin.
 
-This plugin parses semicolon-delimited CSV exports from XTB.
+Reads XTB's **History report** workbook (``.xlsx``), the export XTB generates today on desktop and in the app (History →
+Export → New report). Transactions come from its *Cash Operations* sheet, the account currency from *Open Positions*
+(``_workbook.py``).
+
+Every ``Amount`` is in the account currency, also on an instrument quoted in another currency: the currency written in a
+comment (``SPYL.DE USD 0.6600/ SHR``) is the one of the dividend per share, never the one of the amount.
+
+History: version 1.x of this plugin was built on the sample of the Export-To-Ghostfolio project, the «Cash Operations» CSV
+of xStation 5 (``ID;Type;Time;Symbol;Comment;Amount``). XTB no longer exports that CSV (its report dialog has no format
+choice since 2026: the report is the workbook), so 2.0.0 reads the workbook only (lane 83, release 1.4). The type labels
+of that CSV stay in ``TYPE_MAPPINGS`` as candidates for the workbook's types not seen in a real report yet.
 """
 
 from __future__ import annotations
 
-import csv
-from datetime import date as date_type
+from collections import defaultdict
+from dataclasses import dataclass, field
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 import structlog
 
 from backend.app.db.models import TransactionType
-from backend.app.schemas.brim import FAKE_ASSET_ID_BASE, BRIMExtractedAssetInfo, BRIMParseOutput, BRIMValidationIssue
+from backend.app.schemas.brim import FAKE_ASSET_ID_BASE, BRIMEvidence, BRIMExtractedAssetInfo, BRIMNotice, BRIMParseOutput, BRIMValidationIssue
 from backend.app.schemas.common import Currency
 from backend.app.schemas.transactions.transactions import TXCreateItem
 from backend.app.services.brim.brim_provider import BRIMParseError, BRIMProvider
 from backend.app.services.brim.registry import BRIMProviderRegistry
+from backend.app.services.brim_providers import _brim_io as io
+from backend.app.services.brim_providers.broker_xtb import _workbook as wb
 from backend.app.services.platform.provider_registry import register_provider
 
 logger = structlog.get_logger(__name__)
 
-XTB_HEADER = "ID;Type;Time;Symbol;Comment;Amount"
-
-COL_ID = "ID"
-COL_TYPE = "Type"
-COL_TIME = "Time"
-COL_SYMBOL = "Symbol"
-COL_COMMENT = "Comment"
-COL_AMOUNT = "Amount"
-
+# Exact label first, then a key contained in the label. Insertion order matters for the second pass: the longer
+# labels («free funds interests tax») come before the shorter ones they contain («interest»).
 TYPE_MAPPINGS: Dict[str, TransactionType] = {
-    "stocks/etf purchase": TransactionType.BUY,
+    "stock purchase": TransactionType.BUY,  # seen in a real History report (2026)
+    "stock sale": TransactionType.SELL,
+    "stocks/etf purchase": TransactionType.BUY,  # the old Cash Operations CSV (and its Portuguese labels)
     "ações/etf compra": TransactionType.BUY,
     "stocks/etf sale": TransactionType.SELL,
     "ações/etf vende": TransactionType.SELL,
@@ -52,37 +59,35 @@ TYPE_MAPPINGS: Dict[str, TransactionType] = {
     "interest": TransactionType.INTEREST,
 }
 
-KNOWN_CURRENCIES = {
-    "AUD",
-    "CAD",
-    "CHF",
-    "EUR",
-    "GBP",
-    "JPY",
-    "NOK",
-    "PLN",
-    "SEK",
-    "USD",
+# A move between two sub-accounts of the same account (My Trades → Investment Plans): a pair +X / −X at the same instant.
+SUBACCOUNT_TRANSFER = "subaccount transfer"
+PAIR_WINDOW_SECONDS = 2
+
+OUTSIDE_PERIOD_CODE = "xtb_positions_outside_period"
+OUTSIDE_PERIOD_MESSAGE = "For {n} instruments the quantity imported from this report differs from the quantity XTB shows open: trades made before the " "report's start (or after its end) are not in the file. Generate the report with the date range «All» to import the whole history."
+OUTSIDE_PERIOD_COMMENT = "Open volume from the Open Positions sheet, next to the net quantity of the Cash Operations rows imported."
+
+TAX_REFUND_CODE = "xtb_tax_refund"
+TAX_REFUND_MESSAGE = "{n} tax refunds were imported as interest («Tax refund»): money given back from the investment's gain, so it counts in the P&L."
+TAX_REFUND_COMMENT = "A positive tax is money given back."
+
+# The sign the cash of each type must have. A row whose Amount has the other sign is never flipped: a tax given back
+# becomes a «Tax refund» interest, any other one is left out as not recognised (a reversal or a correction to look at).
+CASH_SIGN: Dict[TransactionType, int] = {
+    TransactionType.BUY: -1,
+    TransactionType.SELL: 1,
+    TransactionType.DEPOSIT: 1,
+    TransactionType.DIVIDEND: 1,
+    TransactionType.INTEREST: 1,
+    TransactionType.WITHDRAWAL: -1,
+    TransactionType.FEE: -1,
+    TransactionType.TAX: -1,
 }
 
+CURRENCY_MISSING_CODE = "xtb_account_currency_missing"
+CURRENCY_AMBIGUOUS_CODE = "xtb_account_currency_ambiguous"
 
-def _parse_xtb_date(value: str) -> Optional[date_type]:
-    """Parse XTB datetime format (DD.MM.YYYY HH:MM:SS)."""
-    value = value.strip()
-    if not value:
-        return None
-
-    date_part, _, time_part = value.partition(" ")
-    parts = date_part.split(".")
-    if len(parts) == 3 and len(parts[0]) == 3 and parts[0].startswith("0"):
-        value = ".".join([parts[0][1:], parts[1], parts[2]]) + (f" {time_part}" if time_part else "")
-
-    for fmt in ("%d.%m.%Y %H:%M:%S", "%d.%m.%Y"):
-        try:
-            return datetime.strptime(value, fmt).date()
-        except ValueError:
-            continue
-    return None
+TAGS = ["import", "xtb"]
 
 
 def _parse_xtb_number(value: str) -> Optional[Decimal]:
@@ -111,7 +116,10 @@ def _is_decimal_token(value: str) -> bool:
 
 
 def _parse_xtb_comment_quantity_price(comment: str) -> tuple[Decimal, Optional[Decimal]]:
-    """Extract quantity and price from comments like ``OPEN BUY 34/42.5658 @ 11.7480``."""
+    """Extract quantity and price from comments like ``OPEN BUY 34/42.5658 @ 11.7480`` or ``OPEN BUY VWCE.DE 0.19 @ 169.86``.
+
+    ``34/42.5658`` is a partial fill: 34 units of an order of 42.5658, and the row's amount is the one of the 34.
+    """
     tokens = comment.replace("/", " / ").replace("@", " @ ").split()
     quantity = Decimal("0")
     price: Optional[Decimal] = None
@@ -131,19 +139,35 @@ def _parse_xtb_comment_quantity_price(comment: str) -> tuple[Decimal, Optional[D
     return quantity, price
 
 
-def _infer_xtb_currency(comment: str) -> Optional[str]:
-    comment_tokens = comment.replace("/", " ").replace("@", " ").replace(",", " ").split()
-    for token in comment_tokens:
-        cleaned = token.strip("()[]{}.,;:")
-        if cleaned in KNOWN_CURRENCIES:
-            return cleaned
+@dataclass
+class _Row:
+    """One row of the Cash Operations sheet, with the cells it came from (for the evidence)."""
 
-    return None
+    line: int
+    cells: List[str]
+    type_raw: str
+    time: Optional[datetime]
+    time_raw: str
+    amount: Optional[Decimal]
+    amount_raw: str
+    symbol: str
+    comment: str
+    name: str = ""
+
+
+@dataclass
+class _Source:
+    """What the workbook reader hands to the row loop."""
+
+    rows: List[_Row]
+    headers: List[str]
+    currency: str
+    open_positions: List[wb.OpenPosition] = field(default_factory=list)
 
 
 @register_provider(BRIMProviderRegistry)
 class XTBBrokerProvider(BRIMProvider):
-    """XTB CSV export import plugin."""
+    """XTB import plugin: the History report workbook (``.xlsx``)."""
 
     @property
     def provider_code(self) -> str:
@@ -155,11 +179,11 @@ class XTBBrokerProvider(BRIMProvider):
 
     @property
     def description(self) -> str:
-        return "Import transactions from XTB CSV export. Supports stocks, ETFs, dividends, cash movements, taxes, fees, and interest."
+        return "Import XTB's History report (Excel): purchases, sales, deposits, withdrawals, dividends, withholding taxes, fees and interest."
 
     @property
     def supported_extensions(self) -> List[str]:
-        return [".csv"]
+        return [".xlsx"]
 
     @property
     def detection_priority(self) -> int:
@@ -175,167 +199,305 @@ class XTBBrokerProvider(BRIMProvider):
 
     @property
     def plugin_version(self) -> str:
-        return "1.0.0"
+        # 2.0.0 — lane 83: the History report workbook (.xlsx) only; the old Cash Operations CSV is no longer read (XTB no
+        # longer exports it); unknown and unreadable rows in the two shared notices (RowSkips).
+        # 2.1.0 — lot 83-B: the cash keeps the sign of Amount: a tax given back is an INTEREST «Tax refund» with an info note,
+        # any other sign that does not fit its type (a negative dividend or interest, a positive fee) is a row not recognised.
+        return "2.1.0"
 
     @property
     def test_file_pattern(self) -> Optional[str]:
         return "xtb"
 
+    # ------------------------------------------------------------------------------------------------------------------
+    # Detection
+    # ------------------------------------------------------------------------------------------------------------------
+
     def can_parse(self, file_path: Path) -> bool:
-        if file_path.suffix.lower() != ".csv":
+        if file_path.suffix.lower() != ".xlsx":
+            return False
+        try:
+            return wb.is_xtb_workbook(wb.read_workbook(file_path, limit=15))
+        except Exception:  # a detection probe: any unreadable workbook is simply not ours
             return False
 
+    # ------------------------------------------------------------------------------------------------------------------
+    # Readers
+    # ------------------------------------------------------------------------------------------------------------------
+
+    def _read_xlsx(self, file_path: Path) -> _Source:
+        book = wb.read_workbook(file_path)
+        if not wb.is_xtb_workbook(book):
+            raise BRIMParseError("Not an XTB History report: the Cash Operations table was not found", details={"code": "header_row_not_found"})
+
+        currencies = wb.account_currencies(book)
+        if not currencies:
+            raise BRIMParseError("The account currency was not found in the Open Positions sheet", details={"code": CURRENCY_MISSING_CODE})
+        if len(currencies) > 1:
+            raise BRIMParseError(
+                f"The Open Positions sheet names more than one account currency ({', '.join(currencies)})",
+                details={"code": CURRENCY_AMBIGUOUS_CODE, "context": {"currencies": ", ".join(currencies)}},
+            )
+
+        sheet = book.rows(wb.CASH_SHEET)
+        start = wb.find_header(sheet, wb.CASH_REQUIRED)
+        assert start is not None  # is_xtb_workbook found it
+        columns = wb.column_index(sheet[start])
+        headers = [wb.cell_text(cell) for cell in sheet[start]]
+        rows: List[_Row] = []
+        for line, raw in enumerate(sheet[start + 1 :], start=start + 2):
+            time_value = wb.get(raw, columns, "Time")
+            amount_value = wb.get(raw, columns, "Amount")
+            rows.append(
+                _Row(
+                    line=line,
+                    cells=[wb.cell_text(cell) for cell in raw],
+                    type_raw=wb.cell_text(wb.get(raw, columns, "Type")),
+                    time=wb.cell_datetime(time_value),
+                    time_raw=wb.cell_text(time_value),
+                    amount=wb.cell_decimal(amount_value),
+                    amount_raw=wb.cell_text(amount_value),
+                    symbol=wb.cell_text(wb.get(raw, columns, "Ticker")),
+                    comment=wb.cell_text(wb.get(raw, columns, "Comment")),
+                    name=wb.cell_text(wb.get(raw, columns, "Instrument")),
+                )
+            )
+        return _Source(rows=rows, headers=headers, currency=currencies[0], open_positions=wb.open_positions(book))
+
+    # ------------------------------------------------------------------------------------------------------------------
+    # Parse
+    # ------------------------------------------------------------------------------------------------------------------
+
+    def parse(self, file_path: Path, broker_id: int) -> BRIMParseOutput:
         try:
-            content = self._read_file_head(file_path, num_lines=1)
-            if not content:
-                return False
-            # LibreOffice/Excel re-saves quote text cells ("ID";"Type";...);
-            # compare the parsed header fields, not the raw line.
-            first_line = content.splitlines()[0].strip()
-            fields = next(csv.reader([first_line], delimiter=";"))
-            return [field.strip() for field in fields] == XTB_HEADER.split(";")
-        except Exception:
-            return False
-
-    def parse(self, file_path: Path, broker_id: int) -> BRIMParseOutput:  # noqa: C901 — flat row loop: validation guards and per-type sign dispatch, no nested logic
-        transactions: List[TXCreateItem] = []
-        warnings: List[str] = []
-        validation_issues: List[BRIMValidationIssue] = []
-        extracted_assets_raw: Dict[int, Dict[str, Optional[str]]] = {}
-        asset_to_fake_id: Dict[str, int] = {}
-        next_fake_id = FAKE_ASSET_ID_BASE
-        warned_default_currency = False
-
-        detected_delim = self.detect_csv_delimiter(file_path)
-
-        try:
-            with self._open_text(file_path) as f:
-                reader = csv.DictReader(f, delimiter=detected_delim)
-                if reader.fieldnames != XTB_HEADER.split(";"):
-                    raise BRIMParseError("XTB CSV header mismatch", details={"code": "header_mismatch"})
-
-                row_num = 1
-                for row in reader:
-                    row_num += 1
-
-                    type_raw = row.get(COL_TYPE, "").strip()
-                    if not type_raw:
-                        continue
-
-                    tx_type = _map_xtb_type(type_raw)
-                    if tx_type is None:
-                        warnings.append(f"Row {row_num}: unknown XTB type '{type_raw}', skipping")
-                        continue
-
-                    tx_date = _parse_xtb_date(row.get(COL_TIME, ""))
-                    if not tx_date:
-                        warnings.append(f"Row {row_num}: invalid date '{row.get(COL_TIME, '')}', skipping")
-                        continue
-
-                    amount = _parse_xtb_number(row.get(COL_AMOUNT, ""))
-                    if amount is None:
-                        warnings.append(f"Row {row_num}: invalid amount '{row.get(COL_AMOUNT, '')}', skipping")
-                        continue
-
-                    symbol = row.get(COL_SYMBOL, "").strip()
-                    comment = row.get(COL_COMMENT, "").strip()
-                    quantity, price = _parse_xtb_comment_quantity_price(comment)
-
-                    if tx_type == TransactionType.BUY:
-                        quantity = abs(quantity)
-                        amount = -abs(amount)
-                    elif tx_type == TransactionType.SELL:
-                        quantity = -abs(quantity)
-                        amount = abs(amount)
-                    elif tx_type in (TransactionType.DIVIDEND, TransactionType.INTEREST, TransactionType.DEPOSIT):
-                        quantity = Decimal("0")
-                        amount = abs(amount)
-                    elif tx_type in (TransactionType.WITHDRAWAL, TransactionType.FEE, TransactionType.TAX):
-                        quantity = Decimal("0")
-                        amount = -abs(amount)
-
-                    asset_id = None
-                    asset_required = tx_type in (TransactionType.BUY, TransactionType.SELL, TransactionType.DIVIDEND)
-                    asset_optional = tx_type in (TransactionType.INTEREST, TransactionType.FEE, TransactionType.TAX)
-
-                    if asset_required and not symbol:
-                        warnings.append(f"Row {row_num}: {tx_type.value} requires symbol, skipping")
-                        continue
-
-                    if asset_required or (asset_optional and symbol):
-                        asset_key = symbol
-                        if asset_key in asset_to_fake_id:
-                            asset_id = asset_to_fake_id[asset_key]
-                        else:
-                            asset_id = next_fake_id
-                            asset_to_fake_id[asset_key] = asset_id
-                            extracted_assets_raw[asset_id] = {
-                                "extracted_symbol": symbol,
-                                "extracted_isin": None,
-                                "extracted_name": symbol,
-                            }
-                            next_fake_id -= 1
-
-                    currency = _infer_xtb_currency(comment)
-                    if currency is None:
-                        currency = "EUR"
-                        if not warned_default_currency:
-                            warnings.append("Currency not explicit in some XTB rows; defaulted ambiguous cash rows to EUR.")
-                            warned_default_currency = True
-
-                    description_parts = [type_raw]
-                    if symbol:
-                        description_parts.append(symbol)
-                    if comment:
-                        description_parts.append(comment)
-                    if price is not None:
-                        description_parts.append(f"price={price}")
-                    description = " | ".join(description_parts)
-
-                    self._create_transaction(
-                        row_num=row_num,
-                        transactions=transactions,
-                        validation_issues=validation_issues,
-                        context=description,
-                        broker_id=broker_id,
-                        asset_id=asset_id,
-                        type=tx_type,
-                        date=tx_date,
-                        quantity=quantity,
-                        cash=Currency(code=currency, amount=amount),
-                        description=description,
-                        tags=["import", "xtb"],
-                    )
-
+            source = self._read_xlsx(file_path)
         except FileNotFoundError:
             raise BRIMParseError(f"File not found: {file_path}", details={"code": "file_not_found", "context": {"file": file_path.name}}) from None
         except BRIMParseError:
             raise
-        except Exception as e:
+        except Exception as e:  # isolation boundary: any reader failure becomes the plugin's «unreadable» refusal
+            logger.warning("XTB file unreadable", file=file_path.name, exc_info=e)
             raise BRIMParseError(f"Error parsing file: {e}", details={"code": "file_unreadable", "context": {"error": str(e)}}) from e
+        return self._parse_rows(source, broker_id)
 
-        if not transactions:
-            warnings.append("No valid transactions found in file")
+    def _parse_rows(self, source: _Source, broker_id: int) -> BRIMParseOutput:  # noqa: C901 — flat row loop: guards and per-type sign dispatch
+        transactions: List[TXCreateItem] = []
+        validation_issues: List[BRIMValidationIssue] = []
+        extracted: Dict[int, BRIMExtractedAssetInfo] = {}
+        asset_to_fake_id: Dict[str, int] = {}
+        next_fake_id = FAKE_ASSET_ID_BASE
+        skips = io.RowSkips(source.headers)
+        imported_quantity: Dict[str, Decimal] = defaultdict(Decimal)
+        transfers: List[_Row] = []
+        quiet: Dict[str, int] = defaultdict(int)
+        tax_refunds: List[_Row] = []
 
-        extracted_assets_typed: Dict[int, BRIMExtractedAssetInfo] = {
-            fake_id: BRIMExtractedAssetInfo(
-                extracted_symbol=info.get("extracted_symbol"),
-                extracted_isin=info.get("extracted_isin"),
-                extracted_name=info.get("extracted_name"),
+        for row in source.rows:
+            if not row.type_raw:
+                if any(row.cells):
+                    if row.cells and row.cells[0].strip().lower() in wb.TOTAL_LABELS:
+                        quiet["total_row"] += 1
+                    else:
+                        skips.unreadable(row.line, row.cells, "Type is empty")
+                continue
+            if row.type_raw.strip().lower() in wb.TOTAL_LABELS:
+                quiet["total_row"] += 1
+                continue
+            if row.type_raw.strip().lower() == SUBACCOUNT_TRANSFER:
+                transfers.append(row)
+                continue
+
+            tx_type = _map_xtb_type(row.type_raw)
+            if tx_type is None:
+                skips.unknown(row.line, row.cells, f"Type «{row.type_raw}»")
+                continue
+            if row.time is None:
+                skips.unreadable(row.line, row.cells, f"Time «{row.time_raw}»")
+                continue
+            if row.amount is None:
+                skips.unreadable(row.line, row.cells, f"Amount «{row.amount_raw}»")
+                continue
+
+            quantity, price = _parse_xtb_comment_quantity_price(row.comment)
+            # The cash is the Amount as written, sign included: a sign that does not fit the type is never flipped (lot 83-B).
+            amount = row.amount
+            refund = False
+            if amount == 0:
+                if tx_type in (TransactionType.BUY, TransactionType.SELL):
+                    skips.unknown(row.line, row.cells, f"{tx_type.value} with amount 0")
+                else:
+                    quiet["zero_amount"] += 1  # a cash row of 0 moves nothing
+                continue
+            if (amount > 0) != (CASH_SIGN[tx_type] > 0):
+                if tx_type != TransactionType.TAX:
+                    skips.unknown(row.line, row.cells, f"{tx_type.value} with a {'positive' if amount > 0 else 'negative'} amount")
+                    continue
+                # A tax given back is income from the investment: an INTEREST «Tax refund» (the plugin rule 6), listed in an info note.
+                tx_type = TransactionType.INTEREST
+                refund = True
+                tax_refunds.append(row)
+            if tx_type == TransactionType.BUY:
+                quantity = abs(quantity)
+            elif tx_type == TransactionType.SELL:
+                quantity = -abs(quantity)
+            else:
+                quantity = Decimal("0")
+
+            asset_required = tx_type in (TransactionType.BUY, TransactionType.SELL, TransactionType.DIVIDEND)
+            asset_optional = tx_type in (TransactionType.INTEREST, TransactionType.FEE, TransactionType.TAX)
+            if asset_required and not row.symbol:
+                skips.unreadable(row.line, row.cells, f"{tx_type.value} without a symbol")
+                continue
+            if tx_type in (TransactionType.BUY, TransactionType.SELL) and quantity == 0:
+                skips.unreadable(row.line, row.cells, f"Quantity in the comment «{row.comment}»")
+                continue
+
+            asset_id = None
+            if asset_required or (asset_optional and row.symbol):
+                asset_id = asset_to_fake_id.get(row.symbol)
+                if asset_id is None:
+                    asset_id = next_fake_id
+                    asset_to_fake_id[row.symbol] = asset_id
+                    extracted[asset_id] = BRIMExtractedAssetInfo(extracted_symbol=row.symbol, extracted_isin=None, extracted_name=row.name or row.symbol)
+                    next_fake_id -= 1
+            if tx_type in (TransactionType.BUY, TransactionType.SELL):
+                imported_quantity[row.symbol] += quantity
+
+            description_parts = [row.type_raw]
+            if row.symbol:
+                description_parts.append(row.symbol)
+            if row.comment:
+                description_parts.append(row.comment)
+            if price is not None:
+                description_parts.append(f"price={price}")
+            description = " | ".join(description_parts)
+            if refund:
+                description = f"Tax refund: {description}"
+
+            self._create_transaction(
+                row_num=row.line,
+                transactions=transactions,
+                validation_issues=validation_issues,
+                context=description,
+                broker_id=broker_id,
+                asset_id=asset_id,
+                type=tx_type,
+                date=row.time.date(),
+                quantity=quantity,
+                cash=Currency(code=source.currency, amount=amount),
+                description=description,
+                tags=list(TAGS),
             )
-            for fake_id, info in extracted_assets_raw.items()
-        }
 
-        logger.info(
-            "XTB file parsed",
-            transaction_count=len(transactions),
-            warning_count=len(warnings),
-            asset_count=len(extracted_assets_typed),
-        )
+        paired, unpaired = _pair_transfers(transfers)
+        if paired:
+            quiet["subaccount_transfer"] += paired
+        for row, reason in unpaired:
+            if reason == "unreadable":
+                skips.unreadable(row.line, row.cells, f"Time «{row.time_raw}» or Amount «{row.amount_raw}»")
+            else:
+                skips.unknown(row.line, row.cells, "Sub-account transfer without its opposite row")
 
+        for reason, count in quiet.items():
+            logger.info("XTB rows left out", reason=reason, count=count)
+
+        notices: List[BRIMNotice] = []
+        if tax_refunds:
+            notices.append(
+                BRIMNotice(
+                    severity="info",
+                    code=TAX_REFUND_CODE,
+                    message=TAX_REFUND_MESSAGE.format(n=len(tax_refunds)),
+                    evidence=[
+                        BRIMEvidence(
+                            title="",
+                            headers=list(source.headers),
+                            rows=[(row.cells + [""] * len(source.headers))[: len(source.headers)] for row in tax_refunds],
+                            row_numbers=[row.line for row in tax_refunds],
+                            comment=TAX_REFUND_COMMENT,
+                        )
+                    ],
+                    context={"count": len(tax_refunds)},
+                )
+            )
+        outside = _outside_period(source.open_positions, imported_quantity)
+        if outside:
+            notices.append(outside)
+        if not transactions:
+            notices.append(BRIMNotice.coerce("No valid transactions found in file"))
+
+        logger.info("XTB file parsed", transaction_count=len(transactions), notice_count=len(notices) + skips.count(), asset_count=len(extracted))
         return BRIMParseOutput(
             transactions=transactions,
-            warnings=warnings,
+            warnings=[*notices, *skips.notices()],
             validation_issues=validation_issues,
-            extracted_assets=extracted_assets_typed,
+            extracted_assets=extracted,
         )
+
+
+def _pair_transfers(rows: List[_Row]) -> Tuple[int, List[Tuple[_Row, str]]]:
+    """Match each sub-account transfer with its opposite (same size, other sign, within ``PAIR_WINDOW_SECONDS``).
+
+    A pair moves money between two sub-accounts of the same account: nothing changes for the account, so both rows are
+    left out (a known reason). A row without its opposite is returned with ``"unpaired"``; one whose time or amount
+    cannot be read with ``"unreadable"``.
+    """
+    readable = [row for row in rows if row.time is not None and row.amount is not None and row.amount != 0]
+    readable_ids = {id(row) for row in readable}
+    result: List[Tuple[_Row, str]] = [(row, "unreadable") for row in rows if id(row) not in readable_ids]
+    readable.sort(key=lambda row: row.time)  # type: ignore[arg-type, return-value]
+    used: set[int] = set()
+    pairs = 0
+    for i, row in enumerate(readable):
+        if i in used:
+            continue
+        for j in range(i + 1, len(readable)):
+            other = readable[j]
+            if (other.time - row.time).total_seconds() > PAIR_WINDOW_SECONDS:  # type: ignore[operator]
+                break
+            if j not in used and other.amount == -row.amount:  # type: ignore[operator]
+                used.update({i, j})
+                pairs += 2
+                break
+    result.extend((row, "unpaired") for i, row in enumerate(readable) if i not in used)
+    result.sort(key=lambda item: item[0].line)
+    return pairs, result
+
+
+def _plain(value: Decimal) -> str:
+    """A quantity as plain text, without exponent or trailing zeros."""
+    text = format(value.normalize(), "f")
+    return "0" if text in ("-0", "") else text
+
+
+def _outside_period(positions: List[wb.OpenPosition], imported: Dict[str, Decimal]) -> Optional[BRIMNotice]:
+    """An info note when the open volume of an instrument differs from the net quantity this report imports for it.
+
+    The open volume of a ticker is the sum of its aggregate rows (one per sub-account that holds it). CFDs are not
+    imported, so they are not compared.
+    """
+    by_ticker: Dict[str, List[wb.OpenPosition]] = {}
+    for position in positions:
+        if "CFD" not in position.category.upper():
+            by_ticker.setdefault(position.ticker, []).append(position)
+    differing = []
+    for ticker, rows in by_ticker.items():
+        volume = sum((row.volume for row in rows), Decimal("0"))
+        if volume != imported.get(ticker, Decimal("0")):
+            differing.append((rows[0], volume))
+    if not differing:
+        return None
+    evidence = BRIMEvidence(
+        title="",
+        headers=["Ticker", "Instrument", "Open volume", "Imported quantity"],
+        rows=[[p.ticker, p.name, _plain(volume), _plain(imported.get(p.ticker, Decimal("0")))] for p, volume in differing],
+        row_numbers=[p.line for p, _ in differing],
+        comment=OUTSIDE_PERIOD_COMMENT,
+    )
+    return BRIMNotice(
+        severity="info",
+        code=OUTSIDE_PERIOD_CODE,
+        message=OUTSIDE_PERIOD_MESSAGE.format(n=len(differing)),
+        evidence=[evidence],
+        context={"count": len(differing)},
+    )

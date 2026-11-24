@@ -190,7 +190,8 @@ frontend/src/routes/
   import and new transaction through the bulk workspace, with this broker pre-selected. «Delete» on a row or the
   selection asks about a parent's linked charges first, through the same flow as the Transactions page
   (`chargesDeleteFlow.svelte.ts`, see
-  [Deleting a parent and keeping its charges](../state/transaction-draft.md#workspace-intent))
+  [Deleting a parent and keeping its charges](../state/transaction-draft.md#workspace-intent)); «Link the charges» in
+  the selection bar goes through the page's flow too (`chargesLinkFlow.svelte.ts`)
 - Info tab: broker details and the embedded sharing panel
   ([BrokerSharingPanel](../components/features/brokers/modals.md#broker-sharing-panel))
 
@@ -218,9 +219,10 @@ frontend/src/routes/
     - A sort, or a filter on the type, makes the table flat. Every charge is then a row of its own with `↳`, and the
       `DataTable` filters, sorts and pages.
     - Pairs keep their own rules: legs side by side and ghost partners, with no filter and no sort.
-    - **Link** in the selection bar (one parent and its charges) follows `linkSelection` of
-      `lib/features/transactions/chargeLinkRules.ts`; it saves at once (`linkCommit`) after the `TxChargesActionModal`
-      confirmation. **Delete** goes through `createChargesDeleteFlow` (`chargesDeleteFlow.svelte.ts`): a parent whose
+    - **Link** in the selection bar (one parent and its charges) goes through `createChargesLinkFlow`
+      (`lib/features/transactions/chargesLinkFlow.svelte.ts`, shared with a broker's Transactions tab): it follows
+      `linkSelection` of `chargeLinkRules.ts`, loads the type rules itself once two rows are selected, and saves at once (`linkCommit`) after the
+      `TxChargesActionModal` confirmation. **Delete** goes through `createChargesDeleteFlow` (`chargesDeleteFlow.svelte.ts`): a parent whose
       charges are not all selected opens the same panel («Keep the charges» / «Delete all») before the bulk workspace
       ([Deleting a parent and keeping its charges](../state/transaction-draft.md#workspace-intent)).
 

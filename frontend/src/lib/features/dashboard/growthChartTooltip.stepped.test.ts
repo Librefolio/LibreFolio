@@ -14,7 +14,7 @@ import {buildGrowthTooltip, type GrowthTooltipView} from './growthChartTooltip';
 
 const THEME = {bg: '#fff', border: '#ccc', textColor: '#111', mutedColor: '#777'};
 const eurLabels = {bookAssetLike: 'Assets', bookAssetLikeTooltip: 'Assets', cashContributed: 'Contributed', cashGenerated: 'Generated', nav: 'NAV', capitalBaseline: 'Baseline', capitalBaselineTooltip: 'Baseline'};
-const pnlLabels = {total: 'Total P&L', dividend: 'Div', interest: 'Int', costs: 'Costs', deposit: 'Dep', acqNewCapital: 'New', acqReinvested: 'Re', bookValue: 'Book'};
+const pnlLabels = {total: 'Total P&L', dividend: 'Div', interest: 'Int', reward: 'Rew', costs: 'Costs', deposit: 'Dep', acqNewCapital: 'New', acqReinvested: 'Re', bookValue: 'Book'};
 
 /** Steps starting on the 1st, the 11th and the 21st of January: a flat stretch each. */
 const DATES = ['2026-01-01', '2026-01-11', '2026-01-21'];

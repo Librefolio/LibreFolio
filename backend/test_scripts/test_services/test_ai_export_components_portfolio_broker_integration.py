@@ -60,13 +60,13 @@ from backend.app.schemas.portfolio.summary import AssetPeriodContribution, Portf
 from backend.app.schemas.portfolio.yield_on_cost import YieldOnCostProvenance, YieldOnCostResult, YieldOnCostStatus
 from backend.app.schemas.prices import FAPricePoint, FAPriceQueryResult
 from backend.app.schemas.risk.outputs import RiskDrawdownOutput
-from backend.app.schemas.risk.results import RiskAnalyticResult, RiskQueryResponse
+from backend.app.schemas.risk.results import RiskAnalyticResult, RiskError, RiskQueryResponse
 from backend.app.schemas.risk.scope import RiskQueryRequest
-from backend.app.schemas.risk.vocabulary import RiskDrawdownRecoveryStatus, RiskResultStatus, RiskReturnBasis
+from backend.app.schemas.risk.vocabulary import RiskDrawdownRecoveryStatus, RiskErrorCode, RiskResultStatus, RiskReturnBasis
 from backend.app.schemas.signals.inputs import SignalExecutionContext, SignalPricePoint
 from backend.app.schemas.signals.vocabulary import SignalCadence, SignalDomain
 from backend.app.services.ai_export.analyses.catalog import EXPECTED_ANALYSIS_COUNT
-from backend.app.services.ai_export.components import broker_cost_efficiency, broker_financial, drawdown_context, portfolio_financial, portfolio_income
+from backend.app.services.ai_export.components import broker_cost_efficiency, broker_financial, drawdown_context, portfolio_financial, portfolio_income, risk_evidence
 from backend.app.services.ai_export.components import portfolio_broker_registry as portfolio_broker_registry_module
 from backend.app.services.ai_export.components.catalog import (
     ALL_FOUNDATION_COMPONENTS,
@@ -97,7 +97,7 @@ from backend.app.services.ai_export.components.resources import (
     PORTFOLIO_PRICE_RESULTS_RESOURCE,
     PORTFOLIO_REPORT_RESOURCE,
 )
-from backend.app.services.ai_export.components.types import BuildScope, DetailLevel, Domain, PeriodBehavior, ResourceKey, TemporalAggregatorSpec
+from backend.app.services.ai_export.components.types import BrokerScopeSource, BuildScope, DetailLevel, Domain, PeriodBehavior, ResourceKey, TemporalAggregatorSpec
 from backend.app.services.ai_export.composer import Composer
 from backend.app.services.ai_export.datasets.catalog import EXPECTED_DATASET_COUNT
 from backend.app.services.ai_export.dependencies import (
@@ -110,6 +110,9 @@ from backend.app.services.assets.manager import AssetSourceManager
 from backend.app.services.portfolio.lots_analysis_service import LotsAnalysisService
 from backend.app.services.portfolio.portfolio_service import PortfolioService
 from backend.app.services.signals.service import SignalService
+
+_OWNED_BROKERS: tuple[int, ...] = (1, 2)
+"""78 L10b: the brokers a whole-scope test reads, named (an empty scope means no broker)."""
 
 CURRENCY = "USD"
 
@@ -133,9 +136,14 @@ def _portfolio_scope(**overrides) -> BuildScope:
         "period_start": date(2026, 1, 1),
         "period_end": date(2026, 1, 20),
         "target_currency": CURRENCY,
-        "broker_scope": (),
+        # 78 L10b: a whole scope is the owned brokers, named; an empty scope means no broker.
+        "broker_scope": _OWNED_BROKERS,
+        "broker_scope_source": BrokerScopeSource.OWNED,
+        "owned_broker_ids": _OWNED_BROKERS,
     }
     defaults.update(overrides)
+    if "broker_scope" in overrides and "broker_scope_source" not in overrides:
+        defaults["broker_scope_source"] = BrokerScopeSource.REQUESTED
     return BuildScope(**defaults)
 
 
@@ -550,6 +558,34 @@ def _patch_drawdown(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(drawdown_context, "RiskService", _FakeRiskService)
 
 
+def _patch_risk_evidence(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keeps the risk evidence (78 L8a, L8b) off the database: Risk answers «too short a history» for every analytic.
+
+    `portfolio.risk_concentration`, `portfolio.tail_risk` and `portfolio.correlated_pairs` run `RiskService.execute` on the context's session; on the
+    tableless session it fails with `no such table` and the sections report `failed`, an accidental path again. An
+    `unavailable` answer is a real Risk answer, and keeps the section's contract under test without a database.
+    """
+
+    class _FakeRiskService:
+        def __init__(self, session):  # noqa: ARG002
+            pass
+
+        async def execute(self, *, user_id, request):  # noqa: ARG002
+            return RiskQueryResponse(
+                items=[
+                    RiskAnalyticResult(
+                        instance_id=analytic.instance_id,
+                        analytic_code=analytic.analytic_code,
+                        status=RiskResultStatus.UNAVAILABLE,
+                        error=RiskError(code=RiskErrorCode.INSUFFICIENT_HISTORY, message="not enough history"),
+                    )
+                    for analytic in request.analytics
+                ]
+            )
+
+    monkeypatch.setattr(risk_evidence, "RiskService", _FakeRiskService)
+
+
 def _patch_income_timeline(monkeypatch: pytest.MonkeyPatch) -> None:
     """Keeps `portfolio.income_timeline` off the database: no accessible broker, hence an empty income ledger.
 
@@ -630,6 +666,7 @@ def _setup_portfolio_scenario(monkeypatch: pytest.MonkeyPatch, scope: BuildScope
     _patch_metadata(monkeypatch, asset_ids=list(_HELD_ASSET_IDS), broker_ids=[1, 2])
     _patch_get_prices_bulk(monkeypatch)
     _patch_drawdown(monkeypatch)
+    _patch_risk_evidence(monkeypatch)
     _patch_income_timeline(monkeypatch)
 
 
@@ -671,6 +708,7 @@ def _setup_broker_scenario(monkeypatch: pytest.MonkeyPatch, scope: BuildScope, b
     _patch_broker_period_activity(monkeypatch)
     _patch_broker_access(monkeypatch)
     _patch_drawdown(monkeypatch)
+    _patch_risk_evidence(monkeypatch)
 
 
 # =============================================================================
@@ -680,10 +718,10 @@ def _setup_broker_scenario(monkeypatch: pytest.MonkeyPatch, scope: BuildScope, b
 
 class TestPortfolioBrokerFragmentSanity:
     def test_exact_component_counts(self):
-        assert len(PORTFOLIO_BROKER_COMPONENTS) == 41
-        assert PORTFOLIO_REAL_COMPONENT_COUNT == 21
+        assert len(PORTFOLIO_BROKER_COMPONENTS) == 44
+        assert PORTFOLIO_REAL_COMPONENT_COUNT == 24
         assert BROKER_REAL_COMPONENT_COUNT == 20
-        assert len(PORTFOLIO_REAL_COMPONENT_IDS) == 21
+        assert len(PORTFOLIO_REAL_COMPONENT_IDS) == 24
         assert len(BROKER_REAL_COMPONENT_IDS) == 20
 
     def test_no_duplicate_component_ids(self):
@@ -716,6 +754,10 @@ class TestPortfolioBrokerFragmentSanity:
             "portfolio.drawdown_summary",
             # AI adequacy remediation: income timeline evidence
             "portfolio.income_timeline",
+            # 78 L8a, L8b: the risk evidence of today's holdings
+            "portfolio.risk_concentration",
+            "portfolio.tail_risk",
+            "portfolio.correlated_pairs",
         }
         assert set(PORTFOLIO_REAL_COMPONENT_IDS) == expected
 
@@ -789,7 +831,7 @@ class TestComponentRegistryConstruction:
     def test_merged_registry_has_68_components(self):
         registry = build_portfolio_broker_component_registry()
         # D5 (plan 68): asset.profile is the 68th component (before D5: 67)
-        assert len(registry) == 68
+        assert len(registry) == 71
 
     def test_pb_component_ids_resolve_to_real_specs(self):
         registry = build_portfolio_broker_component_registry()
@@ -849,12 +891,12 @@ def registry_placeholder(component_id: str):
 class TestDatasetAndAnalysisRegistryConstruction:
     def test_dataset_registry_has_40_datasets(self):
         registry = build_portfolio_broker_dataset_registry()
-        assert len(registry) == EXPECTED_DATASET_COUNT == 40
+        assert len(registry) == EXPECTED_DATASET_COUNT == 41
 
     def test_analysis_registry_has_11_analyses(self):
         dataset_registry = build_portfolio_broker_dataset_registry()
         analysis_registry = build_portfolio_broker_analysis_registry(dataset_registry)
-        assert len(analysis_registry) == EXPECTED_ANALYSIS_COUNT == 11
+        assert len(analysis_registry) == EXPECTED_ANALYSIS_COUNT == 12
 
     def test_portfolio_and_broker_datasets_present(self):
         registry = build_portfolio_broker_dataset_registry()
@@ -874,6 +916,8 @@ class TestDatasetAndAnalysisRegistryConstruction:
             "portfolio.income_evidence",
             "portfolio.overview_and_history",
             "portfolio.asset_history",
+            # 78 L8a: internal, required by portfolio.protection_strategies
+            "portfolio.risk_evidence",
         }
         assert broker_ids == {
             "broker.overview",
@@ -895,7 +939,7 @@ class TestDatasetAndAnalysisRegistryConstruction:
         analysis_registry = build_portfolio_broker_analysis_registry()
         portfolio_analysis_ids = {spec.analysis_id for spec in analysis_registry if spec.domain == Domain.PORTFOLIO}
         broker_analysis_ids = {spec.analysis_id for spec in analysis_registry if spec.domain == Domain.BROKER}
-        assert len(portfolio_analysis_ids) == 4
+        assert len(portfolio_analysis_ids) == 5  # 78 L3: protection_strategies
         assert len(broker_analysis_ids) == 3
 
 
@@ -1185,7 +1229,7 @@ class TestBrokerProvenanceInEveryBrokerDataset:
 
 class TestAnalysisComposition:
     @pytest.mark.asyncio
-    async def test_all_four_portfolio_analyses_compose(self, monkeypatch):
+    async def test_all_five_portfolio_analyses_compose(self, monkeypatch):
         scope = _portfolio_scope()
         _setup_portfolio_scenario(monkeypatch, scope)
         dataset_registry = build_portfolio_broker_dataset_registry()
@@ -1194,7 +1238,7 @@ class TestAnalysisComposition:
         composer = Composer()
 
         portfolio_analyses = [spec for spec in analysis_registry if spec.domain == Domain.PORTFOLIO]
-        assert len(portfolio_analyses) == 4
+        assert len(portfolio_analyses) == 5  # 78 L3: protection_strategies
         for analysis in portfolio_analyses:
             composition = await composer.compose_analysis(analysis, dataset_registry, context, detail_level=DetailLevel.STANDARD)
             assert set(analysis.required_dataset_ids).issubset(set(composition.dataset_ids))
@@ -1572,8 +1616,9 @@ class TestImportCycleSafety:
         )
         result = subprocess.run([sys.executable, "-c", probe], capture_output=True, text=True, timeout=60)
         assert result.returncode == 0, f"fresh-process registry construction failed:\nstdout={result.stdout}\nstderr={result.stderr}"
-        # D5 (plan 68): asset.profile is the 68th component (before D5: "67 40 11")
-        assert result.stdout.strip() == "68 40 11"
+        # D5 (plan 68): asset.profile is the 68th component (before D5: "67 40 11"); 78 L3: the 12th analysis; 78 L8a: two
+        # risk evidence components and the internal portfolio.risk_evidence dataset
+        assert result.stdout.strip() == "71 41 12"
 
 
 # =============================================================================

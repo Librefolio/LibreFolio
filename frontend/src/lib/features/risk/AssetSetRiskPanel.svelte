@@ -101,6 +101,7 @@
     import {dayFormatter, describeEligibility, eligibilityBatches, EMPTY_VERDICTS, fitPeriodOffer, isSelectable, mergeEligibilityAnswers, type DayRange, type EligibilityView, type EligibilityVerdicts} from './eligibility';
     import {addPairSides, buildSyncTargets, labQualityAction} from './syncTargets';
     import RiskPeriodLine from './levels/RiskPeriodLine.svelte';
+    import RiskFreeRateField from './RiskFreeRateField.svelte';
     import {uiLocale} from '$lib/stores/app/uiLocale';
     import DocsLink from '$lib/components/ui/DocsLink.svelte';
 
@@ -871,14 +872,18 @@
          on the Dashboard (the developer's review, 06/10). Only «What did each of these pay?»
          uses the benchmark, for beta, correlation and its dot. The help stays beside it. -->
     {#snippet benchmarkPicker()}
-        <div class="mb-4 flex flex-wrap items-center gap-2" data-testid="risk-asset-set-benchmark-row">
-            <span class="shrink-0 text-xs text-lf-muted">{$t('risk.levels.l3.benchmark')}</span>
-            <Tooltip text={$t('risk.assetSet.benchmark.help')} position="bottom" maxWidth="320px">
-                <span class="inline-flex text-lf-muted" data-testid="risk-asset-set-benchmark-help"><Info size={14} aria-hidden="true" /></span>
-            </Tooltip>
-            <div class="min-w-0 max-w-xs flex-1">
-                <BenchmarkSelect bind:value={benchmarkValue} bind:state={benchmarkState} verdicts={eligibilityView} boxClass="w-full" testid="risk-asset-set-benchmark" />
+        <div class="mb-4 flex flex-wrap items-center gap-x-4 gap-y-2" data-testid="risk-asset-set-benchmark-row">
+            <div class="flex w-full min-w-0 items-center gap-2 sm:w-auto">
+                <span class="shrink-0 text-xs text-lf-muted">{$t('risk.levels.l3.benchmark')}</span>
+                <Tooltip text={$t('risk.assetSet.benchmark.help')} position="bottom" maxWidth="320px">
+                    <span class="inline-flex text-lf-muted" data-testid="risk-asset-set-benchmark-help"><Info size={14} aria-hidden="true" /></span>
+                </Tooltip>
+                <div class="min-w-0 w-64 max-w-full">
+                    <BenchmarkSelect bind:value={benchmarkValue} bind:state={benchmarkState} verdicts={eligibilityView} boxClass="w-full" testid="risk-asset-set-benchmark" />
+                </div>
             </div>
+            <!-- The rate sits beside the reference it is read with (81 U25), as in L3 of Dashboard and Broker. -->
+            <RiskFreeRateField class="" />
         </div>
     {/snippet}
 

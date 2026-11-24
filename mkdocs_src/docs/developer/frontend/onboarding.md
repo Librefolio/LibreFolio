@@ -44,7 +44,7 @@ other fifteen are guided flows, declared in `ONBOARDING_GUIDE_CATALOG`
 | `import_guide` | Step-managed | the Import Wizard shows each step; the last one in the bulk editor | 9 |
 | `broker_page_guide` | Page | `/brokers` has loaded | 4 |
 | `broker_guide` | Modal | the Add Broker modal opens | 3 |
-| `broker_detail_guide` | Detail | `/brokers/[id]` has loaded its broker | 5 |
+| `broker_detail_guide` | Detail | `/brokers/[id]` has loaded its broker | 6 |
 | `fx_page_guide` | Page | `/fx` has loaded | 4 |
 | `fx_guide` | Modal | the add-pair modal opens | 2 |
 | `fx_detail_guide` | Detail | `/fx/[pair]` has initialized | 4 |

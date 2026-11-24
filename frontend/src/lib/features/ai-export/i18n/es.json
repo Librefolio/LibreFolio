@@ -21,8 +21,8 @@
     "period": "Período IA",
     "periodHelp": "Período de exportación independiente que termina en la fecha de la instantánea.",
     "periodCustom": "Personalizado",
-    "userNotes": "Notas para la IA",
-    "userNotesPlaceholder": "Añade contexto o preguntas opcionales…",
+    "userNotes": "Tu pregunta",
+    "userNotesPlaceholder": "Opcional. Haz tu pregunta, o añade el contexto que la IA debe conocer…",
     "payloadStats": "Tamaño del prompt final",
     "payloadStatsHelp": "Estimación del texto que se copiará realmente al portapapeles.",
     "tokenSeverity": {
@@ -57,11 +57,15 @@
         },
         "performance_market_drivers": {
           "display": "Rendimiento y factores de mercado",
-          "description": "Explica el rendimiento de la cartera e investiga factores de mercado fechados para cada activo mantenido."
+          "description": "Explica qué ha movido el resultado de la cartera en el periodo, con noticias de mercado fechadas para los movimientos que importan."
         },
         "fiscal_lots": {
           "display": "Estrategias para compensar minusvalías",
           "description": "Estudia cómo las minusvalías disponibles o próximas a vencer podrían compensar ganancias elegibles usando lotes FIFO económicos, tras aclarar el registro fiscal oficial, el país, el régimen, los vencimientos y las reglas aplicables."
+        },
+        "protection_strategies": {
+          "display": "Estrategias de protección",
+          "description": "Evalúa si hoy tiene sentido proteger la cartera y, solo en ese caso, con qué estrategia."
         }
       },
       "broker": {
@@ -71,7 +75,7 @@
         },
         "performance_market_drivers": {
           "display": "Rendimiento y factores de mercado",
-          "description": "Explica el rendimiento del bróker seleccionado e investiga factores de mercado fechados para cada activo mantenido."
+          "description": "Explica qué ha movido el resultado del bróker seleccionado en el periodo, con noticias de mercado fechadas para los movimientos que importan."
         },
         "fiscal_lots": {
           "display": "Estrategias para compensar minusvalías",
@@ -183,6 +187,10 @@
         "all_data": {
           "display": "Todos los datos de la cartera",
           "description": "Unión deduplicada de todos los conjuntos de datos aplicables a la cartera."
+        },
+        "risk_evidence": {
+          "display": "Evidencias de Riesgo de la Cartera",
+          "description": "Medidas de riesgo deterministas sobre las posiciones actuales, en una ventana de hasta 12 meses que no depende del período IA: dónde se concentra el riesgo, la pérdida de un mes malo y los pares de posiciones que se mueven juntos, con ventana medida, cobertura y exclusiones."
         }
       },
       "broker": {
@@ -307,6 +315,7 @@
     "tooManyPriceDays": "Esta exportación leería demasiados días de precios. Elige un periodo más corto.",
     "replyInstructions": {
       "dataReceived": "Datos recibidos, estoy listo para escuchar tus preguntas."
-    }
+    },
+    "noOwnedBrokers": "No posees ningún bróker: esta selección lee tus posiciones y tu efectivo, y los de los brókeres compartidos contigo no se incluyen."
   }
 }

@@ -3738,6 +3738,10 @@
           "interest": {
             "amount": "0.7500000",
             "code": "EUR"
+          },
+          "reward": {
+            "amount": "0",
+            "code": "EUR"
           }
         }
       ]
@@ -6461,6 +6465,10 @@
             },
             "interest": {
               "amount": "0.7500000",
+              "code": "EUR"
+            },
+            "reward": {
+              "amount": "0",
               "code": "EUR"
             }
           }

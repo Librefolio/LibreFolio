@@ -133,6 +133,22 @@ describe('the targets table and the cash entries', () => {
         expect(screen.getAllByTestId('rebalancer-planner-target-input')).toHaveLength(1);
     });
 
+    it('a right click on a cash row opens its menu on a desktop, and a target field keeps the browser menu (81 U15)', async () => {
+        const {draft, brokerKey} = scenario(REBALANCER_PLANNER_PROFILE);
+        const entry = draft.addCashEntry(brokerKey, 'EUR');
+        draft.data.targets[entry.key] = '10';
+        mount(REBALANCER_PLANNER_PROFILE, draft);
+
+        const input = screen.getAllByTestId('rebalancer-planner-target-input')[1];
+        expect(await fireEvent.contextMenu(input)).toBe(true);
+        expect(screen.queryByTestId('context-menu')).toBeNull();
+
+        const row = document.querySelector(`tr[data-row-id="${entry.key}"]`) as HTMLElement;
+        expect(await fireEvent.contextMenu(row)).toBe(false);
+        const menu = screen.getByTestId('context-menu');
+        expect(within(menu).getByTestId('rebalancer-planner-cash-entry-remove')).toBeTruthy();
+    });
+
     it('«Other cash» is a fixed row at 0 % while some cash has no entry and is worth something today', () => {
         const {draft} = scenario(REBALANCER_PLANNER_PROFILE);
         mount(REBALANCER_PLANNER_PROFILE, draft, otherCashWorthToday());

@@ -85,7 +85,7 @@ function storeSelection(selection: {view: string; tab: string}): void {
 }
 
 /** Mount the panel with no summary and no history loaded: only the restored selection is under test. */
-function mountPanel(): Mock<RequestHistory> {
+function mountPanel(extra: Record<string, unknown> = {}): Mock<RequestHistory> {
     const onRequestAllocationHistory = vi.fn<RequestHistory>(async () => {});
     render(AllocationPanel, {
         summary: null,
@@ -95,6 +95,7 @@ function mountPanel(): Mock<RequestHistory> {
         currentLanguage: 'en',
         allocationHistory: null,
         onRequestAllocationHistory,
+        ...extra,
     });
     return onRequestAllocationHistory;
 }
@@ -206,6 +207,23 @@ describe('AllocationPanel — view and tab restored from storage (S4, R21)', () 
         expect(pressedTabs()).toEqual(['allocation-tab-type']);
         expect(onRequest).toHaveBeenCalledTimes(1);
         expect(onRequest).toHaveBeenCalledWith('type', [7, 9]);
+    });
+});
+
+describe('AllocationPanel — the «Analyze →» link to the Allocation tab (lane 80, F5)', () => {
+    it('is not drawn when no one asks for it: another panel (the positions one) has no tab to open', () => {
+        mountPanel();
+        expect(screen.queryByTestId('allocation-analyze')).toBeNull();
+    });
+
+    it('is a button that calls the view back, once per click, and changes nothing in the panel', async () => {
+        const onAnalyze = vi.fn();
+        mountPanel({onAnalyze});
+        const link = screen.getByTestId('allocation-analyze');
+        expect(link.tagName).toBe('BUTTON');
+        await fireEvent.click(link);
+        expect(onAnalyze).toHaveBeenCalledTimes(1);
+        expect(screen.getByTestId('allocation-view-now')).toHaveAttribute('aria-pressed', 'true');
     });
 });
 

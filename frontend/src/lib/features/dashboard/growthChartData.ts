@@ -95,7 +95,8 @@ export interface AggregatedResolutionData {
         total: AggregatedMetric;
         brokers: AggregatedBrokerPnl[];
         candle: AggregatedCandleMetric;
-        income: {dividend: AggregatedMetric; interest: AggregatedMetric};
+        /** `reward`: rewards in kind (REWARD, project 79); always built by this module, optional for a hand-built entry. */
+        income: {dividend: AggregatedMetric; interest: AggregatedMetric; reward?: AggregatedMetric};
         costs: AggregatedMetric;
         deposits: AggregatedMetric;
         acquisition: {fromNewCapital: AggregatedMetric; fromReinvested: AggregatedMetric};
@@ -136,6 +137,8 @@ export interface AggregationInputs {
     pnlCandleByDate: Map<string, DailyCandle>;
     dividendValues: number[];
     interestValues: number[];
+    /** Rewards in kind (REWARD, project 79): their value on receipt, stacked with the income. */
+    rewardValues: number[];
     costValues: number[];
     depositValues: number[];
     acqFromNewCapitalValues: number[];
@@ -497,6 +500,7 @@ export function buildResolutionData(inputs: AggregationInputs, resolution: Chart
             income: {
                 dividend: aggregateFlowMetric(inputs.dividendValues, resolution, buckets, inputs.dates),
                 interest: aggregateFlowMetric(inputs.interestValues, resolution, buckets, inputs.dates),
+                reward: aggregateFlowMetric(inputs.rewardValues, resolution, buckets, inputs.dates),
             },
             costs: aggregateFlowMetric(inputs.costValues, resolution, buckets, inputs.dates),
             deposits: aggregateFlowMetric(inputs.depositValues, resolution, buckets, inputs.dates),
@@ -530,7 +534,7 @@ export function buildLadderData(inputs: AggregationInputs, width: CandleWidth, t
             total: ladderMetric(inputs.eurStackedData.totalPnl, buckets),
             brokers: inputs.pnlBrokerSeriesRaw.map((broker) => ({brokerId: broker.brokerId, brokerName: broker.brokerName, metric: ladderMetric(broker.values, buckets)})),
             candle: ladderCandleMetric(inputs.pnlCandleByDate, buckets, inputs.dates),
-            income: {dividend: ladderFlowMetric(inputs.dividendValues, buckets), interest: ladderFlowMetric(inputs.interestValues, buckets)},
+            income: {dividend: ladderFlowMetric(inputs.dividendValues, buckets), interest: ladderFlowMetric(inputs.interestValues, buckets), reward: ladderFlowMetric(inputs.rewardValues, buckets)},
             costs: ladderFlowMetric(inputs.costValues, buckets),
             deposits: ladderFlowMetric(inputs.depositValues, buckets),
             acquisition: {fromNewCapital: ladderFlowMetric(inputs.acqFromNewCapitalValues, buckets), fromReinvested: ladderFlowMetric(inputs.acqFromReinvestedValues, buckets)},

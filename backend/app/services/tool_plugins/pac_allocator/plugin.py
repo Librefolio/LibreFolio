@@ -19,22 +19,30 @@ one exact replay (``pac_allocator/preview.py``). No optimizer, no engine window,
 no phases; the platform's short default deadlines.
 
 **``plan`` reports its phases** (V2 of project 67): ``validate``, ``model``,
-``search`` («n of m» over the named stages), ``verify``, ``report``, declared on
+``search`` («n of m» over the named stages; on fewer usable CPUs than searches, over every turn's stages, so each
+turn sends new lines: TURNI 4d), ``verify``, ``report``, declared on
 the operation and handed to the engine as ``context.report_progress``.
 
 Timeout envelope: only one number is a product decision — ``engine_timeout_ms``,
-the solver's own budget, set to 30 s by the developer. Every other value is
-*derived* from identities the platform validators impose, not chosen:
+the solver's own budget for one search, set to 30 s by the developer. Every other value is
+*derived* from identities the platform validators impose, not chosen, by one rule for both Tools
+(``plan_policy``; TURNI of project 67, specification §16.22). For ``T`` turns of searches:
 
-    soft    >= engine + post-engine reserve   44 000 = 30 000 + 14 000
-    job      = soft + output_reserve          45 000 = 44 000 +  1 000
-    request >= ingress + queue + job + cleanup + response
-                                              59 000 = 2 000 + 5 000 + 45 000
-                                                       + 5 000 + 2 000
-    client   > request                        65 000
+    engine   = T × 30 000 + (T − 1) × 5 000   the runs' window, the grace between turns
+    soft     = engine + 14 000                today's 14 s past the window (44 000 − 30 000)
+    job      = soft + output_reserve
+    request  = ingress + queue + job + cleanup + response
+    client   = request + 6 000                today's transport time
 
-``server_bound`` therefore equals exactly 59 000 against a ``request`` of
-59 000: **the margin is zero**. Raising ``queue``, ``cleanup`` or ``job`` by a
+    T = 1:  30 000 / 44 000 / 45 000 / 59 000 /  65 000   the PAC, and the Rebalancer on 3+ CPUs
+    T = 2:  65 000 / 79 000 / 80 000 / 94 000 / 100 000   the Rebalancer on 2 usable CPUs
+    T = 3: 100 000 /114 000 /115 000 /129 000 / 135 000   the Rebalancer on 1 usable CPU (the platform's ceilings)
+
+The Rebalancer declares its row by the machine's usable CPUs (``operations_by_usable_cpus``); the platform picks it once,
+when it builds its executor. The PAC runs one search: its limits are the one-turn row. The rule runs at import as
+arithmetic on constants: nothing is read.
+
+``server_bound`` equals exactly ``request`` in every row: **the margin is zero**. Raising ``queue``, ``cleanup`` or ``job`` by a
 single millisecond fails validation — and an invalid operation policy removes
 the whole tool from the catalog, not just the operation. If more cleanup time
 is ever needed it has to be taken from the job budget.
@@ -55,12 +63,14 @@ from backend.app.schemas.pac_allocator.request import PacPlannerRequest, Rebalan
 from backend.app.schemas.tools import (
     ToolDocumentation,
     ToolOperationPolicy,
+    ToolPlatformPolicy,
     ToolUIDescriptor,
 )
 from backend.app.services.pac_allocator.evaluation.errors import ExactReplayRejectedError
 from backend.app.services.pac_allocator.planner import SeededRunsFailedError, plan_pac_allocation, plan_rebalancing
 from backend.app.services.pac_allocator.preview import preview_pac_allocation, preview_rebalancing
 from backend.app.services.pac_allocator.progress import PLANNER_PHASES
+from backend.app.services.pac_allocator.seed_runs import RUN_COUNT, RUN_GRACE_SECONDS
 from backend.app.services.pac_allocator.solver import SolverStageError
 from backend.app.services.platform.provider_registry import register_plugin
 from backend.app.services.tools.base import (
@@ -91,36 +101,64 @@ MESSAGE_SAFE_ERRORS: frozenset[type[Exception]] = frozenset({ExactReplayRejected
 # rather than only here, because an accurate comment ages without announcing it.
 _POST_ENGINE_RESERVE_MS = 2_000
 
-_OPERATION_POLICIES = (
-    ToolOperationPolicy(
+#: One search's limit, the developer's 30 s (specification §16.22).
+RUN_LIMIT_MS = 30_000
+#: Past the runs' window: the last run's grace, the model built before the runs, the replay. Today's 44 s − 30 s.
+_PAST_WINDOW_MS = 14_000
+#: Past the server's deadline: the transport back to the page. Today's 65 s − 59 s.
+_TRANSPORT_MS = 6_000
+_QUEUE_MS = 5_000
+_CLEANUP_MS = 5_000
+#: The platform's own reserves, read off its defaults: a plain model built on constants, no I/O.
+_PLATFORM = ToolPlatformPolicy()
+
+
+def plan_policy(turns: int, *, run_limit_ms: int = RUN_LIMIT_MS, grace_ms: int = int(RUN_GRACE_SECONDS * 1000), past_window_ms: int = _PAST_WINDOW_MS) -> ToolOperationPolicy:
+    """The «plan» operation's limits for ``turns`` turns of searches (the module docstring's rule). The arguments are the
+    rule's, so a test can shorten them; the defaults are the product's."""
+    window = turns * run_limit_ms + (turns - 1) * grace_ms
+    soft = window + past_window_ms
+    job = soft + _PLATFORM.output_reserve_ms
+    request = _PLATFORM.ingress_timeout_ms + _QUEUE_MS + job + _CLEANUP_MS + _PLATFORM.response_reserve_ms
+    return ToolOperationPolicy(
         operation="plan",
         pure=True,
         deterministic=True,
         deduplication="none",
         max_parameter_bytes=262_144,
         max_result_bytes=_PLAN_RESULT_BYTES,
-        queue_timeout_ms=5_000,
-        engine_timeout_ms=30_000,
-        job_timeout_ms=45_000,
-        soft_timeout_ms=44_000,
-        cleanup_timeout_ms=5_000,
-        request_timeout_ms=59_000,
-        client_timeout_ms=65_000,
+        queue_timeout_ms=_QUEUE_MS,
+        engine_timeout_ms=window,
+        job_timeout_ms=job,
+        soft_timeout_ms=soft,
+        cleanup_timeout_ms=_CLEANUP_MS,
+        request_timeout_ms=request,
+        client_timeout_ms=request + _TRANSPORT_MS,
         # The engine's phases, in order (V2 of project 67): the stream route forwards them, the waiting panel shows them.
         progress_phases=PLANNER_PHASES,
-    ),
-    # The scenario preview (B4 of project 67): the normalizer and one exact replay, no optimizer, so no engine window is
-    # claimed and the platform's short defaults hold. Its answer has one row per target entry, smaller than the entry in the
-    # request, so the plan's result cap holds it for any request the parameter cap admits.
-    ToolOperationPolicy(
-        operation="preview",
-        pure=True,
-        deterministic=True,
-        deduplication="none",
-        max_parameter_bytes=262_144,
-        max_result_bytes=_PLAN_RESULT_BYTES,
-    ),
+    )
+
+
+def turns_for(usable_cpus: int) -> int:
+    """How many turns three searches need on ``usable_cpus`` CPUs: never more searches at once than CPUs (SEEDS-c)."""
+    return -(-RUN_COUNT // usable_cpus)
+
+
+# The scenario preview (B4 of project 67): the normalizer and one exact replay, no optimizer, so no engine window is
+# claimed and the platform's short defaults hold. Its answer has one row per target entry, smaller than the entry in the
+# request, so the plan's result cap holds it for any request the parameter cap admits.
+_PREVIEW_POLICY = ToolOperationPolicy(
+    operation="preview",
+    pure=True,
+    deterministic=True,
+    deduplication="none",
+    max_parameter_bytes=262_144,
+    max_result_bytes=_PLAN_RESULT_BYTES,
 )
+#: The PAC runs one search, and the Rebalancer on a machine with enough CPUs for its three at once: the one-turn row.
+_OPERATION_POLICIES = (plan_policy(1), _PREVIEW_POLICY)
+#: The Rebalancer's rows by usable CPUs: three turns on one CPU, two on two, one from three up (TURNI of project 67).
+_REBALANCER_OPERATIONS_BY_CPUS = tuple((cpus, (plan_policy(turns_for(cpus)), _PREVIEW_POLICY)) for cpus in range(1, RUN_COUNT + 1))
 
 
 def _log_engine_failure(exc: Exception, execution_id: str) -> None:
@@ -189,8 +227,10 @@ class PacAllocatorTool(ToolPlugin):
                 path="user/tools/portfolio-rebalancer/",
                 version="1.0.0",
             ),
-            # The same policy as the PAC: the same engine window, the same reserve, the same zero margin (module docstring).
+            # The PAC's one-turn row by default; on a machine with fewer usable CPUs than searches, its row of turns, which the
+            # platform picks when it builds its executor (TURNI of project 67, module docstring).
             operations=_OPERATION_POLICIES,
+            operations_by_usable_cpus=_REBALANCER_OPERATIONS_BY_CPUS,
             input_type=RebalancerPlannerRequest,
             output_type=RebalancerToolOutput,
         ),
@@ -243,11 +283,14 @@ class PacAllocatorTool(ToolPlugin):
             # strict output check run after this method returns, outside the
             # reserve: at most 2.8 ms for a 28.5 KB result.
             window = context.claim_engine_window(post_engine_reserve_ms=_POST_ENGINE_RESERVE_MS)
+            # The Rebalancer's window holds its turns (TURNI of project 67): each search has its own limit, the window the
+            # whole of them. The PAC runs one search, which has the whole window, as before.
+            turned = {"solver_time_budget_seconds": min(RUN_LIMIT_MS, window.timeout_ms) / 1000, "solver_window_seconds": window.timeout_ms / 1000} if tool_code == "portfolio_rebalancer" else {"solver_time_budget_seconds": window.timeout_ms / 1000}
             try:
                 return plan(
                     parameters,
                     checkpoint=context.checkpoint,
-                    solver_time_budget_seconds=window.timeout_ms / 1000,
+                    **turned,
                     # A pipe write per phase and per named stage of the search, never a datum of the scenario: no cost
                     # inside the engine window worth a reserve.
                     progress=context.report_progress,

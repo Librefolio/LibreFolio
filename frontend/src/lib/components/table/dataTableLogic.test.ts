@@ -25,7 +25,7 @@ vi.hoisted(() => {
 
 import {waitLocale} from 'svelte-i18n';
 import {currentLanguage} from '$lib/stores/app/language';
-import {compareRowsByColumn, extractRawValue, formatCellDate, getColumnMinMax, getCurrencyMinMaxByCode, getCurrencyOptions, getEnumOptionsWithCounts, getMultiEnumOptions, getMultiEnumOptionsWithCounts, matchesColumnFilter} from './dataTableLogic';
+import {compareRowsByColumn, extractRawValue, formatCellDate, getColumnMinMax, getCurrencyMinMaxByCode, getCurrencyOptions, getEnumOptionsWithCounts, getMultiEnumOptions, getMultiEnumOptionsWithCounts, holdRowOrder, matchesColumnFilter} from './dataTableLogic';
 import type {CellContent, ColumnDef, EnumOption, FilterValue} from './types';
 // 66 F7-c1: `paginateFlat` is read through the namespace, so that while it does not exist only its own cases fail.
 import * as dataTableLogicModule from './dataTableLogic';
@@ -910,5 +910,25 @@ describe('paginateFlat — fixed-size pages, and a row that does not open a page
         const pages = paginateFlat(rows, 1, opens);
         expect(pages[0][0]).toBe(rows[0]);
         expect(rows).toEqual(before);
+    });
+});
+
+// ===========================================================================
+// holdRowOrder — the order a table holds while a field in it is edited (81 U48)
+// ===========================================================================
+describe('holdRowOrder', () => {
+    const id = (row: {id: string}) => row.id;
+    const rowsOf = (...ids: string[]) => ids.map((value) => ({id: value}));
+
+    it('puts the rows back in the held order, whatever order the sort gave them', () => {
+        expect(holdRowOrder(rowsOf('b', 'c', 'a'), ['a', 'b', 'c'], id).map(id)).toEqual(['a', 'b', 'c']);
+    });
+
+    it('puts a row added since after the held ones, in the order it came in; a row gone is missing', () => {
+        expect(holdRowOrder(rowsOf('n2', 'c', 'n1', 'a'), ['a', 'b', 'c'], id).map(id)).toEqual(['a', 'c', 'n2', 'n1']);
+    });
+
+    it('returns an empty list for no rows', () => {
+        expect(holdRowOrder([], ['a'], id)).toEqual([]);
     });
 });

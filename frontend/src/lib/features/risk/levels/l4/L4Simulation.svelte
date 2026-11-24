@@ -6,6 +6,8 @@
     import type {RenderedSignal} from '$lib/features/signals';
     import LineChart, {type LineDataPoint} from '$lib/components/charts/LineChart.svelte';
     import SimpleSelect from '$lib/components/ui/select/SimpleSelect.svelte';
+    import DateRangePicker from '$lib/components/ui/date/DateRangePicker.svelte';
+    import {todayIso} from '$lib/utils/dateOnly';
     import {riskOutput} from '$lib/features/risk/riskTypes';
     import {buildSimulationParameters} from '$lib/features/risk/riskRequest';
     import type {RiskPanelController} from '$lib/features/risk/riskPanelController.svelte';
@@ -15,6 +17,7 @@
     import SimulationProvenance from '../SimulationProvenance.svelte';
     import {buildSimulationProvenance} from '../simulationProvenance';
     import {buildDriftUncertainty} from './driftUncertainty';
+    import {clampHistoryPeriod, historyAvailable, initialHistoryPeriod, type HistoryWindow} from './simulationHistory';
     import {DEFAULT_SIMULATION_MODE, SIMULATION_MODES, simulationModeSpec, type SimulationMode} from './simulationModes';
     import {formatPercent} from '$lib/utils/core/formatPercent';
     import {RISK_OVERLAY_COLORS} from '$lib/theme/chartTheme';
@@ -57,6 +60,14 @@
     let paths = $state(8192);
     let sampling = $state<'mc' | 'qmc'>('mc');
     let randomSeed = $state(123456);
+    /**
+     * RSK-SIM1 (P-7, the developer, 23/11/2026): the period the simulation draws its days from. By default all the common
+     * history, as before; in turbulent times the reader may keep only a calmer or a rougher stretch of it. The backend
+     * owns the rule and states the window a period may be chosen in; the picker stays inside the last one it stated.
+     */
+    let historyChosen = $state(false);
+    let historyPeriod = $state<HistoryWindow | null>(null);
+    let lastAvailable = $state<HistoryWindow | null>(null);
 
     let spec = $derived(simulationModeSpec(mode));
     /**
@@ -75,6 +86,12 @@
     let output = $derived(riskOutput(result, schemas.RiskSimulationOutput));
     let provenance = $derived(buildSimulationProvenance(result));
     let terminal = $derived(output?.percentile_bands.at(-1) ?? null);
+    // The window outlives the answer: a control change drops the answer, the picker keeps its bounds.
+    $effect(() => {
+        const available = historyAvailable(output);
+        if (available) lastAvailable = available;
+    });
+    let availableShown = $derived(lastAvailable ? clampHistoryPeriod(lastAvailable, lastAvailable, todayIso()) : null);
 
     /**
      * What the band leaves out: that the drift it rests on is itself an estimate.
@@ -108,7 +125,18 @@
     });
     /** Q5 a: fewer paths than asked when the request did not fit, and said. */
     let pathsReduced = $derived(output && output.requested_path_count != null && output.path_count < output.requested_path_count ? {used: output.path_count, requested: output.requested_path_count} : null);
-    let coneStart = $derived(output?.estimation_end ?? dateEnd);
+    /**
+     * Where the cone starts: where the data ends, today's composition projected forward. With all the common history that
+     * is the last return the simulation read; with a chosen period (RSK-SIM1) the period may end years ago, and the
+     * future still starts at the end of the data — the available window's end, never after today.
+     */
+    let coneStart = $derived.by(() => {
+        if (output?.history_chosen === true && output.history_available_end) {
+            const today = todayIso();
+            return output.history_available_end < today ? output.history_available_end : today;
+        }
+        return output?.estimation_end ?? dateEnd;
+    });
 
     let coneData = $derived.by<LineDataPoint[]>(() => (output?.percentile_bands ?? []).map((point) => ({date: addDays(coneStart, point.day), value: point.p50 * 100})));
 
@@ -152,8 +180,24 @@
                 pathCount: paths,
                 randomSeed,
                 sobolStartIndex: SOBOL_START_INDEX,
+                historyStart: historyChosen ? (historyPeriod?.start ?? null) : null,
+                historyEnd: historyChosen ? (historyPeriod?.end ?? null) : null,
             }),
         }));
+    }
+
+    function chooseHistory(chosen: boolean): void {
+        historyChosen = chosen;
+        if (chosen && !historyPeriod) {
+            const today = todayIso();
+            historyPeriod = initialHistoryPeriod(lastAvailable, today, addDays(today, -365));
+        }
+        invalidate();
+    }
+
+    function changeHistory(start: string, end: string): void {
+        historyPeriod = clampHistoryPeriod({start, end}, lastAvailable, todayIso());
+        invalidate();
     }
 
     function chooseMode(next: SimulationMode): void {
@@ -196,12 +240,45 @@
         {/each}
     </fieldset>
 
-    <!-- T-4: on a phone one parameter per row, its label on the left and its field on the right; from sm up the fields share a row. -->
+    <!-- RSK-SIM1: the period the days are drawn from, a row of its own above the parameters (their row is lane 81's). -->
+    <fieldset class="space-y-1.5 text-xs text-lf-muted" data-testid="risk-simulation-history" data-chosen={historyChosen}>
+        <legend class="mb-1 text-xs font-medium text-lf-secondary">{$t('risk.simulation.history.label')}</legend>
+        <div class="flex flex-wrap items-center gap-2">
+            <!-- The same look as the mode options above: a bordered choice, the selected one tinted. -->
+            <label class="flex cursor-pointer items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm text-lf-primary {historyChosen ? 'border-lf-input' : 'border-lf-checked bg-lf-selected'}">
+                <input type="radio" name="risk-simulation-history" checked={!historyChosen} onchange={() => chooseHistory(false)} data-testid="risk-simulation-history-all" />
+                {$t('risk.simulation.history.all')}
+            </label>
+            <label class="flex cursor-pointer items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm text-lf-primary {historyChosen ? 'border-lf-checked bg-lf-selected' : 'border-lf-input'}">
+                <input type="radio" name="risk-simulation-history" checked={historyChosen} onchange={() => chooseHistory(true)} data-testid="risk-simulation-history-chosen" />
+                {$t('risk.simulation.history.chosen')}
+            </label>
+        </div>
+        {#if historyChosen && historyPeriod}
+            <div data-testid="risk-simulation-history-period" data-start={historyPeriod.start} data-end={historyPeriod.end}>
+                <DateRangePicker start={historyPeriod.start} end={historyPeriod.end} excludePresets={['MAX']} showCustomWindow={false} compact align="start" onchange={changeHistory} />
+            </div>
+            {#if availableShown}
+                <p data-testid="risk-simulation-history-available" data-start={availableShown.start} data-end={availableShown.end}>
+                    {$t('risk.simulation.history.available', {values: {start: formatDay(availableShown.start), end: formatDay(availableShown.end)}})}
+                </p>
+            {/if}
+        {/if}
+    </fieldset>
+
+    <!-- T-4: on a phone one parameter per row, its label on the left and its field on the right, every field of one width (w-28, 81 U30); from sm up the fields share a row, each with the width it had. -->
     <div class="flex flex-col gap-3 text-xs text-lf-muted sm:flex-row sm:flex-wrap sm:items-end sm:pb-5">
         <SimulationHorizonField bind:days={horizonDays} bind:valid={horizonValid} onchange={invalidate} phoneRow />
         <label class="flex items-center justify-between gap-3 sm:flex-col sm:items-stretch sm:justify-start sm:gap-1" data-testid="risk-simulation-paths-row">
             {$t('risk.params.paths')}
-            <input type="number" min="1" bind:value={paths} onchange={invalidate} class="w-24 rounded border border-lf-input bg-lf-field px-2 py-1 text-sm text-lf-primary hover:border-lf-input-hover focus:border-lf-focus focus:ring-1 focus:ring-lf-focus" data-testid="risk-simulation-paths" />
+            <input
+                type="number"
+                min="1"
+                bind:value={paths}
+                onchange={invalidate}
+                class="w-28 sm:w-24 rounded border border-lf-input bg-lf-field px-2 py-1 text-sm text-lf-primary hover:border-lf-input-hover focus:border-lf-focus focus:ring-1 focus:ring-lf-focus"
+                data-testid="risk-simulation-paths"
+            />
         </label>
         {#if showSampling}
             <div class="flex items-center justify-between gap-3 sm:flex-col sm:items-stretch sm:justify-start sm:gap-1" data-testid="risk-simulation-sampling-row">
@@ -236,10 +313,13 @@
 
     {#if output}
         {#if estimation}
-            <p class="text-xs text-lf-muted" data-testid="risk-simulation-estimation" data-truncated={estimation.truncated}>
+            <p class="text-xs text-lf-muted" data-testid="risk-simulation-estimation" data-truncated={estimation.truncated} data-history-chosen={output.history_chosen === true}>
                 {$t('risk.simulation.estimation', {values: {length: estimation.length, start: estimation.start, end: estimation.end, count: estimation.count}})}
                 {#if estimation.truncated}
                     {$t('risk.simulation.estimationTruncated', {values: {count: estimation.count}})}
+                {/if}
+                {#if output.history_chosen === true}
+                    {$t('risk.simulation.history.chosenNote')}
                 {/if}
             </p>
         {/if}

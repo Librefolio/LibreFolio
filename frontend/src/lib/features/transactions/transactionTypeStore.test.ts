@@ -322,3 +322,57 @@ describe('getTypeRule — chargeRole from charge_role (project 66)', () => {
         expect(fresh.getTypeRule('NO_SUCH_TYPE').chargeRole, 'an unknown code takes the fallback rule').toBeNull();
     });
 });
+
+// ─── costBasisAuto: whether a type's cost basis may be the average cost (project 79, STK-2a) ─────────────────────────
+//
+// Same fresh-copy pattern: REWARD comes with `cost_basis_auto: false` (its cost basis is its value on receipt),
+// ADJUSTMENT with `true`, TRANSFER without the field. The generated schema already defaults a missing field to true, so
+// the store's own default is pinned on an unparsed answer too.
+
+function costBasisType(code: string, costBasisAuto?: boolean) {
+    return {
+        code,
+        name: code,
+        description: code,
+        icon_slug: code.toLowerCase(),
+        doc_slug: null,
+        asset_mode: 'required',
+        cash_mode: 'forbidden',
+        quantity_mode: 'required',
+        requires_link: false,
+        quantity_sign: 'positive',
+        cash_sign: 'zero',
+        event_compatible: false,
+        cost_basis_mode: 'required_qty_pos',
+        swap_group: [],
+        ...(costBasisAuto === undefined ? {} : {cost_basis_auto: costBasisAuto}),
+    };
+}
+
+describe('getTypeRule — costBasisAuto from cost_basis_auto (project 79, STK-2a)', () => {
+    it('reads false for REWARD, true for ADJUSTMENT, true when the field is absent; the fallback rule allows Auto', async () => {
+        vi.resetModules();
+        const fresh = await import('./transactionTypeStore');
+        expect(fresh.getTypeRule('REWARD').costBasisAuto, 'before the types load: the fallback rule allows Auto').toBe(true);
+        getTransactionTypes.mockResolvedValue(
+            schemas.TXTypesResponse.parse({
+                transaction_types: [costBasisType('REWARD', false), costBasisType('ADJUSTMENT', true), costBasisType('TRANSFER')],
+                event_types: [],
+            }),
+        );
+        await fresh.ensureTypesLoaded();
+        expect(fresh.getTypeRule('REWARD').costBasisAuto).toBe(false);
+        expect(fresh.getTypeRule('ADJUSTMENT').costBasisAuto).toBe(true);
+        expect(fresh.getTypeRule('TRANSFER').costBasisAuto, 'absent from the answer: true').toBe(true);
+        expect(fresh.getTypeRule('NO_SUCH_TYPE').costBasisAuto, 'an unknown code takes the fallback rule').toBe(true);
+    });
+
+    it('an answer the schema did not fill: a missing cost_basis_auto is still true, an explicit false stays false', async () => {
+        vi.resetModules();
+        const fresh = await import('./transactionTypeStore');
+        getTransactionTypes.mockResolvedValue({transaction_types: [costBasisType('REWARD', false), costBasisType('ADJUSTMENT')], event_types: []});
+        await fresh.ensureTypesLoaded();
+        expect(fresh.getTypeRule('REWARD').costBasisAuto).toBe(false);
+        expect(fresh.getTypeRule('ADJUSTMENT').costBasisAuto, 'no field, no schema default: the store defaults to true').toBe(true);
+    });
+});

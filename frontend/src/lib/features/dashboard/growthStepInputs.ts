@@ -151,6 +151,7 @@ export function buildAggregationInputs(sources: StepSources, extra: readonly str
         pnlCandleByDate: candlesOf(sources.pnlCandles, dates),
         dividendValues: alignFlowToDates(dates, sources.incomeHistory?.points ?? [], (point) => Number(point.dividend.amount)),
         interestValues: alignFlowToDates(dates, sources.incomeHistory?.points ?? [], (point) => Number(point.interest.amount)),
+        rewardValues: alignFlowToDates(dates, sources.incomeHistory?.points ?? [], (point) => Number(point.reward?.amount ?? 0)),
         costValues: alignFlowToDates(dates, sources.costHistory?.points ?? [], (point) => Number(point.cost.amount)),
         depositValues: alignFlowToDates(dates, sources.depositHistory?.points ?? [], (point) => Number(point.deposit.amount)),
         acqFromNewCapitalValues: alignFlowToDates(dates, sources.acquisitionFunding?.points ?? [], (point) => Number(point.from_new_capital.amount)),

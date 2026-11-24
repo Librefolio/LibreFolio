@@ -85,7 +85,11 @@ export function chargesFromRows(rows: readonly TXReadItem[]): ChargeDraft[] {
 /** A saved charge picked to be linked to this parent (F4): its row, marked `linkNew`; `null` for a row that is no charge. */
 export function chargeFromPicked(row: TXReadItem): ChargeDraft | null {
     const [draft] = chargesFromRows([row]);
-    return draft ? {...draft, linkNew: true} : null;
+    if (!draft) return null;
+    // 66 TL-2: a new row of the Bulk (`_bulkKey` = `op-<tempId>`): the Bulk links that very row, never a copy of it.
+    const bulkKey = (row as TXReadItem & {_bulkKey?: string})._bulkKey;
+    if (bulkKey) return {key: bulkKey, id: null, type: draft.type, cash: draft.cash, description: draft.description, original: null, state: 'linked'};
+    return {...draft, linkNew: true};
 }
 
 /** A new row of the given type, with no amount yet; `seq` keeps its key unique in the form. */

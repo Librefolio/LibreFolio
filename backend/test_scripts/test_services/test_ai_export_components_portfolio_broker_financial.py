@@ -45,7 +45,7 @@ from backend.app.services.ai_export.components.payloads.portfolio_broker import 
 from backend.app.services.ai_export.components.registry import ComponentRegistry
 from backend.app.services.ai_export.components.resources import BROKER_REPORT_RESOURCE, PORTFOLIO_REPORT_RESOURCE
 from backend.app.services.ai_export.components.spec import ComponentSpec
-from backend.app.services.ai_export.components.types import BuildScope, DetailLevel, Domain
+from backend.app.services.ai_export.components.types import BrokerScopeSource, BuildScope, DetailLevel, Domain
 from backend.app.services.ai_export.dependencies import (
     BuildContext,
     RequiredComponentBuildError,
@@ -55,6 +55,9 @@ from backend.app.services.financial_math.native_cash import CONVERSION_DUST
 from backend.app.services.financial_math.portfolio import period as period_math
 from backend.app.services.portfolio.lots_analysis_service import LotsAnalysisService
 from backend.app.services.portfolio.portfolio_service import PortfolioService
+
+_OWNED_BROKERS: tuple[int, ...] = (1, 2)
+"""78 L10b: the brokers a whole-scope test reads, named (an empty scope means no broker)."""
 
 CURRENCY = "USD"
 
@@ -78,9 +81,14 @@ def _scope(**overrides) -> BuildScope:
         "period_start": date(2026, 1, 1),
         "period_end": date(2026, 1, 10),
         "target_currency": CURRENCY,
-        "broker_scope": (),
+        # 78 L10b: a whole scope is the owned brokers, named; an empty scope means no broker.
+        "broker_scope": _OWNED_BROKERS,
+        "broker_scope_source": BrokerScopeSource.OWNED,
+        "owned_broker_ids": _OWNED_BROKERS,
     }
     defaults.update(overrides)
+    if "broker_scope" in overrides and "broker_scope_source" not in overrides:
+        defaults["broker_scope_source"] = BrokerScopeSource.REQUESTED
     return BuildScope(**defaults)
 
 
@@ -367,9 +375,9 @@ def _patch_lots(monkeypatch: pytest.MonkeyPatch, responses_by_asset: dict[int, L
     # as module-globals from within `load_lots_results`'s closure, which is
     # defined in `shared_payloads` itself - patching them there (not on
     # portfolio_financial/broker_financial, which never import those names) is
-    # what actually takes effect. `resolve_accessible_broker_ids` is only
-    # exercised for a whole-portfolio (empty `broker_scope`) scope; tests that
-    # pass an explicit non-empty `broker_scope` never reach it.
+    # what actually takes effect. Since 78 L10b `load_lots_results` never calls
+    # `resolve_accessible_broker_ids` (an empty scope means no broker); the patch
+    # stays so a regression to «every accessible broker» reads an empty list.
     monkeypatch.setattr(shared_payloads, "discover_transacted_asset_ids", _fake_discover)
     monkeypatch.setattr(shared_payloads, "resolve_accessible_broker_ids", _fake_resolve_accessible_broker_ids)
     return calls
@@ -2018,9 +2026,11 @@ class TestBrokerScope:
 
 class TestProvenanceComponentVersion:
     """What the Snapshot Data renderer reads off each section: the provenance envelopes say
-    component_version 3, schema_version 1 (the payload shape is unchanged). Version 2 (D12(a)): the
+    component_version 4, schema_version 1 (the payload shape is unchanged). Version 2 (D12(a)): the
     WAC semantics moved to the single average cost; version 3 (J-17): the valuation hierarchy names
-    ESTIMATED_AT_COST and an ADJUSTMENT is never a price. No prompt wording is asserted."""
+    ESTIMATED_AT_COST and an ADJUSTMENT is never a price; version 4 (79 STK-5): a REWARD is an
+    acquisition at its value on receipt, also counted as income, moving no cash. No prompt wording is
+    asserted beyond the type's name."""
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
@@ -2030,8 +2040,9 @@ class TestProvenanceComponentVersion:
             pytest.param("broker.provenance", {"domain": Domain.BROKER, "broker_id": 5, "broker_scope": (5,)}, broker_financial.BROKER_FINANCIAL_COMPONENTS, id="broker"),
         ],
     )
-    async def test_provenance_envelope_is_component_version_3_schema_version_1(self, monkeypatch, component_id, scope_overrides, components):
-        """Before J-17: component_version 2."""
+    async def test_provenance_envelope_is_component_version_4_schema_version_1(self, monkeypatch, component_id, scope_overrides, components):
+        """Before J-17: component_version 2; before 79 STK-5: 3. The semantics name the REWARD (the type's
+        code only: the sentence around it is free to change)."""
         scope = _scope(**scope_overrides)
         _patch_report(monkeypatch, _report(scope))
         _patch_lots(monkeypatch, {})
@@ -2042,8 +2053,9 @@ class TestProvenanceComponentVersion:
 
         envelope = await context.resolve(component_id, required=True)
 
-        assert (envelope.component_id, envelope.component_version, envelope.schema_version) == (component_id, 3, 1)
+        assert (envelope.component_id, envelope.component_version, envelope.schema_version) == (component_id, 4, 1)
         assert envelope.payload["domain"] == component_id.split(".")[0]
+        assert "REWARD" in envelope.payload["valuation_semantics"]
 
 
 # =============================================================================

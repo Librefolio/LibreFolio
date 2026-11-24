@@ -44,7 +44,6 @@
     "dashboardTitle": "Risque du portefeuille",
     "brokerTitle": "Risque du courtier",
     "internalSubset": "Risque interne de ce sous-ensemble du courtier",
-    "dashboardFullPortfolio": "Le risque utilise tout le portefeuille ; le filtre de courtier du tableau de bord n'est pas appliqué.",
     "states": {
       "partial": "Partiel",
       "empty": "Aucun résultat",
@@ -294,7 +293,14 @@
       "driftUncertaintyWide": "La dérive provient de seulement {count} observations : cela seul situe cette médiane entre {low} et {high} — plus large que la bande ci-dessus.",
       "estimation": "Estimée sur {length} d'historique, du {start} au {end} ({count} observations), quelle que soit la période choisie plus haut.",
       "estimationTruncated": "Un historique commun plus long existe : ce sont ses {count} observations les plus récentes, autant que le calcul peut en porter.",
-      "pathsReduced": "{used} trajectoires au lieu de {requested} : autant que le calcul en permet pour ce portefeuille et cet horizon."
+      "pathsReduced": "{used} trajectoires au lieu de {requested} : autant que le calcul en permet pour ce portefeuille et cet horizon.",
+      "history": {
+        "label": "Jours tirés de",
+        "all": "Tout l'historique commun",
+        "chosen": "Une période choisie",
+        "available": "Historique commun des positions : du {start} au {end}.",
+        "chosenNote": "(période choisie)"
+      }
     },
     "errors": {
       "analytic_not_found": "Analyse indisponible.",
@@ -367,7 +373,8 @@
       "extreme_day_ratio_undefined_assets": "Jours extrêmes non définis pour {names} : la série ne bouge pas.",
       "simulation_history_shorter_than_horizon": "La simulation projette {horizon_days} jours à partir de {history_days} jours d'historique : la bande n'est pas plus large que cet historique.",
       "simulation_excluded_short_history": "{names} : {history_days} jours d'historique, moins que l'horizon de {horizon_days} jours : hors de la simulation, son poids compte comme liquidités.",
-      "simulation_mostly_excluded": "La simulation ne décrit qu'une partie de votre portefeuille ({covered, number, percent}) : le reste est exclu de la simulation."
+      "simulation_mostly_excluded": "La simulation ne décrit qu'une partie de votre portefeuille ({covered, number, percent}) : le reste est exclu de la simulation.",
+      "simulation_history_start_moved": "La période choisie commence le {requested_start}, avant l'historique commun des positions : la simulation tire ses jours à partir du {used_start}."
     },
     "assetDetail": {
       "overviewTab": "Vue d'ensemble",
@@ -497,7 +504,6 @@
             "benchmark": "Référence",
             "heldBenchmark": "Référence · en portefeuille, poids {share}"
           },
-          "titleOneAsset": "Risque contre rendement",
           "portfolioName": "Portefeuille"
         },
         "rows": {
@@ -509,9 +515,7 @@
           "notHeld": "Pas dans le portefeuille : l'indice de référence est là pour la comparaison.",
           "expectedReturnShort": "Rend. annuel",
           "namedHelp": "{name}\n{help}"
-        },
-        "titleAsset": "Par rapport à une référence",
-        "benchmarkIsSubject": "La référence est cet actif lui-même : choisissez-en une autre pour comparer."
+        }
       },
       "l4": {
         "title": "Que se passe-t-il si… ?",

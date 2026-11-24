@@ -284,6 +284,10 @@ export const INCOME_EVENT_COLORS = {
     dividend: rolePair('--lf-cat-crypto'),
     /** Interest in the lot comparison chart: since D-T28 the same violet as the Growth chart's (`GROWTH_SERIES.interest`). */
     lotInterest: rolePair('--lf-cat-stock'),
+    /** Rewards in kind (REWARD, project 79): the magenta of the index type, the farthest from the dividend gold, the
+     *  interest violet, the costs orange, the deposit blue and gain/loss (consultant Q-1, 23/11/2026). On the card
+     *  5.78:1 light, 7.25:1 dark. The Growth chart and the lot markers read this one entry. */
+    reward: rolePair('--lf-cat-index'),
 } as const;
 
 /** The Growth chart's series, read as `cc(key)` in `GrowthChart.svelte`. */
@@ -308,6 +312,8 @@ export const GROWTH_SERIES = {
     dividend: INCOME_EVENT_COLORS.dividend,
     /** P&L income submode — interest stacked bar. */
     interest: rolePair('--lf-cat-stock'),
+    /** P&L income submode — rewards in kind stacked bar: the lot markers' magenta. */
+    reward: INCOME_EVENT_COLORS.reward,
     /** P&L income submode — costs (fees and taxes): orange here, red in the Performance chart. */
     costs: rolePair('--lf-cat-commodity'),
     /** P&L income submode — deposit-size bar. */
@@ -397,6 +403,8 @@ export const LOT_GANTT_COLORS = {
         transfer: rolePair('--lf-cat-stock'),
         split: rolePair('--lf-cat-crypto'),
         buy: rolePair('--lf-gain'),
+        /** A lot opened by a reward in kind (project 79): the income magenta. */
+        reward: INCOME_EVENT_COLORS.reward,
     },
 };
 
@@ -411,6 +419,8 @@ export const LOT_WAC_COLORS = {
         transfer: rolePair('--lf-info-on-soft'),
         adjustment: rolePair('--lf-warning'),
         split: rolePair('--lf-cat-stock'),
+        /** A lot opened by a reward in kind (project 79): the income magenta. */
+        reward: INCOME_EVENT_COLORS.reward,
     },
     incomeMarker: rolePair('--lf-cat-stock'),
     /** The bubble of a lot with no broker, and of a lot whose P&L is zero. */

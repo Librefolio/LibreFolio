@@ -388,6 +388,29 @@ describe('FxProviderSelect', () => {
         expect(img!.src).toContain('cdn.test/ecb.png');
     });
 
+    // 81 U34 (testlist 7.2/7.6): the legend of the providers drew only their initials, while the routes below drew the
+    // icon. One piece draws the icon for both: a provider that carries one shows it in the legend too, one without shows its initials.
+    it('draws the icon in the providers legend, as in the routes, and the initials for a provider without one', async () => {
+        await setupI18n();
+        graphReturns([DIRECT, CHAIN], [{...ECB, icon_url: 'https://cdn.test/ecb.png'}, FED, BOE, MANUAL]);
+        mount();
+        await settled();
+        const picker = await openPicker();
+
+        const legend = (code: string) => {
+            const item = within(picker)
+                .getAllByTestId('fx-provider-legend-item')
+                .find((candidate) => candidate.getAttribute('data-provider') === code);
+            if (!item) throw new Error(`no legend entry for ${code}`);
+            return item;
+        };
+        const ecb = legend('ECB').querySelector<HTMLImageElement>('img[alt="ECB"]');
+        expect(ecb, 'the legend entry of a provider with an icon draws no icon').not.toBeNull();
+        expect(ecb!.src).toContain('cdn.test/ecb.png');
+        expect(legend('FED').querySelector('img'), 'a provider with no icon is drawn with one').toBeNull();
+        expect(legend('FED').textContent, 'a provider with no icon shows no initials').toContain('FE');
+    });
+
     it('surfaces a provider warning as a route-level count without inventing one', async () => {
         await setupI18n();
         // ECB carries a warning; FED does not. The direct route (ECB only) shows one

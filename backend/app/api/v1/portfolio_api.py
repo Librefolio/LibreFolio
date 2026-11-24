@@ -4,6 +4,7 @@ Portfolio API endpoints for LibreFolio.
 Provides read-only portfolio calculations on committed data:
 - POST /portfolio/report        — UNIFIED: summary+history+allocation+contribution+data_quality
 - POST /portfolio/positions-series — the daily P&L / value series of the chosen positions (#48)
+- POST /portfolio/allocation    — the «Allocazione» tab's filtered allocation (lane 80, #89)
 - POST /portfolio/lots/analysis — lot engine bulk multi-analysis (lots, Gantt, histories, WAC), in FIFO and/or LIFO
 
 Legacy standalone endpoints (/summary, /history, /allocation-history) removed —
@@ -17,6 +18,7 @@ from backend.app.api.v1.auth import get_current_user
 from backend.app.db.models import User
 from backend.app.db.session import get_session_generator
 from backend.app.logging_config import get_logger
+from backend.app.schemas.portfolio.allocation import PortfolioAllocationQuery, PortfolioAllocationResponse
 from backend.app.schemas.portfolio.lots import LotsAnalysisMethodsResponse, LotsAnalysisQuery
 from backend.app.schemas.portfolio.planner_source import PortfolioPlannerSourceRequest, PortfolioPlannerSourceResponse
 from backend.app.schemas.portfolio.positions_series import PositionsSeriesQuery, PositionsSeriesResponse
@@ -137,6 +139,33 @@ async def get_positions_series(
 
 
 @portfolio_router.post(
+    "/allocation",
+    response_model=PortfolioAllocationResponse,
+    summary="Filtered allocation of the net worth",
+    description=(
+        "The net worth (NAV) of the period's last day split in one dimension (sector, geography, type, asset) after the user's filters: "
+        "the classes in the selection, the assets and the Unknown/Other buckets taken out. Every amount lands in the base, outside the "
+        "class filter or excluded, and base + outside + excluded = NAV; the securities in transit and the cash in the geography are "
+        "excluded with their reason. With the class × dimension matrix of the whole portfolio, the classes and assets of the period, "
+        "and the selection's history in steps when asked. The page's engine run: a change of the filters replays nothing. The "
+        "frontend computes none of the amounts or shares."
+    ),
+)
+async def get_portfolio_allocation(
+    body: PortfolioAllocationQuery,
+    session: AsyncSession = Depends(get_session_generator),
+    current_user: User = Depends(get_current_user),
+) -> PortfolioAllocationResponse:
+    """Return the filtered allocation view of the period's last day."""
+    from backend.app.services.platform.date_sentinel import resolve_date_sentinels  # noqa: PLC0415
+
+    if body.date_range and body.date_range.has_sentinels():
+        body.date_range = await resolve_date_sentinels(body.date_range, current_user.id, session, broker_ids=body.broker_ids)
+
+    return await PortfolioService(session).get_allocation(user_id=current_user.id, query=body)
+
+
+@portfolio_router.post(
     "/lots/analysis",
     response_model=LotsAnalysisMethodsResponse,
     summary="Bulk lots analysis, in one or more matching methods",
@@ -176,6 +205,7 @@ async def get_lots_analysis(
             selected_lot_ids=body.selected_lot_ids,
             requested_analyses=body.requested_analyses,
             matching_methods=body.matching_methods,
+            reward_allocation=body.reward_allocation,
         )
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e

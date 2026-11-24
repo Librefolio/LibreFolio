@@ -56,7 +56,6 @@
     import type {AllocationHistoryDimensions, PortfolioSummary, PositionsContribution} from '$lib/stores/portfolio/portfolioStore.svelte';
     import type {BrokerLike} from '$lib/utils/broker/brokerColors';
     import DocsLink from '$lib/components/ui/DocsLink.svelte';
-    import ProviderAttributionNote from '$lib/features/assets/ProviderAttributionNote.svelte';
 
     // =========================================================================
     // Props
@@ -345,8 +344,6 @@
             asset_ticker: typeof position.asset_ticker === 'string' ? position.asset_ticker : null,
         })),
     );
-    /** The assets the panel shows, for the providers' attribution line (project 76, P4). */
-    let attributedAssetIds = $derived(semanticMode === 'holdings' ? [...holdings.map((holding) => holding.asset_id), ...soldPositions.map((position) => position.asset_id)] : contributionPositions.map((position) => position.asset_id));
 
     /**
      * A line wears its asset's colour, the pie's and the history's: the asset's rank by weight (`assetColorRanks`, the one place the ranks are computed),
@@ -500,7 +497,5 @@
                 <PerformanceChart positions={contributionPositions} {otherEffects} {displayCurrency} {onAnalyze} />
             {/if}
         </div>
-        <!-- A provider's attribution, once under the positions, only when one shown is priced by it (project 76, P4) -->
-        <ProviderAttributionNote assetIds={attributedAssetIds} align="end" testId="positions-provider-attribution" />
     {/if}
 </div>

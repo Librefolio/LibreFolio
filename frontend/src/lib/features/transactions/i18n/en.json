@@ -54,7 +54,8 @@
       "TRANSFER": "Asset Transfer",
       "FX_CONVERSION": "Currency Exchange",
       "ADJUSTMENT": "Adjustment",
-      "CASH_TRANSFER": "Cash Transfer"
+      "CASH_TRANSFER": "Cash Transfer",
+      "REWARD": "Reward"
     },
     "refresh": "Refresh from server",
     "noAsset": "(No asset)",
@@ -136,7 +137,8 @@
         "undo": "Undo"
       },
       "openFailed": "The transaction could not be opened",
-      "candidatesFailed": "The transactions to link could not be loaded"
+      "candidatesFailed": "The transactions to link could not be loaded",
+      "groupSyncHint": "While the rows of this group (the transaction and its linked charges) are all new, they share broker and asset: changing them here changes every row of the group."
     },
     "bulk": {
       "resetRow": "Reset row",
@@ -193,14 +195,28 @@
       },
       "chargesReadFailed": "Could not read the linked charges of {ids}. «Reset row» on the row reads them again.",
       "deleteSkippedUnread": "{n, plural, one {# transaction was not deleted: its linked charges could not be read. «Reset row» reads them again.} other {# transactions were not deleted: their linked charges could not be read. «Reset row» reads them again.}}",
-      "rowRef": "row {n}"
+      "rowRef": "row {n}",
+      "editPartnerInaccessible": "The linked transaction is on a broker you cannot see, so this row cannot be edited.",
+      "rewardFill": {
+        "pending": "{n, plural, one {# reward has no value: it can be filled from the asset's price history} other {# rewards have no value: they can be filled from the assets' price history}}",
+        "button": "Fill from price history",
+        "running": "Reading prices…",
+        "result": "{filled, plural, one {# filled} other {# filled}} with the close of their day, {noPrice, plural, one {# without a price on that day} other {# without a price on that day}}, {noHistory, plural, one {# asset without price history} other {# assets without price history}}. The values can be changed; the rows not filled still wait for a value.",
+        "failed": "The prices could not be read: no value was filled. Try again."
+      },
+      "cloneChargesReadFailed": "Could not read the linked charges of {ids}: the copy was made without them.",
+      "cloneChargeFree": "{reason, select, deleted {The copy of the charge is not linked: its parent is marked for deletion.} paired {The copy of the charge is not linked: its parent is half of a pair.} other {The copy of the charge is not linked: it cannot be linked to the same transaction.}}"
     },
     "commit": {
       "serverError": "Save failed — server error"
     },
     "costBasisOverride": {
       "tooltip": "The cost you enter instead of the weighted average cost: for Exit Tax, inheritance or special fiscal rules. Auto calculates it from your purchases. Use the Total/Per unit toggle below to choose how this amount is entered.",
-      "warningAdjustment": "The manual cost basis is empty: the transaction can't be saved without it. Enter what these units cost you: 0 for the new shares of a stock split. For a gift, enter 0, or what the donor paid for them: that keeps the weighted average cost, and the gain you may be taxed on, closer to the real ones."
+      "warningAdjustment": "The manual cost basis is empty: the transaction can't be saved without it. Enter what these units cost you: 0 for the new shares of a stock split. For a gift, enter 0, or what the donor paid for them: that keeps the weighted average cost, and the gain you may be taxed on, closer to the real ones.",
+      "rewardLabel": "Value on receipt",
+      "rewardTooltip": "What these units were worth on the day you received them: it is both the income of the reward and the cost of the lot it opens.",
+      "warningReward": "The value on receipt is empty: the reward can't be saved without it. Enter what these units were worth on the day you received them, or 0 to count them at no cost.",
+      "rewardFromHistory": "From the price history: the close of {date}. Change it if the platform shows another value."
     },
     "wacPreview": {
       "calculating": "Calculating...",
@@ -319,7 +335,7 @@
       "autoCostEmptyPool": "Automatic cost unavailable: no units of this asset were held on that date to average. Choose Manual and enter what these units cost you; if you received them as a gift, enter 0.",
       "autoCostUnknownPool": "Automatic cost unavailable: the units of this asset held on that date have no known cost to average. Choose Manual and enter what these units cost you.",
       "ledgerUnreadable": "The balances of {brokerName} can't be checked: {count, plural, one {# of its transactions holds} other {# of its transactions hold}} a value that is not a number. Ask the administrator to repair the data.",
-      "costBasisNotAllowed": "❌ {type} takes no cost basis here: remove it. Only units that come in through an Adjustment or an Asset Transfer carry one.",
+      "costBasisNotAllowed": "❌ {type} takes no cost basis here: remove it. Only a transaction that brings units in with a value carries one.",
       "costBasisModeIncompatible": "❌ {type} takes no cost basis here, so no Auto or Manual mode: remove it.",
       "costBasisNegative": "The cost basis can't be negative: enter 0 or more.",
       "pairAdjustmentNotAllowed": "Two Adjustments cannot be linked: use an Asset Transfer to move units between brokers.",
@@ -340,7 +356,8 @@
       "chargeParentRefNotFound": "No row of this batch is named '{parentRef}': the charge cannot be linked to it.",
       "chargeParentTwice": "A charge names its transaction once: by the row of this batch or by a saved transaction, not both.",
       "chargeParentIdInvalid": "The transaction a charge is linked to must be a saved transaction (a positive id).",
-      "chargesDeleteIncomplete": "This transaction has linked charges: delete them or unlink them in the same change."
+      "chargesDeleteIncomplete": "This transaction has linked charges: delete them or unlink them in the same change.",
+      "costBasisAutoNotAllowed": "❌ {type} takes its value on receipt as its cost basis, never the average cost: no Auto mode, enter the value."
     },
     "pydantic": {
       "greaterThan": "Value must be greater than {gt}",
@@ -425,7 +442,7 @@
       "colAction": "Action",
       "createOne": "Create event",
       "createTitle": "Create the missing events",
-      "createIntro": "Check the type and enter the value of each event, in the asset’s currency. The events are created on the day of the transaction; then link them.",
+      "createIntro": "Check the type and enter the value of each event, in the asset’s currency. The events are created on the day of the transaction, and the transactions are linked to them right away.",
       "createValue": "Value",
       "createServes": "{n} transactions",
       "createHint": "Enter a value above 0, with at most 6 decimals, for every event.",

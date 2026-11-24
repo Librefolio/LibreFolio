@@ -100,7 +100,8 @@ class CreditAgricoleBrokerProvider(BRIMProvider):
     def plugin_version(self) -> str:
         # 2.0.0 — a report-set plugin: the securities and the account exports are imported together, each fact once, with the cash
         #         of the account; a file read alone raises BRIMSetRequiredError (up to 1.5.0 each was imported on its own).
-        return "2.0.0"
+        # 2.1.0 — a coupon's withholding, its detach fee and the capital gain of a sale are linked to their one parent (project 66, P2b).
+        return "2.1.0"
 
     @property
     def test_file_pattern(self) -> Optional[str]:

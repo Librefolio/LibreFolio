@@ -14,7 +14,12 @@ the same machine, with the same limit.** How:
   whole CPUs (cgroup v2 ``cpu.max``, v1 ``cpu.cfs_quota_us``; every ancestor of the process's cgroup counts), never below
   1. A quota shares its CPUs among the group's processes whatever their priority, so three runs under a quota of one CPU
   would each get a third of it. The runs started first have the whole limit, which is wall-clock in SCIP; each later one
-  starts when a run ends, with the time left, as long as time is left.
+  starts when a run ends, with the smaller of the whole limit and the time left in the window, as long as time is left.
+* **A limit per run, a whole window** (lot TURNI of project 67, specification §16.22): ``time_budget_seconds`` is the
+  limit of one run, ``window_seconds`` the whole window the turns live in. With a window of as many turns as the machine
+  needs, every run has its whole limit. Without a window it is the limit itself, so a later run has the time left, as
+  in lot SEEDS-c; and a window shorter than the turns (a calculation that sees fewer CPUs than were counted) falls back
+  to that rule instead of running past it.
 * **«Impossible» needs two** (§16.17): once a run has answered «impossible», the next one starts however little time is
   left, with a short budget of its own, so one CPU never turns a lone «impossible» into a failure on every retry. Once two
   have said it, no further run is forced.
@@ -22,8 +27,12 @@ the same machine, with the same limit.** How:
   which removed SEEDS-b's lower priority for the second and third). The count of usable CPUs is what protects the first
   run on a small machine.
 * **The wait** (one condition, ``_deadline``): a run has its budget and a grace. Once the first run has a result, the
-  others have the limit and a short settle (an unclosed run answers a little after its limit); a forced run has its own
-  short budget and the settle.
+  others have their own limit and a short settle (an unclosed run answers a little after its limit); a forced run has
+  its own short budget and the settle. A run's limit runs from its own start: the first wave's limit for the first
+  wave, the later run's own for a later one.
+* **Progress** (lot V1; turns, TURNI 4d): ``progress`` hears the furthest named stage any run has started, as a step of the
+  whole: turn × stages + stage, of turns × stages. A run in a later turn repeats the stages of the first, and the Tool
+  forwards only new lines, so this keeps the stream speaking at every turn. With one turn the steps are a search's own.
 * ``in_process``: one after the other, in the caller's process, each with the whole limit. For tests that read what a run
   did through a patch.
 
@@ -35,22 +44,21 @@ waits, never inside a run.
 from __future__ import annotations
 
 import multiprocessing
-import os
 import secrets
 import time
 from collections import deque
 from collections.abc import Callable
 from dataclasses import dataclass
 from multiprocessing.connection import Connection, wait
-from pathlib import Path
 from typing import Any, Literal
 
 from backend.app.logging_config import get_logger
 from backend.app.services.pac_allocator.models import Checkpoint, check_budget
 from backend.app.services.pac_allocator.progress import ProgressReporter, report_phase
+from backend.app.services.tools.cpus import cpu_count_usable
 from backend.app.utils.runtime.errors import code_site
 
-__all__ = ["RUN_COUNT", "SeedRun", "SeedRunMode", "cpu_count_usable", "fresh_seeds", "run_seeds", "usable_cpus"]
+__all__ = ["RUN_COUNT", "RUN_GRACE_SECONDS", "SeedRun", "SeedRunMode", "cpu_count_usable", "fresh_seeds", "run_seeds", "usable_cpus"]
 
 logger = get_logger(__name__)
 
@@ -58,8 +66,9 @@ logger = get_logger(__name__)
 RUN_COUNT = 3
 
 #: How long past its budget a run may take to come back (the exact replay, the report, the pipe) before it is stopped and
-#: counted as a run with no result.
-_GRACE_SECONDS = 5.0
+#: counted as a run with no result. Public: the Tool's limits keep it between turns (TURNI of project 67).
+RUN_GRACE_SECONDS = 5.0
+_GRACE_SECONDS = RUN_GRACE_SECONDS
 
 #: How long past the limit (or past the first run's answer, if later) the others may still answer once the first has one:
 #: an unclosed run answers 0.05–0.17 s after its limit on free CPUs (lot SEEDS measurement), so 0.5 s keeps their vote
@@ -100,61 +109,7 @@ def fresh_seeds(count: int = RUN_COUNT) -> tuple[int, ...]:
     return tuple(seeds)
 
 
-# -- usable CPUs (lot SEEDS-c) -------------------------------------------------------------
-
-
-def _read(path: Path) -> str | None:
-    try:
-        return path.read_text().strip()
-    except OSError:
-        return None
-
-
-def _whole_cpus(quota: str | None, period: str | None) -> int | None:
-    """A quota over its period, in whole CPUs rounded down, at least 1; None when there is no quota or it cannot be read."""
-    try:
-        quota_us, period_us = int(quota or ""), int(period or "")
-    except ValueError:
-        return None
-    if quota_us <= 0 or period_us <= 0:
-        return None
-    return max(1, quota_us // period_us)
-
-
-def _quota_cpus(proc_cgroup: Path, cgroup_root: Path) -> int | None:
-    """The smallest CPU quota over the process's cgroup and every ancestor, cgroup v2 or v1; None without one."""
-    text = _read(proc_cgroup)
-    if text is None:
-        return None
-    limits: list[int] = []
-    for line in text.splitlines():
-        parts = line.split(":", 2)
-        if len(parts) != 3:
-            continue
-        _hierarchy, controllers, path = parts
-        chain = [Path(path.lstrip("/")), *Path(path.lstrip("/")).parents]
-        if controllers == "":  # cgroup v2: `cpu.max` reads «max <period>» or «<quota> <period>»
-            for directory in chain:
-                fields = (_read(cgroup_root / directory / "cpu.max") or "").split()
-                cpus = _whole_cpus(fields[0], fields[1]) if len(fields) == 2 else None
-                if cpus is not None:
-                    limits.append(cpus)
-        elif "cpu" in controllers.split(","):  # cgroup v1: the `cpu` controller, mounted under its controllers' names
-            mount = cgroup_root / controllers
-            for directory in chain:
-                cpus = _whole_cpus(_read(mount / directory / "cpu.cfs_quota_us"), _read(mount / directory / "cpu.cfs_period_us"))
-                if cpus is not None:
-                    limits.append(cpus)
-    return min(limits) if limits else None
-
-
-def cpu_count_usable(*, proc_cgroup: Path = Path("/proc/self/cgroup"), cgroup_root: Path = Path("/sys/fs/cgroup"), affinity: int | None = None) -> int:
-    """The CPUs this process can use at once: the smaller of the affinity's CPUs and the quota's whole CPUs, never below 1.
-    A file that cannot be read means no quota."""
-    if affinity is None:
-        affinity = len(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else (os.cpu_count() or 1)
-    quota = _quota_cpus(proc_cgroup, cgroup_root)
-    return max(1, min(affinity, quota) if quota is not None else affinity)
+# -- usable CPUs (lot SEEDS-c; counted by the Tool platform since TURNI of project 67) -------------------
 
 
 def usable_cpus() -> int:
@@ -170,6 +125,7 @@ def run_seeds(
     *,
     seeds: tuple[int, ...],
     time_budget_seconds: float,
+    window_seconds: float | None = None,
     mode: SeedRunMode = "processes",
     checkpoint: Checkpoint | None = None,
     progress: ProgressReporter | None = None,
@@ -177,13 +133,14 @@ def run_seeds(
 ) -> tuple[SeedRun, ...]:
     """Run ``task`` once per seed and return the runs in the order of ``seeds``.
 
-    ``progress`` hears the furthest named search stage any run has started, each once, so the user sees the search advance
-    as with one run. ``start_next_after`` tells a result after which the next run starts even with no time left (the
+    ``time_budget_seconds`` is one run's limit and ``window_seconds`` the whole window (None: the limit itself, lot SEEDS-c's
+    rule). ``progress`` hears the furthest named search stage any run has started, each once, so the user sees the search
+    advance as with one run. ``start_next_after`` tells a result after which the next run starts even with no time left (the
     planner's «impossible»). With ``fork`` the task needs no pickling; with ``spawn`` it and its result must pickle.
     """
     if mode == "in_process":
         return tuple(_run_here(task, seed, checkpoint, progress, time_budget_seconds) for seed in seeds)
-    return _run_in_processes(task, seeds, time_budget_seconds, checkpoint, progress, start_next_after)
+    return _run_in_processes(task, seeds, time_budget_seconds, time_budget_seconds if window_seconds is None else window_seconds, checkpoint, progress, start_next_after)
 
 
 def _run_here(task: SeedTask, seed: int, checkpoint: Checkpoint | None, progress: ProgressReporter | None, budget: float) -> SeedRun:
@@ -221,19 +178,23 @@ def _child(task: SeedTask, seed: int, connection: Connection, budget: float) -> 
 
 @dataclass(slots=True)
 class _Entry:
-    """A run out: its seed, its process, when it started, its budget, and whether it was forced by an «impossible»."""
+    """A run out: its seed, its process, when it started, its budget, the end of its limit, and whether it was forced by an
+    «impossible»."""
 
     seed: int
     process: multiprocessing.process.BaseProcess
     started: float
     budget: float
+    limit: float
     forced: bool
+    #: The turn the run started in (0 first): its stages are reported as steps of the whole (TURNI 4d of project 67).
+    turn: int = 0
 
 
 class _Runs:
     """The runs out and still to start, what came back, and the furthest stage reported (``_run_in_processes``)."""
 
-    def __init__(self, task: SeedTask, seeds: tuple[int, ...], budget: float, progress: ProgressReporter | None, start_next_after: Callable[[Any], bool] | None) -> None:
+    def __init__(self, task: SeedTask, seeds: tuple[int, ...], budget: float, window: float, progress: ProgressReporter | None, start_next_after: Callable[[Any], bool] | None) -> None:
         self.context = multiprocessing.get_context("fork" if "fork" in multiprocessing.get_all_start_methods() else "spawn")
         self.task = task
         self.seeds = seeds
@@ -243,9 +204,15 @@ class _Runs:
         self.progress = progress
         self.furthest = 0
         self.start_next_after = start_next_after
-        self.budget = budget
+        #: One run's limit, never more than the window.
+        self.budget = min(budget, window)
         self.started = time.monotonic()
-        self.limit = self.started + budget
+        #: The end of the first wave's limit, and of the whole window.
+        self.limit = self.started + self.budget
+        self.window_end = self.started + window
+        #: Runs launched so far, and the turns all the runs need on the CPUs counted: a run's turn is its rank over the CPUs.
+        self.launched = 0
+        self.turns = 1
         #: When the first run came back with a result, or None.
         self.first_answered: float | None = None
         #: «Impossible» answers so far, and whether the next run starts even with no time left.
@@ -254,28 +221,33 @@ class _Runs:
 
     def start(self, concurrency: int, *, first_wave: bool = False) -> None:
         """Start runs while fewer than ``concurrency`` are out: the first wave with the whole limit, the later ones with the
-        time left, or forced after an «impossible»."""
+        smaller of the whole limit and the time left in the window, or forced after an «impossible»."""
+        if first_wave:
+            self.turns = -(-len(self.seeds) // concurrency)
         while self.pending and len(self.running) < concurrency:
-            left = self.limit - time.monotonic()
+            now = time.monotonic()
+            left = self.window_end - now
             forced = self.force_next and left <= 0
             if left <= 0 and not forced:
                 return
             self.force_next = False
             _index, seed = self.pending.popleft()
-            budget = self.budget if first_wave else _FORCED_RUN_SECONDS if forced else left
+            budget = self.budget if first_wave else _FORCED_RUN_SECONDS if forced else min(self.budget, left)
+            limit = self.limit if first_wave else now + budget
             receiver, sender = self.context.Pipe(duplex=False)
             process = self.context.Process(target=_child, args=(self.task, seed, sender, budget), name=f"planner-seed-{seed}", daemon=True)
             process.start()
             sender.close()
-            self.running[receiver] = _Entry(seed=seed, process=process, started=time.monotonic(), budget=budget, forced=forced)
+            self.running[receiver] = _Entry(seed=seed, process=process, started=time.monotonic(), budget=budget, limit=limit, forced=forced, turn=self.launched // concurrency)
+            self.launched += 1
 
     def deadline(self, entry: _Entry) -> float:
         """The one stop condition: a run's budget and a grace (a forced run, the settle); once the first run has a result,
-        the others also stop at the limit, or the first's answer if later, and the settle."""
+        the others also stop at their own limit, or the first's answer if later, and the settle."""
         own = entry.started + entry.budget + (_SETTLE_SECONDS if entry.forced else _GRACE_SECONDS)
         if entry.forced or self.first_answered is None or entry.seed == self.seeds[0]:
             return own
-        return min(own, max(self.limit, self.first_answered) + _SETTLE_SECONDS)
+        return min(own, max(entry.limit, self.first_answered) + _SETTLE_SECONDS)
 
     def finish(self, connection: Connection, run: SeedRun, *, stop: bool = False) -> None:
         entry = self.running.pop(connection)
@@ -302,10 +274,15 @@ class _Runs:
             self.finish(connection, SeedRun(seed=seed, failure="RunProcessEnded"))
             return
         if kind == "progress":
+            # A run in a later turn repeats the stages of the first, and the Tool forwards a line only when it is new: the
+            # stream would be silent for whole turns, which a reverse proxy can cut. So a stage is reported as a step of the
+            # whole: turn × stages + stage, of turns × stages (TURNI 4d of project 67). One turn reports today's steps.
             step, total = payload
-            if step > self.furthest:
-                self.furthest = step
-                report_phase(self.progress, "search", step, total)
+            turn = self.running[connection].turn
+            whole = turn * total + step
+            if whole > self.furthest:
+                self.furthest = whole
+                report_phase(self.progress, "search", whole, self.turns * total)
             return
         value, seconds = payload
         self.finish(connection, SeedRun(seed=seed, result=value, seconds=seconds) if kind == "result" else SeedRun(seed=seed, failure=value, seconds=seconds))
@@ -317,9 +294,9 @@ class _Runs:
                 self.finish(connection, SeedRun(seed=entry.seed, failure="RunPastDeadline"), stop=True)
 
 
-def _run_in_processes(task: SeedTask, seeds: tuple[int, ...], time_budget_seconds: float, checkpoint: Checkpoint | None, progress: ProgressReporter | None, start_next_after: Callable[[Any], bool] | None) -> tuple[SeedRun, ...]:
+def _run_in_processes(task: SeedTask, seeds: tuple[int, ...], time_budget_seconds: float, window_seconds: float, checkpoint: Checkpoint | None, progress: ProgressReporter | None, start_next_after: Callable[[Any], bool] | None) -> tuple[SeedRun, ...]:
     concurrency = max(1, min(len(seeds), usable_cpus()))
-    runs = _Runs(task, seeds, time_budget_seconds, progress, start_next_after)
+    runs = _Runs(task, seeds, time_budget_seconds, window_seconds, progress, start_next_after)
     try:
         runs.start(concurrency, first_wave=True)
         while runs.running:

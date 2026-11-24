@@ -1,7 +1,7 @@
 # 🏦 Crédit Agricole Importer
 
 `broker_credit_agricole` imports the two Italian exports of Crédit Agricole as one **report set**
-(version **2.0.0**):
+(version **2.1.0**):
 
 - the securities movements, *Lista Movimenti Deposito Titoli* (role `securities`);
 - the account movements, *Lista Movimenti Conto* (role `account`).
@@ -414,6 +414,23 @@ by sign — the cash is always right — and differ only in what the plugin decl
   sum back to the credited amount. A clawback is never grossed up. A coupon that is part of a pair gets the
   same treatment from `book_movement`.
 
+### 🪢 Linked charges {: #linked-charges }
+
+Since 2.1.0 a charge names its parent (`parent_ref`) when the file ties it to **exactly one** row of the same
+output; with none or several it stays free, as before. The rows keep their order: the fee and the capital gain
+are matched by `Booking.link_charges` once every row is booked (`BRIMProvider._link_existing_charge`), because the
+combined file may list a charge before its parent.
+
+- **Withholding** (`RITENUTA: <x>`) → the coupon of its own row, in both arms (`_create_linked_charge`).
+- **Detach fee**, `SPESE STACCO CEDOLA DEL <date> … TIT: <ISIN>` → the one `INTEREST` or `DIVIDEND` on the asset
+  of that ISIN dated `<date>` (the date after `DEL`, never the fee's booking date). A maturity premium
+  (`maturity_premium`) is no coupon. A paired coupon is dated by the securities operation date.
+- **Capital gain**, `ADDEBITO CAPITAL GAIN … DATA:<date>` → the one `SELL` of `<date>`: a trade sale, a maturity,
+  a fund redemption. An inflow of that day booked as an unresolved `DEPOSIT` (a fund redemption by transfer, an
+  unresolved sale) is no parent but competes: the charge stays free. Linked, the charge takes the sale's asset and
+  its `ca_account_charge_unallocated` todo is dropped.
+- The commissions and the accrued interest inside a trade stay in its total: the file gives no split.
+
 ### 🔁 Trades on the account
 
 A `COMPRAVENDITA TITOLI/FONDI/OPZIONI` row carries the money, not the instrument or the quantity. With no
@@ -491,7 +508,7 @@ A paired maturity ([above](#parse)) uses the securities row instead. Both arms c
 | `ca_account_trade_unresolved` | todo on `asset_id` | blocker | every tier-2 row |
 | `ca_account_trade_bundled_amount` | todo on `cash` | warning | every resolved account trade (`split_hint`) |
 | `ca_account_trade_sell_quantity_presumed` | todo on `quantity` | warning | every resolved account sale |
-| `ca_account_charge_unallocated` | todo on `asset_id` | warning | a securities charge names no ISIN |
+| `ca_account_charge_unallocated` | todo on `asset_id` | warning | a securities charge names no ISIN and is not [linked](#linked-charges) to a sale |
 
 `ca_securities_unknown_causale`, `ca_account_invalid_amount` and `ca_unknown_causale` carry
 `context.report_issue`, so the wizard shows the link *open an issue on GitHub* under them: they are rows the
@@ -521,6 +538,7 @@ the holes.
 |---|---|
 | 1.0 – 1.5.0 | **Single-file plugin.** Each export was imported on its own. The securities export booked, for every buy, sale, coupon or premium, an automatic counter-entry (`auto_cash`) because it has no cash; the account export booked the real cash. Read together the two exports counted each fact twice |
 | **2.0.0** | **Report-set plugin.** Both exports are uploaded together; one transaction per fact with the cash of the account; no `auto_cash` leg; the balances of the XLSX open the cash and a hole becomes a proposed correction. A file read alone raises `BRIMSetRequiredError` (HTTP 422 `set_required`), naming the missing role |
+| **2.1.0** | **Linked charges** (project 66): the withholding of a coupon, its detach fee and the capital gain of a sale name their one parent ([linked charges](#linked-charges)) |
 
 The tag `credit_agricole` is unchanged. There is no warning and no clean-up for transactions already
 imported with 1.x (developer decision, 25/10/2026).

@@ -49,6 +49,10 @@ Guards — green before R4/R5 and after them:
   (the cure must not narrow what is plainly allowed), and ``test_zero_on_a_row_without_parent_is_a_no_op`` is red only
   because the schema rejects the field today.
 
+C22e (``TestASplitHalfSwappedAndLinkedInOneBatch``): one batch splits a saved CASH_TRANSFER, swaps its receiving half to a
+WITHDRAWAL through an update that names the type, and links a FEE to it — accepted (a guard of the server side the Bulk's
+C22e fix relies on); the same batch without the type, what the Bulk sends today, is refused (a characterization).
+
 Its world (own brokers that may go below zero, own assets) follows ``test_transaction_charge_links.py``; ids are plain ints,
 because a savepoint that rolls a refused batch back expires every ORM object. Linked rows of the setup are written straight
 into the session (``parent_transaction_id`` on the ORM row), read back with ``populate_existing``.
@@ -685,6 +689,63 @@ class TestSplitAPairThenLinkInOneBatch:
         response = await _batch(world, commit=commit, creates=[_new_fee(world, parent_id=receiving)])
 
         await _assert_refused(world, response, before, commit, [("create", 0, None, "chargeParentTypeNotAllowed", {"type": "CASH_TRANSFER"})], ["parent_transaction_id"])
+
+
+async def _type_amount_related(world: World, row_id: int) -> tuple[T, Decimal, int | None]:
+    """``(type, amount, related_transaction_id)`` of a row, re-read."""
+    statement = select(Transaction.type, Transaction.amount, Transaction.related_transaction_id).where(Transaction.id == row_id).execution_options(populate_existing=True)
+    row_type, amount, related = (await world.session.execute(statement)).one()
+    return row_type, amount, related
+
+
+class TestASplitHalfSwappedAndLinkedInOneBatch:
+    """66 C22e: the server side of the Bulk's swapped split half. One batch splits a saved CASH_TRANSFER, turns its
+    receiving half (a DEPOSIT once split, saved +100) into a WITHDRAWAL −100 through an update that names the type, and
+    links a saved FEE to that half. ``apply_splits`` runs first (the half becomes a DEPOSIT, ``pair_sides`` on the saved
+    sign), then the update swaps it (``SWAP_GROUPS``), then ``link_charges`` on the final state: a WITHDRAWAL is a parent.
+
+    The guard is green before the Bulk's fix; the characterization pins what the Bulk sends today (the same batch with
+    no ``type``): the update writes −100 on the DEPOSIT the split made, and the batch is refused."""
+
+    @pytest.mark.asyncio
+    @COMMIT
+    async def test_the_receiving_half_swapped_to_withdrawal_with_a_fee_linked(self, world, commit):
+        sending, receiving = await _save_pair(world)
+        fee_id = await _save_charge(world, broker_id=world.b_id, asset_id=None)
+        before = await _rows(world)
+
+        response = await _batch(
+            world,
+            commit=commit,
+            splits=[{"id_a": sending, "id_b": receiving}],
+            updates=[{"id": receiving, "type": "WITHDRAWAL", "cash": {"code": EUR, "amount": "-100"}}, {"id": fee_id, "parent_transaction_id": receiving}],
+        )
+
+        rows = await _assert_accepted(world, response, before, commit)
+        if commit:
+            assert await _type_amount_related(world, receiving) == (T.WITHDRAWAL, Decimal("-100"), None), "the receiving half must be an unpaired WITHDRAWAL of -100"
+            assert await _type_amount_related(world, sending) == (T.WITHDRAWAL, Decimal("-100"), None), "the sending half must be the split's unpaired WITHDRAWAL, untouched"
+            assert rows[fee_id][2] == receiving, f"the saved FEE must point at the swapped half: {rows[fee_id]}"
+
+    @pytest.mark.asyncio
+    @COMMIT
+    async def test_the_same_batch_without_the_type_is_refused(self, world, commit):
+        """Characterization of today's Bulk payload: the split makes the receiving half a DEPOSIT, and an update that
+        writes -100 on it without naming the type breaks the DEPOSIT's cash sign."""
+        sending, receiving = await _save_pair(world)
+        fee_id = await _save_charge(world, broker_id=world.b_id, asset_id=None)
+        before = await _rows(world)
+
+        response = await _batch(
+            world,
+            commit=commit,
+            splits=[{"id_a": sending, "id_b": receiving}],
+            updates=[{"id": receiving, "cash": {"code": EUR, "amount": "-100"}}, {"id": fee_id, "parent_transaction_id": receiving}],
+        )
+
+        assert response.committed is False, f"{_mode(commit)}: the batch without the type was committed"
+        assert any(issue.operation == "update" and issue.ref_id == receiving for issue in response.issues), f"{_mode(commit)}: expected an issue on the update of #{receiving}; issues: {_render(response.issues)}"
+        assert await _rows(world) == before, f"{_mode(commit)}: a refused batch wrote rows"
 
 
 # ============================================================================

@@ -1,0 +1,102 @@
+{
+  "allocation": {
+    "tab": "Allocation",
+    "heading": "Where am I exposed, looking at only a part?",
+    "loading": "Loading the allocation…",
+    "failed": "The allocation could not be loaded.",
+    "retry": "Try again",
+    "empty": "Nothing is held in this period.",
+    "subtitle": {
+      "all": "Whole portfolio",
+      "scopeAll": "all brokers",
+      "scopeBrokers": "{n} brokers",
+      "scopeBroker": "this broker"
+    },
+    "tiles": {
+      "base": "Base of the 100%",
+      "outside": "Outside the filter",
+      "excluded": "Excluded from the 100%",
+      "none": "Nothing",
+      "ofPortfolio": "of the portfolio",
+      "outsideShort": "Outside the filter",
+      "excludedShort": "Excluded"
+    },
+    "unattributable": {
+      "in_transit": "Securities in transit between brokers",
+      "no_country": "Cash has no country"
+    },
+    "filters": {
+      "button": "Filters",
+      "classes": "Classes",
+      "excluded": "Outside the 100%",
+      "assets": "Included assets",
+      "countOf": "{on} of {total}",
+      "countActive": "{n, plural, one {# active} other {# active}}",
+      "clear": "Remove filters",
+      "remembered": "Remembered for this page",
+      "searchAssets": "Search assets",
+      "noMatch": "No asset matches.",
+      "noAssets": "No assets in the classes switched on."
+    },
+    "classHint": {
+      "STOCK": "also stock ETFs",
+      "BOND": "also bond ETFs",
+      "COMMODITY": "also commodity ETFs",
+      "REAL_ESTATE": "also real-estate ETFs",
+      "CRYPTO": "also crypto ETFs"
+    },
+    "bucket": {
+      "Unknown": "Unclassified",
+      "UnknownHint": "the part with no declared sector, country or type",
+      "Other": "Other",
+      "OtherHint": "the «Other» sector of the sources"
+    },
+    "chip": {
+      "without": "Without {name}",
+      "remove": "Remove {name}"
+    },
+    "dimension": {
+      "label": "Group by",
+      "sector": "Sector",
+      "geography": "Area",
+      "type": "Type",
+      "asset": "Asset"
+    },
+    "view": {
+      "label": "View",
+      "now": "Now",
+      "history": "History"
+    },
+    "table": {
+      "label": "Allocation table",
+      "amount": "Amount",
+      "shareOfSelection": "% of the selection",
+      "shareOfPortfolio": "% of the portfolio",
+      "assets": "Assets",
+      "excluded": "(excluded)",
+      "ofSlice": "{share} of the slice",
+      "hint": "Click a row to see the assets that make it up. The first % column adds up to 100, the second to {share}.",
+      "hintNoShare": "Click a row to see the assets that make it up.",
+      "empty": "Nothing in the selection."
+    },
+    "map": {
+      "captionBefore": "Colours on the selection: 100% =",
+      "captionAfter": "of the portfolio"
+    },
+    "pie": {
+      "center": "Base"
+    },
+    "history": {
+      "empty": "No history for this selection in the period.",
+      "loading": "Loading the history…"
+    },
+    "matrix": {
+      "title": "Class × {dimension}",
+      "hint": "Follows the dimension chosen above. Shares of the whole portfolio; the framed cells are the selection. Click a cell to keep only its class.",
+      "classHeader": "Class",
+      "unattributed": "Not in a column:",
+      "cell": "{class}, {bucket}: {share}",
+      "cellEmpty": "{class}, {bucket}: nothing"
+    }
+  }
+}

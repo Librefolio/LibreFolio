@@ -30,7 +30,7 @@ import {themed} from '$lib/theme/themePair';
 import {CHART_GAIN_LOSS, LOT_GANTT_COLORS} from '$lib/theme/chartTheme';
 
 /** The marker kinds the Gantt can draw for a lot event. */
-export type EventMarkerKind = 'BUY' | 'SELL' | 'TRANSFER' | 'ADJUSTMENT_IN' | 'ADJUSTMENT_OUT' | 'SPLIT';
+export type EventMarkerKind = 'BUY' | 'REWARD' | 'SELL' | 'TRANSFER' | 'ADJUSTMENT_IN' | 'ADJUSTMENT_OUT' | 'SPLIT';
 
 /** Bar thickness bounds (px). Only {@link thicknessForQuantity} reads these. */
 export const THICKNESS_MIN = 10;
@@ -266,6 +266,7 @@ export function eventMarkerKind(kind: string, scopeBoundary?: ScopeBoundary | nu
     if (kind === 'ADJUSTMENT_OUT') return 'ADJUSTMENT_OUT';
     if (kind === 'SPLIT') return 'SPLIT';
     if (kind === 'SELL') return 'SELL';
+    if (kind === 'REWARD' || kind === 'REWARD_MERGE') return 'REWARD';
     return 'BUY';
 }
 

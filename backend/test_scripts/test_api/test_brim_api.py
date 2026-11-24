@@ -1810,7 +1810,10 @@ class TestDanskeReportSetEndToEnd:
                 parsed = await client.post(f"{API_BASE}/brokers/import/files/{combined['file_id']}/parse", json={"plugin_code": DANSKE_CODE, "broker_id": broker_id}, timeout=TIMEOUT)
                 assert parsed.status_code == 200, parsed.text
                 result = parsed.json()
-                assert (result["history_start"], len(result["transactions"])) == ("2020-02-03", 27)
+                # 27 rows, and the 10 commissions the trades now carry as linked FEEs (project 66, P2c).
+                assert (result["history_start"], len(result["transactions"])) == ("2020-02-03", 37)
+                trades = {tx["ref"]: tx for tx in result["transactions"] if tx["type"] in ("BUY", "SELL") and tx.get("ref")}
+                assert sum(1 for tx in result["transactions"] if tx["type"] == "FEE" and tx.get("parent_ref") in trades) == 10, "each split commission arrives linked to its trade"
                 assert len(result["checkpoints"]) == 1 and len(result["verifications"]) == 1, (result["checkpoints"], result["verifications"])
                 checkpoint, verification = result["checkpoints"][0], result["verifications"][0]
                 assert (checkpoint["as_of"], checkpoint["kind"], _money_list(checkpoint["cash"]), len(checkpoint["positions"])) == ("2020-02-02", "opening", {"EUR": Decimal("2699.50")}, 3)

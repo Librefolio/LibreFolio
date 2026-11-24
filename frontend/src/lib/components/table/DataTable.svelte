@@ -27,7 +27,7 @@
     import ContextMenu from '$lib/components/ui/ContextMenu.svelte';
     import type {ContextMenuItem} from '$lib/components/ui/ContextMenu.svelte';
     import type {BulkAction, ColumnDef, ColumnWidthsState, FilterValue, FooterCellContent, FooterCells, PaginationState, RowAction, RowActions, SelectionState, SortState, VisibilityState} from './types';
-    import {compareRowsByColumn, matchesColumnFilter, paginateFlat, reorderKeepingAbsent, withNewColumns} from './dataTableLogic';
+    import {compareRowsByColumn, holdRowOrder, matchesColumnFilter, paginateFlat, reorderKeepingAbsent, withNewColumns} from './dataTableLogic';
     import {clearTimer} from '$lib/utils/core/clearTimer';
 
     interface Props {
@@ -71,6 +71,12 @@
         tableLayout?: 'fixed' | 'auto';
         /** Optional predicate: if returns false, row checkbox is hidden and row is excluded from bulk select */
         isRowSelectable?: (row: T) => boolean;
+        /**
+         * Optional (79 STK-2c): 'partial' draws an unselected row's checkbox in the mixed state, as the header's — a row that
+         * stands for others, part of which are selected (the reward lots group). Selection itself is unchanged; null or
+         * absent: the usual checked / unchecked.
+         */
+        getRowSelectionState?: (row: T) => 'partial' | null;
         /** Tooltip text for non-selectable rows (⊘ icon shown instead of checkbox). */
         disabledRowTooltip?: (row: T) => string | null;
         /** Enable touch long-press (500ms) to toggle row selection (mobile). */
@@ -186,6 +192,7 @@
         getRowStyle,
         tableLayout = 'fixed',
         isRowSelectable,
+        getRowSelectionState,
         disabledRowTooltip,
         enableTouchSelection = false,
         stickyActions = true,
@@ -404,6 +411,28 @@
         return result;
     });
 
+    // The display order held while a field in the table is being edited: the ids in the order the rows had when the field was
+    // entered, or null. A sorted table re-sorts at every keystroke otherwise, and the row under the cursor runs away from it;
+    // it sorts again when the focus leaves the table's fields (blur, Enter).
+    let heldOrder = $state<string[] | null>(null);
+
+    /** A field the user types into, inside the rows. */
+    const EDIT_FIELDS = 'input, textarea, select, [contenteditable]:not([contenteditable="false"])';
+
+    function holdOrderOnFocus(event: FocusEvent): void {
+        const target = event.target instanceof Element ? event.target : null;
+        if (!target?.closest(EDIT_FIELDS) || heldOrder || !sortState || !enableSorting) return;
+        heldOrder = sortedData.map((row) => getRowId(row));
+    }
+
+    function releaseOrderOnBlur(event: FocusEvent): void {
+        if (!heldOrder) return;
+        const next = event.relatedTarget instanceof Element ? event.relatedTarget : null;
+        // Moving to another field of the table keeps the order held: re-sorting then would move the field being entered.
+        if (next?.closest(EDIT_FIELDS) && event.currentTarget instanceof Element && event.currentTarget.contains(next)) return;
+        heldOrder = null;
+    }
+
     // Sorted data
     let sortedData = $derived.by(() => {
         if (!sortState || !enableSorting) return filteredData;
@@ -411,7 +440,9 @@
         const column = columns.find((c) => c.id === sortState!.columnId);
         if (!column) return filteredData;
 
-        return [...filteredData].sort((a, b) => compareRowsByColumn(column, a, b, sortState!.direction));
+        const sorted = [...filteredData].sort((a, b) => compareRowsByColumn(column, a, b, sortState!.direction));
+        // While a field of the table is being edited the order it had at the first focus holds (81 U48, issue #89).
+        return heldOrder ? holdRowOrder(sorted, heldOrder, getRowId) : sorted;
     });
 
     // The pages cut by `opensPage` (66 F7-c1); null without it, when the pages are fixed slices.
@@ -531,6 +562,7 @@
         } else {
             sortState = {columnId, direction: 'asc'};
         }
+        heldOrder = null;
         onSortChange?.(sortState);
     }
 
@@ -661,7 +693,6 @@
                 icon: action.icon,
                 variant: action.variant,
                 blocked: block ? {hint: typeof block.hint === 'function' ? block.hint() : block.hint, reason: block.reason} : undefined,
-                disabled: action.disabled?.(row) ?? false,
                 title: typeof action.title === 'function' ? action.title(row) : action.title,
                 testid: typeof action.testid === 'function' ? action.testid(row) : action.testid,
                 iconClass: action.iconClass?.(row),
@@ -669,6 +700,9 @@
             };
         });
     }
+
+    /** What keeps the browser's own context menu inside a row: the places where the user pastes or edits text. */
+    const NATIVE_MENU_FIELDS = 'input, textarea, select, [contenteditable]:not([contenteditable="false"])';
 
     function openRowActionsMenu(row: T, button: HTMLButtonElement): void {
         const rect = button.getBoundingClientRect();
@@ -1131,7 +1165,7 @@
                         {/if}
                     </tr>
                 </thead>
-                <tbody>
+                <tbody onfocusin={holdOrderOnFocus} onfocusout={releaseOrderOnBlur}>
                     {#if isLoading}
                         <tr>
                             <td colspan={visibleColumns.length + (effectiveSelectionMode === 'multi' ? 1 : 0) + (showActionsColumn ? 1 : 0)} class="td-loading" data-testid="dt-loading">
@@ -1173,7 +1207,17 @@
                                 }}
                                 oncontextmenu={(e) => {
                                     if (enableContextMenu && visibleRowActions.length > 0) {
+                                        const target = e.target instanceof Element ? e.target : null;
+                                        // A field inside the row keeps the browser's own menu, so «Paste» still works there (81 U15).
+                                        if (target?.closest(NATIVE_MENU_FIELDS)) return;
                                         e.preventDefault();
+                                        // From the keyboard (Shift+F10, the Menu key) the event comes from the ⋮: open the menu on it,
+                                        // so Esc gives the focus back to it.
+                                        const actionsButton = target?.closest<HTMLButtonElement>('button.row-actions-btn');
+                                        if (actionsButton) {
+                                            openRowActionsMenu(row, actionsButton);
+                                            return;
+                                        }
                                         contextMenuRow = row;
                                         contextMenuAnchor = null;
                                         contextMenuPos = {x: e.clientX, y: e.clientY};
@@ -1198,11 +1242,12 @@
                                     <td class="td-fixed td-select" data-testid="dt-select-cell-{rowId}">
                                         <div class="flex items-center justify-center gap-1">
                                             {#if !isRowSelectable || isRowSelectable(row)}
+                                                {@const rowPartial = !isSelected && getRowSelectionState?.(row) === 'partial'}
                                                 <button
                                                     type="button"
                                                     class="checkbox-btn"
                                                     data-testid="dt-row-checkbox-{rowId}"
-                                                    data-state={isSelected ? 'checked' : 'unchecked'}
+                                                    data-state={isSelected ? 'checked' : rowPartial ? 'partial' : 'unchecked'}
                                                     onclick={(e) => {
                                                         e.stopPropagation();
                                                         toggleRowSelection(rowId);
@@ -1210,6 +1255,8 @@
                                                 >
                                                     {#if isSelected}
                                                         <Check size={16} class="check-icon checked" />
+                                                    {:else if rowPartial}
+                                                        <Check size={16} class="check-icon partial" />
                                                     {:else}
                                                         <span class="check-box"></span>
                                                     {/if}
@@ -1344,6 +1391,7 @@
     items={pendingBulkRows.map((row) => (getRowDisplayName ? getRowDisplayName(row) : String(getRowId(row))))}
     itemsLabel={`${pendingBulkRows.length} ${$t('table.items')}`}
     message={pendingBulkAction?.confirmMessage ? (typeof pendingBulkAction.confirmMessage === 'function' ? pendingBulkAction.confirmMessage(pendingBulkRows.length) : pendingBulkAction.confirmMessage) : `${$t('table.confirmBulkAction')} ${pendingBulkRows.length} ${$t('table.items')}?`}
+    confirmText={pendingBulkAction?.confirmText ? (typeof pendingBulkAction.confirmText === 'function' ? pendingBulkAction.confirmText() : pendingBulkAction.confirmText) : undefined}
     onCancel={cancelBulkAction}
     onConfirm={confirmBulkAction}
     open={showDeleteModal}

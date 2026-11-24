@@ -67,6 +67,7 @@ PUBLIC_CATALOG_V1_ANALYSES = (
     "portfolio.rebalancing",
     "portfolio.performance_market_drivers",
     "portfolio.fiscal_lots",
+    "portfolio.protection_strategies",
     "broker.review",
     "broker.performance_market_drivers",
     "broker.fiscal_lots",
@@ -92,6 +93,13 @@ COMPOSITION_COMPONENTS = (
     "instructions/contracts",
 )
 DISTRIBUTION_PERCENTILES = (10, 25, 75, 90, 95, 99)
+# 78 L10: a Portfolio export filtered on one broker, its own named case: the first single-broker Portfolio scope
+# (``broker_anon_NN``, stable order) of these selections. Its prompt opens with «Export Scope» whenever the user owns
+# another broker. Alone: ``--target-case <user>|portfolio.protection_strategies|3M|standard|broker=<display name>``.
+NAMED_FILTERED_PROMPT_RETENTION: Mapping[tuple[str, str, str], tuple[str, ...]] = {
+    ("portfolio.protection_strategies", "3M", "standard"): ("named_portfolio_protection_filtered_3m_standard",),
+}
+FILTERED_PORTFOLIO_SCOPE_PREFIX = "broker_anon_"
 NAMED_PROMPT_RETENTION: Mapping[tuple[str, str, str], tuple[str, ...]] = {
     ("portfolio.overview_and_history", "3M", "compact"): ("named_portfolio_general_3m_compact",),
     ("portfolio.overview_and_history", "3M", "standard"): ("named_portfolio_general_3m_standard",),
@@ -105,6 +113,7 @@ NAMED_PROMPT_RETENTION: Mapping[tuple[str, str, str], tuple[str, ...]] = {
     ("portfolio.rebalancing", "1Y", "standard"): ("named_portfolio_rebalancing_1y_standard",),
     ("portfolio.performance_market_drivers", "3M", "standard"): ("named_portfolio_performance_drivers_3m_standard",),
     ("portfolio.fiscal_lots", "1Y", "standard"): ("named_portfolio_fiscal_lots_1y_standard",),
+    ("portfolio.protection_strategies", "3M", "standard"): ("named_portfolio_protection_3m_standard",),
     ("broker.overview_and_history", "3M", "standard"): ("named_broker_general_3m_standard",),
     ("broker.overview_and_history", "1Y", "standard"): ("named_broker_general_1y_standard",),
     ("broker.asset_history", "3M", "standard"): ("named_broker_detailed_3m_standard",),
@@ -142,6 +151,7 @@ FINANCIAL_WITH_CONTEXT_SELECTIONS = frozenset(
         "fx.market_and_exposure",
         "portfolio.pac_planning",
         "portfolio.rebalancing",
+        "portfolio.protection_strategies",
         "broker.review",
         "asset.position_review",
         "fx.exposure_impact",
@@ -430,7 +440,13 @@ def measure_broker_scope_diagnostics(snapshot: Mapping[str, object]) -> dict[str
     contributor_count = None
     if isinstance(performance, Mapping) and performance.get("period_contributor_broker_count") is not None:
         contributor_count = int(performance["period_contributor_broker_count"])
+    # 78 L10: the scope fact the prompt opens with when the export leaves out an owned broker
+    export_scope = snapshot.get("export_scope")
+    export_scope = export_scope if isinstance(export_scope, Mapping) else None
     return {
+        "export_scope_present": export_scope is not None,
+        "export_scope_included_broker_count": len(export_scope.get("included_broker_ids") or []) if export_scope else None,
+        "export_scope_excluded_broker_count": len(export_scope.get("excluded_brokers") or []) if export_scope else None,
         "broker_scope_refs": scope_refs,
         "scoped_broker_count": scoped_count,
         "position_broker_count": position_count,
@@ -1346,7 +1362,7 @@ def public_catalog_v1_scope(scopes: Sequence[Mapping[str, object]], selection: M
     if domain == "portfolio":
         selected = next((dict(scope) for scope in scopes if scope.get("domain") == "portfolio" and scope.get("scope_alias") == "all"), None)
         if selected is not None:
-            selected["profile_selection_reason"] = "portfolio_all_accessible_brokers"
+            selected["profile_selection_reason"] = "portfolio_all_owned_brokers"
         return selected
     if domain == "broker":
         candidates = [dict(scope) for scope in scopes if scope.get("domain") == "broker"]
@@ -1627,7 +1643,15 @@ def select_prompt_retention_reasons(entries: Sequence[Mapping[str, object]]) -> 
     """Return deduplicated named + global representative retention reasons."""
     successful = [entry for entry in entries if entry.get("status") == "ok" and isinstance(entry.get("rendered_prompt_chars"), int)]
     reasons: defaultdict[str, list[str]] = defaultdict(list)
+    filtered_named: set[str] = set()
     for entry in sorted(successful, key=stable_metric_key):
+        key = (str(entry.get("selection_id") or ""), str(entry.get("period_label") or ""), str(entry.get("detail_level") or ""))
+        if entry.get("domain") == "portfolio" and str(entry.get("scope_alias") or "").startswith(FILTERED_PORTFOLIO_SCOPE_PREFIX):
+            # 78 L10: the first filtered Portfolio prompt of the selection, once
+            for name in NAMED_FILTERED_PROMPT_RETENTION.get(key, ()):
+                if name not in filtered_named:
+                    filtered_named.add(name)
+                    reasons[stable_metric_key_text(entry)].append(name)
         named = NAMED_PROMPT_RETENTION.get(
             (
                 str(entry.get("selection_id") or ""),
@@ -2117,15 +2141,21 @@ def _readonly_connection(database_path: Path) -> sqlite3.Connection:
     return connection
 
 
-def _accessible_brokers(connection: sqlite3.Connection, user_id: int) -> list[dict[str, object]]:
-    rows = connection.execute(
-        """
+OWNED_BROKERS_SQL = """
         SELECT b.id, b.name, bua.role
         FROM broker_user_access AS bua
         JOIN brokers AS b ON b.id = bua.broker_id
-        WHERE bua.user_id = ?
+        WHERE bua.user_id = ? AND bua.role = 'OWNER' AND (bua.share_percentage IS NULL OR CAST(bua.share_percentage AS REAL) > 0)
         ORDER BY b.id
-        """,
+        """
+"""The brokers the user owns: role owner and a share above zero, the rule of `AiExportSnapshotService._owned_broker_ids`
+and of the Dashboard (78 L10b). The probe's «all» scope is the Dashboard's unfiltered portfolio, never the brokers only
+shared with the user."""
+
+
+def _owned_brokers(connection: sqlite3.Connection, user_id: int) -> list[dict[str, object]]:
+    rows = connection.execute(
+        OWNED_BROKERS_SQL,
         (user_id,),
     ).fetchall()
     return [
@@ -2353,7 +2383,7 @@ def collect_user_inventory(database_path: Path, username: str, *, minimum_fx_his
         locale = str(user["language"]).split("-", maxsplit=1)[0].lower()
         if locale not in LANGUAGE_BY_LOCALE:
             locale = "en"
-        brokers = _accessible_brokers(connection, user_id)
+        brokers = _owned_brokers(connection, user_id)
         broker_ids = [int(item["id"]) for item in brokers]
         asset_candidates = _asset_candidates(connection, broker_ids)
         ranked_assets = rank_asset_candidates(asset_candidates)
@@ -2403,7 +2433,7 @@ def collect_user_inventory(database_path: Path, username: str, *, minimum_fx_his
             **{broker_id: _scope_inventory(connection, [broker_id], snapshot_as_of=all_end) for broker_id in broker_ids},
         }
     inventory = {
-        "accessible_broker_count": len(broker_ids),
+        "owned_broker_count": len(broker_ids),
         "position_legs": len(position_rows),
         "unique_held_assets": len(held_asset_ids),
         "historical_assets": len(historical_ids),
@@ -3706,7 +3736,7 @@ def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         "--profile",
         choices=("tuning-v2", "representative", PUBLIC_CATALOG_V1_PROFILE, "exhaustive"),
         default="tuning-v2",
-        help="tuning-v2 keeps the internal tuning matrix; public-catalog-v1 runs 19 public selections × 3M/1Y × compact/standard/full",
+        help=f"tuning-v2 keeps the internal tuning matrix; public-catalog-v1 runs {len(PUBLIC_CATALOG_V1_SELECTIONS)} public selections × 3M/1Y × compact/standard/full",
     )
     parser.add_argument("--manifest-shape", choices=("legacy", "slim"), default="slim", help="Expected public technical manifest shape")
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
@@ -4123,7 +4153,7 @@ def run_probe(args: argparse.Namespace) -> int:  # noqa: C901 — sequential pro
                 "exact explicit target cases only"
                 if target_cases
                 else (
-                    "exact 19 selections x 3M/1Y x compact/standard/full; no 6M"
+                    f"exact {len(PUBLIC_CATALOG_V1_SELECTIONS)} selections x 3M/1Y x compact/standard/full; no 6M"
                     if public_catalog_v1_run
                     else ("base datasets: 3M/6M/1Y x compact/standard/full; analyses with temporal data: 3M/1Y x compact/standard/full; all_data excluded from tuning" if args.profile == "tuning-v2" else "representative or exhaustive legacy profile")
                 )
@@ -4141,7 +4171,7 @@ def run_probe(args: argparse.Namespace) -> int:  # noqa: C901 — sequential pro
         },
         "inventory": {artifact_aliases[alias]: data["inventory"] for alias, data in inventories.items()},
         "inventory_methods": {
-            "accessible_broker_count": "ALL-TIME access universe: BrokerUserAccess rows available to the probed user. It is not reduced by current positions or the selected period.",
+            "owned_broker_count": "ALL-TIME owned universe: brokers the probed user owns at a share above zero (78 L10b), the Dashboard's unfiltered portfolio. Brokers only shared with the user are left out. It is not reduced by current positions or the selected period.",
             "scoped_broker_count": "REQUEST scope: broker IDs selected for one Portfolio/Broker calculation after access validation. A scoped broker may have no current positions.",
             "position_broker_count": "AS-OF position universe: distinct brokers with current open holdings at snapshot_as_of.",
             "period_contributor_broker_count": "PERIOD-SCOPED contributor universe: distinct brokers represented by performance contribution rows in the selected period, including historical-only contributors.",

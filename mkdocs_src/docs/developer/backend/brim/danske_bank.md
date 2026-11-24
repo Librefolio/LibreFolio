@@ -3,7 +3,7 @@
 `broker_danske_bank` imports the **equity savings account** (*osakesäästötili*) of Danske Bank
 Finland from two exports that only make sense together: the custody transactions (XLSX) and the
 cash statement (CSV). It lives in `backend/app/services/brim_providers/broker_danske_bank/plugin.py`
-(`plugin_version` 1.1.0, 🔬 Alpha — built from the exports of one account, shared in
+(`plugin_version` 1.2.0, 🔬 Alpha — built from the exports of one account, shared in
 [issue #26](https://github.com/Librefolio/LibreFolio/issues/26)) and is LibreFolio's reference
 **report-set plugin**.
 
@@ -396,22 +396,36 @@ imported.
 
 ---
 
-## 💶 The commission estimate
+## 💶 The commission split
 
 The exports give one total per trade: the fee column (`Palkkio sis. Alv`) is always 0, and the
-commission is inside `Summa`. Every paired purchase and sale therefore gets the `warning` todo
-`danske_trade_charges_included` on `cash` (`_charges_todo`); dividends get none.
+commission is inside `Summa`. Since 1.2.0 (project 66, the developer's decision of 16/11) the plugin
+splits it by itself when the file explains it (`_trade_split`); dividends have none.
 
-- **Context** — `split_hint: "trade_charges"`, so the **Corrections** step owns the row
-  (`isCashSplitWarning`) and every trade needs a decision; `compare_nominal: false`; `cash` (the
-  absolute amount), `currency`, `row`, `split_suggestions`, and `charges` when the estimate is
-  plausible.
 - **Estimate** — gross = absolute quantity × `Kurssi`, rounded to the cent; charges = absolute
-  amount − gross for a purchase, gross − absolute amount for a sale. It is plausible when
-  0 ≤ charges ≤ max(15 €, gross ÷ 100): the first suggestion then gives both figures, valid if the
-  price is in euro. Otherwise it says the price may be quoted in another currency, so the
-  commission cannot be computed from the file.
-- The second suggestion always points to the trade confirmation in eBanking.
+  amount − gross for a purchase, gross − absolute amount for a sale. The file explains the sum when
+  0 ≤ charges ≤ max(15 €, gross ÷ 100) and the gross is above zero.
+- **Explained, charges above zero** — the trade is booked at the gross, and the charges become a
+  `FEE` of the same day, asset and currency, **linked** to the trade (`parent_ref`, through
+  `_create_linked_charge`). Trade + fee is the sum the bank moved, so the cash, the truths and the
+  gap-fix do not change. The info notice `danske_trade_charges_split` lists the split trades.
+- **Explained, charges zero** — the trade is already its own figure: no fee, no todo.
+- **Not explained** (the price is in another currency, or zero) — the trade keeps the whole sum and
+  gets the `warning` todo `danske_trade_charges_included` on `cash` (`_charges_todo`):
+  `split_hint: "trade_charges"`, so the **Corrections** step owns the row (`isCashSplitWarning`);
+  `compare_nominal: false`; `cash`, `currency`, `row`, `split_suggestions`. The fee the user splits
+  there is born linked to the trade (P1b). The suggestions say the price may be quoted in another
+  currency, and point to the trade confirmation in eBanking.
+- **A file imported with 1.1.0** — its trades held the whole sum, so a reimport no longer
+  recognises them: delete those transactions once and import the files again (the changelog says
+  so). The other rows are recognised as before.
+
+### 🔗 The tax of a withdrawal
+
+A tax row of the account (`vero osakesäästötililtä`) is linked to the withdrawal (`nosto
+osakesäästötililtä`) of the same day when there is exactly one (`_link_cash_taxes`, after every
+row is read, since the statement lists the newest first and the output keeps its order). With none
+or several it stays free. Service fees (`palvelumaksut`) are account charges: never linked.
 
 ---
 
@@ -448,6 +462,7 @@ are in Finnish. Evidence tables are titled `Arvopaperitapahtumat` (custody colum
 | `proof_discarded` | info | Holdings the files could not prove reliably (`context.proofs`) |
 | `balance_chain_broken` | warning | The statement's balances are only compared, never used for corrections |
 | `deposit_assumed` | info | Credits read as deposits: check them |
+| `danske_trade_charges_split` | info | The trades whose commission was split from the sum and linked to them ([the commission split](#the-commission-split)) |
 
 A reservation (`reservation`, in `_SILENT_EXCLUSIONS`) gives no notice: the parse writes one
 backend log line, `logger.info` with its `reason` and `count`, and the rows keep their place in the

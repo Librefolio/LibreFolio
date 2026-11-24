@@ -56,7 +56,8 @@ function coinHit(identifier: string, name: string) {
     });
 }
 
-const HITS = [coinHit('bitcoin', 'Bitcoin (BTC)'), coinHit('wrapped-bitcoin', 'Wrapped Bitcoin (WBTC)'), coinHit('bitcoin-cash', 'Bitcoin Cash (BCH)')];
+// The coin's name alone, as the plugin names a row (TL40)
+const HITS = [coinHit('bitcoin', 'Bitcoin'), coinHit('wrapped-bitcoin', 'Wrapped Bitcoin'), coinHit('bitcoin-cash', 'Bitcoin Cash')];
 
 /** Answer this page's `GET <path>` — that path only — with the backend's own answer, rewritten (the headers of the transit dropped). */
 async function serveRewritten(page: Page, path: string, rewrite: (body: unknown) => unknown): Promise<void> {

@@ -29,6 +29,18 @@ const DEMO = vi.hoisted(() => {
     } as const;
 });
 
+/** A tool with two operations of different limits: the client waits for each one its own (TURNI 5a of project 67). */
+const TWO = vi.hoisted(() => {
+    return {
+        toolCode: 'two_operation_tool',
+        contractVersion: 'v1',
+        implementationVersion: 'impl-1',
+        schemaFingerprint: 'fp-two-v1',
+        componentKey: 'TwoOperationToolPanel',
+        uiVersion: '1.0.0',
+    } as const;
+});
+
 /** Identity of a strict compiled tool used to prove pre-flight input validation sees the snapshot. */
 const STRICT = vi.hoisted(() => {
     return {
@@ -57,7 +69,7 @@ vi.mock('$lib/api', () => ({
 vi.mock('$lib/api/generated-tools', async () => {
     const {z} = await import('zod');
 
-    const toolOperationSchema = z.object({operation: z.string()});
+    const toolOperationSchema = z.object({operation: z.string(), client_timeout_ms: z.number()});
     const toolUiSchema = z.object({
         kind: z.literal('custom'),
         component_key: z.string(),
@@ -164,6 +176,18 @@ vi.mock('$lib/api/tool-contract-map.generated', async () => {
                     operations: [DEMO.operation],
                 },
             },
+            [TWO.toolCode]: {
+                [TWO.contractVersion]: {
+                    toolCode: TWO.toolCode,
+                    contractVersion: TWO.contractVersion,
+                    schemaFingerprint: TWO.schemaFingerprint,
+                    componentKey: TWO.componentKey,
+                    uiVersion: TWO.uiVersion,
+                    input: z.any(),
+                    output: z.any(),
+                    operations: ['plan', 'preview'],
+                },
+            },
             [STRICT.toolCode]: {
                 [STRICT.contractVersion]: {
                     toolCode: STRICT.toolCode,
@@ -221,7 +245,7 @@ function rawCatalog() {
                     component_key: DEMO.componentKey,
                     version: DEMO.uiVersion,
                 },
-                operations: [{operation: DEMO.operation}],
+                operations: [{operation: DEMO.operation, client_timeout_ms: 7_000}],
             },
             {
                 tool_code: STRICT.toolCode,
@@ -233,7 +257,22 @@ function rawCatalog() {
                     component_key: STRICT.componentKey,
                     version: STRICT.uiVersion,
                 },
-                operations: [{operation: STRICT.operation}],
+                operations: [{operation: STRICT.operation, client_timeout_ms: 7_000}],
+            },
+            {
+                tool_code: TWO.toolCode,
+                contract_version: TWO.contractVersion,
+                implementation_version: TWO.implementationVersion,
+                schema_fingerprint: TWO.schemaFingerprint,
+                ui: {
+                    kind: 'custom' as const,
+                    component_key: TWO.componentKey,
+                    version: TWO.uiVersion,
+                },
+                operations: [
+                    {operation: 'plan', client_timeout_ms: 9_000},
+                    {operation: 'preview', client_timeout_ms: 3_000},
+                ],
             },
         ],
         unavailable: [],
@@ -474,6 +513,7 @@ describe('tools client — compute request wire contract', () => {
     const previousSession = getClientSessionUserId();
     let demoDescriptor: unknown;
     let strictDescriptor: unknown;
+    let twoDescriptor: unknown;
 
     beforeAll(async () => {
         transitionClientSession('demo-user');
@@ -481,6 +521,7 @@ describe('tools client — compute request wire contract', () => {
         const catalog = await fetchToolCatalog();
         demoDescriptor = verifyDescriptorForTest(catalog, DEMO.toolCode, DEMO.contractVersion);
         strictDescriptor = verifyDescriptorForTest(catalog, STRICT.toolCode, STRICT.contractVersion);
+        twoDescriptor = verifyDescriptorForTest(catalog, TWO.toolCode, TWO.contractVersion);
     });
 
     afterEach(() => {
@@ -822,6 +863,53 @@ describe('tools client — compute request wire contract', () => {
         } finally {
             vi.unstubAllGlobals();
         }
+    });
+
+    it('the client waits for each operation its own limit, never the platform ceiling (TURNI 5a)', async () => {
+        // The platform's ceiling (5 s here, 135 s in a real catalog) holds the longest operation of any Tool; a call waits
+        // for its own operation's limit, as the catalog declares it.
+        const timeouts: unknown[] = [];
+        for (const operation of ['plan', 'preview']) {
+            mockSuccessfulCompute({operation});
+            await runToolForTest(TWO.toolCode, TWO.contractVersion, {descriptor: twoDescriptor, correlationId: `corr-${operation}`, parameters: {operation}});
+            timeouts.push((axiosPost.mock.calls.at(-1)?.[2] as {timeout?: number}).timeout);
+        }
+        expect(timeouts).toEqual([9_000, 3_000]);
+
+        // Parameters that name no operation wait for the longest of the tool's operations.
+        mockSuccessfulCompute({plain: true});
+        await runDemo({}, 'corr-no-operation');
+        expect((axiosPost.mock.calls.at(-1)?.[2] as {timeout?: number}).timeout).toBe(7_000);
+    });
+
+    it('the operation is read from the sent snapshot: a getter is refused before axios, never read (TURNI 5a)', async () => {
+        let reads = 0;
+        const hostile = {
+            get operation() {
+                reads += 1;
+                return reads === 1 ? 'preview' : 'plan';
+            },
+        };
+        let error: unknown;
+        try {
+            await runToolForTest(TWO.toolCode, TWO.contractVersion, {descriptor: twoDescriptor, correlationId: 'corr-hostile', parameters: hostile});
+        } catch (caught) {
+            error = caught;
+        }
+        expect(error).toMatchObject({kind: 'validation', code: 'invalid_request'});
+        expect(reads).toBe(0);
+        expect(axiosPost).not.toHaveBeenCalled();
+    });
+
+    it('an operation the descriptor lacks is refused before axios (TURNI 5a)', async () => {
+        let error: unknown;
+        try {
+            await runToolForTest(TWO.toolCode, TWO.contractVersion, {descriptor: twoDescriptor, correlationId: 'corr-unknown', parameters: {operation: 'unknown'}});
+        } catch (caught) {
+            error = caught;
+        }
+        expect(error).toMatchObject({kind: 'compatibility', code: 'operation_mismatch'});
+        expect(axiosPost).not.toHaveBeenCalled();
     });
 
     it('runTool without onProgress still posts to compute', async () => {

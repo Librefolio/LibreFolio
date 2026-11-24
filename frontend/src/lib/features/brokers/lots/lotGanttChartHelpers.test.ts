@@ -638,6 +638,22 @@ describe('eventMarkerKind', () => {
         expect(eventMarkerKind('BUY')).toBe('BUY');
         expect(eventMarkerKind('SOMETHING_ELSE')).toBe('BUY');
     });
+
+    it('gives a reward in kind its own marker kind, not the BUY fallback (project 79)', () => {
+        expect(eventMarkerKind('REWARD')).toBe('REWARD');
+        expect(eventMarkerKind('REWARD', null)).toBe('REWARD');
+    });
+
+    it('reads a reward leg at the scope edge as a transfer, as every kind', () => {
+        expect(eventMarkerKind('REWARD', 'IN')).toBe('TRANSFER');
+        expect(eventMarkerKind('REWARD', 'OUT')).toBe('TRANSFER');
+    });
+
+    it('marks a reward merged into a lot (REWARD_MERGE, STK-3) as a reward, a scope-edge leg as a transfer', () => {
+        expect(eventMarkerKind('REWARD_MERGE')).toBe('REWARD');
+        expect(eventMarkerKind('REWARD_MERGE', null)).toBe('REWARD');
+        expect(eventMarkerKind('REWARD_MERGE', 'IN')).toBe('TRANSFER');
+    });
 });
 
 describe('eventMarkerSymbol', () => {
@@ -648,6 +664,8 @@ describe('eventMarkerSymbol', () => {
         ['ADJUSTMENT_OUT', '×'],
         ['SPLIT', '│'],
         ['BUY', '▲'],
+        // A reward in kind opens a lot as a buy does: the same glyph, in its own colour (LOT_GANTT_COLORS.events.reward).
+        ['REWARD', '▲'],
     ];
     it.each(cases)('draws %s as %s', (kind, glyph) => {
         expect(eventMarkerSymbol(kind)).toBe(glyph);
@@ -856,6 +874,7 @@ describe('J-48 — scope boundary', () => {
             {kind: 'ADJUSTMENT_IN', key: 'ADJUSTMENT_IN'},
             {kind: 'ADJUSTMENT_OUT', key: 'ADJUSTMENT_OUT'},
             {kind: 'SPLIT', key: 'SPLIT'},
+            {kind: 'REWARD', key: 'REWARD'},
         ] as ReadonlyArray<{kind: EventMarkerKind; key: string}>)('without a label kind, $kind reads the $key key', ({kind, key}) => {
             expect(labelKeyOf(kind), 'absent').toBe(`${EVENT_TYPE}.${key}`);
             expect(labelKeyOf(kind, null), 'null').toBe(`${EVENT_TYPE}.${key}`);
@@ -1016,6 +1035,10 @@ describe('Q-G29-1 — ganttMarkerEvent: a lot_events row as its tooltip names it
         expect(ganttMarkerEvent({kind: 'BUY', date: '2024-03-15', quantity: 10, broker_id: 1})).toEqual({kind: 'BUY', labelKind: null, date: '2024-03-15', quantity: 10, brokerId: 1, sourceBrokerId: null, destinationBrokerId: null});
     });
 
+    it('reads a REWARD row as a REWARD marker, titled by its own key, not as the BUY it once stood for (project 79)', () => {
+        expect(ganttMarkerEvent({kind: 'REWARD', date: '2024-03-15', quantity: 0.5, broker_id: 1})).toEqual({kind: 'REWARD', labelKind: null, date: '2024-03-15', quantity: 0.5, brokerId: 1, sourceBrokerId: null, destinationBrokerId: null});
+    });
+
     it('keeps the date as sent and the sign of the quantity (the tooltip takes the absolute value, not the row)', () => {
         const event = ganttMarkerEvent({kind: 'SELL', date: '2024-03-16', quantity: -5.5, broker_id: 2});
         expect(event.kind).toBe('SELL');
@@ -1112,6 +1135,7 @@ describe('Q-G29-1 — ganttMarkerTooltipBlocks: one block per event', () => {
         {kind: 'SPLIT', key: 'SPLIT'},
         {kind: 'ADJUSTMENT_IN', key: 'ADJUSTMENT_IN'},
         {kind: 'ADJUSTMENT_OUT', key: 'ADJUSTMENT_OUT'},
+        {kind: 'REWARD', key: 'REWARD'},
     ] as ReadonlyArray<{kind: EventMarkerKind; key: string}>)('a $kind is titled $key and carries one Broker row, never a From or To', ({kind, key}) => {
         const [block] = ganttMarkerTooltipBlocks([markerEvent({kind, brokerId: 2})], fakeDeps());
         expect(block.title).toBe(`${TITLE_KEY}.${key}`);

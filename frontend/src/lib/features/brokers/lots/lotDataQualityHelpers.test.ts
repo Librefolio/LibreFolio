@@ -594,6 +594,9 @@ type Params = Record<string, Param>;
 const ORPHAN_KEY = {
     ASSET_INCOME_NO_ELIGIBLE_LOTS: 'dataQuality.assetIncomeNoEligibleLots',
     ASSET_COST_NO_ELIGIBLE_LOTS: 'dataQuality.assetCostNoEligibleLots',
+    // Project 66: a charge linked to a trade after the end waits (M1b); one linked to an income no lot earned is orphan with it (M2).
+    ASSET_COST_LINKED_PARENT_AFTER_RANGE: 'dataQuality.assetCostLinkedParentAfterRange',
+    ASSET_COST_LINKED_INCOME_NO_ELIGIBLE_LOTS: 'dataQuality.assetCostLinkedIncomeNoEligibleLots',
 } as const;
 
 type OrphanCode = keyof typeof ORPHAN_KEY;
@@ -840,5 +843,56 @@ describe('J-53 — every lot-less issue keeps its own message', () => {
 
             expect(groups.map((group) => group.code)).toEqual(['E', 'W', 'I']);
         });
+    });
+});
+
+/**
+ * Project 66, M3 (GUARD) — the two orphan codes of a linked charge group like the old ones.
+ *
+ * A charge linked to a trade after the end of the analysis waits for it (M1b, `ASSET_COST_LINKED_PARENT_AFTER_RANGE`);
+ * one linked to an income no lot earned is orphan with it (M2, `ASSET_COST_LINKED_INCOME_NO_ELIGIBLE_LOTS`). The engine
+ * sends each once per charge, a warning with no lot, with the four params of an orphan pool plus the parent's id and day
+ * (`parent_transaction_id`, `parent_date`). The helper knows no list of codes: these pin that the two codes take the
+ * path of `ASSET_COST_NO_ELIGIBLE_LOTS` — a group per code, a line per charge with its own key and params, no chip,
+ * warning — and never fold into it. Green from the start: M3 changes no production code.
+ */
+type LinkedOrphanCode = 'ASSET_COST_LINKED_PARENT_AFTER_RANGE' | 'ASSET_COST_LINKED_INCOME_NO_ELIGIBLE_LOTS';
+
+const AFTER_RANGE: LinkedOrphanCode = 'ASSET_COST_LINKED_PARENT_AFTER_RANGE';
+const INCOME_ORPHAN_LINKED: LinkedOrphanCode = 'ASSET_COST_LINKED_INCOME_NO_ELIGIBLE_LOTS';
+
+/** A linked charge's orphan issue as the service sends it: an orphan pool's issue, plus its parent's id and day. */
+function linkedOrphan(code: LinkedOrphanCode, pool: Pool, parent: {parent_transaction_id: number; parent_date: string}): WireIssue {
+    const sent = orphan(code, pool);
+    return {...sent, message_params: {...sent.message_params, ...parent}};
+}
+
+/** A FEE of 5 EUR on 10 March at Alfa, linked to a BUY of 20 March after the end; a TAX of 6 EUR at Beta, to another. */
+const FEE_WAITING = linkedOrphan(AFTER_RANGE, {transaction_id: 7301, broker_id: ALFA.id, economic_type: 'FEE', as_of_date: '2024-03-10', target_amount: '5', target_currency: 'EUR'}, {parent_transaction_id: 7401, parent_date: '2024-03-20'});
+const TAX_WAITING = linkedOrphan(AFTER_RANGE, {transaction_id: 7302, broker_id: BETA.id, economic_type: 'TAX', as_of_date: '2024-03-11', target_amount: '6', target_currency: 'EUR'}, {parent_transaction_id: 7402, parent_date: '2024-03-25'});
+/** A FEE of 1 EUR on 12 February at Alfa, linked to the dividend of 10 February that no lot earned. */
+const FEE_ON_ORPHAN_DIVIDEND = linkedOrphan(INCOME_ORPHAN_LINKED, {transaction_id: 7303, broker_id: ALFA.id, economic_type: 'FEE', as_of_date: '2024-02-12', target_amount: '1', target_currency: 'EUR'}, {parent_transaction_id: 7403, parent_date: '2024-02-10'});
+
+describe('Project 66, M3 — the orphan codes of a linked charge group like the old orphan codes', () => {
+    it('beside the old orphan codes: a group per code, a line per charge with its own params in input order, no chip, warning', () => {
+        const groups = buildIssueGroups([FEE_WAITING, MARCH, FEE_ON_ORPHAN_DIVIDEND, FEE_MAY, TAX_WAITING], LOT_DATES, echo);
+
+        expect(groups.map((group) => group.code).sort(), 'a group per code, the linked ones never folded into the ladder’s').toEqual([AFTER_RANGE, COST, INCOME_ORPHAN_LINKED, INCOME].sort());
+        expect(linesOf(groupOf(groups, AFTER_RANGE)), 'each waiting charge its own line, its parent’s day included').toEqual([lineOf(FEE_WAITING), lineOf(TAX_WAITING)]);
+        expect(linesOf(groupOf(groups, INCOME_ORPHAN_LINKED)), 'the charge orphan with its income').toEqual([lineOf(FEE_ON_ORPHAN_DIVIDEND)]);
+        expect(linesOf(groupOf(groups, COST)), 'the ladder’s orphan cost, untouched').toEqual([lineOf(FEE_MAY)]);
+        for (const code of [AFTER_RANGE, INCOME_ORPHAN_LINKED, COST, INCOME]) {
+            const group = groupOf(groups, code);
+            expect(group.severity, `${code}: warning`).toBe('warning');
+            expect(group.lots, `${code}: no lot named, no chip`).toEqual([]);
+        }
+    });
+
+    it('a repeat of a linked orphan issue makes no second line, as for the old codes', () => {
+        const repeat: WireIssue = {...FEE_WAITING, message_params: {...FEE_WAITING.message_params}};
+
+        const group = groupOf(buildIssueGroups([FEE_WAITING, repeat, TAX_WAITING], LOT_DATES, echo), AFTER_RANGE);
+
+        expect(linesOf(group)).toEqual([lineOf(FEE_WAITING), lineOf(TAX_WAITING)]);
     });
 });

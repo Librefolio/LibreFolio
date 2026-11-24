@@ -15,8 +15,9 @@
     import TransactionsTable from '$lib/features/transactions/TransactionsTable.svelte';
     import {resolveFormItemsForView, type FormModalItems} from '$lib/features/transactions/resolveFormItems';
     import type {TXReadItem} from '$lib/features/transactions/types';
+    import {txStoreAddExtras} from '$lib/features/transactions/txStore.svelte';
     import type {BulkAction, FilterValue} from '$lib/components/table/types';
-    import {getBrokerRole} from '$lib/stores/reference/brokerStore';
+    import {canEditBroker, canEditPaired, getBrokerRole} from '$lib/stores/reference/brokerStore';
     import {zodiosApi} from '$lib/api';
     import {_} from '$lib/i18n';
     import {notify} from '$lib/stores/app/notify.svelte';
@@ -62,6 +63,29 @@
     let viewItems = $state<FormModalItems | null>(null);
     /** Project 66 (F3): the transaction the user came from with «Open», highlighted in the form. */
     let viewHighlightId = $state<number | null>(null);
+
+    /**
+     * 66 TL-1b: the view's pencil, as on the Transactions page. Only where the tab edits (a writer's `onEditRow`, actions
+     * shown) and for who can edit the row's broker, both brokers for a pair: the pencil closes the view and opens the row
+     * in edit, as «Edit» on the row does.
+     */
+    const viewRow = $derived(viewItems?.[0] && 'id' in viewItems[0] ? (viewItems[0] as TXReadItem) : null);
+    const viewCanEdit = $derived.by(() => {
+        if (!viewRow) return false;
+        if (viewRow.related_transaction_id == null) return canEditBroker(viewRow.broker_id);
+        return viewRow.partner_broker_id != null && canEditPaired(viewRow.broker_id, viewRow.partner_broker_id);
+    });
+
+    function switchViewToEdit() {
+        const row = viewRow;
+        viewOpen = false;
+        viewHighlightId = null;
+        if (!row) return;
+        // A row reached with «Open» may be outside the list the tab loaded (a parent before the period): the bulk workspace
+        // reads the originals from the store, as `chargesDeleteFlow` adds them.
+        txStoreAddExtras([row]);
+        onEditRow?.(row);
+    }
 
     /** «Open» in the form (F3): the same modal shows that transaction, read-only, fetched by id. */
     async function openFromForm(id: number) {
@@ -123,4 +147,4 @@
 </div>
 
 <!-- Transaction view modal — opened from a row's double-click -->
-<TransactionFormModal open={viewOpen} mode="view" items={viewItems} onClose={() => (viewOpen = false)} onOpenTransaction={openFromForm} highlightTxId={viewHighlightId} />
+<TransactionFormModal open={viewOpen} mode="view" items={viewItems} canEdit={viewCanEdit} onClose={() => (viewOpen = false)} onOpenTransaction={openFromForm} highlightTxId={viewHighlightId} onSwitchToEdit={onEditRow && !hideActions ? switchViewToEdit : undefined} />

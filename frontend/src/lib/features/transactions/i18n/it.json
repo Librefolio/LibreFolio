@@ -54,7 +54,8 @@
       "TRANSFER": "Trasferimento Asset",
       "FX_CONVERSION": "Cambio Valuta",
       "ADJUSTMENT": "Rettifica",
-      "CASH_TRANSFER": "Giroconto"
+      "CASH_TRANSFER": "Giroconto",
+      "REWARD": "Premio"
     },
     "refresh": "Ricarica dal server",
     "noAsset": "(Senza asset)",
@@ -136,7 +137,8 @@
         "undo": "Annulla"
       },
       "openFailed": "Non è stato possibile aprire la transazione",
-      "candidatesFailed": "Non è stato possibile caricare le transazioni da collegare"
+      "candidatesFailed": "Non è stato possibile caricare le transazioni da collegare",
+      "groupSyncHint": "Finché le righe di questo gruppo (la transazione e le sue spese collegate) sono tutte nuove, hanno lo stesso broker e lo stesso asset: cambiarli qui li cambia su ogni riga del gruppo."
     },
     "bulk": {
       "resetRow": "Reimposta riga",
@@ -193,14 +195,28 @@
       },
       "chargesReadFailed": "Impossibile leggere le spese collegate di {ids}. «Reimposta riga» le rilegge.",
       "deleteSkippedUnread": "{n, plural, one {# transazione non è stata eliminata: non è stato possibile leggere le sue spese collegate. «Reimposta riga» le rilegge.} other {# transazioni non sono state eliminate: non è stato possibile leggere le loro spese collegate. «Reimposta riga» le rilegge.}}",
-      "rowRef": "riga {n}"
+      "rowRef": "riga {n}",
+      "editPartnerInaccessible": "La transazione collegata è su un broker che non puoi vedere: per questo la riga non si modifica.",
+      "rewardFill": {
+        "pending": "{n, plural, one {# premio non ha un valore: si può riempire dallo storico prezzi dell'asset} other {# premi non hanno un valore: si possono riempire dallo storico prezzi degli asset}}",
+        "button": "Riempi dallo storico prezzi",
+        "running": "Lettura dei prezzi…",
+        "result": "{filled, plural, one {# riempito} other {# riempiti}} con la chiusura del loro giorno, {noPrice, plural, one {# senza prezzo in quel giorno} other {# senza prezzo in quel giorno}}, {noHistory, plural, one {# asset senza storico prezzi} other {# asset senza storico prezzi}}. I valori si possono modificare; le righe non riempite aspettano ancora un valore.",
+        "failed": "Non è stato possibile leggere i prezzi: nessun valore è stato riempito. Riprova."
+      },
+      "cloneChargesReadFailed": "Impossibile leggere le spese collegate di {ids}: la copia è stata fatta senza.",
+      "cloneChargeFree": "{reason, select, deleted {La copia della spesa non è collegata: la transazione a cui era collegata è segnata da eliminare.} paired {La copia della spesa non è collegata: la transazione a cui era collegata è metà di una coppia.} other {La copia della spesa non è collegata: non si può collegare alla stessa transazione.}}"
     },
     "commit": {
       "serverError": "Salvataggio impossibile — errore del server"
     },
     "costBasisOverride": {
       "tooltip": "Il costo che inserisci al posto del prezzo medio di carico: per Exit Tax, eredità o regole fiscali particolari. Auto lo calcola dai tuoi acquisti. Usa il selettore Totale/Per unità sotto per scegliere come inserire questo importo.",
-      "warningAdjustment": "Il costo di carico manuale è vuoto: senza, la transazione non si può salvare. Scrivi quanto ti sono costate queste quote: 0 per le quote nuove di uno split. Per un regalo, scrivi 0, oppure quanto le ha pagate il donante: così il prezzo medio di carico, e l'utile su cui potresti pagare le tasse, restano più vicini a quelli veri."
+      "warningAdjustment": "Il costo di carico manuale è vuoto: senza, la transazione non si può salvare. Scrivi quanto ti sono costate queste quote: 0 per le quote nuove di uno split. Per un regalo, scrivi 0, oppure quanto le ha pagate il donante: così il prezzo medio di carico, e l'utile su cui potresti pagare le tasse, restano più vicini a quelli veri.",
+      "rewardLabel": "Valore alla ricezione",
+      "rewardTooltip": "Quanto valevano queste unità il giorno in cui le hai ricevute: è sia il reddito del premio sia il costo del lotto che apre.",
+      "warningReward": "Il valore alla ricezione è vuoto: senza, il premio non si può salvare. Inserisci quanto valevano queste unità il giorno in cui le hai ricevute, oppure 0 per contarle a costo zero.",
+      "rewardFromHistory": "Dallo storico prezzi: la chiusura del {date}. Cambialo se la piattaforma mostra un altro valore."
     },
     "wacPreview": {
       "calculating": "Calcolo in corso...",
@@ -319,7 +335,7 @@
       "autoCostEmptyPool": "Costo automatico non disponibile: in quella data non c'erano unità di questo asset di cui fare la media. Scegli Manuale e scrivi quanto ti sono costate; se le hai ricevute in regalo, scrivi 0.",
       "autoCostUnknownPool": "Costo automatico non disponibile: le unità di questo asset detenute in quella data non hanno un costo noto di cui fare la media. Scegli Manuale e scrivi quanto ti sono costate.",
       "ledgerUnreadable": "I saldi di {brokerName} non si possono verificare: {count, plural, one {# sua transazione contiene} other {# sue transazioni contengono}} un valore che non è un numero. Chiedi all'amministratore di sistemare i dati.",
-      "costBasisNotAllowed": "❌ {type} qui non prende un costo base: toglilo. Lo portano solo le unità che entrano con una Rettifica o un Trasferimento Asset.",
+      "costBasisNotAllowed": "❌ {type} qui non prende un costo base: toglilo. Lo porta solo una transazione che fa entrare unità con un valore.",
       "costBasisModeIncompatible": "❌ {type} qui non prende un costo base, quindi nessuna modalità Auto o Manuale: toglila.",
       "costBasisNegative": "Il costo di carico non può essere negativo: scrivi 0 o più.",
       "pairAdjustmentNotAllowed": "Due Rettifiche non si possono collegare: per spostare titoli fra broker usa un Trasferimento Asset.",
@@ -340,7 +356,8 @@
       "chargeParentRefNotFound": "Nessuna riga di questo invio si chiama '{parentRef}': la spesa non si può collegare.",
       "chargeParentTwice": "Una spesa indica la sua transazione una volta sola: con la riga di questo invio o con una transazione salvata, non entrambe.",
       "chargeParentIdInvalid": "La transazione a cui è collegata una spesa deve essere una transazione salvata (un id positivo).",
-      "chargesDeleteIncomplete": "Questa transazione ha spese collegate: eliminale o scollegale nella stessa modifica."
+      "chargesDeleteIncomplete": "Questa transazione ha spese collegate: eliminale o scollegale nella stessa modifica.",
+      "costBasisAutoNotAllowed": "❌ {type} prende come costo base il suo valore alla ricezione, mai il costo medio: niente modalità Auto, inserisci il valore."
     },
     "pydantic": {
       "greaterThan": "Il valore deve essere maggiore di {gt}",
@@ -425,7 +442,7 @@
       "colAction": "Azione",
       "createOne": "Crea evento",
       "createTitle": "Crea gli eventi mancanti",
-      "createIntro": "Controlla il tipo e inserisci il valore di ogni evento, nella valuta dell’asset. Gli eventi sono creati nel giorno della transazione; poi collegali.",
+      "createIntro": "Controlla il tipo e inserisci il valore di ogni evento, nella valuta dell’asset. Gli eventi sono creati nel giorno della transazione e le transazioni vengono collegate subito.",
       "createValue": "Valore",
       "createServes": "{n} transazioni",
       "createHint": "Inserisci per ogni evento un valore maggiore di 0, con al massimo 6 decimali.",

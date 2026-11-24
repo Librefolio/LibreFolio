@@ -1,0 +1,658 @@
+{
+  "format": "lf-brim-previous-output/1",
+  "comment": "Output of the plugin BEFORE its project-66 lot changed it (P2 contract §2.1). Never re-take it after the code change.",
+  "plugin_code": "broker_danske_bank",
+  "plugin_version": "1.1.0",
+  "source_head": "d6e041135",
+  "captured_on": "2026-11-21",
+  "members": [
+    {
+      "sample": "broker_danske_bank/sample_reports/danske_bank-custody.xlsx",
+      "sample_sha256": "ce2b00e0f5cd812b31b57ccbcd51055d31c08bf799c3a3dddb99f327a416ed9b"
+    },
+    {
+      "sample": "broker_danske_bank/sample_reports/danske_bank-cash.csv",
+      "sample_sha256": "2893c4ac99f8dc199043274ab0a65a3a788cafb1366b0fff487cf7ff7283f769"
+    }
+  ],
+  "extracted_assets": {
+    "2147483647": {
+      "extracted_symbol": null,
+      "extracted_isin": null,
+      "extracted_name": "Aurora Metsä Oyj",
+      "notices": []
+    },
+    "2147483646": {
+      "extracted_symbol": null,
+      "extracted_isin": null,
+      "extracted_name": "Lumi Holding Oyj",
+      "notices": []
+    },
+    "2147483645": {
+      "extracted_symbol": null,
+      "extracted_isin": null,
+      "extracted_name": "Pohjola Tekniikka Oyj",
+      "notices": []
+    },
+    "2147483644": {
+      "extracted_symbol": null,
+      "extracted_isin": null,
+      "extracted_name": "Kaamos Robotics AB",
+      "notices": []
+    },
+    "2147483643": {
+      "extracted_symbol": null,
+      "extracted_isin": null,
+      "extracted_name": "Saimaa Energia Oyj",
+      "notices": []
+    },
+    "2147483642": {
+      "extracted_symbol": null,
+      "extracted_isin": null,
+      "extracted_name": "Lumi Kiinteistöt Oyj",
+      "notices": []
+    },
+    "2147483641": {
+      "extracted_symbol": null,
+      "extracted_isin": null,
+      "extracted_name": "Lumi Palvelut Oyj",
+      "notices": []
+    },
+    "2147483640": {
+      "extracted_symbol": null,
+      "extracted_isin": null,
+      "extracted_name": "Tunturi Pankki Oyj",
+      "notices": []
+    }
+  },
+  "transactions": [
+    {
+      "asset_id": null,
+      "type": "DEPOSIT",
+      "date": "2019-01-07",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "6000"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "danske_bank"
+      ],
+      "description": "Matti Meikäläinen",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": null,
+      "type": "FEE",
+      "date": "2019-03-29",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "-3.5"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "danske_bank"
+      ],
+      "description": "Palvelumaksut 03/2019",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": null,
+      "type": "FEE",
+      "date": "2019-06-28",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "-3.5"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "danske_bank"
+      ],
+      "description": "Palvelumaksut 06/2019",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": null,
+      "type": "FEE",
+      "date": "2019-09-30",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "-3.5"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "danske_bank"
+      ],
+      "description": "Palvelumaksut 09/2019",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": null,
+      "type": "TAX",
+      "date": "2019-11-04",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "-21.3"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "danske_bank"
+      ],
+      "description": "Vero osakesäästötililtä",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": null,
+      "type": "WITHDRAWAL",
+      "date": "2019-11-04",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "-300"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "danske_bank"
+      ],
+      "description": "Nosto osakesäästötililtä",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": null,
+      "type": "FEE",
+      "date": "2019-12-31",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "-3.5"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "danske_bank"
+      ],
+      "description": "Palvelumaksut 12/2019",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483644,
+      "type": "BUY",
+      "date": "2020-02-03",
+      "quantity": "300",
+      "cash": {
+        "code": "EUR",
+        "amount": "-1181.04"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "danske_bank"
+      ],
+      "description": "Osto Kaamos Robotics AB (Rajakurssi)",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483647,
+      "type": "BUY",
+      "date": "2020-02-10",
+      "quantity": "50",
+      "cash": {
+        "code": "EUR",
+        "amount": "-718"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "danske_bank"
+      ],
+      "description": "Osto Aurora Metsä Oyj (Rajakurssi)",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483646,
+      "type": "BUY",
+      "date": "2020-03-02",
+      "quantity": "40",
+      "cash": {
+        "code": "EUR",
+        "amount": "-402"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "danske_bank"
+      ],
+      "description": "Osto Lumi Holding Oyj (Pikakauppa)",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483645,
+      "type": "SELL",
+      "date": "2020-03-10",
+      "quantity": "-120",
+      "cash": {
+        "code": "EUR",
+        "amount": "724"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "danske_bank"
+      ],
+      "description": "Myynti Pohjola Tekniikka (Päivän kurssi)",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": null,
+      "type": "DEPOSIT",
+      "date": "2020-03-20",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "1000"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "danske_bank"
+      ],
+      "description": "Matti Meikäläinen",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483643,
+      "type": "BUY",
+      "date": "2020-03-25",
+      "quantity": "25",
+      "cash": {
+        "code": "EUR",
+        "amount": "-318"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "danske_bank"
+      ],
+      "description": "Osto Saimaa Energia Oyj (Rajakurssi)",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483643,
+      "type": "BUY",
+      "date": "2020-03-25",
+      "quantity": "25",
+      "cash": {
+        "code": "EUR",
+        "amount": "-318"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "danske_bank"
+      ],
+      "description": "Osto Saimaa Energia Oyj (Rajakurssi)",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": null,
+      "type": "FEE",
+      "date": "2020-03-31",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "-3.5"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "danske_bank"
+      ],
+      "description": "Palvelumaksut 03/2020",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483645,
+      "type": "BUY",
+      "date": "2020-04-01",
+      "quantity": "20",
+      "cash": {
+        "code": "EUR",
+        "amount": "-116"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "danske_bank"
+      ],
+      "description": "Osto Pohjola Tekniikka O (Rajakurssi)",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483647,
+      "type": "DIVIDEND",
+      "date": "2020-04-15",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "22.5"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "danske_bank"
+      ],
+      "description": "Aurora Metsä 4820193756 (Tuotto)",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483645,
+      "type": "SELL",
+      "date": "2020-05-05",
+      "quantity": "-80",
+      "cash": {
+        "code": "EUR",
+        "amount": "532"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "danske_bank"
+      ],
+      "description": "Myynti Pohjola Tekniikka (Päivän kurssi)",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483647,
+      "type": "SELL",
+      "date": "2020-05-20",
+      "quantity": "-30",
+      "cash": {
+        "code": "EUR",
+        "amount": "466"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "danske_bank"
+      ],
+      "description": "Myynti Aurora Metsä Oyj (Rajakurssi)",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483646,
+      "type": "ADJUSTMENT",
+      "date": "2020-06-01",
+      "quantity": "-100",
+      "cash": null,
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "danske_bank",
+        "demerger"
+      ],
+      "description": "Jakautuminen, vanha: Lumi Holding Oyj",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483642,
+      "type": "ADJUSTMENT",
+      "date": "2020-06-01",
+      "quantity": "100",
+      "cash": null,
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "danske_bank",
+        "demerger"
+      ],
+      "description": "Jakautuminen, uusi: Lumi Kiinteistöt Oyj",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483641,
+      "type": "ADJUSTMENT",
+      "date": "2020-06-01",
+      "quantity": "100",
+      "cash": null,
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "danske_bank",
+        "demerger"
+      ],
+      "description": "Jakautuminen, uusi: Lumi Palvelut Oyj",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": null,
+      "type": "TAX",
+      "date": "2020-06-10",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "-45"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "danske_bank"
+      ],
+      "description": "Vero osakesäästötililtä",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": null,
+      "type": "WITHDRAWAL",
+      "date": "2020-06-10",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "-500"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "danske_bank"
+      ],
+      "description": "Nosto osakesäästötililtä",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483641,
+      "type": "SELL",
+      "date": "2020-06-15",
+      "quantity": "-50",
+      "cash": {
+        "code": "EUR",
+        "amount": "152"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "danske_bank"
+      ],
+      "description": "Myynti Lumi Palvelut Oyj (Päivän kurssi)",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483640,
+      "type": "BUY",
+      "date": "2020-06-26",
+      "quantity": "10",
+      "cash": {
+        "code": "EUR",
+        "amount": "-218"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "danske_bank"
+      ],
+      "description": "Osto Tunturi Pankki Oyj (Rajakurssi)",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": null,
+      "type": "FEE",
+      "date": "2020-06-30",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "-3.5"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "danske_bank"
+      ],
+      "description": "Palvelumaksut 06/2020",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    }
+  ]
+}

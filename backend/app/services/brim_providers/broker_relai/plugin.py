@@ -95,6 +95,11 @@ class RelaiBrokerProvider(BRIMProvider):
         return "https://relai.app/app/uploads/2023/06/cropped-App-icon-32x32.png"
 
     @property
+    def plugin_version(self) -> str:
+        # 1.1.0 — a fee is linked to the booking of its own row (project 66, P4); 1.0.0 was the base default.
+        return "1.1.0"
+
+    @property
     def docs_url(self) -> Optional[str]:
         return "/mkdocs/user/transactions/import/relai/"
 
@@ -159,7 +164,7 @@ class RelaiBrokerProvider(BRIMProvider):
                     tx_type = TransactionType.BUY if tx_type_raw == "buy" else TransactionType.SELL
                     quantity = abs(btc_amount) if tx_type == TransactionType.BUY else -abs(btc_amount)
                     cash_amount = -abs(fiat_amount) if tx_type == TransactionType.BUY else abs(fiat_amount)
-                    self._create_transaction(
+                    booking = self._create_transaction(
                         row_num=row_num,
                         transactions=transactions,
                         validation_issues=validation_issues,
@@ -177,7 +182,8 @@ class RelaiBrokerProvider(BRIMProvider):
                     fee_amount = _parse_decimal(row.get(COL_FEE, ""))
                     fee_currency = row.get(COL_FEE_CURRENCY, "").strip().upper() or fiat_currency
                     if fee_amount and fee_amount > 0:
-                        self._create_transaction(
+                        self._create_charge_of(
+                            booking,  # project 66 P4: linked to the booking of its own row; free when that booking was refused
                             row_num=row_num,
                             transactions=transactions,
                             validation_issues=validation_issues,

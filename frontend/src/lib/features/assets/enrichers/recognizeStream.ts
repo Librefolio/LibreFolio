@@ -16,12 +16,22 @@ import type {EnricherRecognition} from './enrichersEditState';
 
 export const RECOGNIZE_PATH = '/api/v1/assets/enrichers/recognize';
 
-/** What «Riconosci» is asked: the asset's type, the identifiers known, its price provider (first at equal degree). */
+/** A binding to start from (ENR-2): the asset's price assignment, by the price provider's code. */
+export interface RecognizeSeed {
+    code: string;
+    identifier_type: string;
+    identifier: string;
+    params?: Record<string, unknown>;
+}
+
+/** What «Riconosci» is asked: the asset's type, the identifiers known, its price provider (first at equal degree), and
+ *  the bindings to start from. */
 export interface RecognizeRequest {
     asset_type: string;
     identifiers: Record<string, string>;
     price_provider_code?: string | null;
     codes?: string[];
+    seeds?: RecognizeSeed[];
 }
 
 export type EnricherResultEvent = {event: 'enricher_result'} & EnricherRecognition;
@@ -42,11 +52,11 @@ export type RecognizeEvent = EnricherResultEvent | IdentifierLearnedEvent | Reco
 export type RecognizeOutcome = {kind: 'done'; done: RecognizeDoneEvent | null} | {kind: 'refused'; retryAfter: number | null} | {kind: 'aborted'};
 
 /** A parser of a Server-Sent Events stream: bytes in, whole JSON events out. */
-export function createSseParser(): {push: (chunk: Uint8Array) => RecognizeEvent[]; end: () => RecognizeEvent[]} {
+export function createSseParser<T = RecognizeEvent>(): {push: (chunk: Uint8Array) => T[]; end: () => T[]} {
     const decoder = new TextDecoder();
     let buffer = '';
-    function events(): RecognizeEvent[] {
-        const out: RecognizeEvent[] = [];
+    function events(): T[] {
+        const out: T[] = [];
         let cut = buffer.indexOf('\n\n');
         while (cut >= 0) {
             const block = buffer.slice(0, cut);
@@ -58,7 +68,7 @@ export function createSseParser(): {push: (chunk: Uint8Array) => RecognizeEvent[
                 .join('\n');
             if (data) {
                 try {
-                    out.push(JSON.parse(data) as RecognizeEvent);
+                    out.push(JSON.parse(data) as T);
                 } catch {
                     // Not an event: skipped
                 }
@@ -80,11 +90,11 @@ export function createSseParser(): {push: (chunk: Uint8Array) => RecognizeEvent[
     };
 }
 
-function isAbort(error: unknown, signal: AbortSignal | undefined): boolean {
+export function isAbort(error: unknown, signal: AbortSignal | undefined): boolean {
     return signal?.aborted === true || (error instanceof DOMException && error.name === 'AbortError');
 }
 
-async function retryAfterOf(response: Response): Promise<number | null> {
+export async function retryAfterOf(response: Response): Promise<number | null> {
     try {
         const detail = ((await response.json()) as {detail?: {retry_after?: unknown}})?.detail;
         if (typeof detail?.retry_after === 'number') return detail.retry_after;

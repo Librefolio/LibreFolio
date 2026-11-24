@@ -381,4 +381,50 @@ test.describe('Broker CRUD on a disposable account', () => {
         // then fails on a *different* broker while this one really was deleted.
         await expect(page.locator('[data-testid^="broker-card-"]').filter({hasText: editedName})).toHaveCount(0, {timeout: 5000});
     });
+    // 81 U24: in a grid row a card is stretched to the tallest one; the footer must still end on the card's bottom edge, with no band of
+    // the card's own colour under it. A broker with a description and one without differ in height, so one of the two is stretched.
+    test('the footer of a card ends on the card’s bottom edge beside a taller card, at three widths (81 U24)', async ({page, owner}) => {
+        const suffix = uniqueSuffix();
+        const ids: number[] = [];
+        for (const [label, description] of [
+            ['tall', 'A broker with a line of description'],
+            ['short', null],
+        ] as const) {
+            const response = await page.request.post(BROKERS_PATH, {data: [{name: `U24 ${label} ${suffix}`, description}]});
+            expect(response.ok(), `create the ${label} broker: HTTP ${response.status()}`).toBe(true);
+            const created = ((await response.json()) as {results: Array<{broker_id: number | null}>}).results[0].broker_id;
+            if (typeof created !== 'number') throw new Error(`the ${label} broker was not created`);
+            owner.brokerIds.push(created);
+            ids.push(created);
+        }
+
+        await navigateTo(page, '/brokers');
+        await waitForSettled(page.getByTestId('brokers-page'));
+        for (const id of ids) await expect(page.getByTestId(`broker-card-${id}`)).toBeVisible({timeout: ROUND_TRIP_MS});
+
+        // Both edges are read in ONE evaluate: two awaited reads straddle a reflow (at 390 px the toolbar wraps and the page moves under
+        // the second read), and the gap then measures the reflow, not the card. The poll waits for the layout to settle after a resize.
+        const edges = (brokerIds: number[]) =>
+            page.evaluate((entries) => {
+                const bottom = (testId: string) => document.querySelector<HTMLElement>(`[data-testid="${testId}"]`)?.getBoundingClientRect().bottom ?? Number.NaN;
+                return entries.map((id) => ({id, card: bottom(`broker-card-${id}`), footer: bottom(`broker-card-footer-${id}`)}));
+            }, brokerIds);
+
+        for (const width of [1280, 768, 390]) {
+            await page.setViewportSize({width, height: 900});
+            // The card's own 1 px border sits under the footer.
+            await expect.poll(async () => Math.max(...(await edges(ids)).map((edge) => Math.abs(edge.card - edge.footer))), {message: `at ${width}px a footer does not end on its card's bottom edge`, timeout: 5_000}).toBeLessThanOrEqual(2);
+            if (width >= 768) {
+                await expect
+                    .poll(
+                        async () => {
+                            const [tall, short] = await edges(ids);
+                            return Math.abs(tall.card - short.card);
+                        },
+                        {message: `at ${width}px the two cards share a row, so they end together`, timeout: 5_000},
+                    )
+                    .toBeLessThanOrEqual(1);
+            }
+        }
+    });
 });

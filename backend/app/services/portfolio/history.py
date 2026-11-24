@@ -30,7 +30,7 @@ from backend.app.schemas.portfolio.history import (
     PnlCandleSeries,
     PortfolioHistoryPoint,
 )
-from backend.app.services.financial_math.native_cash import NativeCash, broker_shares, cash_movement_from_transaction, compute_native_cash
+from backend.app.services.financial_math.native_cash import NativeCash, broker_shares, cash_movement_from_transaction, compute_native_cash, in_kind_income_movement
 from backend.app.services.financial_math.portfolio.models import DailyStates
 from backend.app.services.financial_math.returns import (
     annualized_to_cumulative,
@@ -272,14 +272,19 @@ class PortfolioHistoryMixin:
         horizon = date_to or date_type.today()
         if native_cash is None:
             movements = []
+            in_kind = []
             shares = broker_shares(accesses)
             for access in accesses:
                 for tx in await self._get_transactions(access.broker_id, tx_types=tx_types, date_to=horizon):
                     movement = cash_movement_from_transaction(tx, share=shares[access.broker_id])
                     if movement is not None:
                         movements.append(movement)
+                    income_in_kind = in_kind_income_movement(tx, share=shares[access.broker_id])
+                    if income_in_kind is not None:
+                        in_kind.append(income_in_kind)
             movements.sort(key=lambda movement: (movement.date, movement.movement_id or 0))
-            native_cash = await compute_native_cash(self.db, movements, report_currency=base_currency, rates_until=horizon)
+            in_kind.sort(key=lambda movement: (movement.date, movement.movement_id or 0))
+            native_cash = await compute_native_cash(self.db, movements, report_currency=base_currency, rates_until=horizon, in_kind_income=in_kind)
         types = {tx_type.value for tx_type in tx_types}
         sums_by_date = native_cash.sums_by_date(date_from, horizon, types)
         missing_fx_pairs = [missing.pair for missing in native_cash.missing_conversions(date_from, horizon, types)]
@@ -294,13 +299,13 @@ class PortfolioHistoryMixin:
         target_currency_override: str | None = None,
         _precomputed_native_cash: NativeCash | None = None,
     ) -> IncomeHistorySeries:
-        """Signed daily DIVIDEND/INTEREST income history for the GrowthChart P&L income
+        """Signed daily DIVIDEND/INTEREST/REWARD income history for the GrowthChart P&L income
         submode (G1c, plan §3.4/§4.4).
 
         Read from the native cash (financial_math.native_cash), the reconstruction
         get_summary() also reads its period income from: same (date_from, date_to]
         boundary, same F2 role-aware share applied once, same conversion at each row's
-        own date, so sum(dividend)+sum(interest) reproduces PortfolioSummary.period_income
+        own date, so sum(dividend)+sum(interest)+sum(reward) reproduces PortfolioSummary.period_income
         exactly for the same scope/window, by construction. get_report() passes the
         engine's own native cash; a standalone call builds one from the income rows.
         """
@@ -309,15 +314,16 @@ class PortfolioHistoryMixin:
         if not accesses:
             return IncomeHistorySeries(points=[])
 
-        sums_by_date, missing_fx_pairs = await self._signed_transaction_sums_by_date(accesses, {TransactionType.DIVIDEND, TransactionType.INTEREST}, base_currency, date_from, date_to, _precomputed_native_cash)
+        sums_by_date, missing_fx_pairs = await self._signed_transaction_sums_by_date(accesses, {TransactionType.DIVIDEND, TransactionType.INTEREST, TransactionType.REWARD}, base_currency, date_from, date_to, _precomputed_native_cash)
 
-        # Sparse series: only dates with actual DIVIDEND/INTEREST activity, never a
+        # Sparse series: only dates with actual DIVIDEND/INTEREST/REWARD activity, never a
         # dense day-by-day zero-filled series (plan §3.4 — "sparse economic flows").
         points = [
             IncomeHistoryPoint(
                 date=d,
                 dividend=Currency(code=base_currency, amount=type_sums.get(TransactionType.DIVIDEND, Decimal("0"))),
                 interest=Currency(code=base_currency, amount=type_sums.get(TransactionType.INTEREST, Decimal("0"))),
+                reward=Currency(code=base_currency, amount=type_sums.get(TransactionType.REWARD, Decimal("0"))),
             )
             for d, type_sums in sorted(sums_by_date.items())
         ]

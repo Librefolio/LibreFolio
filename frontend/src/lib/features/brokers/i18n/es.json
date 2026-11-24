@@ -138,7 +138,8 @@
           "transfer": "Transferencias",
           "adjustment": "Ajustes",
           "split": "Desdoblamiento",
-          "income": "Dividendo / interés"
+          "income": "Dividendo / interés",
+          "reward": "Recompensas"
         },
         "eventType": {
           "BUY": "Compra",
@@ -149,7 +150,9 @@
           "TRANSFER_ARRIVE": "Transferencia",
           "SPLIT": "Desdoblamiento",
           "TRANSFER_IN": "Transferencia de entrada",
-          "TRANSFER_OUT": "Transferencia de salida"
+          "TRANSFER_OUT": "Transferencia de salida",
+          "REWARD": "Recompensa",
+          "REWARD_MERGE": "Recompensa repartida"
         },
         "unitPrice": "Precio unitario",
         "transitInterval": "Intervalo de tránsito",
@@ -229,7 +232,9 @@
           "TRANSFER_ARRIVE": "TRANSFERENCIA",
           "SPLIT": "SPLIT",
           "TRANSFER_IN": "TRANSFERENCIA+",
-          "TRANSFER_OUT": "TRANSFERENCIA-"
+          "TRANSFER_OUT": "TRANSFERENCIA-",
+          "REWARD": "RECOMPENSA",
+          "REWARD_MERGE": "RECOMPENSA+"
         },
         "historyDetail": {
           "openPrice": "Precio de apertura",
@@ -293,7 +298,19 @@
       "analysisFailedFix": "Corrige estas transacciones y los lotes volverán:",
       "matchingMethod": "Método de emparejamiento",
       "methodFifoHint": "FIFO: una venta cierra primero el lote más antiguo",
-      "methodLifoHint": "LIFO: una venta cierra primero el lote más reciente"
+      "methodLifoHint": "LIFO: una venta cierra primero el lote más reciente",
+      "incomeMarkerReward": "Recompensa",
+      "rewardAllocation": {
+        "label": "Dónde van las recompensas",
+        "hint": "Recompensas aparte: cada recompensa es un lote propio, a su valor al recibirla. Recompensas en los lotes: cada recompensa se une a los lotes mantenidos en su bróker el día anterior, sin coste. Solo una vista: no se guarda nada.",
+        "ownLot": "Recompensas aparte",
+        "merged": "Recompensas en los lotes"
+      },
+      "rewardGroup": {
+        "title": "{n, plural, one {# recompensa} other {# recompensas}}",
+        "open": "Mostrar los lotes de las recompensas",
+        "close": "Ocultar los lotes de las recompensas"
+      }
     },
     "createdInSystem": "Creado en el Sistema",
     "deleteBlockedTitle": "No se puede eliminar el bróker",

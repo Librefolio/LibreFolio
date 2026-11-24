@@ -281,7 +281,16 @@ A FEE or a TAX can point at the transaction it belongs to (project 66; the backe
       (`GET /transactions?without_parent=true&broker_id=…`), on the parent's asset (`null` with `null`) and not already in
       the section. Each picked row becomes a `ChargeDraft` with `linkNew` (`chargeFromPicked`), and the batch always
       sends its link. Unlinking or trashing a picked row only takes it back out of the section: it was never linked,
-      and the picker offers it again.
+      and the picker offers it again. Inside the Bulk (66 TL-2) the host's prop `bulkCandidates('charges', probe)` adds
+      the Bulk's own rows, read on its state by the selection's «Link» rule (`bulkChargeCandidates` in
+      `bulk/bulkCharges.ts`, the probe being the form's broker, asset and type): a row in both sources is the Bulk's, and
+      `exclude` drops the saved rows the Bulk marked «del» or linked elsewhere. A new row carries a negative id, its key
+      `_bulkKey` (`op-<tempId>`) and its name `_rowRef` (the picker's ID cell shows it); `chargeFromPicked` turns it into
+      the draft of that very row, which `applyChargeDrafts` links as `linkInBulk` does. The parent picker still reads the
+      database only.
+    - `groupSync` (66 TL-3b): the Bulk sets it on the Form of a row of an all-new group (`newGroupOf`), whose broker and
+      asset move together; `TxFormSingleSection` shows a line under the broker (`tx-form-group-sync-hint`), never in a
+      read-only Form.
     - «Link to a transaction…», in the form of a FEE or TAX with no parent: the rows of the same broker whose type has
       `charge_role` `parent`, on the charge's asset and not paired. One row; it shows as pending, with «Undo», and «Apply»
       hands `_parent_link`.

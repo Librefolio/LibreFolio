@@ -1,0 +1,255 @@
+{
+  "format": "lf-brim-previous-output/1",
+  "comment": "Output of the plugin BEFORE its project-66 lot changed it (P2 contract §2.1). Never re-take it after the code change.",
+  "plugin_code": "broker_delta",
+  "plugin_version": "1.0.0",
+  "source_head": "a2e85db13",
+  "captured_on": "2026-11-21",
+  "sample": "broker_delta/sample_reports/delta-export.csv",
+  "sample_sha256": "d9a54974a67092136db7775bd237e9c00f7b25d9f633dbbc55836358ea1beecb",
+  "extracted_assets": {
+    "2147483647": {
+      "extracted_symbol": "ETH",
+      "extracted_isin": null,
+      "extracted_name": "ETH (Crypto)",
+      "notices": []
+    },
+    "2147483646": {
+      "extracted_symbol": "BNB",
+      "extracted_isin": null,
+      "extracted_name": "BNB (Crypto)",
+      "notices": []
+    },
+    "2147483645": {
+      "extracted_symbol": "SOL",
+      "extracted_isin": null,
+      "extracted_name": "Solana",
+      "notices": []
+    },
+    "2147483644": {
+      "extracted_symbol": "DOT",
+      "extracted_isin": null,
+      "extracted_name": "Polkadot",
+      "notices": []
+    },
+    "2147483643": {
+      "extracted_symbol": "BTC",
+      "extracted_isin": null,
+      "extracted_name": "BTC (Crypto)",
+      "notices": []
+    },
+    "2147483642": {
+      "extracted_symbol": "AAPL",
+      "extracted_isin": null,
+      "extracted_name": "AAPL",
+      "notices": []
+    }
+  },
+  "transactions": [
+    {
+      "asset_id": 2147483647,
+      "type": "ADJUSTMENT",
+      "date": "2023-06-02",
+      "quantity": "10",
+      "cash": null,
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "delta"
+      ],
+      "description": "Example of a crypto buy of 10 ETH for a total of 0.6 BTC and a fee of 0.1 BNB",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483646,
+      "type": "ADJUSTMENT",
+      "date": "2023-06-02",
+      "quantity": "-0.1",
+      "cash": null,
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "delta",
+        "fee"
+      ],
+      "description": "Delta crypto fee: BUY: ETH on Binance",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483645,
+      "type": "ADJUSTMENT",
+      "date": "2023-06-01",
+      "quantity": "-100",
+      "cash": null,
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "delta"
+      ],
+      "description": "Example of a crypto sell. Name specified in brackets so we know SOL is Solana and not Sola",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483644,
+      "type": "ADJUSTMENT",
+      "date": "2023-05-26",
+      "quantity": "-0.1",
+      "cash": null,
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "delta"
+      ],
+      "description": "Example of a withdrawal. Asset name can be specified in brackets for base, quote or fee currency",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483644,
+      "type": "ADJUSTMENT",
+      "date": "2023-05-26",
+      "quantity": "-0.001",
+      "cash": null,
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "delta",
+        "fee"
+      ],
+      "description": "Delta crypto fee: WITHDRAW: DOT",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483643,
+      "type": "ADJUSTMENT",
+      "date": "2023-05-09",
+      "quantity": "0.001",
+      "cash": null,
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "delta"
+      ],
+      "description": "Example of a deposit from staking / dividends for crypto",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483642,
+      "type": "BUY",
+      "date": "2023-05-08",
+      "quantity": "5",
+      "cash": {
+        "code": "USD",
+        "amount": "-1250"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "delta"
+      ],
+      "description": "Example of a stock purchase",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": null,
+      "type": "DEPOSIT",
+      "date": "2023-05-08",
+      "quantity": "0",
+      "cash": {
+        "code": "USD",
+        "amount": "5000"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "delta"
+      ],
+      "description": "Example of a fiat deposit",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483642,
+      "type": "DIVIDEND",
+      "date": "2023-05-08",
+      "quantity": "0",
+      "cash": {
+        "code": "USD",
+        "amount": "2.5"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "delta"
+      ],
+      "description": "Example of a dividend with a fee for AAPL",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483642,
+      "type": "FEE",
+      "date": "2023-05-08",
+      "quantity": "0",
+      "cash": {
+        "code": "USD",
+        "amount": "-0.5"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "delta",
+        "fee"
+      ],
+      "description": "Delta fee: DIVIDEND: AAPL on Nasdaq",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    }
+  ]
+}

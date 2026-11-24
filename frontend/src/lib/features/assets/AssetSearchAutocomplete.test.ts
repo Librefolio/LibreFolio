@@ -85,7 +85,7 @@ vi.mock('$lib/api', () => ({
 vi.mock('$lib/utils/providerHelpers', async () => ({
     ensureAssetProvidersCached: vi.fn(() => Promise.resolve()),
     getAssetProviderIconUrl: vi.fn(() => null),
-    // The plugin card's attribution line (76 P4): no provider here asks for one
+    // The providers' attributions: none by default; the TL42 case gives one, and the results still show no line
     assetProvidersVersion: (await import('svelte/store')).writable(0),
     getAssetProviderAttribution: vi.fn(() => null),
 }));
@@ -1685,36 +1685,22 @@ describe('AssetSearchAutocomplete — a provider to configure is switched off (7
     });
 });
 
-// Project 76, P4b (the consultant's rule, 18/11): wherever a provider's data is on screen and the provider has an
-// attribution, its line is there. Search rows are the provider's data too (names, ids): the line goes under the
-// results when such a provider answered with at least one row.
-describe("AssetSearchAutocomplete — a provider's attribution under its results (76 P4b)", () => {
+// TL42 (the developer, 23/11): no «Powered by CoinGecko» under the search results; the attribution lives on CoinGecko's
+// own pages. A provider with an attribution answers with a row, and the results still carry no attribution line.
+describe('AssetSearchAutocomplete — no attribution line under the results (76 TL42)', () => {
     const ATTRIBUTION = {text: 'Powered by Alpha', url: 'https://alpha.example/'};
 
     afterEach(() => {
         vi.mocked(getAssetProviderAttribution).mockImplementation(() => null);
     });
 
-    it('shows the line of a provider with an attribution that answered with a row', async () => {
+    it('a provider with an attribution answered with a row: the results and no attribution link', async () => {
         vi.mocked(getAssetProviderAttribution).mockImplementation((code: string | null | undefined) => (code === 'alpha' ? ATTRIBUTION : null));
         await mountReady();
         await type('apple');
         await waitFor(() => expect(state()).toBe('results'));
 
-        const note = await screen.findByTestId('asset-search-attribution');
-        const links = within(note).getAllByTestId('provider-attribution-link');
-        expect(links.map((link) => link.getAttribute('data-provider'))).toEqual(['alpha']);
-        expect(links[0]).toHaveAttribute('href', ATTRIBUTION.url);
-    });
-
-    it('shows nothing when that provider gave no row', async () => {
-        vi.mocked(getAssetProviderAttribution).mockImplementation((code: string | null | undefined) => (code === 'alpha' ? ATTRIBUTION : null));
-        global.fetch = vi.fn(async () => sseResponse([{event: 'provider_results', results: [R2]}, {event: 'done'}])) as never;
-        await mountReady();
-        await type('microsoft');
-        await waitFor(() => expect(state()).toBe('results'));
-
-        expect(screen.queryByTestId('asset-search-attribution')).toBeNull();
+        expect(screen.queryByTestId('provider-attribution-link')).toBeNull();
     });
 });
 
@@ -1723,7 +1709,7 @@ describe("AssetSearchAutocomplete — a provider's attribution under its results
 // (CoinGecko's coin logo); the row draws it, and a result without one is drawn as before (the asset type's icon).
 describe('AssetSearchAutocomplete — the icon of a result (76 S3)', () => {
     const LOGO = 'https://coin-images.coingecko.com/coins/images/29850/large/pepe-token.jpeg';
-    const PEPE = {identifier: 'pepe', identifier_type: 'other', display_name: 'Pepe (PEPE)', provider_code: 'alpha', currency: 'EUR', asset_type: 'CRYPTO', via_web: false, icon_url: LOGO};
+    const PEPE = {identifier: 'pepe', identifier_type: 'other', display_name: 'Pepe', provider_code: 'alpha', currency: 'EUR', asset_type: 'CRYPTO', via_web: false, icon_url: LOGO};
     const iconOf = (index: number) => screen.getByTestId(`asset-search-result-${index}`).querySelector(`img[src="${LOGO}"]`);
 
     it("ASA-I1: the streamed row draws the result's icon; a result without one draws none of it", async () => {

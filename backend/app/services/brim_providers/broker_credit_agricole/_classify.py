@@ -182,6 +182,10 @@ ACCOUNT_MATURITY_RE = re.compile(r"RIMB\.TIT\.\s*(?P<name>.+?)\s*\((?P<code>[^)]
 ACCOUNT_NOMINALE_RE = re.compile(r"\bNOMINALE\s*:\s*(?P<nominale>[\d\.\,]+)", re.IGNORECASE)
 # Withholding spelled out inside an income description ("... ALIQ: 12,50 RITENUTA: 13,36").
 ACCOUNT_RITENUTA_RE = re.compile(r"\bRITENUT[AE]\s*:\s*(?P<ritenuta>[\d\.\,]+)", re.IGNORECASE)
+# The coupon a detach fee was charged for, by its date ("SPESE STACCO CEDOLA DEL 21/11/2024 DOSSIER: ... TIT: IT000...").
+ACCOUNT_DETACH_FEE_RE = re.compile(r"\bSTACCO\s+CEDOLA\s+DEL\s+(?P<day>\d{1,2}/\d{1,2}/\d{2,4})\b", re.IGNORECASE)
+# The sale a capital gain tax was charged on, by its date ("ADDEBITO CAPITAL GAIN (D.LGS 461/97) 0000000000000 DATA:21/05/2026").
+ACCOUNT_CAPITAL_GAIN_RE = re.compile(r"\bCAPITAL\s+GAIN\b.*?\bDATA\s*:\s*(?P<day>\d{1,2}/\d{1,2}/\d{2,4})\b", re.IGNORECASE | re.DOTALL)
 
 
 def slug_causale(causale: str) -> str:

@@ -97,6 +97,7 @@ A **Fee** or a **Tax** can be linked to the transaction it was paid for: the com
 - **Which transactions can have charges**: a **Buy**, a **Sell**, a **Dividend**, an **Interest**, a **Deposit** or a **Withdrawal**.
 - **Which charges fit**: the same broker, and the same asset (or no asset, when the transaction has none). The date and the currency are free.
 - **Pairs**: a row of a transfer or an exchange can be neither a charge nor a transaction with charges. Split the pair first ([Link or unlink a pair](index.md#link-pairs)).
+- **New groups move together**: in the bulk workspace, while a transaction and its charges are all new rows, they share the broker and the asset. Change either in the form of the transaction or of one of its charges, and every row of the group changes too; the dates stay their own. The form says so under the broker. Once one row of the group is saved, nothing moves together: the workspace flags a charge on another broker or asset, and **Save All** waits until you fix it.
 
 In the form, you change the links in the [bulk workspace](index.md#bulk-workspace), and **Save All** writes them with the rest. When you open a transaction from the list, the form is read-only: you see its links and can move between them, nothing more. The list has its own quick **Link** and delete — see [Linked charges](index.md#linked-charges).
 
@@ -105,7 +106,7 @@ In the form, you change the links in the [bulk workspace](index.md#bulk-workspac
 The form of a Buy, a Sell, a Dividend, an Interest, a Deposit or a Withdrawal lists its charges in **Linked charges**:
 
 - **+ Fee** and **+ Tax** add a new charge: type its amount (in the transaction's currency unless you pick another) and, if you like, a note. It takes the transaction's broker, asset and date. A new charge without an amount shows *Enter the amount of this charge*, and **Apply** waits.
-- **Link an existing charge…** picks Fees and Taxes of the same broker and asset that are not linked to anything yet.
+- **Link an existing charge…** picks Fees and Taxes of the same broker and asset that are not linked to anything yet. In the bulk editor it also offers the rows of the batch you have not saved yet, named by their row number, and the charges you unlinked there; a row you marked for deletion, or linked to another transaction there, is not offered. Picking a row of the batch moves that row under this transaction: it is never copied.
 - **Unlink** takes a saved charge out of the list: when you save, it stays as a transaction of its own. **Delete** deletes it.
 
 Under the list, a read-only line adds it up: **Total charged** on a Buy or a Withdrawal (the amount plus its charges), **Net received** on a Sell, a Dividend, an Interest or a Deposit (the amount minus its charges). There is one figure per currency: a charge in another currency is never converted.
@@ -146,6 +147,7 @@ The [Financial Theory guide](../../financial-theory/instruments/transaction-type
 | ![](../../static/icons/transactions/fee.png){: width="24" style="vertical-align: middle;" } **Fee** | A commission or another cost, optionally tied to an asset | [📖 Read](../../financial-theory/instruments/transaction-types/fee.md) |
 | ![](../../static/icons/transactions/tax.png){: width="24" style="vertical-align: middle;" } **Tax** | A tax paid, optionally tied to an asset | [📖 Read](../../financial-theory/instruments/transaction-types/fee.md) |
 | ![](../../static/icons/transactions/adjustment.png){: width="24" style="vertical-align: middle;" } **Adjustment** | Units added or removed without cash: a split, a gift, a position opened elsewhere | [📖 Read](../../financial-theory/instruments/transaction-types/adjustment.md) |
+| ![](../../static/icons/transactions/reward.png){: width="24" style="vertical-align: middle;" } **Reward** | Units received in kind — staking, an airdrop, a free share — with their value on the day they arrived, which counts as income. The form suggests that value from the asset's price history (the close of that day, per unit); change it if the platform shows another | [📖 Read](../../financial-theory/instruments/transaction-types/reward.md) |
 
 ### 🔗 Paired transactions {: #composite-transactions }
 

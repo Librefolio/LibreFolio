@@ -32,7 +32,7 @@ import {CHART_GAIN_LOSS, LOT_WAC_COLORS} from '$lib/theme/chartTheme';
 import type {ScopeBoundary} from './lotChartShared';
 
 /** The seven presentation-level lot chronology event kinds. */
-export type LotEventKind = 'BUY' | 'SELL' | 'ADJUSTMENT_IN' | 'ADJUSTMENT_OUT' | 'SPLIT' | 'TRANSFER_DEPART' | 'TRANSFER_ARRIVE';
+export type LotEventKind = 'BUY' | 'REWARD' | 'REWARD_MERGE' | 'SELL' | 'ADJUSTMENT_IN' | 'ADJUSTMENT_OUT' | 'SPLIT' | 'TRANSFER_DEPART' | 'TRANSFER_ARRIVE';
 
 /** A per-broker series point in both representations. */
 export interface ValuePoint {
@@ -390,9 +390,11 @@ export function eventKey(event: LotEventIdentity): string {
 
 /** The marker series an event kind belongs to, or `null` if it draws no marker. A transfer leg read at the scope's edge
  *  (`scopeBoundary`, J-48) is a transfer marker, whatever adjustment kind carries its figures. */
-export function eventCategory(kind: LotEventKind, scopeBoundary?: ScopeBoundary | null): 'buy' | 'sell' | 'transfer' | 'adjustment' | 'split' | null {
+export function eventCategory(kind: LotEventKind, scopeBoundary?: ScopeBoundary | null): 'buy' | 'reward' | 'sell' | 'transfer' | 'adjustment' | 'split' | null {
     if (scopeBoundary === 'IN' || scopeBoundary === 'OUT') return 'transfer';
     if (kind === 'BUY') return 'buy';
+    // A lot opened by a reward in kind (project 79): its own marker, the reason the lot exists
+    if (kind === 'REWARD' || kind === 'REWARD_MERGE') return 'reward';
     if (kind === 'SELL') return 'sell';
     if (kind === 'TRANSFER_ARRIVE') return 'transfer';
     if (kind === 'ADJUSTMENT_IN' || kind === 'ADJUSTMENT_OUT') return 'adjustment';
@@ -409,7 +411,9 @@ export function eventTimelineOrder(kind: LotEventKind): number {
     if (kind === 'TRANSFER_DEPART') return 0;
     if (kind === 'TRANSFER_ARRIVE') return 1;
     if (kind === 'SPLIT') return 2;
-    if (kind === 'BUY' || kind === 'ADJUSTMENT_IN') return 3;
+    // A reward merged into the lots (STK-3) comes first among the day's movements, on the lots held the day before
+    if (kind === 'REWARD_MERGE') return 2.5;
+    if (kind === 'BUY' || kind === 'REWARD' || kind === 'ADJUSTMENT_IN') return 3;
     return 4;
 }
 
@@ -541,7 +545,7 @@ export function applyLotEvent(before: LotEventState, event: LotEventInput): LotE
     let afterQuantity = beforeQuantity;
     let afterUnitPrice = beforeUnitPrice;
 
-    if (event.kind === 'BUY') {
+    if (event.kind === 'BUY' || event.kind === 'REWARD') {
         const openedQuantity = quantity == null ? null : Math.abs(quantity);
         const baseQuantity = beforeQuantity ?? 0;
         afterQuantity = openedQuantity == null ? beforeQuantity : baseQuantity + openedQuantity;
@@ -567,13 +571,18 @@ export function applyLotEvent(before: LotEventState, event: LotEventInput): LotE
         const splitBeforeQuantity = beforeQuantity ?? fallbackBeforeQuantity;
         afterQuantity = splitBeforeQuantity != null && ratio != null ? splitBeforeQuantity * ratio : beforeQuantity;
         afterUnitPrice = beforeUnitPrice != null && ratio != null && ratio !== 0 ? beforeUnitPrice / ratio : beforeUnitPrice;
+    } else if (event.kind === 'REWARD_MERGE') {
+        // A reward merged into the lot (STK-3): its units at no cost — the quantity grows by the row's, the cost stays
+        const addedQuantity = quantity == null ? null : Math.abs(quantity);
+        afterQuantity = beforeQuantity != null && addedQuantity != null ? beforeQuantity + addedQuantity : beforeQuantity;
+        afterUnitPrice = beforeUnitPrice != null && ratio != null && ratio !== 0 ? beforeUnitPrice / ratio : beforeUnitPrice;
     } else if (event.kind === 'TRANSFER_DEPART' || event.kind === 'TRANSFER_ARRIVE') {
         afterQuantity = beforeQuantity ?? (quantity == null ? null : Math.abs(quantity));
         afterUnitPrice = beforeUnitPrice ?? unitPrice;
     }
     // NOTE: the implicit `else` of the chain above is intentionally uncovered — `LotEventKind` is a
-    // closed 7-value union and every value is handled, so no input can reach the fall-through. It
-    // exists only as a defensive no-op should an eighth kind ever be added upstream without a branch.
+    // closed union and every value is handled, so no input can reach the fall-through. It
+    // exists only as a defensive no-op should a new kind ever be added upstream without a branch.
 
     return {quantity: afterQuantity, unitPrice: afterUnitPrice};
 }

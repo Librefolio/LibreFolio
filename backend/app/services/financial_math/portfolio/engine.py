@@ -26,7 +26,7 @@ from backend.app.services.financial_math.average_cost import (
 )
 from backend.app.services.financial_math.fx_rates import AskedDayRates
 from backend.app.services.financial_math.native_cash import broker_shares as counted_broker_shares
-from backend.app.services.financial_math.native_cash import cash_movement_from_transaction, compute_native_cash
+from backend.app.services.financial_math.native_cash import cash_movement_from_transaction, compute_native_cash, in_kind_income_movement
 from backend.app.services.financial_math.portfolio.classifier import ScopeAwareTransactionClassifier
 from backend.app.services.financial_math.portfolio.daily_state import GEOGRAPHY_VOICE, SECTOR_VOICE, AssetClassification, ClassificationStep, DailyStateBuilder
 from backend.app.services.financial_math.portfolio.derived_views import build_cost_positions
@@ -349,6 +349,12 @@ class PortfolioCalculationEngine:
         # The held assets' countries and sectors (plan 68, D2): a read of an enricher, a hand edit or a «Dimentica» moves
         # the allocation without moving any other fingerprint
         classification_fingerprint = await rows_fingerprint(self.db, held_asset_ids, CLASSIFICATION_VOICES)
+        # The held assets' types (lane 80, B1a-0): the result splits each day by type (by_type), and an edit of a type
+        # moves no other fingerprint, so the run kept the old type for the cache's 24 hours
+        asset_type_fingerprint: tuple = ()
+        if held_asset_ids:
+            asset_type_rows = await self.db.execute(select(Asset.id, Asset.asset_type).where(Asset.id.in_(held_asset_ids)).order_by(Asset.id))
+            asset_type_fingerprint = tuple((asset_id, getattr(asset_type, "value", asset_type)) for asset_id, asset_type in asset_type_rows.all())
 
         # Blob key: independent of date range (blob stores its own range).
         # The access fingerprint (role + share per broker) MUST be part of the
@@ -366,6 +372,7 @@ class PortfolioCalculationEngine:
             fx_fingerprint,
             split_fingerprint,
             classification_fingerprint,
+            asset_type_fingerprint,
             include_candles,
             include_acquisition_funding,
             # #48: the position frames are in the result only when asked
@@ -558,12 +565,15 @@ class PortfolioCalculationEngine:
                     mark_series[aid] = series
 
         # ── 10c. Native cash of every broker: balances in their own currencies, valued at each
-        # day's rate, and the period flows; each movement at its broker's share ──
+        # day's rate, and the period flows; each movement at its broker's share. Income in kind (REWARD) joins the
+        # flows only: it moves no cash ──
+        in_range = [ctxn for ctxn in classification.classified if ctxn.tx.date <= actual_to]
         native_cash = await compute_native_cash(
             self.db,
-            [movement for movement in (cash_movement_from_transaction(ctxn.tx, share=ctxn.share) for ctxn in classification.classified if ctxn.tx.date <= actual_to) if movement is not None],
+            [movement for movement in (cash_movement_from_transaction(ctxn.tx, share=ctxn.share) for ctxn in in_range) if movement is not None],
             report_currency=target_currency,
             rates_until=actual_to,
+            in_kind_income=[movement for movement in (in_kind_income_movement(ctxn.tx, share=ctxn.share) for ctxn in in_range) if movement is not None],
         )
 
         # ── 11. Build daily states ──

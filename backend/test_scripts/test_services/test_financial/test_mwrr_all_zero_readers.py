@@ -67,7 +67,7 @@ from backend.app.schemas.portfolio.history import MwrrLinePoint, PortfolioHistor
 from backend.app.schemas.portfolio.report import PortfolioReportQuery, PortfolioReportResponse
 from backend.app.schemas.portfolio.summary import PortfolioSummary
 from backend.app.services.ai_export.components.catalog import build_component_registry
-from backend.app.services.ai_export.components.types import BuildScope, DetailLevel, Domain
+from backend.app.services.ai_export.components.types import BrokerScopeSource, BuildScope, DetailLevel, Domain
 from backend.app.services.ai_export.dependencies import BuildContext, build_bucket_plan_for_scope
 from backend.app.services.financial_math.series_steps import value_at
 from backend.app.services.portfolio import report as report_module
@@ -152,6 +152,7 @@ def no_cached_portfolio(request):
 class _Book:
     engine: AsyncEngine
     user_id: int
+    broker_ids: tuple[int, ...] = ()
 
 
 def _cash(broker: Broker, tx_type: TransactionType, day: date, amount: str) -> Transaction:
@@ -181,7 +182,7 @@ async def _emptied_book(engine: AsyncEngine) -> _Book:
             ]
         )
         await session.commit()
-        return _Book(engine=engine, user_id=user.id)
+        return _Book(engine=engine, user_id=user.id, broker_ids=(broker.id,))
 
 
 async def _buy_first_book(engine: AsyncEngine) -> _Book:
@@ -202,7 +203,7 @@ async def _buy_first_book(engine: AsyncEngine) -> _Book:
             session.add(PriceHistory(asset_id=stock.id, date=day, open=close, high=close, low=close, close=close, volume=Decimal("1"), currency=EUR, source_plugin_key="p1d_test"))
             day += timedelta(days=1)
         await session.commit()
-        return _Book(engine=engine, user_id=user.id)
+        return _Book(engine=engine, user_id=user.id, broker_ids=(broker.id,))
 
 
 async def _report(book: _Book, start: date | None, end: date) -> PortfolioReportResponse:
@@ -393,6 +394,10 @@ class TestAiExportPortfolioMwrr:
             period_start=WINDOW_OPEN,
             period_end=period_end,
             target_currency=EUR,
+            # 78 L10b: the whole portfolio is the user's owned broker, named (an empty scope means no broker)
+            broker_scope=book.broker_ids,
+            broker_scope_source=BrokerScopeSource.OWNED,
+            owned_broker_ids=book.broker_ids,
         )
         async with AsyncSession(book.engine, expire_on_commit=False) as session:
             context = BuildContext(build_component_registry(), request_id=scope.request_id, scope=scope, bucket_plan=build_bucket_plan_for_scope(scope), session=session)

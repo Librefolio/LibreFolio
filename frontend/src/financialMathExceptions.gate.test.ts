@@ -22,6 +22,9 @@
  *     types, or the unit price from the amount, one product or one quotient on exact decimals (developer decision of
  *     25/10/2026: small sums and products are the frontend's own, a route for a multiplication is not); and the total
  *     of a parent with its linked charges (project 66, F1), one exact sum per currency of the amounts the user types.
+ *   - the Rebalancer's table «Maximum acceptable cost» (R1-F (b) of project 67, developer decision of 21/11/2026,
+ *     `acceptableCost.ts`): its rows and cells on the preview's total and the levels' λ, and the «Custom» λ from the
+ *     euros the user types, so a choice or a figure changes the table at once. The plan reads λ, never the table.
  *
  * Each exception must be declared where it lives. The documentation named the four files while the code declared none
  * of them (plan 43, `plan-phase00FinancialMathHome.prompt.md:1494`): this gate was written red against that state, and
@@ -116,6 +119,7 @@ const LOT_COMPARISON = 'src/lib/features/brokers/lots/lotComparisonChartHelpers.
 const LOT_WAC = 'src/lib/features/brokers/lots/lotWacPriceChartHelpers.ts';
 const POSITIONS_SERIES = 'src/lib/features/dashboard/positionsSeries.ts';
 const TRADE_AMOUNT = 'src/lib/features/transactions/form/txTradeAmount.ts';
+const ACCEPTABLE_COST = 'src/lib/features/tools/pac-allocator/planner/acceptableCost.ts';
 
 interface DeclaredException {
     /** Relative to `frontend/`. */
@@ -144,6 +148,7 @@ const DECLARED_EXCEPTIONS: readonly DeclaredException[] = [
     {file: LOT_WAC, annualizes: false, measure: "D-MF6(b), the WAC chart's percentage view: the value series rebased on its first known value"},
     {file: POSITIONS_SERIES, annualizes: false, measure: "Y5-2, the positions return chart: the backend's fraction in base 100, and the Dashboard history moved to the left edge of the window the user picks"},
     {file: TRADE_AMOUNT, annualizes: false, measure: "W5-9 (#47), the transaction form: the trade's amount from the unit price the user types, or the unit price from the amount — one product or one quotient, exact decimals"},
+    {file: ACCEPTABLE_COST, annualizes: false, measure: "R1-F (b) of project 67, the Rebalancer's Strategy step: the table «Maximum acceptable cost» (2·λ·d²/F on the preview's total and the levels' λ) and the «Custom» λ from the euros the user types"},
 ];
 
 const DECLARED_FILES: ReadonlySet<string> = new Set(DECLARED_EXCEPTIONS.map((entry) => entry.file));

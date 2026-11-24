@@ -1,0 +1,490 @@
+{
+  "format": "lf-brim-previous-output/1",
+  "comment": "Output of the plugin BEFORE its project-66 lot changed it (P2 contract §2.1). Never re-take it after the code change.",
+  "plugin_code": "broker_fineco",
+  "plugin_version": "1.5.0",
+  "source_head": "890343101",
+  "captured_on": "2026-11-21",
+  "sample": "broker_fineco/sample_reports/fineco-export.csv",
+  "sample_sha256": "f977b0f9624ac0704cf27d1d68592eaa223a2cd6e44c0f9a4f0c8bf033c2d152",
+  "extracted_assets": {
+    "2147483647": {
+      "extracted_symbol": null,
+      "extracted_isin": "IE00B4L5Y983",
+      "extracted_name": "ISHARES MSCI WORLD ACC",
+      "notices": []
+    },
+    "2147483646": {
+      "extracted_symbol": null,
+      "extracted_isin": "IE00BKM4GZ66",
+      "extracted_name": "ISHARES CORE MSCI EM IMI",
+      "notices": []
+    },
+    "2147483645": {
+      "extracted_symbol": null,
+      "extracted_isin": "US0378331005",
+      "extracted_name": "APPLE INC",
+      "notices": []
+    },
+    "2147483644": {
+      "extracted_symbol": null,
+      "extracted_isin": "IT0005583478",
+      "extracted_name": "BTP VALORE SC MZ30",
+      "notices": []
+    },
+    "2147483643": {
+      "extracted_symbol": null,
+      "extracted_isin": "IE00B3B8Q275",
+      "extracted_name": "ETF COVERED BOND ISH",
+      "notices": []
+    },
+    "2147483642": {
+      "extracted_symbol": null,
+      "extracted_isin": "IE00B2NPKV68",
+      "extracted_name": "ISHARES JPMORGAN EM BOND",
+      "notices": []
+    }
+  },
+  "transactions": [
+    {
+      "asset_id": 2147483647,
+      "type": "BUY",
+      "date": "2024-01-15",
+      "quantity": "5",
+      "cash": {
+        "code": "EUR",
+        "amount": "-528.55"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "fineco"
+      ],
+      "description": "Compravendita titoli: ISHARES MSCI WORLD ACC",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483647,
+      "type": "FEE",
+      "date": "2024-01-15",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "-2.95"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "fineco",
+        "fee"
+      ],
+      "description": "Commissioni: ISHARES MSCI WORLD ACC",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483646,
+      "type": "BUY",
+      "date": "2024-01-15",
+      "quantity": "10",
+      "cash": {
+        "code": "EUR",
+        "amount": "-330.50"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "fineco"
+      ],
+      "description": "Compravendita titoli: ISHARES CORE MSCI EM IMI",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483646,
+      "type": "FEE",
+      "date": "2024-01-15",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "-2.95"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "fineco",
+        "fee"
+      ],
+      "description": "Commissioni: ISHARES CORE MSCI EM IMI",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483646,
+      "type": "SELL",
+      "date": "2024-03-15",
+      "quantity": "-4",
+      "cash": {
+        "code": "EUR",
+        "amount": "136.80"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "fineco"
+      ],
+      "description": "Compravendita titoli: ISHARES CORE MSCI EM IMI",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483646,
+      "type": "FEE",
+      "date": "2024-03-15",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "-2.95"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "fineco",
+        "fee"
+      ],
+      "description": "Commissioni: ISHARES CORE MSCI EM IMI",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483645,
+      "type": "BUY",
+      "date": "2024-02-20",
+      "quantity": "2",
+      "cash": {
+        "code": "USD",
+        "amount": "-329.03"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "fineco"
+      ],
+      "description": "Compravendita titoli: APPLE INC",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483645,
+      "type": "FEE",
+      "date": "2024-02-20",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "-12.95"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "fineco",
+        "fee"
+      ],
+      "description": "Commissioni: APPLE INC",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483645,
+      "type": "SELL",
+      "date": "2024-05-15",
+      "quantity": "-1",
+      "cash": {
+        "code": "USD",
+        "amount": "176.10"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "fineco"
+      ],
+      "description": "Compravendita titoli: APPLE INC",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483645,
+      "type": "FEE",
+      "date": "2024-05-15",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "-12.95"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "fineco",
+        "fee"
+      ],
+      "description": "Commissioni: APPLE INC",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483644,
+      "type": "BUY",
+      "date": "2024-01-10",
+      "quantity": "2000",
+      "cash": {
+        "code": "EUR",
+        "amount": "-1990.00"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "fineco"
+      ],
+      "description": "Compravendita titoli: BTP VALORE SC MZ30",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483644,
+      "type": "FEE",
+      "date": "2024-01-10",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "-5.00"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "fineco",
+        "fee"
+      ],
+      "description": "Commissioni: BTP VALORE SC MZ30",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483643,
+      "type": "BUY",
+      "date": "2024-02-01",
+      "quantity": "3",
+      "cash": {
+        "code": "EUR",
+        "amount": "-431.04"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "fineco"
+      ],
+      "description": "Compravendita titoli: ETF COVERED BOND ISH",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483642,
+      "type": "DIVIDEND",
+      "date": "2024-06-15",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "20.95"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "fineco"
+      ],
+      "description": "Dividendo: ISHARES JPMORGAN EM BOND",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483645,
+      "type": "DIVIDEND",
+      "date": "2024-08-15",
+      "quantity": "0",
+      "cash": {
+        "code": "USD",
+        "amount": "4.23"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "fineco"
+      ],
+      "description": "Dividendo: APPLE INC",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483644,
+      "type": "INTEREST",
+      "date": "2024-06-01",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "24.38"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "fineco"
+      ],
+      "description": "Stacco Cedole: BTP VALORE SC MZ30",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483646,
+      "type": "ADJUSTMENT",
+      "date": "2024-07-20",
+      "quantity": "6",
+      "cash": null,
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "fineco"
+      ],
+      "description": "Aumento capitale: ISHARES CORE MSCI EM IMI",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483647,
+      "type": "ADJUSTMENT",
+      "date": "2024-06-19",
+      "quantity": "3",
+      "cash": null,
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "fineco"
+      ],
+      "description": "Aumento capitale: ISHARES MSCI WORLD ACC",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483644,
+      "type": "SELL",
+      "date": "2024-09-01",
+      "quantity": "-2000",
+      "cash": {
+        "code": "EUR",
+        "amount": "2000.00"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "fineco"
+      ],
+      "description": "Rimborso: BTP VALORE SC MZ30",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483645,
+      "type": "SELL",
+      "date": "2024-10-13",
+      "quantity": "-5",
+      "cash": {
+        "code": "USD",
+        "amount": "450.81"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "fineco"
+      ],
+      "description": "Rimborso: APPLE INC",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    }
+  ]
+}

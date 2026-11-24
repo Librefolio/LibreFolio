@@ -263,6 +263,106 @@ def external_brim_traderepublic(verbose: bool = False, test_names: list = None) 
     return run_command(cmd, "BRIM Trade Republic tests", verbose=verbose)
 
 
+def external_brim_fineco(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the Fineco plugin's linked charges (project 66, wave P2a); the rest of Fineco is in brim-providers."""
+    print_section("External: BRIM Fineco Tests")
+    print_info("Testing: broker_fineco — each commission names the trade of its row (also across currencies), the previous version's snapshot, the reimport")
+    print_info("Tests: the four samples (Variant B links, Variant A has no charge), structure, only names change, reimport adds nothing, version")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_external/test_brim_fineco.py", test_names or None)
+    return run_command(cmd, "BRIM Fineco tests", verbose=verbose)
+
+
+def external_brim_directa(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the Directa plugin's linked charges (project 66, lot P3); the rest of Directa is in brim-providers."""
+    print_section("External: BRIM Directa Tests")
+    print_info("Testing: broker_directa — commissions, «Rit. etf» and Tobin tax by order reference, withholdings by date and ISIN, «Rit.provento etf» as a TAX")
+    print_info("Tests: the sample and invented rows, one candidate only, order kept, snapshot of the previous version, reimport, version")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_external/test_brim_directa.py", test_names or None)
+    return run_command(cmd, "BRIM Directa tests", verbose=verbose)
+
+
+def external_brim_cointracking(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the CoinTracking plugin's linked charges (project 66, lot P4a); the rest of CoinTracking is in brim-providers."""
+    print_section("External: BRIM CoinTracking Tests")
+    print_info("Testing: broker_cointracking — a fee or a tax linked to the booking of its own row")
+    print_info("Tests: the sample and invented rows, free charges by rule, snapshot of the previous version, reimport, version")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_external/test_brim_cointracking.py", test_names or None)
+    return run_command(cmd, "BRIM CoinTracking tests", verbose=verbose)
+
+
+def external_brim_delta(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the Delta plugin's linked charges (project 66, lot P4a); the rest of Delta is in brim-providers."""
+    print_section("External: BRIM Delta Tests")
+    print_info("Testing: broker_delta — a fee or a tax linked to the booking of its own row")
+    print_info("Tests: the sample and invented rows, free charges by rule, snapshot of the previous version, reimport, version")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_external/test_brim_delta.py", test_names or None)
+    return run_command(cmd, "BRIM Delta tests", verbose=verbose)
+
+
+def external_brim_relai(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the Relai plugin's linked charges (project 66, lot P4a); the rest of Relai is in brim-providers."""
+    print_section("External: BRIM Relai Tests")
+    print_info("Testing: broker_relai — a fee or a tax linked to the booking of its own row")
+    print_info("Tests: the sample and invented rows, free charges by rule, snapshot of the previous version, reimport, version")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_external/test_brim_relai.py", test_names or None)
+    return run_command(cmd, "BRIM Relai tests", verbose=verbose)
+
+
+def external_brim_investimental(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the Investimental plugin's linked charges (project 66, lot P4a); the rest of Investimental is in brim-providers."""
+    print_section("External: BRIM Investimental Tests")
+    print_info("Testing: broker_investimental — a fee or a tax linked to the booking of its own row")
+    print_info("Tests: the sample and invented rows, free charges by rule, snapshot of the previous version, reimport, version")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_external/test_brim_investimental.py", test_names or None)
+    return run_command(cmd, "BRIM Investimental tests", verbose=verbose)
+
+
+def external_brim_ibkr(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the IBKR plugin's linked charges (project 66, lot P4a); the rest of IBKR is in brim-providers."""
+    print_section("External: BRIM IBKR Tests")
+    print_info("Testing: broker_ibkr — a fee or a tax linked to the booking of its own row")
+    print_info("Tests: the sample and invented rows, free charges by rule, snapshot of the previous version, reimport, version")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_external/test_brim_ibkr.py", test_names or None)
+    return run_command(cmd, "BRIM IBKR tests", verbose=verbose)
+
+
+def external_brim_parqet(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the Parqet plugin's linked charges (project 66, lot P4a); the rest of Parqet is in brim-providers."""
+    print_section("External: BRIM Parqet Tests")
+    print_info("Testing: broker_parqet — a fee or a tax linked to the booking of its own row")
+    print_info("Tests: the sample and invented rows, free charges by rule, snapshot of the previous version, reimport, version")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_external/test_brim_parqet.py", test_names or None)
+    return run_command(cmd, "BRIM Parqet tests", verbose=verbose)
+
+
+def external_brim_trading212(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the Trading 212 plugin's linked charges (project 66, lot P4a); the rest of Trading 212 is in brim-providers."""
+    print_section("External: BRIM Trading 212 Tests")
+    print_info("Testing: broker_trading212 — a fee or a tax linked to the booking of its own row")
+    print_info("Tests: the sample and invented rows, free charges by rule, snapshot of the previous version, reimport, version")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_external/test_brim_trading212.py", test_names or None)
+    return run_command(cmd, "BRIM Trading 212 tests", verbose=verbose)
+
+
+def external_brim_revolut(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the Revolut plugin's linked charges (project 66, lot P4a); the rest of Revolut is in brim-providers."""
+    print_section("External: BRIM Revolut Tests")
+    print_info("Testing: broker_revolut — a fee or a tax linked to the booking of its own row")
+    print_info("Tests: the sample and invented rows, free charges by rule, snapshot of the previous version, reimport, version")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_external/test_brim_revolut.py", test_names or None)
+    return run_command(cmd, "BRIM Revolut tests", verbose=verbose)
+
+
 def external_brim_scalable(verbose: bool = False, test_names: list = None) -> bool:
     """Test the Scalable Capital plugins (broker account and overnight account)."""
     print_section("External: BRIM Scalable Capital Tests")
@@ -271,6 +371,16 @@ def external_brim_scalable(verbose: bool = False, test_names: list = None) -> bo
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_external/test_brim_scalable.py", test_names or None)
     return run_command(cmd, "BRIM Scalable Capital tests", verbose=verbose)
+
+
+def external_brim_xtb(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the XTB plugin: the History report workbook, the only format it reads since 2.0.0 (lane 83)."""
+    print_section("External: BRIM XTB Tests")
+    print_info("Testing: broker_xtb — the History report workbook (.xlsx)")
+    print_info("Tests: samples, account currency, sub-account transfers, partial fills, rows left out, positions outside the period")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_external/test_brim_xtb.py", test_names or None)
+    return run_command(cmd, "BRIM XTB tests", verbose=verbose)
 
 
 def external_brim_row_skips(verbose: bool = False, test_names: list = None) -> bool:
@@ -311,6 +421,16 @@ def external_brim_date_order(verbose: bool = False, test_names: list = None) -> 
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_external/test_brim_date_order.py", test_names or None)
     return run_command(cmd, "BRIM date order tests", verbose=verbose)
+
+
+def external_brim_rewards(verbose: bool = False, test_names: list = None) -> bool:
+    """Test rewards in kind imported as REWARD by Coinbase, Crypto.com, Freetrade and the generic CSV (project 79, STK-4a), Bitvavo and CoinTracking (STK-4b)."""
+    print_section("External: BRIM Rewards Tests")
+    print_info("Testing: reward_unit_value and reward_value_todo, the REWARD rows of four plugins (1.1.0), their value on receipt; Bitvavo 1.1.0 and CoinTracking 1.2.0 staking rewards (STK-4b)")
+    print_info("Tests: type, units, no cash, per-unit value and currency, the reward_value todo, rows not imported with a warning, samples")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_external/test_brim_rewards.py", test_names or None)
+    return run_command(cmd, "BRIM rewards tests", verbose=verbose)
 
 
 def external_all(verbose: bool = False, providers: list = None, exclude_providers: list = None) -> bool:
@@ -375,7 +495,117 @@ These tests verify external API integrations:
         name="BRIM Trade Republic",
         desc="Test the Trade Republic plugin (Transaction export, also re-saved by Excel, and the Dutch CSV)",
         prereq="Sample files in test fixtures",
-        tests="Recognition, both shapes and ; identical, sample row by row, date column, tax refund, unsettled rows, duplicates, rows left out, assets",
+        tests="Recognition, both shapes and ; identical, sample row by row, date column, tax refund, unsettled rows, duplicates, rows left out, assets, linked charges",
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "brim-fineco",
+        external_brim_fineco,
+        name="BRIM Fineco",
+        desc="Test the Fineco plugin's linked charges (project 66, wave P2a)",
+        prereq="Sample files in test fixtures",
+        tests="Each commission names its trade (EUR fee on a USD trade too), Variant A without charges, structure, snapshot of the previous version, reimport, version",
+        # PURE: the samples and tmp_path files; the reimport tests open a private in-memory SQLite each and dispose it.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "brim-directa",
+        external_brim_directa,
+        name="BRIM Directa",
+        desc="Test the Directa plugin's linked charges (project 66, lot P3)",
+        prereq="Sample files in test fixtures",
+        tests="Commission / «Rit. etf» / Tobin tax by order reference, coupon and ETF income withholdings by date and ISIN, «Rit.provento etf» as a TAX, one candidate only, order, snapshot, reimport, version, XLSX",
+        # PURE: the sample and tmp_path files; the reimport test opens a private in-memory SQLite and disposes it.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "brim-cointracking",
+        external_brim_cointracking,
+        name="BRIM CoinTracking",
+        desc="Test the CoinTracking plugin's linked charges (project 66, lot P4a)",
+        prereq="Sample files in test fixtures",
+        tests="Same-row fee and tax linked to their booking, free charges by rule, snapshot, reimport, version",
+        # PURE: the sample and tmp_path files; the reimport test opens a private in-memory SQLite and disposes it.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "brim-delta",
+        external_brim_delta,
+        name="BRIM Delta",
+        desc="Test the Delta plugin's linked charges (project 66, lot P4a)",
+        prereq="Sample files in test fixtures",
+        tests="Same-row fee and tax linked to their booking, free charges by rule, snapshot, reimport, version",
+        # PURE: the sample and tmp_path files; the reimport test opens a private in-memory SQLite and disposes it.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "brim-relai",
+        external_brim_relai,
+        name="BRIM Relai",
+        desc="Test the Relai plugin's linked charges (project 66, lot P4a)",
+        prereq="Sample files in test fixtures",
+        tests="Same-row fee and tax linked to their booking, free charges by rule, snapshot, reimport, version",
+        # PURE: the sample and tmp_path files; the reimport test opens a private in-memory SQLite and disposes it.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "brim-investimental",
+        external_brim_investimental,
+        name="BRIM Investimental",
+        desc="Test the Investimental plugin's linked charges (project 66, lot P4a)",
+        prereq="Sample files in test fixtures",
+        tests="Same-row fee and tax linked to their booking, free charges by rule, snapshot, reimport, version",
+        # PURE: the sample and tmp_path files; the reimport test opens a private in-memory SQLite and disposes it.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "brim-ibkr",
+        external_brim_ibkr,
+        name="BRIM IBKR",
+        desc="Test the IBKR plugin's linked charges (project 66, lot P4a)",
+        prereq="Sample files in test fixtures",
+        tests="Same-row fee and tax linked to their booking, free charges by rule, snapshot, reimport, version",
+        # PURE: the sample and tmp_path files; the reimport test opens a private in-memory SQLite and disposes it.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "brim-parqet",
+        external_brim_parqet,
+        name="BRIM Parqet",
+        desc="Test the Parqet plugin's linked charges (project 66, lot P4a)",
+        prereq="Sample files in test fixtures",
+        tests="Same-row fee and tax linked to their booking, free charges by rule, snapshot, reimport, version",
+        # PURE: the sample and tmp_path files; the reimport test opens a private in-memory SQLite and disposes it.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "brim-trading212",
+        external_brim_trading212,
+        name="BRIM Trading 212",
+        desc="Test the Trading 212 plugin's linked charges (project 66, lot P4a)",
+        prereq="Sample files in test fixtures",
+        tests="Same-row fee and tax linked to their booking, free charges by rule, snapshot, reimport, version",
+        # PURE: the sample and tmp_path files; the reimport test opens a private in-memory SQLite and disposes it.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "brim-revolut",
+        external_brim_revolut,
+        name="BRIM Revolut",
+        desc="Test the Revolut plugin's linked charges (project 66, lot P4a)",
+        prereq="Sample files in test fixtures",
+        tests="Same-row fee and tax linked to their booking, free charges by rule, snapshot, reimport, version",
+        # PURE: the sample and tmp_path files; the reimport test opens a private in-memory SQLite and disposes it.
         isolation="pure",
     )
     add_test(
@@ -385,7 +615,18 @@ These tests verify external API integrations:
         name="BRIM Scalable Capital",
         desc="Test the Scalable Capital plugins (broker and overnight account)",
         prereq="Sample files in test fixtures",
-        tests="Recognition, refusals with a code, PRIME and exporter samples, legs, notices, synthetic edge cases",
+        tests="Recognition, refusals with a code, PRIME and exporter samples, legs, notices, synthetic edge cases, linked charges",
+    )
+    add_test(
+        cat,
+        "brim-xtb",
+        external_brim_xtb,
+        name="BRIM XTB",
+        desc="Test the XTB plugin: the History report workbook (.xlsx only)",
+        prereq="Sample files in test fixtures",
+        tests="Samples, account currency from Open Positions, sub-account transfer pairs, partial fills, RowSkips, positions outside the period, the old CSV refused",
+        # PURE: the samples and workbooks/CSVs written in tmp_path; no server, no database.
+        isolation="pure",
     )
     add_test(
         cat,
@@ -422,6 +663,17 @@ These tests verify external API integrations:
         desc="Test the generic CSV plugin's date_order field (CP12, W5-8): day_first parity with the old behaviour, month_first, the declaration",
         prereq="Sample files in test fixtures",
         tests="parse_date parity with a frozen reference, generic samples with and without day_first bound, month_first on slash/dash/dot, field declared as the contract says",
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "brim-rewards",
+        external_brim_rewards,
+        name="BRIM Rewards",
+        desc="Test rewards in kind imported as REWARD (project 79, STK-4a): Coinbase, Crypto.com, Freetrade, generic CSV; STK-4b: Bitvavo and CoinTracking staking rewards",
+        prereq="Sample files in test fixtures",
+        tests="reward_unit_value, reward_value_todo, REWARD type/units/no cash/value per plugin, the todo, rows not imported, samples, version 1.1.0; Bitvavo 1.1.0 (staking → REWARD + todo, Distributed settled for staking only, negative → ADJUSTMENT, the sample's 9 rewards), CoinTracking 1.2.0 (crypto staking → REWARD + todo, its fee a free FEE, fiat staking still a linked INTEREST)",
+        # PURE: untouched samples and files of tmp_path; no server, no database, no network.
         isolation="pure",
     )
     add_test(cat, "all", external_all, test_names=False, name="All External Tests", desc="Run all external tests")

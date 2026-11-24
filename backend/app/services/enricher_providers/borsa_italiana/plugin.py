@@ -12,7 +12,12 @@ What it gives:
   the issuer's country for a state, minimum lot, outstanding amount (in the denomination currency), reference price
   date, payout description, its country and sector, and the legal form. Not the first day of trading: a venue's first
   trading day is not a launch date (a BTP listed years after it was issued);
-- **a share**: its sector and the legal form.
+- **a share**: its sector and the legal form from the sheet; with a library that has ``ottieni_profilo_societa``, also
+  the company's description (in the binding's language), its country (the registered office's) and its website from the
+  «Profilo Società» page, dated by the page's last update, and the revenue and net income of the last fiscal year, in the
+  table's unit («EUR - millions» → × 1 000 000) and dated by the end of that fiscal year (lot BI-PROF). That page is read only when one of its voices is
+  asked, with the MIC of the binding or of the sheet's canonical URL (one request more per share); a share without it
+  keeps the sheet's voices.
 
 The page comes in the binding's language (``language``, ``en`` or ``it``, as the price provider's): the texts
 (frequency, structure, issuer type) are translated from either. A text the plugin does not know leaves its voice empty,
@@ -41,6 +46,7 @@ from backend.app.services.enrichers.base import (
     RATE_LIMITED,
     EnricherBinding,
     EnricherPlugin,
+    EnricherRateLimited,
     EnricherReadItem,
     EnricherReadStatus,
     EnricherRecognition,
@@ -50,6 +56,7 @@ from backend.app.services.enrichers.base import (
 from backend.app.services.enrichers.registry import EnricherRegistry
 from backend.app.services.financial_math.interest import annual_coupon_rate
 from backend.app.services.platform.provider_registry import register_provider
+from backend.app.utils.asset.geo import normalize_country_to_iso3
 from backend.app.utils.asset.sector import validate_sector
 from backend.app.utils.runtime.pacing import Pacer
 
@@ -70,6 +77,12 @@ except ImportError:  # pragma: no cover — the library is in the lock; without 
 
     class StrumentoNonTrovato(Exception):  # type: ignore[no-redef]
         """Stand-in when the library is missing."""
+
+
+try:
+    from borsa_italiana_scraping import ottieni_profilo_societa
+except ImportError:  # a library older than the company profile (lot BI-PROF): a share keeps the sheet's voices only
+    ottieni_profilo_societa = None
 
 
 logger = get_logger(__name__)
@@ -111,7 +124,28 @@ _BOND_VOICES = frozenset(
         "legal_form",
     }
 )
-_STOCK_VOICES = frozenset({"sector", "legal_form"})
+#: The voices of the company profile page (lot BI-PROF), declared only with a library that reads it.
+_PROFILE_VOICES = frozenset({"description", "issuer_country", "website", "revenue", "net_income"})
+# The rows of the profile's «main data» table, in either language (lower case).
+_REVENUE_ROWS = frozenset({"net sales", "fatturato"})
+_NET_INCOME_ROWS = frozenset({"net income", "utile netto"})
+_FISCAL_YEAR_END_ROWS = frozenset({"fiscal year end", "chiusura esercizio fiscale"})
+_UNIT_ROWS = frozenset({"currency & unit", "valuta e unità di misura"})
+#: The unit of the table («EUR - millions» / «EUR - milioni») → the factor its figures are multiplied by.
+_SCALES = {
+    "units": 1,
+    "unità": 1,
+    "thousands": 1_000,
+    "migliaia": 1_000,
+    "millions": 1_000_000,
+    "milioni": 1_000_000,
+    "billions": 1_000_000_000,
+    "miliardi": 1_000_000_000,
+}
+#: The rule of the «Profile» tab's link (``isWebAddress``): http or https, then text without spaces.
+_WEB_ADDRESS = re.compile(r"^https?://\S+$", re.IGNORECASE)
+_BARE_DOMAIN = re.compile(r"^(?:www\.)?[a-z0-9-]+(?:\.[a-z0-9-]+)+(?:/\S*)?$", re.IGNORECASE)
+_STOCK_VOICES = frozenset({"sector", "legal_form"}) | (_PROFILE_VOICES if ottieni_profilo_societa is not None else frozenset())
 #: A fund page gives little that is the profile's: its currency, its launch date and its management fee («Gestione», C2e:
 #: only a part of the TER, so ``management_fee`` and never ``ter``). Not written: the fund's assets (no unit), the
 #: management company (not on the recorded page).
@@ -184,6 +218,8 @@ _STATE_ISSUERS = {
     "united kingdom": "GBR",
 }
 _SHEET_ASSET_TYPES = {"obbligazione": AssetType.BOND, "azione": AssetType.STOCK}
+#: The MIC in a sheet's canonical URL: ``…/borsa/azioni/scheda/IT0003128367-MTAA.html``.
+_MIC_IN_URL = re.compile(r"/([A-Z0-9]{12})-([A-Z0-9]{4})\.html(?:$|[?#])", re.IGNORECASE)
 
 # The composed description of a bond (plan I19; wording approved by the consultant): stable facts only, never a price,
 # a yield or the annual coupon, which change and would write a new description at every read.
@@ -349,6 +385,108 @@ def _share_sector(sheet: Any) -> str | None:
     return sector if sector is None or validate_sector(sector) else None
 
 
+def _row(profile: Any, names: frozenset[str]) -> dict[int, Any]:
+    """The values by year of the first «main data» row whose label is one of ``names``; empty when there is none."""
+    for row in profile.dati_principali or ():
+        if (_text(row.voce) or "").lower() in names:
+            return dict(row.valori or {})
+    return {}
+
+
+def _scale(unit: Any, isin: str) -> tuple[str, int] | None:
+    """«EUR - millions» → (``EUR``, 1 000 000); None, with one log line, for a unit the plugin does not know."""
+    text = _text(unit)
+    if text is None:
+        return None
+    currency, _, scale = (part.strip() for part in text.partition("-"))
+    factor = _SCALES.get(scale.lower())
+    if factor is None or not re.fullmatch(r"[A-Za-z]{3}", currency):
+        logger.warning("Borsa Italiana unit not translated, figures left out", field="dati_principali", value=text, isin=isin)
+        return None
+    return currency.upper(), factor
+
+
+def _last_figure(values: Mapping[int, Any]) -> tuple[int, Decimal] | None:
+    """The most recent year with a number."""
+    years = sorted((year for year, value in values.items() if isinstance(value, Decimal)), reverse=True)
+    return (years[0], values[years[0]]) if years else None
+
+
+def _fiscal_figures(profile: Any) -> tuple[dict[str, Any], dict[str, date]]:
+    """``revenue`` and ``net_income`` of the last fiscal year that gives them, in the table's currency and scaled by its
+    unit (a scale, not a calculation: «5,617» in «EUR - millions» is 5 617 000 000 EUR), each dated by the end of its
+    fiscal year. A figure whose year has no unit or no fiscal year end is left out: its year could not be shown."""
+    isin = str(profile.isin)
+    units, ends = _row(profile, _UNIT_ROWS), _row(profile, _FISCAL_YEAR_END_ROWS)
+    voices: dict[str, Any] = {}
+    dates: dict[str, date] = {}
+    scales: dict[int, tuple[str, int] | None] = {}  # one reading (and at most one log line) per year
+    for key, names in (("revenue", _REVENUE_ROWS), ("net_income", _NET_INCOME_ROWS)):
+        figure = _last_figure(_row(profile, names))
+        if figure is None:
+            continue
+        year, number = figure
+        if year not in scales:
+            scales[year] = _scale(units.get(year), isin)
+        scale, end = scales[year], ends.get(year)
+        if scale is None or not isinstance(end, date):
+            continue
+        currency, factor = scale
+        voices[key] = {"amount": number * factor, "currency": currency}
+        dates[key] = end
+    return voices, dates
+
+
+def _website(value: Any, isin: str) -> str | None:
+    """The company's site as a web address: kept when it is http(s):// followed by text without spaces (the tab's link
+    rule), «https://» put in front of a bare domain; anything else left out with one log line."""
+    text = _text(value)
+    if text is None:
+        return None
+    if _WEB_ADDRESS.match(text):
+        return text
+    if _BARE_DOMAIN.fullmatch(text):
+        return f"https://{text}"
+    logger.warning("Borsa Italiana website not a web address, voice left out", field="website", value=text, isin=isin)
+    return None
+
+
+def profile_voices(profile: Any) -> tuple[dict[str, Any], dict[str, date]]:
+    """The voices of a company profile page and their dates: the description, the country (the registered office's, as
+    an ISO 3166 alpha-3 code through the generic helper; a name the helper does not know leaves it out with one log
+    line) and the website, dated by the page's last update; the revenue and the net income of the last fiscal year,
+    dated by its end."""
+    isin = str(profile.isin)
+    voices: dict[str, Any] = {}
+    description = _text(profile.descrizione)
+    if description is not None:
+        voices["description"] = description
+    address = profile.indirizzo
+    country = _text(address.paese) if address is not None else None
+    if country is not None:
+        try:
+            voices["issuer_country"] = normalize_country_to_iso3(country)
+        except ValueError:  # parsing probe: a country name the helper does not know
+            logger.warning("Borsa Italiana country not translated, voice left out", field="issuer_country", value=country, isin=isin)
+    contacts = profile.contatti
+    website = _website(contacts.sito_web, isin) if contacts is not None else None
+    if website is not None:
+        voices["website"] = website
+    day = profile.ultimo_aggiornamento
+    dates: dict[str, date] = dict.fromkeys(voices, day) if day is not None else {}
+    figures, figure_dates = _fiscal_figures(profile)
+    return {**voices, **figures}, {**dates, **figure_dates}
+
+
+def _sheet_mic(binding: EnricherBinding, sheet: Any) -> str | None:
+    """The market of a share: the binding's ``mic``, else the one in the sheet's canonical URL."""
+    mic = _text(binding.params.get("mic"))
+    if mic is not None:
+        return mic.upper()
+    match = _MIC_IN_URL.search(_text(sheet.url_pagina) or "")
+    return match.group(2).upper() if match is not None else None
+
+
 def _launch_date(value: Any) -> date | None:
     """«14/03/22» → 2022-03-14 (a two-digit year in this century up to this year, else the last), «14/03/2022» too."""
     match = _SHORT_DATE.fullmatch(_text(value) or "")
@@ -480,6 +618,11 @@ class BorsaItalianaEnricher(EnricherPlugin):
         _PACER.wait()
         return ottieni_dati_fondo(code, sessione=session)
 
+    @staticmethod
+    def _profile(binding: EnricherBinding, sheet: Any, session: Any = None) -> Any:
+        _PACER.wait()
+        return ottieni_profilo_societa(str(sheet.isin or binding.identifier), _sheet_mic(binding, sheet), _language(binding), sessione=session)
+
     def recognize(self, binding: EnricherBinding) -> EnricherRecognition:
         code = _fund_code(binding)
         if code is not None:
@@ -510,12 +653,12 @@ class BorsaItalianaEnricher(EnricherPlugin):
         # whatever ends the read (a failure, or the consumer stopping it early)
         session = Sessione() if Sessione is not None else None
         try:
-            yield from self._read_with(session, bindings)
+            yield from self._read_with(session, bindings, None if keys is None else frozenset(keys))
         finally:
             if session is not None:
                 session.chiudi()
 
-    def _read_with(self, session: Any, bindings: list[EnricherBinding]) -> Iterator[EnricherReadItem]:
+    def _read_with(self, session: Any, bindings: list[EnricherBinding], keys: frozenset[str] | None) -> Iterator[EnricherReadItem]:  # noqa: C901 — one flat loop: the outcome of each binding
         refused = False
         for index, binding in enumerate(bindings):
             code = _fund_code(binding)
@@ -548,7 +691,25 @@ class BorsaItalianaEnricher(EnricherPlugin):
                 yield EnricherReadItem(index=index, status=EnricherReadStatus.ERROR, error_code=SOURCE_ERROR, error_message=type(error).__name__)
                 continue
             values = sheet_voices(sheet, _language(binding))
-            yield EnricherReadItem(index=index, status=EnricherReadStatus.OK, values=values, source_dates=sheet_source_dates(sheet, values))
+            dates = sheet_source_dates(sheet, values)
+            if _text(sheet.tipo) == "azione" and ottieni_profilo_societa is not None and (keys is None or keys & _PROFILE_VOICES):
+                try:
+                    profile = self._profile(binding, sheet, session)
+                except StrumentoNonTrovato:  # «not resolved» too: no profile page for this share, the sheet's voices stay
+                    profile = None
+                except RateLimitRaggiunto as error:
+                    refused = True
+                    logger.warning("Borsa Italiana refused for too many requests", isin=binding.identifier, error=str(error))
+                    yield EnricherReadItem(index=index, status=EnricherReadStatus.ERROR, error_code=RATE_LIMITED)
+                    continue
+                except Exception as error:  # noqa: BLE001 — isolation boundary: a failing profile leaves the sheet's voices
+                    logger.warning("Borsa Italiana company profile failed", isin=binding.identifier, exc_info=error)
+                    profile = None
+                if profile is not None:
+                    extra, extra_dates = profile_voices(profile)
+                    values = {**values, **extra}
+                    dates = {**dates, **extra_dates}
+            yield EnricherReadItem(index=index, status=EnricherReadStatus.OK, values=values, source_dates=dates)
 
     def search(self, query: str) -> list[EnricherSearchResult]:
         if cerca is None:
@@ -557,11 +718,13 @@ class BorsaItalianaEnricher(EnricherPlugin):
         try:
             _PACER.wait()
             hits = cerca(query, lingua="it", sessione=session)
+        except RateLimitRaggiunto as error:
+            raise EnricherRateLimited("Borsa Italiana refused the search for too many requests") from error
         finally:
             session.chiudi()
         results: list[EnricherSearchResult] = []
         for hit in hits:
             binding = EnricherBinding(identifier_type="ISIN", identifier=hit.isin, params={"mic": hit.mic})
             asset_type = _SHEET_ASSET_TYPES.get((_text(hit.tipo) or "").lower())
-            results.append(EnricherSearchResult(name=hit.nome, binding=binding, asset_type=asset_type, page_url=self.page_url(binding)))
+            results.append(EnricherSearchResult(name=hit.nome, binding=binding, asset_type=asset_type, page_url=self.page_url(binding), market=_text(hit.mic)))
         return results

@@ -6,7 +6,7 @@
  * the focus, the tap and the click that open the reason; its click runs nothing and leaves the menu open. The keyboard
  * follows the WAI-ARIA menu: the first item takes the focus when the menu opens, ↑ ↓ Home End move through every item
  * (the blocked ones too, separators skipped), Escape and Tab close and give the focus back to the element that opened the
- * menu. The old `disabled` (no reason) is drawn as before. Driven through test ids and roles, never through text.
+ * menu. An item is never off without a reason: there is no `disabled`. Driven through test ids and roles, never text.
  *
  * Registered in `front_component_unit` (`scripts/test_runner/_frontend_utility.py`, action `component-unit`).
  */
@@ -19,7 +19,7 @@ afterEach(() => {
     document.querySelector('[data-testid="probe-trigger"]')?.remove();
 });
 
-const ITEMS: ContextMenuItem[] = [{id: 'view', label: 'View'}, {type: 'separator'}, {id: 'sync', label: 'Sync', blocked: {hint: 'The Asset is inactive', reason: 'inactive'}}, {id: 'old', label: 'Old', disabled: true}, {id: 'delete', label: 'Delete', variant: 'danger'}];
+const ITEMS: ContextMenuItem[] = [{id: 'view', label: 'View'}, {type: 'separator'}, {id: 'sync', label: 'Sync', blocked: {hint: 'The Asset is inactive', reason: 'inactive'}}, {id: 'delete', label: 'Delete', variant: 'danger'}];
 
 /** A ⋮ that has the focus, as after the keyboard opened the menu from it. */
 function trigger(): HTMLButtonElement {
@@ -65,12 +65,6 @@ describe('ContextMenu — a blocked item says why (77 SEL-M)', () => {
         await fireEvent.pointerDown(tip);
         expect(onClose).not.toHaveBeenCalled();
     });
-
-    it('the old form without a reason stays natively disabled, as before', () => {
-        open();
-        expect(item('old')).toBeDisabled();
-        expect(item('old')).not.toHaveAttribute('aria-disabled');
-    });
 });
 
 describe('ContextMenu — the keyboard of a WAI-ARIA menu (77 SEL-M)', () => {
@@ -79,14 +73,14 @@ describe('ContextMenu — the keyboard of a WAI-ARIA menu (77 SEL-M)', () => {
         await waitFor(() => expect(item('view')).toHaveFocus());
     });
 
-    it('↓ reaches the blocked item, skipping the separator and the natively disabled one; Home and End; it wraps', async () => {
+    it('↓ reaches the blocked item, skipping the separator; Home and End; it wraps', async () => {
         open();
         const menu = screen.getByTestId('context-menu');
         await waitFor(() => expect(item('view')).toHaveFocus());
         await fireEvent.keyDown(menu, {key: 'ArrowDown'});
         expect(item('sync')).toHaveFocus();
         await fireEvent.keyDown(menu, {key: 'ArrowDown'});
-        expect(item('delete'), 'the natively disabled item cannot hold the focus').toHaveFocus();
+        expect(item('delete')).toHaveFocus();
         await fireEvent.keyDown(menu, {key: 'ArrowDown'});
         expect(item('view'), 'past the last item, the first').toHaveFocus();
         await fireEvent.keyDown(menu, {key: 'End'});

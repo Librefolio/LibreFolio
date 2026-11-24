@@ -159,7 +159,7 @@ async def _compute_until_disconnect(batch: ToolComputeBatchRequest, request: _To
 async def get_tool_catalog(request: Request, current_user: User = Depends(get_current_user)) -> ToolCatalogResponse:
     _execution_request(request)
     executor = get_tool_executor()
-    return await asyncio.to_thread(build_tool_catalog, executor.policy)
+    return await asyncio.to_thread(build_tool_catalog, executor.policy, usable_cpus=executor.usable_cpus)
 
 
 @router.post("/compute", response_model=ToolComputeBatchResponse)
@@ -293,7 +293,7 @@ async def compute_tools_stream(batch: ToolComputeBatchRequest, request: Request,
 async def get_tool_diagnostics(request: Request, current_user: User = Depends(get_current_user)) -> ToolDiagnosticsResponse:
     _execution_request(request)
     executor = get_tool_executor()
-    descriptors, failures = await asyncio.to_thread(effective_catalog_entries, executor.policy)
+    descriptors, failures = await asyncio.to_thread(effective_catalog_entries, executor.policy, usable_cpus=executor.usable_cpus)
     capabilities = await asyncio.to_thread(executor.resource_capabilities)
     return ToolDiagnosticsResponse(
         scope="api_process",

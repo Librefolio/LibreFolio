@@ -1558,9 +1558,9 @@ function comparisonAssetIds(requests: RiskRequest[], brokerSets: BrokerSets): nu
 
 /**
  * The brokers this user owns, ascending: OWNER, with a share unset or above zero, as
- * `getOwnedBrokers()` keeps them. Since R2/N the Dashboard asks its risk over every one of
- * them, whatever its broker filter — the scope that tells its requests apart from Broker
- * Detail's — and `heldBenchmarkCandidate` walks them.
+ * `getOwnedBrokers()` keeps them. Since R2/N the Dashboard with no broker filter asks its
+ * risk over every one of them — the scope that tells its requests apart from Broker
+ * Detail's; a filter narrows it (RSK-F) — and `heldBenchmarkCandidate` walks them.
  *
  * Read from the backend through `page.request`, which no route of `installRiskMocks`
  * intercepts, and never hard-coded. The Dashboard's tests read it twice, just before the
@@ -1977,8 +1977,8 @@ test.describe('Risk analysis functional integration', () => {
         // absent node from a hidden one.
         await expect(page.getByTestId('risk-beta-banner')).toHaveCount(0);
 
-        // Dashboard's scope is the whole portfolio, so it must carry no subset
-        // label. Broker Detail asserts the mirror image; the pair is what makes
+        // The unfiltered Dashboard's scope is every owned broker, so it must carry
+        // no subset label (a broker filter adds it, RSK-F: dashboard-cache). Broker Detail asserts the mirror image; the pair is what makes
         // the label mean something, since its text is translated and unassertable.
         await expect(panel.getByTestId('risk-scope-label')).toHaveCount(0);
 
@@ -4374,9 +4374,9 @@ test.describe('Risk analysis functional integration', () => {
 
     /**
      * T-4 (testlist of 07/11/2026): on a phone the simulation's parameters are one per row, the label on the left and the field on
-     * the right, every field on one right edge; the days line of the horizon sits under its field and never on the row below.
+     * the right, every field on one right edge and of one width (81 U30); the days line of the horizon sits under its field and never on the row below.
      */
-    test('T-4: at 375 px each simulation parameter is a row, label left and field right, and the horizon days stay off the next row', async ({page}) => {
+    test('T-4: at 375 px each simulation parameter is a row, label left and field right, all fields of one width, and the horizon days stay off the next row', async ({page}) => {
         await page.setViewportSize({width: 375, height: 812});
         await installRiskMocks(page);
         const panel = await openDashboardRisk(page);
@@ -4409,6 +4409,9 @@ test.describe('Risk analysis functional integration', () => {
         }
         const rights = layout.rows.map((entry) => Math.round(entry.field!.right));
         expect(Math.max(...rights) - Math.min(...rights), 'the fields do not share one right edge').toBeLessThanOrEqual(1);
+        // 81 U30: and they are of one width, not a width each (the testlist of 23/11: «campi di input tutti della stessa larghezza»).
+        const widths = layout.rows.map((entry) => ({id: entry.id, width: Math.round(entry.field!.right - entry.field!.left)}));
+        expect(Math.max(...widths.map((entry) => entry.width)) - Math.min(...widths.map((entry) => entry.width)), `the fields are not of one width: ${widths.map((entry) => `${entry.id} ${entry.width}px`).join(', ')}`).toBeLessThanOrEqual(1);
         const horizonField = layout.rows[0].field!;
         expect(layout.days.top, 'the days line is not under the horizon field').toBeGreaterThanOrEqual(horizonField.bottom - 1);
         expect(layout.days.bottom, 'the days line lies on the paths row').toBeLessThanOrEqual(layout.pathsRow.top + 1);
@@ -4825,6 +4828,9 @@ test.describe('Risk analysis — the reader’s risk-free rate (RN-21)', () => {
         const panel = await openDashboardRisk(page);
         const field = panel.getByTestId('risk-free-rate');
         await expect(field).toHaveValue('0');
+        // 81 U25: the field sits in L3's row, beside «Compare with», and nowhere else on the page.
+        await expect(panel.getByTestId('risk-l3-benchmark').getByTestId('risk-free-rate'), 'the rate is not beside «Compare with»').toHaveCount(1);
+        await expect(panel.getByTestId('risk-free-rate')).toHaveCount(1);
 
         const charged = page.waitForRequest(
             (request) => {
@@ -4882,4 +4888,28 @@ test.describe('Risk analysis — the reader’s risk-free rate (RN-21)', () => {
         await sharpeRequest;
         await expect(page.getByTestId('signal-param-risk-free-rate')).toHaveAttribute('data-percent', '2.5');
     });
+
+    // 81 U25: one row of controls in L3, «Compare with» and the rate. Wide enough they share the row; on a phone the rate
+    // wraps under the picker, and nothing — the field included — pushes the page sideways.
+    for (const [width, sameRow] of [
+        [1280, true],
+        [375, false],
+    ] as const) {
+        test(`the rate sits beside «Compare with» in L3's row and stays on screen at ${width} px (81 U25)`, async ({page}) => {
+            await page.setViewportSize({width, height: 900});
+            const panel = await openDashboardRisk(page);
+            const picker = panel.getByTestId('risk-l3-benchmark-select');
+            const field = panel.getByTestId('risk-free-rate-field');
+            await picker.scrollIntoViewIfNeeded();
+            const pickerBox = await picker.boundingBox();
+            const fieldBox = await field.boundingBox();
+            if (!pickerBox || !fieldBox) throw new Error('L3 drew no picker or no rate field, so there is no row to measure.');
+
+            const overlapsVertically = fieldBox.y < pickerBox.y + pickerBox.height && pickerBox.y < fieldBox.y + fieldBox.height;
+            expect(overlapsVertically, `the field and the picker ${sameRow ? 'are not' : 'are'} on one row at ${width} px`).toBe(sameRow);
+            expect(fieldBox.x + fieldBox.width, 'the rate field leaves the screen').toBeLessThanOrEqual(width);
+            const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+            expect(overflow, 'the page scrolls sideways').toBeLessThanOrEqual(0);
+        });
+    }
 });

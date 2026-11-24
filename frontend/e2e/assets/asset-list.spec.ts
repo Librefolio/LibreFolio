@@ -11,7 +11,7 @@
 import {IntlMessageFormat} from 'intl-messageformat';
 import {expect, test} from '../fixtures/playwright';
 import type {Locator, Page, Request} from '../fixtures/playwright';
-import {login, navigateTo} from '../fixtures/auth-helpers';
+import {login, navigateTo, setLanguage} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
 import {deleteDisposableUser, prepareOnboardingAccount, registerDisposableUser, type DisposableUser} from '../fixtures/onboarding-accounts';
 import {waitForSettled} from '../fixtures/app-events';
@@ -3188,7 +3188,7 @@ test.describe('Asset list — a card signal bound to the risk-free rate follows 
         ).toBe(true);
 
         await page.getByTestId('assets-tab-correlation').click();
-        const field = page.getByTestId('asset-global-risk-panel').getByTestId('risk-free-rate');
+        const field = page.getByTestId('asset-global-risk-panel').getByTestId('risk-asset-set-benchmark-row').getByTestId('risk-free-rate');
         await expect(field, 'the lab shows the rate field only once its opening selection is analysed (the seeded holdings)').toBeVisible({timeout: 20_000});
         // The answer to the card load at the new rate: the engine must accept it, not only receive it.
         const answeredAtNewRate = page.waitForResponse((response) => sharpeRatesOf(response.request()).includes(0.025), {timeout: 15_000});
@@ -3198,4 +3198,76 @@ test.describe('Asset list — a card signal bound to the risk-free rate follows 
         await expect.poll(() => rates.includes(0.025), {message: `the card did not ask its rolling Sharpe at the new rate, asked ${JSON.stringify(rates)}`, timeout: 15_000}).toBe(true);
         expect((await answeredAtNewRate).status(), 'the card load at the new rate was refused').toBe(200);
     });
+});
+
+/**
+ * 81 U33 — the table's columns hold their text: «Max drawdown» sat over «Δ 3m» (testlist of 23/11). At every width the page is
+ * used on, in every language, no header and no cell of the table draws a text past its own column, so one column never runs
+ * into the next. Measured, not looked at: the right edge of each cell's text (a Range over its text nodes) against the right
+ * edge of its cell. The period is two years, so the page offers every Δ column the table can show, and the risk column
+ * that is on by default sits right after them.
+ */
+test.describe('Asset list — the columns hold their text (81 U33)', () => {
+    test.beforeEach(async ({page}) => {
+        await login(page, TEST_USER);
+    });
+
+    interface RunOver {
+        kind: 'header' | 'cell';
+        column: string;
+        text: string;
+        over: number;
+    }
+
+    /** Every header and the cells of the first rows whose text ends past its own box, by how much. */
+    async function textPastItsColumn(page: Page): Promise<RunOver[]> {
+        return page.evaluate(() => {
+            const table = document.querySelector('[data-testid="assets-page"] table');
+            if (!table) throw new Error('the assets table is not on the page');
+            const headers = [...table.querySelectorAll('thead th')];
+            const found: RunOver[] = [];
+            const textRight = (cell: Element): {right: number; text: string} | null => {
+                const walker = document.createTreeWalker(cell, NodeFilter.SHOW_TEXT);
+                let right = -Infinity;
+                let text = '';
+                for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+                    if (!node.textContent?.trim()) continue;
+                    const range = document.createRange();
+                    range.selectNodeContents(node);
+                    for (const rect of range.getClientRects()) if (rect.width > 0) right = Math.max(right, rect.right);
+                    text += node.textContent.trim();
+                }
+                return right === -Infinity ? null : {right, text};
+            };
+            const check = (cell: Element, kind: 'header' | 'cell', column: string) => {
+                const measured = textRight(cell);
+                if (!measured) return;
+                const over = Math.round((measured.right - cell.getBoundingClientRect().right) * 10) / 10;
+                if (over > 0.5) found.push({kind, column, text: measured.text.slice(0, 30), over});
+            };
+            headers.forEach((th, index) => check(th, 'header', th.getAttribute('data-testid') ?? `#${index}`));
+            for (const row of [...table.querySelectorAll('tbody tr')].slice(0, 8)) {
+                [...row.querySelectorAll('td')].forEach((td, index) => check(td, 'cell', headers[index]?.getAttribute('data-testid') ?? `#${index}`));
+            }
+            return found;
+        });
+    }
+
+    for (const lang of ['en', 'it', 'fr', 'es'] as const) {
+        for (const width of [1440, 1024]) {
+            test(`${lang} at ${width} px: no header and no cell draws its text past its column`, async ({page}) => {
+                test.skip(test.info().project.name !== 'desktop', 'the width is set here: one project is enough');
+                await page.setViewportSize({width, height: 900});
+                await setLanguage(page, lang);
+                await goToAssetsPage(page, {start: daysAgoIso(730), end: todayIso()});
+                await page.getByTestId('view-mode-list').click();
+                const root = page.getByTestId('assets-page');
+                await expect(root, 'the risk columns never said they were in').toHaveAttribute('data-risk-columns', 'ready', {timeout: 30_000});
+                await expect(root).toHaveAttribute('data-busy', 'false', {timeout: 20_000});
+                await expect(page.locator('[data-testid="assets-page"] tbody tr').first(), 'the table has no rows').toBeVisible({timeout: 10_000});
+                const over = await textPastItsColumn(page);
+                expect(over, `text past its column at ${width} px in ${lang}: ${JSON.stringify(over)}`).toEqual([]);
+            });
+        }
+    }
 });

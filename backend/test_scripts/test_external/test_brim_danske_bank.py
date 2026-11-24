@@ -41,7 +41,11 @@ What is pinned (B0, and design v5.3 §3.4.2–§3.4.4, §3.5, §7.1):
   statement's start is imported on its trade date, after the opening, which subtracts it
   from its positions; a trade settled before the statement stays left out
   (``outside_cash_coverage``), its cash in that balance and its shares in the opening;
-- the exact facts of the two synthetic sample sets, "main" and "gap".
+- the exact facts of the two synthetic sample sets, "main" and "gap";
+- project 66, wave P2c (``TestLinkedCharges``, P2 contract §6): a trade whose sum works out is recorded at
+  quantity × Kurssi with its commission as a linked FEE, and one info notice lists those trades; a trade whose sum does
+  not work out keeps its charges todo; a zero difference has neither; the withdrawal tax names the one withdrawal of its
+  day. Compared with the snapshots of version 1.1.0 in ``brim_previous_outputs/broker_danske_bank/``.
 
 Edge cases are built in temporary folders by two small writers: an XLSX custody export
 (dates as text unless asked otherwise) and a cash statement written the way the bank
@@ -83,6 +87,7 @@ from backend.app.services.brim.brim_gap_fix import compute_gap_fix
 from backend.app.services.brim.brim_provider import BRIMProvider, BRIMSetRequiredError
 from backend.app.services.brim.combined_files import write_combined_csv
 from backend.app.services.brim.registry import BRIMProviderRegistry
+from backend.test_scripts.brim_charge_links import LINK_FIELDS, RowKey, assert_charge_link_structure, assert_expected_charge_links, load_previous_snapshot, sample_reimport_report, version_tuple
 from backend.test_scripts.brim_samples import SampleDir
 
 # =============================================================================
@@ -139,12 +144,18 @@ QUANTITY_VALUE_RE = re.compile(r"^-?\d+(\.\d*[1-9])?$")
 TAGS = ["import", "danske_bank"]
 DEMERGER_TAGS = ["import", "danske_bank", "demerger"]
 CHARGES = "danske_trade_charges_included"
+# Project 66, P2c: the info notice that lists the trades whose commission was split out as a linked FEE.
+SPLIT_NOTICE = "danske_trade_charges_split"
+# The opening of the old suggestion «Määrä × kurssi = … €: … erotus … € on todennäköisesti palkkio» (the plugin's own Finnish
+# text, not the UI's). Project 66, P2c (the developer's decision of 21/11): a charges todo exists only for a trade quantity
+# × price does not explain (a price in another currency, or 0), so it never suggests that figure nor carries «charges».
+GROSS_SUGGESTION = "Määrä × kurssi"
 DEMERGER = "demerger"
 DEMERGER_OLD = "demerger_old_leg"
 DANSKE_REASON_CODES = {CHARGES, DEMERGER, DEMERGER_OLD}
 # Parse notices and their severity; every excluded reason has its own "excluded_<reason>" notice, a warning except where
 # EXCLUDED_NOTICES says otherwise — but the silent reasons (SILENT_REASONS), which have none.
-PARSE_NOTICES = {"deferred_rows": "info", "name_mismatch": "warning", "proof_discarded": "info", "balance_chain_broken": "warning", "deposit_assumed": "info"}
+PARSE_NOTICES = {"deferred_rows": "info", "name_mismatch": "warning", "proof_discarded": "info", "balance_chain_broken": "warning", "deposit_assumed": "info", SPLIT_NOTICE: "info"}
 # Lot N74 (Fineco, safe rows): a trade the cash statement settles after its last row is not a fault — it comes with the
 # next import — so its notice is a note (info). Every other excluded reason stays a warning, excluded_status included.
 EXCLUDED_NOTICES = {"excluded_not_yet_settled": "info"}
@@ -451,27 +462,61 @@ def _cash_type(label: str) -> str:
     return "DEPOSIT"
 
 
-def _owed_transactions(records: List[Dict[str, str]]) -> List[Tuple[Any, ...]]:
-    """What the parse owes for each pair and standalone row, in file order:
-    ``(type, date, quantity, cash, title, description, tags)``.
+def _owed_split(record: Dict[str, str]) -> Optional[Tuple[Decimal, Decimal]]:
+    """Project 66, P2c: ``(trade cash, charges)`` of a paired purchase or sale whose sum quantity × Kurssi explains, else
+    None. The gross is |quantity| × Kurssi to the cent; it explains the sum paid when it is not zero and the difference
+    (paid − gross for a purchase, gross − received for a sale) is between 0 and max(15, 1 % of the gross). The trade is
+    then booked at the gross (negative for a purchase), and a difference above zero is its FEE."""
+    if record["lf_row_kind"] != "pair" or record["custody:Toimeksiantotyyppi"] == "Tuotto":
+        return None
+    quantity, paid = _number(record["custody:Määrä"]), _number(record["cash:Määrä"])
+    gross = abs(quantity * _number(record["custody:Kurssi"])).quantize(Decimal("0.01"))
+    if gross <= 0:
+        return None
+    charges = abs(paid) - gross if quantity > 0 else gross - abs(paid)
+    if not Decimal(0) <= charges <= max(Decimal(15), gross / 100):
+        return None
+    return (-gross if quantity > 0 else gross), charges
+
+
+def _owed_rows(records: List[Dict[str, str]]) -> List[Tuple[Tuple[Any, ...], List[Tuple[str, str, str]]]]:
+    """What the parse owes for each pair and standalone row, in file order: the transaction
+    ``(type, date, quantity, cash, title, description, tags)`` and its todos ``(reason, field, severity)``.
 
     Lot B-52: a pair (a trade, or a ``Tuotto``) and a demerger line are dated on the custody ``Kauppapäivä`` (the trade
-    date). A cash-only row keeps its ``Pvm``, the only date it has."""
-    owed = []
+    date). A cash-only row keeps its ``Pvm``, the only date it has.
+
+    Project 66, P2c (``_owed_split``): a trade whose sum quantity × Kurssi explains is owed at the gross, followed by its
+    FEE (the difference, negative, same date and title, ``Palkkio: `` + the trade's description) when the difference is
+    not zero; it has no todo. A trade whose sum is not explained keeps the cash of its pair and its charges todo."""
+    owed: List[Tuple[Tuple[Any, ...], List[Tuple[str, str, str]]]] = []
     for record in records:
         kind = record["lf_row_kind"]
         if kind == "pair":
             order = record["custody:Toimeksiantotyyppi"]
             quantity = _number(record["custody:Määrä"])
             tx_type = "DIVIDEND" if order == "Tuotto" else ("BUY" if quantity > 0 else "SELL")
-            owed.append((tx_type, _from_fi_date(record["custody:Kauppapäivä"]), Decimal(0) if tx_type == "DIVIDEND" else quantity, _number(record["cash:Määrä"]), record["custody:Sijoituskohde"], f"{record['cash:Saaja/Maksaja']} ({order})", TAGS))
+            day, title, description = _from_fi_date(record["custody:Kauppapäivä"]), record["custody:Sijoituskohde"], f"{record['cash:Saaja/Maksaja']} ({order})"
+            split = _owed_split(record)
+            cash = _number(record["cash:Määrä"]) if split is None else split[0]
+            todos = [(CHARGES, "cash", "warning")] if tx_type != "DIVIDEND" and split is None else []
+            owed.append(((tx_type, day, Decimal(0) if tx_type == "DIVIDEND" else quantity, cash, title, description, TAGS), todos))
+            if split is not None and split[1] > 0:
+                owed.append((("FEE", day, Decimal(0), -split[1], title, f"Palkkio: {description}", TAGS), []))
         elif kind == "standalone" and record["cash:Pvm"]:
             label = record["cash:Saaja/Maksaja"]
-            owed.append((_cash_type(label), _from_fi_date(record["cash:Pvm"]), Decimal(0), _number(record["cash:Määrä"]), None, label, TAGS))
+            owed.append(((_cash_type(label), _from_fi_date(record["cash:Pvm"]), Decimal(0), _number(record["cash:Määrä"]), None, label, TAGS), []))
         elif kind == "standalone":
             title = record["custody:Sijoituskohde"]
-            owed.append(("ADJUSTMENT", _from_fi_date(record["custody:Kauppapäivä"]), _number(record["custody:Määrä"]), None, title, f"{record['custody:Toimeksiantotyyppi']}: {title}", DEMERGER_TAGS))
+            quantity = _number(record["custody:Määrä"])
+            todos = [(DEMERGER, "cost_basis_override", "blocker")] if quantity > 0 else [(DEMERGER_OLD, "quantity", "warning")]
+            owed.append((("ADJUSTMENT", _from_fi_date(record["custody:Kauppapäivä"]), quantity, None, title, f"{record['custody:Toimeksiantotyyppi']}: {title}", DEMERGER_TAGS), todos))
     return owed
+
+
+def _owed_transactions(records: List[Dict[str, str]]) -> List[Tuple[Any, ...]]:
+    """The transactions of ``_owed_rows``, in file order."""
+    return [transaction for transaction, _todos in _owed_rows(records)]
 
 
 def _assert_each_source_row_once(row_counts: Dict[Tuple[str, int], int], records: List[Dict[str, str]]) -> None:
@@ -1051,16 +1096,16 @@ EXCLUDED_SOURCES = [
     pytest.param("scenario", "early_end", ("not_yet_settled",), id="early_end"),
 ]
 NOTICE_SOURCES = [
-    pytest.param("sample", "main", ("deferred_rows", "deposit_assumed"), id="main"),
+    pytest.param("sample", "main", ("deferred_rows", "deposit_assumed", SPLIT_NOTICE), id="main"),
     pytest.param("scenario", "same_day", ("proof_discarded",), id="same_day"),
     pytest.param("scenario", "name_mismatch", ("name_mismatch",), id="name_mismatch"),
     pytest.param("scenario", "chain", ("balance_chain_broken",), id="chain"),
 ]
 # The notices of the sample sets, (code, severity, context): every row of the samples is booked and none is a «Varaus»,
-# so lot W-B85 changes nothing in them.
+# so lot W-B85 changes nothing in them. Project 66, P2c adds the info notice of the split trades: 10 in main, 4 in gap.
 SAMPLE_NOTICES = {
-    "main": [("deferred_rows", "info", {"count": 1}), ("deposit_assumed", "info", {"count": 2})],
-    "gap": [("deposit_assumed", "info", {"count": 2}), ("excluded_not_yet_settled", "info", {"count": 1, "reason": "not_yet_settled"})],
+    "main": [(SPLIT_NOTICE, "info", {"count": 10}), ("deferred_rows", "info", {"count": 1}), ("deposit_assumed", "info", {"count": 2})],
+    "gap": [(SPLIT_NOTICE, "info", {"count": 4}), ("deposit_assumed", "info", {"count": 2}), ("excluded_not_yet_settled", "info", {"count": 1, "reason": "not_yet_settled"})],
 }
 
 
@@ -1079,12 +1124,12 @@ class TestIdentity:
         assert type(plugin).__module__ == PLUGIN_MODULE
 
     def test_metadata(self) -> None:
-        """Name, extensions, priority, version, icon and docs page. The version is 1.1.0 (lot B-52, the operation date) —
-        red until the plugin bumps it from 1.0.2."""
+        """Name, extensions, priority, version, icon and docs page. The version is 1.2.0 (project 66, P2c: the commission
+        split out as a linked FEE, the withdrawal tax linked)."""
         plugin = _danske()
 
-        # 1.1.0: lot B-52, trades on Kauppapäivä and truths in operation-date terms (1.0.2: lot W-B85; 1.0.1: lot N74).
-        assert (plugin.provider_name, plugin.supported_extensions, plugin.detection_priority, plugin.plugin_version) == ("Danske Bank", [".xlsx", ".csv"], 100, "1.1.0")
+        # 1.2.0: project 66, P2c, linked charges (1.1.0: lot B-52, trades on Kauppapäivä; 1.0.2: lot W-B85; 1.0.1: lot N74).
+        assert (plugin.provider_name, plugin.supported_extensions, plugin.detection_priority, plugin.plugin_version) == ("Danske Bank", [".xlsx", ".csv"], 100, "1.2.0")
         assert plugin.description and plugin.description.strip()
         assert (plugin.icon_url, plugin.docs_url) == ("https://danskebank.fi/favicon.ico", "/mkdocs/user/transactions/import/danske-bank/")
         assert plugin.test_file_pattern == "danske_bank"
@@ -1104,15 +1149,14 @@ class TestIdentity:
         assert all(role.description.strip() for role in roles)
 
     def test_plugin_catalogue_shows_the_roles(self) -> None:
-        """The catalogue entry: identity, version 1.1.0 (lot B-52) — red until the plugin bumps it from 1.0.2 — and the
-        two roles."""
+        """The catalogue entry: identity, version 1.2.0 (project 66, P2c) and the two roles."""
         plugin = _danske()
 
         info = plugin.to_plugin_info()
         catalogue = {item.code: item for item in BRIMProviderRegistry.list_plugin_info()}
 
-        # 1.1.0: lot B-52, trades on Kauppapäivä and truths in operation-date terms (1.0.2: lot W-B85; 1.0.1: lot N74).
-        assert (info.code, info.name, info.plugin_version, info.detection_priority, info.icon_url, info.docs_url) == (PLUGIN_CODE, "Danske Bank", "1.1.0", 100, plugin.icon_url, plugin.docs_url)
+        # 1.2.0: project 66, P2c, linked charges (1.1.0: lot B-52, trades on Kauppapäivä; 1.0.2: lot W-B85; 1.0.1: lot N74).
+        assert (info.code, info.name, info.plugin_version, info.detection_priority, info.icon_url, info.docs_url) == (PLUGIN_CODE, "Danske Bank", "1.2.0", 100, plugin.icon_url, plugin.docs_url)
         assert info.report_roles == plugin.report_roles
         assert [role.code for role in catalogue[PLUGIN_CODE].report_roles] == ["custody", "cash"]
 
@@ -1854,8 +1898,12 @@ class TestPairing:
         assert pair["lf_row_kind"] == "pair" and pair is builder.row(records, "c")
         notices = [notice for notice in output.warnings if notice.code == "name_mismatch"]
         assert notices and all(notice.severity == "warning" for notice in notices)
-        # Found by its cash, not by its date: lot B-52 moves the date of a pair from the value date to the trade date.
-        [buy] = [tx for tx in output.transactions if tx.type.value == "BUY" and tx.cash is not None and tx.cash.amount == Decimal("-208")]
+        # Found by its cash, not by its date: lot B-52 moves the date of a pair from the value date to the trade date. Project 66,
+        # P2c: the purchase is booked at 10 × 20 and its 8 of charges are a FEE linked to it (_owed_split of the pair).
+        trade_cash, charges = _owed_split(pair)
+        assert (trade_cash, charges) == (Decimal("-200"), Decimal("8")), "premise: 10 × 20 explains the 208 paid"
+        [buy] = [tx for tx in output.transactions if tx.type.value == "BUY" and tx.cash is not None and tx.cash.amount == trade_cash]
+        assert [(tx.type.value, tx.cash.amount) for tx in output.transactions if buy.ref and tx.parent_ref == buy.ref] == [("FEE", -charges)], "its commission is a FEE linked to it"
         assert (_names(output)[buy.asset_id], buy.description) == ("Aurora Metsä Oyj", "Osto Revontuli Oyj (Rajakurssi)")
 
     def test_names_sort_out_two_titles_with_the_same_key(self, tmp_path_factory: pytest.TempPathFactory) -> None:
@@ -2516,8 +2564,9 @@ class TestOperationDateTruths:
           row.
         - Aurora's position, proven by the Tuotto (exact:E1), is the 60 shares it holds minus the moves imported between
           the opening and the Tuotto, by value date: 60 − 10 = 50.
-        - The purchase x, traded on 03-08 and settled on 03-10, is imported as a BUY on 03-08 (10 shares, −208), its true
-          cost. It is not left out, and it brings no new notice.
+        - The purchase x, traded on 03-08 and settled on 03-10, is imported as a BUY on 03-08 (10 shares). Project 66, P2c:
+          10 × 20 explains the 208 paid, so it is booked at −200 with a linked FEE of −8 on the same day. It is not left
+          out, and it brings no notice but the split one.
         - k1, settled on 03-03 before the statement, stays left out (``outside_cash_coverage``). It is settled after the
           opening, so its zone is the window. n stays left out too (``no_counterpart``).
         - The verification (04-20) has nothing in flight and stays 801.00."""
@@ -2528,7 +2577,7 @@ class TestOperationDateTruths:
         assert (builder.row(records, "x")["lf_row_kind"], builder.row(records, "x") is builder.row(records, "cx")) == ("pair", True), "premise: x pairs with the statement's first row"
         assert [(builder.row(records, key)["lf_row_kind"], builder.row(records, key)["lf_reason"]) for key in ("k1", "n")] == [("excluded", "outside_cash_coverage"), ("excluded", "no_counterpart")], "premise: k1 and n are left out"
         assert _in_flight(records, "2021-02-28") == (Decimal(0), {}), "premise: nothing is in flight on the eve of the custody export"
-        assert sorted(_codes(output.warnings)) == ["excluded_no_counterpart", "excluded_outside_cash_coverage"], "x is imported: no new notice"
+        assert sorted(_codes(output.warnings)) == sorted([SPLIT_NOTICE, "excluded_no_counterpart", "excluded_outside_cash_coverage"]), "x is imported, its commission split: no other new notice"
         assert [(row["lf_checkpoint"], row["lf_value"]) for row in _truth(records, "verification")] == [("2021-04-20", "801.00")]
 
         assert [(row["lf_checkpoint"], row["lf_value"], row["lf_zone"]) for row in _truth(records, "truth_cash")] == [("2021-02-28", "1000.00", "before")], "A13 (20/10): the opening on the eve of the custody export, with the statement's first balance"
@@ -2536,7 +2585,11 @@ class TestOperationDateTruths:
         opening = _checkpoint(output, "2021-02-28")
         assert (opening.kind, _money(opening.cash), _positions(output, opening), opening.absorbed.count, _money(opening.absorbed.opening_cash)) == ("opening", {"EUR": Decimal("1000.00")}, {"Aurora Metsä Oyj": (Decimal("50"), "exact")}, 0, {"EUR": Decimal("1000.00")})
         assert builder.row(records, "k1")["lf_zone"] == "window", "k1 is settled after the opening"
-        assert [tx[:5] for tx in _transactions(output) if tx[0] in ("BUY", "SELL")] == [("BUY", _d("2021-03-08"), Decimal("10"), Decimal("-208"), "Aurora Metsä Oyj")], "B-52: x is imported on its trade date"
+        trade_cash, charges = _owed_split(builder.row(records, "x"))
+        assert [tx[:5] for tx in _transactions(output) if tx[0] in ("BUY", "SELL") or (tx[0] == "FEE" and tx[4] is not None)] == [
+            ("BUY", _d("2021-03-08"), Decimal("10"), trade_cash, "Aurora Metsä Oyj"),
+            ("FEE", _d("2021-03-08"), Decimal("0"), -charges, "Aurora Metsä Oyj"),
+        ], "B-52: x is imported on its trade date; P2c: at 10 × 20, its commission a FEE of the same day"
 
     @pytest.mark.asyncio
     async def test_gap_fix_of_the_a13_opening_finds_nothing_to_correct(self, tmp_path_factory: pytest.TempPathFactory) -> None:
@@ -2545,8 +2598,9 @@ class TestOperationDateTruths:
         Scenario "b52_a13", through the gap-fix of a first import. The opening is on 02-28, so H0 is 03-01, the custody
         export's first day: the wizard shows every custody trade.
         - The opening proposes the statement's first balance (1000.00) and Aurora's 50 shares. Nothing is unexplained.
-        - x is selected as a BUY on 03-08, at its true cost (−208, 10 shares). After it LibreFolio holds 792.00 and 60
-          Aurora shares, as the bank says: the balance after x, and the shares the Tuotto of 04-20 states.
+        - x is selected as a BUY on 03-08 (10 shares) at 10 × 20, −200, with its FEE of −8 on the same day (project 66,
+          P2c): together the 208 paid. After it LibreFolio holds 792.00 and 60 Aurora shares, as the bank says: the balance
+          after x, and the shares the Tuotto of 04-20 states.
         - The verification on 04-20 is ok (801.00).
         The amounts are the ones of today; the dates are not."""
         _builder, _table, _path, output = _scenario_parse("b52_a13", tmp_path_factory)
@@ -2563,7 +2617,10 @@ class TestOperationDateTruths:
         assert _gap_fix_positions(opening, titles) == {"Aurora Metsä Oyj": ("exact", Decimal("50"), Decimal(0), Decimal("50"))}
 
         assert (opening.as_of, history_start) == (_d("2021-02-28"), _d("2021-03-01")), "A13 (20/10): the opening on the eve of the custody export, H0 its first day"
-        assert [(tx.date, tx.quantity, tx.cash.amount) for tx in selection if tx.type.value == "BUY"] == [(_d("2021-03-08"), Decimal("10"), Decimal("-208"))], "B-52: x is selected on its trade date, at its true cost"
+        assert [(tx.type.value, tx.date, tx.quantity, tx.cash.amount) for tx in selection if tx.type.value == "BUY" or (tx.type.value == "FEE" and tx.asset_id is not None)] == [
+            ("BUY", _d("2021-03-08"), Decimal("10"), Decimal("-200")),
+            ("FEE", _d("2021-03-08"), Decimal("0"), Decimal("-8")),
+        ], "B-52: x is selected on its trade date; P2c: at 10 × 20, with its commission"
         after_x = (_ledger_cash(response, selection, _d("2021-03-08")), _ledger_quantity(response, selection, titles["Aurora Metsä Oyj"], _d("2021-03-08")))
         assert after_x == (Decimal("792.00"), Decimal("60")), "after x LibreFolio holds what the bank says: 792.00 and 60 Aurora shares"
 
@@ -2636,7 +2693,8 @@ class TestOperationDateTruths:
         saimaa = titles["Saimaa Energia Oyj"]
         proposals = [proposal for result in response.checkpoints for proposal in result.proposals]
 
-        assert [(tx.type.value, tx.quantity) for tx in selection if tx.asset_id == saimaa] == [("SELL", -sold)], "premise: the sale is selected"
+        # Project 66, P2c: 5 × 20 explains the 92 received, so the sale comes with its FEE (no shares).
+        assert [(tx.type.value, tx.quantity) for tx in selection if tx.asset_id == saimaa] == [("SELL", -sold), ("FEE", Decimal(0))], "premise: the sale is selected"
         brought = [item for item in _gap_fix_proposals(_gap_fix_at(response, opening_day), titles) if item[2] == "Saimaa Energia Oyj"]
         assert [(item[0], item[3] >= sold) for item in brought] == [("ADJUSTMENT", True)], f"the opening brings at least the {sold} shares sold: {brought}"
         holdings = {day.isoformat(): _ledger_quantity(response, selection, saimaa, day) for day in sorted({row.date for row in [*selection, *proposals] if row.asset_id == saimaa})}
@@ -2990,20 +3048,18 @@ class TestParseContract:
 
     @pytest.mark.parametrize(("source", "name"), PARSED_SETS)
     def test_todos_per_transaction(self, source: str, name: str, tmp_path_factory: pytest.TempPathFactory) -> None:
-        """Every BUY and SELL: charges included (warning on ``cash``). A demerger: a blocking cost on the new lines, a warning on the old one."""
-        _table, _path, output = _combined(source, name, tmp_path_factory)
+        """A BUY or SELL whose sum quantity × Kurssi does not explain: charges included (warning on ``cash``); one it
+        explains (project 66, P2c, ``_owed_split``) and its FEE: none. A demerger: a blocking cost on the new lines, a
+        warning on the old one."""
+        table, _path, output = _combined(source, name, tmp_path_factory)
+        owed = _owed_rows(_records(table))
         by_transaction: Dict[int, List[Tuple[str, str, str]]] = defaultdict(list)
         for todo in output.field_todos:
             by_transaction[todo.tx_index].append((todo.reason_code, todo.field, todo.severity))
 
+        assert len(owed) == len(output.transactions), "premise: one transaction per owed row (test_transactions_follow_the_combined_rows)"
         assert set(by_transaction) <= set(range(len(output.transactions)))
-        for index, tx in enumerate(output.transactions):
-            if tx.type.value in ("BUY", "SELL"):
-                expected = [(CHARGES, "cash", "warning")]
-            elif tx.type.value == "ADJUSTMENT":
-                expected = [(DEMERGER, "cost_basis_override", "blocker")] if tx.quantity > 0 else [(DEMERGER_OLD, "quantity", "warning")]
-            else:
-                expected = []
+        for index, (tx, (_owed_tx, expected)) in enumerate(zip(output.transactions, owed, strict=True)):
             assert sorted(by_transaction.get(index, [])) == expected, f"transaction {index}: {tx.type.value} {tx.date} {tx.description}"
 
     @pytest.mark.parametrize(("source", "name"), PARSED_SETS)
@@ -3016,7 +3072,8 @@ class TestParseContract:
         records = _records(table)
         names = _names(output)
         todos = [todo for todo in output.field_todos if todo.reason_code == CHARGES]
-        assert todos or not any(tx.type.value in ("BUY", "SELL") for tx in output.transactions)
+        # Project 66, P2c: only a trade whose sum quantity × Kurssi does not explain keeps the todo.
+        assert len(todos) == sum(1 for _tx, owed in _owed_rows(records) if (CHARGES, "cash", "warning") in owed)
 
         for todo in todos:
             tx = output.transactions[todo.tx_index]
@@ -3026,16 +3083,14 @@ class TestParseContract:
             assert isinstance(context["row"], int) and 2 <= context["row"] <= len(records) + 1, where
             record = records[context["row"] - 2]
             assert (record["lf_row_kind"], _from_fi_date(record["custody:Kauppapäivä"]), record["custody:Sijoituskohde"]) == ("pair", tx.date, names[tx.asset_id]), where
+            assert _owed_split(record) is None, f"{where}: a trade whose sum is explained is split, it has no todo"
             assert context["cash"] == f"{abs(tx.cash.amount):.2f}", f"{where}: cash is the absolute amount with two decimals"
             assert (context["currency"], context["compare_nominal"], context["split_hint"]) == ("EUR", False, "trade_charges"), where
             suggestions = context["split_suggestions"]
             assert isinstance(suggestions, list) and suggestions and all(isinstance(item, str) and item.strip() for item in suggestions), where
-            gross = abs(_number(record["custody:Määrä"]) * _number(record["custody:Kurssi"]))
-            difference = abs(tx.cash.amount) - gross if tx.quantity > 0 else gross - abs(tx.cash.amount)
-            if Decimal(0) <= difference <= max(Decimal(15), gross / 100):
-                assert context.get("charges") == f"{difference:.2f}", where
-            else:
-                assert "charges" not in context, f"{where}: the price is in another currency, there is no amount to suggest"
+            # P2c (21/11): quantity × price does not explain this trade, so the todo has no amount to suggest.
+            assert "charges" not in context, f"{where}: a charges todo carries no «charges»"
+            assert not any(GROSS_SUGGESTION in item for item in suggestions), f"{where}: no «{GROSS_SUGGESTION}» suggestion: {suggestions}"
 
     @pytest.mark.parametrize(("source", "name"), PARSED_SETS)
     def test_every_todo_shows_its_source_rows(self, source: str, name: str, tmp_path_factory: pytest.TempPathFactory) -> None:
@@ -3090,6 +3145,7 @@ class TestParseContract:
         assert ("deferred_rows" in by_code) == any(record["lf_row_kind"] == "deferred" for record in records)
         assert ("proof_discarded" in by_code) == any(record["lf_proof"].startswith("discarded:") for record in _truth(records, "truth_position"))
         assert ("deposit_assumed" in by_code) == any(tx.type.value == "DEPOSIT" for tx in output.transactions)
+        assert (SPLIT_NOTICE in by_code) == any(split is not None and split[1] > 0 for split in map(_owed_split, records))
 
     @pytest.mark.parametrize(("source", "name"), PARSED_SETS)
     def test_checkpoints_and_verifications_are_the_truth_rows(self, source: str, name: str, tmp_path_factory: pytest.TempPathFactory) -> None:
@@ -3125,9 +3181,19 @@ class TestParseContract:
 # 13. THE MAIN SAMPLE SET
 # =============================================================================
 
+
+def _with_fee(trade: Tuple[Optional[str], ...], fee: str) -> List[Tuple[Optional[str], ...]]:
+    """A split trade (project 66, P2c) and the FEE right after it: same date and title, no shares, ``fee`` as cash, and
+    ``Palkkio: `` + the trade's description."""
+    _tx_type, day, _quantity, _cash, title, description = trade
+    return [trade, ("FEE", day, "0", fee, title, f"Palkkio: {description}")]
+
+
 # (type, date, quantity, cash, title, description), in the order of the combined file (by value date). Lot B-52: a paired
 # trade is dated on its trade date (custody Kauppapäivä), two business days before its cash row here; a Tuotto and a
-# demerger have both dates equal; a cash-only row keeps its Pvm.
+# demerger have both dates equal; a cash-only row keeps its Pvm. Project 66, P2c: a trade whose sum quantity × Kurssi
+# explains is booked at quantity × Kurssi, its 8 of charges a FEE right after it; Kaamos (a price in another currency:
+# 300 × 41.2 is no 1181.04) keeps the sum paid.
 MAIN_TRANSACTIONS = [
     ("DEPOSIT", "2019-01-07", "0", "6000", None, "Matti Meikäläinen"),
     ("FEE", "2019-03-29", "0", "-3.5", None, "Palvelumaksut 03/2019"),
@@ -3137,24 +3203,24 @@ MAIN_TRANSACTIONS = [
     ("WITHDRAWAL", "2019-11-04", "0", "-300", None, "Nosto osakesäästötililtä"),
     ("FEE", "2019-12-31", "0", "-3.5", None, "Palvelumaksut 12/2019"),
     ("BUY", "2020-02-03", "300", "-1181.04", "Kaamos Robotics AB", "Osto Kaamos Robotics AB (Rajakurssi)"),
-    ("BUY", "2020-02-10", "50", "-718", "Aurora Metsä Oyj", "Osto Aurora Metsä Oyj (Rajakurssi)"),
-    ("BUY", "2020-03-02", "40", "-402", "Lumi Holding Oyj", "Osto Lumi Holding Oyj (Pikakauppa)"),
-    ("SELL", "2020-03-10", "-120", "724", "Pohjola Tekniikka Oyj", "Myynti Pohjola Tekniikka (Päivän kurssi)"),
+    *_with_fee(("BUY", "2020-02-10", "50", "-710", "Aurora Metsä Oyj", "Osto Aurora Metsä Oyj (Rajakurssi)"), "-8"),
+    *_with_fee(("BUY", "2020-03-02", "40", "-394", "Lumi Holding Oyj", "Osto Lumi Holding Oyj (Pikakauppa)"), "-8"),
+    *_with_fee(("SELL", "2020-03-10", "-120", "732", "Pohjola Tekniikka Oyj", "Myynti Pohjola Tekniikka (Päivän kurssi)"), "-8"),
     ("DEPOSIT", "2020-03-20", "0", "1000", None, "Matti Meikäläinen"),
-    ("BUY", "2020-03-25", "25", "-318", "Saimaa Energia Oyj", "Osto Saimaa Energia Oyj (Rajakurssi)"),
-    ("BUY", "2020-03-25", "25", "-318", "Saimaa Energia Oyj", "Osto Saimaa Energia Oyj (Rajakurssi)"),
+    *_with_fee(("BUY", "2020-03-25", "25", "-310", "Saimaa Energia Oyj", "Osto Saimaa Energia Oyj (Rajakurssi)"), "-8"),
+    *_with_fee(("BUY", "2020-03-25", "25", "-310", "Saimaa Energia Oyj", "Osto Saimaa Energia Oyj (Rajakurssi)"), "-8"),
     ("FEE", "2020-03-31", "0", "-3.5", None, "Palvelumaksut 03/2020"),
-    ("BUY", "2020-04-01", "20", "-116", "Pohjola Tekniikka Oyj", "Osto Pohjola Tekniikka O (Rajakurssi)"),
+    *_with_fee(("BUY", "2020-04-01", "20", "-108", "Pohjola Tekniikka Oyj", "Osto Pohjola Tekniikka O (Rajakurssi)"), "-8"),
     ("DIVIDEND", "2020-04-15", "0", "22.5", "Aurora Metsä Oyj", "Aurora Metsä 4820193756 (Tuotto)"),
-    ("SELL", "2020-05-05", "-80", "532", "Pohjola Tekniikka Oyj", "Myynti Pohjola Tekniikka (Päivän kurssi)"),
-    ("SELL", "2020-05-20", "-30", "466", "Aurora Metsä Oyj", "Myynti Aurora Metsä Oyj (Rajakurssi)"),
+    *_with_fee(("SELL", "2020-05-05", "-80", "540", "Pohjola Tekniikka Oyj", "Myynti Pohjola Tekniikka (Päivän kurssi)"), "-8"),
+    *_with_fee(("SELL", "2020-05-20", "-30", "474", "Aurora Metsä Oyj", "Myynti Aurora Metsä Oyj (Rajakurssi)"), "-8"),
     ("ADJUSTMENT", "2020-06-01", "-100", None, "Lumi Holding Oyj", "Jakautuminen, vanha: Lumi Holding Oyj"),
     ("ADJUSTMENT", "2020-06-01", "100", None, "Lumi Kiinteistöt Oyj", "Jakautuminen, uusi: Lumi Kiinteistöt Oyj"),
     ("ADJUSTMENT", "2020-06-01", "100", None, "Lumi Palvelut Oyj", "Jakautuminen, uusi: Lumi Palvelut Oyj"),
     ("TAX", "2020-06-10", "0", "-45", None, "Vero osakesäästötililtä"),
     ("WITHDRAWAL", "2020-06-10", "0", "-500", None, "Nosto osakesäästötililtä"),
-    ("SELL", "2020-06-15", "-50", "152", "Lumi Palvelut Oyj", "Myynti Lumi Palvelut Oyj (Päivän kurssi)"),
-    ("BUY", "2020-06-26", "10", "-218", "Tunturi Pankki Oyj", "Osto Tunturi Pankki Oyj (Rajakurssi)"),
+    *_with_fee(("SELL", "2020-06-15", "-50", "160", "Lumi Palvelut Oyj", "Myynti Lumi Palvelut Oyj (Päivän kurssi)"), "-8"),
+    *_with_fee(("BUY", "2020-06-26", "10", "-210", "Tunturi Pankki Oyj", "Osto Tunturi Pankki Oyj (Rajakurssi)"), "-8"),
     ("FEE", "2020-06-30", "0", "-3.5", None, "Palvelumaksut 06/2020"),
 ]
 # custody line -> cash line of every pair but the two identical partial fills (custody 14 and 15, cash 13 and 14).
@@ -3198,16 +3264,19 @@ def _pair_lines(records: List[Dict[str, str]]) -> Dict[Tuple[int, int], int]:
     return pairs
 
 
-def _expected_todos(transactions: Sequence[Tuple[str, ...]]) -> List[Tuple[Any, ...]]:
+def _expected_todos(transactions: Sequence[Tuple[Optional[str], ...]]) -> List[Tuple[Any, ...]]:
     """(transaction, reason, field, severity, cash, charges) of the sample todos.
 
-    A split todo states the trade's cash as its absolute amount with two decimals ("718.00") and, for a
-    title priced in EUR, charges of 8.00; the title priced in another currency gets no charges.
+    Project 66, P2c: a trade followed by its FEE (``_with_fee``) was split and has no todo. The others keep the charges
+    todo, stating the trade's cash as its absolute amount with two decimals ("1181.04") and no charges: in the samples
+    they are the titles priced in another currency.
     """
     todos = []
-    for index, (tx_type, _day, quantity, cash, title, _description) in enumerate(transactions):
-        if tx_type in ("BUY", "SELL"):
-            todos.append((index, CHARGES, "cash", "warning", f"{abs(Decimal(cash)):.2f}", None if title == "Kaamos Robotics AB" else "8.00"))
+    for index, (tx_type, _day, quantity, cash, _title, description) in enumerate(transactions):
+        follower = transactions[index + 1] if index + 1 < len(transactions) else None
+        split = follower is not None and follower[0] == "FEE" and follower[5] == f"Palkkio: {description}"
+        if tx_type in ("BUY", "SELL") and not split:
+            todos.append((index, CHARGES, "cash", "warning", f"{abs(Decimal(cash)):.2f}", None))
         elif tx_type == "ADJUSTMENT":
             todos.append((index, DEMERGER, "cost_basis_override", "blocker", None, None) if Decimal(quantity) > 0 else (index, DEMERGER_OLD, "quantity", "warning", None, None))
     return todos
@@ -3273,7 +3342,8 @@ class TestMainSampleFacts:
         _table, _path, output = _sample_parse("main", tmp_path_factory)
 
         assert _transactions(output) == [_expected_tx(*row) for row in MAIN_TRANSACTIONS]
-        assert Counter(tx.type.value for tx in output.transactions) == Counter({"BUY": 7, "SELL": 4, "DIVIDEND": 1, "ADJUSTMENT": 3, "FEE": 6, "TAX": 2, "WITHDRAWAL": 2, "DEPOSIT": 2})
+        # Project 66, P2c: 6 service fees and the 10 commissions split out of the trades.
+        assert Counter(tx.type.value for tx in output.transactions) == Counter({"BUY": 7, "SELL": 4, "DIVIDEND": 1, "ADJUSTMENT": 3, "FEE": 16, "TAX": 2, "WITHDRAWAL": 2, "DEPOSIT": 2})
 
     def test_assets(self, tmp_path_factory: pytest.TempPathFactory) -> None:
         _table, _path, output = _sample_parse("main", tmp_path_factory)
@@ -3281,19 +3351,20 @@ class TestMainSampleFacts:
         assert sorted(_names(output).values()) == ["Aurora Metsä Oyj", "Kaamos Robotics AB", "Lumi Holding Oyj", "Lumi Kiinteistöt Oyj", "Lumi Palvelut Oyj", "Pohjola Tekniikka Oyj", "Saimaa Energia Oyj", "Tunturi Pankki Oyj"]
 
     def test_todos(self, tmp_path_factory: pytest.TempPathFactory) -> None:
-        """11 trades with charges included (8.00 each, none for the title priced in another currency), two blocking new lines, one old line."""
+        """Project 66, P2c: of the 11 trades only the title priced in another currency keeps its charges todo (the other
+        10 are split); two blocking new lines, one old line."""
         _table, _path, output = _sample_parse("main", tmp_path_factory)
 
         todos = _sample_todos(output)
 
         assert todos == _expected_todos(MAIN_TRANSACTIONS)
-        assert Counter(todo[1] for todo in todos) == Counter({CHARGES: 11, DEMERGER: 2, DEMERGER_OLD: 1})
-        assert [todo[4] for todo in todos if todo[0] in (7, 8)] == ["1181.04", "718.00"]
+        assert Counter(todo[1] for todo in todos) == Counter({CHARGES: 1, DEMERGER: 2, DEMERGER_OLD: 1})
+        assert [(todo[4], todo[5]) for todo in todos if todo[1] == CHARGES] == [("1181.04", None)]
 
     def test_notices(self, tmp_path_factory: pytest.TempPathFactory) -> None:
         _table, _path, output = _sample_parse("main", tmp_path_factory)
 
-        assert sorted(set(_codes(output.warnings))) == ["deferred_rows", "deposit_assumed"]
+        assert sorted(set(_codes(output.warnings))) == sorted([SPLIT_NOTICE, "deferred_rows", "deposit_assumed"])
 
     def test_checkpoint_and_verification(self, tmp_path_factory: pytest.TempPathFactory) -> None:
         """The opening as it is (nothing in flight on 2020-02-02); the verification in operation-date terms, 1776.46 (lot
@@ -3316,18 +3387,19 @@ class TestMainSampleFacts:
 # 14. THE GAP SAMPLE SET
 # =============================================================================
 
-# Lot B-52: a paired trade dated on its trade date (custody Kauppapäivä); the Tuotto has both dates equal.
+# Lot B-52: a paired trade dated on its trade date (custody Kauppapäivä); the Tuotto has both dates equal. Project 66, P2c:
+# a trade quantity × Kurssi explains is booked at it, its 8 of charges a FEE right after it; Kaamos keeps the sum received.
 GAP_TRANSACTIONS = [
     ("DEPOSIT", "2020-08-03", "0", "2000", None, "Matti Meikäläinen"),
     ("FEE", "2020-08-31", "0", "-3.5", None, "Palvelumaksut 08/2020"),
-    ("BUY", "2020-09-01", "40", "-652", "Aurora Metsä Oyj", "Osto Aurora Metsä Oyj (Rajakurssi)"),
-    ("SELL", "2020-09-14", "-50", "644.5", "Saimaa Energia Oyj", "Myynti Saimaa Energia Oy (Päivän kurssi)"),
+    *_with_fee(("BUY", "2020-09-01", "40", "-644", "Aurora Metsä Oyj", "Osto Aurora Metsä Oyj (Rajakurssi)"), "-8"),
+    *_with_fee(("SELL", "2020-09-14", "-50", "652.5", "Saimaa Energia Oyj", "Myynti Saimaa Energia Oy (Päivän kurssi)"), "-8"),
     ("FEE", "2020-09-30", "0", "-3.5", None, "Palvelumaksut 09/2020"),
-    ("BUY", "2020-10-30", "10", "-231", "Tunturi Pankki Oyj", "Osto Tunturi Pankki Oyj (Rajakurssi)"),
+    *_with_fee(("BUY", "2020-10-30", "10", "-223", "Tunturi Pankki Oyj", "Osto Tunturi Pankki Oyj (Rajakurssi)"), "-8"),
     ("DEPOSIT", "2020-12-15", "0", "500", None, "Matti Meikäläinen"),
     ("FEE", "2020-12-31", "0", "-3.5", None, "Palvelumaksut 12/2020"),
     ("SELL", "2021-01-05", "-100", "428.56", "Kaamos Robotics AB", "Myynti Kaamos Robotics A (Päivän kurssi)"),
-    ("SELL", "2021-01-20", "-60", "424", "Pohjola Tekniikka Oyj", "Myynti Pohjola Tekniikka (Päivän kurssi)"),
+    *_with_fee(("SELL", "2021-01-20", "-60", "432", "Pohjola Tekniikka Oyj", "Myynti Pohjola Tekniikka (Päivän kurssi)"), "-8"),
     ("DIVIDEND", "2021-02-15", "0", "28.5", "Aurora Metsä Oyj", "Aurora Metsä 5930284716 (Tuotto)"),
     ("FEE", "2021-03-01", "0", "-3.5", None, "Palvelumaksut 02/2021"),
 ]
@@ -3402,15 +3474,16 @@ class TestGapSampleFacts:
         todos = _sample_todos(output)
 
         assert todos == _expected_todos(GAP_TRANSACTIONS)
-        assert [todo[4] for todo in todos if todo[0] in (3, 8)] == ["644.50", "428.56"]
+        # Project 66, P2c: only Kaamos (100 × 44.8 is no 428.56: a price in another currency) keeps its todo.
+        assert [(todo[4], todo[5]) for todo in todos if todo[1] == CHARGES] == [("428.56", None)]
 
     def test_notices(self, tmp_path_factory: pytest.TempPathFactory) -> None:
         """Lot N74: the purchase settled after the statement is a note (info), like the assumed deposit — red until the plugin
         stops calling it a warning."""
         _table, _path, output = _sample_parse("gap", tmp_path_factory)
 
-        assert sorted(set(_codes(output.warnings))) == ["deposit_assumed", "excluded_not_yet_settled"]
-        assert sorted({(notice.code, notice.severity) for notice in output.warnings}) == [("deposit_assumed", "info"), ("excluded_not_yet_settled", "info")]
+        assert sorted(set(_codes(output.warnings))) == sorted([SPLIT_NOTICE, "deposit_assumed", "excluded_not_yet_settled"])
+        assert sorted({(notice.code, notice.severity) for notice in output.warnings}) == sorted([(SPLIT_NOTICE, "info"), ("deposit_assumed", "info"), ("excluded_not_yet_settled", "info")])
 
     def test_checkpoints_and_verification(self, tmp_path_factory: pytest.TempPathFactory) -> None:
         """The opening absorbs the two rows before 2020-09-01 over an opening balance of 1523.36; the gap checkpoint the two trades of the gap.
@@ -3542,3 +3615,701 @@ class TestFixtureGuards:
         assert _fi_amount(Decimal("-1181.04"), thousands="\u00a0") == "-1\u00a0181,04"
         assert [_number(value) for value in ("-1181.04", "\u22121\u00a0181,04", "22,5", "1 000")] == [Decimal("-1181.04"), Decimal("-1181.04"), Decimal("22.5"), Decimal("1000")]
         assert (_fi_text(-1181.04, thousands="\u00a0", minus="\u2212"), _fi_text(41.2, thousands=" ", minus="-"), _fi_text("EUR", thousands=" ", minus="-")) == ("\u22121\u00a0181,04", "41,2", "EUR")
+
+
+# =============================================================================
+# 16. LINKED CHARGES — project 66, wave P2c (P2 contract §2 and §6)
+# =============================================================================
+#
+# The developer's decisions of 16/11 (``domande-FEE.md``, «Danske: la correzione», «Prima dell'approvazione», answer b):
+# - a trade whose sum works out (the test of ``_charges_todo``: 0 < paid − |quantity| × Kurssi <= max(15, gross / 100))
+#   is recorded at the gross, and the difference becomes a FEE linked to it: same date, same asset, EUR, negative. Its
+#   ``danske_trade_charges_included`` todo goes, and one info notice lists the split trades;
+# - a trade whose sum does not work out (a price in another currency) keeps today's proposal: the todo, no FEE;
+# - a zero difference: no FEE and no todo, the trade as it is;
+# - the tax «Vero osakesäästötililtä» names the withdrawal «Nosto osakesäästötililtä» of its day when there is exactly
+#   one; otherwise it stays free. Service fees («Palvelumaksut») stay free;
+# - the cash of a trade plus its FEE is today's amount: truths and balances do not move.
+#
+# The snapshots of version 1.1.0 (HEAD d6e041135) are in ``brim_previous_outputs/broker_danske_bank/``. Every number below
+# is worked out by hand from the samples (combined lines in the comments) and cross-checked against qty × Kurssi.
+
+LINK_SAMPLES = {
+    "main": "danske_bank-custody.xlsx+danske_bank-cash.csv",
+    "gap": "danske_bank-gap-custody-1.xlsx+danske_bank-gap-custody-2.xlsx+danske_bank-gap-cash.csv",
+}
+WITHDRAWAL_TAX_LABEL = "Vero osakesäästötililtä"
+WITHDRAWAL_LABEL = "Nosto osakesäästötililtä"
+
+
+@dataclass(frozen=True)
+class _Split:
+    """A trade the plugin splits, named by type, trade date, title and quantity. ``paid`` is today's amount (the sum
+    paid, the commission inside), ``gross`` the new one (|quantity| × Kurssi, signed by the trade), ``fee`` the FEE."""
+
+    tx_type: str
+    day: str
+    title: str
+    quantity: str
+    paid: str
+    gross: str
+    fee: str
+
+
+@dataclass(frozen=True)
+class _Kept:
+    """A trade that is not split: its amount stays ``paid``. ``todo``: the charges todo stays (the sum does not work out)
+    or not (a zero difference)."""
+
+    tx_type: str
+    day: str
+    title: str
+    quantity: str
+    paid: str
+    todo: bool
+
+
+@dataclass(frozen=True)
+class _LinkExpectation:
+    splits: Tuple[_Split, ...]
+    kept: Tuple[_Kept, ...]
+    tax_links: Tuple[Tuple[str, str, str], ...] = ()  # (day, tax amount, its withdrawal's amount)
+    free_taxes: Tuple[Tuple[str, str], ...] = ()  # (day, amount)
+    service_fees: Tuple[Tuple[str, str], ...] = ()  # (day, amount): always free
+    split_keys: Tuple[str, ...] = ()  # a scenario's keys of the split pairs
+
+
+SAMPLE_LINKS = {
+    "main": _LinkExpectation(
+        splits=(
+            _Split("BUY", "2020-02-10", "Aurora Metsä Oyj", "50", "-718", "-710", "-8"),  # line 21: 50 × 14.2
+            _Split("BUY", "2020-03-02", "Lumi Holding Oyj", "40", "-402", "-394", "-8"),  # line 22: 40 × 9.85
+            _Split("SELL", "2020-03-10", "Pohjola Tekniikka Oyj", "-120", "724", "732", "-8"),  # line 23: 120 × 6.1
+            _Split("BUY", "2020-03-25", "Saimaa Energia Oyj", "25", "-318", "-310", "-8"),  # line 25: 25 × 12.4 (partial fill)
+            _Split("BUY", "2020-03-25", "Saimaa Energia Oyj", "25", "-318", "-310", "-8"),  # line 26: its identical twin
+            _Split("BUY", "2020-04-01", "Pohjola Tekniikka Oyj", "20", "-116", "-108", "-8"),  # line 28: 20 × 5.4
+            _Split("SELL", "2020-05-05", "Pohjola Tekniikka Oyj", "-80", "532", "540", "-8"),  # line 30: 80 × 6.75
+            _Split("SELL", "2020-05-20", "Aurora Metsä Oyj", "-30", "466", "474", "-8"),  # line 31: 30 × 15.8
+            _Split("SELL", "2020-06-15", "Lumi Palvelut Oyj", "-50", "152", "160", "-8"),  # line 37: 50 × 3.2
+            _Split("BUY", "2020-06-26", "Tunturi Pankki Oyj", "10", "-218", "-210", "-8"),  # line 39: 10 × 21
+        ),
+        # line 20: 300 × 41.2 = 12 360 against 1181.04 paid, the price is in another currency.
+        kept=(_Kept("BUY", "2020-02-03", "Kaamos Robotics AB", "300", "-1181.04", todo=True),),
+        tax_links=(("2019-11-04", "-21.3", "-300"), ("2020-06-10", "-45", "-500")),  # lines 12/13 and 35/36: the tax first
+        service_fees=(("2019-03-29", "-3.5"), ("2019-06-28", "-3.5"), ("2019-09-30", "-3.5"), ("2019-12-31", "-3.5"), ("2020-03-31", "-3.5"), ("2020-06-30", "-3.5")),
+    ),
+    "gap": _LinkExpectation(
+        splits=(
+            _Split("BUY", "2020-09-01", "Aurora Metsä Oyj", "40", "-652", "-644", "-8"),  # line 6: 40 × 16.1
+            _Split("SELL", "2020-09-14", "Saimaa Energia Oyj", "-50", "644.5", "652.5", "-8"),  # line 7: 50 × 13.05
+            _Split("BUY", "2020-10-30", "Tunturi Pankki Oyj", "10", "-231", "-223", "-8"),  # line 9: 10 × 22.3
+            _Split("SELL", "2021-01-20", "Pohjola Tekniikka Oyj", "-60", "424", "432", "-8"),  # line 19: 60 × 7.2
+        ),
+        # line 18: 100 × 44.8 = 4480 against 428.56 received, the price is in another currency.
+        kept=(_Kept("SELL", "2021-01-05", "Kaamos Robotics AB", "-100", "428.56", todo=True),),
+        service_fees=(("2020-08-31", "-3.5"), ("2020-09-30", "-3.5"), ("2020-12-31", "-3.5"), ("2021-03-01", "-3.5")),
+    ),
+}
+# The lines of the combined file the split notice shows: the pairs of the split trades (worked out from the samples).
+SAMPLE_SPLIT_LINES = {"main": {21, 22, 23, 25, 26, 28, 30, 31, 37, 39}, "gap": {6, 7, 9, 19}}
+# The other notices of the samples, as version 1.1.0 emits them (``SAMPLE_NOTICES``): the split changes none of them.
+SAMPLE_OTHER_NOTICES = {"main": {"deferred_rows": 1, "deposit_assumed": 2}, "gap": {"deposit_assumed": 2, "excluded_not_yet_settled": 1}}
+# The charges todos of the samples once the split is done: only the trade whose sum does not work out keeps its todo.
+SAMPLE_TODOS = {"main": Counter({CHARGES: 1, DEMERGER: 2, DEMERGER_OLD: 1}), "gap": Counter({CHARGES: 1})}
+
+
+def _paired_trade(day: str, name: str, quantity: Any, price: Any, summa: str, *, key: str, kind: str = "Rajakurssi") -> Tuple[Tuple[str, List[Any]], _Cash]:
+    """A custody trade and its cash row, settled two business days later: ``Osto``/``Myynti`` + the name, the same amount."""
+    value = _business_days_after(_d(day), 2).isoformat()
+    label = ("Osto " if Decimal(summa) < 0 else "Myynti ") + name
+    return (key, _trade(day, name, quantity, price, float(summa), value=value, kind=kind)), _Cash(value, label, summa, f"cash-{key}")
+
+
+@scenario("p2c_charges")
+def _p2c_charges(builder: _Builder) -> None:
+    """Invented trades around the plausibility test (gross 1000: threshold 15; gross 2000: threshold 20, the 1 % branch).
+
+    split: exactly 15 (``edge15``), exactly 1 % (``pct``), a sale (``ssplit``), a decimal price (``dec``), the last
+    one-share purchase (``end``); not split, todo kept: 15.01 (``over``), 20.01 on 2000 (``pct_over``), a sale that got
+    more than gross (``sneg``); zero difference, no todo: a purchase (``z``) and a sale (``szero``). A ``Tuotto`` (``t``)
+    is no trade."""
+    trades = [
+        _paired_trade("2021-03-01", "Aurora Metsä Oyj", 10, 20, "-200", key="z"),
+        _paired_trade("2021-03-02", "Lumi Holding Oyj", 10, 100, "-1015", key="edge15"),
+        _paired_trade("2021-03-03", "Kaamos Robotics AB", 10, 100, "-1015.01", key="over"),
+        _paired_trade("2021-03-04", "Saimaa Energia Oyj", 20, 100, "-2020", key="pct"),
+        _paired_trade("2021-03-05", "Tunturi Pankki Oyj", 20, 100, "-2020.01", key="pct_over"),
+        _paired_trade("2021-03-08", "Aurora Metsä Oyj", -5, 20, "105", key="sneg", kind="Päivän kurssi"),
+        _paired_trade("2021-03-09", "Lumi Holding Oyj", -5, 100, "500", key="szero", kind="Päivän kurssi"),
+        _paired_trade("2021-03-10", "Saimaa Energia Oyj", -10, 100, "990", key="ssplit", kind="Päivän kurssi"),
+        _paired_trade("2021-03-11", "Pohjola Tekniikka Oyj", 3, 21.15, "-71.45", key="dec"),
+        _paired_trade("2021-03-31", "Kaamos Robotics AB", 1, 30, "-38", key="end"),
+    ]
+    custody = [row for row, _cash in trades]
+    custody.insert(9, ("t", _tuotto("2021-03-12", "Aurora Metsä Oyj", 5, 9)))
+    cash = [_Cash("2021-02-01", "Matti Meikäläinen", "10000", "deposit"), *(row for _custody, row in trades), _Cash("2021-03-12", "Aurora Metsä 1234567890", "9", "cash-t"), _Cash("2021-04-30", "Palvelumaksut 04/2021", "-3.5", "fee")]
+    builder.add_custody(custody)
+    builder.add_cash(sorted(cash, key=lambda row: row.day), opening=OPENING)
+
+
+@scenario("p2c_tax")
+def _p2c_tax(builder: _Builder) -> None:
+    """Invented withdrawals and their taxes (both Kaamos purchases split, 8 of charges each).
+
+    03-15: one withdrawal, the tax below it in the file; 03-16: one withdrawal, the tax above it; 03-17: two withdrawals
+    (the tax stays free); 03-18: a tax with no withdrawal that day (the one of 03-19 is another day); 03-22: a withdrawal
+    and a service fee (the fee stays free); 03-23: two taxes and one withdrawal (each tax has one withdrawal on its day:
+    both name it, the literal rule, as Degiro's dividend tax does)."""
+    builder.add_custody([("k1", _kaamos("2021-03-01")), ("k2", _kaamos("2021-03-31"))])
+    builder.add_cash(
+        [
+            _Cash("2021-02-01", "Matti Meikäläinen", "5000", "deposit"),
+            _Cash("2021-03-03", "Osto Kaamos Robotics AB", "-38", "cash-k1"),
+            _Cash("2021-03-15", WITHDRAWAL_LABEL, "-100", "wa"),
+            _Cash("2021-03-15", WITHDRAWAL_TAX_LABEL, "-10", "ta"),
+            _Cash("2021-03-16", WITHDRAWAL_TAX_LABEL, "-20", "tb"),
+            _Cash("2021-03-16", WITHDRAWAL_LABEL, "-200", "wb"),
+            _Cash("2021-03-17", WITHDRAWAL_TAX_LABEL, "-30", "tc"),
+            _Cash("2021-03-17", WITHDRAWAL_LABEL, "-300", "wc1"),
+            _Cash("2021-03-17", WITHDRAWAL_LABEL, "-310", "wc2"),
+            _Cash("2021-03-18", WITHDRAWAL_TAX_LABEL, "-40", "td"),
+            _Cash("2021-03-19", WITHDRAWAL_LABEL, "-400", "wd"),
+            _Cash("2021-03-22", WITHDRAWAL_LABEL, "-500", "we"),
+            _Cash("2021-03-22", "Palvelumaksut 03/2021", "-3.5", "fe"),
+            _Cash("2021-03-23", WITHDRAWAL_TAX_LABEL, "-50", "tf1"),
+            _Cash("2021-03-23", WITHDRAWAL_TAX_LABEL, "-60", "tf2"),
+            _Cash("2021-03-23", WITHDRAWAL_LABEL, "-600", "wf"),
+            _Cash("2021-04-02", "Osto Kaamos Robotics AB", "-38", "cash-k2"),
+        ],
+        opening=OPENING,
+    )
+
+
+@scenario("p2c_nothing_to_split")
+def _p2c_nothing_to_split(builder: _Builder) -> None:
+    """Two trades, neither split: a zero difference (``z``) and 15.01 over a one-share gross of 30 (``o``)."""
+    trades = [_paired_trade("2021-03-01", "Aurora Metsä Oyj", 10, 20, "-200", key="z"), _paired_trade("2021-03-31", "Kaamos Robotics AB", 1, 30, "-45.01", key="o")]
+    builder.add_custody([row for row, _cash in trades])
+    builder.add_cash([_Cash("2021-02-01", "Matti Meikäläinen", "5000", "deposit"), *(row for _custody, row in trades)], opening=OPENING)
+
+
+@scenario("p2c_price_zero")
+def _p2c_price_zero(builder: _Builder) -> None:
+    """A purchase at Kurssi 0 (``z0``): quantity × price is 0 and explains nothing (the coordinator's choice, P2c), so it is
+    not split, whatever the 8 paid. The one-share Kaamos purchase (``end``) closes the segment and is split."""
+    trades = [_paired_trade("2021-03-01", "Aurora Metsä Oyj", 10, 0, "-8", key="z0"), _paired_trade("2021-03-31", "Kaamos Robotics AB", 1, 30, "-38", key="end")]
+    builder.add_custody([row for row, _cash in trades])
+    builder.add_cash([_Cash("2021-02-01", "Matti Meikäläinen", "5000", "deposit"), *(row for _custody, row in trades)], opening=OPENING)
+
+
+SCENARIO_LINKS = {
+    "p2c_charges": _LinkExpectation(
+        splits=(
+            _Split("BUY", "2021-03-02", "Lumi Holding Oyj", "10", "-1015", "-1000", "-15"),
+            _Split("BUY", "2021-03-04", "Saimaa Energia Oyj", "20", "-2020", "-2000", "-20"),
+            _Split("SELL", "2021-03-10", "Saimaa Energia Oyj", "-10", "990", "1000", "-10"),
+            _Split("BUY", "2021-03-11", "Pohjola Tekniikka Oyj", "3", "-71.45", "-63.45", "-8"),
+            _Split("BUY", "2021-03-31", "Kaamos Robotics AB", "1", "-38", "-30", "-8"),
+        ),
+        kept=(
+            _Kept("BUY", "2021-03-01", "Aurora Metsä Oyj", "10", "-200", todo=False),
+            _Kept("BUY", "2021-03-03", "Kaamos Robotics AB", "10", "-1015.01", todo=True),
+            _Kept("BUY", "2021-03-05", "Tunturi Pankki Oyj", "20", "-2020.01", todo=True),
+            _Kept("SELL", "2021-03-08", "Aurora Metsä Oyj", "-5", "105", todo=True),
+            _Kept("SELL", "2021-03-09", "Lumi Holding Oyj", "-5", "500", todo=False),
+        ),
+        service_fees=(("2021-04-30", "-3.5"),),
+        split_keys=("edge15", "pct", "ssplit", "dec", "end"),
+    ),
+    "p2c_tax": _LinkExpectation(
+        splits=(_Split("BUY", "2021-03-01", "Kaamos Robotics AB", "1", "-38", "-30", "-8"), _Split("BUY", "2021-03-31", "Kaamos Robotics AB", "1", "-38", "-30", "-8")),
+        kept=(),
+        tax_links=(("2021-03-15", "-10", "-100"), ("2021-03-16", "-20", "-200"), ("2021-03-23", "-50", "-600"), ("2021-03-23", "-60", "-600")),
+        free_taxes=(("2021-03-17", "-30"), ("2021-03-18", "-40")),
+        service_fees=(("2021-03-22", "-3.5"),),
+        split_keys=("k1", "k2"),
+    ),
+    "p2c_price_zero": _LinkExpectation(
+        splits=(_Split("BUY", "2021-03-31", "Kaamos Robotics AB", "1", "-38", "-30", "-8"),),
+        kept=(_Kept("BUY", "2021-03-01", "Aurora Metsä Oyj", "10", "-8", todo=True),),
+        split_keys=("end",),
+    ),
+    "p2c_nothing_to_split": _LinkExpectation(
+        splits=(),
+        kept=(_Kept("BUY", "2021-03-01", "Aurora Metsä Oyj", "10", "-200", todo=False), _Kept("BUY", "2021-03-31", "Kaamos Robotics AB", "1", "-45.01", todo=True)),
+    ),
+}
+
+LINK_SETS = [
+    pytest.param("sample", "main", id="main"),
+    pytest.param("sample", "gap", id="gap"),
+    pytest.param("scenario", "p2c_charges", id="p2c_charges"),
+    pytest.param("scenario", "p2c_tax", id="p2c_tax"),
+    pytest.param("scenario", "p2c_nothing_to_split", id="p2c_nothing_to_split"),
+    pytest.param("scenario", "p2c_price_zero", id="p2c_price_zero"),
+]
+
+
+def _link_expectation(source: str, name: str) -> _LinkExpectation:
+    return SAMPLE_LINKS[name] if source == "sample" else SCENARIO_LINKS[name]
+
+
+def _trade_indices(output: BRIMParseOutput, tx_type: str, day: str, title: str, quantity: str, cash: str) -> List[int]:
+    """The positions of the trades of ``output`` with these values (identical partial fills give several)."""
+    names = _names(output)
+    wanted = (tx_type, _d(day), title, Decimal(quantity), Decimal(cash))
+    return [index for index, tx in enumerate(output.transactions) if tx.cash is not None and (tx.type.value, tx.date, names.get(tx.asset_id), tx.quantity, tx.cash.amount) == wanted]
+
+
+def _cash_rows(output: BRIMParseOutput, tx_type: str, day: str, amount: str) -> List[Any]:
+    return [tx for tx in output.transactions if tx.type.value == tx_type and tx.date == _d(day) and tx.cash is not None and tx.cash.amount == Decimal(amount)]
+
+
+def _children(output: BRIMParseOutput) -> Dict[str, List[Any]]:
+    """``{ref: the rows that name it as parent}``."""
+    found: Dict[str, List[Any]] = defaultdict(list)
+    for tx in output.transactions:
+        if tx.parent_ref:
+            found[tx.parent_ref].append(tx)
+    return found
+
+
+def _split_fee_problem(split: _Split, trade: Any, children: Dict[str, List[Any]]) -> Optional[str]:
+    """What is wrong with the FEE of a split trade: exactly one charge names it, a FEE of −charges in EUR on the trade's
+    date, asset and broker, tagged like every Danske row (the report-set history is found by ``danske_bank``). None when
+    it holds."""
+    fees = children.get(trade.ref, []) if trade.ref else []
+    if len(fees) != 1:
+        return f"{split}: {len(fees)} charge(s) name the trade (ref {trade.ref!r}), one FEE expected"
+    fee = fees[0]
+    got = (fee.type.value, fee.date, fee.cash.amount if fee.cash else None, fee.cash.code if fee.cash else None, fee.asset_id, fee.broker_id, list(fee.tags or []))
+    want = ("FEE", trade.date, Decimal(split.fee), "EUR", trade.asset_id, trade.broker_id, TAGS)
+    return f"{split}: its FEE is {got}, expected {want}" if got != want else None
+
+
+def _split_trade_problems(output: BRIMParseOutput, expect: _LinkExpectation, children: Dict[str, List[Any]], problems: List[str]) -> None:
+    """Each split trade at its gross with exactly one FEE naming it; each kept trade at its amount, named by nothing; no
+    other trade. Identical partial fills are claimed one by one, never by position."""
+    names = _names(output)
+    unclaimed = [index for index, tx in enumerate(output.transactions) if tx.type.value in ("BUY", "SELL")]
+
+    def claim(tx_type: str, day: str, title: str, quantity: str, cash: str) -> Optional[Any]:
+        for index in _trade_indices(output, tx_type, day, title, quantity, cash):
+            if index in unclaimed:
+                unclaimed.remove(index)
+                return output.transactions[index]
+        problems.append(f"no {tx_type} {day} {title} × {quantity} at {cash} EUR in the output")
+        return None
+
+    for split in expect.splits:
+        trade = claim(split.tx_type, split.day, split.title, split.quantity, split.gross)
+        problem = _split_fee_problem(split, trade, children) if trade is not None else None
+        if problem:
+            problems.append(problem)
+    for kept in expect.kept:
+        trade = claim(kept.tx_type, kept.day, kept.title, kept.quantity, kept.paid)
+        if trade is not None and trade.ref and children.get(trade.ref):
+            problems.append(f"{kept}: not split, yet {len(children[trade.ref])} row(s) name it")
+    for index in unclaimed:
+        tx = output.transactions[index]
+        problems.append(f"a trade no expectation names: {tx.type.value} {tx.date} {names.get(tx.asset_id)} × {tx.quantity} at {tx.cash.amount if tx.cash else None}")
+
+
+def _one_cash_row(output: BRIMParseOutput, tx_type: str, day: str, amount: str, problems: List[str]) -> Optional[Any]:
+    rows = _cash_rows(output, tx_type, day, amount)
+    if len(rows) != 1:
+        problems.append(f"{len(rows)} {tx_type} rows on {day} at {amount}, one expected")
+        return None
+    return rows[0]
+
+
+def _tax_and_fee_problems(output: BRIMParseOutput, expect: _LinkExpectation, problems: List[str]) -> None:
+    for day, tax_amount, withdrawal_amount in expect.tax_links:
+        tax = _one_cash_row(output, "TAX", day, tax_amount, problems)
+        withdrawal = _one_cash_row(output, "WITHDRAWAL", day, withdrawal_amount, problems)
+        if tax is None or withdrawal is None:
+            continue
+        if not withdrawal.ref or tax.parent_ref != withdrawal.ref:
+            problems.append(f"the TAX {day} {tax_amount} should name the WITHDRAWAL {withdrawal_amount}: parent_ref={tax.parent_ref!r}, its ref={withdrawal.ref!r}")
+        if (tax.asset_id, tax.broker_id) != (withdrawal.asset_id, withdrawal.broker_id):
+            problems.append(f"the TAX {day} {tax_amount} should have its withdrawal's asset and broker")
+    for day, amount in expect.free_taxes:
+        tax = _one_cash_row(output, "TAX", day, amount, problems)
+        if tax is not None and tax.parent_ref:
+            problems.append(f"the TAX {day} {amount} should stay free, it names {tax.parent_ref!r}")
+    for day, amount in expect.service_fees:
+        fee = _one_cash_row(output, "FEE", day, amount, problems)
+        if fee is not None and (fee.parent_ref or not (fee.description or "").startswith("Palvelumaksut")):
+            problems.append(f"the service fee {day} {amount} should stay free: parent_ref={fee.parent_ref!r}, description {fee.description!r}")
+
+
+def _charge_link_problems(output: BRIMParseOutput, expect: _LinkExpectation) -> List[str]:
+    """How the links of ``output`` differ from ``expect``, exhaustively: every trade, FEE and TAX is declared."""
+    problems: List[str] = []
+    children = _children(output)
+    _split_trade_problems(output, expect, children, problems)
+    _tax_and_fee_problems(output, expect, problems)
+    kinds = Counter(tx.type.value for tx in output.transactions)
+    if kinds["FEE"] != len(expect.splits) + len(expect.service_fees):
+        problems.append(f"{kinds['FEE']} FEE rows, expected {len(expect.splits)} split charges + {len(expect.service_fees)} service fees")
+    if kinds["TAX"] != len(expect.tax_links) + len(expect.free_taxes):
+        problems.append(f"{kinds['TAX']} TAX rows, expected {len(expect.tax_links)} linked + {len(expect.free_taxes)} free")
+    problems += [f"a row that is not a FEE or a TAX names a parent: {tx.type.value} {tx.date} {tx.description}" for tx in output.transactions if tx.parent_ref and tx.type.value not in ("FEE", "TAX")]
+    return problems
+
+
+def _split_trades(output: BRIMParseOutput, expect: _LinkExpectation) -> List[int]:
+    """The positions of the split trades (at their gross), each partial fill once."""
+    found: List[int] = []
+    for split in expect.splits:
+        found += [index for index in _trade_indices(output, split.tx_type, split.day, split.title, split.quantity, split.gross) if index not in found][:1]
+    return found
+
+
+def _new_fees(output: BRIMParseOutput, trades: Sequence[int]) -> List[int]:
+    """The positions of the FEE rows that name one of ``trades``."""
+    refs = {output.transactions[index].ref for index in trades if output.transactions[index].ref}
+    return [index for index, tx in enumerate(output.transactions) if tx.type.value == "FEE" and tx.parent_ref in refs]
+
+
+def _link_row_key(tx_type: str, day: str, amount: str) -> RowKey:
+    """A Danske row for ``assert_expected_charge_links``: no ISIN nor symbol is extracted, so the identifier is None."""
+    return (tx_type, day, amount, "EUR", None)
+
+
+async def _gap_fix_digest(output: BRIMParseOutput) -> Tuple[date, Dict[str, Any], Dict[str, Any]]:
+    """H0, and per checkpoint and verification of the first-import gap-fix: the cash rows, the corrections, what is left
+    unexplained (checkpoints), and ok (verifications)."""
+    response, history_start, _selection, titles = await _first_import_gap_fix(output)
+    checkpoints = {result.as_of.isoformat(): (_gap_fix_cash(result), _gap_fix_proposals(result, titles), list(result.explanation.unexplained_cash)) for result in response.checkpoints}
+    verifications = {result.as_of.isoformat(): (result.ok, _gap_fix_cash(result)) for result in response.verifications}
+    return history_start, checkpoints, verifications
+
+
+# The gap-fix of a first import on each sample, as version 1.1.0 gives it (measured at HEAD d6e041135). The split moves
+# no cent between days: a FEE is dated as its trade.
+SAMPLE_GAP_FIX = {
+    "main": (
+        _d("2020-02-03"),
+        {
+            "2020-02-02": (
+                {"EUR": (Decimal("2699.50"), Decimal("0"), Decimal("2699.50"))},
+                [("ADJUSTMENT", None, "Aurora Metsä Oyj", Decimal("100")), ("ADJUSTMENT", None, "Lumi Holding Oyj", Decimal("60")), ("ADJUSTMENT", None, "Pohjola Tekniikka Oyj", Decimal("180")), ("DEPOSIT", Decimal("2699.50"), None, Decimal("0"))],
+                [],
+            )
+        },
+        {"2020-06-26": (True, {"EUR": (Decimal("1776.46"), Decimal("1776.46"), Decimal("0"))})},
+    ),
+    "gap": (
+        _d("2020-09-01"),
+        {
+            "2020-08-31": ({"EUR": (Decimal("3519.86"), Decimal("0"), Decimal("3519.86"))}, [("ADJUSTMENT", None, "Saimaa Energia Oyj", Decimal("50")), ("DEPOSIT", Decimal("3519.86"), None, Decimal("0"))], []),
+            "2021-01-04": (
+                {"EUR": (Decimal("3482.36"), Decimal("3774.36"), Decimal("-292.00"))},
+                [("ADJUSTMENT", None, "Aurora Metsä Oyj", Decimal("150")), ("ADJUSTMENT", None, "Kaamos Robotics AB", Decimal("100")), ("ADJUSTMENT", None, "Pohjola Tekniikka Oyj", Decimal("60")), ("WITHDRAWAL", Decimal("-292.00"), None, Decimal("0"))],
+                [],
+            ),
+        },
+        {"2021-02-26": (True, {"EUR": (Decimal("4363.42"), Decimal("4363.42"), Decimal("0"))})},
+    ),
+}
+
+
+class TestLinkedCharges:
+    """Project 66, wave P2c (P2 contract §6): the commission inside a Danske trade is split out as a linked FEE when the
+    sum works out; the withdrawal tax names its withdrawal. Red before P2c unless the name says guard."""
+
+    # -- links and free charges ---------------------------------------------------------------------------------------
+
+    @pytest.mark.parametrize(("source", "name"), LINK_SETS)
+    def test_each_charge_names_its_parent_or_stays_free(self, source: str, name: str, tmp_path_factory: pytest.TempPathFactory) -> None:
+        """RED before P2c: every FEE and TAX declared. A split FEE names its trade (same date, asset, broker, EUR); the
+        withdrawal tax names its one withdrawal; the tax of a day with zero or two withdrawals and every service fee stay
+        free. On ``p2c_nothing_to_split`` (no trade splits, no tax) it is green today: the guard that nothing splits."""
+        _table, _path, output = _combined(source, name, tmp_path_factory)
+
+        assert output.validation_issues == [], f"{name}: {output.validation_issues}"
+        problems = _charge_link_problems(output, _link_expectation(source, name))
+        assert not problems, f"{name}: {len(problems)} unexpected link(s):\n  " + "\n  ".join(problems)
+        assert_charge_link_structure(output, f"{PLUGIN_CODE} [{name}]")
+
+    @pytest.mark.parametrize("name", ["gap", "p2c_tax"])
+    def test_the_shared_expectation_agrees(self, name: str, tmp_path_factory: pytest.TempPathFactory) -> None:
+        """RED before P2c. The same links through the shared checker of every plugin (``assert_expected_charge_links``),
+        on the sets where each key names one row (the main sample has identical partial fills: the test above)."""
+        source = "sample" if name == "gap" else "scenario"
+        expect = _link_expectation(source, name)
+        _table, _path, output = _combined(source, name, tmp_path_factory)
+
+        linked = [(_link_row_key("FEE", split.day, split.fee), _link_row_key(split.tx_type, split.day, split.gross)) for split in expect.splits]
+        linked += [(_link_row_key("TAX", day, tax), _link_row_key("WITHDRAWAL", day, withdrawal)) for day, tax, withdrawal in expect.tax_links]
+        free = [_link_row_key("TAX", day, amount) for day, amount in expect.free_taxes] + [_link_row_key("FEE", day, amount) for day, amount in expect.service_fees]
+        assert_expected_charge_links(output, f"{PLUGIN_CODE} [{name}]", linked=linked, free=free)
+
+    def test_the_identical_partial_fills_each_get_their_own_fee(self, tmp_path_factory: pytest.TempPathFactory) -> None:
+        """RED before P2c. The two Saimaa fills of 2020-03-25 (main, lines 25 and 26) are alike in every value: each is
+        split, each has its own name, and their two FEEs name one each."""
+        _table, _path, output = _sample_parse("main", tmp_path_factory)
+        twins = [output.transactions[index] for index in _trade_indices(output, "BUY", "2020-03-25", "Saimaa Energia Oyj", "25", "-310")]
+        assert len(twins) == 2, f"two fills at the gross of 310 expected, got {len(twins)}"
+
+        refs = {tx.ref for tx in twins}
+        assert None not in refs and len(refs) == 2, f"each fill has its own name: {refs}"
+        fees = [tx for tx in output.transactions if tx.type.value == "FEE" and tx.parent_ref in refs]
+        assert sorted(tx.parent_ref for tx in fees) == sorted(refs), "one FEE names each fill"
+
+    # -- the split arithmetic -----------------------------------------------------------------------------------------
+
+    @pytest.mark.parametrize("name", ["main", "gap"])
+    def test_the_split_keeps_the_sum_of_each_trade(self, name: str, tmp_path_factory: pytest.TempPathFactory) -> None:
+        """RED before P2c. Per split trade: the trade at the gross, the FEE at −charges, trade + FEE = the snapshot's amount
+        (the sum paid); the gross is |quantity| × Kurssi of its pair in the combined file. The cash of the whole output
+        equals the snapshot's."""
+        expect = SAMPLE_LINKS[name]
+        previous = load_previous_snapshot(PLUGIN_CODE, LINK_SAMPLES[name], BROKER_ID)
+        table, _path, output = _sample_parse(name, tmp_path_factory)
+        records = _records(table)
+        previous_names = {asset_id: info.extracted_name for asset_id, info in previous.extracted_assets.items()}
+        paid = Counter((tx.type.value, tx.date, previous_names.get(tx.asset_id), tx.quantity, tx.cash.amount) for tx in previous.transactions if tx.type.value in ("BUY", "SELL"))
+        assert len(expect.splits) == {"main": 10, "gap": 4}[name], "presence barrier: the hand-counted splits"
+
+        for split in expect.splits:
+            key = (split.tx_type, _d(split.day), split.title, Decimal(split.quantity), Decimal(split.paid))
+            assert paid[key] > 0, f"premise: the snapshot holds {key}"
+            paid[key] -= 1
+            pair = [record for record in records if record["lf_row_kind"] == "pair" and _from_fi_date(record["custody:Kauppapäivä"]) == _d(split.day) and record["custody:Sijoituskohde"] == split.title and _number(record["custody:Määrä"]) == Decimal(split.quantity)]
+            assert pair, f"premise: {split} is a pair of the combined file"
+            gross = abs(_number(pair[0]["custody:Määrä"]) * _number(pair[0]["custody:Kurssi"]))
+            assert abs(Decimal(split.gross)) == gross and Decimal(split.gross) - Decimal(split.paid) == -Decimal(split.fee), f"premise: {split} is |quantity| × Kurssi and the difference"
+        trades = _split_trades(output, expect)
+        assert len(trades) == len(expect.splits), f"{name}: {len(trades)} trades at their gross, {len(expect.splits)} expected"
+        for split, index in zip(expect.splits, trades, strict=True):
+            trade = output.transactions[index]
+            fees = [tx for tx in output.transactions if trade.ref and tx.parent_ref == trade.ref]
+            assert [(tx.type.value, tx.cash.amount) for tx in fees] == [("FEE", Decimal(split.fee))], f"{split}: its FEE"
+            assert trade.cash.amount + fees[0].cash.amount == Decimal(split.paid), f"{split}: trade + FEE is the sum paid"
+        total = sum((tx.cash.amount for tx in output.transactions if tx.cash is not None), Decimal(0))
+        assert total == sum((tx.cash.amount for tx in previous.transactions if tx.cash is not None), Decimal(0)), "the cash of the output is the snapshot's"
+
+    @pytest.mark.parametrize("name", ["p2c_charges", "p2c_tax"])
+    def test_the_split_keeps_the_sum_of_each_invented_trade(self, name: str, tmp_path_factory: pytest.TempPathFactory) -> None:
+        """RED before P2c. Per split trade of the invented sets: its pair's cash in the combined file is the sum paid, the
+        trade + its FEE is that sum, and the whole output's cash is the combined file's."""
+        expect = SCENARIO_LINKS[name]
+        builder, table, _path, output = _scenario_parse(name, tmp_path_factory)
+        records = _records(table)
+
+        for split, key in zip(expect.splits, expect.split_keys, strict=True):
+            record = builder.row(records, key)
+            assert (record["lf_row_kind"], _number(record["cash:Määrä"])) == ("pair", Decimal(split.paid)), f"premise: {key} is a pair at {split.paid}"
+            assert abs(_number(record["custody:Määrä"]) * _number(record["custody:Kurssi"])) == abs(Decimal(split.gross)), f"premise: {key} gross"
+            indices = _trade_indices(output, split.tx_type, split.day, split.title, split.quantity, split.gross)
+            assert len(indices) == 1, f"{key}: the trade at the gross {split.gross}, got {len(indices)}"
+            trade = output.transactions[indices[0]]
+            fees = [tx for tx in output.transactions if trade.ref and tx.parent_ref == trade.ref]
+            assert [tx.cash.amount for tx in fees] == [Decimal(split.fee)], f"{key}: its FEE"
+            assert trade.cash.amount + fees[0].cash.amount == _number(record["cash:Määrä"]), f"{key}: trade + FEE is the sum paid"
+        owed = sum((_number(record["cash:Määrä"]) for record in records if record["lf_row_kind"] in ("pair", "standalone") and record["cash:Määrä"]), Decimal(0))
+        assert sum((tx.cash.amount for tx in output.transactions if tx.cash is not None), Decimal(0)) == owed, "the cash of the output is the combined file's"
+
+    # -- the todo -----------------------------------------------------------------------------------------------------
+
+    @pytest.mark.parametrize(("source", "name"), LINK_SETS)
+    def test_only_a_trade_whose_sum_does_not_work_out_keeps_its_todo(self, source: str, name: str, tmp_path_factory: pytest.TempPathFactory) -> None:
+        """RED before P2c (green on nothing but the trades kept). The charges todo stays on the trades whose sum does not
+        work out, with its split hint and no amount; a split trade and a zero difference have none."""
+        expect = _link_expectation(source, name)
+        _table, _path, output = _combined(source, name, tmp_path_factory)
+        todos = [todo for todo in output.field_todos if todo.reason_code == CHARGES]
+
+        with_todo = sorted(index for kept in expect.kept if kept.todo for index in _trade_indices(output, kept.tx_type, kept.day, kept.title, kept.quantity, kept.paid))
+        assert len(with_todo) == sum(1 for kept in expect.kept if kept.todo), "presence barrier: the trades that keep their todo are in the output"
+        assert sorted(todo.tx_index for todo in todos) == with_todo, f"{name}: charges todos on {[(output.transactions[todo.tx_index].date, output.transactions[todo.tx_index].description) for todo in todos]}"
+        for todo in todos:
+            assert (todo.context or {}).get("split_hint") == "trade_charges", f"{name}: {todo.context}"
+            # A price in another currency or of 0: quantity × price explains nothing, so there is no amount to suggest (21/11).
+            assert "charges" not in (todo.context or {}), f"{name}: {todo.context}"
+            assert not any(GROSS_SUGGESTION in item for item in (todo.context or {}).get("split_suggestions", [])), f"{name}: {todo.context}"
+
+    @pytest.mark.parametrize("name", ["main", "gap"])
+    def test_the_sample_todos(self, name: str, tmp_path_factory: pytest.TempPathFactory) -> None:
+        """RED before P2c: one charges todo per sample (the Kaamos trade); the demerger todos stay, on their ADJUSTMENT rows."""
+        _table, _path, output = _sample_parse(name, tmp_path_factory)
+
+        assert Counter(todo.reason_code for todo in output.field_todos) == SAMPLE_TODOS[name]
+        for todo in output.field_todos:
+            expected = "ADJUSTMENT" if todo.reason_code in (DEMERGER, DEMERGER_OLD) else ("BUY", "SELL")
+            assert output.transactions[todo.tx_index].type.value in expected, f"{todo.reason_code} on {output.transactions[todo.tx_index].type.value}"
+
+    # -- the info notice ----------------------------------------------------------------------------------------------
+
+    @pytest.mark.parametrize(("source", "name"), [param for param in LINK_SETS if _link_expectation(*param.values).splits])
+    def test_one_info_notice_lists_the_split_trades(self, source: str, name: str, tmp_path_factory: pytest.TempPathFactory) -> None:
+        """RED before P2c: one ``danske_trade_charges_split`` info notice, its count the split trades, its evidence their
+        pairs in the combined file."""
+        expect = _link_expectation(source, name)
+        if source == "sample":
+            table, _path, output = _sample_parse(name, tmp_path_factory)
+            lines = SAMPLE_SPLIT_LINES[name]
+            records = _records(table)
+            assert all(records[line - 2]["lf_row_kind"] == "pair" for line in lines), "premise: the hand-counted lines are pairs"
+        else:
+            builder, table, _path, output = _scenario_parse(name, tmp_path_factory)
+            lines = _keyed_lines(builder, _records(table), expect.split_keys)
+        assert len(lines) == len(expect.splits), "premise: one line per split trade"
+
+        notices = [notice for notice in output.warnings if notice.code == SPLIT_NOTICE]
+        assert len(notices) == 1, f"{name}: one {SPLIT_NOTICE} notice expected, the parse noted {_codes(output.warnings)}"
+        notice = notices[0]
+        count = len(expect.splits)
+        assert (notice.severity, (notice.context or {}).get("count")) == ("info", count)
+        assert notice.message and notice.message.strip(), "a Finnish message, as every notice of the plugin"
+        assert _shown(notice) == lines
+        for evidence in notice.evidence:
+            assert evidence.title.strip() and evidence.comment and evidence.comment.strip() and len(evidence.row_numbers) == len(evidence.rows)
+
+    def test_no_notice_and_no_fee_when_nothing_splits(self, tmp_path_factory: pytest.TempPathFactory) -> None:
+        """Guard (green today, must stay): a set whose trades are a zero difference and a sum over the threshold has no
+        split notice and no FEE."""
+        _builder, _table, _path, output = _scenario_parse("p2c_nothing_to_split", tmp_path_factory)
+        assert [tx.type.value for tx in output.transactions].count("BUY") == 2, "presence barrier: both trades are imported"
+
+        assert SPLIT_NOTICE not in _codes(output.warnings)
+        assert [tx for tx in output.transactions if tx.type.value == "FEE"] == []
+
+    @pytest.mark.parametrize("name", ["main", "gap"])
+    def test_guard_the_other_notices_are_unchanged(self, name: str, tmp_path_factory: pytest.TempPathFactory) -> None:
+        """Guard (green today, must stay): besides the split notice, the notices of version 1.1.0, with their counts."""
+        _table, _path, output = _sample_parse(name, tmp_path_factory)
+
+        others = {notice.code: (notice.context or {}).get("count") for notice in output.warnings if notice.code != SPLIT_NOTICE}
+        assert others == SAMPLE_OTHER_NOTICES[name]
+
+    # -- the snapshot of version 1.1.0 --------------------------------------------------------------------------------
+
+    @pytest.mark.parametrize("name", ["main", "gap"])
+    def test_the_snapshot_differs_by_the_split_trades_and_their_fees_only(self, name: str, tmp_path_factory: pytest.TempPathFactory) -> None:
+        """RED before P2c. Not «only the names change» (P2 contract §6): take the new FEEs out, and every other row equals
+        the snapshot's, in order, apart from ``ref``/``parent_ref``; a split trade differs in its cash amount alone (the
+        gross); each FEE comes after its trade. The extracted assets are the snapshot's."""
+        expect = SAMPLE_LINKS[name]
+        previous = load_previous_snapshot(PLUGIN_CODE, LINK_SAMPLES[name], BROKER_ID)
+        _table, _path, output = _sample_parse(name, tmp_path_factory)
+        trades = _split_trades(output, expect)
+        fees = _new_fees(output, trades)
+        assert (len(trades), len(fees)) == (len(expect.splits), len(expect.splits)), f"{name}: {len(trades)} trades at their gross and {len(fees)} FEEs naming them, {len(expect.splits)} each expected"
+
+        rest = [tx for index, tx in enumerate(output.transactions) if index not in fees]
+        assert len(rest) == len(previous.transactions), f"{len(rest)} rows besides the new FEEs, the snapshot has {len(previous.transactions)}"
+        assert output.extracted_assets == previous.extracted_assets
+        names = _names(output)
+        gross = {(split.tx_type, _d(split.day), split.title, Decimal(split.quantity), Decimal(split.paid)): Decimal(split.gross) for split in expect.splits}
+        problems = []
+        for index, (before, after) in enumerate(zip(previous.transactions, rest, strict=True)):
+            old, new = before.model_dump(mode="json", exclude=set(LINK_FIELDS)), after.model_dump(mode="json", exclude=set(LINK_FIELDS))
+            changed = sorted(field for field in old if old[field] != new[field])
+            key = (before.type.value, before.date, names.get(before.asset_id), before.quantity, before.cash.amount if before.cash else None)
+            if key in gross:
+                if changed != ["cash"] or (after.cash.code, after.cash.amount) != (before.cash.code, gross[key]):
+                    problems.append(f"#{index} {key}: should change its cash to {gross[key]} only, changed {changed}: {after.cash}")
+            elif changed:
+                problems.append(f"#{index} {key}: should not change, changed {changed}")
+        assert not problems, f"{name}:\n  " + "\n  ".join(problems)
+        positions = {output.transactions[index].ref: index for index in trades}
+        assert all(positions[output.transactions[index].parent_ref] < index for index in fees), "each FEE comes after its trade"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("name", ["main", "gap"])
+    async def test_reimport_recognises_every_row_but_the_split_trades_and_their_fees(self, name: str) -> None:
+        """RED before P2c (P2 contract §2.5): over the rows 1.1.0 saved, the rows that are not split trades are found as
+        duplicates; the split trades (their amount changed) and the new FEEs are not: the expected «delete and reimport»."""
+        expect = SAMPLE_LINKS[name]
+        report = await sample_reimport_report(_danske(), LINK_SAMPLES[name])
+        output = report.output
+        trades = _split_trades(output, expect)
+        changed = frozenset([*trades, *_new_fees(output, trades)])
+        assert len(changed) == 2 * len(expect.splits), f"{name}: {len(changed)} split trades and FEEs, {2 * len(expect.splits)} expected"
+
+        assert sorted(report.unique) == sorted(changed), "the reimport adds exactly the split trades and their FEEs"
+        assert report.duplicates == frozenset(range(len(output.transactions))) - changed, "every other row is recognised"
+
+    # -- truths and balances ------------------------------------------------------------------------------------------
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("name", ["main", "gap"])
+    async def test_guard_the_gap_fix_of_a_first_import_is_unchanged(self, name: str, tmp_path_factory: pytest.TempPathFactory) -> None:
+        """Guard (green today, must stay): the gap-fix of a first import, end to end, finds the same cash on both sides,
+        the same corrections and the same verifications as with 1.1.0. The truths come from the combined file, and the
+        ledger sums trade + FEE on the trade date: the split moves nothing."""
+        _table, _path, output = _sample_parse(name, tmp_path_factory)
+
+        assert await _gap_fix_digest(output) == SAMPLE_GAP_FIX[name]
+
+    @pytest.mark.parametrize(("source", "name"), [param for param in LINK_SETS if param.values[0] == "scenario"])
+    def test_guard_the_ledger_meets_the_verification(self, source: str, name: str, tmp_path_factory: pytest.TempPathFactory) -> None:
+        """Guard (green today, must stay): the opening plus every transaction dated after it, up to the verification day,
+        is the verification: the FEEs carry what the trades lose."""
+        _table, _path, output = _combined(source, name, tmp_path_factory)
+        [opening] = output.checkpoints
+        [verification] = output.verifications
+
+        ledger = _money(opening.cash)["EUR"] + sum((tx.cash.amount for tx in output.transactions if tx.cash is not None and opening.as_of < tx.date <= verification.as_of), Decimal(0))
+        assert ledger == _money(verification.cash)["EUR"]
+
+    # -- the withdrawal tax keeps its place ---------------------------------------------------------------------------
+
+    def test_a_tax_keeps_its_place_on_either_side_of_its_withdrawal(self, tmp_path_factory: pytest.TempPathFactory) -> None:
+        """RED before P2c on the links (the order is green today, the guard). On 03-15 the tax is above its withdrawal in
+        the combined file, on 03-16 below it: the output keeps the file order, and both taxes name their withdrawal."""
+        builder, table, _path, output = _scenario_parse("p2c_tax", tmp_path_factory)
+        records = _records(table)
+        problems: List[str] = []
+
+        for day, tax_key, withdrawal_key, tax_amount, withdrawal_amount in (("2021-03-15", "ta", "wa", "-10", "-100"), ("2021-03-16", "tb", "wb", "-20", "-200")):
+            tax, withdrawal = _one_cash_row(output, "TAX", day, tax_amount, problems), _one_cash_row(output, "WITHDRAWAL", day, withdrawal_amount, problems)
+            assert tax is not None and withdrawal is not None, problems
+            file_order = _line_of(records, builder.row(records, tax_key)) < _line_of(records, builder.row(records, withdrawal_key))
+            assert (output.transactions.index(tax) < output.transactions.index(withdrawal)) == file_order, f"{day}: the output keeps the file order"
+            assert withdrawal.ref and tax.parent_ref == withdrawal.ref, f"{day}: the tax names its withdrawal: parent_ref={tax.parent_ref!r}, ref={withdrawal.ref!r}"
+        tax_first = [_line_of(records, builder.row(records, key)) < _line_of(records, builder.row(records, other)) for key, other in (("ta", "wa"), ("tb", "wb"))]
+        assert sorted(tax_first) == [False, True], "presence barrier: one tax above its withdrawal, one below"
+
+    # -- the coordinator's choices of P2c (21/11), pinned ---------------------------------------------------------------
+
+    def test_a_price_of_zero_explains_nothing(self, tmp_path_factory: pytest.TempPathFactory) -> None:
+        """A purchase at Kurssi 0: quantity × price is 0, so the sum is not split (no FEE, the 8 paid stays the trade's
+        cash) and the trade keeps its charges todo with the split hint — with no amount to suggest: no «charges», no
+        «Määrä × kurssi» figure (the developer, 21/11). Red until ``_charges_todo`` drops its plausible branch."""
+        builder, table, _path, output = _scenario_parse("p2c_price_zero", tmp_path_factory)
+        record = builder.row(_records(table), "z0")
+        assert (record["lf_row_kind"], _number(record["custody:Kurssi"])) == ("pair", Decimal(0)), "premise: the purchase at price 0 pairs"
+
+        [index] = _trade_indices(output, "BUY", "2021-03-01", "Aurora Metsä Oyj", "10", "-8")
+        trade = output.transactions[index]
+        assert not trade.ref or [tx for tx in output.transactions if tx.parent_ref == trade.ref] == [], "no charge names it"
+        [todo] = [todo for todo in output.field_todos if todo.tx_index == index]
+        context = todo.context or {}
+        assert (todo.reason_code, context.get("split_hint")) == (CHARGES, "trade_charges")
+        assert context.get("split_suggestions"), "presence barrier: the todo still offers its suggestions"
+
+        assert "charges" not in context, f"a price of 0 explains nothing: no amount to suggest, got charges={context.get('charges')!r}"
+        assert not any(GROSS_SUGGESTION in item for item in context["split_suggestions"]), f"no «{GROSS_SUGGESTION}» figure: {context['split_suggestions']}"
+
+    def test_two_taxes_with_one_withdrawal_both_name_it(self, tmp_path_factory: pytest.TempPathFactory) -> None:
+        """Two taxes on a day with one withdrawal: each tax has exactly one withdrawal on its day, so both name it (the
+        literal rule, as Degiro's dividend tax)."""
+        _builder, _table, _path, output = _scenario_parse("p2c_tax", tmp_path_factory)
+        problems: List[str] = []
+        withdrawal = _one_cash_row(output, "WITHDRAWAL", "2021-03-23", "-600", problems)
+        taxes = [_one_cash_row(output, "TAX", "2021-03-23", amount, problems) for amount in ("-50", "-60")]
+        assert not problems, problems
+
+        assert withdrawal.ref and [tax.parent_ref for tax in taxes] == [withdrawal.ref, withdrawal.ref]
+
+    # -- the version --------------------------------------------------------------------------------------------------
+
+    def test_the_version_is_above_the_snapshot(self) -> None:
+        """RED before P2c: the plugin goes up a version (P2 contract §1)."""
+        for name, sample in LINK_SAMPLES.items():
+            previous = load_previous_snapshot(PLUGIN_CODE, sample, BROKER_ID)
+            assert version_tuple(_danske().plugin_version) > version_tuple(previous.plugin_version), f"{PLUGIN_CODE} {_danske().plugin_version}: not above the snapshot's {previous.plugin_version} ({name})"

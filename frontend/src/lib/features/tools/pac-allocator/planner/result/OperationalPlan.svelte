@@ -307,7 +307,6 @@
                 enableColumnVisibility
                 enableColumnFilters={false}
                 enableColumnResize
-                enableContextMenu={false}
                 enableActions
                 rowActions={orderActions}
                 actionsColumnWidth="64px"

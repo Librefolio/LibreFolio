@@ -2,9 +2,10 @@
     /**
      * RiskFreeRateField — the reader's risk-free rate, one value for every risk page (RN-21).
      *
-     * Under the period line (`RiskPeriodLine`), the line that says on what the figures below are measured: the rate is
-     * one more condition of that kind (the consultant, 17/11/2026), and it moves L1's «How does it move?» as well as
-     * L3, so a field inside L3 would change figures above itself. The text is the reader's while they type; the shared
+     * Beside «Compare with», the choice that conditions L3 the same way (the developer, 24/11/2026, 81 U25): in L3's row on
+     * Dashboard and Broker, in the lab's benchmark row, and — where there is no L3, the single asset — under the period line
+     * (`RiskPeriodLine`), because the rate also sets L1's «How does it move?» (the semi-deviation counts from it). The
+     * text is the reader's while they type; the shared
      * value (`riskFreeRate`) changes only on Enter or on leaving the field, and only with a value the engine accepts —
      * otherwise the field says so and keeps it. 0 % until the reader sets one; the hint (Q9 bis) lives in the ⓘ only.
      */
@@ -20,9 +21,11 @@
 
     interface Props {
         testId?: string;
+        /** The label's own classes: a top margin under a line of text (the default), none inside a row of controls. */
+        class?: string;
     }
 
-    let {testId = 'risk-free-rate'}: Props = $props();
+    let {testId = 'risk-free-rate', class: className = 'mt-1'}: Props = $props();
 
     /** The shared value as the reader's language writes it. */
     function shown(percent: number): string {
@@ -65,7 +68,7 @@
     }
 </script>
 
-<label class="mt-1 flex items-center gap-1 text-xs text-lf-muted" data-testid="{testId}-field" data-percent={riskFreeRate.percent}>
+<label class="flex items-center gap-1 text-xs text-lf-muted {className}" data-testid="{testId}-field" data-percent={riskFreeRate.percent}>
     <span>{$t('risk.params.riskFreeRate')}</span>
     <Tooltip text={$t('risk.params.riskFreeRateHint')} position="bottom" maxWidth="300px" testId="{testId}-hint">
         <CircleHelp size={13} class="text-lf-muted" aria-label={$t('risk.params.riskFreeRateHint')} />

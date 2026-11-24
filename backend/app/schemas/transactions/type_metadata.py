@@ -136,6 +136,13 @@ class TXTypeMetadata(StrictModel):
         description="Whether cost_basis_override is applicable. " "'forbidden': field not used; " "'required_qty_pos': required when quantity > 0; " "'optional': can have cost_basis but not mandatory.",
     )
 
+    # Whether the cost basis may be the pool's average cost (cost_basis_mode auto / auto-detail). False where the cost basis
+    # is a value the user or the import states: a REWARD's is its value on receipt, which is also its income (rule 12c).
+    cost_basis_auto: bool = Field(
+        True,
+        description="Whether the cost basis may be computed as the average cost (cost_basis_mode auto or auto-detail). False when it must be stated, as for a REWARD, whose cost basis is its value on receipt.",
+    )
+
     # For paired types: per-side cost_basis rule. Index 0 = 'from' (sender, qty<0), index 1 = 'to' (receiver, qty>0).
     # Overrides cost_basis_mode when present. None for standalone types.
     cost_basis_pair: list[CostBasisFieldMode] | None = Field(
@@ -372,6 +379,22 @@ def _build_tx_type_metadata() -> dict[TransactionType, TXTypeMetadata]:
             "cash_sign": "zero",
             "event_compatible": True,
             "cost_basis_mode": "required_qty_pos",
+        },
+        TransactionType.REWARD: {
+            "code": "REWARD",
+            "name": "Reward (in kind)",
+            "description": "Reward received in units of an asset (staking, airdrop): income at its value on receipt",
+            "icon_slug": "reward",
+            "doc_slug": "reward",
+            "asset_mode": "required",
+            "cash_mode": "forbidden",
+            "quantity_mode": "required",
+            "requires_link": False,
+            "quantity_sign": "positive",
+            "cash_sign": "zero",
+            "event_compatible": False,
+            "cost_basis_mode": "required_qty_pos",
+            "cost_basis_auto": False,
         },
         TransactionType.CASH_TRANSFER: {
             "code": "CASH_TRANSFER",

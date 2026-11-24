@@ -369,6 +369,7 @@ class CombinedParser:
                 self._book_standalone(booking, entry)
             else:
                 excluded[entry.reason or "invalid"].append(entry)
+        booking.link_charges()
         booking.attach_maturity_notices()
         notices = [*self._excluded_notices(excluded), *self._mismatch_notices(mismatched), *booking.warnings, *booking.notices()]
         if not booking.transactions and not notices:

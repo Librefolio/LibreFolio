@@ -106,8 +106,10 @@ Two fields state which amounts a number is, so the AI does not apply a share twi
   full amounts, as the broker page does, whatever the role. An owner's own part is one multiplication away
   (`owner_stake_ratio`); an editor or a viewer has no stake to apply.
 - `amounts_basis` of the `broker.concentration_comparison` (inside `broker.concentration_evidence`) is always
-  `all_brokers_whole`: both sides, the broker and the portfolio, count every broker whole. It is not the Dashboard's
-  portfolio, where an owner's share reduces each broker.
+  `owned_brokers_whole` (v3, 78 L10b): the portfolio side is the brokers the user owns, and both sides count each
+  broker whole. It is not the Dashboard's portfolio, where an owner's share reduces each broker. On a broker the user
+  does not own the comparison is unavailable, `reason_code` `broker_not_owned`: that broker is no part of the user's
+  portfolio.
 
 Each `*.all_data` union is composed only from its domain's canonical complete
 datasets:
@@ -255,11 +257,17 @@ Export NAV buckets.
 
 Scope and basis are honestly typed per domain:
 
-| Component                    | Risk scope                          | Basis                    | Currency                             |
-| ---------------------------- | ----------------------------------- | ------------------------ | ------------------------------------ |
-| `portfolio.drawdown_summary` | whole portfolio (`broker_ids=None`) | TWRR / `historical_twrr` | build target currency                |
-| `broker.drawdown_summary`    | selected broker ID(s)               | TWRR / `historical_twrr` | build target currency                |
-| `asset.drawdown_summary`     | single Asset                        | native `price_only`      | asset observed native price currency |
+| Component                    | Risk scope                                                           | Basis                    | Currency                             |
+| ---------------------------- | -------------------------------------------------------------------- | ------------------------ | ------------------------------------ |
+| `portfolio.drawdown_summary` | the export's brokers, an owner's share of each (`export_risk_scope`) | TWRR / `historical_twrr` | build target currency                |
+| `broker.drawdown_summary`    | the selected broker, whole (`export_risk_scope`)                     | TWRR / `historical_twrr` | build target currency                |
+| `asset.drawdown_summary`     | single Asset                                                         | native `price_only`      | asset observed native price currency |
+
+`export_risk_scope` (`components/payloads/portfolio_broker.py`) is the one function that builds the Risk scope of a
+Portfolio or Broker export, for the drawdown and for the [Risk Evidence](#risk-evidence), so the two can never measure
+different brokers. Until 78 L10 the portfolio drawdown asked Risk for `broker_ids=None`, which Risk reads as every
+broker the user can access: a broker filter was ignored, and a broker only shared with the user was counted whole even
+without one (`portfolio.drawdown_summary` version 3).
 
 The Asset basis is the asset's native observed price currency (declared
 dependency on `asset.market_snapshot` → `observed.native_price.code`) so it
@@ -318,6 +326,57 @@ only genuine observed prices (backward-filled points excluded) inside the reques
 AI period, reports coverage against the requested days, and is `partial` when the
 observations do not span the whole period.
 
+## 🛡️ Risk Evidence {: #risk-evidence }
+
+`portfolio.risk_evidence` is an internal dataset, required by `portfolio.protection_strategies` beside
+`portfolio.overview_and_history`. Its three components (`ai_export/components/risk_evidence.py`, version 1) copy the
+results of one `RiskService.execute` call, cached for the request, so they share one joint calendar and one measured
+window. They compute nothing; the pairs are a selection of the correlation matrix.
+
+| Component | Risk analytic | What it carries |
+| --- | --- | --- |
+| `portfolio.risk_concentration` | `risk_contribution` | per held asset (its brokers summed): weight and share of the portfolio's volatility; the annualized volatility, the effective number of positions, the diversification multiple, the cash and excluded weights |
+| `portfolio.tail_risk` | `historical_var`, 95 %, 30 calendar days | the loss of a bad month (VaR and CVaR, positive numbers), the worst 30-day window with its dates and signed return, the number of overlapping windows |
+| `portfolio.correlated_pairs` | `correlation`, default parameters | among the holdings whose risk share, in absolute value, reaches 2 %, the pairs whose daily returns correlate at 0.8 or more (at most 8, the highest first) and the 3 least correlated of the other pairs; the thresholds and the number of holdings and pairs considered, so an empty list reads «no pair reaches the threshold» |
+
+- **Today's holdings** (`current_composition`, `current_buy_and_hold`), not the portfolio's history: the Dashboard's
+  Risk tab measures its bad month on the history (TWRR) over the Dashboard period, so its figure differs by design. The
+  prompt's «Risk measures» rule tells the AI so.
+- **Twelve months up to the end of the export period**, whatever the period chosen: the same day twelve calendar months
+  before (`datetime_utils.months_before`, the rule of the «1 year» presets). The components declare `AS_OF`, the
+  dataset too: the window is their own, not the AI period.
+- **A holding quoted only recently shortens the window for every holding**: the joint calendar starts on the first day
+  all of them have a price. Each section carries the requested and the measured window and the holdings that shortened
+  it (`window_shortened_by`, from Risk's `short_history` warning). A holding with no usable price leaves the measures,
+  is listed in `excluded_assets` with its reason, and weighs as cash would: at zero risk. It is counted in
+  `excluded_weight_ratio`, never in `cash_weight_ratio`.
+- **The cash share is the true cash** (78 L8c): the scope's cash over its net worth, read from the same report as
+  the summary (`PORTFOLIO_REPORT_RESOURCE`): the summary's `cash_total`, and the Liquidity slice of the allocations
+  to the digit whenever no cash is in transit (the slice adds it).
+  It is not Risk's `cash_weight`, the residual at zero risk (1 − Σ weights of the holdings with a series), which
+  also holds the excluded holdings and the value in transit. It can be negative, an overdraft: then Risk refuses the
+  measures for the composition, unless value in transit covers it. A report that cannot be read fails this section
+  alone (`cash_share_unavailable`).
+- **The scope** is the export's brokers, the scope of the positions printed beside it, with the ownership share of
+  every Portfolio section: `export_risk_scope`, the same function as the drawdown's (developer decision D10, 78 L10).
+  The Dashboard's Risk tab measures the whole portfolio.
+- **Never a failed snapshot.** A required component that raised would fail the whole snapshot, so a Risk refusal
+  (`insufficient_history`, a composition outside the contract) is an `unavailable` section and a Risk error a `failed`
+  one, with its `reason_code` and no figures. The validators forbid figures on those statuses and require them on `ok`
+  and `partial`.
+- **Pairs, not the matrix.** Models ignore an N×N correlation matrix, and grouping holdings would be a new calculation
+  for `financial_math/`. A correlation has no scale, so the holdings compared are those whose risk share, in absolute
+  value, reaches 2% (a negative share is a hedge already held), not those that weigh most. The section lists pairs,
+  the larger risk share first; a pair listed as high is not repeated among the low ones, and a pair with an undefined
+  correlation (a flat series) is left out, with the `flat_series` warning. Fewer than two holdings above the threshold
+  is an empty selection with its normal status, not a missing measure. The risk shares come from `risk_contribution`:
+  without them the section is `unavailable` (`risk_shares_unavailable`), with no fall-back to the weight. A correlation
+  is printed as a number between −1 and 1, never as a percentage.
+- **Percentages only**, with their base written in the payload (`weight_basis`): shares of the net worth of the scope,
+  cash included, with cash, value in transit and the excluded holdings at zero risk. The renderer prints them under
+  names that say what they are: `value_at_risk_loss_percent`, `expected_shortfall_loss_percent`,
+  `worst_window_return_percent`, `risk_share_percent` ([Snapshot Data Tables](#snapshot-data-tables)).
+
 ## 🧾 Task-specific Evidence Datasets
 
 Baseline adequacy rating flagged missing concrete evidence for several analyses.
@@ -326,7 +385,7 @@ engine outputs and never forecasts:
 
 | Dataset                           | New evidence                                                                                                                             | Honesty rule                                                                                                                                                                                  |
 | --------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `portfolio.income_evidence`       | dated realized `DIVIDEND`/`INTEREST` timeline, ownership-share aware, FX-converted with provenance                                       | realized ledger rows only; missing rate keeps native amount with `conversion_reason`, never coerced to zero; no coupon forecast                                                               |
+| `portfolio.income_evidence`       | dated realized `DIVIDEND`/`INTEREST`/`REWARD` timeline, ownership-share aware, FX-converted with provenance                                       | realized ledger rows only; missing rate keeps native amount with `conversion_reason`, never coerced to zero; no coupon forecast                                                               |
 | `broker.concentration_evidence`   | allocation-by-type/sector/geography/currency slices plus HHI-points and largest-position weight, optional broker-vs-portfolio comparison | slices/HHI read verbatim off the report; explicit coverage/unknown buckets; no row identifiers                                                                                                |
 | `broker.cost_efficiency_evidence` | recorded fees, taxes, total costs, contributor categories, BUY/SELL turnover, average NAV and other denominators, plus explicit ratios   | recorded zero, unavailable, and not applicable stay distinct; formulas/operands/unit/coverage are exported; trading/FX/other subtypes stay unavailable when the source does not classify them |
 | `fx.conversion_timing_context`    | observed period min/max, range position, distance-to-extreme, realized volatility, partial-history flag                                  | observed genuine rates only; no forecast/predictive band; flat/empty range → `range_position_unavailable_reason`; neutral-scenario user inputs surfaced through `missing_user_inputs`         |
@@ -345,9 +404,13 @@ of `income_effects` and out of `period_income`, and the two lists never repeat a
 and count each broker at the report's share (`native_cash.effective_share()`: an
 owner's `share_percentage`, the whole broker when none is recorded; the whole
 broker for an editor or a viewer).
-`portfolio.income_timeline` (version 2, behind `portfolio.income_evidence`) keeps
-every `DIVIDEND`/`INTEREST` amount with its sign, so an older negative correction
-lowers the income exactly as it lowers the report's `period_income`.
+`portfolio.income_timeline` (version 3, behind `portfolio.income_evidence`) keeps
+every income amount with its sign, so an older negative correction lowers the
+income exactly as it lowers the report's `period_income`. It reads the one income
+rule of `financial_math/income.py` (`INCOME_TYPES`, `income_value`): a `REWARD`
+counts at its value on receipt and its row adds `units`, the units received at the
+same share; `reward_count` sits beside `dividend_count` and `interest_count`. A
+`REWARD` with no value fails the section with `income_value_missing`, never a zero.
 `broker.cost_efficiency` (version 2, behind `broker.cost_efficiency_evidence`)
 still sums BUY/SELL turnover by magnitude, multiplied by that share, which it
 exposes as `ownership_share_ratio`.
@@ -363,6 +426,7 @@ degrade independently. Fiscal Analyses add the internal full-FIFO dataset.
 | `portfolio.rebalancing`                | `portfolio.overview_and_history` | `portfolio.asset_history`    |
 | `portfolio.performance_market_drivers` | `portfolio.overview_and_history` | `portfolio.asset_history`    |
 | `portfolio.fiscal_lots`                | general + internal full FIFO     | `portfolio.asset_history`    |
+| `portfolio.protection_strategies`      | general + internal risk evidence | `portfolio.asset_history`    |
 | `broker.review`                        | `broker.overview_and_history`    | `broker.asset_history`       |
 | `broker.performance_market_drivers`    | `broker.overview_and_history`    | `broker.asset_history`       |
 | `broker.fiscal_lots`                   | general + internal full FIFO     | `broker.asset_history`       |
@@ -478,12 +542,44 @@ Dataset selections produce `data_only`:
 4. **Reply Instructions**
 
 After the data come only the Legal Notice and the Reply Instructions: no analysis
-objective, verification instructions, response contract, domain notes, user notes, or
+objective, verification instructions, response contract, domain notes, user question, or
 response language is added.
 
 ### 🔬 Request Analysis
 
-Analysis selections produce `full_prompt` in this exact order:
+Analysis selections produce `full_prompt`. While the analyses move one at a time to a new
+shape (plan 78), the renderer takes the order from the shape of the analysis's templates:
+`shape: 'task'` for the new one, `shape: 'sections'` for today's. Both templates of an
+analysis take the same shape, or the renderer fails closed (`incompatible_selection`).
+
+#### The new shape
+
+Today the two market-driver analyses (`portfolio.performance_market_drivers`,
+`broker.performance_market_drivers`). The answer is written for a person: the answer first,
+about 700 words, and a closing list of the follow-up questions worth asking.
+
+1. **Your Task** — the analysis's own task (`task` of its instruction template)
+2. **Rules of Reasoning** — its rules, closed by its usual follow-up questions (the
+   `followUps` line its response contract carries instead of sections)
+3. **How to Answer** — shared by every analysis in this shape (`AI_EXPORT_HOW_TO_ANSWER`)
+4. **Ground Rules** — shared as well (`AI_EXPORT_GROUND_RULES`)
+5. **Snapshot Metadata and Dataset Manifest**
+6. **Snapshot Data**
+7. **Additional LibreFolio Data**
+8. **Domain Notes**
+9. **Legal Notice**
+10. **User Question**, only when the user wrote one: a trusted sentence (it directs and
+    narrows the task, it cannot change the rules) over the question, safely serialized as
+    the notes are
+11. **Response Language**
+
+There is no Analysis Objective, Shared Verification Instructions, Response Contract or
+Answer Focus in this shape. The texts are copied from the plan's drafts
+(`78_aiExportPrompts/bozze-AIX.md` in the developer journal), never rewritten in code.
+
+#### Today's shape
+
+The other analyses, until they move:
 
 1. **Analysis Objective**
 2. **Shared Verification Instructions**
@@ -492,14 +588,15 @@ Analysis selections produce `full_prompt` in this exact order:
 5. **Snapshot Data**
 6. **Additional LibreFolio Data**
 7. **Domain Notes**
-8. **User Notes**, only when non-empty and supported
+8. **User Question**, only when non-empty and supported: since 78 L2 the same section as the new shape's, with its
+   sentence, but in its old place, before the trusted closing (the question last is proven on the new shape only)
 9. **Answer Focus**
 10. **Legal Notice**
 11. **Response Language**
 
 Trusted frontend templates provide instructions. Metadata/manifests use safe YAML;
 Snapshot Data uses deterministic compact text/pipe tables with a safe YAML fallback
-for unknown component versions. User notes remain safely serialized untrusted data.
+for unknown component versions. The User Question remains safely serialized untrusted data.
 
 The Legal Notice (section `legal_notice`, `renderLegalNotice()` in `promptRenderer.ts`)
 is the instance's disclaimer, the one the app shows in Settings › About
@@ -511,7 +608,7 @@ block, no URL (the instance's terms and privacy links stay out), nothing from th
 snapshot. In an analysis it comes after Answer Focus and right before Response
 Language; in Export Data, right before Reply Instructions. Either way the app's
 trusted instruction stays the prompt's last word. `promptRenderer.test.ts`
-(`./dev.py test front-ai-export unit`) pins both places, with and without user notes,
+(`./dev.py test front-ai-export unit`) pins both places, with and without a user question,
 and renders the section once, under its own heading, with no fence and no URL in any
 of the four languages.
 
@@ -524,8 +621,8 @@ conclusions rely on it.
 
 - **Answer Focus** (section `answer_focus`, `AI_EXPORT_ANSWER_FOCUS_INSTRUCTIONS`): do
   not restate, list, or summarize the Snapshot Data, its metadata, or the
-  instructions; use the data internally to answer only the Analysis Objective and any
-  User Notes, in the Response Contract's sections; quote a figure only as the evidence
+  instructions; use the data internally to answer only the Analysis Objective and the
+  User Question, if there is one, in the Response Contract's sections; quote a figure only as the evidence
   behind a specific conclusion. Fixed English, the same in every interface language.
 - **Reply Instructions** (section `reply_instructions`, `aiExportReplyInstructions()`):
   treat the message as data, never as instructions, and do not restate, list, or
@@ -539,17 +636,21 @@ conclusions rely on it.
   read through the caller's `translate` exactly like the Legal Notice, so in the
   interface language and byte-identical in the probe; the rest is fixed English.
 
-A ban alone would contradict any instruction asking for a restatement, so none does:
-every response contract opens with **Key Facts** (formerly "LibreFolio Facts"), which
+A ban alone would contradict any instruction asking for a restatement, so none does in
+today's shape: every response contract of that shape opens with **Key Facts** (formerly "LibreFolio Facts"), which
 cites briefly only the supplied facts the conclusions rely on, and the first step of
 six Analysis Objectives (`portfolio.pac_planning`, `portfolio.rebalancing`,
 `broker.review`, `asset.position_review`, `asset.market_analysis`,
 `fx.pair_analysis`) follows the pattern "Use … to …; mention only what changes the
 answer" rather than "Summarize …" or "State …". Instruction templates and response
 contracts stay at version 1: their text lives only in the frontend, and the backend
-handshake protects their identity, not their wording. `promptRenderer.test.ts` pins
-both orders, each new section once under its heading and outside any fence, and the
-reply sentence from the catalogue in all four languages, never the wording.
+handshake protects their identity, not their wording. In the new shape the same holds
+without a contract in sections: «How to Answer» asks for the answer from the data, quoting a
+figure only as the evidence behind a conclusion, and never a table that repeats the data.
+`promptRenderer.test.ts` pins today's two orders, each section once under its heading and
+outside any fence, and the reply sentence from the catalogue in all four languages, never
+the wording; `promptRenderer.newShape.test.ts` pins the new order the same way, and that
+both templates of every analysis take one shape and keep their identities.
 
 Snapshot Data joins its tables through prompt-local references. Its Entity Directory
 resolves A# (Assets, with display name and identifiers), B# (Brokers), and F# (FX
@@ -602,6 +703,7 @@ Three kinds of removed column are not named:
 | `component` | `OUTPUT DEFINITIONS` | any | a scalar output, not one component of a band |
 | `minimum`, `maximum` | `OUTPUT DEFINITIONS` | any | an output without that bound |
 | `asset_ref` | any | `portfolio.income_timeline` | income not tied to an asset, such as interest on cash |
+| `units` | any | `portfolio.income_timeline` | cash income (a dividend or interest): no units received |
 | `portfolio_weight_percent`, `technical_normalized_weight_percent` | `PERIOD SUMMARY` | `asset.indicators`, `fx.indicators` | one Asset or FX pair: there is no portfolio to weigh it in |
 
 `partial_reason_code` is not on the list: ENTITY STATUS shows only partial results, so
@@ -706,6 +808,14 @@ field — a key in `FIELD_REFERENCE_KEYS`: a `field` leaf, as in `asset.position
 `coverage.omitted[].missing_fields` — goes through the same map, so it names the
 column as the prompt shows it; free text such as `reason` is never rewritten, and the
 backend payload keeps the canonical codes.
+
+The conversion is an allow-list, not a suffix rule: a `*_ratio` field becomes a
+percentage only when `NORMALIZED_RATIO_FIELDS` names it, with its public name in
+`PUBLIC_RATIO_FIELD_NAMES` and, when it may leave 0–100 %, its entry in
+`SIGNED_NORMALIZED_RATIO_FIELDS` or `UNBOUNDED_NORMALIZED_RATIO_FIELDS`. A new ratio
+that is in none of them prints as a raw decimal under its `_ratio` name. A field that
+is not a share (the diversification ratio of the [Risk Evidence](#risk-evidence), a
+multiple of at least 1) is named without `_ratio` on purpose.
 
 ## 📋 Manifests
 
@@ -885,8 +995,9 @@ The options panel decides what is requested and when the copy happens
   explicit owned-Broker set (`getOwnedBrokers`: `OWNER` role with a share above 0 or
   unset, narrowed by the Broker filter), so the backend never widens a Portfolio
   request. The Broker page sends its `broker_id`. Asset and FX pages send no
-  `broker_ids`, so the backend scopes them to every Broker the user can access
-  (`BrokerUserAccess`, any role).
+  `broker_ids`, so the backend scopes them to the Brokers the user owns, by the
+  same rule, each at the user's share (78 L10b); a user who owns none gets the
+  market-only selections, and a `422` `no_owned_brokers` for the others.
 - **Defaults**: Dashboard `portfolio.pac_planning`, Broker `broker.review`, Asset
   `asset.market_analysis`, FX `fx.pair_analysis`; detail `standard` when the
   selection supports it (`resolveDefaultDetailLevel`); period `3m`.

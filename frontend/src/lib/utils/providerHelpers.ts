@@ -171,8 +171,8 @@ export function getAssetProviderParamKeys(code: string | null | undefined): stri
 }
 
 /**
- * The line an asset provider's terms ask to show with its prices (CoinGecko's «Powered by CoinGecko», project 76, P4),
- * or null. Requires `ensureAssetProvidersCached()`; read it with `assetProvidersVersion` to follow the cache.
+ * The line an asset provider's terms ask for (CoinGecko's «Powered by CoinGecko», project 76, P4), shown on its card in
+ * Settings › Plugins only (TL42), or null. Requires `ensureAssetProvidersCached()`; read it with `assetProvidersVersion` to follow the cache.
  */
 export function getAssetProviderAttribution(code: string | null | undefined): {text: string; url: string} | null {
     return code ? (assetProviderAttributions.get(code) ?? null) : null;

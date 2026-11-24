@@ -234,6 +234,7 @@ export function buildGrowthTooltip(params: any, view: GrowthTooltipView): string
         const cc = (key: keyof typeof COLORS) => COLORS[key][isDark ? 'dark' : 'light'];
         const divVal = activeChartData?.pnl.income.dividend.values[idx] ?? 0;
         const intVal = activeChartData?.pnl.income.interest.values[idx] ?? 0;
+        const rewardVal = activeChartData?.pnl.income.reward?.values[idx] ?? 0;
         const costVal = activeChartData?.pnl.costs.values[idx] ?? 0;
         const depositVal = activeChartData?.pnl.deposits.values[idx] ?? 0;
         const acqNewVal = activeChartData?.pnl.acquisition.fromNewCapital.values[idx] ?? 0;
@@ -244,8 +245,10 @@ export function buildGrowthTooltip(params: any, view: GrowthTooltipView): string
         };
         html += signedRow(pnlLabels.dividend, divVal, cc('dividend'));
         html += signedRow(pnlLabels.interest, intVal, cc('interest'));
+        // Rewards in kind (project 79): a row only when there are some, as most portfolios have none; always in the total
+        if (rewardVal !== 0) html += signedRow(pnlLabels.reward, rewardVal, cc('reward'));
         html += buildTooltipDivider(tooltipBorder);
-        html += signedRow(`<b>${t('assets.distribution.total')}</b>`, divVal + intVal, textColor);
+        html += signedRow(`<b>${t('assets.distribution.total')}</b>`, divVal + intVal + rewardVal, textColor);
         // Batch 2 dimensions: costs/deposit/acquisition are distinct economic
         // concepts from personal income, so each gets its own row rather than
         // folding into the income total above.

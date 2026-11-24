@@ -4,7 +4,8 @@
   Closed: the enricher, the identifier type it reads, the name it found (or the identifier), what it fills (topics),
   its last read and outcome, its priority («#1»); drawn off when the instance does not serve it or it is not
   configured («Configura»). Open (the pencil): «Cerca su …» inside that enricher, the identifier type and identifier,
-  the plugin's parameters, «Testa Configurazione». The row publishes its state (`data-position`, `data-availability`,
+  the plugin's parameters, «Testa Configurazione». An enricher that accepts one identifier type only shows it as a
+  fixed badge, not a choice (R4). A binding «Riconosci» found nothing with says so, to correct or search (R3). The row publishes its state (`data-position`, `data-availability`,
   `data-last-read`, `data-issue`) for the tests.
 -->
 <script lang="ts">
@@ -36,6 +37,11 @@
 
     let usable = $derived(row.availability === 'ok');
     let name = $derived(row.info?.name ?? row.code);
+    /** The one type the enricher reads, when it accepts one only and the binding is on it (or has none yet): no choice (R4). */
+    let fixedType = $derived.by(() => {
+        const accepted = row.info?.accepted_identifier_types ?? [];
+        return accepted.length === 1 && (!row.binding.identifier_type || row.binding.identifier_type === accepted[0]) ? accepted[0] : null;
+    });
     let typeOptions = $derived([...new Set([...(row.info?.accepted_identifier_types ?? []), row.binding.identifier_type].filter(Boolean))].map((type) => ({value: type, label: type})));
     let params = $derived(Object.fromEntries(Object.entries(row.binding).filter(([key]) => key !== 'identifier_type' && key !== 'identifier')));
 
@@ -133,6 +139,24 @@
             {#if row.lastRead}
                 <p class="text-[11px] {row.lastRead.status === 'ok' ? 'text-lf-muted' : 'text-lf-warning'}" data-testid="enricher-last-read-{row.code}">{lastReadText()}</p>
             {/if}
+            {#if row.notFoundWith}
+                <p class="mt-0.5 text-[11px] text-lf-warning flex items-center gap-1" data-testid="enricher-not-found-with-{row.code}">
+                    <TriangleAlert size={11} aria-hidden="true" />
+                    {$t('assets.enrichers.notFoundWith', {values: {type: row.notFoundWith.identifier_type, identifier: row.notFoundWith.identifier}})}
+                </p>
+            {/if}
+            {#if row.conflictWith}
+                <p class="mt-0.5 text-[11px] text-lf-warning flex items-center gap-1" data-testid="enricher-conflict-with-{row.code}">
+                    <TriangleAlert size={11} aria-hidden="true" />
+                    {$t('assets.enrichers.conflictWith', {
+                        values: {
+                            named: Object.entries(row.conflictWith)
+                                .map(([type, value]) => `${type} ${value}`)
+                                .join(', '),
+                        },
+                    })}
+                </p>
+            {/if}
             {#if row.issue}
                 <p class="mt-0.5 text-[11px] text-lf-danger flex items-center gap-1">
                     <TriangleAlert size={11} aria-hidden="true" />
@@ -212,7 +236,14 @@
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <div>
                     <span class="block text-xs text-lf-secondary mb-1">{$t('assets.enrichers.identifierType')}</span>
-                    <SimpleSelect value={row.binding.identifier_type} options={typeOptions} testId="enricher-type-{row.code}" optionTestId={(option) => `enricher-type-${row.code}-option-${option.value}`} onchange={(value) => setBinding({identifier_type: value})} />
+                    {#if fixedType}
+                        <div class="flex items-center gap-1.5 min-h-[34px]" data-testid="enricher-type-fixed-{row.code}" data-type={fixedType}>
+                            <span class="px-1.5 py-0.5 rounded bg-lf-neutral text-xs font-mono font-semibold text-lf-primary">{fixedType}</span>
+                            <span class="text-[11px] text-lf-muted">{$t('assets.enrichers.onlyType', {values: {name}})}</span>
+                        </div>
+                    {:else}
+                        <SimpleSelect value={row.binding.identifier_type} options={typeOptions} testId="enricher-type-{row.code}" optionTestId={(option) => `enricher-type-${row.code}-option-${option.value}`} onchange={(value) => setBinding({identifier_type: value})} />
+                    {/if}
                 </div>
                 <label class="block">
                     <span class="block text-xs text-lf-secondary mb-1">{$t('assets.enrichers.identifier')}</span>

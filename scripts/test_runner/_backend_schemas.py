@@ -66,6 +66,14 @@ def schemas_period_changes_bounds(verbose: bool = False, test_names: list = None
     return run_command(cmd, "Period changes bounds tests", verbose=verbose)
 
 
+def schemas_portfolio_history(verbose: bool = False, test_names: list = None) -> bool:
+    """79 STK1-fix: an income history point without reward (an answer or a captured report from before 1.4) validates."""
+    print_section("Schemas: Portfolio History (79 STK1-fix)")
+    print_info("Testing: backend/app/schemas/portfolio/history.py (IncomeHistoryPoint.reward optional on the wire)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_schemas/test_portfolio_history_schema.py", test_names)
+    return run_command(cmd, "Portfolio history schema tests", verbose=verbose)
+
+
 def schemas_price_write_point(verbose: bool = False, test_names: list = None) -> bool:
     """N92 (i): the write model of a manual price ("clear" | number | null) and an answer model that checks no sign."""
     print_section("Schemas: Price Write Point (N92)")
@@ -253,6 +261,15 @@ Tests for Pydantic/SQLModel schema validation:
         name="Secret Validator Messages",
         desc="A-38: no field_validator of a secret field (password, token, secret, key, credential) puts the value in its message: the 422 keeps msg and ctx",
         # PURE: reads the schemas' source with ast; no import of the app, no row, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "portfolio-history",
+        schemas_portfolio_history,
+        name="Portfolio History",
+        desc="79 STK1-fix: IncomeHistoryPoint.reward is optional on the wire; a point without it validates and the OpenAPI document does not require it",
+        # PURE: validates schema models and reads app.openapi(); no row, no server, no network.
         isolation="pure",
     )
     add_test(

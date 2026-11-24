@@ -9,12 +9,12 @@
  * they have their own specs.
  */
 import {beforeAll, describe, expect, it, vi} from 'vitest';
-import {render, screen, setupI18n} from '$test/component';
+import {cleanup, render, screen, setupI18n} from '$test/component';
 
-const mocks = vi.hoisted(() => ({noop: () => {}}));
+const mocks = vi.hoisted(() => ({noop: () => {}, allocation: vi.fn()}));
 vi.mock('$lib/features/dashboard/KpiSection.svelte', () => ({default: mocks.noop}));
 vi.mock('$lib/features/dashboard/GrowthChart.svelte', () => ({default: mocks.noop}));
-vi.mock('$lib/features/dashboard/AllocationPanel.svelte', () => ({default: mocks.noop}));
+vi.mock('$lib/features/dashboard/AllocationPanel.svelte', () => ({default: mocks.allocation}));
 
 import PortfolioOverviewTab from './PortfolioOverviewTab.svelte';
 import type {PortfolioDataState} from './portfolioData';
@@ -39,6 +39,7 @@ function snapshot(cashBalances: {code: string; amount: string}[] | undefined): P
         groupedSummary: null,
         pnlCandles: null,
         appliedCurrency: 'EUR',
+        appliedBrokerIds: null,
         reportLoading: false,
         contributionLoading: false,
         contributionRefreshing: false,
@@ -84,5 +85,19 @@ describe('PortfolioOverviewTab — cash balances', () => {
         expect(screen.getByTestId('broker-cash-balances')).toBeInTheDocument();
         expect(screen.getAllByTestId('broker-cash-balance')).toHaveLength(1);
         expect(screen.queryByTestId('dashboard-overview-tab')).toBeNull();
+    });
+});
+
+describe('PortfolioOverviewTab — the Allocation card', () => {
+    it("hands the view's «Analyze →» callback down untouched, and none when the view gives none", () => {
+        const onAnalyzeAllocation = vi.fn();
+        mocks.allocation.mockClear();
+        render(PortfolioOverviewTab, {...props(snapshot([])), onAnalyzeAllocation});
+        expect((mocks.allocation.mock.calls.at(-1)?.[1] as {onAnalyze?: unknown}).onAnalyze).toBe(onAnalyzeAllocation);
+        cleanup();
+
+        mocks.allocation.mockClear();
+        render(PortfolioOverviewTab, props(snapshot([])));
+        expect((mocks.allocation.mock.calls.at(-1)?.[1] as {onAnalyze?: unknown}).onAnalyze).toBeUndefined();
     });
 });

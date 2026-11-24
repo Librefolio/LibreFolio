@@ -111,6 +111,8 @@ function problemMessage(t: AiExportTranslate, problem: AiExportProblemDetail): s
     if (problem.code === 'version_mismatch') return t('aiExport.contractMismatch');
     if (problem.code === 'unsupported_selection') return t('aiExport.catalogUnavailable');
     // J-50: the selection reads more days of prices over this period than one request may build — a shorter period helps.
+    // 78 L10b: the user owns no broker, so a selection that reads positions or exposure has nothing to read.
+    if (problem.code === 'selection_not_applicable' && problem.reason_code === 'no_owned_brokers') return t('aiExport.noOwnedBrokers');
     if (problem.code === 'selection_not_applicable') return t(problem.reason_code === 'too_many_price_days' ? 'aiExport.tooManyPriceDays' : 'aiExport.selectionNotApplicable');
     if (problem.code === 'broker_access_denied' || problem.code === 'entity_not_found') return t('aiExport.entityNotFound');
     return t('aiExport.sourceUnavailable');

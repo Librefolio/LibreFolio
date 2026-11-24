@@ -15,6 +15,14 @@ other identifiers:
 
 An enricher found stops being asked. The plugin calls block: each runs in a worker thread (``asyncio.to_thread``). A
 plugin that raises gives an ``error`` answer, logged; the others go on.
+
+**Seeds** (ENR-2) are bindings to start from, today the asset's price assignment. A source's price provider and its
+enricher share their code, so a seed of the code of a covering enricher that accepts its type is that enricher's first
+binding, with the parameters its ``params_schema`` declares (the others are dropped); after a clean «not found» it goes
+on with the identifiers known. A seed's identifier joins the known ones: a type not known yet is added; a weak one
+(a ticker) different from the asset's goes first, the asset's kept as the last choice (R6: ``SWDA.MI`` before
+``SWDA``); a strong one different from the asset's is a **conflict**: it joins nothing, and the enricher of the seed's
+code answers ``conflict`` and is not asked.
 """
 
 from __future__ import annotations
@@ -62,6 +70,14 @@ class IdentifierLearned:
     source: str
 
 
+@dataclass(frozen=True, slots=True)
+class Seed:
+    """A binding to start from (ENR-2): the source's code and how it names the asset, with its parameters."""
+
+    code: str
+    binding: EnricherBinding
+
+
 @dataclass
 class _Cascade:
     """The state of one cascade: what is known, searched, asked, found, and the calls in flight."""
@@ -69,6 +85,10 @@ class _Cascade:
     plugins: list[EnricherPlugin]
     known: dict[str, str]
     queue: asyncio.Queue
+    #: Code → the binding a seed gives that enricher, asked before anything else.
+    seeded: dict[str, EnricherBinding] = field(default_factory=dict)
+    #: Identifiers tried only after the known ones (the asset's ticker a seed's put behind, R6).
+    fallback: list[tuple[str, str]] = field(default_factory=list)
     asked: set[tuple[str, str, str]] = field(default_factory=set)
     found: set[str] = field(default_factory=set)
     stopped: set[str] = field(default_factory=set)
@@ -82,9 +102,17 @@ class _Cascade:
     def ask_next(self) -> None:
         """Ask every enricher not found, not stopped and not busy with the strongest known identifier it accepts and was
         not asked with: after a clean «not found» the next one is tried, until one finds."""
-        ordered = self._strongest_first()
+        ordered = self._strongest_first() + [item for item in self.fallback if self.known.get(item[0]) != item[1]]
         for plugin in self.plugins:
             if plugin.code in self.found or plugin.code in self.stopped or plugin.code in self.busy:
+                continue
+            seed = self.seeded.get(plugin.code)
+            if seed is not None and (plugin.code, seed.identifier_type, seed.identifier) not in self.asked:
+                self.asked.add((plugin.code, seed.identifier_type, seed.identifier))
+                self.busy.add(plugin.code)
+                task = asyncio.create_task(self._call(plugin, seed))
+                self.tasks.add(task)
+                task.add_done_callback(self.tasks.discard)
                 continue
             for kind, value in ordered:
                 if kind in plugin.accepted_identifier_types and (plugin.code, kind, value) not in self.asked:
@@ -128,12 +156,46 @@ class _Cascade:
         return events
 
 
-async def recognize_cascade(asset_type: AssetType, identifiers: Mapping[str, str], *, plugins: Sequence[EnricherPlugin] | None = None) -> AsyncIterator[Recognized | IdentifierLearned]:
-    """The cascade from ``identifiers`` (type → value) over ``plugins`` (the installed enrichers when None), its events
-    as they happen."""
+def _seed_binding(plugin: EnricherPlugin, seed: Seed) -> EnricherBinding:
+    """The seed as ``plugin``'s binding: its type and identifier, and only the parameters the plugin declares."""
+    declared = {str(entry.get("key")) for entry in plugin.params_schema if isinstance(entry, Mapping)}
+    params = {key: value for key, value in seed.binding.params.items() if key in declared}
+    return EnricherBinding(identifier_type=seed.binding.identifier_type, identifier=seed.binding.identifier, params=params)
+
+
+def _plant_seeds(cascade: _Cascade, seeds: Sequence[Seed]) -> list[Recognized]:
+    """Put the seeds in the cascade (see the module docstring); the conflicts they make, as answers."""
+    by_code = {plugin.code: plugin for plugin in cascade.plugins}
+    conflicts: list[Recognized] = []
+    for seed in seeds:
+        kind = str(seed.binding.identifier_type).strip().upper()
+        value = str(seed.binding.identifier).strip()
+        if not kind or not value:
+            continue
+        binding = EnricherBinding(identifier_type=kind, identifier=value, params=dict(seed.binding.params))
+        plugin = by_code.get(seed.code)
+        current = cascade.known.get(kind)
+        if kind in STRONG_IDENTIFIER_TYPES and current is not None and current != value:
+            if plugin is not None and plugin.code not in cascade.stopped:
+                cascade.stopped.add(plugin.code)
+                conflicts.append(Recognized(code=plugin.code, binding=_seed_binding(plugin, Seed(seed.code, binding)), status=RecognizeStatus.CONFLICT, conflicts={kind: value}))
+            continue
+        if current is not None and current != value:
+            cascade.fallback.append((kind, current))
+        cascade.known[kind] = value
+        if plugin is not None and kind in plugin.accepted_identifier_types and plugin.code not in cascade.seeded:
+            cascade.seeded[plugin.code] = _seed_binding(plugin, Seed(seed.code, binding))
+    return conflicts
+
+
+async def recognize_cascade(asset_type: AssetType, identifiers: Mapping[str, str], *, plugins: Sequence[EnricherPlugin] | None = None, seeds: Sequence[Seed] = ()) -> AsyncIterator[Recognized | IdentifierLearned]:
+    """The cascade from ``identifiers`` (type → value) and ``seeds`` (ENR-2) over ``plugins`` (the installed enrichers
+    when None), its events as they happen."""
     covering = [plugin for plugin in (installed_enrichers() if plugins is None else plugins) if plugin.covers(asset_type)]
     known = {str(kind).strip().upper(): str(value).strip() for kind, value in identifiers.items() if str(value).strip()}
     cascade = _Cascade(plugins=covering, known=known, queue=asyncio.Queue())
+    for conflict in _plant_seeds(cascade, seeds):
+        yield conflict
     cascade.ask_next()
     try:
         while cascade.busy:

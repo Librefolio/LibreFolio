@@ -132,7 +132,7 @@ import {
     settlePacShot,
 } from './fixtures/galleryPac';
 import {closeProviderCompare, fitScreenToCompareDialog, mockProviderCompare, openProviderCompare, restoreCompareScreen, settleProviderCompareShot} from './fixtures/galleryProviderCompare';
-import {serveGalleryEnrichers} from './fixtures/galleryEnrichers';
+import {GALLERY_ENRICHER_QUERY, GALLERY_RECOGNIZED_ASSET, serveGalleryEnricherAnswers, serveGalleryEnrichers} from './fixtures/galleryEnrichers';
 import {expectGalleryEmailStatus, serveGalleryEmailStatus} from './fixtures/galleryEmail';
 import {expectGalleryBackupReady, serveGalleryBackupJob} from './fixtures/galleryBackup';
 import {openAiExportPanel, selectAiExportSelection} from './ai-export/helpers';
@@ -147,6 +147,7 @@ import {extendScreenToBlock, fitScreenToDialog, PAGE_BLOCK, restoreTallScreen} f
 import {boxStill, bringIntoViewFromTop, CAPTURE_TIMEOUT_MS, captureShot, COLUMN_FILTER_GAP, DROPDOWN_GAP, expectDropdownAt, frameTarget, logApiOnFailure, scrollStill, settledToOpen, settleShot, type ShotOptions, trackApiRequests} from './fixtures/galleryShot';
 import {brimFileId, chooseTheme, closePreview, FILES_SAMPLES, filesTableReady, fontsLoaded, gridPreviewReady, imagePreviewReady, imagesInViewLoaded, languageMenuClosed, markdownPreviewReady, openPreview, pdfPreviewReady, staticFileId, textPreviewReady} from './fixtures/galleryFiles';
 import {expectDrawnUnder, setBrowserLocale, stampDocumentLocale} from './fixtures/galleryLocale';
+import {collectPhoneOverflow} from './fixtures/phone-overflow';
 import {completeWelcome, prepareOnboardingAccount} from './fixtures/onboarding-accounts';
 import {openSettingsTab} from './fixtures/settings-tabs';
 import {type Language, SUPPORTED_LANGUAGES, TEST_ADMIN, TEST_EMPTY, TEST_USER} from './fixtures/test-users';
@@ -410,6 +411,12 @@ async function waitForSplashGone(page: Page) {
 }
 
 /**
+ * Where the phone shots that scroll sideways are listed, one JSON line each, whichever worker took them (81 U22). Append-only,
+ * a defect that was already there never stops the gallery: delete the file before a run, read it after.
+ */
+const PHONE_OVERFLOW_REPORT = path.resolve('test-results', 'gallery-phone-overflow.jsonl');
+
+/**
  * Take the shot `category/name` of this combination, once the page has settled for it (galleryShot.ts, `settleShot`): the
  * pointer parked, every `/api/` request answered, no loader on screen, the animations that end ended, the images in, the
  * charts, the text and the frame still, no toast, the looping animations pinned. `options` opts a shot out of a step — a
@@ -422,6 +429,8 @@ async function screenshot(page: Page, viewport: 'desktop' | 'mobile', lang: Lang
     // The page began under this language's browser locale: a forgotten switch point fails here, not as an en-US number in
     // another language's shot (galleryLocale.ts).
     await expectDrawnUnder(page, lang);
+    // 81 U22: a phone shot that scrolls sideways is collected into one report, never stops the run (fixtures/phone-overflow.ts).
+    if (viewport === 'mobile') await collectPhoneOverflow(page, shot, PHONE_OVERFLOW_REPORT);
     const dir = getGalleryPath(viewport, lang, theme, category);
     ensureDir(dir);
     await captureShot(page, path.join(dir, `${name}.png`), shot);
@@ -1640,6 +1649,59 @@ test.describe('Gallery Screenshots', () => {
                 }
 
                 // Scroll back to top so next iteration starts clean
+                await page.evaluate(() => window.scrollTo(0, 0));
+            });
+        });
+
+        test('dashboard allocation tab - all languages and themes', async ({page}, testInfo) => {
+            // The «Allocazione» tab (lane 80, #89): the top of the tab (the three boxes, the filters, the chart, the table), the filter
+            // panel (a column on a wide screen, the popover of the «Filters» button on a phone) and the Class × dimension matrix. The
+            // report is the snapshot's; the tab asks the allocation of the test user's own (populated) portfolio, and nothing is written.
+            test.setTimeout(420_000);
+            const viewport = getViewport(testInfo);
+            await setupDashboardMockReport(page);
+
+            await forEachLanguageAndTheme(page, async (lang, theme) => {
+                await page.goto('/dashboard');
+                await page.waitForLoadState('networkidle', {timeout: 20_000});
+                await selectOneYearPreset(page);
+                await freezeAnimations(page);
+                await expectDashboardReportLoaded(page);
+
+                await page.getByTestId('dashboard-tab-allocazione').click();
+                const tab = page.getByTestId('dashboard-allocation-tab');
+                await expect(tab).toBeVisible({timeout: 10_000});
+                await waitForSettled(tab, 20_000);
+                // The answer is on screen: the boxes, the chart's frame and the table's rows.
+                await expect(page.getByTestId('dashboard-allocation-tab-tiles-base-amount')).toBeVisible();
+                await expect(page.getByTestId('dashboard-allocation-tab-results-table')).toBeVisible();
+                await expect(page.getByTestId('dashboard-allocation-tab-results-chart')).toBeVisible();
+
+                await frameTarget(page, tab, `${viewport}/${lang}/${theme}/dashboard/allocation-tab`);
+                await screenshot(page, viewport, lang, theme, 'dashboard', 'allocation-tab');
+
+                // The filters: the column on a wide screen; behind the button on a phone, opened for the shot.
+                if (viewport === 'mobile') {
+                    const button = page.getByTestId('dashboard-allocation-tab-filters-button');
+                    await button.click();
+                    const panel = page.getByTestId('dashboard-allocation-tab-filters');
+                    await expect(panel).toBeVisible();
+                    await screenshot(page, viewport, lang, theme, 'dashboard', 'allocation-filters');
+                    await button.click();
+                    await expect(page.getByTestId('dashboard-allocation-tab-filters')).toHaveCount(0);
+                } else {
+                    const column = page.getByTestId('dashboard-allocation-tab-filters-column');
+                    // The column is sticky, `lg:top-4`: it stands 16 px under the top of the screen, where the frame asks for it.
+                    await frameTarget(page, column, `${viewport}/${lang}/${theme}/dashboard/allocation-filters`, 16);
+                    await screenshot(page, viewport, lang, theme, 'dashboard', 'allocation-filters');
+                }
+
+                // The matrix of the dimension on screen (the sector, at the first opening), framed under the table.
+                const matrix = page.getByTestId('dashboard-allocation-tab-results-matrix');
+                await expect(matrix).toBeVisible();
+                await frameTarget(page, matrix, `${viewport}/${lang}/${theme}/dashboard/allocation-matrix`);
+                await screenshot(page, viewport, lang, theme, 'dashboard', 'allocation-matrix');
+
                 await page.evaluate(() => window.scrollTo(0, 0));
             });
         });
@@ -6428,7 +6490,7 @@ test.describe('Gallery Screenshots', () => {
             }
         });
 
-        test('Asset detail profile: latest changes, the history of the data, the enrichers window (plan 68, E12)', async ({page}, testInfo) => {
+        test('Asset detail profile: latest changes, the history of the data (plan 68, E12)', async ({page}, testInfo) => {
             // The seeded fund with a profile history (populate_mock_data.py, PROFILE_HISTORY_FUND): its TER read by justETF,
             // corrected by hand, read again; its fund size read three times; its enrichers justETF and Borsa Italiana. The
             // real enrichers' catalogue is served (galleryEnrichers.ts): a lane serves only mockenrich. Read only: windows
@@ -6472,8 +6534,29 @@ test.describe('Gallery Screenshots', () => {
                     await restoreTallScreen(page);
                     await page.getByTestId('profile-history-close').click();
                     await expect(history).toHaveCount(0);
+                }
+            }
+        });
 
-                    // 3. The enrichers window, over the asset window: justETF first, Borsa Italiana second, with their last read
+        test('Asset enrichers window: recognized on opening, search online (82 ENR-4)', async ({page}, testInfo) => {
+            // The seeded iShares Core MSCI World, no enrichers yet, opened in edit mode: «Riconosci» starts with the window
+            // and «Cerca online» searches by name. Both answered as the real enrichers would (galleryEnrichers.ts): justETF
+            // and ESMA know the ISIN and enter the list, Yahoo Finance found by the bare ticker waits in «Non in elenco»,
+            // the search shows three Yahoo listings. Read only: the window is closed without applying, nothing saved.
+            test.setTimeout(300_000);
+            const viewport = getViewport(testInfo);
+            await serveGalleryEnrichers(page);
+            await serveGalleryEnricherAnswers(page);
+
+            for (const lang of SUPPORTED_LANGUAGES) {
+                await setBrowserLocale(page, lang);
+                for (const theme of THEMES) {
+                    await goToAssetsPage(page);
+                    await setLanguage(page, lang);
+                    await setTheme(page, theme);
+                    await freezeAnimations(page);
+
+                    await openGalleryAsset(page, GALLERY_RECOGNIZED_ASSET.name);
                     const editBtn = page.getByTestId('asset-detail-edit-btn');
                     await expect(editBtn).toBeEnabled({timeout: 10_000});
                     await editBtn.click();
@@ -6481,9 +6564,17 @@ test.describe('Gallery Screenshots', () => {
                     await page.getByTestId('asset-modal-enrichers').click();
                     const enrichers = page.getByTestId('enrichers-modal');
                     await expect(enrichers).toBeVisible({timeout: 10_000});
+
+                    // «Riconosci» on opening: justETF and ESMA chosen, Yahoo Finance by its bare ticker left out
+                    await expect(enrichers.getByTestId('enrichers-recognition'), 'recognized on opening').toHaveAttribute('data-state', 'found', {timeout: 10_000});
                     await expect(enrichers.getByTestId('enricher-row-justetf')).toHaveAttribute('data-position', '1');
-                    await expect(enrichers.getByTestId('enricher-row-justetf')).toHaveAttribute('data-last-read', 'ok');
-                    await expect(enrichers.getByTestId('enricher-row-borsa_italiana')).toHaveAttribute('data-availability', 'ok');
+                    await expect(enrichers.getByTestId('enricher-row-esma')).toHaveAttribute('data-position', '2');
+                    await expect(enrichers.getByTestId('enricher-other-yfinance')).toHaveAttribute('data-ticker-only', 'true');
+
+                    // «Cerca online» by name: Yahoo Finance's listings, each with «+»
+                    await enrichers.getByTestId('enrichers-search-input').fill(GALLERY_ENRICHER_QUERY);
+                    await expect(enrichers.getByTestId('enrichers-search')).toHaveAttribute('data-status', 'done', {timeout: 10_000});
+                    await expect(enrichers.locator('[data-testid^="enrichers-search-row-"][data-code="yfinance"]'), 'three Yahoo listings').toHaveCount(3);
                     await imagesSettled(enrichers);
                     if (viewport === 'desktop') await fitScreenToDialog(page, enrichers, `desktop/${lang}/${theme}/assets/enrichers-window`);
                     await screenshot(page, viewport, lang, theme, 'assets', 'enrichers-window');

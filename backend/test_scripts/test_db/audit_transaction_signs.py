@@ -12,6 +12,7 @@ Anomalies reported (mirrors the plan's Fase 0.2 thresholds):
 - BUY with ``amount > 0``           (should be a cash outflow, < 0)
 - SELL with ``amount < 0``          (should be a cash inflow,  > 0)
 - DIVIDEND / INTEREST with ``amount <= 0`` (should be a cash inflow, > 0)
+- REWARD with ``amount != 0``        (income in kind: no cash moves)
 
 This script is a **read-only pre-deploy gate**, NOT a permanent automatic test:
 it neither imports the test-DB harness nor mutates data. It targets whatever DB
@@ -75,6 +76,12 @@ SIGN_RULES: list[SignRule] = [
         types=frozenset({TransactionType.DIVIDEND, TransactionType.INTEREST}),
         is_anomalous=lambda amt: amt <= _ZERO,
         expectation="cash inflow (amount > 0)",
+    ),
+    SignRule(
+        label="REWARD amount != 0",
+        types=frozenset({TransactionType.REWARD}),
+        is_anomalous=lambda amt: amt != _ZERO,
+        expectation="no cash movement (amount = 0)",
     ),
 ]
 

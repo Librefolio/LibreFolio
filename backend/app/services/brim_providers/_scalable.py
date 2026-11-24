@@ -392,20 +392,22 @@ class _Reader:
             return
         fee = abs(fee or Decimal("0"))
         tax = tax or Decimal("0")
-        if not self._create(row, TransactionType.SELL if sell else TransactionType.BUY, -abs(shares) if sell else abs(shares), amount if sell else -amount, asset=True):
+        trade = self._create(row, TransactionType.SELL if sell else TransactionType.BUY, -abs(shares) if sell else abs(shares), amount if sell else -amount, asset=True)
+        if trade is None:
             return
         if fee > 0:
-            self._create(row, TransactionType.FEE, Decimal("0"), -fee, asset=True, prefix="Order fee")
-        self._tax_leg(row, tax)
+            self._create(row, TransactionType.FEE, Decimal("0"), -fee, asset=True, prefix="Order fee", parent=trade)
+        self._tax_leg(row, tax, trade)
 
-    def _tax_leg(self, row: _Row, tax: Decimal) -> None:
-        """The tax of a trade: paid (> 0) is a TAX of the security; given back (< 0) is an INTEREST of the security.
+    def _tax_leg(self, row: _Row, tax: Decimal, trade: TXCreateItem) -> None:
+        """The tax of a trade: paid (> 0) is a TAX of the security, linked to the trade (project 66); given back (< 0) is
+        an INTEREST of the security, which is no charge and links to nothing.
 
         A tax refund is money given back from the investment's gain: it counts in the P&L, it is not new capital (the BRIM rule
         «a tax refund is INTEREST», the developer, 11/11/2026).
         """
         if tax > 0:
-            self._create(row, TransactionType.TAX, Decimal("0"), -tax, asset=True, prefix="Tax")
+            self._create(row, TransactionType.TAX, Decimal("0"), -tax, asset=True, prefix="Tax", parent=trade)
         elif tax < 0:
             self._flag("scalable_tax_refund", row)
             self._create(row, TransactionType.INTEREST, Decimal("0"), -tax, asset=True, prefix="Tax refund")
@@ -426,8 +428,9 @@ class _Reader:
                 self._flag("scalable_dividends_net", row)
             elif self.exporter:
                 self._flag("scalable_fees_unknown", row)
-        if self._create(row, tx_type, Decimal("0"), amount + withheld, asset=dividend) and withheld > 0:
-            self._create(row, TransactionType.TAX, Decimal("0"), -withheld, asset=dividend, prefix="Tax")
+        income = self._create(row, tx_type, Decimal("0"), amount + withheld, asset=dividend)
+        if income is not None and withheld > 0:
+            self._create(row, TransactionType.TAX, Decimal("0"), -withheld, asset=dividend, prefix="Tax", parent=income)
 
     def _cash(self, row: _Row, kind: str) -> None:
         amount = row.number("amount")
@@ -470,27 +473,31 @@ class _Reader:
             parts.append(f"ref {row.get('reference')}")
         return _SEP.join(parts)
 
-    def _create(self, row: _Row, tx_type: TransactionType, quantity: Decimal, amount: Decimal, *, asset: bool, prefix: Optional[str] = None) -> bool:
+    def _create(self, row: _Row, tx_type: TransactionType, quantity: Decimal, amount: Decimal, *, asset: bool, prefix: Optional[str] = None, parent: Optional[TXCreateItem] = None) -> Optional[TXCreateItem]:
+        """One row of the output, or ``None`` when it is refused. A charge given a ``parent`` (the operation of its own row)
+        is linked to it (project 66, ``_create_linked_charge``)."""
         try:
             cash = Currency(code=row.get("currency").upper(), amount=amount)
         except (ValueError, ValidationError):
             self._flag("scalable_unreadable_rows", row)  # not an ISO 4217 currency
-            return False
-        created = self.provider._create_transaction(
-            row_num=row.line,
-            transactions=self.transactions,
-            validation_issues=self.validation_issues,
-            context=row.get("description") or None,
-            broker_id=self.broker_id,
-            asset_id=self._asset_id(row) if asset else None,
-            type=tx_type,
-            date=to_date(row.get("date"), _DATE_FORMATS),
-            quantity=quantity,
-            cash=cash,
-            description=self._description(row, prefix),
-            tags=list(_TAGS),
-        )
-        return created is not None
+            return None
+        fields = {
+            "row_num": row.line,
+            "transactions": self.transactions,
+            "validation_issues": self.validation_issues,
+            "context": row.get("description") or None,
+            "broker_id": self.broker_id,
+            "asset_id": self._asset_id(row) if asset else None,
+            "type": tx_type,
+            "date": to_date(row.get("date"), _DATE_FORMATS),
+            "quantity": quantity,
+            "cash": cash,
+            "description": self._description(row, prefix),
+            "tags": list(_TAGS),
+        }
+        if parent is None:
+            return self.provider._create_transaction(**fields)
+        return self.provider._create_linked_charge(parent=parent, **fields)
 
     @staticmethod
     def _asset_key(row: _Row) -> str:

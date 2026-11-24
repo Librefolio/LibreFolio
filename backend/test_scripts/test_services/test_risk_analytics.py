@@ -43,6 +43,7 @@ from backend.app.services.risk.base import (
     RiskAssetClassification,
     RiskExecutionContext,
     RiskHistoricalReplayContext,
+    RiskSimulationHistoryContext,
     RiskUnavailableError,
 )
 from backend.app.services.risk.metrics import (
@@ -2785,6 +2786,20 @@ async def test_drift_uncertainty_compounds_over_the_observations_the_horizon_hol
     assert output.drift_uncertainty_observations == observations
     # The bands are still one per calendar day.
     assert len(output.percentile_bands) == 366
+
+
+@pytest.mark.asyncio
+async def test_the_output_states_the_history_it_could_draw_from_and_whether_a_period_was_chosen(engine_requests):
+    """RSK-SIM1 (P-7): the window the user may choose a period in, and whether they did, travel from the context to the
+    result; a context with no simulation history (an answer from before) carries none."""
+    available = DateRangeModel(start=date(2016, 5, 3), end=date(2026, 11, 24))
+    context = replace(simulation_context(252.0), simulation_history=RiskSimulationHistoryContext(available=available, chosen=True))
+
+    output = (await SimulationAnalytic().execute(bootstrap_params(30), context)).output
+    assert (output.history_available_start, output.history_available_end, output.history_chosen) == (available.start, available.end, True)
+
+    plain = (await SimulationAnalytic().execute(bootstrap_params(30), simulation_context(252.0))).output
+    assert (plain.history_available_start, plain.history_available_end, plain.history_chosen) == (None, None, False)
 
 
 def test_simulation_steps_are_a_new_algorithm_version():

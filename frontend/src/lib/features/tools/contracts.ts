@@ -322,13 +322,20 @@ export function getToolDescriptorGeneration(descriptor: VerifiedToolDescriptor):
     return context.accountGeneration;
 }
 
+/**
+ * What a run of ``code`` needs before it is sent. ``clientTimeoutFor(operation)`` is how long the client waits for that
+ * operation: its limit as the catalog declares it, never the platform's ceiling, which holds the longest operation of any
+ * Tool (TURNI 5a of project 67: 135 s, three turns of the Rebalancer). An operation the descriptor lacks is
+ * ``operation_mismatch``. With none named, the longest of this Tool's operations: every shipped Tool's input names its
+ * operation, so this is only for an input that does not.
+ */
 export function prepareToolRun<C extends ToolCode, V extends ToolVersion<C>>(
     code: C,
     version: V,
     descriptor: CompatibleToolDescriptor<C, V>,
 ): {
     accountGeneration: number;
-    clientTimeoutMs: number;
+    clientTimeoutFor: (operation: string | undefined) => number;
     validateInput: (raw: unknown) => void;
     decodeOutput: (raw: unknown) => ToolOutput<C, V>;
 } {
@@ -338,9 +345,16 @@ export function prepareToolRun<C extends ToolCode, V extends ToolVersion<C>>(
     if (descriptor.tool_code !== code || descriptor.contract_version !== version) {
         throw new ToolClientError('compatibility', 'contract_mismatch');
     }
+    const operations = descriptor.operations;
     return {
         accountGeneration,
-        clientTimeoutMs: context.policy.client_timeout_ms,
+        clientTimeoutFor(operation) {
+            if (operations.length === 0) throw new ToolClientError('compatibility', 'operation_mismatch');
+            if (operation === undefined) return Math.max(...operations.map((item) => item.client_timeout_ms));
+            const named = operations.find((item) => item.operation === operation);
+            if (!named) throw new ToolClientError('compatibility', 'operation_mismatch');
+            return named.client_timeout_ms;
+        },
         validateInput(raw) {
             assertToolAccount(accountGeneration);
             parseToolCodec(context.contract.input, raw, 'validation', 'invalid_parameters');

@@ -139,7 +139,8 @@ class DeltaBrokerProvider(BRIMProvider):
 
     @property
     def plugin_version(self) -> str:
-        return "1.0.0"
+        # 1.1.0 — the fiat fee of a row is linked to that row's booking (project 66, P4).
+        return "1.1.0"
 
     @property
     def test_file_pattern(self) -> Optional[str]:
@@ -185,7 +186,10 @@ class DeltaBrokerProvider(BRIMProvider):
             next_fake_id -= 1
             return asset_id
 
-        def create_fee(row_num: int, tx_date: date_type, fee: Optional[Decimal], fee_currency_raw: str, asset_id: Optional[int], context: str) -> None:
+        def create_fee(row_num: int, tx_date: date_type, fee: Optional[Decimal], fee_currency_raw: str, asset_id: Optional[int], context: str, parent: Optional[TXCreateItem]) -> None:
+            """The fee of a row: a fiat FEE linked to the row's booking (``parent``, project 66 P4; an ADJUSTMENT is no
+            parent, so the fiat fee of a crypto-to-crypto trade or of a crypto transfer stays free), or a crypto fee as an
+            ADJUSTMENT."""
             if fee is None or fee <= 0 or not fee_currency_raw.strip():
                 return
             fee_asset = _parse_delta_asset(fee_currency_raw)
@@ -193,7 +197,8 @@ class DeltaBrokerProvider(BRIMProvider):
             if not fee_symbol:
                 return
             if is_fiat_currency(fee_symbol):
-                self._create_transaction(
+                self._create_charge_of(
+                    parent,
                     row_num=row_num,
                     transactions=transactions,
                     validation_issues=validation_issues,
@@ -257,6 +262,7 @@ class DeltaBrokerProvider(BRIMProvider):
                     if exchange:
                         context = f"{context} on {exchange}"
 
+                    parent: Optional[TXCreateItem] = None  # the row's booking, which its fee is linked to
                     if way == "TRANSFER":
                         skipped_transfer_rows += 1
                         warnings.append(f"Row {row_num}: TRANSFER rows are not imported, skipping")
@@ -272,7 +278,7 @@ class DeltaBrokerProvider(BRIMProvider):
                             tx_type = TransactionType.BUY if way == "BUY" else TransactionType.SELL
                             quantity = abs(base_amount) if way == "BUY" else -abs(base_amount)
                             cash_amount = -abs(quote_amount) if way == "BUY" else abs(quote_amount)
-                            self._create_transaction(
+                            parent = self._create_transaction(
                                 row_num=row_num,
                                 transactions=transactions,
                                 validation_issues=validation_issues,
@@ -290,7 +296,7 @@ class DeltaBrokerProvider(BRIMProvider):
                             crypto_trade_adjustments += 1
                             quantity = abs(base_amount) if way == "BUY" else -abs(base_amount)
                             quote_text = f" for {quote_amount} {quote_symbol}" if quote_amount and quote_symbol else ""
-                            self._create_transaction(
+                            parent = self._create_transaction(
                                 row_num=row_num,
                                 transactions=transactions,
                                 validation_issues=validation_issues,
@@ -304,7 +310,7 @@ class DeltaBrokerProvider(BRIMProvider):
                                 description=notes or f"Delta crypto-to-crypto {way.lower()} {base_symbol}{quote_text}; quote leg not imported",
                                 tags=["import", "delta"],
                             )
-                        create_fee(row_num, tx_date, fee_amount, row.get(COL_FEE_CURRENCY, ""), asset_id, context)
+                        create_fee(row_num, tx_date, fee_amount, row.get(COL_FEE_CURRENCY, ""), asset_id, context, parent)
 
                     elif way in ("WITHDRAW", "DEPOSIT"):
                         if base_amount is None or base_amount <= 0 or not base_symbol:
@@ -314,7 +320,7 @@ class DeltaBrokerProvider(BRIMProvider):
                         if base_type == "FIAT" or is_fiat_currency(base_symbol):
                             tx_type = TransactionType.DEPOSIT if way == "DEPOSIT" else TransactionType.WITHDRAWAL
                             cash_amount = abs(base_amount) if way == "DEPOSIT" else -abs(base_amount)
-                            self._create_transaction(
+                            parent = self._create_transaction(
                                 row_num=row_num,
                                 transactions=transactions,
                                 validation_issues=validation_issues,
@@ -328,11 +334,11 @@ class DeltaBrokerProvider(BRIMProvider):
                                 description=notes or f"Delta fiat {way.lower()} {base_symbol}",
                                 tags=["import", "delta"],
                             )
-                            create_fee(row_num, tx_date, fee_amount, row.get(COL_FEE_CURRENCY, ""), None, context)
+                            create_fee(row_num, tx_date, fee_amount, row.get(COL_FEE_CURRENCY, ""), None, context, parent)
                         else:
                             asset_id = get_asset_id(base_symbol, base_asset["name"], base_type)
                             quantity = abs(base_amount) if way == "DEPOSIT" else -abs(base_amount)
-                            self._create_transaction(
+                            parent = self._create_transaction(
                                 row_num=row_num,
                                 transactions=transactions,
                                 validation_issues=validation_issues,
@@ -346,7 +352,7 @@ class DeltaBrokerProvider(BRIMProvider):
                                 description=notes or f"Delta crypto {way.lower()} {base_symbol}",
                                 tags=["import", "delta"],
                             )
-                            create_fee(row_num, tx_date, fee_amount, row.get(COL_FEE_CURRENCY, ""), asset_id, context)
+                            create_fee(row_num, tx_date, fee_amount, row.get(COL_FEE_CURRENCY, ""), asset_id, context, parent)
 
                     elif way == "DIVIDEND":
                         if not base_symbol or quote_amount is None or quote_amount <= 0 or not quote_symbol or not is_fiat_currency(quote_symbol):
@@ -354,7 +360,7 @@ class DeltaBrokerProvider(BRIMProvider):
                             warnings.append(f"Row {row_num}: invalid dividend, skipping")
                             continue
                         asset_id = get_asset_id(base_symbol, base_asset["name"], base_type)
-                        self._create_transaction(
+                        parent = self._create_transaction(
                             row_num=row_num,
                             transactions=transactions,
                             validation_issues=validation_issues,
@@ -368,7 +374,7 @@ class DeltaBrokerProvider(BRIMProvider):
                             description=notes or f"Delta dividend {base_symbol}",
                             tags=["import", "delta"],
                         )
-                        create_fee(row_num, tx_date, fee_amount, row.get(COL_FEE_CURRENCY, ""), asset_id, context)
+                        create_fee(row_num, tx_date, fee_amount, row.get(COL_FEE_CURRENCY, ""), asset_id, context, parent)
 
                     else:
                         skipped_unknown_rows += 1

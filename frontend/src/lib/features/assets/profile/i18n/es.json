@@ -39,7 +39,10 @@
         "issuer_type": "Tipo de emisor",
         "issuer_lei": "LEI del emisor",
         "outstanding_amount": "Importe en circulación",
-        "reference_price_date": "Fecha del precio de referencia"
+        "reference_price_date": "Fecha del precio de referencia",
+        "website": "Sitio web",
+        "revenue": "Ingresos",
+        "net_income": "Beneficio neto"
       },
       "choices": {
         "replication": {
@@ -119,7 +122,8 @@
         "size": "tamaño",
         "legal_form": "forma jurídica",
         "issuer": "emisor",
-        "description": "descripción"
+        "description": "descripción",
+        "financials": "resultados financieros"
       },
       "edit": {
         "title": "Datos del perfil",
@@ -190,7 +194,9 @@
         "companySector": "Sector",
         "staleConfirmed": "Confirmado el {date}, sin actualizar",
         "noEnrichersText": "Los datos de esta pestaña se escribieron a mano o llegaron al crear el activo: nada los mantiene actualizados.",
-        "configureHint": "Abre la ventana del activo, con la de los enriquecedores encima"
+        "configureHint": "Abre la ventana del activo, con la de los enriquecedores encima",
+        "fiscalYear": "ejercicio {year}",
+        "openWebsite": "Abrir el sitio en una pestaña nueva"
       },
       "row": {
         "pending": "{count, plural, one {# cambio pendiente} other {# cambios pendientes}}"
@@ -214,7 +220,8 @@
         "loadFailed": "No se pudieron leer los cambios.",
         "empty": "Todavía ningún cambio.",
         "who": {
-          "deletedUser": "un usuario eliminado"
+          "deletedUser": "un usuario eliminado",
+          "system": "Sistema"
         },
         "what": {
           "first": "Primer valor leído: {to}.",

@@ -254,6 +254,16 @@ Set it only when every request crosses that proxy ([warning above](#client-addre
 
         LibreFolio knows that the browser uses HTTPS and gets the visitor's address.
 
+        In the same block, also add:
+
+        ```nginx
+        proxy_read_timeout 150s;
+        ```
+
+        Nginx closes a connection that stays silent for 60 s, by default. A calculation of the Portfolio rebalancer
+        sends a line at each of its steps, about half a minute apart at most, and lasts at most 135 s on a server with
+        one CPU: 150 s is a margin, so the proxy never cuts it.
+
     2. **In LibreFolio's `.env`**, list Nginx as LibreFolio sees it (with Docker: its container or its
        Docker network):
 

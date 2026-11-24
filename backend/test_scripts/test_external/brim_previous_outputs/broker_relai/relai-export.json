@@ -1,0 +1,135 @@
+{
+  "format": "lf-brim-previous-output/1",
+  "comment": "Output of the plugin BEFORE its project-66 lot changed it (P2 contract §2.1). Never re-take it after the code change.",
+  "plugin_code": "broker_relai",
+  "plugin_version": "1.0.0",
+  "source_head": "a2e85db13",
+  "captured_on": "2026-11-21",
+  "sample": "broker_relai/sample_reports/relai-export.csv",
+  "sample_sha256": "9e4ccee01bfb3339af7de62d5d27a502dbaaa2691d38a80a7b19a7b981ff0080",
+  "extracted_assets": {
+    "2147483647": {
+      "extracted_symbol": "BTC",
+      "extracted_isin": null,
+      "extracted_name": "BTC (Crypto)",
+      "notices": []
+    }
+  },
+  "transactions": [
+    {
+      "asset_id": 2147483647,
+      "type": "SELL",
+      "date": "2024-09-15",
+      "quantity": "-0.02847593",
+      "cash": {
+        "code": "CHF",
+        "amount": "2629.45"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "relai",
+        "crypto"
+      ],
+      "description": "sell: BTC (39a4ed08-b7f2-4c5e-a1d3-f8e2c9b4a7d6)",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483647,
+      "type": "BUY",
+      "date": "2024-07-22",
+      "quantity": "0.00284516",
+      "cash": {
+        "code": "CHF",
+        "amount": "-271.05"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "relai",
+        "crypto"
+      ],
+      "description": "buy: BTC (02731d4a-9b8c-42f7-b6e5-c3a8f1d9e2b4)",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483647,
+      "type": "FEE",
+      "date": "2024-07-22",
+      "quantity": "0",
+      "cash": {
+        "code": "CHF",
+        "amount": "-2.45"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "relai",
+        "fee"
+      ],
+      "description": "Fee: BTC (02731d4a-9b8c-42f7-b6e5-c3a8f1d9e2b4)",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483647,
+      "type": "BUY",
+      "date": "2024-06-18",
+      "quantity": "0.00371249",
+      "cash": {
+        "code": "CHF",
+        "amount": "-321.45"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "relai",
+        "crypto"
+      ],
+      "description": "buy: BTC (59ac51d2-b07c-438f-a1e4-d6c9f2b8a5e7)",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483647,
+      "type": "FEE",
+      "date": "2024-06-18",
+      "quantity": "0",
+      "cash": {
+        "code": "CHF",
+        "amount": "-2.90"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "relai",
+        "fee"
+      ],
+      "description": "Fee: BTC (59ac51d2-b07c-438f-a1e4-d6c9f2b8a5e7)",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    }
+  ]
+}

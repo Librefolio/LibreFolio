@@ -40,7 +40,7 @@ from backend.app.services.ai_export.components.registry import ComponentRegistry
 from backend.app.services.ai_export.components.types import ALL_DETAIL_LEVELS, Domain, PeriodBehavior
 from backend.app.services.ai_export.datasets.spec import DatasetRegistry, DatasetRegistryError, DatasetSpec, build_all_data_dataset
 
-EXPECTED_DATASET_COUNT = 40
+EXPECTED_DATASET_COUNT = 41
 EXPECTED_PUBLIC_DATASET_COUNT = 8
 
 # -- Portfolio ------------------------------------------------------------------
@@ -178,6 +178,25 @@ PORTFOLIO_DRAWDOWN_CONTEXT = DatasetSpec(
     section_order=("portfolio.drawdown_summary",),
     technical_requirements=("requires_price_history",),
     period_semantics=PeriodBehavior.WINDOWED,
+    supported_detail_levels=ALL_DETAIL_LEVELS,
+)
+
+# 78 L8a: the risk evidence of today's holdings, required by portfolio.protection_strategies. AS_OF: the measures
+# have their own 12-month window up to the snapshot date, whatever the AI period (`components/risk_evidence.py`).
+PORTFOLIO_RISK_EVIDENCE = DatasetSpec(
+    dataset_id="portfolio.risk_evidence",
+    version=2,  # every internal dataset of the V2 catalog is at version 2
+    domain=Domain.PORTFOLIO,
+    display_i18n_key="aiExport.dataset.portfolio.risk_evidence.display",
+    description_i18n_key="aiExport.dataset.portfolio.risk_evidence.description",
+    icon="shield",
+    applicability_code="always_applicable",
+    applicable_pages=("dashboard",),
+    required_component_ids=("portfolio.risk_concentration", "portfolio.tail_risk", "portfolio.correlated_pairs"),
+    optional_component_ids=(),
+    section_order=("portfolio.risk_concentration", "portfolio.tail_risk", "portfolio.correlated_pairs"),
+    technical_requirements=("requires_price_history",),
+    period_semantics=PeriodBehavior.AS_OF,
     supported_detail_levels=ALL_DETAIL_LEVELS,
 )
 
@@ -952,6 +971,7 @@ def build_dataset_registry(component_registry: ComponentRegistry | None = None) 
         PORTFOLIO_ASSET_SNAPSHOT,
         PORTFOLIO_ASSET_COMPARISON,
         PORTFOLIO_DRAWDOWN_CONTEXT,
+        PORTFOLIO_RISK_EVIDENCE,
         PORTFOLIO_INCOME_EVIDENCE,
         PORTFOLIO_TECHNICAL,
         PORTFOLIO_FIFO,

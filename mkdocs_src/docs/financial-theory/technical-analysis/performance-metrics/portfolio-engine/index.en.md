@@ -102,6 +102,8 @@ $$
 !!! info "Ordering"
 
     Within the same date: additions processed before reductions. Ensures SELL reads the correct WAC including same-day BUYs.
+    The cash income of the date (dividends, interest) comes before both, so an income reinvested the same day — a
+    broker's automatic reinvestment — reaches the returns pool $R$ before the purchase that spends it.
 
 ---
 

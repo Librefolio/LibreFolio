@@ -16,7 +16,7 @@ from collections.abc import Iterable, Mapping
 from datetime import date
 from decimal import Decimal
 
-from backend.app.services.financial_math.native_cash import CashMovement, NativeCash, cash_movement_from_transaction
+from backend.app.services.financial_math.native_cash import CashMovement, NativeCash, cash_movement_from_transaction, in_kind_income_movement
 from backend.app.services.financial_math.portfolio.models import ClassifiedTransaction
 
 FxRateMap = Mapping[tuple[str, str, date], Decimal]
@@ -36,15 +36,32 @@ def engine_native_cash(
     in classification order; every foreign amount converted at the movement's own date; the
     unit rate of every day the map holds, from the currency's first non-zero movement through
     ``date_to``. A rate the map lacks is a missing conversion, as a ``convert_bulk`` without
-    that rate would report it — never a zero.
+    that rate would report it — never a zero. Income in kind (a REWARD) joins as ``calculate()`` passes it, through
+    ``in_kind_income_movement``: converted by the same rule, flows only.
     """
-    movements = tuple(_movements(classified_txs, date_to))
+    classified = list(classified_txs)
+    movements = tuple(_movements(classified, date_to))
+    in_kind = tuple(_in_kind_movements(classified, date_to))
     return NativeCash(
         report_currency=target_currency,
         movements=movements,
         converted=tuple(_converted(movement, target_currency, fx_rate_map) for movement in movements),
         unit_rates=_unit_rates(movements, target_currency, fx_rate_map, date_to),
+        in_kind=in_kind,
+        in_kind_converted=tuple(_converted(movement, target_currency, fx_rate_map) for movement in in_kind),
     )
+
+
+def _in_kind_movements(classified_txs: Iterable[ClassifiedTransaction], date_to: date) -> list[CashMovement]:
+    """The income in kind of the transactions dated up to ``date_to``: one per REWARD whose value is known."""
+    movements: list[CashMovement] = []
+    for ctxn in classified_txs:
+        if ctxn.tx.date > date_to:
+            continue
+        movement = in_kind_income_movement(ctxn.tx, share=ctxn.share)
+        if movement is not None:
+            movements.append(movement)
+    return movements
 
 
 def _movements(classified_txs: Iterable[ClassifiedTransaction], date_to: date) -> list[CashMovement]:

@@ -415,6 +415,15 @@ function identifierLabel(type: string): string {
 }
 
 /**
+ * The asset's free identifiers (type `OTHER`): values with no kind, in the order the asset holds them. The Profile tab
+ * shows them as chips in one row, not as one «Other | value» row each.
+ */
+export function softIdentifiers(asset: Record<string, unknown>): string[] {
+    const raw = asset.identifier_other;
+    return (Array.isArray(raw) ? raw : [raw]).filter((value): value is string => typeof value === 'string' && value.length > 0);
+}
+
+/**
  * Build a list of [label, value] pairs for non-empty identifiers on an asset.
  * Derives field names from the IdentifierType enum to stay in sync with backend.
  *

@@ -133,10 +133,6 @@ const mocks = vi.hoisted(() => ({
         getAssetProviderParamKeys: vi.fn(() => null),
         getAssetProviderIconUrl: vi.fn(),
         isParametricProvider: vi.fn(),
-        // The attribution line of the search and of the comparison window (76 P4): no provider here asks for one
-        // A store that is also a spy: beforeEach resets every member of `mocks` with mockReset()
-        assetProvidersVersion: Object.assign(vi.fn(), {subscribe: (run: (value: number) => void) => (run(0), () => undefined)}),
-        getAssetProviderAttribution: vi.fn(() => null),
     },
     currencies: {
         ensureCurrenciesLoaded: vi.fn(),
@@ -149,10 +145,6 @@ const mocks = vi.hoisted(() => ({
     assets: {
         mergeAssets: vi.fn(),
         invalidateAfterMutation: vi.fn(),
-        // Read by the attribution line (76 P4): a store that is also a spy, as above
-        assetStoreVersion: Object.assign(vi.fn(), {subscribe: (run: (value: number) => void) => (run(0), () => undefined)}),
-        ensureAssetsLoaded: vi.fn(),
-        getAssetInfo: vi.fn(),
     },
     toasts: {success: vi.fn(), info: vi.fn(), warning: vi.fn(), error: vi.fn()},
     // X-R49: the sentence of a refused plan. Reset with the rest, then null (an error the module does not word).

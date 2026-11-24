@@ -33,7 +33,8 @@
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
     import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
     import BrimEvidenceTable from '$lib/features/transactions/import/BrimEvidenceTable.svelte';
-    import {initialCostBasisMode, remainingTodos, withoutPossibleSplit, possibleSplitEntries as buildSplitEntries, type PossibleSplitEntry} from './bulkTodos';
+    import {initialCostBasisMode, remainingTodos, withoutPossibleSplit, possibleSplitEntries as buildSplitEntries, rewardFillCandidates, applyRewardFill, type PossibleSplitEntry, type RewardFillAnswer, type RewardFillCounts} from './bulkTodos';
+    import {fetchRewardValues} from '$lib/features/transactions/form/rewardValue';
     import {isPreFloorDateTodo, preFloorEntries as buildPreFloorEntries} from '$lib/features/transactions/preFloorDate';
     import EventCreateMiniModal from '../events/EventCreateMiniModal.svelte';
     import {resolveBrimTodoMessage} from '$lib/features/transactions/resolveBrimNotice';
@@ -43,7 +44,7 @@
     import DataTable from '$lib/components/table/DataTable.svelte';
     import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
 
-    import type {ColumnDef, CellContent} from '$lib/components/table/types';
+    import type {BulkAction, ColumnDef, CellContent} from '$lib/components/table/types';
     import {zodiosApi} from '$lib/api';
     import {ensureAssetsLoaded, getAssetInfo, getAllAssets} from '$lib/stores/reference/assetStore';
     import {ensureBrokersLoaded, getAccessibleBrokers, getEditableBrokers, brokerStoreVersion, type BrokerInfo} from '$lib/stores/reference/brokerStore';
@@ -111,15 +112,22 @@
         unlinkCharge,
         type BulkDeletePlan,
         type ChargesUnread,
+        cloneChargeLink,
+        cloneChargesUnder,
+        wireClonedRows,
+        bulkChargeCandidates,
+        type BulkChargeProbe,
+        newGroupOf,
+        syncNewGroup,
     } from './bulkCharges';
-    import {SPLIT_TYPE_MAP, splitHalfType, postSplitType} from './splitTypes';
+    import {SPLIT_TYPE_MAP, splitHalfType, postSplitType, splitTypeToSend} from './splitTypes';
     import {txRowRef} from '../chargeLinkRules';
     import {canEditBroker} from '$lib/stores/reference/brokerStore';
     import TxChargesActionModal from '../TxChargesActionModal.svelte';
     import type {ChargeDraft} from '../form/txCharges';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
     import {notify} from '$lib/stores/app/notify.svelte';
-    import {guideAnchor} from '$lib/features/onboarding/guideAnchors.svelte';
+    import {guideAnchor, guideAnchors} from '$lib/features/onboarding/guideAnchors.svelte';
     import {onboardingGuide} from '$lib/features/onboarding/onboardingGuide.svelte';
     import {TRANSACTION_BULK_STEP_IDS, type TransactionBulkStepId} from '$lib/features/onboarding/onboardingGuideCatalog';
     import {resolveFormItemsFromOps, type FormModalItems} from '../resolveFormItems';
@@ -396,7 +404,7 @@
     // =========================================================================
 
     /** Resolve initialRows from intent (if provided) or use legacy initialRows prop. */
-    function resolveInitialRows(): {rows: TXReadItem[]; status?: 'delete'; autoForm: string | null} {
+    function resolveInitialRows(): {rows: TXReadItem[]; status?: 'delete'; autoForm: string | null; cloneSources?: TXReadItem[]} {
         if (intent) {
             if (intent.action === 'create') {
                 return {rows: [], autoForm: 'create'};
@@ -459,7 +467,8 @@
                     if (link) (c as any).link_uuid = link;
                     return c;
                 });
-                return {rows: cloned, autoForm: cloned.length === 1 ? 'create' : null};
+                // 66 TL-3: the originals, aligned with their clones, so the charges' structure is carried over.
+                return {rows: cloned, autoForm: cloned.length === 1 ? 'create' : null, cloneSources: resolved};
             }
             // edit — auto-open FormModal only for single-row intent (user selected 1 row)
             return {rows: resolved, autoForm: txIds.length === 1 ? 'edit' : null};
@@ -475,7 +484,10 @@
         // is open (66 F7-c1: the charges the Bulk reads, `txStoreAddExtras`) re-ran this whole effect, which rebuilds the
         // rows from the intent: every unsaved edit was lost.
         void intent;
-        const {rows, status: initSt, autoForm} = untrack(() => resolveInitialRows());
+        const {rows, status: initSt, autoForm, cloneSources} = untrack(() => resolveInitialRows());
+        // 66 TL-3: «Clona» on a parent with linked charges reads them first (`GET ?parent_ids`), then builds the rows.
+        const cloneParents = untrack(() => (cloneSources ?? []).filter((source) => (source.charges_count ?? 0) > 0).map((source) => source.id));
+        const cloneGeneration = ++cloneChargesGeneration;
         // K-2: the nested form or wizard opens automatically once per open. Set when it is scheduled before the load
         // ends; the load's end then opens nothing the user may have closed meanwhile.
         let autoOpenScheduled = false;
@@ -511,12 +523,12 @@
             // Collapse paired rows: keep only the "from" half with partner
             // metadata populated. No dependency on isTypesLoaded — pair detection
             // uses related_transaction_id (not getTypeRule().requiresPair).
-            let next: PendingOp[] = rows.length > 0 ? buildInitialOps(rows, initSt) : [];
+            let next: PendingOp[] = rows.length > 0 ? buildInitialOps(rows, initSt, cloneSources ? {sources: cloneSources, read: []} : undefined) : [];
 
             // B4-fix: Build ops eagerly but only assign after types are loaded,
             // because getTypeRule() returns FALLBACK_RULE (requiresPair=false)
             // until _ruleMap is populated → paired rows render as singles.
-            if (isTypesLoaded()) {
+            if (isTypesLoaded() && cloneParents.length === 0) {
                 // Fast path: types already cached → assign + auto-open immediately.
                 ops = next;
                 setBaseline(next);
@@ -551,13 +563,17 @@
             // K-4: the language read untracked. Tracked, a language change re-ran this whole effect, which rebuilds the
             // rows from the intent: every unsaved edit was lost.
             await Promise.all([ensureBrokersLoaded(), ensureCurrenciesLoaded(untrack(() => $currentLanguage)), ensureAssetsLoaded(), ensureTypesLoaded()]);
+            const cloneRead = cloneParents.length > 0 ? await readCloneCharges(cloneParents) : [];
+            // An answer for an editor closed or reopened meanwhile changes nothing.
+            if (cloneGeneration !== cloneChargesGeneration || !untrack(() => open)) return;
             untrack(() => {
                 // B4-fix: if ops was deferred (slow path), rebuild + assign now.
                 if (ops.length === 0 && rows.length > 0) {
-                    const next2 = buildInitialOps(rows, initSt);
+                    const next2 = buildInitialOps(rows, initSt, cloneSources ? {sources: cloneSources, read: cloneRead} : undefined);
                     ops = next2;
                     setBaseline(next2);
                     enterOps(next2);
+                    if (cloneRead === null) notifyCloneChargesUnread(cloneParents);
                 }
                 if (!autoOpenScheduled && !formOpen) {
                     scheduleAutoOpen(autoForm, ops);
@@ -574,8 +590,15 @@
      * The charges of the page's choice (`chargeIds`, 66 F7-d: «Delete all» or «Keep») are the parent's choice
      * (`byParentChoice`), so «Restore» on the parent takes them back; a charge the user selected is not among them.
      */
-    function buildInitialOps(rows: TXReadItem[], initSt: 'delete' | undefined): PendingOp[] {
+    function buildInitialOps(rows: TXReadItem[], initSt: 'delete' | undefined, clone?: {sources: TXReadItem[]; read: TXReadItem[] | null}): PendingOp[] {
         let next: PendingOp[] = initSt === 'delete' ? rows.filter((r) => r.id > 0).map((r) => editOpFromTx(r.id, {markedDelete: true})) : rows.map((r) => (r.id > 0 ? editOpFromTx(r.id) : createOpFromClone(r, (r as any).link_uuid)));
+        if (clone) {
+            // 66 TL-3: each cloned charge under its parent's clone (or linked to its saved parent), and the charges read
+            // of each cloned parent as copies under its clone. Their groups start open: the user brought them.
+            const wired = wireClonedRows(clone.sources, next, clone.read, (charge) => createOpFromClone(charge));
+            next = wired.ops;
+            if (wired.expanded.length > 0) expandedParents = new Set([...expandedParents, ...wired.expanded]);
+        }
         const unlinkIds = new Set(intent?.action === 'delete' ? (intent.unlinkIds ?? []) : []);
         if (unlinkIds.size > 0) {
             const present = new Set(next.map((op) => opTxId(op)).filter((id): id is number => id != null));
@@ -597,6 +620,32 @@
             // The parent of an intent's charge is its saved one: `unlinkCharge` cuts that link (`parentUnlink`).
             return {...(unlinked ? unlinkCharge(op, next, txStoreGet) : op), ...(chosen ? {byParentChoice: true as const} : {})};
         });
+    }
+
+    /** 66 TL-3: bumped on every open, so the charges read for a clone answer only the open that asked for them. */
+    let cloneChargesGeneration = 0;
+
+    /** 66 TL-3: the linked charges of the parents a «Clona» copies, read in batches of `CHARGES_READ_BATCH`; `null` when a
+     *  read failed (the parents are then copied alone, and a toast says so). */
+    async function readCloneCharges(parentIds: number[]): Promise<TXReadItem[] | null> {
+        const found: TXReadItem[] = [];
+        try {
+            for (let at = 0; at < parentIds.length; at += CHARGES_READ_BATCH) {
+                const batch = parentIds.slice(at, at + CHARGES_READ_BATCH);
+                const answer = (await zodiosApi.query_transactions_api_v1_transactions_get({queries: {parent_ids: batch}} as never)) as unknown;
+                if (!Array.isArray(answer)) return null;
+                found.push(...(answer as TXReadItem[]).filter((charge) => charge.parent_transaction_id != null && batch.includes(charge.parent_transaction_id)));
+            }
+        } catch {
+            // The API client writes the failure to the console (H-60); the toast tells the user.
+            return null;
+        }
+        return found;
+    }
+
+    /** 66 TL-3: the charges of these parents could not be read: each parent was copied alone. */
+    function notifyCloneChargesUnread(parentIds: readonly number[]) {
+        notify({name: 'tx.bulk.clone.charges-read-failed', detail: {parentIds: [...parentIds]}, toast: {variant: 'warning', message: $t('transactions.bulk.cloneChargesReadFailed', {values: {ids: shortIdList(parentIds)}})}});
     }
 
     /** Schedule auto-open of the nested FormModal based on the mode. */
@@ -987,6 +1036,8 @@
             }
         }
         // else: target already has 'auto' or 'manual' and no explicit override → preserve
+        // A type whose cost basis is a stated value (`costBasisAuto` false: a REWARD, project 79) never takes Auto
+        if (target.cost_basis_mode === 'auto' && !getTypeRule(target.type).costBasisAuto) target.cost_basis_mode = 'manual';
 
         // Back to the editor's convention, last, so the derivation above reads the Form's payload as it always has
         // (W-B65): the Form pushes signed values, the editor holds a negative-rule value as its magnitude (`fieldsFromTx`),
@@ -1038,6 +1089,24 @@
     function bulkRowRef(op: PendingOp): string {
         const id = opTxId(op) ?? null;
         return txRowRef(id, id === null ? (visualRowLabels.get(op.tempId) ?? null) : null, $t);
+    }
+
+    /**
+     * 66 TL-2: the Bulk's rows the charges picker of the open Form may offer, read on the Bulk's state by the selection's
+     * «Link» rule (`bulkChargeCandidates`; the parent is the row the Form edits, or none while it creates it). Each is a
+     * mirror as the panels show it, free: a saved one keeps its id, a new one gets a negative one and its key
+     * (`_bulkKey`), and both their name (`_rowRef`). The parent picker reads the database only, as before.
+     */
+    function formBulkCandidates(mode: 'charges' | 'parent', probe: BulkChargeProbe): {rows: TXReadItem[]; exclude: number[]} | null {
+        if (mode !== 'charges') return null;
+        const parent = formEditingTempId !== null ? (ops.find((d) => d.tempId === formEditingTempId) ?? null) : null;
+        const {candidates, excluded} = bulkChargeCandidates(parent, probe, ops, txStoreGet, {roleOf: (type) => getTypeRule(type).chargeRole, canEdit: (brokerId) => canEditBroker(brokerId)}, (op) => postSplitType(op, pendingSplits));
+        let synthetic = 0;
+        const rows = candidates.map((op): TXReadItem => {
+            const id = op.op === 'edit' ? op.txId : -++synthetic;
+            return {...panelItem(op), id, parent_transaction_id: null, related_transaction_id: null, _rowRef: bulkRowRef(op), ...(op.op === 'create' ? {_bulkKey: `op-${op.tempId}`} : {})} as TXReadItem;
+        });
+        return {rows, exclude: excluded};
     }
 
     /** A row as the panel shows it: the editor's values, signed as the ledger holds them. */
@@ -1163,33 +1232,46 @@
         );
     }
 
-    /** Clone a row as a new row. */
-    function cloneRow(tempId: string) {
-        const src = ops.find((d) => d.tempId === tempId);
+    /**
+     * Clone a row as a new row. 66 TL-3: a parent brings a copy of each charge still linked under it (neither «del» nor
+     * «scollega»), owned by its copy, whose group opens; a saved parent whose charges are not all read yet is read first,
+     * and copied alone if that read fails (a toast says so). A charge's copy is born linked to the same parent, when the
+     * «Link» rule allows it (`cloneChargeLink`), free otherwise, with a toast saying why. Every copy keeps its original's date.
+     */
+    async function cloneRow(tempId: string) {
+        let src = ops.find((d) => d.tempId === tempId);
         if (!src) return;
+        if (src.op === 'edit' && parentChargesMissing(src)) {
+            const read = await ensureParentCharges(tempId);
+            src = ops.find((d) => d.tempId === tempId);
+            if (!src) return;
+            if (!read) notifyCloneChargesUnread([(src as PendingOp & {txId: number}).txId]);
+        }
+        const copyOf = (row: PendingOp): PendingOp => ({op: 'create', tempId: generateUUID(), createdSeq: nextCreatedSeq(), fields: structuredClone($state.snapshot(followedFields(row))) as DraftFields, link_uuid: null});
         // T3: the source row's date is preserved (correction workflow) — not reset to today.
-        const clone: PendingOp = {
-            op: 'create',
-            tempId: generateUUID(),
-            createdSeq: nextCreatedSeq(),
-            fields: {...src.fields},
-            link_uuid: getTypeRule(src.fields.type as TransactionTypeCode)?.requiresPair ? generateUUID() : null,
-        };
+        const clone: PendingOp = {...copyOf(src), link_uuid: getTypeRule(src.fields.type as TransactionTypeCode)?.requiresPair ? generateUUID() : null};
+        const added: PendingOp[] = [clone];
         // Clone hidden partner if exists
         const srcPartner = getPartnerOp(tempId);
         if (srcPartner) {
-            const partnerClone: PendingOp = {
-                op: 'create',
-                tempId: generateUUID(),
-                createdSeq: nextCreatedSeq(),
-                fields: {...srcPartner.fields},
-                link_uuid: clone.link_uuid, // share link_uuid
-                pairedWith: clone.tempId,
-            };
-            ops = [...ops, clone, partnerClone];
-        } else {
-            ops = [...ops, clone];
+            added.push({...copyOf(srcPartner), link_uuid: clone.link_uuid, pairedWith: clone.tempId});
         }
+        if (src.fields.type === 'FEE' || src.fields.type === 'TAX') {
+            const link = cloneChargeLink(src, clone.fields, ops, txStoreGet, {roleOf: (type) => getTypeRule(type).chargeRole, canEdit: (brokerId) => canEditBroker(brokerId)}, (op) => postSplitType(op, pendingSplits));
+            if (link.kind === 'owner') {
+                clone.chargeOf = link.chargeOf;
+                openGroup(link.chargeOf);
+            } else if (link.kind === 'saved') {
+                clone.parentLinkId = link.parentLinkId;
+            } else if (link.reason !== null) {
+                notify({name: 'tx.bulk.clone.charge-free', detail: {reason: link.reason, tempId: clone.tempId}, toast: {variant: 'warning', message: $t('transactions.bulk.cloneChargeFree', {values: {reason: link.reason}})}});
+            }
+        } else if (!srcPartner) {
+            const charges = cloneChargesUnder(src, clone.tempId, ops, copyOf);
+            added.push(...charges);
+            if (charges.length > 0) openGroup(clone.tempId);
+        }
+        ops = [...ops, ...added];
     }
 
     /** 66 C22 (§5.1): reset rows back to what is saved. A merge still waiting for the save (`pendingPromotes`) that
@@ -1536,8 +1618,13 @@
                 resolved.push({intent: 'create', tempId: d.tempId, partnerTempId: pOp?.tempId, payload: collectCreate(d), partnerPayload});
             } else if (st === 'edited') {
                 const upd = collectUpdate(d);
-                // For split-queued rows, strip type (split handles type change)
-                if (upd && splitTxIds.has((d as any).txId)) delete upd.type;
+                // A split half: the split gives it its type, so the update names one only when the user swapped it
+                // (66 C22e, `splitTypeToSend`); otherwise the type stays out.
+                if (upd && splitTxIds.has((d as any).txId)) {
+                    const handType = splitTypeToSend(d, pendingSplits, txStoreGet((d as any).txId) ?? null);
+                    if (handType) upd.type = handType;
+                    else delete upd.type;
+                }
                 const payload = upd && Object.keys(upd).length > 1 ? upd : undefined;
                 let partnerPayload: Record<string, unknown> | null = null;
                 if (pOp && pOp.op === 'edit') {
@@ -2487,15 +2574,16 @@
             icon: Pencil,
             label: () => $t('transactions.bulk.editSingle') || 'Edit row',
             onClick: (row: PendingOp) => handleEditRowClick(row),
-            disabled: (row: PendingOp) => !!getPartnerOp(row.tempId)?.inaccessible,
+            // A pair whose partner sits on a broker the user cannot read is not edited from here: off, saying why (77 SEL-M)
+            blocked: (row: PendingOp) => (getPartnerOp(row.tempId)?.inaccessible ? {hint: () => $t('transactions.bulk.editPartnerInaccessible'), reason: 'partner-inaccessible'} : null),
             // 66 F7-c1: an indented row keeps «Edit row» — on touch and from the keyboard it is the double-click's twin.
         },
         {
             id: 'clone',
             icon: Copy,
             label: () => $t('transactions.bulk.cloneRow') || 'Clone row',
-            onClick: (row: PendingOp) => cloneRow(row.tempId),
-            visible: (row: PendingOp) => !indentedIds.has(row.tempId),
+            // 66 TL-3: offered on a charge under its parent again (the FEE consultant); its copy sits under the same parent.
+            onClick: (row: PendingOp) => void cloneRow(row.tempId),
         },
         {
             id: 'split',
@@ -2581,8 +2669,13 @@
                 }
             },
             // 66 F7-c1 (§14.2): «del» on a parent waits for its charges to be read, and stays off when they could not be.
-            disabled: (row: PendingOp) => row.op === 'edit' && !row.markedDelete && chargesUnreadReason(row) !== null,
-            title: (row: PendingOp) => (row.op === 'edit' && !row.markedDelete ? (chargesUnreadReason(row) ?? '') : ''),
+            // The reason is reachable at the touch and from the keyboard (77 SEL-M), its code the state of the read.
+            blocked: (row: PendingOp) => {
+                if (row.op !== 'edit' || row.markedDelete) return null;
+                const unread = chargesUnread(row);
+                const hint = chargesUnreadReason(row);
+                return unread === null || hint === null ? null : {hint, reason: unread === 'loading' ? 'charges-loading' : 'charges-failed'};
+            },
             variant: 'danger' as const,
         },
         {
@@ -2740,6 +2833,35 @@
             }
             return merged;
         });
+    }
+    // «Fill from price history» (project 79, STK-4b): the rows with an open `reward_value` todo get the asset's close of
+    // that very day, per unit, from the backend's one reader; the outcome is a count shown in the blockers banner.
+    let rewardFillPending = $derived(rewardFillCandidates(ops).length);
+    let rewardFillRunning = $state(false);
+    let rewardFillResult = $state<(RewardFillCounts & {failed: boolean}) | null>(null);
+    async function fillRewardsFromHistory() {
+        const candidates = rewardFillCandidates(ops);
+        if (candidates.length === 0 || rewardFillRunning) return;
+        rewardFillRunning = true;
+        try {
+            const asked = candidates.filter((candidate) => candidate.assetId != null);
+            const answers = asked.length > 0 ? await fetchRewardValues(asked.map((candidate) => ({assetId: candidate.assetId as number, date: candidate.date}))) : [];
+            if (answers === null) {
+                rewardFillResult = {filled: 0, noPrice: 0, noHistory: 0, failed: true};
+                return;
+            }
+            const fill: RewardFillAnswer[] = candidates.map((candidate) => {
+                if (candidate.assetId == null) return {tempId: candidate.tempId, status: 'NO_HISTORY', value: null};
+                const answer = answers[asked.indexOf(candidate)];
+                return {tempId: candidate.tempId, status: answer?.status ?? 'NO_PRICE_THAT_DAY', value: answer?.suggestion ? {code: answer.suggestion.code, amount: answer.suggestion.amount} : null};
+            });
+            const result = applyRewardFill(ops, fill);
+            ops = result.ops;
+            rewardFillResult = {...result.counts, failed: false};
+            notify({name: 'tx.bulk.rewards.filled', detail: {...result.counts}});
+        } finally {
+            rewardFillRunning = false;
+        }
     }
     let splitCreateAsset = $derived(splitCreateEntry?.assetId != null ? getAssetInfo(splitCreateEntry.assetId) : null);
     /** Human-readable list of the auto-derived fields still awaiting verification (for the Save-gate dialog). */
@@ -2913,7 +3035,7 @@
             // Q-J57-5 (a) and Q-J57-1 (c): a row the plugin left without a cost mode starts in Auto where its type takes a
             // cost, so the hand-over's validation costs it or refuses it and leads to it; a cost the plugin wrote, or a
             // blocking cost todo, starts it in Manual.
-            op.fields.cost_basis_mode = initialCostBasisMode({mode: op.fields.cost_basis_mode, cost: op.fields.cost_basis_override, costAllowed: costBasisModeAllowed(op.fields)}, item.todos);
+            op.fields.cost_basis_mode = initialCostBasisMode({mode: op.fields.cost_basis_mode, cost: op.fields.cost_basis_override, costAllowed: costBasisModeAllowed(op.fields), autoAllowed: getTypeRule(op.fields.type).costBasisAuto}, item.todos);
             return op;
         });
         const linked = linkPairedImportOps(newOps);
@@ -3334,11 +3456,21 @@
     function handleFormPushed(payload: Record<string, unknown>) {
         const isDual = payload._dual === true;
         let pushedTempId: string | null = formEditingTempId;
+        // 66 TL-3b: the row's broker and asset as shown before this «Apply», to tell what changed (`syncNewGroup`).
+        const editedBefore = formEditingTempId != null && !isDual ? ops.find((d) => d.tempId === formEditingTempId) : undefined;
+        const before = editedBefore ? followedFields(editedBefore) : undefined;
         if (formEditingTempId != null) {
             // Patching an existing draft row
             if (isDual) {
                 patchDualRowFromForm(formEditingTempId, payload);
             } else {
+                // §11.4: a create that followed its parent, applied in its own form, keeps what that form gives it. The flag
+                // goes before the patch, or `syncFollowers` would write the parent's broker, asset and date back over it.
+                if (editedBefore?.followsParent) {
+                    const own = {...editedBefore};
+                    delete own.followsParent;
+                    ops = ops.map((d) => (d.tempId === own.tempId ? own : d));
+                }
                 patchRowFromForm(formEditingTempId, payload);
             }
         } else {
@@ -3350,6 +3482,8 @@
             }
         }
         if (!isDual && pushedTempId != null) applyChargePayload(pushedTempId, payload, formEditingTempId != null);
+        // 66 TL-3b (P-30): in an all-new group, the broker or asset changed on one row moves onto the others, both ways.
+        if (before && pushedTempId != null) ops = syncNewGroup(ops, pushedTempId, {broker_id: before.broker_id, asset_id: before.asset_id}, {effective: (d) => followedFields(d), assetAllowed: (type) => getTypeRule(type as TransactionTypeCode).assetField !== 'forbidden'});
         formOpen = false;
         formEditingTempId = null;
         // R3-B2: trigger validation after FormModal pushes a draft
@@ -3460,19 +3594,96 @@
         return highlight;
     }
 
-    /** Bulk actions for selected rows. */
-    let bulkDeleteSelected = $derived({
-        id: 'delete-selected',
-        icon: Trash2,
-        label: () => $t('transactions.bulk.deleteSelected') || 'Delete selected',
-        variant: 'danger' as const,
-        onClick: (rows: PendingOp[]) =>
-            void requestDelete(
-                rows.map((row) => row.tempId),
-                true,
-            ),
+    /** A row the selection's «Reset» acts on: changed or marked for deletion, or half of a split or a merge still waiting
+     *  for the save — `resetRows` undoes those too, and a row in a pending split can read «original» (77 SEL-E). */
+    function hasPendingChange(row: PendingOp): boolean {
+        const status = deriveStatus(row);
+        if (status === 'edited' || status === 'delete') return true;
+        if (row.op === 'edit' && pendingSplits.some((s) => s.id_a === row.txId || s.id_b === row.txId)) return true;
+        if (row.op === 'edit') return pendingPromotes.some((p) => p.id_a === row.txId || p.id_b === row.txId);
+        return !!row.link_uuid && pendingPromotes.some((p) => p.link_uuid_a === row.link_uuid || p.link_uuid_b === row.link_uuid);
+    }
+
+    /** The body that scrolls, which holds the table and its selection panel. */
+    let bulkBodyEl: HTMLElement | undefined = $state();
+
+    // The Bulk guide's «selection» step points at the selection bar (77 SEL-E). The table's panel draws it, at the top of
+    // the table or, once scrolled away, in the balloon at the bottom — another element: the anchor follows whichever is on
+    // screen while rows are ticked.
+    $effect(() => {
+        const body = bulkBodyEl;
+        if (!body || bulkTableSelectedRows.length === 0) return;
+        let current: HTMLElement | null = null;
+        let unregister: (() => void) | null = null;
+        const follow = () => {
+            const bar = body.querySelector<HTMLElement>('[data-testid="selection-toolbar"]');
+            if (bar === current) return;
+            unregister?.();
+            current = bar;
+            unregister = bar ? guideAnchors.register('transaction.bulk.selection', bar) : null;
+        };
+        // The registry is reactive: registering inside the effect would make the effect depend on it
+        untrack(follow);
+        const observer = new MutationObserver(follow);
+        observer.observe(body, {childList: true, subtree: true});
+        return () => {
+            observer.disconnect();
+            unregister?.();
+        };
     });
-    let bulkActionsForTable = $derived([bulkDeleteSelected] as never);
+
+    /**
+     * The selection's actions on the table's panel (77 SEL-E): the bar at the top of the table, the balloon when it scrolls
+     * away, each with the number of rows it takes. Hidden where it makes no sense, off with its reason where it is blocked.
+     * The test ids stay the Bulk's own.
+     */
+    let bulkActionsForTable = $derived.by((): BulkAction<PendingOp>[] => [
+        {
+            id: 'reset-selected',
+            testid: 'tx-bulk-reset-selected',
+            icon: Undo2,
+            label: () => $t('transactions.bulk.resetSelected') || 'Reset selected',
+            appliesTo: (row) => hasPendingChange(row),
+            // Offered, as before, only when a ticked row is changed or marked for deletion (66 C22b: no reset on a row that
+            // reads `original`); then it takes every row the reset undoes something on, and counts them
+            pointless: (rows) => !rows.some((row) => ['edited', 'delete'].includes(deriveStatus(row))),
+            onClick: (rows) => resetRows(rows.map((row) => row.tempId)),
+        },
+        {
+            id: 'link-charges',
+            testid: 'tx-bulk-link-charges',
+            icon: Link2,
+            label: () => $t('transactions.chargesLink.action') || 'Link the charges',
+            shortLabel: () => $t('transactions.chargesLink.actionShort') || 'Link',
+            pointless: () => bulkLinkState.kind === 'hidden',
+            blocked: () => (bulkLinkState.kind === 'disabled' ? {hint: () => bulkLinkHint, reason: bulkLinkState.reason} : null),
+            onClick: () => openLinkPanel(),
+        },
+        {
+            id: 'delete-selected',
+            testid: 'tx-bulk-delete-selected',
+            icon: Trash2,
+            label: () => $t('transactions.bulk.deleteSelected') || 'Delete selected',
+            shortLabel: () => $t('common.delete') || 'Delete',
+            variant: 'danger',
+            onClick: (rows) =>
+                void requestDelete(
+                    rows.map((row) => row.tempId),
+                    true,
+                ),
+        },
+        {
+            id: 'promote-pair',
+            testid: 'promote-toolbar-confirm',
+            icon: Link2,
+            label: () => (selectedForPromote.kind === 'hidden' ? $t('transactions.actions.promotePair') : `${$t('transactions.actions.promotePair')}: ${selectedForPromote.targetLabel}`),
+            shortLabel: () => (selectedForPromote.kind === 'hidden' ? $t('transactions.actions.promotePair') : selectedForPromote.targetLabel),
+            minSelection: 2,
+            pointless: () => selectedForPromote.kind === 'hidden',
+            blocked: () => (selectedForPromote.kind === 'disabled' ? {hint: () => promoteHint, reason: selectedForPromote.reason} : null),
+            onClick: () => handlePromoteSelected(),
+        },
+    ]);
 
     /** Rows currently selected in the bulk DataTable (for inline toolbar). */
     let bulkTableSelectedRows = $state<PendingOp[]>([]);
@@ -4198,12 +4409,6 @@
     }
 
     /** «Delete selected» (66 F7-c2): the rows taken at the click; the selection empties once the choice is made. */
-    function executeBulkDeleteOnSelected() {
-        void requestDelete(
-            bulkTableSelectedRows.map((row) => row.tempId),
-            true,
-        );
-    }
 </script>
 
 <ModalBase {open} maxWidth="none" onRequestClose={requestClose} testId="tx-bulk-modal" allowOverflow={true} contentClass="max-w-[95vw] w-[95vw]">
@@ -4270,6 +4475,10 @@
             {preFloorEntries}
             onSplitCreate={(entry) => (splitCreateEntry = entry)}
             onSplitLink={linkSplitEvent}
+            {rewardFillPending}
+            {rewardFillRunning}
+            {rewardFillResult}
+            onRewardFill={fillRewardsFromHistory}
         />
 
         <!-- Toolbar (Bugfix-2 §U9: action buttons right-aligned, most important first
@@ -4278,32 +4487,10 @@
              TransactionFormModal that pushes its draft into the grid (no
              commit) so the user gets the structured single-row UX while
              staying in the bulk batch. -->
-        <TxBulkToolbar
-            bind:bulkTableSelectedRows
-            bind:importWizardOpen
-            bind:maxDeltaDays
-            {pendingSplits}
-            {tableRef}
-            {importableSuggestions}
-            {selectedForPromote}
-            {promoteHint}
-            {tableRefForToggle}
-            {visibleOps}
-            {deriveStatus}
-            {executeBulkDeleteOnSelected}
-            linkState={bulkLinkState}
-            linkHint={bulkLinkHint}
-            onLinkCharges={openLinkPanel}
-            {handlePromoteSelected}
-            {openAddRowForm}
-            {openPicker}
-            {openSuggestPicker}
-            {resetAll}
-            {resetRows}
-        />
+        <TxBulkToolbar bind:importWizardOpen bind:maxDeltaDays {pendingSplits} {importableSuggestions} {tableRefForToggle} {visibleOps} {deriveStatus} {openAddRowForm} {openPicker} {openSuggestPicker} {resetAll} />
 
         <!-- DataTable body -->
-        <div class="flex-1 min-h-0 overflow-y-auto px-3 py-2" data-testid="tx-bulk-body" use:captureChargeChip>
+        <div class="flex-1 min-h-0 overflow-y-auto px-3 py-2" data-testid="tx-bulk-body" bind:this={bulkBodyEl} use:captureChargeChip>
             <DataTable
                 bind:this={tableRef}
                 data={gridRows}
@@ -4325,6 +4512,7 @@
                 actionsColumnWidth="64px"
                 rowActions={rowActionsForTable}
                 bulkActions={bulkActionsForTable}
+                selectionPanel={true}
                 onSelectionChange={handleBulkTableSelectionChange}
                 stickyActions={false}
                 {getRowClass}
@@ -4473,6 +4661,8 @@
     openKey={formKey}
     getBulkContext={() => getBulkContextExcluding(formEditingTempId)}
     allowChargeEdits={formChargeEdits}
+    bulkCandidates={formBulkCandidates}
+    groupSync={formEditingTempId != null && newGroupOf(ops, formEditingTempId) !== null}
     getWacResult={(tempId) => {
         // Direct lookup (standalone ADJUSTMENT)
         const direct = wacResults.get(tempId);

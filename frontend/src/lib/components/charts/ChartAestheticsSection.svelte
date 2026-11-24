@@ -16,6 +16,7 @@
     import {numericArrows} from '$lib/actions/numericArrows';
     import LineShapePicker from './LineShapePicker.svelte';
     import PreferenceSourceBadge from '$lib/components/ui/PreferenceSourceBadge.svelte';
+    import Switch from '$lib/components/ui/input/Switch.svelte';
     import type {LineShape} from './lineShape';
     // =========================================================================
     // Props
@@ -119,20 +120,19 @@
                 <span class="block text-sm font-medium text-lf-secondary">{$t('chartSettings.baselineColors')}</span>
                 <span class="block text-xs text-lf-muted">{$t('chartSettings.baselineColorsDesc')}</span>
             </span>
-            <button
-                aria-label={$t('chartSettings.baselineColors')}
-                data-testid="chart-aesthetic-baseline"
-                aria-pressed={colorByBaseline}
-                class="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors {colorByBaseline ? 'bg-lf-checked' : 'bg-lf-switch-off'}"
+            <Switch
+                semantics="pressed"
+                class="shrink-0"
+                dim={false}
+                label={$t('chartSettings.baselineColors')}
+                testId="chart-aesthetic-baseline"
+                checked={colorByBaseline}
                 disabled={disabledFields.has('colorByBaseline')}
-                onclick={() => {
-                    colorByBaseline = !colorByBaseline;
+                onchange={(next) => {
+                    colorByBaseline = next;
                     emitChange();
                 }}
-                type="button"
-            >
-                <span class="inline-block h-4 w-4 transform rounded-full transition-transform {colorByBaseline ? 'translate-x-6 bg-lf-switch-knob-on' : 'translate-x-1 bg-lf-switch-knob-off border border-lf-input'}"></span>
-            </button>
+            />
         </div>
 
         <!-- Area fill -->
@@ -141,20 +141,19 @@
                 <span class="block text-sm font-medium text-lf-secondary">{$t('chartSettings.areaFill')}</span>
                 <span class="block text-xs text-lf-muted">{$t('chartSettings.areaFillDesc')}</span>
             </span>
-            <button
-                aria-label={$t('chartSettings.areaFill')}
-                data-testid="chart-aesthetic-area-fill"
-                aria-pressed={areaFill}
-                class="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors {areaFill ? 'bg-lf-checked' : 'bg-lf-switch-off'}"
+            <Switch
+                semantics="pressed"
+                class="shrink-0"
+                dim={false}
+                label={$t('chartSettings.areaFill')}
+                testId="chart-aesthetic-area-fill"
+                checked={areaFill}
                 disabled={disabledFields.has('areaFill')}
-                onclick={() => {
-                    areaFill = !areaFill;
+                onchange={(next) => {
+                    areaFill = next;
                     emitChange();
                 }}
-                type="button"
-            >
-                <span class="inline-block h-4 w-4 transform rounded-full transition-transform {areaFill ? 'translate-x-6 bg-lf-switch-knob-on' : 'translate-x-1 bg-lf-switch-knob-off border border-lf-input'}"></span>
-            </button>
+            />
         </div>
 
         <!-- Grid lines -->
@@ -163,19 +162,18 @@
                 <span class="block text-sm font-medium text-lf-secondary">{$t('chartSettings.gridLines')}</span>
                 <span class="block text-xs text-lf-muted">{$t('chartSettings.gridLinesDesc')}</span>
             </span>
-            <button
-                aria-label={$t('chartSettings.gridLines')}
-                data-testid="chart-aesthetic-grid-lines"
-                aria-pressed={gridLines}
-                class="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors {gridLines ? 'bg-lf-checked' : 'bg-lf-switch-off'}"
-                onclick={() => {
-                    gridLines = !gridLines;
+            <Switch
+                semantics="pressed"
+                class="shrink-0"
+                dim={false}
+                label={$t('chartSettings.gridLines')}
+                testId="chart-aesthetic-grid-lines"
+                checked={gridLines}
+                onchange={(next) => {
+                    gridLines = next;
                     emitChange();
                 }}
-                type="button"
-            >
-                <span class="inline-block h-4 w-4 transform rounded-full transition-transform {gridLines ? 'translate-x-6 bg-lf-switch-knob-on' : 'translate-x-1 bg-lf-switch-knob-off border border-lf-input'}"></span>
-            </button>
+            />
         </div>
 
         <!-- Stale gradient -->
@@ -184,20 +182,19 @@
                 <span class="block text-sm font-medium text-lf-secondary">{$t('chartSettings.staleGradient')}</span>
                 <span class="block text-xs text-lf-muted">{$t('chartSettings.staleGradientDesc')}</span>
             </span>
-            <button
-                aria-label={$t('chartSettings.staleGradient')}
-                data-testid="chart-aesthetic-stale-gradient"
-                aria-pressed={staleGradient}
-                class="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors {staleGradient ? 'bg-lf-checked' : 'bg-lf-switch-off'}"
+            <Switch
+                semantics="pressed"
+                class="shrink-0"
+                dim={false}
+                label={$t('chartSettings.staleGradient')}
+                testId="chart-aesthetic-stale-gradient"
+                checked={staleGradient}
                 disabled={disabledFields.has('staleGradient')}
-                onclick={() => {
-                    staleGradient = !staleGradient;
+                onchange={(next) => {
+                    staleGradient = next;
                     emitChange();
                 }}
-                type="button"
-            >
-                <span class="inline-block h-4 w-4 transform rounded-full transition-transform {staleGradient ? 'translate-x-6 bg-lf-switch-knob-on' : 'translate-x-1 bg-lf-switch-knob-off border border-lf-input'}"></span>
-            </button>
+            />
         </div>
 
         {#if onlineshapechange}

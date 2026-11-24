@@ -30,9 +30,11 @@ from backend.app.services.enrichers.base import (
     RATE_LIMITED,
     EnricherBinding,
     EnricherPlugin,
+    EnricherRateLimited,
     EnricherReadItem,
     EnricherReadStatus,
     EnricherRecognition,
+    EnricherSearchResult,
     EnricherTerms,
 )
 from backend.app.services.enrichers.registry import EnricherRegistry
@@ -63,6 +65,13 @@ _STOCK_VOICES = frozenset({"sector", "industry", "issuer_country", "market_cap",
 _FUND_VOICES = frozenset({"ter", "fund_provider", "inception_date", "sector", "description"})
 _FUND_TYPES = frozenset({AssetType.FUND} | {t for t in AssetType if t == AssetType.ETF or t.value.startswith("ETF_")})
 _FUND_QUOTE_TYPES = frozenset({"ETF", "MUTUALFUND"})
+#: The search's quote types the enricher reads, and the asset type each is (ENR-3b): indices, currencies, futures,
+#: options and crypto are left out, the enricher reads nothing of them. The price provider's map, kept to those types.
+_SEARCH_TYPES = {"equity": AssetType.STOCK, "etf": AssetType.ETF, "mutualfund": AssetType.FUND}
+#: A shorter text finds nothing worth a call (the price provider's minimum).
+_MIN_SEARCH_CHARS = 2
+#: The quotes of a search the results are taken from (the price provider's cut).
+_MAX_SEARCH_QUOTES = 20
 OTHER = "Other"
 
 #: Yahoo's fund sectors (``funds_data.sector_weightings`` keys) the generic helper does not know, on the standard
@@ -233,6 +242,39 @@ class YahooFinanceEnricher(EnricherPlugin):
             return EnricherRecognition(found=False)
         # Never an ISIN: the one Yahoo gives for a ticker is wrong for several shares
         return EnricherRecognition(found=True, name=_text(info.get("longName")) or _text(info.get("shortName")), page_url=self.page_url(binding))
+
+    def search(self, query: str) -> list[EnricherSearchResult]:
+        """The listings Yahoo finds for ``query`` (a name, an ISIN, a ticker), each bound by its symbol with the market's
+        suffix (``SWDA.MI``): the binding ``recognize`` and ``read`` take (ENR-3b). Copied from the price provider's
+        search (``yf.Search``), not imported (a plugin never imports another). No currency per result: the binding does
+        not use it, and it would be one more call to Yahoo for each. A refusal for too many requests raises
+        ``EnricherRateLimited``; another failure goes to the route as it is."""
+        text = query.strip()
+        if len(text) < _MIN_SEARCH_CHARS:
+            return []
+        if yf is None:
+            raise RuntimeError("yfinance is not installed")
+        _PACER.wait()
+        try:
+            found = yf.Search(text)
+        except Exception as error:
+            limited = rate_limited_from_exception(error, PROVIDER_NAME)
+            if limited is None:
+                raise
+            raise EnricherRateLimited(f"{PROVIDER_NAME} refused the search for too many requests", retry_after=limited.retry_after) from error
+        results: list[EnricherSearchResult] = []
+        for quote in (getattr(found, "quotes", None) or [])[:_MAX_SEARCH_QUOTES]:
+            if not isinstance(quote, Mapping) or not quote.get("isYahooFinance", True):
+                continue
+            symbol = _text(quote.get("symbol"))
+            asset_type = _SEARCH_TYPES.get((_text(quote.get("quoteType")) or "").lower())
+            if symbol is None or asset_type is None:
+                continue
+            binding = EnricherBinding(identifier_type=_TICKER, identifier=symbol)
+            name = _text(quote.get("longname")) or _text(quote.get("shortname")) or symbol
+            market = _text(quote.get("exchDisp")) or _text(quote.get("exchange"))
+            results.append(EnricherSearchResult(name=name, binding=binding, asset_type=asset_type, page_url=self.page_url(binding), market=market))
+        return results
 
     def _fund_sectors(self, ticker: Any, symbol: str) -> dict[str, str] | None:
         """The sector breakdown from ``funds_data``; a failure other than a refusal costs only this voice."""

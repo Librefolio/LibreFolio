@@ -303,6 +303,14 @@
             allowedModalDepth: 0,
             pointer: 'cursor',
         },
+        'broker.detail.allocation': {
+            anchorId: 'broker.detail.allocation',
+            titleKey: 'onboarding.brokerDetailGuide.steps.allocation.title',
+            descriptionKey: 'onboarding.brokerDetailGuide.steps.allocation.description',
+            hostRoute: '/brokers/',
+            allowedModalDepth: 0,
+            pointer: 'cursor',
+        },
         'broker.detail.transactions': {
             anchorId: 'broker.detail.transactions',
             titleKey: 'onboarding.brokerDetailGuide.steps.transactions.title',

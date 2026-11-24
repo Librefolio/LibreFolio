@@ -19,6 +19,7 @@ from backend.app.schemas.wac import WACMissingPairInfo
 from backend.app.services.financial_math.change_days import reading_change_days
 from backend.app.services.financial_math.fifo.models import FifoEvent, FifoInputTransaction, FifoLot, FragmentInterval, LotClosure
 from backend.app.services.financial_math.fx_rates import AskedDayRates, missing_pair_infos
+from backend.app.services.financial_math.income import income_value, is_income
 from backend.app.services.financial_math.lots.prices import opening_reference_price
 from backend.app.services.financial_math.price_marks import AssetPriceSeries
 from backend.app.services.financial_math.returns import realized_gain
@@ -287,8 +288,8 @@ def collect_fx_needs(  # noqa: C901 — independent per-analysis fx-need collect
             tx = tx_by_id.get(event.transaction_id)
             if tx is not None:
                 fx_resolver.need(tx.currency, event.date)
-            # An opening row's price is in its lot's currency (for a priced ADJUSTMENT, its cost basis's).
-            if event.kind in ("BUY", "ADJUSTMENT_IN") and event.transaction_id in lots_by_id:
+            # An opening row's price is in its lot's currency (for a priced ADJUSTMENT or a REWARD, its cost basis's).
+            if event.kind in ("BUY", "REWARD", "REWARD_MERGE", "ADJUSTMENT_IN") and event.transaction_id in lots_by_id:
                 fx_resolver.need(lots_by_id[event.transaction_id].currency, event.date)
         for closure in closures:
             if closure.lot_id in selected_ids:
@@ -365,7 +366,8 @@ def collect_performance_fx_needs(
         if tx_type == "BUY":
             fx_resolver.need(tx.currency or asset_currency, tx.date)
             continue
-        if tx_type == "ADJUSTMENT" and tx.quantity > 0:
+        # A REWARD opens its lot at its cost basis, as a priced ADJUSTMENT-in does (project 79)
+        if tx_type in ("ADJUSTMENT", "REWARD") and tx.quantity > 0:
             if tx.cost_basis_override not in (None, Decimal("0")):
                 fx_resolver.need(tx.cost_basis_currency or asset_currency, tx.date)
             elif tx.amount != Decimal("0"):
@@ -377,5 +379,18 @@ def collect_performance_fx_needs(
 
 
 def unconvertible_ids(transactions: Sequence[Transaction], fx_resolver: FxRateResolver, asset_currency: str) -> set[int]:
-    """Ids of the transactions whose amount has no rate to the target currency on their date."""
-    return {tx.id for tx in transactions if tx.id is not None and tx.amount is not None and fx_resolver.convert(tx.amount, tx.currency or asset_currency, tx.date) is None}
+    """Ids of the transactions whose amount has no rate to the target currency on their date.
+
+    The amount of an income is its ``income_value``: a REWARD's value on receipt, in its cost basis's currency.
+    """
+    ids: set[int] = set()
+    for tx in transactions:
+        if tx.id is None:
+            continue
+        if is_income(tx):
+            income = income_value(tx, default_currency=asset_currency)
+            if income is not None and fx_resolver.convert(income.amount, income.currency, tx.date) is None:
+                ids.add(tx.id)
+        elif tx.amount is not None and fx_resolver.convert(tx.amount, tx.currency or asset_currency, tx.date) is None:
+            ids.add(tx.id)
+    return ids

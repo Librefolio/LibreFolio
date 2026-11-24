@@ -22,6 +22,8 @@ from backend.app.config import planner as planner_config
 from backend.app.config.planner import planner_fixed_seeds  # the real reader: the autouse fixture replaces the module's
 from backend.app.services.pac_allocator import planner, seed_runs
 from backend.app.services.pac_allocator.proof import PROOF_NOT_CONFIRMED_REASON, SeededRunVote, merge_seeded_runs, seeded_margin, seeded_runs_agree
+from backend.app.services.tool_plugins.pac_allocator import plugin as pac_plugin
+from backend.app.services.tools.base import ToolExecutionContext
 from backend.test_scripts.test_services import _reb_small_cases as cases
 
 # ---------------------------------------------------------------------------- the runs
@@ -314,6 +316,104 @@ def test_after_an_impossible_the_next_run_always_starts_with_a_bounded_wait(monk
     assert runs[2].failure == "RunPastDeadline", "forced in its turn, and stopped at its own bound"
 
 
+# ---------------------------------------------------------------------------- TURNI step 1: a limit per run, a whole window
+#
+# The developer's decision of 19/11 (specification §16.22): each run has its whole limit, and a run that starts later starts
+# with that limit, not with the time left. ``run_seeds`` takes both numbers: ``time_budget_seconds``, the limit of one run,
+# and ``window_seconds``, the whole window the turns live in. A later run starts with the smaller of its limit and the time
+# left in the window. Without a window it is the limit itself: today's rule, unchanged until the Tool passes one (step 4).
+
+
+@pytest.mark.parametrize("cpus", [1, 2, 16])
+def test_without_a_window_the_runs_keep_today_s_budgets(monkeypatch, cpus: int) -> None:
+    """Step 1 changes nothing by itself: no window is the limit, so the first wave has the whole limit and a later run the
+    time left, at 1, 2 and 16 usable CPUs alike."""
+    monkeypatch.setattr(seed_runs, "usable_cpus", lambda: cpus)
+    # Each run's own limit, as the scheduler records it (``_Entry.limit``), beside the first wave's (``_Runs.limit``).
+    entries, limits = [], []
+    real_entry, real_init = seed_runs._Entry, seed_runs._Runs.__init__
+
+    def entry(**fields):
+        entries.append(fields)
+        return real_entry(**fields)
+
+    def init(self, *args, **kwargs):
+        real_init(self, *args, **kwargs)
+        limits.append(self.limit)
+
+    monkeypatch.setattr(seed_runs, "_Entry", entry)
+    monkeypatch.setattr(seed_runs._Runs, "__init__", init)
+    runs = seed_runs.run_seeds(_stamps, seeds=(1, 2, 3), time_budget_seconds=5)
+    budgets = [run.result[2] for run in runs]
+    first_wave = min(cpus, 3)
+    assert budgets[:first_wave] == [5] * first_wave, "the first wave has the whole limit"
+    assert all(4 < budget < 5 for budget in budgets[first_wave:]), "a later run has the time left"
+    # And the stop time is today's: every run's limit is the first wave's, the later ones to the float's rounding.
+    assert all(abs(fields["limit"] - limits[0]) < 1e-6 for fields in entries), [fields["limit"] - limits[0] for fields in entries]
+
+
+def test_one_usable_cpu_gives_each_run_its_whole_limit(monkeypatch) -> None:
+    """One usable CPU and a window of three turns: the runs go one after the other, each with the whole limit."""
+    monkeypatch.setattr(seed_runs, "usable_cpus", lambda: 1)
+    runs = seed_runs.run_seeds(_stamps, seeds=(1, 2, 3), time_budget_seconds=5, window_seconds=15)
+    (s1, e1, b1), (s2, e2, b2), (s3, _e3, b3) = (run.result for run in runs)
+    assert s2 >= e1 and s3 >= e2, "never two runs at once"
+    assert (b1, b2, b3) == (5, 5, 5), "each run its whole limit, not the time left"
+
+
+def test_two_usable_cpus_give_the_third_run_its_whole_limit(monkeypatch) -> None:
+    """Two usable CPUs and a window of two turns: the third starts when one of the first two ends, with the whole limit."""
+    monkeypatch.setattr(seed_runs, "usable_cpus", lambda: 2)
+    runs = seed_runs.run_seeds(_stamps, seeds=(1, 2, 3), time_budget_seconds=5, window_seconds=10)
+    (s1, e1, b1), (s2, e2, b2), (s3, _e3, b3) = (run.result for run in runs)
+    assert s2 < e1 and s1 < e2, "the first two side by side"
+    assert s3 >= min(e1, e2)
+    assert (b1, b2, b3) == (5, 5, 5)
+
+
+def test_a_run_never_starts_past_the_whole_window(monkeypatch) -> None:
+    """A window shorter than the turns (the calculation sees fewer CPUs than the server counted): a later run has the time
+    left in the window, never more, and none starts once the window is spent."""
+    monkeypatch.setattr(seed_runs, "usable_cpus", lambda: 1)
+
+    def one_second(seed: int, progress, budget=None):
+        started = time.monotonic()
+        time.sleep(1.0)
+        return (started, time.monotonic(), budget)
+
+    started = time.monotonic()
+    # Each run takes about 1 s: the second starts with about 5.5 s left (its whole 5 s fit, 0.5 s to spare), the third
+    # with about 4.5 s (0.5 s short of its limit). Half a second each way: a busy machine does not move the case.
+    runs = seed_runs.run_seeds(one_second, seeds=(1, 2, 3), time_budget_seconds=5, window_seconds=6.5)
+    (_s1, _e1, b1), (_s2, _e2, b2), (s3, _e3, b3) = (run.result for run in runs)
+    assert b1 == 5 and b2 == 5, "the second still fits whole"
+    assert 3.5 < b3 < 5, "the third has the time left in the window, not its whole limit"
+    assert s3 + b3 <= started + 6.5 + 0.05, "no run's limit passes the window"
+
+    def first_takes_the_window(seed: int, progress, budget=None):
+        time.sleep(0.6)
+        return seed
+
+    runs = seed_runs.run_seeds(first_takes_the_window, seeds=(1, 2, 3), time_budget_seconds=0.5, window_seconds=0.5)
+    assert [run.failure for run in runs] == [None, "RunNotStarted", "RunNotStarted"]
+
+
+def test_a_later_run_is_stopped_at_its_own_limit_not_the_first_wave_s(monkeypatch) -> None:
+    """Once the first run has answered, the others stop at their limit and a settle. With turns a later run's limit runs
+    from its own start: the first wave's limit must not cut it short."""
+    monkeypatch.setattr(seed_runs, "usable_cpus", lambda: 1)
+    monkeypatch.setattr(seed_runs, "_GRACE_SECONDS", 30.0)
+
+    def first_quick_second_long(seed: int, progress, budget=None):
+        time.sleep(0.8 if seed == 1 else 0.95 if seed == 2 else 0.0)
+        return seed
+
+    # The first answers at 0.8 s; the second starts then, with 1.0 s of its own, and answers at about 1.75 s: past the first
+    # wave's limit and settle (1.0 + 0.5 s), inside its own (1.8 + 0.5 s).
+    runs = seed_runs.run_seeds(first_quick_second_long, seeds=(1, 2, 3), time_budget_seconds=1.0, window_seconds=3.0)
+    assert [(run.result, run.failure) for run in runs[:2]] == [(1, None), (2, None)]
+
+
 # ---------------------------------------------------------------------------- the merge, as a table
 
 V = Fraction(77600, 100)  # 776 €, about G5's score
@@ -518,6 +618,109 @@ def test_three_seeded_runs_of_t4_are_proven_with_the_chosen_seed_on_record() -> 
     result = planner.plan_exact_scenario(cases.t4(), solver_time_budget_seconds=5, seeds=(31, 17, 23)).result
     assert (result.result_state, result.proof.kind) == ("ready_incumbent", "optimal_proven")
     assert {settings.get("randomization/randomseedshift") for settings in _settings(result)} == {"17"}
+
+
+def _two_stages(seed: int, progress, budget=None) -> int:
+    """A search of two named stages, 0.4 s each: what a search reports, in miniature."""
+    if progress is not None:
+        progress("search", step=1, total=2)
+    time.sleep(0.4)
+    if progress is not None:
+        progress("search", step=2, total=2)
+    time.sleep(0.4)
+    return seed
+
+
+@pytest.mark.parametrize("cpus", [1, 2, 3])
+def test_every_turn_reports_its_search_so_the_stream_is_never_silent_long(monkeypatch, cpus: int) -> None:
+    """TURNI step 4d (the coordinator's merge condition, 21/11): the Tool's stream forwards a progress line only when it is
+    new, so later turns repeating stages already reported were silent, for minutes on one CPU, which a reverse proxy can cut
+    (Nginx: 60 s). Each turn now reports its stages as steps of the whole: turn × stages + stage, of turns × stages. Every
+    line is new, the steps only go up, and no gap between two lines exceeds one search's stage plus a margin. With one turn
+    (three CPUs) the steps are today's."""
+    monkeypatch.setattr(seed_runs, "usable_cpus", lambda: cpus)
+    heard: list[tuple[float, int, int]] = []
+
+    def listen(phase: str, step: int | None = None, total: int | None = None) -> None:
+        assert phase == "search"
+        heard.append((time.monotonic(), step, total))
+
+    started = time.monotonic()
+    seed_runs.run_seeds(_two_stages, seeds=(1, 2, 3), time_budget_seconds=5, window_seconds=15, progress=listen)
+    turns = -(-3 // cpus)
+    assert [(step, total) for _at, step, total in heard] == [(step, 2 * turns) for step in range(1, 2 * turns + 1)]
+    instants = [started, *(at for at, _step, _total in heard)]
+    assert max(later - earlier for earlier, later in zip(instants, instants[1:], strict=False)) < 0.4 + 0.5, "no long silence"
+
+
+def test_searches_that_close_early_wait_no_longer_with_turns(monkeypatch) -> None:
+    """TURNI «done when» 3: a request whose searches close early lasts as today. The window of three turns only lets a
+    search use its whole limit; it never makes the others wait for it."""
+    monkeypatch.setattr(seed_runs, "usable_cpus", lambda: 1)
+    started = time.monotonic()
+    runs = seed_runs.run_seeds(_echo, seeds=(1, 2, 3), time_budget_seconds=30, window_seconds=100)
+    assert [run.result for run in runs] == [10, 20, 30]
+    assert time.monotonic() - started < 5, "three quick searches, one CPU: done in moments, not in their limits"
+
+
+def test_soft_deadline_does_not_stop_the_last_turn(monkeypatch) -> None:
+    """TURNI step 4 (the plan's test): on one usable CPU, the three searches go in three turns inside the Tool's soft
+    deadline, as the rule of limits sets it. The rule takes its numbers as arguments, so the turns are short here: searches
+    of 1 s that each answer 0.25 s late (inside the runs' own grace), a grace of 1 s between turns, 1 s past the window.
+    The third search starts at about 2.5 s with 2.5 s of the 5 s window left, so it keeps its whole limit; the last turn
+    ends at about 3.75 s, and the soft deadline is at 6 s. The planner's checkpoint stops nothing."""
+    monkeypatch.setattr(seed_runs, "usable_cpus", lambda: 1)
+    policy = pac_plugin.plan_policy(3, run_limit_ms=1_000, grace_ms=1_000, past_window_ms=1_000)
+    started = time.monotonic()
+    context = ToolExecutionContext(execution_id="turns", soft_deadline=started + policy.soft_timeout_ms / 1000, hard_deadline=started + policy.job_timeout_ms / 1000, cancelled=lambda: False)
+
+    def a_little_late(seed: int, progress, budget=None):
+        time.sleep(1.25)
+        return (seed, budget)
+
+    runs = seed_runs.run_seeds(a_little_late, seeds=(1, 2, 3), time_budget_seconds=1.0, window_seconds=policy.engine_timeout_ms / 1000, checkpoint=context.checkpoint)
+    assert [run.result for run in runs] == [(1, 1.0), (2, 1.0), (3, 1.0)], "every turn ran, each search with its whole limit"
+
+
+@pytest.mark.parametrize(("window", "expected"), [(None, None), (15.0, 15.0)])
+def test_the_planner_hands_the_runs_their_limit_and_the_whole_window(monkeypatch, window, expected) -> None:
+    """TURNI step 1: the planner passes both numbers to the runs, the window as the caller gives it (None until the Tool
+    passes one, step 4), and still publishes a proven T4."""
+    seen = []
+    real = planner.run_seeds
+
+    def spy(task, **kwargs):
+        seen.append((kwargs["time_budget_seconds"], kwargs["window_seconds"]))
+        return real(task, **kwargs)
+
+    monkeypatch.setattr(planner, "run_seeds", spy)
+    result = planner.plan_exact_scenario(cases.t4(), solver_time_budget_seconds=5, solver_window_seconds=window, seeds=(31, 17, 23)).result
+    assert seen == [(5, expected)]
+    assert (result.result_state, result.proof.kind) == ("ready_incumbent", "optimal_proven")
+
+
+@pytest.mark.parametrize(("window", "whole"), [(15.0, True), (None, False)], ids=["a-window-of-three-turns", "no-window"])
+def test_the_published_time_budget_is_the_time_the_run_was_given(monkeypatch, window, whole) -> None:
+    """TURNI step 2, check 7 (the coordinator's rule of 21/11): the evidence publishes the time the run was really given.
+    On one usable CPU the published run of T4 is the one started last (the lowest seed, 17, chosen on a tie). With a window
+    of three turns it was given its whole limit, and every stage says 5 s; with no window it had the time left, a little
+    less, and every stage says that."""
+    monkeypatch.setattr(seed_runs, "usable_cpus", lambda: 1)
+    # The budget the scheduler gave each run, as it records it (``_Entry.budget``).
+    given: dict[int, float] = {}
+    real_entry = seed_runs._Entry
+
+    def entry(**fields):
+        given[fields["seed"]] = fields["budget"]
+        return real_entry(**fields)
+
+    monkeypatch.setattr(seed_runs, "_Entry", entry)
+    result = planner.plan_exact_scenario(cases.t4(), solver_time_budget_seconds=5, solver_window_seconds=window, seeds=(31, 23, 17)).result
+    assert (result.result_state, result.proof.kind) == ("ready_incumbent", "optimal_proven")
+    assert {settings.get("randomization/randomseedshift") for settings in _settings(result)} == {"17"}, "the run started last is published"
+    # Every stage of the published run says exactly the time that run was given, formatted as the solver writes it.
+    assert {settings.get("time_budget") for settings in _settings(result)} == {f"{given[17]:g}"}
+    assert given[17] == 5 if whole else given[17] < 5
 
 
 def test_a_run_carries_its_first_stage_band_in_the_unit_of_its_value() -> None:

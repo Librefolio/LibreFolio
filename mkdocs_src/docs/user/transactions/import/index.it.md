@@ -166,7 +166,7 @@ Gli importatori senza etichetta sono ben testati e affidabili per i formati che 
     <img src="https://www.xtb.com/favicon.ico" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="favicon di XTB">
     <span class="card-title" style="margin: 0;">XTB</span>
     </div>
-    <span class="card-desc">🧪 Beta · Cronologia delle transazioni CSV</span>
+    <span class="card-desc">🧪 Beta · Report della cronologia (Excel)</span>
     </a>
     <a href="parqet/" class="card-link" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
     <div style="display: flex; align-items: center; gap: 0.75rem;">

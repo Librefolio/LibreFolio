@@ -411,6 +411,54 @@ describe('DataTable — multi selection', () => {
         expect(row('r2')).toHaveAttribute('data-selected', 'true');
         expect(row('r1')).toHaveAttribute('data-selected', 'false');
     });
+
+    /**
+     * `getRowSelectionState` (79 STK-2c): a row that stands for others (the Lots table's reward group) draws its
+     * checkbox in the mixed state while part of what it stands for is selected. Drawing only: a click still selects the
+     * row and nothing else, a selected row is `checked` whatever the prop says, and the header's state counts selected
+     * rows only.
+     */
+    it('draws an unselected row the caller calls partial in the mixed state, and selects it as any other row', async () => {
+        await setupI18n();
+        const getRowSelectionState = vi.fn((r: Row) => (r.id === 'r2' ? ('partial' as const) : null));
+        const {onSelectionChange} = mount('multi-row-partial', {getRowSelectionState});
+
+        expect(screen.getByTestId('dt-row-checkbox-r2')).toHaveAttribute('data-state', 'partial');
+        expect(screen.getByTestId('dt-row-checkbox-r1')).toHaveAttribute('data-state', 'unchecked');
+        expect(screen.getByTestId('dt-row-checkbox-r3')).toHaveAttribute('data-state', 'unchecked');
+        // A partial row is not a selected one: the header and the row element say so
+        expect(screen.getByTestId('dt-select-all')).toHaveAttribute('data-state', 'unchecked');
+        expect(row('r2')).toHaveAttribute('data-selected', 'false');
+
+        await fireEvent.click(screen.getByTestId('dt-row-checkbox-r2'));
+        expect(lastSelection(onSelectionChange)).toEqual(['r2']);
+        // Selected wins over the caller's 'partial'
+        expect(screen.getByTestId('dt-row-checkbox-r2')).toHaveAttribute('data-state', 'checked');
+        expect(screen.getByTestId('dt-select-all')).toHaveAttribute('data-state', 'partial');
+
+        await fireEvent.click(screen.getByTestId('dt-row-checkbox-r2'));
+        expect(lastSelection(onSelectionChange)).toEqual([]);
+        expect(screen.getByTestId('dt-row-checkbox-r2')).toHaveAttribute('data-state', 'partial');
+
+        await fireEvent.click(screen.getByTestId('dt-row-checkbox-r1'));
+        expect(lastSelection(onSelectionChange)).toEqual(['r1']);
+        expect(screen.getByTestId('dt-row-checkbox-r1')).toHaveAttribute('data-state', 'checked');
+        expect(screen.getByTestId('dt-row-checkbox-r2')).toHaveAttribute('data-state', 'partial');
+    });
+
+    it('without getRowSelectionState draws only checked and unchecked', async () => {
+        await setupI18n();
+        const {onSelectionChange} = mount('multi-row-no-partial');
+        const states = () => ['r1', 'r2', 'r3'].map((id) => screen.getByTestId(`dt-row-checkbox-${id}`).getAttribute('data-state'));
+
+        expect(states()).toEqual(['unchecked', 'unchecked', 'unchecked']);
+        await fireEvent.click(screen.getByTestId('dt-row-checkbox-r2'));
+        expect(lastSelection(onSelectionChange)).toEqual(['r2']);
+        expect(states()).toEqual(['unchecked', 'checked', 'unchecked']);
+        await fireEvent.click(screen.getByTestId('dt-row-checkbox-r2'));
+        expect(lastSelection(onSelectionChange)).toEqual([]);
+        expect(states()).toEqual(['unchecked', 'unchecked', 'unchecked']);
+    });
 });
 
 describe('DataTable — non-selectable rows', () => {
@@ -646,7 +694,7 @@ describe('DataTable — row actions', () => {
             testid: 'act-delete',
             requireConfirm: true,
             visible: (r) => r.id !== 'r3',
-            disabled: (r) => r.id === 'r2',
+            blocked: (r) => (r.id === 'r2' ? {hint: 'Locked row', reason: 'locked'} : null),
         },
     ];
 
@@ -666,7 +714,7 @@ describe('DataTable — row actions', () => {
         expect(within(menu3).queryByTestId('act-delete')).toBeNull();
     });
 
-    it('renders a disabled action as unusable rather than hiding it', async () => {
+    it('renders a blocked action off with its reason rather than hiding it (77 SEL-M)', async () => {
         await setupI18n();
         const onEdit = vi.fn();
         const onDelete = vi.fn();
@@ -674,7 +722,8 @@ describe('DataTable — row actions', () => {
 
         const menu = await openMenu('r2');
         const del = within(menu).getByTestId('act-delete');
-        expect(del).toBeDisabled();
+        expect(del).toHaveAttribute('aria-disabled', 'true');
+        expect(del).toHaveAttribute('data-disabled-reason', 'locked');
 
         await fireEvent.click(del);
         expect(onDelete).not.toHaveBeenCalled();
@@ -729,6 +778,42 @@ describe('DataTable — row actions', () => {
         await fireEvent.click(within(menu2).getByTestId('act-edit'));
         expect(onDelete).not.toHaveBeenCalled();
         expect(onEdit).toHaveBeenCalledTimes(1);
+    });
+
+    // 81 U15 — the right click is the ⋮'s twin, but a field inside the row keeps the browser's own menu (Paste).
+    it.each(['input', 'textarea', 'editable'])('leaves the browser menu on a %s inside the row', async (kind) => {
+        await setupI18n();
+        mount(`actions-field-${kind}`, {rowActions: actions(vi.fn(), vi.fn())});
+
+        const field = kind === 'input' ? document.createElement('input') : kind === 'textarea' ? document.createElement('textarea') : document.createElement('div');
+        if (kind === 'editable') field.setAttribute('contenteditable', 'true');
+        row('r1').querySelector('td.td-data')!.appendChild(field);
+
+        const notCancelled = await fireEvent.contextMenu(field);
+        expect(notCancelled).toBe(true);
+        expect(screen.queryByTestId('context-menu')).toBeNull();
+
+        // The rest of the row still opens the menu, and swallows the browser's.
+        const cancelled = await fireEvent.contextMenu(row('r1').querySelector('td.td-data')!);
+        expect(cancelled).toBe(false);
+        expect(screen.getByTestId('context-menu')).toBeInTheDocument();
+    });
+
+    it('anchors the menu to the ⋮ when the contextmenu comes from the keyboard on it, and Esc gives the focus back', async () => {
+        await setupI18n();
+        mount('actions-keyboard', {rowActions: actions(vi.fn(), vi.fn())});
+
+        const button = screen.getByTestId('row-actions-r1');
+        // jsdom measures every box as zero, and an anchored menu closes itself on a zero box: give the ⋮ a real one.
+        button.getBoundingClientRect = () => ({x: 10, y: 10, left: 10, top: 10, right: 30, bottom: 30, width: 20, height: 20, toJSON: () => ({})});
+
+        await fireEvent.contextMenu(button);
+        expect(screen.getByTestId('context-menu')).toBeInTheDocument();
+        expect(document.activeElement).not.toBe(button);
+
+        await fireEvent.keyDown(window, {key: 'Escape'});
+        await waitFor(() => expect(screen.queryByTestId('context-menu')).toBeNull());
+        expect(document.activeElement).toBe(button);
     });
 
     it('opens no menu at all on a row where every action is hidden', async () => {
@@ -919,6 +1004,83 @@ function mountEditable(key: string, cellValue: unknown, extra: Record<string, un
 const numberInput = () => document.querySelector('input.cell-editable-number') as HTMLInputElement;
 const textInput = () => document.querySelector('input.cell-editable-text') as HTMLInputElement;
 const toggleButton = () => document.querySelector('button[aria-label="Toggle"]') as HTMLButtonElement;
+
+// 81 U48 (issue #89) — a table sorted on a column holds its order while a field in it is being edited, and sorts again
+// when the field is left (blur or Enter): the row under the cursor does not run away from it at the first digit.
+describe('DataTable — the order holds while a field is edited (81 U48)', () => {
+    interface QtyRow {
+        id: string;
+        qty: number;
+    }
+
+    /** A table sorted ascending on an editable `qty`, whose parent takes each change back as new data, as the editors do. */
+    async function mountSorted() {
+        await setupI18n();
+        let data: QtyRow[] = [
+            {id: 'a', qty: 1},
+            {id: 'b', qty: 2},
+            {id: 'c', qty: 3},
+        ];
+        const view: {rerender: (props: Record<string, unknown>) => Promise<void>} = {rerender: async () => {}};
+        const columns = [
+            {
+                id: 'qty',
+                header: 'Qty',
+                type: 'number',
+                sortable: true,
+                getValue: (r: QtyRow) => r.qty,
+                cell: (r: QtyRow) => ({
+                    type: 'editable-number' as const,
+                    value: r.qty,
+                    onchange: (value: number | null) => {
+                        data = data.map((x) => (x.id === r.id ? {...x, qty: value ?? 0} : x));
+                        void view.rerender({data});
+                    },
+                }),
+            },
+        ] as unknown as ColumnDef<unknown>[];
+        const {rerender} = render(DataTable, {data, columns, getRowId: ((r: QtyRow) => r.id) as (row: unknown) => string, storageKey: 'order-hold', enablePagination: false});
+        view.rerender = rerender as typeof view.rerender;
+        await fireEvent.click(screen.getByTestId('dt-sort-qty'));
+        expect(screen.getByTestId('dt-header-qty')).toHaveAttribute('data-sort', 'asc');
+        expect(pageIds()).toEqual(['a', 'b', 'c']);
+        return (id: string) => row(id).querySelector('input.cell-editable-number') as HTMLInputElement;
+    }
+
+    it('keeps every row in place, and the focus in the same field, while a number is typed out of order', async () => {
+        const field = await mountSorted();
+        const input = field('a');
+        input.focus();
+        await fireEvent.input(input, {target: {value: '10'}});
+
+        await waitFor(() => expect(field('a').value).toBe('10'));
+        expect(pageIds(), 'the row did not move under the cursor').toEqual(['a', 'b', 'c']);
+        expect(field('a')).toBe(input);
+        expect(document.activeElement).toBe(input);
+    });
+
+    it('sorts again when the field is left', async () => {
+        const field = await mountSorted();
+        const input = field('a');
+        input.focus();
+        await fireEvent.input(input, {target: {value: '10'}});
+        expect(pageIds()).toEqual(['a', 'b', 'c']);
+
+        input.blur();
+        await waitFor(() => expect(pageIds()).toEqual(['b', 'c', 'a']));
+    });
+
+    it('sorts again on Enter, which leaves the field', async () => {
+        const field = await mountSorted();
+        const input = field('a');
+        input.focus();
+        await fireEvent.input(input, {target: {value: '10'}});
+        expect(pageIds()).toEqual(['a', 'b', 'c']);
+
+        await fireEvent.keyDown(input, {key: 'Enter'});
+        await waitFor(() => expect(pageIds()).toEqual(['b', 'c', 'a']));
+    });
+});
 
 describe('DataTable — editable cells', () => {
     describe('editable-number', () => {

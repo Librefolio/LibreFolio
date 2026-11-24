@@ -36,7 +36,7 @@
     import {onDestroy, tick, untrack} from 'svelte';
     import {_ as t} from '$lib/i18n';
     import {currentLanguage} from '$lib/stores/app/language';
-    import {X, ArrowRight, ArrowDown, Check, Pencil, Save, Info} from 'lucide-svelte';
+    import {X, ArrowRight, ArrowDown, Check, Pencil, Save, Info, Loader2} from 'lucide-svelte';
     import {getRoleIcon, getRoleIconColor} from '$lib/utils/broker/brokerRoleHelpers';
     import {getBrokerIconHtmlById} from '$lib/utils/broker/brokerHelpers';
 
@@ -73,6 +73,7 @@
     import {normalizeDecimalInput} from '$lib/utils/core/parseDecimalInput';
     import {preFloorDates} from '$lib/features/transactions/preFloorDate';
     import {calculateTradeValue, tradeHasUnitPrice, type TradeAmountDriver} from '$lib/features/transactions/form/txTradeAmount';
+    import {fetchRewardValue, type RewardValueSuggestion} from '$lib/features/transactions/form/rewardValue';
     import {computeTxFormChecks, type TxFormCell, type TxFormCheckKind} from '$lib/features/transactions/form/txFormChecks';
     import {deduplicateIssues, signLabel, signHintKey} from '$lib/features/transactions/form/txFormFields';
     import {isBulkBalanceIssue} from '$lib/features/transactions/bulk/bulkDisplay';
@@ -164,6 +165,13 @@
         onOpenTransaction?: (id: number) => void;
         /** Project 66 (F3): the charge the user came from, highlighted among the parent's charges. */
         highlightTxId?: number | null;
+        /** Project 66 (TL-2): the host's own rows a picker may offer, read on the host's state (the Bulk). `rows` join the
+         *  database's (a row in both is the host's), `exclude` drops database rows the host already marked or linked; `null`
+         *  for a mode the host does not answer. A new row carries `_bulkKey` (`op-<tempId>`) and its name in `_rowRef`. */
+        bulkCandidates?: (mode: 'charges' | 'parent', probe: {broker_id: number; asset_id: number | null; type: string}) => {rows: TXReadItem[]; exclude: number[]} | null;
+        /** Project 66 (TL-3b): the row belongs to an all-new group of the Bulk, whose broker and asset move together: a line
+         *  under the broker says so. */
+        groupSync?: boolean;
     }
 
     let {
@@ -190,6 +198,8 @@
         allowChargeEdits = false,
         onOpenTransaction,
         highlightTxId = null,
+        bulkCandidates,
+        groupSync = false,
     }: Props = $props();
 
     let guideObservedOpen = false;
@@ -745,7 +755,14 @@
         try {
             const rows = (await zodiosApi.query_transactions_api_v1_transactions_get({queries: {without_parent: true, broker_id: draft.broker_id}} as never)) as TXReadItem[];
             const inSection = new Set(charges.map((charge) => charge.id));
-            pickerRows = (rows ?? []).filter((row) => sameAsset(row) && !inSection.has(row.id));
+            const sectionKeys = new Set(charges.map((charge) => charge.key));
+            // 66 TL-2: inside the Bulk its own rows join, read on its state: a row in both sources is the Bulk's, a row the
+            // Bulk marked «del» or linked elsewhere is dropped.
+            const host = bulkCandidates?.('charges', {broker_id: draft.broker_id, asset_id: draft.asset_id ?? null, type: draft.type}) ?? null;
+            const hostIds = new Set((host?.rows ?? []).map((row) => row.id));
+            const dropped = new Set(host?.exclude ?? []);
+            const merged = [...(rows ?? []).filter((row) => !dropped.has(row.id) && !hostIds.has(row.id)), ...(host?.rows ?? [])];
+            pickerRows = merged.filter((row) => sameAsset(row) && !inSection.has(row.id) && !sectionKeys.has((row as TXReadItem & {_bulkKey?: string})._bulkKey ?? ''));
             pickerMode = 'charges';
         } catch {
             notify({name: 'tx.form.charges.candidates.failed', detail: {brokerId: draft.broker_id}, toast: {variant: 'error', message: $t('transactions.form.candidatesFailed')}});
@@ -927,9 +944,37 @@
         return true;
     });
 
-    // cost_basis_override is meaningful only for units coming in: the receiver of a TRANSFER pair, or an ADJUSTMENT with
-    // a positive quantity. An ADJUSTMENT taking units out has no value (N78-1): it only lowers the quantity.
-    let showCostBasisField = $derived(draft.type === 'TRANSFER' || (draft.type === 'ADJUSTMENT' && (exactDecimalSign(draft.quantity) ?? 0) > 0));
+    // cost_basis_override is meaningful only for units coming in: the receiver of a TRANSFER pair, or a standalone type the
+    // table gives `required_qty_pos` (ADJUSTMENT, REWARD) with a positive quantity. An ADJUSTMENT taking units out has no
+    // value (N78-1): it only lowers the quantity.
+    let showCostBasisField = $derived(draft.type === 'TRANSFER' || (rule.costBasisMode === 'required_qty_pos' && (exactDecimalSign(draft.quantity) ?? 0) > 0));
+
+    // A type whose cost basis is a stated value (`costBasisAuto` false: a REWARD, its value on receipt) never takes the
+    // average cost: the form keeps it on Manual, whatever mode a row or a type change brought (rule 12c refuses Auto).
+    $effect(() => {
+        if (!rule.costBasisAuto && costBasisMode === 'auto') costBasisMode = 'manual';
+    });
+
+    // A REWARD's value on receipt, suggested from the asset's price history (project 79, STK-2a, aligned by STK-4b): the
+    // close of that very day, per unit, read by the backend (the same reader as the bulk's «fill from price history»), into
+    // an empty field only. The note under the field shows while the value is still the
+    // suggestion; the user's own value is never overwritten.
+    let rewardSuggestion = $state<RewardValueSuggestion | null>(null);
+    let rewardSuggestionKey = '';
+    $effect(() => {
+        if (isReadonly || draft.type !== 'REWARD' || draft.asset_id == null || !draft.date || draft.cost_basis_override?.amount?.trim()) return;
+        const assetId = draft.asset_id;
+        const date = draft.date;
+        const key = `${assetId}|${date}`;
+        if (key === rewardSuggestionKey) return;
+        rewardSuggestionKey = key;
+        void fetchRewardValue(assetId, date).then((suggestion) => {
+            if (!suggestion || draft.type !== 'REWARD' || draft.asset_id !== assetId || draft.date !== date || draft.cost_basis_override?.amount?.trim()) return;
+            rewardSuggestion = suggestion;
+            draft = {...draft, cost_basis_override: {code: suggestion.code, amount: suggestion.amount}};
+        });
+    });
+    let rewardValueDate = $derived(rewardSuggestion && draft.type === 'REWARD' && draft.cost_basis_override?.code === rewardSuggestion.code && draft.cost_basis_override?.amount === rewardSuggestion.amount ? rewardSuggestion.priceDate : null);
 
     // Pair partner chip (only when editing an existing linked tx — non-dual mode).
     let pairPartnerId = $derived(pairLayout ? null : (mainRow?.related_transaction_id ?? null));
@@ -1666,8 +1711,8 @@
         <!-- ============================================================= -->
         <!-- Header -->
         <!-- ============================================================= -->
-        <div class="flex items-center justify-between p-5 pb-4 border-b border-lf-subtle shrink-0">
-            <h2 class="text-lg font-semibold text-lf-primary" data-testid="tx-form-title">
+        <div class="flex items-center justify-between gap-2 p-5 pb-4 border-b border-lf-subtle shrink-0">
+            <h2 class="min-w-0 break-words text-lg font-semibold text-lf-primary" data-testid="tx-form-title">
                 {#if pairLayout}
                     {#if pairLayout === 'fx'}💱{:else if pairLayout === 'transfer_asset'}📦{:else}🏦{/if}
                     {#if mode === 'edit'}
@@ -1695,7 +1740,7 @@
                     👁 {$t('transactions.form.titleView')} #{mainRow?.id}
                 {/if}
             </h2>
-            <div class="flex items-center gap-1">
+            <div class="flex shrink-0 items-center gap-1">
                 {#if isReadonly && onSwitchToEdit && canEdit}
                     <button class="p-2 text-lf-muted hover:text-lf-link hover:bg-lf-hover rounded-lg transition-colors" onclick={onSwitchToEdit} data-testid="tx-form-switch-edit" aria-label="Edit" title={$t('transactions.form.titleEdit') || 'Edit'}>
                         <Pencil size={18} />
@@ -1801,6 +1846,7 @@
                     {autocompleteNonce}
                     {brokerIdValue}
                     {rowSaved}
+                    groupSync={groupSync && !isReadonly}
                     {brokerImmutable}
                     {brokers}
                     {brokersForSelect}
@@ -1824,6 +1870,7 @@
                     {onCashInput}
                     {rule}
                     {showCostBasisField}
+                    {rewardValueDate}
                     {typeImmutable}
                     {wacAvailableCurrencies}
                     {handleSyncFx}
@@ -1841,7 +1888,7 @@
             {/if}
 
             <!-- Cost basis override — TRANSFER single-form (editing existing linked pair, non-dual) -->
-            {#if !pairLayout && showCostBasisField && draft.type !== 'ADJUSTMENT'}
+            {#if !pairLayout && showCostBasisField && rule.costBasisMode !== 'required_qty_pos'}
                 <div class="mt-3" data-testid="tx-form-cost-basis-inline">
                     <WacPreviewSection
                         value={displayedCostBasis}
@@ -1947,9 +1994,12 @@
                         data-testid="tx-form-save"
                         use:guideAnchor={'transaction.create.save'}
                         title={committing ? $t('common.saving') : !commitOnSave ? $t('common.apply') : $t('common.save')}
+                        aria-label={committing ? $t('common.saving') : !commitOnSave ? $t('common.apply') : $t('common.save')}
+                        aria-busy={committing}
                     >
                         {#if committing}
-                            <span class="hidden sm:inline">{$t('common.saving')}</span>
+                            <!-- D2: below `sm` the word hides; the spinner keeps the button from going blank. -->
+                            <Loader2 size={15} class="animate-spin" /> <span class="hidden sm:inline">{$t('common.saving')}</span>
                         {:else if !commitOnSave}
                             <Check size={16} /> <span class="hidden sm:inline">{$t('common.apply')}</span>
                         {:else}

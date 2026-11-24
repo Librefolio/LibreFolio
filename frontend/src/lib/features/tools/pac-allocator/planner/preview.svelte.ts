@@ -3,10 +3,12 @@
  * come from the backend.
  *
  * The service's `preview` operation reads the same request as `plan` (`buildRequest(…, {operation: 'preview'})`, which lets
- * a draft still being typed through) and answers the total, today's value and weight of every target entry, the table
- * «maximum acceptable cost» and the «custom» fidelity both ways. This class only reads and forwards: no figure is computed
- * here. It
- *   - calls once, `PREVIEW_DELAY_MS` after the last change (`schedule`), with the latest draft;
+ * a draft still being typed through) and answers the total, today's value and weight of every target entry, and the λ of
+ * the three fidelity levels. This class only reads and forwards: no figure is computed here (the table «maximum acceptable
+ * cost» is the page's own, `acceptableCost.ts`, from these numbers: R1-F (b) of project 67). It
+ *   - calls once, `PREVIEW_DELAY_MS` after the last change (`schedule`), with the latest draft. The shell schedules on the
+ *     draft's `previewFingerprint`, which leaves out the target fidelity: no number of the answer depends on it, so a level
+ *     chosen or a figure typed for «Custom» asks nothing, and the request carries a fixed fidelity (`wireFidelity`);
  *   - while it waits, keeps the previous numbers, `stale`; an answer that lands while a newer change is still to be sent
  *     (queued, or in its pause) leaves it waiting: its numbers are already stale;
  *   - never sends while a call is on its way (one batch per user: a second call would be refused): a change made
@@ -16,12 +18,14 @@
  *   - waits while a calculation runs (`blocked`): the Tools API admits one batch per user (`queue_full`, 429) and frees it
  *     only when the job ends on the server, not when the client stops waiting. So a calculation waits for the preview in
  *     flight (`busy`, `settled()`) instead of aborting it;
- *   - sends the euros typed for «Custom» (`setCustomEuros`) until an answer that carried them lands, and writes the λ that
- *     answer gives into the draft, while the draft's choice is still «Custom»; later previews send λ (§7.3: the draft keeps
- *     λ, a new total gives the euros back).
+ *   - turns the euros typed for «Custom» (`setCustomEuros`) into the draft's λ on the total of a current answer: at once
+ *     when the numbers on screen are current, else when the next answer lands, while the draft's choice is still «Custom»
+ *     (§7.3: the draft keeps λ, a new total gives the euros back). The conversion lives here, not in the step, so a figure
+ *     typed while the numbers are stale is converted on the fresh total even if the user leaves the step meanwhile.
  */
 import {runTool} from '../../client';
 import {assertToolAccount} from '../../contracts';
+import {lambdaFromReferenceAmount, type FidelityLevelWeights} from './acceptableCost';
 import type {PlannerDraft} from './draft.svelte';
 import type {PlannerProfile} from './profile';
 import {buildRequest, type PreviewLimitProblem} from './request';
@@ -35,23 +39,6 @@ export const PREVIEW_DELAY_MS = 600;
 export type PreviewNumber = PlannerExactNumber;
 export type PreviewMoney = PlannerExactMoney;
 
-/** One row of the table «maximum acceptable cost» (M30): money in the wrong place and, per level, the most a plan accepts to spend
- * to put it back; `custom` only while the «custom» fidelity has a λ. */
-export interface PreviewCostRow {
-    misplaced: PreviewMoney;
-    reference: boolean;
-    cost_aware: PreviewMoney;
-    balanced: PreviewMoney;
-    faithful: PreviewMoney;
-    custom: PreviewMoney | null;
-}
-
-/** The table «maximum acceptable cost» of the Rebalancer's preview: four rows, the third the reference (M32). */
-export interface PreviewCostTable {
-    level_weights: {cost_aware: PreviewNumber; balanced: PreviewNumber; faithful: PreviewNumber};
-    rows: PreviewCostRow[];
-}
-
 /** The fields of a ready preview the planner reads (`RebalancerPreviewReadyResult`, `PacPreviewReadyResult`). */
 export interface PreviewReady {
     operation: 'preview';
@@ -64,8 +51,8 @@ export interface PreviewReady {
     limit_problems: PreviewLimitProblem[];
     /** Every target entry today, and «other cash» (the cash outside the entries, G5-2 of project 67). */
     items?: ({kind: 'asset'; asset_id: string; value: PreviewMoney; weight: PreviewNumber} | {kind: 'cash'; broker_id: string; currency: string; value: PreviewMoney; weight: PreviewNumber} | {kind: 'other_cash'; value: PreviewMoney; weight: PreviewNumber})[];
-    table?: PreviewCostTable;
-    custom?: {distance_weight: PreviewNumber; reference_amount: PreviewMoney} | null;
+    /** The Rebalancer's: the λ of the three fidelity levels, the columns of the table «maximum acceptable cost». */
+    fidelity_level_weights?: FidelityLevelWeights;
 }
 
 /** What one call answers: the service's result, or the Tools API's error for the item. */
@@ -121,10 +108,14 @@ export class PlannerPreview {
         this.#arm();
     }
 
-    /** «Custom»: the euros typed on the reference row travel with the next preview, which gives λ back to the draft. */
+    /**
+     * «Custom»: the euros typed on the reference row become the draft's λ on the total of a current answer — now, when the
+     * numbers on screen are current, else when the next answer lands. An empty text withdraws euros still waiting.
+     */
     setCustomEuros(draft: PlannerDraft, euros: string): void {
+        this.#draft = draft;
         this.#customEuros = euros.trim() === '' ? null : euros;
-        this.schedule(draft);
+        if (this.state === 'ready' && this.numbers !== null) this.#convert(draft, this.numbers);
     }
 
     get customEuros(): string | null {
@@ -163,8 +154,7 @@ export class PlannerPreview {
             return;
         }
         const sequence = ++this.#sequence;
-        const euros = this.#customEuros;
-        const built = buildRequest(draft, new Date(), {operation: 'preview', customReferenceAmount: euros});
+        const built = buildRequest(draft, new Date(), {operation: 'preview'});
         if (!built.ok) {
             this.#fail('incomplete');
             return;
@@ -174,7 +164,7 @@ export class PlannerPreview {
         this.busy = true;
         const flight = this.#deps.call(built.built.request as unknown as Record<string, unknown>, controller.signal).then(
             (answer) => {
-                if (sequence === this.#sequence) this.#apply(draft, answer, euros);
+                if (sequence === this.#sequence) this.#apply(answer);
             },
             () => {
                 if (sequence === this.#sequence && !controller.signal.aborted) this.#fail('unavailable');
@@ -192,7 +182,7 @@ export class PlannerPreview {
         this.#inFlight = settled;
     }
 
-    #apply(draft: PlannerDraft, answer: PreviewAnswer, euros: string | null): void {
+    #apply(answer: PreviewAnswer): void {
         this.#controller = null;
         if (answer.kind === 'tool_error') {
             this.#fail(answer.code);
@@ -209,16 +199,21 @@ export class PlannerPreview {
         this.reason = null;
         // A newer draft waits to be sent: these numbers are already stale.
         this.state = this.#pending ? 'waiting' : 'ready';
+        // Euros typed while the numbers were stale: converted on this answer's total, the latest draft's.
+        if (this.state === 'ready' && this.#draft !== null) this.#convert(this.#draft, ready);
+    }
+
+    /**
+     * The euros waiting become the draft's λ on `ready`'s total, only while its choice is still «Custom» (the user may have
+     * picked a level meanwhile). A λ the plan's request cannot carry is not written: the step keeps «Custom» without one.
+     */
+    #convert(draft: PlannerDraft, ready: PreviewReady): void {
+        const euros = this.#customEuros;
         if (euros === null) return;
-        // Newer euros were typed, or the field was cleared, while this answer was on its way: its λ is not the field's (10b).
-        if (this.#customEuros !== euros) return;
-        // The euros reached the backend: later previews send λ. The λ they give, as the answer gives it, goes to the draft
-        // only while its choice is still «Custom» (the user may have picked a level meanwhile).
         this.#customEuros = null;
-        const lambda = ready.custom?.distance_weight.kind === 'finite_decimal' ? ready.custom.distance_weight.value : undefined;
-        if (lambda !== undefined && draft.data.fidelity.kind === 'custom' && draft.data.fidelity.lambda !== lambda) {
-            draft.data.fidelity = {kind: 'custom', lambda};
-        }
+        if (draft.data.fidelity.kind !== 'custom') return;
+        const lambda = lambdaFromReferenceAmount(ready.total, euros) ?? '';
+        if (draft.data.fidelity.lambda !== lambda) draft.data.fidelity = {kind: 'custom', lambda};
     }
 
     #fail(reason: string): void {

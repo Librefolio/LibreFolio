@@ -4,9 +4,16 @@ import {handleProbeMessage, probeTranslation} from '../../../../../scripts/ai-ex
 import {AI_EXPORT_ANALYSIS_IDS, AI_EXPORT_DATASET_IDS, type AiExportCompatibleSelection} from '../catalog/shared';
 import {AiExportPromptRenderError, renderAiExportPrompt, renderAiExportPromptDiagnostics, type AiExportPromptDiagnostics, type AiExportResponseLanguageDisplayName} from '../templates/promptRenderer';
 import * as sharedInstructions from '../templates/sharedInstructions';
+import {findAiExportAnalysisInstruction} from '../templates/sharedInstructions';
 import {backendCatalogFixture, compatibilityFixture, selectionFixture, snapshotFixture} from './runtimeFixtures';
 
 const markKey = (key: string): string => `⟦${key}⟧`;
+/**
+ * The analyses still in today's shape (objective, verification instructions, contract in sections, Answer Focus). Those in
+ * the new shape (plan 78, L1) close differently — legal notice, user question, language — and are pinned in
+ * `promptRenderer.newShape.test.ts`.
+ */
+const SECTIONS_SHAPE_ANALYSIS_IDS = AI_EXPORT_ANALYSIS_IDS.filter((id) => findAiExportAnalysisInstruction(id).shape === 'sections');
 /** The four interface languages, each with the response language the UI derives from it (`aiExportResponseLanguageFromLocale`). */
 const LOCALES = [
     ['en', 'English'],
@@ -36,8 +43,9 @@ describe('AI Export prompt renderer', () => {
         });
 
         // Red until E-24: answer_focus, the trusted instruction to answer rather than restate the data, comes right after the
-        // optional user notes and right before the legal notice; the legal notice comes right before response_language,
-        // which stays last: the app's trusted instruction.
+        // optional user question and right before the legal notice; the legal notice comes right before response_language,
+        // which stays last: the app's trusted instruction. 78 L2: the user's text is the User Question, in the old shape
+        // too, and keeps its place before that trusted closing.
         expect(diagnostics.sections.map((section) => section.id)).toEqual([
             'analysis_objective',
             'shared_verification_instructions',
@@ -46,15 +54,18 @@ describe('AI Export prompt renderer', () => {
             'snapshot_data',
             'additional_librefolio_data',
             'domain_notes',
-            'user_notes',
+            'user_question',
             'answer_focus',
             'legal_notice',
             'response_language',
         ]);
-        // Red until E-24: user_notes only when non-empty; without them answer_focus follows domain_notes.
+        // Red until E-24: user_question only when non-empty; without it answer_focus follows domain_notes.
         expect(withoutNotes.sections.map((section) => section.id)).toEqual(['analysis_objective', 'shared_verification_instructions', 'response_contract', 'snapshot_metadata', 'snapshot_data', 'additional_librefolio_data', 'domain_notes', 'answer_focus', 'legal_notice', 'response_language']);
         expect(diagnostics.rendered.mode).toBe('full_prompt');
-        expect(diagnostics.sections.find((section) => section.id === 'user_notes')?.content).toContain('Focus on recovery duration.');
+        const question = diagnostics.sections.find((section) => section.id === 'user_question')?.content ?? '';
+        expect(question).toContain('Focus on recovery duration.');
+        expect(question.startsWith(`## User Question\n\n${sharedInstructions.AI_EXPORT_USER_QUESTION_INTRO}\n\n`), 'the old shape takes the sentence too (78 L2)').toBe(true);
+        expect(diagnostics.rendered.prompt).not.toContain('## User Notes');
         expect(diagnostics.sections.find((section) => section.id === 'response_language')?.content).toContain('Italian');
     });
 
@@ -175,14 +186,16 @@ describe('AI Export prompt renderer', () => {
         }
         // Every analysis and every dataset of the catalogue, across the four domains.
         const analyses = AI_EXPORT_ANALYSIS_IDS.map((id) => selectionFixture('analysis', id));
+        const sectionsShaped = SECTIONS_SHAPE_ANALYSIS_IDS.map((id) => selectionFixture('analysis', id));
         const datasets = AI_EXPORT_DATASET_IDS.map((id) => selectionFixture('dataset', id));
 
         // response_language stays the analysis prompt's last word: the app's trusted instruction after the untrusted user notes.
         expect(analyses.map((selection) => fromEnd(selection, -1))).toEqual(analyses.map((selection) => [selection.id, 'response_language', 'response_language']));
-        // legal_notice sits immediately before it, with and without user notes.
-        expect(analyses.map((selection) => fromEnd(selection, -2))).toEqual(analyses.map((selection) => [selection.id, 'legal_notice', 'legal_notice']));
-        // Red until E-24: answer_focus sits immediately before the legal notice, with and without user notes.
-        expect(analyses.map((selection) => fromEnd(selection, -3))).toEqual(analyses.map((selection) => [selection.id, 'answer_focus', 'answer_focus']));
+        // In today's shape legal_notice sits immediately before it, with and without user notes ...
+        expect(sectionsShaped.map((selection) => fromEnd(selection, -2))).toEqual(sectionsShaped.map((selection) => [selection.id, 'legal_notice', 'legal_notice']));
+        // ... and answer_focus immediately before the legal notice (E-24). The new shape closes on legal notice, user question
+        // and language (78 L1, its own test file).
+        expect(sectionsShaped.map((selection) => fromEnd(selection, -3))).toEqual(sectionsShaped.map((selection) => [selection.id, 'answer_focus', 'answer_focus']));
         // Red until E-24: data only, reply_instructions is the last word, the trusted instruction that closes the data ...
         expect(datasets.map((selection) => [selection.id, sectionIds(selection).at(-1)])).toEqual(datasets.map((selection) => [selection.id, 'reply_instructions']));
         // ... and legal_notice sits immediately before it.
@@ -560,7 +573,7 @@ describe('AI Export prompt renderer — every prompt closes on a trusted instruc
         return rule;
     }
 
-    it.each(AI_EXPORT_ANALYSIS_IDS)('AF-01: %s renders answer_focus exactly once, under "## Answer Focus", outside any fence, with and without user notes', (id) => {
+    it.each(SECTIONS_SHAPE_ANALYSIS_IDS)('AF-01: %s renders answer_focus exactly once, under "## Answer Focus", outside any fence, with and without user notes', (id) => {
         const selection = selectionFixture('analysis', id);
         for (const [notes, userNotes] of NOTES_CASES) {
             const label = `${id} ${notes}`;
@@ -569,7 +582,7 @@ describe('AI Export prompt renderer — every prompt closes on a trusted instruc
         }
     });
 
-    it.each(AI_EXPORT_ANALYSIS_IDS)('AF-02: %s renders answer_focus from no catalogue: in every language, the bytes of the key-marker render', (id) => {
+    it.each(SECTIONS_SHAPE_ANALYSIS_IDS)('AF-02: %s renders answer_focus from no catalogue: in every language, the bytes of the key-marker render', (id) => {
         const selection = selectionFixture('analysis', id);
         for (const [notes, userNotes] of NOTES_CASES) {
             const label = `${id} ${notes}`;
@@ -658,7 +671,7 @@ describe('AI Export prompt renderer — every prompt closes on a trusted instruc
 
         // ... and, now that the rule is proved findable in a render, no analysis' answer_focus carries it, with or without user
         // notes. answer_focus reads no catalogue (AF-02): the key-marker render stands for every language.
-        const focuses = AI_EXPORT_ANALYSIS_IDS.flatMap((id) =>
+        const focuses = SECTIONS_SHAPE_ANALYSIS_IDS.flatMap((id) =>
             NOTES_CASES.map(([notes, userNotes]) => {
                 const label = `${id} ${notes}`;
                 return [label, occurrences(onlySection(render(selectionFixture('analysis', id), markKey, {userNotes}), 'answer_focus', label), rule)];

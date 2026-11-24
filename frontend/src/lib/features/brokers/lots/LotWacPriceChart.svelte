@@ -20,6 +20,7 @@
     import {maskableQuantity} from '$lib/utils/privacy/maskable';
     import {formatExactDecimal, priceFractionDigits} from '$lib/utils/core/formatFixed';
     import {lotDisplayState, lotStateColor, lotStateSymbol, type LotDisplayState} from './lotStateVisual';
+    import {isLotIncomeKind, type LotIncomeKind} from './lotComparisonChartHelpers';
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {translateOr} from '$lib/utils/core/translateOr';
     import {formatAxisDate, formatDayWithWeekday} from '$lib/utils/core/formatAxisDate';
@@ -73,7 +74,7 @@
     type LotTimelineEventSchema = z.infer<typeof schemas.LotTimelineEventSchema>;
     type LotSummarySchema = z.infer<typeof schemas.LotSummarySchema>;
     type DisplayMode = 'absolute' | 'percentage';
-    type EventMarkerSeriesKind = 'buy' | 'sell' | 'transfer' | 'adjustment' | 'split';
+    type EventMarkerSeriesKind = 'buy' | 'reward' | 'sell' | 'transfer' | 'adjustment' | 'split';
 
     // Bidirectional "back-and-forth" arrow (custom path renders identically in chart + legend,
     // unlike a rotated built-in which the legend icon ignores).
@@ -103,6 +104,7 @@
         transfer: 2,
         adjustment: 3,
         split: 4,
+        reward: 5,
     };
 
     type ComponentProps = {
@@ -142,7 +144,7 @@
 
     /** Local mirror of LotComparisonChart's LotIncomeEvent — shape matches the LotIncomeEventSchema DTO. */
     type LotIncomeEvent = {
-        type: 'DIVIDEND' | 'INTEREST';
+        type: LotIncomeKind;
         date: string;
         broker_id: number | null;
         /** `null` when the income has no rate to the target currency. */
@@ -601,6 +603,14 @@
                 color: themed(LOT_WAC_COLORS.markers.buy, isDark),
             },
             {
+                // A lot opened by a reward in kind (project 79): the buy triangle in the income magenta
+                key: 'reward',
+                label: labels.markerLegend.reward,
+                symbol: BUY_MARKER_SYMBOL,
+                symbolSize: 12,
+                color: themed(LOT_WAC_COLORS.markers.reward, isDark),
+            },
+            {
                 key: 'sell',
                 label: labels.markerLegend.sell,
                 symbol: SELL_MARKER_SYMBOL,
@@ -647,12 +657,15 @@
         const realizedPnl = $_('brokers.lots.chartMarkers.realizedPnl');
         const markerLegendBuy = $_('brokers.lots.chartMarkers.legend.buy');
         const markerLegendSell = $_('brokers.lots.chartMarkers.legend.sell');
+        const markerLegendReward = translateOr($_, 'brokers.lots.chartMarkers.legend.reward', 'Rewards');
         const markerLegendTransfer = $_('brokers.lots.chartMarkers.legend.transfer');
         const markerLegendAdjustment = $_('brokers.lots.chartMarkers.legend.adjustment');
         const markerLegendSplit = $_('brokers.lots.chartMarkers.legend.split');
         const markerLegendIncome = $_('brokers.lots.chartMarkers.legend.income');
         const eventTypeBuy = $_('brokers.lots.chartMarkers.eventType.BUY');
         const eventTypeSell = $_('brokers.lots.chartMarkers.eventType.SELL');
+        const eventTypeReward = translateOr($_, 'brokers.lots.chartMarkers.eventType.REWARD', 'Reward');
+        const eventTypeRewardMerge = translateOr($_, 'brokers.lots.chartMarkers.eventType.REWARD_MERGE', 'Reward spread');
         const eventTypeAdjustmentIn = $_('brokers.lots.chartMarkers.eventType.ADJUSTMENT_IN');
         const eventTypeAdjustmentOut = $_('brokers.lots.chartMarkers.eventType.ADJUSTMENT_OUT');
         const eventTypeTransferDepart = $_('brokers.lots.chartMarkers.eventType.TRANSFER_DEPART');
@@ -736,6 +749,7 @@
             markerLegend: {
                 buy: !markerLegendBuy || markerLegendBuy === 'brokers.lots.chartMarkers.legend.buy' ? 'Buys' : markerLegendBuy,
                 sell: !markerLegendSell || markerLegendSell === 'brokers.lots.chartMarkers.legend.sell' ? 'Sales' : markerLegendSell,
+                reward: markerLegendReward,
                 transfer: !markerLegendTransfer || markerLegendTransfer === 'brokers.lots.chartMarkers.legend.transfer' ? 'Transfers' : markerLegendTransfer,
                 adjustment: !markerLegendAdjustment || markerLegendAdjustment === 'brokers.lots.chartMarkers.legend.adjustment' ? 'Adjustments' : markerLegendAdjustment,
                 split: !markerLegendSplit || markerLegendSplit === 'brokers.lots.chartMarkers.legend.split' ? 'Split' : markerLegendSplit,
@@ -744,6 +758,8 @@
             eventType: {
                 BUY: !eventTypeBuy || eventTypeBuy === 'brokers.lots.chartMarkers.eventType.BUY' ? 'Buy' : eventTypeBuy,
                 SELL: !eventTypeSell || eventTypeSell === 'brokers.lots.chartMarkers.eventType.SELL' ? 'Sale' : eventTypeSell,
+                REWARD: eventTypeReward,
+                REWARD_MERGE: eventTypeRewardMerge,
                 ADJUSTMENT_IN: !eventTypeAdjustmentIn || eventTypeAdjustmentIn === 'brokers.lots.chartMarkers.eventType.ADJUSTMENT_IN' ? 'Adjustment In' : eventTypeAdjustmentIn,
                 ADJUSTMENT_OUT: !eventTypeAdjustmentOut || eventTypeAdjustmentOut === 'brokers.lots.chartMarkers.eventType.ADJUSTMENT_OUT' ? 'Adjustment Out' : eventTypeAdjustmentOut,
                 TRANSFER_DEPART: !eventTypeTransferDepart || eventTypeTransferDepart === 'brokers.lots.chartMarkers.eventType.TRANSFER_DEPART' ? 'Transfer' : eventTypeTransferDepart,
@@ -850,6 +866,7 @@
 
         const markerSeriesMap = new Map<EventMarkerSeriesKind, EventMarkerDatum[]>([
             ['buy', []],
+            ['reward', []],
             ['sell', []],
             ['transfer', []],
             ['adjustment', []],
@@ -895,10 +912,10 @@
     }
 
     function incomeEventTypeLabel(type: LotIncomeEvent['type']): string {
-        return type === 'DIVIDEND' ? $_('brokers.lots.incomeMarkerDividend') : $_('brokers.lots.incomeMarkerInterest');
+        return type === 'DIVIDEND' ? $_('brokers.lots.incomeMarkerDividend') : type === 'REWARD' ? $_('brokers.lots.incomeMarkerReward') : $_('brokers.lots.incomeMarkerInterest');
     }
 
-    let incomeMarkerEvents = $derived.by((): LotIncomeEvent[] => (incomeEvents ?? []).filter((event): event is LotIncomeEvent => (event?.type === 'DIVIDEND' || event?.type === 'INTEREST') && !!event.date));
+    let incomeMarkerEvents = $derived.by((): LotIncomeEvent[] => (incomeEvents ?? []).filter((event): event is LotIncomeEvent => isLotIncomeKind(event?.type) && !!event.date));
 
     function buildIncomeEventTooltip(event: LotIncomeEvent | null): string {
         if (!event) return '';

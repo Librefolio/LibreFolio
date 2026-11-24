@@ -7,13 +7,14 @@ import {findAiExportAnalysisInstruction} from '../templates/sharedInstructions';
 import {backendCatalogFixture} from './runtimeFixtures';
 
 describe('AI Export V1 public catalog', () => {
-    it('registers exactly 8 Dataset and 11 Analysis entries with approved group, domain, and icon config', () => {
+    it('registers exactly 8 Dataset and 12 Analysis entries with approved group, domain, and icon config', () => {
         expect(AI_EXPORT_DATASET_IDS).toEqual(['portfolio.overview_and_history', 'portfolio.asset_history', 'broker.overview_and_history', 'broker.asset_history', 'asset.position_and_history', 'asset.market_history', 'fx.market_and_exposure', 'fx.market_history']);
         expect(AI_EXPORT_ANALYSIS_IDS).toEqual([
             'portfolio.pac_planning',
             'portfolio.rebalancing',
             'portfolio.performance_market_drivers',
             'portfolio.fiscal_lots',
+            'portfolio.protection_strategies',
             'broker.review',
             'broker.performance_market_drivers',
             'broker.fiscal_lots',
@@ -22,7 +23,7 @@ describe('AI Export V1 public catalog', () => {
             'fx.pair_analysis',
             'fx.exposure_impact',
         ]);
-        expect(AI_EXPORT_PUBLIC_CATALOG_CONFIG).toHaveLength(19);
+        expect(AI_EXPORT_PUBLIC_CATALOG_CONFIG).toHaveLength(20);
         expect(AI_EXPORT_PUBLIC_CATALOG_CONFIG.map(({group, id, domain, icon}) => ({group, id, domain, icon}))).toEqual([
             {group: 'dataset', id: 'portfolio.overview_and_history', domain: 'portfolio', icon: 'layout-dashboard'},
             {group: 'dataset', id: 'portfolio.asset_history', domain: 'portfolio', icon: 'activity'},
@@ -36,6 +37,7 @@ describe('AI Export V1 public catalog', () => {
             {group: 'analysis', id: 'portfolio.rebalancing', domain: 'portfolio', icon: 'scale'},
             {group: 'analysis', id: 'portfolio.performance_market_drivers', domain: 'portfolio', icon: 'newspaper'},
             {group: 'analysis', id: 'portfolio.fiscal_lots', domain: 'portfolio', icon: 'list-ordered'},
+            {group: 'analysis', id: 'portfolio.protection_strategies', domain: 'portfolio', icon: 'shield'},
             {group: 'analysis', id: 'broker.review', domain: 'broker', icon: 'landmark'},
             {group: 'analysis', id: 'broker.performance_market_drivers', domain: 'broker', icon: 'newspaper'},
             {group: 'analysis', id: 'broker.fiscal_lots', domain: 'broker', icon: 'list-ordered'},
@@ -51,6 +53,7 @@ describe('AI Export V1 public catalog', () => {
         const analysisById = new Map(catalog.analyses.map((entry) => [entry.id, entry]));
 
         expect(analysisById.get('portfolio.pac_planning')?.required_dataset_ids).toEqual(['portfolio.overview_and_history']);
+        expect(analysisById.get('portfolio.protection_strategies')?.required_dataset_ids).toEqual(['portfolio.overview_and_history', 'portfolio.risk_evidence']);
         expect(analysisById.get('portfolio.fiscal_lots')?.required_dataset_ids).toEqual(['portfolio.overview_and_history', 'portfolio.fifo']);
         expect(analysisById.get('broker.fiscal_lots')?.required_dataset_ids).toEqual(['broker.overview_and_history', 'broker.fifo']);
         expect(analysisById.get('asset.market_analysis')?.required_dataset_ids).toEqual(['asset.market_history']);

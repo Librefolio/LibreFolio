@@ -80,6 +80,8 @@
     }
 
     function author(change: ProfileChange): string {
+        // The sentence says «before the profile»; the «Chi» cell says who: the system (81 U26a).
+        if (change.source === 'legacy') return $t('assets.profile.changes.who.system');
         if (change.source !== 'user') return sourceName(change.source);
         return text(change.user_name) ?? $t('assets.profile.changes.who.deletedUser');
     }

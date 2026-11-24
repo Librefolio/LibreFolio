@@ -110,7 +110,8 @@ flowchart LR
 
 - **Search** (`search`): `/search?query=…`. Only its coins are kept, never its NFTs, exchanges or categories.
     - The coins are ordered by `market_cap_rank`; a coin without a rank comes last, in CoinGecko's order.
-    - A row is `identifier=<id>`, `identifier_type=OTHER`, «Name (SYMBOL)», `type` CRYPTO, with the user's
+    - A row is `identifier=<id>`, `identifier_type=OTHER`, the coin's name alone (TL40: the name its metadata gives,
+        so «Ask the provider» offers no rename; the symbol is the ticker), `type` CRYPTO, with the user's
         `preferred_currency` as `currency` and as `vs_currency`. A blank query asks nothing.
     - The row's `icon_url` is the coin's logo, `large` of the answer (S3): the very image the metadata gives the asset,
         so the browser asks it once.
@@ -137,13 +138,13 @@ Italiana's icons are theirs: it follows CoinGecko's own updates, and no file is 
 
 ## 🏷️ Attribution
 
-CoinGecko's terms ask for every price it gives to be shown with «Powered by CoinGecko», prominent, linked to its site.
-`attribution` returns it as a constant `FAProviderAttribution`. `GET /assets/provider` exposes it, and the interface
-draws it with `ProviderAttributionNote`:
+CoinGecko's terms ask for its data to be shown with «Powered by CoinGecko», linked to its site. `attribution` returns
+it as a constant `FAProviderAttribution`. `GET /assets/provider` exposes it.
 
-- under the price on the asset page;
-- on the plugin's card in Settings › Plugins;
-- once at the foot of the asset list and of the Dashboard positions, when an asset on screen is priced by CoinGecko.
+Where it is shown is the developer's decision (TL42, 23/11/2026): on CoinGecko's own pages only, its card in Settings ›
+Plugins (`ProviderAttributionNote`) and its user-guide page. The screens that show its prices (the asset page, the asset
+list, the Dashboard positions, the search, «Provider Data Comparison») carry no line: the asset shows CoinGecko's icon,
+and its page links to the coin on coingecko.com.
 
 The brand phrase is shown as CoinGecko writes it, in every language.
 

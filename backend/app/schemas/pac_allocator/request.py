@@ -20,7 +20,6 @@ from backend.app.schemas.pac_allocator.base import (
     PlannerLabel,
     PlannerMoneyInput,
     PlannerPositiveDecimal,
-    PlannerPositiveMoneyInput,
     PlannerRef,
     PlannerSafeInteger,
     PlannerTimestamp,
@@ -526,20 +525,6 @@ class RebalancerPlannerRequest(_PlannerScenarioInputBase):
     holdings: list[PlannerHoldingInput] = []
     order_routes: list[RebalancerOrderRouteInput]
     tax: RebalancerTaxInput = RebalancerTaxInput()
-    custom_reference_amount: PlannerPositiveMoneyInput | None = Field(
-        default=None,
-        description="The preview only: the «custom» fidelity as euros, what the plan may spend at most to put back the reference row's misplaced money, in the valuation currency. The preview turns it into λ; absent, a custom target fidelity gives λ and the preview turns it into euros.",
-    )
-
-    @model_validator(mode="after")
-    def _reference_amount_only_in_a_preview(self) -> RebalancerPlannerRequest:
-        if self.custom_reference_amount is None:
-            return self
-        if self.operation != "preview":
-            raise ValueError("custom_reference_amount belongs to the preview: a plan reads λ from target_fidelity")
-        if self.custom_reference_amount.currency != self.valuation_currency:
-            raise ValueError("custom_reference_amount must be in the valuation currency")
-        return self
 
     @model_validator(mode="after")
     def _invest_only_has_no_sale_route(self) -> RebalancerPlannerRequest:

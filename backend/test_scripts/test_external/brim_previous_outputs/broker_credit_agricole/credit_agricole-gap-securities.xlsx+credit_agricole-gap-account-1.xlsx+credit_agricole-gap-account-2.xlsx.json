@@ -1,0 +1,306 @@
+{
+  "format": "lf-brim-previous-output/1",
+  "comment": "Output of the plugin BEFORE its project-66 lot changed it (P2 contract §2.1). Never re-take it after the code change.",
+  "plugin_code": "broker_credit_agricole",
+  "plugin_version": "2.0.0",
+  "source_head": "595738c0c",
+  "captured_on": "2026-11-21",
+  "members": [
+    {
+      "sample": "broker_credit_agricole/sample_reports/credit_agricole-gap-securities.xlsx",
+      "sample_sha256": "ff2da12b0e5b9357f800f544ab12ad9892a92023d3df08d6236a0bd6deb88781"
+    },
+    {
+      "sample": "broker_credit_agricole/sample_reports/credit_agricole-gap-account-1.xlsx",
+      "sample_sha256": "2db1fde81157b91b1a9cdd738aaa52cf40d0c08e3c7c0bad652e9c3e38483440"
+    },
+    {
+      "sample": "broker_credit_agricole/sample_reports/credit_agricole-gap-account-2.xlsx",
+      "sample_sha256": "e1fd9b7343249e6da72cf26cdbe3dfeff03e5e98335963e1ea148da7af3483c7"
+    }
+  ],
+  "extracted_assets": {
+    "2147483647": {
+      "extracted_symbol": null,
+      "extracted_isin": "IT0000000001",
+      "extracted_name": "BTP SAMPLE 1/12/2026 1.25%",
+      "notices": []
+    }
+  },
+  "transactions": [
+    {
+      "asset_id": 2147483647,
+      "type": "ADJUSTMENT",
+      "date": "2026-04-20",
+      "quantity": "40000",
+      "cash": null,
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "credit_agricole"
+      ],
+      "description": "[GIRO ALTRO DOSSIER — successione / transfer-in] BTP SAMPLE 1/12/2026 1.25% (price 0.00, qty 40000)",
+      "cost_basis_override": {
+        "code": "EUR",
+        "amount": "0.00"
+      },
+      "cost_basis_mode": "manual",
+      "asset_event_id": null
+    },
+    {
+      "asset_id": null,
+      "type": "DEPOSIT",
+      "date": "2026-05-05",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "2000.00"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "credit_agricole",
+        "accredito_emolumenti"
+      ],
+      "description": "STIPENDIO SAMPLE a",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483647,
+      "type": "INTEREST",
+      "date": "2026-05-12",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "250.00"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "credit_agricole"
+      ],
+      "description": "CEDOLA: BTP SAMPLE 1/12/2026 1.25%",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483647,
+      "type": "TAX",
+      "date": "2026-05-12",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "-31.25"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "credit_agricole",
+        "cedole_dividendi_premi_estratti",
+        "withholding_tax"
+      ],
+      "description": "[CEDOLE, DIVIDENDI, PREMI ESTRATTI — ritenuta] CEDOLA:BTP SAMPLE 1/12/2026 IT0000000001 DOS:00000/00000000 NOMINALE: 40.000,00 TASSO: 1,25 ALIQ: 12,50 RITENUTA: 31,25 DATA : 01/06/2026 N.MOVIM: 1",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": null,
+      "type": "WITHDRAWAL",
+      "date": "2026-05-20",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "-42.10"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "credit_agricole",
+        "pagamento_tramite_pos"
+      ],
+      "description": "POS CARTA 00000000 a",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": null,
+      "type": "DEPOSIT",
+      "date": "2026-06-05",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "2000.00"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "credit_agricole",
+        "accredito_emolumenti"
+      ],
+      "description": "STIPENDIO SAMPLE a",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": null,
+      "type": "WITHDRAWAL",
+      "date": "2026-06-15",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "-100.00"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "credit_agricole",
+        "pagamento_tramite_pos"
+      ],
+      "description": "POS CARTA 00000000 b",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483647,
+      "type": "INTEREST",
+      "date": "2026-07-10",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "218.75"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "credit_agricole"
+      ],
+      "description": "CEDOLA: BTP SAMPLE 1/12/2026 1.25%",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": null,
+      "type": "DEPOSIT",
+      "date": "2026-08-05",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "2000.00"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "credit_agricole",
+        "accredito_emolumenti"
+      ],
+      "description": "STIPENDIO SAMPLE a",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483647,
+      "type": "INTEREST",
+      "date": "2026-08-12",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "250.00"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "credit_agricole"
+      ],
+      "description": "CEDOLA: BTP SAMPLE 1/12/2026 1.25%",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483647,
+      "type": "TAX",
+      "date": "2026-08-12",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "-31.25"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "credit_agricole",
+        "cedole_dividendi_premi_estratti",
+        "withholding_tax"
+      ],
+      "description": "[CEDOLE, DIVIDENDI, PREMI ESTRATTI — ritenuta] CEDOLA:BTP SAMPLE 1/12/2026 IT0000000001 DOS:00000/00000000 NOMINALE: 40.000,00 TASSO: 1,25 ALIQ: 12,50 RITENUTA: 31,25 DATA : 01/06/2026 N.MOVIM: 1",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": null,
+      "type": "WITHDRAWAL",
+      "date": "2026-08-20",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "-42.10"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "credit_agricole",
+        "pagamento_tramite_pos"
+      ],
+      "description": "POS CARTA 00000000 a",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    }
+  ]
+}

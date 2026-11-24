@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import date
+
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from backend.app.schemas.risk.outputs import RiskSimulationBandPoint, RiskSimulationOutput
@@ -89,6 +91,10 @@ class SimulationParams(BaseModel):
     sobol_start_index: int | None = Field(None, ge=0, le=2**32 - 1)
     bootstrap_seed: int | None = Field(None, ge=0, le=2**32 - 1)
     block_length_days: int | None = Field(None, ge=1, le=5_000)
+    # RSK-SIM1 (P-7, 23/11/2026): the period the days are drawn from, inside the common history; None = all of it, the
+    # default. A start before the common history moves to it, with a warning (``simulation_window``).
+    history_start: date | None = Field(None, description="First day of the period the simulation draws its days from; None = from the start of the common history.")
+    history_end: date | None = Field(None, description="Last day of that period; None = up to the end of the data.")
 
     @model_validator(mode="before")
     @classmethod
@@ -154,6 +160,8 @@ class SimulationParams(BaseModel):
 
     @model_validator(mode="after")
     def validate_engine_contract(self) -> SimulationParams:
+        if self.history_start is not None and self.history_end is not None and self.history_end < self.history_start:
+            raise ValueError("history_end must not precede history_start")
         if self.process == RiskSimulationProcess.BLOCK_BOOTSTRAP:
             self._validate_bootstrap_params()
         else:
@@ -328,6 +336,9 @@ class SimulationAnalytic(RiskAnalytic):
                 estimation_end=dates[-1] if dates else None,
                 estimation_observations=len(dates) or None,
                 history_truncated=history_truncated,
+                history_available_start=context.simulation_history.available.start if context.simulation_history else None,
+                history_available_end=context.simulation_history.available.end if context.simulation_history else None,
+                history_chosen=bool(context.simulation_history and context.simulation_history.chosen),
             ),
             warnings=self._history_warnings(params.horizon_days, history_baseline, dates, end=context.requested_range.end),
             method=self._method_label(params),

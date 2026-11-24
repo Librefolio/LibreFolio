@@ -1,29 +1,29 @@
 /**
- * A price provider's attribution line (project 76, lot P4): «Powered by CoinGecko», linked to CoinGecko's site, wherever
- * a screen shows prices CoinGecko gave — once per provider, never per row — and nothing at all where none is shown.
+ * A price provider's attribution line (project 76): «Powered by CoinGecko», linked to CoinGecko's site, lives on
+ * CoinGecko's own pages only — its card in Settings › Plugins (P4) and its manual page — and never on the screens that
+ * show its prices (TL42, the developer's decision of 23/11: the asset already shows CoinGecko's icon and its link).
  *
  * The provider list `GET /api/v1/assets/provider` carries each provider's `attribution: {text, url} | null`; only
- * CoinGecko has one. The test backend has no CoinGecko key, so no asset can be assigned to it: on the shared backend the
- * line is absent everywhere an asset list is drawn. To see it drawn, the page's own read of the provider list is
- * rewritten (`page.route`, this page only, GET only) so that `yfinance` — a seeded provider — carries a synthetic
- * attribution; nothing is written to the backend. The provider list is cached once per document
- * (`ensureAssetProvidersCached`), and every navigation here is a full load (`navigateTo`), so the route is installed
- * before the first one.
+ * CoinGecko has one. The test backend has no CoinGecko key, so no asset can be assigned to it. To put an attributed
+ * provider on screen, the page's own read of the provider list is rewritten (`page.route`, this page only, GET only)
+ * so that `yfinance` — a seeded provider — carries a synthetic attribution; nothing is written to the backend. The
+ * provider list is cached once per document (`ensureAssetProvidersCached`), and every navigation here is a full load
+ * (`navigateTo`), so the route is installed before the first one.
  *
  * Cases:
- *   1. the Assets list, real provider list: no line;
- *   2. the Assets list, yfinance attributed: one line, one yfinance link (href, new tab, `noopener noreferrer`, ≥ 10 px);
- *   3. the Dashboard's positions (Performance × table), real list: no line; yfinance attributed: one yfinance link;
- *   4. an asset's detail page (a yfinance asset), real list: no line; yfinance attributed: one link under the price, ≥ 10 px;
- *   5. Settings › Plugins as an administrator, real list: CoinGecko's asset card carries its own line, linked to its site;
+ *   1. the Assets list, yfinance attributed: no attribution link on the page;
+ *   2. the Dashboard's positions (Performance × table), yfinance attributed: no attribution link;
+ *   3. an asset's detail page (a yfinance asset), yfinance attributed: no attribution link;
+ *   4. Settings › Plugins as an administrator, real list: CoinGecko's asset card carries its own line, linked to its site;
  *      justETF's card (yfinance has no settings, so no card) and CoinGecko's settings group carry none.
  *
- * Every absence is asserted behind a presence barrier: the provider list has been served to this page (a counter in its
- * route), the owning screen has settled, and — where the screen reads the same cache visibly — that reading is on show.
+ * Every absence is asserted behind a presence barrier: the owning screen has settled with the attributed provider's
+ * assets on show; the detail page also reads the provider list visibly (the provider's name), and that reading is on
+ * show. The Assets list and the Dashboard no longer read the provider list at all (the attribution line was their only
+ * reader): no reading there is the point, so no barrier waits for one.
  * Assertions read test ids and `data-*` only; the texts compared are the provider's own brand phrase (CoinGecko's, the
- * same in every language) and the synthetic one this spec serves. Nothing is written: live prices and the detail page's
- * price sync are answered empty in the page, so no third-party source is reached. Parallel (the config's default), both
- * projects.
+ * same in every language). Nothing is written: live prices and the detail page's price sync are answered empty in the
+ * page, so no third-party source is reached. Parallel (the config's default), both projects.
  *
  * Prerequisites (populate_mock_data.py): an active asset assigned to yfinance (the seeded `Apple Inc.`, with stored
  * prices), and positions of the test user on it; test users `e2e_test_user` and `e2e_test_admin`.
@@ -45,7 +45,7 @@ const LIVE_PRICES_PATH = `${API}/assets/prices/current`;
 /** The one shipped provider whose terms ask for a line, and that line as the backend serves it. */
 const COINGECKO = 'coingecko';
 const COINGECKO_ATTRIBUTION = {text: 'Powered by CoinGecko', url: 'https://www.coingecko.com/'};
-/** A seeded provider, given a synthetic attribution in the page's own read of the list. */
+/** A seeded provider, given a synthetic attribution in the page's own read of the list: an attributed provider on screen. */
 const PRICED = 'yfinance';
 const E2E_ATTRIBUTION = {text: 'Powered by E2E', url: 'https://example.org/'};
 /** The seeded yfinance asset with stored prices (populate_mock_data.populate_assets), found by name and provider. */
@@ -157,20 +157,6 @@ async function attributedProviders(page: Page): Promise<Set<string>> {
     return new Set(providers.filter((entry) => entry.attribution).map((entry) => entry.code));
 }
 
-/** No asset is priced by an attributed provider (no CoinGecko key on the test backend): the real list draws no line. */
-async function expectNoAttributedAsset(page: Page, assets: readonly AssetRow[]): Promise<void> {
-    const attributed = await attributedProviders(page);
-    const priced = assets.filter((asset) => asset.provider_code && attributed.has(asset.provider_code)).map((asset) => `${asset.display_name} (${asset.provider_code})`);
-    expect(priced, `precondition: no asset priced by an attributed provider (${[...attributed].join(', ')})`).toEqual([]);
-}
-
-/** The active assets priced by yfinance: the Assets list shows active assets only, by default. */
-async function activePricedAssets(page: Page): Promise<AssetRow[]> {
-    const priced = (await allAssets(page)).filter((asset) => asset.provider_code === PRICED && asset.active !== false);
-    if (priced.length === 0) throw new Error(`No active asset assigned to ${PRICED} on this backend: check populate_mock_data.py (populate_asset_provider_assignments).`);
-    return priced;
-}
-
 /** The seeded yfinance asset with stored prices. */
 async function seededPricedAsset(page: Page): Promise<AssetRow> {
     const asset = (await allAssets(page)).find((row) => row.display_name === SEEDED_PRICED_ASSET && row.provider_code === PRICED);
@@ -185,6 +171,11 @@ async function seededPricedAsset(page: Page): Promise<AssetRow> {
 /** The provider list reached this page through its route: the cache the line reads is filled, or about to be. */
 async function expectProviderListServed(traffic: ProviderListTraffic): Promise<void> {
     await expect.poll(() => traffic.served, {message: 'the page read the provider list', timeout: PAGE_TIMEOUT}).toBeGreaterThan(0);
+}
+
+/** No attribution link anywhere on the page (TL42): the screens that show prices carry none, whatever the provider asks. */
+async function expectNoAttributionLink(page: Page): Promise<void> {
+    await expect(page.getByTestId('provider-attribution-link')).toHaveCount(0);
 }
 
 /** One line, drawn for `provider` alone, with its one link: address, new tab, no opener, never under 10 px. */
@@ -246,98 +237,60 @@ async function expectProviderNameShown(page: Page): Promise<void> {
 }
 
 // =============================================================================
-// 1–2. The Assets list
+// 1. The Assets list
 // =============================================================================
 
 test.describe('Provider attribution — the Assets list', () => {
-    test('the real provider list: no asset priced by an attributed provider, no line', async ({page}) => {
-        const traffic = await serveProviderList(page);
+    test('TL42: yfinance attributed in the page, its assets listed: no attribution link', async ({page}) => {
+        await serveProviderList(page, withPricedAttribution);
         await keepOffline(page);
         await login(page, TEST_USER);
-        await expectNoAttributedAsset(page, await allAssets(page));
-        await activePricedAssets(page); // the list shows priced assets: the line would have something to follow
+        const asset = await seededPricedAsset(page); // an asset of the attributed provider, listed (active, seeded)
 
         await goToAssetsPage(page);
-        await expectProviderListServed(traffic);
-        await expect(page.getByTestId('assets-page')).toHaveAttribute('data-busy', 'false');
-        await expect(page.getByTestId('assets-provider-attribution')).toHaveCount(0);
-    });
-
-    test('yfinance attributed in the page: one line, one yfinance link, at least 10 px', async ({page}) => {
-        const traffic = await serveProviderList(page, withPricedAttribution);
-        await keepOffline(page);
-        await login(page, TEST_USER);
-        await expectNoAttributedAsset(page, await allAssets(page));
-        await activePricedAssets(page);
-
-        await goToAssetsPage(page);
-        await expectProviderListServed(traffic);
-        await expectOneLine(page.getByTestId('assets-provider-attribution'), PRICED, E2E_ATTRIBUTION);
+        await expect(page.getByTestId('assets-page')).toHaveAttribute('data-busy', 'false', {timeout: PAGE_TIMEOUT});
+        // The grid (the page's default view) shows the attributed provider's asset
+        await expect(page.getByTestId(`asset-card-${asset.id}`)).toBeVisible({timeout: PAGE_TIMEOUT});
+        await expectNoAttributionLink(page);
     });
 });
 
 // =============================================================================
-// 3. The Dashboard's positions
+// 2. The Dashboard's positions
 // =============================================================================
 
 test.describe('Provider attribution — the Dashboard positions', () => {
-    test('the real provider list: no line under the positions', async ({page}) => {
-        const traffic = await serveProviderList(page);
+    test('TL42: yfinance attributed in the page, its position shown: no attribution link', async ({page}) => {
+        await serveProviderList(page, withPricedAttribution);
         await keepOffline(page);
         await login(page, TEST_USER);
-        await expectNoAttributedAsset(page, await allAssets(page));
 
         const shown = await openPerformanceTable(page);
         await expectPricedPosition(page, shown);
-        await expectProviderListServed(traffic);
-        await expect(page.getByTestId('positions-provider-attribution')).toHaveCount(0);
-    });
-
-    test('yfinance attributed in the page: one line under the positions, one yfinance link', async ({page}) => {
-        const traffic = await serveProviderList(page, withPricedAttribution);
-        await keepOffline(page);
-        await login(page, TEST_USER);
-        await expectNoAttributedAsset(page, await allAssets(page));
-
-        const shown = await openPerformanceTable(page);
-        await expectPricedPosition(page, shown);
-        await expectProviderListServed(traffic);
-        await expectOneLine(page.getByTestId('positions-provider-attribution'), PRICED, E2E_ATTRIBUTION);
+        await expectNoAttributionLink(page);
     });
 });
 
 // =============================================================================
-// 4. An asset's detail page
+// 3. An asset's detail page
 // =============================================================================
 
 test.describe('Provider attribution — the asset detail page', () => {
-    test('the real provider list: no line under the price of a yfinance asset', async ({page}) => {
-        const traffic = await serveProviderList(page);
+    test('TL42: yfinance attributed in the page, a yfinance asset: no attribution link under the price', async ({page}) => {
+        const traffic = await serveProviderList(page, withPricedAttribution);
         await keepOffline(page);
         await login(page, TEST_USER);
-        await attributedProviders(page);
         const asset = await seededPricedAsset(page);
 
         await openPricedDetail(page, asset);
         await expectProviderListServed(traffic);
         await expectProviderNameShown(page);
-        await expect(page.getByTestId('asset-price-attribution')).toHaveCount(0);
-    });
-
-    test('yfinance attributed in the page: one line under the price, at least 10 px', async ({page}) => {
-        const traffic = await serveProviderList(page, withPricedAttribution);
-        await keepOffline(page);
-        await login(page, TEST_USER);
-        const asset = await seededPricedAsset(page);
-
-        await openPricedDetail(page, asset);
-        await expectProviderListServed(traffic);
-        await expectOneLine(page.getByTestId('asset-price-attribution'), PRICED, E2E_ATTRIBUTION);
+        await expectNoAttributionLink(page);
     });
 });
 
 // =============================================================================
-// 5. Settings › Plugins
+// 4. Settings › Plugins
 // =============================================================================
 
 test.describe('Provider attribution — Settings › Plugins', () => {

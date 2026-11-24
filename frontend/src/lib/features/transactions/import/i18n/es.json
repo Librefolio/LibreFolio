@@ -208,7 +208,12 @@
       "date_unreadable_more": "{n, plural, one {# fila más tiene} other {# filas más tienen}} una fecha no válida en este formato: vale la misma corrección.",
       "traderepublic_other_account": "{count, plural, one {# fila pertenece} other {# filas pertenecen}} a otra cuenta, por ejemplo la cuenta JUNIOR de un hijo, y {count, plural, one {se ha ignorado} other {se han ignorado}}: exporta esa cuenta desde su propio acceso e impórtala en un bróker aparte.",
       "traderepublic_tax_refund": "{count, plural, one {# devolución de impuestos se importó como interés} other {# devoluciones de impuestos se importaron como intereses}} («Tax refund»): es dinero devuelto de la ganancia de la inversión, así que cuenta en el P&L.",
-      "traderepublic_not_yet_settled": "{count, plural, one {# fila tiene una fecha posterior a hoy: aún no está liquidada y se ha dejado fuera} other {# filas tienen una fecha posterior a hoy: aún no están liquidadas y se han dejado fuera}}. Llegarán con la próxima exportación."
+      "traderepublic_not_yet_settled": "{count, plural, one {# fila tiene una fecha posterior a hoy: aún no está liquidada y se ha dejado fuera} other {# filas tienen una fecha posterior a hoy: aún no están liquidadas y se han dejado fuera}}. Llegarán con la próxima exportación.",
+      "investimental_order_start_missing": "Orden {order} ({symbol}, última ejecución el {date} a {price}): el archivo empieza con esta orden ya en curso, así que su cantidad total no se deduce del archivo {visible, select, yes {(el archivo muestra {quantity} por {amount} {currency})} other {(ninguna de las ejecuciones que muestra se puede contar)}}. La orden no se ha importado: introdúcela a mano con tu extracto.",
+      "reward_value": "El archivo no indica el valor de esta recompensa: introduce el valor de una sola unidad el día en que la recibiste, no el total, para importar esta fila.",
+      "investimental_fee_from_order_log": "{count, plural, one {# comisión se ha leído del registro de órdenes: puede diferir un poco de tu extracto, compruébala allí.} other {# comisiones se han leído del registro de órdenes: pueden diferir un poco de tu extracto, compruébalas allí.}}",
+      "xtb_positions_outside_period": "Para {count, plural, one {# instrumento} other {# instrumentos}} la cantidad importada de este informe es distinta de la que XTB muestra abierta: las operaciones hechas antes del inicio del informe (o después de su fin) no están en el archivo. Genera el informe con el intervalo «All» para importar todo el historial.",
+      "xtb_tax_refund": "{count, plural, one {# devolución de impuestos se importó como interés} other {# devoluciones de impuestos se importaron como intereses}} («Tax refund»): es dinero devuelto de la ganancia de la inversión, así que cuenta en el P&L."
     },
     "evidenceRowsTitle": "Filas del archivo",
     "evidenceRowCount": "{n} filas",
@@ -280,7 +285,6 @@
       "split": "Separar",
       "mergeWith": "Unir con…",
       "extract": "Sacar del grupo",
-      "noTargets": "Ningún otro valor",
       "actions": "Acciones",
       "inspect": "Editar activo",
       "noIsin": "sin ISIN",
@@ -547,7 +551,9 @@
       "credit_agricole_combined_columns_missing": "Este no es un archivo combinado de Crédit Agricole: faltan las columnas {missing}.",
       "credit_agricole_combined_line_unknown_kind": "La línea {line} del archivo combinado tiene un tipo desconocido ({kind}).",
       "credit_agricole_combined_line_incomplete": "La línea {line} del archivo combinado está incompleta.",
-      "credit_agricole_no_dated_rows": "Las exportaciones no tienen filas con fecha: no hay nada que combinar."
+      "credit_agricole_no_dated_rows": "Las exportaciones no tienen filas con fecha: no hay nada que combinar.",
+      "xtb_account_currency_missing": "No se encontró la divisa de la cuenta: falta la hoja Open Positions del informe de XTB o no tiene resumen.",
+      "xtb_account_currency_ambiguous": "El informe de XTB indica más de una divisa de cuenta ({currencies}): genera un informe por cuenta."
     },
     "brimEvidence": {
       "scalable_unreadable_rows": "En estas filas falta, o no se puede leer, una fecha, un importe, una divisa, las participaciones o el valor.",
@@ -566,7 +572,11 @@
       "rows_unreadable": "La última columna dice qué no se pudo leer en cada fila.",
       "traderepublic_other_account": "En estas filas la columna account_type no es DEFAULT.",
       "traderepublic_tax_refund": "Un impuesto positivo es dinero devuelto.",
-      "traderepublic_not_yet_settled": "La fecha (o la value_date) de estas filas es posterior a hoy."
+      "traderepublic_not_yet_settled": "La fecha (o la value_date) de estas filas es posterior a hoy.",
+      "investimental_order_start_missing": "Cada fila da el volumen aún abierto. Las primeras filas de la orden, con las primeras ejecuciones, no están en el archivo.",
+      "investimental_fee_from_order_log": "Cada comisión es lo que baja, en cada ejecución, la comisión aún debida sobre la parte abierta de la orden.",
+      "xtb_positions_outside_period": "Volumen abierto de la hoja Open Positions, junto a la cantidad neta de las filas de Cash Operations importadas.",
+      "xtb_tax_refund": "Un impuesto positivo es dinero devuelto."
     },
     "notesCount": "{n, plural, one {# nota} other {# notas}}",
     "noNotices": "Sin advertencias ni notas",
@@ -577,6 +587,7 @@
       "preview_unreadable": "El archivo parece dañado o no es lo que indica su extensión: no se puede mostrar la vista previa."
     },
     "reviewPossibleSplitNote": "{n, plural, one {# fila parece un split: las acciones nuevas entran a coste cero.} other {# filas parecen splits: las acciones nuevas entran a coste cero.}} En el editor puedes vincular o crear el evento SPLIT.",
-    "reviewPreFloorNote": "{n} filas seleccionadas tienen una fecha anterior al 1 de enero de 1900. Comprueba el año: suele ser un error de escritura. Se te pedirá confirmarlas al guardar."
+    "reviewPreFloorNote": "{n} filas seleccionadas tienen una fecha anterior al 1 de enero de 1900. Comprueba el año: suele ser un error de escritura. Se te pedirá confirmarlas al guardar.",
+    "viewDetailReading": "El archivo todavía se está leyendo"
   }
 }

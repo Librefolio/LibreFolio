@@ -186,6 +186,7 @@
       "growth": "How the portfolio's value moved over the period: in money, as a rate of return, or as the profit and loss you made.",
       "allocation": "How the portfolio is split — by type, sector, country or asset — today, or over time.",
       "positions": "What you hold and what each position earned in the period, grouped by asset or by broker, as a table or a map."
-    }
+    },
+    "analyzeAllocation": "Analyze →"
   }
 }

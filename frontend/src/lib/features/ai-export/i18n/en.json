@@ -21,8 +21,8 @@
     "period": "AI period",
     "periodHelp": "Independent export period ending on the snapshot date.",
     "periodCustom": "Custom",
-    "userNotes": "Notes for the AI",
-    "userNotesPlaceholder": "Add optional context or questions…",
+    "userNotes": "Your question",
+    "userNotesPlaceholder": "Optional. Ask your own question, or add context the AI should know…",
     "payloadStats": "Final prompt size",
     "payloadStatsHelp": "Estimated size of the text that will actually be copied to the clipboard.",
     "tokenSeverity": {
@@ -57,11 +57,15 @@
         },
         "performance_market_drivers": {
           "display": "Portfolio Performance & Market Drivers",
-          "description": "Explain portfolio performance and research dated market drivers for every held Asset."
+          "description": "Explain what drove the portfolio's result in the period, with dated market news for the movements that matter."
         },
         "fiscal_lots": {
           "display": "Capital-Loss Offset Strategies",
           "description": "Explore how available or expiring tax losses might offset eligible gains using economic FIFO lots, after clarifying the official tax-loss inventory, jurisdiction, regime, expiries, and legal rules."
+        },
+        "protection_strategies": {
+          "display": "Protection Strategies",
+          "description": "Assess whether protecting the portfolio makes sense now and, only if it does, with which strategy."
         }
       },
       "broker": {
@@ -71,7 +75,7 @@
         },
         "performance_market_drivers": {
           "display": "Broker Performance & Market Drivers",
-          "description": "Explain selected-broker performance and research dated market drivers for every held Asset."
+          "description": "Explain what drove the selected broker's result in the period, with dated market news for the movements that matter."
         },
         "fiscal_lots": {
           "display": "Capital-Loss Offset Strategies",
@@ -183,6 +187,10 @@
         "all_data": {
           "display": "All Portfolio Data",
           "description": "Deduplicated union of every applicable portfolio dataset."
+        },
+        "risk_evidence": {
+          "display": "Portfolio Risk Evidence",
+          "description": "Deterministic risk measures on today's holdings, over a window of up to 12 months that does not depend on the AI period: where risk is concentrated, the loss of a bad month, and the pairs of holdings that move together, with the measured window, coverage and exclusions."
         }
       },
       "broker": {
@@ -307,6 +315,7 @@
     "tooManyPriceDays": "This export would read too many days of prices. Choose a shorter period.",
     "replyInstructions": {
       "dataReceived": "Data received, I'm ready for your questions."
-    }
+    },
+    "noOwnedBrokers": "You own no broker: this selection reads your positions and cash, and those in brokers shared with you are not included."
   }
 }

@@ -194,6 +194,16 @@ def validate_transaction_business_rules(  # noqa: C901 — flat per-rule error c
                 {"type": t, "qty": str(quantity)},
             )
         )
+    # Rule 12c (project 79, Q-B): where TX_TYPE_METADATA says cost_basis_auto False the cost basis is a stated value, never
+    # the pool's average cost (Auto): a REWARD's is its value on receipt, which is also its income.
+    elif meta is not None and not meta.cost_basis_auto and cost_basis_mode in ("auto", "auto-detail"):
+        errors.append(
+            PydanticCustomError(
+                "costBasisAutoNotAllowed",
+                "{type} takes its value on receipt as its cost basis, never the average cost: cost_basis_mode {mode} is not allowed",
+                {"type": t, "mode": cost_basis_mode},
+            )
+        )
 
     return errors
 
@@ -224,6 +234,7 @@ class TXCreateItem(StrictModel):
     - TRANSFER: quantity +/-, cash = None, link_uuid REQUIRED
     - FX_CONVERSION: quantity = 0, cash.amount +/-, link_uuid REQUIRED
     - ADJUSTMENT: quantity +/-, cash = None
+    - REWARD: quantity > 0, cash = None, cost_basis_override = per-unit value at receipt
     """
 
     broker_id: int = Field(..., description="Broker ID")

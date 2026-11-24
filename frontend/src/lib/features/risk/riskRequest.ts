@@ -35,6 +35,9 @@ export interface SimulationEditorState {
     pathCount: number;
     randomSeed: number;
     sobolStartIndex: number;
+    /** RSK-SIM1: the period the days are drawn from, ISO days; absent or null = all the common history (the default). */
+    historyStart?: string | null;
+    historyEnd?: string | null;
 }
 
 interface BuildRiskQueryRequestInput {
@@ -193,6 +196,9 @@ export function buildSimulationParameters(state: SimulationEditorState): RiskAna
     const shared = {
         horizon_days: state.horizonDays,
         path_count: state.pathCount,
+        // Only a chosen period travels: all the common history is the backend's default, so the wire stays as it was.
+        ...(state.historyStart ? {history_start: state.historyStart} : {}),
+        ...(state.historyEnd ? {history_end: state.historyEnd} : {}),
     };
 
     if (state.process === 'block_bootstrap') {

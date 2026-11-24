@@ -5,6 +5,9 @@
  * Three states, told apart by the owned brokers: known and some (the panel is mounted), known and none (a plain line), not
  * known yet (a spinner, not an empty tab). The panel never mounts before the owned brokers are known: asked without
  * `broker_ids` the backend would widen the scope to every broker the user can see. The panel itself has its own specs.
+ *
+ * A broker filter narrows the risk as it narrows every other tab (RSK-F, the developer, 24/11/2026): the panel asks over the
+ * brokers of the summary on screen (`brokerIds`), so its money and its percentages answer one question.
  */
 import {beforeAll, describe, expect, it, vi} from 'vitest';
 import {render, screen, setupI18n} from '$test/component';
@@ -23,11 +26,11 @@ const props = (overrides: Record<string, unknown> = {}) => ({
     canAsk: false,
     brokersReady: false,
     ownedBrokerIds: [] as number[],
+    brokerIds: null as number[] | null,
     dateStart: '2026-01-01',
     dateEnd: '2026-06-30',
     targetCurrency: 'EUR',
     summary: null,
-    brokerFilterActive: false,
     refreshVersion: 0,
     onsynced: () => {},
     ...overrides,
@@ -36,10 +39,38 @@ const props = (overrides: Record<string, unknown> = {}) => ({
 describe('PortfolioRiskTab', () => {
     it('mounts the panel on the owned brokers once they are known', () => {
         mocks.panel.mockClear();
-        render(PortfolioRiskTab, props({canAsk: true, brokersReady: true, ownedBrokerIds: [3, 4]}));
+        const summary = {net_worth: {amount: '900'}, holdings: [{asset_id: 5}]};
+        render(PortfolioRiskTab, props({canAsk: true, brokersReady: true, ownedBrokerIds: [3, 4], brokerIds: [4, 3], summary}));
         expect(mocks.panel).toHaveBeenCalledTimes(1);
         expect(screen.queryByTestId('dashboard-risk-no-owned')).toBeNull();
         expect(screen.queryByTestId('dashboard-risk-loading')).toBeNull();
+        const panelProps = mocks.panel.mock.calls[0][1] as Record<string, unknown>;
+        expect(panelProps.scope).toEqual({kind: 'portfolio', broker_ids: [4, 3]});
+        expect(panelProps.internalSubset).toBe(false);
+        expect(panelProps.wholeBroker).toBeFalsy();
+        expect(panelProps.scopeValue).toBe(900);
+    });
+
+    it("with a broker filter, asks over the filtered brokers at the owner's share and says it reads a subset", () => {
+        mocks.panel.mockClear();
+        const summary = {net_worth: {amount: '250.5'}, holdings: [{asset_id: 8}]};
+        render(PortfolioRiskTab, props({canAsk: true, brokersReady: true, ownedBrokerIds: [3, 4, 9], brokerIds: [4], summary}));
+        const panelProps = mocks.panel.mock.calls[0][1] as Record<string, unknown>;
+        expect(panelProps.scope).toEqual({kind: 'portfolio', broker_ids: [4]});
+        expect(panelProps.internalSubset).toBe(true);
+        expect(panelProps.wholeBroker).toBeFalsy();
+        // The summary is the filtered report's: its net worth is the value of this very scope.
+        expect(panelProps.scopeValue).toBe(250.5);
+        expect(panelProps.assetIds).toEqual([8]);
+    });
+
+    it('never asks with no brokers: an empty set falls back to the owned ones', () => {
+        mocks.panel.mockClear();
+        render(PortfolioRiskTab, props({canAsk: true, brokersReady: true, ownedBrokerIds: [3, 4], brokerIds: []}));
+        const panelProps = mocks.panel.mock.calls[0][1] as Record<string, unknown>;
+        expect(panelProps.scope).toEqual({kind: 'portfolio', broker_ids: [3, 4]});
+        expect(panelProps.internalSubset).toBe(false);
+        expect(panelProps.scopeValue).toBeNull();
     });
 
     it('says there is nothing when the brokers are known and the user owns none', () => {

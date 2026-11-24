@@ -75,7 +75,7 @@ from backend.app.services.ai_export.components.catalog import (
 )
 from backend.app.services.ai_export.components.fx_payloads import FxExposureConversionBasis, FxExposureKind
 from backend.app.services.ai_export.components.registry import ComponentRegistry
-from backend.app.services.ai_export.components.types import BuildScope, DetailLevel, Domain
+from backend.app.services.ai_export.components.types import BrokerScopeSource, BuildScope, DetailLevel, Domain
 from backend.app.services.ai_export.composer import Composer
 from backend.app.services.ai_export.datasets.catalog import (
     EXPECTED_DATASET_COUNT,
@@ -139,7 +139,8 @@ def _full_registry() -> ComponentRegistry:
     return build_component_registry()
 
 
-def _asset_scope(*, user_id: int, asset_id: int, start: date, end: date, target: str = CURRENCY, detail_level: DetailLevel = DetailLevel.STANDARD, broker_scope: tuple[int, ...] = ()) -> BuildScope:
+def _asset_scope(*, user_id: int, asset_id: int, start: date, end: date, target: str = CURRENCY, detail_level: DetailLevel = DetailLevel.STANDARD, broker_scope: tuple[int, ...] = (), owned: tuple[int, ...] | None = None) -> BuildScope:
+    """`owned`: the user's owned brokers, the scope of a request without a list (78 L10b); `broker_scope` otherwise."""
     return BuildScope(
         request_id=f"req-asset-{user_id}-{asset_id}-{end.isoformat()}-{detail_level.value}",
         user_id=user_id,
@@ -148,12 +149,15 @@ def _asset_scope(*, user_id: int, asset_id: int, start: date, end: date, target:
         period_start=start,
         period_end=end,
         target_currency=target,
-        broker_scope=broker_scope,
+        broker_scope=broker_scope if owned is None else owned,
+        broker_scope_source=BrokerScopeSource.REQUESTED if owned is None else BrokerScopeSource.OWNED,
+        owned_broker_ids=owned or (),
         asset_id=asset_id,
     )
 
 
-def _fx_scope(*, user_id: int, base: str, quote: str, start: date, end: date, target: str = CURRENCY, detail_level: DetailLevel = DetailLevel.STANDARD, broker_scope: tuple[int, ...] = ()) -> BuildScope:
+def _fx_scope(*, user_id: int, base: str, quote: str, start: date, end: date, target: str = CURRENCY, detail_level: DetailLevel = DetailLevel.STANDARD, broker_scope: tuple[int, ...] = (), owned: tuple[int, ...] | None = None) -> BuildScope:
+    """`owned`: the user's owned brokers, the scope of a request without a list (78 L10b); `broker_scope` otherwise."""
     return BuildScope(
         request_id=f"req-fx-{user_id}-{base}-{quote}-{end.isoformat()}-{detail_level.value}",
         user_id=user_id,
@@ -162,7 +166,9 @@ def _fx_scope(*, user_id: int, base: str, quote: str, start: date, end: date, ta
         period_start=start,
         period_end=end,
         target_currency=target,
-        broker_scope=broker_scope,
+        broker_scope=broker_scope if owned is None else owned,
+        broker_scope_source=BrokerScopeSource.REQUESTED if owned is None else BrokerScopeSource.OWNED,
+        owned_broker_ids=owned or (),
         base_currency=base,
         quote_currency=quote,
     )
@@ -459,7 +465,7 @@ class TestComponentRegistryConstruction:
 class TestDatasetAnalysisRegistryConstruction:
     def test_dataset_registry_totals_and_asset_fx_subsets(self):
         registry = build_asset_fx_dataset_registry()
-        assert len(registry) == EXPECTED_DATASET_COUNT == 40
+        assert len(registry) == EXPECTED_DATASET_COUNT == 41
         asset_datasets = {d.dataset_id for d in registry.for_domain(Domain.ASSET)}
         fx_datasets = {d.dataset_id for d in registry.for_domain(Domain.FX)}
         assert asset_datasets == {
@@ -485,7 +491,7 @@ class TestDatasetAnalysisRegistryConstruction:
 
     def test_analysis_registry_totals_and_asset_fx_subsets(self):
         registry = build_asset_fx_analysis_registry()
-        assert len(registry) == EXPECTED_ANALYSIS_COUNT == 11
+        assert len(registry) == EXPECTED_ANALYSIS_COUNT == 12
         asset_analyses = {a.analysis_id for a in registry.for_domain(Domain.ASSET)}
         fx_analyses = {a.analysis_id for a in registry.for_domain(Domain.FX)}
         assert asset_analyses == {"asset.position_review", "asset.market_analysis"}
@@ -494,12 +500,12 @@ class TestDatasetAnalysisRegistryConstruction:
     def test_dataset_registry_builds_over_supplied_component_registry(self):
         component_registry = build_asset_fx_component_registry()
         dataset_registry = build_asset_fx_dataset_registry(component_registry)
-        assert len(dataset_registry) == 40
+        assert len(dataset_registry) == 41
 
     def test_analysis_registry_builds_over_supplied_dataset_registry(self):
         dataset_registry = build_asset_fx_dataset_registry()
         analysis_registry = build_asset_fx_analysis_registry(dataset_registry)
-        assert len(analysis_registry) == 11
+        assert len(analysis_registry) == 12
 
 
 # =============================================================================
@@ -568,13 +574,19 @@ async def scenario(session, test_user) -> Scenario:
     return Scenario(broker1, broker2, usd_asset, jpy_asset, empty_asset)
 
 
+def _owned(scenario: Scenario) -> tuple[int, ...]:
+    """The test user's owned brokers: a request without a broker list reads them (78 L10b)."""
+    return (scenario.broker1.id, scenario.broker2.id)
+
+
 def _asset_context(session, scenario: Scenario, *, asset_id: int, broker_scope: tuple[int, ...] = (), detail_level: DetailLevel = DetailLevel.STANDARD, user_id: int) -> BuildContext:
-    scope = _asset_scope(user_id=user_id, asset_id=asset_id, start=PERIOD_START, end=PERIOD_END, detail_level=detail_level, broker_scope=broker_scope)
+    scope = _asset_scope(user_id=user_id, asset_id=asset_id, start=PERIOD_START, end=PERIOD_END, detail_level=detail_level, broker_scope=broker_scope, owned=None if broker_scope else _owned(scenario))
     return _context(session, scope)
 
 
-def _asset_fx_context(session, *, user_id: int, base: str = "EUR", quote: str = "USD", detail_level: DetailLevel = DetailLevel.STANDARD, broker_scope: tuple[int, ...] = ()) -> BuildContext:
-    scope = _fx_scope(user_id=user_id, base=base, quote=quote, start=PERIOD_START, end=PERIOD_END, detail_level=detail_level, broker_scope=broker_scope)
+def _asset_fx_context(session, owned: tuple[int, ...], *, user_id: int, base: str = "EUR", quote: str = "USD", detail_level: DetailLevel = DetailLevel.STANDARD) -> BuildContext:
+    """An FX build without a broker list: the user's owned brokers (78 L10b)."""
+    scope = _fx_scope(user_id=user_id, base=base, quote=quote, start=PERIOD_START, end=PERIOD_END, detail_level=detail_level, owned=owned)
     return _context(session, scope)
 
 
@@ -674,7 +686,7 @@ class TestResourceSharingFx:
 
         technical_shared_module.convert_bulk = _counting
         try:
-            context = _asset_fx_context(session, user_id=test_user.id)
+            context = _asset_fx_context(session, _owned(scenario), user_id=test_user.id)
             registry = build_asset_fx_dataset_registry()
             composer = Composer()
             await composer.compose_dataset(registry.get("fx.overview"), context, detail_level=DetailLevel.STANDARD)
@@ -699,7 +711,7 @@ class TestResourceSharingFx:
 
         PortfolioService.get_report = _counting
         try:
-            context = _asset_fx_context(session, user_id=test_user.id)
+            context = _asset_fx_context(session, _owned(scenario), user_id=test_user.id)
             registry = build_asset_fx_dataset_registry()
             composer = Composer()
             await composer.compose_dataset(
@@ -827,14 +839,14 @@ class TestAssetDatasetComposition:
 class TestFxDatasetComposition:
     @pytest.mark.asyncio
     async def test_fx_overview_composes_with_correct_section_order(self, session, test_user, scenario):
-        context = _asset_fx_context(session, user_id=test_user.id)
+        context = _asset_fx_context(session, _owned(scenario), user_id=test_user.id)
         registry = build_asset_fx_dataset_registry()
         composition = await Composer().compose_dataset(registry.get("fx.overview"), context, detail_level=DetailLevel.STANDARD)
         assert [e.component_id for e in composition.sections] == ["fx.pair_identity", "fx.current_rate", "fx.conversion_provenance"]
 
     @pytest.mark.asyncio
     async def test_fx_market_technical_composes_with_real_signals(self, session, test_user, scenario):
-        context = _asset_fx_context(session, user_id=test_user.id)
+        context = _asset_fx_context(session, _owned(scenario), user_id=test_user.id)
         registry = build_asset_fx_dataset_registry()
         composition = await Composer().compose_dataset(registry.get("fx.market_technical"), context, detail_level=DetailLevel.STANDARD)
         assert [e.component_id for e in composition.sections] == ["fx.technical_coverage", "fx.rate_ohlc", "fx.returns_volatility", "fx.indicators", "fx.states_events"]
@@ -843,14 +855,14 @@ class TestFxDatasetComposition:
 
     @pytest.mark.asyncio
     async def test_fx_direct_exposure_composes_with_no_optional_components(self, session, test_user, scenario):
-        context = _asset_fx_context(session, user_id=test_user.id)
+        context = _asset_fx_context(session, _owned(scenario), user_id=test_user.id)
         registry = build_asset_fx_dataset_registry()
         composition = await Composer().compose_dataset(registry.get("fx.direct_exposure"), context, detail_level=DetailLevel.STANDARD)
         assert [e.component_id for e in composition.sections] == ["fx.exposure_base_quote", "fx.exposure_provenance"]
 
     @pytest.mark.asyncio
     async def test_fx_all_data_is_deduplicated_union_in_canonical_order(self, session, test_user, scenario):
-        context = _asset_fx_context(session, user_id=test_user.id)
+        context = _asset_fx_context(session, _owned(scenario), user_id=test_user.id)
         registry = build_asset_fx_dataset_registry()
         composition = await Composer().compose_dataset(registry.get("fx.all_data"), context, detail_level=DetailLevel.STANDARD)
         ids = [e.component_id for e in composition.sections]
@@ -879,7 +891,7 @@ class TestAnalysisComposition:
 
     @pytest.mark.asyncio
     async def test_fx_analyses_compose_with_expected_datasets(self, session, test_user, scenario):
-        context = _asset_fx_context(session, user_id=test_user.id)
+        context = _asset_fx_context(session, _owned(scenario), user_id=test_user.id)
         dataset_registry = build_asset_fx_dataset_registry()
         analysis_registry = build_asset_fx_analysis_registry(dataset_registry)
         composer = Composer()
@@ -919,8 +931,8 @@ class TestAnalysisComposition:
         registry = build_asset_fx_dataset_registry()
         composer = Composer()
 
-        compact_context = _asset_fx_context(session, user_id=test_user.id, detail_level=DetailLevel.COMPACT)
-        full_context = _asset_fx_context(session, user_id=test_user.id, detail_level=DetailLevel.FULL)
+        compact_context = _asset_fx_context(session, _owned(scenario), user_id=test_user.id, detail_level=DetailLevel.COMPACT)
+        full_context = _asset_fx_context(session, _owned(scenario), user_id=test_user.id, detail_level=DetailLevel.FULL)
 
         compact = await composer.compose_dataset(registry.get("fx.market_technical"), compact_context, detail_level=DetailLevel.COMPACT)
         full = await composer.compose_dataset(registry.get("fx.market_technical"), full_context, detail_level=DetailLevel.FULL)
@@ -1023,7 +1035,9 @@ class TestFxDomainValidations:
         empty_user = User(username=f"assetfxint_empty_{utcnow().timestamp()}", email=f"assetfxint_empty_{utcnow().timestamp()}@test.com", hashed_password="fakehash", is_active=True)
         session.add(empty_user)
         await session.flush()
-        context = _asset_fx_context(session, user_id=empty_user.id, base="EUR", quote="GBP")
+        # 78 L10b: the user owns one broker with nothing in it (a user who owns none is refused before the build)
+        empty_broker = await _make_broker(session, empty_user, name="AssetFxEmptyBroker")
+        context = _asset_fx_context(session, (empty_broker.id,), user_id=empty_user.id, base="EUR", quote="GBP")
         registry = build_asset_fx_dataset_registry()
         composition = await Composer().compose_dataset(registry.get("fx.direct_exposure"), context, detail_level=DetailLevel.STANDARD)
         base_quote = next(e for e in composition.sections if e.component_id == "fx.exposure_base_quote")
@@ -1033,7 +1047,7 @@ class TestFxDomainValidations:
 
     @pytest.mark.asyncio
     async def test_direct_exposure_rows_have_correct_native_target_provenance(self, session, test_user, scenario):
-        context = _asset_fx_context(session, user_id=test_user.id, base="EUR", quote="USD")
+        context = _asset_fx_context(session, _owned(scenario), user_id=test_user.id, base="EUR", quote="USD")
         envelope = await context.resolve("fx.exposure_base_quote", required=True)
         rows = envelope.payload["rows"]
         assert rows, "expected at least the EUR cash + USD position rows"
@@ -1059,7 +1073,7 @@ class TestFxDomainValidations:
 
     @pytest.mark.asyncio
     async def test_no_look_through_jpy_position_excluded_from_eur_usd_pair(self, session, test_user, scenario):
-        context = _asset_fx_context(session, user_id=test_user.id, base="EUR", quote="USD")
+        context = _asset_fx_context(session, _owned(scenario), user_id=test_user.id, base="EUR", quote="USD")
         envelope = await context.resolve("fx.exposure_base_quote", required=True)
         rows = envelope.payload["rows"]
         jpy_rows = [row for row in rows if row.get("asset_id") == scenario.jpy_asset.id]
@@ -1069,7 +1083,7 @@ class TestFxDomainValidations:
 
     @pytest.mark.asyncio
     async def test_no_top_n_truncation_every_row_preserved(self, session, test_user, scenario):
-        context = _asset_fx_context(session, user_id=test_user.id, base="EUR", quote="USD")
+        context = _asset_fx_context(session, _owned(scenario), user_id=test_user.id, base="EUR", quote="USD")
         envelope = await context.resolve("fx.exposure_base_quote", required=True)
         rows = envelope.payload["rows"]
         # 2 brokers each with EUR cash + a USD position = at least 4 rows expected, well beyond any
@@ -1116,7 +1130,7 @@ class TestAutomaticFxAndTechnicalCoverage:
 
     @pytest.mark.asyncio
     async def test_fx_warmup_dates_excluded_and_bucket_plan_exactly_matches_scope_period(self, session, test_user, scenario):
-        context = _asset_fx_context(session, user_id=test_user.id)
+        context = _asset_fx_context(session, _owned(scenario), user_id=test_user.id)
         assert context.bucket_plan.start == PERIOD_START
         assert context.bucket_plan.end == PERIOD_END
 
@@ -1185,7 +1199,7 @@ class TestMaliciousTextAndJsonSafety:
 
     @pytest.mark.asyncio
     async def test_fx_all_data_is_fully_json_safe(self, session, test_user, scenario):
-        context = _asset_fx_context(session, user_id=test_user.id)
+        context = _asset_fx_context(session, _owned(scenario), user_id=test_user.id)
         registry = build_asset_fx_dataset_registry()
         composition = await Composer().compose_dataset(registry.get("fx.all_data"), context, detail_level=DetailLevel.STANDARD)
         for envelope in composition.sections:
@@ -1646,7 +1660,7 @@ class TestConcurrentComposition:
         registry = build_asset_fx_dataset_registry()
         composer = Composer()
         asset_context = _asset_context(session, scenario, asset_id=scenario.usd_asset.id, user_id=test_user.id)
-        fx_context = _asset_fx_context(session, user_id=test_user.id)
+        fx_context = _asset_fx_context(session, _owned(scenario), user_id=test_user.id)
 
         async def _run():
             return await asyncio.gather(

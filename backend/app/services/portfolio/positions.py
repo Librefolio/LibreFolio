@@ -64,7 +64,7 @@ class PortfolioPositionsMixin:
         For each (broker_id, asset_id) pair with activity in the period, computes:
         - unrealized_delta: change in unrealized P&L over the period
         - realized_gain_loss: gain/loss from SELLs in the period
-        - income: DIVIDEND/INTEREST attributed to this asset
+        - income: DIVIDEND/INTEREST/REWARD attributed to this asset (a REWARD: its value on receipt, no cash)
         - fees_taxes: FEE/TAX attributed to this asset
         - period_pnl: total = unrealized_delta + realized + income - fees_taxes
 

@@ -50,7 +50,7 @@ from backend.app.services.ai_export.components.asset_payloads import AssetLotCus
 from backend.app.services.ai_export.components.asset_resources import AssetMetadataResource, AssetNotFoundError
 from backend.app.services.ai_export.components.registry import ComponentRegistry
 from backend.app.services.ai_export.components.resources import PriceResultsResource
-from backend.app.services.ai_export.components.types import BuildScope, DetailLevel, Domain, PeriodBehavior
+from backend.app.services.ai_export.components.types import BrokerScopeSource, BuildScope, DetailLevel, Domain, PeriodBehavior
 from backend.app.services.ai_export.dependencies import (
     BuildContext,
     RequiredComponentBuildError,
@@ -58,6 +58,9 @@ from backend.app.services.ai_export.dependencies import (
 )
 from backend.app.services.portfolio.lots_analysis_service import LotsAnalysisService
 from backend.app.services.portfolio.portfolio_service import PortfolioService
+
+_OWNED_BROKERS: tuple[int, ...] = (1, 2, 3)
+"""78 L10b: the brokers a whole-scope test reads, named (an empty scope means no broker)."""
 
 CURRENCY = "EUR"
 ASSET_ID = 42
@@ -79,10 +82,15 @@ def _scope(**overrides) -> BuildScope:
         "period_start": date(2026, 1, 1),
         "period_end": date(2026, 1, 31),
         "target_currency": CURRENCY,
-        "broker_scope": (),
+        # 78 L10b: a whole scope is the owned brokers, named; an empty scope means no broker.
+        "broker_scope": _OWNED_BROKERS,
+        "broker_scope_source": BrokerScopeSource.OWNED,
+        "owned_broker_ids": _OWNED_BROKERS,
         "asset_id": ASSET_ID,
     }
     defaults.update(overrides)
+    if "broker_scope" in overrides and "broker_scope_source" not in overrides:
+        defaults["broker_scope_source"] = BrokerScopeSource.REQUESTED
     return BuildScope(**defaults)
 
 
@@ -1343,7 +1351,7 @@ class TestPortfolioRoleBasis:
 
         role = _role(await context.resolve("asset.position_scope", required=True))
 
-        assert role["broker_scope_mode"] == "WHOLE_ACCESSIBLE_PORTFOLIO"
+        assert role["broker_scope_mode"] == "OWNED_BROKERS"
         assert role["target_currency"] == CURRENCY
         assert role["valuation_basis"] == "current_market_value"
         assert role["denominator_basis"] == "gross_absolute_open_position_value"
@@ -1390,7 +1398,7 @@ class TestPortfolioRoleBasis:
         context_whole = _make_context(scope_whole, _make_async_session())
         role_whole = _role(await context_whole.resolve("asset.position_scope", required=True))
 
-        assert role_whole["broker_scope_mode"] == "WHOLE_ACCESSIBLE_PORTFOLIO"
+        assert role_whole["broker_scope_mode"] == "OWNED_BROKERS"
         assert role_whole["portfolio_gross_absolute_value"] == "2000"
         assert role_whole["portfolio_weight_ratio"] == "0.25"
 
@@ -1400,7 +1408,7 @@ class TestPortfolioRoleBasis:
         context_scoped = _make_context(scope_scoped, _make_async_session())
         role_scoped = _role(await context_scoped.resolve("asset.position_scope", required=True))
 
-        assert role_scoped["broker_scope_mode"] == "SCOPED_BROKERS"
+        assert role_scoped["broker_scope_mode"] == "REQUESTED_BROKERS"
         assert role_scoped["portfolio_gross_absolute_value"] == "500"
         assert role_scoped["portfolio_weight_ratio"] == "1"
 
@@ -1568,7 +1576,7 @@ class TestPortfolioRoleBasis:
 
         assert captured["user_id"] == 7
         assert captured["broker_ids"] == [1, 2]
-        assert role["broker_scope_mode"] == "SCOPED_BROKERS"
+        assert role["broker_scope_mode"] == "REQUESTED_BROKERS"
         assert role["portfolio_gross_absolute_value"] == "500"
 
     @pytest.mark.asyncio

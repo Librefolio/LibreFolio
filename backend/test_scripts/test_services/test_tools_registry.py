@@ -10,10 +10,12 @@ from __future__ import annotations
 
 import json
 import sys
+import time
 from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import Path
 from textwrap import dedent
+from types import SimpleNamespace
 from typing import Annotated, Literal, Self, TypedDict
 from uuid import uuid4
 
@@ -21,15 +23,21 @@ import pytest
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, computed_field
 from pydantic.dataclasses import dataclass as pydantic_dataclass
 
-from backend.app.schemas.tools import ToolDiscoveryFailure, ToolDocumentation, ToolOperationPolicy, ToolPlatformPolicy, ToolUIDescriptor
+from backend.app.schemas.pac_allocator.preview import PAC_TOOL_INPUT_ADAPTER, REBALANCER_TOOL_INPUT_ADAPTER
+from backend.app.schemas.tools import ToolComputeItem, ToolDiscoveryFailure, ToolDocumentation, ToolOperationPolicy, ToolPlatformPolicy, ToolUIDescriptor
 from backend.app.services.pac_allocator.progress import PLANNER_PHASES
+from backend.app.services.pac_allocator.seed_runs import RUN_COUNT, RUN_GRACE_SECONDS
 from backend.app.services.platform.provider_registry import AbstractPluginRegistry, register_plugin
+from backend.app.services.tool_plugins.pac_allocator import plugin as pac_plugin
 from backend.app.services.tool_plugins.pac_allocator.plugin import PacAllocatorTool
-from backend.app.services.tools.base import ToolDefinitionError, ToolPlugin, ToolService
-from backend.app.services.tools.catalog import effective_catalog_entries, effective_operation, get_tool_catalog
+from backend.app.services.tools.base import ToolDefinitionError, ToolExecutionContext, ToolPlugin, ToolService
+from backend.app.services.tools.catalog import effective_catalog_entries, effective_descriptor, effective_operation, get_tool_catalog, operations_for
+from backend.app.services.tools.executor import ToolExecutor
 from backend.app.services.tools.registry import ToolPluginRegistry, build_tool_definition
 from backend.app.services.tools.schema_export import TOOL_MANIFEST_KEY, build_tool_contracts_document
 from backend.app.services.tools.wire import MAX_SAFE_JSON_INTEGER, encode_json
+from backend.test_scripts.test_schemas.test_pac_planner_schemas import _pac_request
+from backend.test_scripts.test_services import _reb_small_requests as reb
 
 
 class _StrictModel(BaseModel):
@@ -201,12 +209,13 @@ def _long_operation_policy(operation: str = "inspect", *, deterministic: bool = 
         max_parameter_bytes=262_144,
         max_result_bytes=524_288,
         queue_timeout_ms=10_000,
-        engine_timeout_ms=35_000,
-        job_timeout_ms=50_000,
-        soft_timeout_ms=45_000,
+        # Above every platform ceiling (three turns of the Rebalancer, TURNI step 3), so the platform lowers each one.
+        engine_timeout_ms=120_000,
+        job_timeout_ms=130_000,
+        soft_timeout_ms=125_000,
         cleanup_timeout_ms=7_000,
-        request_timeout_ms=70_000,
-        client_timeout_ms=75_000,
+        request_timeout_ms=150_000,
+        client_timeout_ms=160_000,
         memory_limit_bytes=2_147_483_648,
     )
 
@@ -1222,16 +1231,151 @@ def test_effective_policy_only_lowers_limits_and_reserves_output_time():
         "max_parameter_bytes": 131_072,
         "max_result_bytes": 262_144,
         "queue_timeout_ms": 5_000,
-        "engine_timeout_ms": 30_000,
-        "job_timeout_ms": 45_000,
-        "soft_timeout_ms": 44_000,
+        "engine_timeout_ms": 100_000,
+        "job_timeout_ms": 115_000,
+        "soft_timeout_ms": 114_000,
         "cleanup_timeout_ms": 5_000,
-        "request_timeout_ms": 59_000,
-        "client_timeout_ms": 65_000,
+        "request_timeout_ms": 129_000,
+        "client_timeout_ms": 135_000,
         "memory_limit_bytes": 1_073_741_824,
         "progress_phases": [],
     }
     assert declared.model_dump() == original
+
+
+# -- TURNI step 4 of project 67: an operation's limits by the machine's usable CPUs --------------------------------------
+#
+# A service may declare its operations' limits by usable CPUs: rows of (fewest CPUs, operations), from one CPU up. The
+# platform picks the row once, when it builds its executor, and the catalog and every job read the same row. Without a count
+# (a test executor, a probe), the service's own operations hold.
+
+_ONE_CPU_INSPECT = ToolOperationPolicy(operation="inspect", engine_timeout_ms=8_000, soft_timeout_ms=9_000, job_timeout_ms=10_000, request_timeout_ms=24_000, client_timeout_ms=30_000)
+_CPU_TABLE = ((1, (_ONE_CPU_INSPECT,)), (2, (ToolOperationPolicy(operation="inspect"),)))
+_TIMES = ("engine_timeout_ms", "soft_timeout_ms", "job_timeout_ms", "request_timeout_ms", "client_timeout_ms")
+
+
+@pytest.mark.parametrize(("cpus", "engine_ms"), [(None, 4_000), (1, 8_000), (2, 4_000), (16, 4_000)], ids=["no-count", "one-cpu", "two-cpus", "sixteen-cpus"])
+def test_a_cpu_table_gives_the_catalog_its_row(plugin_factory, cpus, engine_ms):
+    """The catalog's effective operation comes from the row of the CPUs counted; no count is the service's own operations."""
+    definition = _build(plugin_factory("private_turns", operations_by_usable_cpus=_CPU_TABLE))
+    (chosen,) = operations_for(definition, cpus)
+    assert chosen.engine_timeout_ms == engine_ms
+    (published,) = effective_descriptor(definition, ToolPlatformPolicy(), cpus).operations
+    assert published.model_dump(include=set(_TIMES)) == effective_operation(chosen, ToolPlatformPolicy()).model_dump(include=set(_TIMES))
+
+
+@pytest.mark.parametrize(
+    "table",
+    [
+        ((2, (ToolOperationPolicy(operation="inspect"),)),),
+        ((1, (ToolOperationPolicy(operation="other"),)),),
+        ((1, (_ONE_CPU_INSPECT.model_copy(update={"max_result_bytes": 1_024}),)),),
+        ((1, (_ONE_CPU_INSPECT,)), (1, (ToolOperationPolicy(operation="inspect"),))),
+        ((1, ()),),
+    ],
+    ids=["not-from-one-cpu", "another-operation", "more-than-times", "rows-not-ascending", "an-empty-row"],
+)
+def test_a_cpu_table_is_checked_at_registration(plugin_factory, table):
+    """A row starts the table at one CPU, keeps the service's operation names, changes only the time limits, and the rows
+    go up: anything else quarantines the service, as an invalid operation policy does."""
+    with pytest.raises(ToolDefinitionError) as caught:
+        _build(plugin_factory("private_bad_turns", operations_by_usable_cpus=table))
+    assert caught.value.reason == "invalid_operation_policy"
+
+
+@pytest.mark.parametrize("cpus", [None, 1, 2, 16])
+def test_a_job_reads_the_same_cpu_row_as_the_catalog(plugin_factory, cpus):
+    """One chooser: the job's effective operation is the catalog's, for the CPUs the executor was built with."""
+    definition = _build(plugin_factory("private_turns", operations_by_usable_cpus=_CPU_TABLE))
+    descriptor = definition.descriptor
+    snapshot = SimpleNamespace(definitions={"private_turns": definition}, failures=())
+    item = ToolComputeItem(correlation_id="turns", tool_code="private_turns", contract_version=descriptor.contract_version, implementation_version=descriptor.implementation_version, schema_fingerprint=descriptor.schema_fingerprint, parameters={"operation": "inspect"})
+    executor = ToolExecutor(usable_cpus=cpus)
+    (catalog,) = effective_descriptor(definition, executor.policy, cpus).operations
+    assert executor._operation(item, snapshot) == catalog
+
+
+_TODAY_S_PLAN_LIMITS = {"queue_timeout_ms": 5_000, "engine_timeout_ms": 30_000, "job_timeout_ms": 45_000, "soft_timeout_ms": 44_000, "cleanup_timeout_ms": 5_000, "request_timeout_ms": 59_000, "client_timeout_ms": 65_000}
+_TODAY_S_PREVIEW_LIMITS = {"queue_timeout_ms": 5_000, "engine_timeout_ms": 4_000, "job_timeout_ms": 5_000, "soft_timeout_ms": 4_000, "cleanup_timeout_ms": 2_000, "request_timeout_ms": 20_000, "client_timeout_ms": 25_000}
+
+
+@pytest.mark.parametrize("tool_code", ["pac_allocator", "portfolio_rebalancer"])
+def test_raising_the_platform_ceilings_moves_no_shipped_operation(tool_code):
+    """TURNI step 3: the ceilings rise to three turns, and every shipped operation keeps its effective limits, as literal
+    numbers, when no CPUs are counted: both plans and both previews. Step 4 gives the Rebalancer's plan its rows by CPUs
+    (the tests below); with no count, both Tools declare the one-turn row, today's numbers."""
+    operations = {operation.operation: operation for operation in ToolPluginRegistry.get_definition(tool_code).descriptor.operations}
+    for name, expected in (("plan", _TODAY_S_PLAN_LIMITS), ("preview", _TODAY_S_PREVIEW_LIMITS)):
+        effective = effective_operation(operations[name], ToolPlatformPolicy()).model_dump(mode="json")
+        assert {key: effective[key] for key in expected} == expected, (tool_code, name)
+
+
+_TURN_ROWS = {
+    1: {"engine_timeout_ms": 100_000, "soft_timeout_ms": 114_000, "job_timeout_ms": 115_000, "request_timeout_ms": 129_000, "client_timeout_ms": 135_000},
+    2: {"engine_timeout_ms": 65_000, "soft_timeout_ms": 79_000, "job_timeout_ms": 80_000, "request_timeout_ms": 94_000, "client_timeout_ms": 100_000},
+    3: {"engine_timeout_ms": 30_000, "soft_timeout_ms": 44_000, "job_timeout_ms": 45_000, "request_timeout_ms": 59_000, "client_timeout_ms": 65_000},
+}
+
+
+@pytest.mark.parametrize("cpus", [None, 1, 2, 3, 16])
+def test_the_rebalancer_plan_limits_follow_the_turns_and_the_pac_stays(cpus):
+    """TURNI step 4 (the plan's ``test_rebalancer_plan_limits_follow_the_turns``): the Rebalancer's plan takes the row of
+    the CPUs counted, three turns on one, two on two, one from three up; the platform lowers no time of any row.
+    The PAC keeps today's 30 / 44 / 45 / 59 / 65 s bit for bit on every machine (the coordinator's condition, 21/11). Both
+    previews keep theirs."""
+    rows = {}
+    for tool_code in ("pac_allocator", "portfolio_rebalancer"):
+        definition = ToolPluginRegistry.get_definition(tool_code)
+        chosen = {operation.operation: operation for operation in operations_for(definition, cpus)}
+        for name, declared in chosen.items():
+            # The platform lowers no time of any row (the byte caps are the platform's own, as before the turns).
+            assert effective_operation(declared, ToolPlatformPolicy()).model_dump(include=set(_TIMES)) == declared.model_dump(include=set(_TIMES)), (tool_code, name)
+        rows[tool_code] = chosen
+    times = list(_TURN_ROWS[3])
+    expected = _TURN_ROWS[3] if cpus is None or cpus >= 3 else _TURN_ROWS[cpus]
+    assert rows["portfolio_rebalancer"]["plan"].model_dump(include=set(times)) == expected
+    assert rows["pac_allocator"]["plan"].model_dump(include=set(times)) == _TURN_ROWS[3]
+    assert rows["pac_allocator"]["plan"].model_dump(include=set(_TODAY_S_PLAN_LIMITS)) == _TODAY_S_PLAN_LIMITS
+    for tool_code in rows:
+        assert rows[tool_code]["preview"].model_dump(include=set(_TODAY_S_PREVIEW_LIMITS)) == _TODAY_S_PREVIEW_LIMITS
+
+
+def test_the_turn_rule_is_tied_to_the_grace_and_the_run_count():
+    """The rule's window carries the seeded runs' own grace between turns, and its worst case (one CPU, every search in its
+    own turn) is the platform's ceilings, field by field."""
+    worst = pac_plugin.plan_policy(pac_plugin.turns_for(1))
+    assert pac_plugin.turns_for(1) == RUN_COUNT
+    assert worst.engine_timeout_ms == RUN_COUNT * pac_plugin.RUN_LIMIT_MS + (RUN_COUNT - 1) * int(RUN_GRACE_SECONDS * 1000)
+    platform = ToolPlatformPolicy()
+    for field in ("engine_timeout_ms", "soft_timeout_ms", "job_timeout_ms", "request_timeout_ms", "client_timeout_ms"):
+        assert getattr(worst, field) == getattr(platform, field), field
+
+
+@pytest.mark.parametrize(
+    ("tool_code", "window_ms", "expected"),
+    [
+        ("portfolio_rebalancer", 100_000, {"solver_time_budget_seconds": 30.0, "solver_window_seconds": 100.0}),
+        ("portfolio_rebalancer", 65_000, {"solver_time_budget_seconds": 30.0, "solver_window_seconds": 65.0}),
+        ("portfolio_rebalancer", 30_000, {"solver_time_budget_seconds": 30.0, "solver_window_seconds": 30.0}),
+        ("pac_allocator", 30_000, {"solver_time_budget_seconds": 30.0}),
+    ],
+)
+def test_compute_gives_each_search_its_limit_and_the_rebalancer_its_window(monkeypatch, tool_code, window_ms, expected):
+    """TURNI step 4: the Rebalancer's claimed window is the whole of its turns, and each search keeps its own 30 s; the
+    PAC's single search has the whole window, as before. Never the window as one search's budget."""
+    seen = {}
+
+    def spy(parameters, **kwargs):
+        seen.update({key: value for key, value in kwargs.items() if key.startswith("solver_")})
+        return "planned"
+
+    monkeypatch.setattr(pac_plugin, "plan_rebalancing", spy)
+    monkeypatch.setattr(pac_plugin, "plan_pac_allocation", spy)
+    parameters = REBALANCER_TOOL_INPUT_ADAPTER.validate_python(reb.t4()) if tool_code == "portfolio_rebalancer" else PAC_TOOL_INPUT_ADAPTER.validate_python(_pac_request())
+    started = time.monotonic()
+    context = ToolExecutionContext(execution_id="turns", soft_deadline=started + 600, hard_deadline=started + 700, cancelled=lambda: False, engine_timeout_ms=window_ms)
+    assert PacAllocatorTool().compute(tool_code, parameters, context) == "planned"
+    assert seen == expected
 
 
 def test_effective_policy_rejects_request_without_platform_envelope_time():
@@ -1320,7 +1464,8 @@ def test_registered_pac_allocator_service_is_the_v2_planner_card():
 
 def test_both_services_declare_plan_and_preview():
     """B4 test 13 (contract §11): each planner service answers ``plan`` and ``preview``; the preview claims no engine window
-    of its own (the platform's short defaults) and returns a small result; both services share the two policies."""
+    of its own (the platform's short defaults) and returns a small result; both services declare the same two policies,
+    the plan's one-turn row. Only the Rebalancer adds its rows by usable CPUs (TURNI of project 67)."""
     pac = ToolPluginRegistry.get_definition("pac_allocator").descriptor
     rebalancer = ToolPluginRegistry.get_definition("portfolio_rebalancer").descriptor
     for descriptor in (pac, rebalancer):
@@ -1330,6 +1475,8 @@ def test_both_services_declare_plan_and_preview():
         assert policies["preview"].request_timeout_ms < policies["plan"].request_timeout_ms
         assert policies["preview"].max_result_bytes <= policies["plan"].max_result_bytes
     assert pac.operations == rebalancer.operations
+    assert ToolPluginRegistry.get_definition("pac_allocator").service.operations_by_usable_cpus == ()
+    assert [cpus for cpus, _operations in ToolPluginRegistry.get_definition("portfolio_rebalancer").service.operations_by_usable_cpus] == [1, 2, 3]
 
 
 def test_registered_portfolio_rebalancer_service_is_published():

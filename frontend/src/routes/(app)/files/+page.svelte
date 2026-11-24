@@ -701,6 +701,10 @@
             icon: Trash2,
             label: () => $t('common.delete') || 'Delete',
             variant: 'danger',
+            // 81 U21: a file is gone for good, so the table asks first (the modal lists the files that will go).
+            requireConfirm: true,
+            confirmMessage: (count) => $t('uploads.confirmBulkDelete.message', {values: {n: count}}),
+            confirmText: () => $t('common.delete'),
             appliesTo: (file) => (file as {can_delete?: boolean}).can_delete !== false,
             onClick: (files) => handleBulkDeleteFiles(files.map((file) => ('file_id' in file ? file.file_id : file.id))),
         },

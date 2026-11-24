@@ -234,6 +234,19 @@ function formatNumber(text: string, locale: string): string {
     return Number.isFinite(number) ? new Intl.NumberFormat(locale, {maximumFractionDigits: 6}).format(number) : text;
 }
 
+/** The period a figure covers, written beside its value (BI-PROF): for a fiscal year's figure, «fiscal year 2025» from the
+ * year of its source date (the end of that fiscal year); null for any other voice, or when the step has no source date. */
+export function periodLabel(cell: ProfileCell, label: (year: string) => string): string | null {
+    if (cell.voice.period !== 'fiscal_year' || cell.state !== 'value') return null;
+    const day = cell.step?.source_date;
+    return day ? label(String(day).slice(0, 4)) : null;
+}
+
+/** A web address the tab may open as a link: http or https only. */
+export function isWebAddress(text: string): boolean {
+    return /^https?:\/\/\S+$/i.test(text);
+}
+
 /** A stored value as the tab writes it; '' for a missing value. Amounts are public figures of the asset, never masked. */
 export function formatProfileValue(voice: ProfileVoice, value: unknown, context: ProfileFormatContext): string {
     if (value === null || value === undefined || value === '') return '';

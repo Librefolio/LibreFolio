@@ -22,6 +22,7 @@ from backend.app.services.financial_math.fifo.eligibility import eligible_income
 from backend.app.services.financial_math.fifo.engine import run_fifo_lot_engine
 from backend.app.services.financial_math.fifo.models import FifoEngineResult, FifoEvent, FifoInputTransaction, FragmentInterval
 from backend.app.services.financial_math.fx_rates import fx_days_back
+from backend.app.services.financial_math.income import INCOME_TYPES, income_value, is_in_kind_income
 from backend.app.services.financial_math.lots.scope_boundary import TransferPartner, read_arrivals_at_scope_boundary
 from backend.app.services.financial_math.splits import SplitLink, is_valid_split_ratio, load_split_links
 from backend.app.services.fx.conversion import convert_bulk
@@ -31,7 +32,8 @@ from backend.app.utils.datetime_utils import day_before, shift_date
 logger = structlog.get_logger(__name__)
 
 PositionKey = tuple[int, int]
-_INCOME_TYPES = {TransactionType.DIVIDEND, TransactionType.INTEREST}
+# DIVIDEND, INTEREST and REWARD (income in kind, its value at receipt): financial_math.income
+_INCOME_TYPES = INCOME_TYPES
 _SPLIT_QUANTITY_ABS_TOLERANCE = Decimal("0.000001")
 _SPLIT_QUANTITY_REL_TOLERANCE = Decimal("0.000000001")
 
@@ -444,13 +446,18 @@ async def _resolve_conversion_context(
     income_by_key: dict[PositionKey, list[Transaction]],
     target_currency: str,
 ) -> _ConversionContext:
-    """Every income movement converted at its own date. The WAC is not converted: it is already in the report currency."""
+    """Every income movement converted at its own date. The WAC is not converted: it is already in the report currency.
+
+    The income of a movement is :func:`~backend.app.services.financial_math.income.income_value`: a REWARD's value at
+    receipt, with no cash. One without a value or a currency leaves the position's yield unavailable, never at zero.
+    """
     specs: list[_ConversionSpec] = []
     inputs: list[tuple[Currency, str, date_type]] = []
     missing_by_key: dict[PositionKey, tuple[str | None, date_type]] = {}
     for key in sorted(income_by_key):
         for transaction in income_by_key[key]:
-            if transaction.id is None or not transaction.currency:
+            income = income_value(transaction)
+            if transaction.id is None or income is None:
                 missing_by_key.setdefault(key, (None, transaction.date))
                 continue
             _append_conversion(
@@ -458,9 +465,9 @@ async def _resolve_conversion_context(
                 inputs,
                 position_key=key,
                 requested_date=transaction.date,
-                from_currency=transaction.currency,
+                from_currency=income.currency,
                 target_currency=target_currency,
-                amount=transaction.amount,
+                amount=income.amount,
                 transaction_id=transaction.id,
             )
 
@@ -647,6 +654,11 @@ def _calculate_income_position(
             broker_id,
             day_before(transaction.date),
         )
+        if eligible_quantity <= 0 and is_in_kind_income(transaction):
+            # Project 79 (consultant, 23/11): a reward with nothing held the day before (an airdrop, a learning reward) is
+            # the position's acquisition, not a yield of units held. It stays out of the numerator; its value still counts
+            # in the average cost. A DIVIDEND or INTEREST with no units keeps INCOME_WITHOUT_ELIGIBLE_QUANTITY.
+            continue
         if eligible_quantity <= 0:
             return _unavailable(
                 provenance.model_copy(update={"issue_date": transaction.date}),

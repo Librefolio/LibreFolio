@@ -18,7 +18,8 @@ The `DataTable` is a powerful, generic table component built with Svelte 5 Runes
 - **Selection**: Row selection with checkboxes, "Select All" on the current page, and a
   "show selected only" filter in the checkbox header.
   The pages act on the selection through `DataTableToolbar` (`lib/components/table/`), the selection bar:
-  one `toolbar-action-<id>` per action. An action can be `disabled`. A disabled action with a `hint` says why
+  one `toolbar-action-<id>` per action (with `-count` and `-label`), or the action's own `testid` when a table keeps
+  the ids its tests already read (the Bulk, 77 SEL-E). An action can be `disabled`. A disabled action with a `hint` says why
   in the shared `Tooltip`, in both variants of the bar. Its button carries `aria-disabled="true"` instead of the
   native `disabled`, so it keeps the focus, the tap and the click that open the reason; a phone shows no `title`.
   Its click never runs the action. The label stays the action's name, and the `reason` code is published as
@@ -40,13 +41,13 @@ The `DataTable` is a powerful, generic table component built with Svelte 5 Runes
   columns present and forgets the absent ones.
 - **Actions**: Per-row actions behind a **⋮** button in the actions column, and bulk actions on the
   selected rows. Actions with `requireConfirm` go through a [ConfirmModal](modals.md#confirmmodal).
-- **Context Menu**: Right-click on a row opens the same menu as **⋮**, built from `rowActions`.
+- **Context Menu**: Right-click on a row opens the same menu as **⋮**, built from `rowActions`. A right-click on an `input`, `textarea`, `select` or `contenteditable` inside the row keeps the browser's own menu, so «Paste» works there; a `contextmenu` that comes from the ⋮ itself (Shift+F10, the Menu key) opens the menu anchored to the ⋮, and Escape gives the focus back to it. A table that passes `rowActions` does not switch the menu off: `rowMenuCoverage.gate.test.ts` fails on `enableContextMenu={false}` or on a value that follows the phone.
   - **Hidden or blocked** (77 SEL-M, Q-SEL-12): an action that makes no sense on a row is hidden with `visible`. One that
     makes sense but is blocked returns its reason from `blocked(row)` (`{hint, reason}`, as the bulk actions do). Its item
     is `aria-disabled`, reachable, with an ⓘ; a hover, a tap, a click or the keyboard focus opens the reason in the
     shared `Tooltip`, placed against the whole menu. Its click runs nothing and leaves the menu open, and it carries
-    `data-disabled-reason` (the code) for the tests. `disabled(row)` without a reason is the old form, still drawn as
-    native `disabled` until its last users move.
+    `data-disabled-reason` (the code) for the tests. An action is never off without a reason: there is no
+    `disabled(row)` (SEL-M part 2).
   - **Keyboard** (WAI-ARIA menu): the first item takes the focus when the menu opens; ↑ ↓ Home End move through every
     item, the blocked ones too; Enter and Space run; Escape and Tab close it and give the focus back to the ⋮ (or to what
     held it before a right-click). Escape is consumed, so a modal under the menu stays open.
@@ -169,7 +170,7 @@ The source of truth is the `Props` interface of `lib/components/table/DataTable.
 | `actionsColumnWidth` | `string` | `'64px'` | Width of the actions column. |
 | `actionsLabel` | `string` | `table.actions` | Header and ⋮ label of the actions column. |
 | `stickyActions` | `boolean` | `true` | Whether the actions column sticks to the right edge, above 768 px — see [Sticky columns](#sticky-columns). |
-| `enableContextMenu` | `boolean` | `true` | Right-click menu on rows. |
+| `enableContextMenu` | `boolean` | `true` | Right-click menu on rows. Keep it on wherever `rowActions` is not empty (gate). |
 
 **Columns, sorting, filters**
 

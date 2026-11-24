@@ -93,7 +93,10 @@
     "deleteSkipped": "Files you are not allowed to delete were left in place",
     "backups": "Backups",
     "systemUploader": "System",
-    "docsHelp": "The files you uploaded: broker reports to import and the images LibreFolio uses, with the space they take."
+    "docsHelp": "The files you uploaded: broker reports to import and the images LibreFolio uses, with the space they take.",
+    "confirmBulkDownload": {
+      "message": "Download {n} file(s)?"
+    }
   },
   "files": {
     "deleteFailed": "Failed to delete file"

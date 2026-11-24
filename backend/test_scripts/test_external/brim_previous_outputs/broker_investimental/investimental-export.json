@@ -1,0 +1,208 @@
+{
+  "format": "lf-brim-previous-output/1",
+  "comment": "Output of the plugin BEFORE its project-66 lot changed it (P2 contract §2.1). Never re-take it after the code change.",
+  "plugin_code": "broker_investimental",
+  "plugin_version": "1.0.0",
+  "source_head": "a2e85db13",
+  "captured_on": "2026-11-21",
+  "sample": "broker_investimental/sample_reports/investimental-export.csv",
+  "sample_sha256": "3963b7e252f595e1fd85aea26cc69d95aa6f6634a88863f59e0eaaf072d9e76a",
+  "extracted_assets": {
+    "2147483647": {
+      "extracted_symbol": "TVBETETF",
+      "extracted_isin": null,
+      "extracted_name": "TVBETETF",
+      "notices": []
+    },
+    "2147483646": {
+      "extracted_symbol": "R2704A",
+      "extracted_isin": null,
+      "extracted_name": "R2704A",
+      "notices": []
+    },
+    "2147483645": {
+      "extracted_symbol": "ICBETNETF",
+      "extracted_isin": null,
+      "extracted_name": "ICBETNETF",
+      "notices": []
+    }
+  },
+  "transactions": [
+    {
+      "asset_id": 2147483647,
+      "type": "BUY",
+      "date": "2024-03-05",
+      "quantity": "20",
+      "cash": {
+        "code": "RON",
+        "amount": "-494.900000"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "investimental"
+      ],
+      "description": "Investimental buy TVBETETF on BVB",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483647,
+      "type": "BUY",
+      "date": "2024-04-12",
+      "quantity": "96",
+      "cash": {
+        "code": "RON",
+        "amount": "-2489.280000"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "investimental"
+      ],
+      "description": "Investimental buy TVBETETF on BVB",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483646,
+      "type": "BUY",
+      "date": "2024-04-18",
+      "quantity": "300",
+      "cash": {
+        "code": "RON",
+        "amount": "-30000.000000"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "investimental"
+      ],
+      "description": "Investimental buy R2704A on BVB",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483647,
+      "type": "BUY",
+      "date": "2024-05-13",
+      "quantity": "94",
+      "cash": {
+        "code": "RON",
+        "amount": "-2480.660000"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "investimental"
+      ],
+      "description": "Investimental buy TVBETETF on BVB",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483645,
+      "type": "BUY",
+      "date": "2024-05-29",
+      "quantity": "267",
+      "cash": {
+        "code": "RON",
+        "amount": "-19904.850000"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "investimental"
+      ],
+      "description": "Investimental buy ICBETNETF on BVB",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483647,
+      "type": "SELL",
+      "date": "2024-05-31",
+      "quantity": "-64",
+      "cash": {
+        "code": "RON",
+        "amount": "1740.160000"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "investimental"
+      ],
+      "description": "Investimental sell TVBETETF on BVB",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483645,
+      "type": "BUY",
+      "date": "2024-05-31",
+      "quantity": "77",
+      "cash": {
+        "code": "RON",
+        "amount": "-5637.170000"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "investimental"
+      ],
+      "description": "Investimental buy ICBETNETF on BVB",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483645,
+      "type": "BUY",
+      "date": "2024-08-05",
+      "quantity": "189",
+      "cash": {
+        "code": "RON",
+        "amount": "-14354.550000"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "investimental"
+      ],
+      "description": "Investimental buy ICBETNETF on BVB",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    }
+  ]
+}

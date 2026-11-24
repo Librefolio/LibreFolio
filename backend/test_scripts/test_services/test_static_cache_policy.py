@@ -12,8 +12,12 @@ build has ``index.html`` and ``_app/`` (``ImmutableStaticFiles`` today), and the
     The 304 that answers the revalidation says the same, or the browser would keep its copy for a year from then on.
 (c) The HTML documents (``/``, ``/index.html``, the SPA fallback of a client-side route) keep ``Cache-Control: no-cache,
     must-revalidate`` (``REVALIDATE_HTML``), as today.
+(d) The documentation's shared menu (lane 84-D), ``/mkdocs/javascripts/nav/nav.<language>.<hash>.js``, is named after its
+    content (the hash covers the menu and the code that reads it): it is sent with the immutable policy of (a). Any other
+    file of the site, a script that keeps its name included (``nav-enhance.js``, ``nav/nav.it.js`` with no hash, a hashed
+    name outside ``javascripts/nav/``), is never immutable, and the documentation's HTML keeps ``no-cache, must-revalidate``.
 
-Each case runs on a fresh ``FastAPI()`` holding the static site of a fake build under ``tmp_path``, twice: the build folder
+The cases of (a) to (c) run on a fresh ``FastAPI()`` holding the static site of a fake build under ``tmp_path``, twice: the build folder
 itself, and the same build reached through a symlink, as a release folder behind a ``current`` link (``StaticFiles``
 resolves the path of the file it serves, never the folder it was given). ``FRONTEND_BUILD_DIR`` is swapped in with
 ``monkeypatch`` before ``install_static_site`` runs, as ``test_app_lifecycle`` does; requests go through
@@ -202,4 +206,84 @@ async def test_an_html_document_is_revalidated_as_today(site: FastAPI, url: str,
 
     _assert_sent(response, url, relative)
     assert _only_cache_control(response, url) == REVALIDATED_HTML
+    print_success(f"✓ {REVALIDATED_HTML}")
+
+
+# =============================================================================
+# (d) THE DOCUMENTATION'S SHARED MENU
+# =============================================================================
+
+DOCS_FILES: dict[str, bytes] = {
+    "index.html": b"<!doctype html><title>docs home</title>",
+    "javascripts/nav/nav.en.0123456789.js": b"(window.LF_NAV = window.LF_NAV || {})['en'] = '<ul></ul>';\n",
+    "javascripts/nav/nav.it.abcdef0123.js": b"(window.LF_NAV = window.LF_NAV || {})['it'] = '<ul></ul>';\n",
+    "javascripts/nav-enhance.js": b"/* the enhancer, same name in every build */\n",
+    "javascripts/nav/nav.it.js": b"/* no hash in the name */\n",
+    "javascripts/nav/nav.it.0123456789.js.map": b"{}",
+    "javascripts/other/nav.it.0123456789.js": b"/* hashed name, wrong folder */\n",
+}
+#: Named after their content.
+DOCS_HASHED = {"menu-en": "/mkdocs/javascripts/nav/nav.en.0123456789.js", "menu-it": "/mkdocs/javascripts/nav/nav.it.abcdef0123.js"}
+#: Not named after their content: never immutable.
+DOCS_UNHASHED = {
+    "enhancer": "/mkdocs/javascripts/nav-enhance.js",
+    "menu-without-hash": "/mkdocs/javascripts/nav/nav.it.js",
+    "menu-source-map": "/mkdocs/javascripts/nav/nav.it.0123456789.js.map",
+    "hashed-name-in-another-folder": "/mkdocs/javascripts/other/nav.it.0123456789.js",
+}
+
+
+@pytest.fixture
+def docs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> FastAPI:
+    """A fresh app holding the documentation site of a fake build."""
+    root = tmp_path / "site"
+    for relative, content in DOCS_FILES.items():
+        (root / relative).parent.mkdir(parents=True, exist_ok=True)
+        (root / relative).write_bytes(content)
+    monkeypatch.setattr(static_site, "SITE_DIR", root)
+    app = FastAPI()
+    static_site.install_static_site(app)
+    return app
+
+
+def _assert_docs_sent(response: httpx.Response, url: str) -> None:
+    relative = url.removeprefix("/mkdocs/")
+    assert response.status_code == 200, f"GET {url}: {response.status_code}, the file was not sent"
+    assert response.content == DOCS_FILES[relative], f"GET {url} sent something other than {relative}"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("url", DOCS_HASHED.values(), ids=list(DOCS_HASHED))
+async def test_the_shared_menu_of_the_documentation_is_cached_for_a_year(docs: FastAPI, url: str) -> None:
+    print_section(f"84-D: GET {url}, the shared menu named after its content")
+
+    response = await _get(docs, url)
+
+    _assert_docs_sent(response, url)
+    assert _only_cache_control(response, url) == IMMUTABLE
+    print_success(f"✓ {IMMUTABLE}")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("url", DOCS_UNHASHED.values(), ids=list(DOCS_UNHASHED))
+async def test_a_documentation_file_that_keeps_its_name_is_never_immutable(docs: FastAPI, url: str) -> None:
+    print_section(f"84-D: GET {url}, a documentation file whose name does not follow its content")
+
+    response = await _get(docs, url)
+
+    _assert_docs_sent(response, url)
+    value = response.headers.get("cache-control", "")
+    assert "immutable" not in _directives(value), f"GET {url}: Cache-Control {value!r} is immutable, yet the name of this file does not change with its content"
+    assert _directives(value).get("max-age") != "31536000", f"GET {url}: Cache-Control {value!r} keeps this file for a year"
+    print_success("✓ never immutable nor a year")
+
+
+@pytest.mark.asyncio
+async def test_a_documentation_page_is_revalidated(docs: FastAPI) -> None:
+    print_section("84-D: GET /mkdocs/, an HTML document of the documentation")
+
+    response = await _get(docs, "/mkdocs/")
+
+    assert response.status_code == 200 and response.content == DOCS_FILES["index.html"]
+    assert _only_cache_control(response, "/mkdocs/") == REVALIDATED_HTML
     print_success(f"✓ {REVALIDATED_HTML}")

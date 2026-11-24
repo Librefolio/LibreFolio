@@ -39,7 +39,10 @@
         "issuer_type": "Issuer type",
         "issuer_lei": "Issuer LEI",
         "outstanding_amount": "Amount outstanding",
-        "reference_price_date": "Reference price date"
+        "reference_price_date": "Reference price date",
+        "website": "Website",
+        "revenue": "Revenue",
+        "net_income": "Net income"
       },
       "choices": {
         "replication": {
@@ -119,7 +122,8 @@
         "size": "size",
         "legal_form": "legal form",
         "issuer": "issuer",
-        "description": "description"
+        "description": "description",
+        "financials": "financial results"
       },
       "edit": {
         "title": "Profile data",
@@ -190,7 +194,9 @@
         "companySector": "Sector",
         "staleConfirmed": "Confirmed on {date}, not up to date",
         "noEnrichersText": "The data on this tab was written by hand or arrived when the asset was created: nothing keeps it up to date.",
-        "configureHint": "Opens the asset window, with the enrichers window on top"
+        "configureHint": "Opens the asset window, with the enrichers window on top",
+        "fiscalYear": "fiscal year {year}",
+        "openWebsite": "Open the website in a new tab"
       },
       "row": {
         "pending": "{count, plural, one {# change waiting} other {# changes waiting}}"
@@ -214,7 +220,8 @@
         "loadFailed": "The changes could not be read.",
         "empty": "No change yet.",
         "who": {
-          "deletedUser": "a deleted user"
+          "deletedUser": "a deleted user",
+          "system": "System"
         },
         "what": {
           "first": "First value read: {to}.",

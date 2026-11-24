@@ -25,7 +25,7 @@ vi.mock('$lib/features/risk/riskStore.svelte', async (importOriginal) => {
 });
 vi.mock('$lib/components/charts/LineChart.svelte', async () => ({default: (await import('$test/LineChartStub.svelte')).default}));
 
-import {fireEvent, render, screen, setupI18n} from '$test/component';
+import {fireEvent, render, screen, setupI18n, within} from '$test/component';
 import {effectRoot} from '$test/runes.svelte';
 import {_} from '$lib/i18n';
 import {currentLanguage} from '$lib/stores/app/language';
@@ -170,5 +170,133 @@ describe('L4Simulation — Run asks for the simulation on screen', () => {
         const analytic = request?.analytics.find((item) => item.analytic_code === 'simulation');
         expect(request?.mode).toBe('current_composition');
         expect(analytic?.parameters).toMatchObject({horizon_days: 365, path_count: 8192});
+    });
+});
+
+describe('L4Simulation — the period the days are drawn from (RSK-SIM1, P-7)', () => {
+    const AVAILABLE = {start: '2016-05-03', end: '2026-11-13'};
+
+    function simulationRequestParameters(): Record<string, unknown> | undefined {
+        const request = queryRisk.mock.calls.map(([asked]) => asked as RiskQueryRequest).find((asked) => asked.analytics.some((item) => item.analytic_code === 'simulation'));
+        return request?.analytics.find((item) => item.analytic_code === 'simulation')?.parameters as Record<string, unknown> | undefined;
+    }
+
+    async function runAndRead(): Promise<Record<string, unknown> | undefined> {
+        await fireEvent.click(screen.getByTestId('risk-simulation-run'));
+        await vi.waitFor(() => expect(simulationRequestParameters()).toBeDefined());
+        return simulationRequestParameters();
+    }
+
+    it('draws from all the common history by default, and sends no period', async () => {
+        mount();
+
+        expect(screen.getByTestId('risk-simulation-history').getAttribute('data-chosen')).toBe('false');
+        expect((screen.getByTestId('risk-simulation-history-all') as HTMLInputElement).checked).toBe(true);
+        expect(screen.queryByTestId('risk-simulation-history-period')).toBeNull();
+        const parameters = await runAndRead();
+        expect(parameters).not.toHaveProperty('history_start');
+        expect(parameters).not.toHaveProperty('history_end');
+    });
+
+    it('opens a chosen period on the window the last answer stated, and sends it', async () => {
+        mount(simulationResult({history_available_start: AVAILABLE.start, history_available_end: AVAILABLE.end}));
+
+        await fireEvent.click(screen.getByTestId('risk-simulation-history-chosen'));
+        const period = screen.getByTestId('risk-simulation-history-period');
+        expect([period.getAttribute('data-start'), period.getAttribute('data-end')]).toEqual([AVAILABLE.start, AVAILABLE.end]);
+        const available = screen.getByTestId('risk-simulation-history-available');
+        expect([available.getAttribute('data-start'), available.getAttribute('data-end')]).toEqual([AVAILABLE.start, AVAILABLE.end]);
+        expect(normalize(available.textContent)).toBe(resolve('risk.simulation.history.available', {start: dayFormatter(uiLocale())(AVAILABLE.start), end: dayFormatter(uiLocale())(AVAILABLE.end)}));
+
+        const parameters = await runAndRead();
+        expect(parameters).toMatchObject({history_start: AVAILABLE.start, history_end: AVAILABLE.end});
+    });
+
+    it('before any answer opens on the last year, and going back to all the history sends no period again', async () => {
+        mount();
+
+        await fireEvent.click(screen.getByTestId('risk-simulation-history-chosen'));
+        const period = screen.getByTestId('risk-simulation-history-period');
+        const end = period.getAttribute('data-end') ?? '';
+        expect(period.getAttribute('data-start')).toBe(addDays(end, -365));
+        expect(screen.queryByTestId('risk-simulation-history-available')).toBeNull();
+
+        await fireEvent.click(screen.getByTestId('risk-simulation-history-all'));
+        expect(screen.queryByTestId('risk-simulation-history-period')).toBeNull();
+        const parameters = await runAndRead();
+        expect(parameters).not.toHaveProperty('history_start');
+    });
+
+    it('starts the cone where the data ends, not where a chosen period ends', () => {
+        mount(simulationResult({estimation_start: '2020-02-03', estimation_end: '2021-03-31', history_available_start: AVAILABLE.start, history_available_end: AVAILABLE.end, history_chosen: true}));
+
+        expect(screen.getByTestId('stub-line-chart').getAttribute('data-first-date')).toBe(AVAILABLE.end);
+    });
+
+    it('keeps a typed start inside the common history, in the state and in the field', async () => {
+        mount(simulationResult({history_available_start: AVAILABLE.start, history_available_end: AVAILABLE.end}));
+        await fireEvent.click(screen.getByTestId('risk-simulation-history-chosen'));
+        const period = screen.getByTestId('risk-simulation-history-period');
+        const start = within(period).getByTestId('date-range-input-start') as HTMLInputElement;
+
+        // A start inside the window is kept as typed.
+        await fireEvent.focus(start);
+        await fireEvent.input(start, {target: {value: '2020-02-03'}});
+        await fireEvent.blur(start);
+        expect(screen.getByTestId('risk-simulation-history-period').getAttribute('data-start')).toBe('2020-02-03');
+
+        // A start before the common history comes back to it, twice in a row too (the second clamp returns the same day).
+        for (const typed of ['2010-01-04', '2009-06-01']) {
+            await fireEvent.focus(start);
+            await fireEvent.input(start, {target: {value: typed}});
+            await fireEvent.blur(start);
+            expect(screen.getByTestId('risk-simulation-history-period').getAttribute('data-start')).toBe(AVAILABLE.start);
+            await fireEvent.focus(start);
+            expect(start.value, `the field shows the clamped day after typing ${typed}`).toBe(AVAILABLE.start);
+            await fireEvent.blur(start);
+        }
+    });
+
+    it('says the history line is a chosen period when the answer says so', () => {
+        mount(simulationResult({history_available_start: AVAILABLE.start, history_available_end: AVAILABLE.end, history_chosen: true}));
+
+        const line = screen.getByTestId('risk-simulation-estimation');
+        expect(line.getAttribute('data-history-chosen')).toBe('true');
+        expect(normalize(line.textContent)).toContain(resolve('risk.simulation.history.chosenNote'));
+    });
+});
+
+// 81 U30 (testlist of 23/11: «campi di input tutti della stessa larghezza»): on a phone the parameters keep T-4's rows —
+// label on the left, field on the right — and every field is of one width; from `sm` up each keeps the width it had.
+// `w-full` cannot do it beside a label (the field would take what the label leaves, a width per row), so the one width is
+// a shared fixed one. Classes are the contract here (jsdom draws no media query); the measure at 375 px is the E2E's («T-4»).
+describe('L4Simulation — the parameter fields on a phone are of one width (81 U30)', () => {
+    /** The width class a field has below `sm` (the unprefixed `w-*` tokens) and from `sm` up (`sm:w-*`). */
+    function widths(el: Element): {phone: string[]; fromSm: string[]} {
+        const list = (el.getAttribute('class') ?? '').split(/\s+/);
+        return {phone: list.filter((token) => /^w-/.test(token)), fromSm: list.filter((token) => /^sm:w-/.test(token))};
+    }
+
+    it('gives horizon, paths and seed the same width below `sm`', () => {
+        mount();
+        const phone = ['risk-simulation-horizon', 'risk-simulation-paths', 'risk-simulation-seed'].map((id) => ({id, ...widths(screen.getByTestId(id))}));
+        for (const field of phone) expect(field.phone, `${field.id}: one fixed width below sm`).toHaveLength(1);
+        expect(new Set(phone.map((field) => field.phone[0])).size, `the fields differ below sm: ${phone.map((field) => `${field.id} ${field.phone[0]}`).join(', ')}`).toBe(1);
+    });
+
+    it('gives the sampling select the same width as the inputs below `sm`', async () => {
+        mount();
+        // The select exists only for the parametric process (`gbm`), the «advanced» mode.
+        const advanced = document.querySelector('[data-testid="risk-simulation-mode"][data-mode-id="gbm"] input');
+        await fireEvent.click(advanced as Element);
+        const input = widths(screen.getByTestId('risk-simulation-paths')).phone[0];
+        const sampling = screen.getByTestId('risk-simulation-sampling');
+        const own = [sampling, ...sampling.querySelectorAll('*')].map((el) => widths(el).phone).find((list) => list.length > 0);
+        expect(own, 'the sampling select carries no width of its own below sm').toEqual([input]);
+    });
+
+    it('keeps the width paths had from `sm` up', () => {
+        mount();
+        expect(widths(screen.getByTestId('risk-simulation-paths')).fromSm).toEqual(['sm:w-24']);
     });
 });

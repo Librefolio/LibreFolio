@@ -13,6 +13,13 @@ the price budget (over 27 years of prices at 100 holdings) shows in the window's
 
 Who takes part (RN-16b, developer's Q7 «per ora B», 17/11/2026): a holding with less history than the horizon stays out
 — its weight counted as cash, the page naming it — unless none reaches the horizon (:func:`simulation_participants`).
+
+The period the days are drawn from (RSK-SIM1, P-7, 23/11/2026): by default all that common history; the user may choose a
+period inside it (``SimulationParams.history_start``/``history_end``) — in turbulent times, drawing both the crashes and
+the rebounds gives too rosy or too dark a cone. Who takes part is still decided on all the history available, so a short
+period never drops a holding in silence (the coordinator's answer); the period only chooses which days are drawn. A start
+before the common history moves to it, with a warning; the result states the window it could have drawn from
+(``history_available_start``/``_end``) beside the one it drew from.
 """
 
 from __future__ import annotations
@@ -29,7 +36,7 @@ from backend.app.schemas.risk.results import RiskExcludedAsset, RiskWarning
 from backend.app.schemas.risk.scope import RiskQueryRequest
 from backend.app.schemas.risk.vocabulary import RiskErrorCode, RiskHistoricalReplayExclusionTreatment, RiskScopeKind
 from backend.app.services.platform.data_quality_thresholds import REPLAY_EXCLUDED_WEIGHT_WARNING_SHARE
-from backend.app.services.risk.base import RiskExecutionContext, RiskUnavailableError
+from backend.app.services.risk.base import RiskExecutionContext, RiskSimulationHistoryContext, RiskUnavailableError
 from backend.app.services.risk.eligibility import first_fx_rate_dates, load_price_window_facts
 from backend.app.services.risk.results import build_execution_context
 from backend.app.services.risk.scope import ScopeInputs, bounded_range, prepare_asset_series
@@ -142,6 +149,54 @@ def _without_assets(warnings: tuple[RiskWarning, ...], asset_ids: frozenset[int]
     return kept
 
 
+def _chosen_window(
+    participant_days: Mapping[int, date],
+    available: DateRangeModel,
+    *,
+    history_start: date | None,
+    history_end: date | None,
+) -> tuple[DateRangeModel, list[RiskWarning]]:
+    """The window the days are drawn from: the user's period inside ``available``, or ``available`` itself.
+
+    A chosen end earlier than the common one moves the window's end there, and the price budget (J-50) counts from it; a
+    chosen start before the window's start — the common history's, or the budget's — moves to it, with a warning that
+    names both days. A period that ends before the common history starts, or starts after the history ends, leaves
+    nothing to draw from: refused.
+    """
+    if history_start is None and history_end is None:
+        return available, []
+    window = available
+    if history_end is not None and history_end < available.end:
+        if history_end < available.start:
+            raise RiskUnavailableError(
+                f"The chosen period ends on {history_end.isoformat()}, before the common history starts on {available.start.isoformat()}",
+                code=RiskErrorCode.INSUFFICIENT_HISTORY,
+                details={"history_end": history_end.isoformat(), "available_start": available.start.isoformat()},
+            )
+        window = simulation_window(participant_days, end=history_end) or available
+    warnings: list[RiskWarning] = []
+    if history_start is not None:
+        if history_start < window.start:
+            warnings.append(
+                RiskWarning(
+                    code="simulation_history_start_moved",
+                    message=f"The chosen period starts on {history_start.isoformat()}, before the common history: the simulation draws from {window.start.isoformat()}.",
+                    details={"requested_start": history_start.isoformat(), "used_start": window.start.isoformat()},
+                    message_i18n_key="risk.warnings.simulation_history_start_moved",
+                    message_params={"requested_start": history_start.isoformat(), "used_start": window.start.isoformat()},
+                )
+            )
+        elif history_start > window.end:
+            raise RiskUnavailableError(
+                f"The chosen period starts on {history_start.isoformat()}, after the history ends on {window.end.isoformat()}",
+                code=RiskErrorCode.INSUFFICIENT_HISTORY,
+                details={"history_start": history_start.isoformat(), "available_end": window.end.isoformat()},
+            )
+        else:
+            window = DateRangeModel(start=history_start, end=window.end)
+    return window, warnings
+
+
 async def prepare_simulation_context(
     db: AsyncSession,
     *,
@@ -150,9 +205,12 @@ async def prepare_simulation_context(
     never_priced_asset_ids: frozenset[int],
     horizon_days: int,
     market_holidays: AbstractSet[date] = frozenset(),
+    history_start: date | None = None,
+    history_end: date | None = None,
 ) -> RiskExecutionContext:
     """The execution context of a simulation, rebuilt whole from its own window and its own participants (weights, cash,
-    exclusions, series, warnings)."""
+    exclusions, series, warnings). ``history_start``/``history_end``: the period the user chose to draw from, None for all
+    the common history."""
     end = latest_range_end()
     facts = await load_price_window_facts(
         db,
@@ -165,12 +223,14 @@ async def prepare_simulation_context(
     first_rates = await first_fx_rate_dates(db, currencies={item.currency for item in facts.values() if item.currency}, target_currency=request.target_currency)
     first_days = {asset_id: first_useful_day(item.first_quote_ever, first_rates.get(item.currency) if item.currency else None) for asset_id, item in facts.items()}
     chosen = simulation_participants(first_days, horizon_days=horizon_days, end=end)
-    window = simulation_window({asset_id: first_days[asset_id] for asset_id in chosen.taking_part}, end=end)
-    if window is None:
+    participant_days = {asset_id: first_days[asset_id] for asset_id in chosen.taking_part}
+    available = simulation_window(participant_days, end=end)
+    if available is None:
         raise RiskUnavailableError(
             "No asset of the scope has a price to estimate the simulation on",
             code=RiskErrorCode.INSUFFICIENT_HISTORY,
         )
+    window, period_warnings = _chosen_window(participant_days, available, history_start=history_start, history_end=history_end)
     short = frozenset(chosen.short)
     prepared = await prepare_asset_series(
         db,
@@ -185,7 +245,7 @@ async def prepare_simulation_context(
         prepared=prepared,
         never_priced_asset_ids=never_priced_asset_ids,
     )
-    warnings = list(_without_assets(tuple(context.execution_warnings), short)) + _short_history_warnings(chosen.short, first_days, horizon_days=horizon_days, end=end)
+    warnings = list(_without_assets(tuple(context.execution_warnings), short)) + _short_history_warnings(chosen.short, first_days, horizon_days=horizon_days, end=end) + period_warnings
     if request.scope.kind == RiskScopeKind.PORTFOLIO:
         excluded_ids = {item.asset_id for item in context.excluded_assets} | short
         if (mostly := _mostly_excluded_warning(excluded_ids, scope_inputs.weights)) is not None:
@@ -194,4 +254,5 @@ async def prepare_simulation_context(
     excluded_assets = tuple(
         RiskExcludedAsset(asset_id=item.asset_id, reason="shorter_than_horizon", details={"horizon_days": horizon_days, "first_useful_day": first_days[item.asset_id].isoformat()}) if item.asset_id in short and first_days.get(item.asset_id) is not None else item for item in context.excluded_assets
     )
-    return replace(context, execution_warnings=tuple(warnings), excluded_assets=excluded_assets)
+    history = RiskSimulationHistoryContext(available=available, chosen=history_start is not None or history_end is not None)
+    return replace(context, execution_warnings=tuple(warnings), excluded_assets=excluded_assets, simulation_history=history)

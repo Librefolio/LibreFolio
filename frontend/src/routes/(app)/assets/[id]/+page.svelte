@@ -94,7 +94,7 @@
     import {getAssetPriceStore, invalidateAssetPriceStore, apiPricesToAssetPricePoints} from '$lib/stores/assetPriceStoreRegistry';
     import {firstDateOf, forgetFirstDate, rememberFirstDate} from '$lib/stores/firstSeriesDates';
     import {hasStoredPointInRange} from '$lib/utils/sync/syncHelpers';
-    import {buildIdentifiersList} from '$lib/utils/assetTypes';
+    import {buildIdentifiersList, softIdentifiers} from '$lib/utils/assetTypes';
     import {ensureAssetProvidersCached, getAssetProviderIconUrl, getAssetProviderName, isParametricProvider, assetProvidersVersion} from '$lib/utils/providerHelpers';
     import {replaceHistoryDateRange} from '$lib/utils/url/dateRangeUrl';
     import {buildTabUrlFromLocation, getResolvedTabParam} from '$lib/utils/url/tabUrl';
@@ -773,11 +773,13 @@
         }
     }
 
-    /** The asset's identifiers other than the ISIN and the ticker, which the «Profilo» tab shows on their own rows. */
+    /** The asset's typed identifiers other than the ISIN and the ticker, which the «Profilo» tab shows on their own rows. */
     let otherIdentifiers = $derived.by((): [string, string][] => {
         if (!assetInfo) return [];
-        return buildIdentifiersList({...(assetInfo as Record<string, unknown>), identifier_isin: null, identifier_ticker: null});
+        return buildIdentifiersList({...(assetInfo as Record<string, unknown>), identifier_isin: null, identifier_ticker: null, identifier_other: null});
     });
+    /** The free identifiers (type `OTHER`): one row of chips on the «Profilo» tab (81 U26b). */
+    let freeIdentifiers = $derived(assetInfo ? softIdentifiers(assetInfo as Record<string, unknown>) : []);
 
     let signalDefinitionsByType = $derived(new Map(signalDefinitions.map((definition) => [definition.type, definition])));
 
@@ -2481,7 +2483,6 @@
                     livePriceFlashToken={live.flashToken}
                     fxPairUrl={mainFxPairUrl}
                     onCreateForex={() => (showFxPairAddModal = true)}
-                    providerCode={assetInfo.provider_code}
                 />
             {/if}
         {/snippet}
@@ -2936,6 +2937,7 @@
                 isin={assetInfo.identifier_isin ?? null}
                 ticker={assetInfo.identifier_ticker ?? null}
                 {otherIdentifiers}
+                softIdentifiers={freeIdentifiers}
                 refreshKey={profileRefreshKey}
                 onedit={() => (profileEditOpen = true)}
                 onhistory={(key) => (profileHistoryKey = key)}

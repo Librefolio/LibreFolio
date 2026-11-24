@@ -48,7 +48,7 @@ class PortfolioDataMixin:
         include_candles: bool = False,
         apply_ownership_share: bool = True,
     ):
-        """The one engine run of the report, the Performance table and the positions chart (FB-14).
+        """The one engine run of the report, the Performance table, the positions chart and the «Allocazione» tab (FB-14).
 
         Every caller asks the same run — the replay from t=0, with the position frames, the BUY funding split and the
         positions at the end of ``date_from`` — so the requests of one page share the engine's blob-cache key: the first

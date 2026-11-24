@@ -1330,3 +1330,105 @@ describe('ImportWizardModal — 66 P1b: the names of the linked charges at the h
         expect(parentRefOf(handedDescribed(handed, 'P1b fee')), 'the FEE still names it').toBe(refOf(parent));
     });
 });
+
+// ---------------------------------------------------------------------------
+// 77 SEL-M part 2 — the Import's row menus: hidden where pointless, off with the reason where blocked
+// ---------------------------------------------------------------------------
+
+/**
+ * D2 (plan 77, designer 20/11): «Merge with…» of an asset's row is offered only when another group exists, and the
+ * placeholder «No other security» is gone. A row with no action at all shows no ⋮. jsdom has no layout: a menu anchored on
+ * a ⋮ of no size closes at once, so each ⋮ is given a size.
+ */
+describe('AssetGroupStep — «Merge with…» only with another group (77 SEL-M part 2, D2)', () => {
+    afterEach(() => cleanup());
+
+    async function openMemberMenu(testid: string): Promise<HTMLElement> {
+        const kebab = screen.getByTestId(testid);
+        vi.spyOn(kebab, 'getBoundingClientRect').mockReturnValue(new DOMRect(10, 10, 16, 16));
+        await fireEvent.click(kebab);
+        return screen.findByTestId('context-menu');
+    }
+
+    it('one group of two members: «Extract» only, no «Merge with…»', async () => {
+        await setupI18n();
+        render(AssetGroupStep, assetGroupStepProps([assetGroup('alone', 'confirmed', 100)]));
+        const menu = await openMemberMenu('asset-group-member-menu-100');
+        expect(menu.querySelector('[data-testid="asset-group-menu-merge"]')).toBeNull();
+        expect(menu.querySelector('[data-testid="asset-group-menu-extract"]')).not.toBeNull();
+    });
+
+    it('one group of one member, nothing else: no action, so no ⋮', async () => {
+        await setupI18n();
+        render(AssetGroupStep, assetGroupStepProps([assetGroup('only', 'single', 500)]));
+        expect(screen.queryByTestId('asset-group-single-menu-500')).toBeNull();
+    });
+
+    it('with another group, «Merge with…» is there', async () => {
+        await setupI18n();
+        render(AssetGroupStep, assetGroupStepProps([assetGroup('first', 'confirmed', 100), assetGroup('second', 'single', 500)]));
+        const menu = await openMemberMenu('asset-group-single-menu-500');
+        expect(menu.querySelector('[data-testid="asset-group-menu-merge"]')).not.toBeNull();
+    });
+});
+
+/**
+ * D3 (plan 77, designer 20/11): in step 3, «View detail» of a file is hidden when its read failed (the row's message and
+ * «Read again» stay), and off with its reason while the file is still being read.
+ */
+describe('ImportWizardModal — step 3 «View detail» (77 SEL-M part 2, D3)', () => {
+    const broker = {id: 79, name: 'Detail broker', default_import_plugin: 'owned-parser', opened_at: '2020-01-01', icon_url: null, portal_url: null};
+
+    beforeEach(async () => {
+        vi.clearAllMocks();
+        guideAnchors.clear();
+        vi.mocked(getEditableBrokers).mockReturnValue([broker]);
+        vi.mocked(getBrokerInfo).mockImplementation((id) => (id === broker.id ? broker : null));
+        vi.mocked(zodiosApi.list_files_api_v1_brokers_import_files_get).mockResolvedValue([
+            {file_id: 'detail-file', filename: 'detail.csv', size_bytes: 128, status: 'uploaded', uploaded_at: '2026-09-14T08:00:00Z', compatible_plugins: ['owned-parser'], target_broker_id: broker.id, can_delete: true},
+        ]);
+        await setupI18n();
+    });
+
+    afterEach(() => {
+        cleanup();
+        guideAnchors.clear();
+        vi.mocked(getEditableBrokers).mockReturnValue([]);
+        vi.mocked(getBrokerInfo).mockReturnValue(null);
+        vi.mocked(zodiosApi.list_files_api_v1_brokers_import_files_get).mockResolvedValue([]);
+    });
+
+    async function parseTheFile(): Promise<HTMLElement> {
+        mount();
+        await waitFor(() => expect(screen.getByTestId('import-wizard-step1')).toHaveAttribute('data-busy', 'false'));
+        await fireEvent.click(screen.getByTestId('import-wizard-next'));
+        await waitFor(() => expect(screen.getByTestId('import-wizard-step2')).toHaveAttribute('data-busy', 'false'));
+        await fireEvent.click(screen.getByTestId('dt-row-checkbox-detail-file'));
+        await waitFor(() => expect(screen.getByTestId('import-wizard-parse')).toBeEnabled());
+        await fireEvent.click(screen.getByTestId('import-wizard-parse'));
+        return waitFor(() => {
+            const row = document.querySelector<HTMLElement>('tr[data-row-id="detail-file"]');
+            if (!row) throw new Error('step 3 shows no row for the file yet');
+            return row;
+        });
+    }
+
+    it('a read that failed: no «View detail»; «Read again» stays', async () => {
+        vi.mocked(zodiosApi.parse_file_api_v1_brokers_import_files__file_id__parse_post).mockRejectedValue(Object.assign(new Error('Request failed with status code 500'), {response: {status: 500}}));
+        const row = await parseTheFile();
+        await screen.findByTestId('import-wizard-parse-errors');
+        await fireEvent.contextMenu(row, {clientX: 10, clientY: 10});
+        const menu = await screen.findByTestId('context-menu');
+        expect(menu.querySelector('[data-testid="context-menu-action-viewDetail"]')).toBeNull();
+        expect(menu.querySelector('[data-testid="context-menu-action-reparse"]')).not.toBeNull();
+    });
+
+    it('a file still being read: «View detail» off, with its reason', async () => {
+        vi.mocked(zodiosApi.parse_file_api_v1_brokers_import_files__file_id__parse_post).mockReturnValue(new Promise(() => {}) as never);
+        const row = await parseTheFile();
+        await fireEvent.contextMenu(row, {clientX: 10, clientY: 10});
+        const detail = await screen.findByTestId('context-menu-action-viewDetail');
+        expect(detail).toHaveAttribute('aria-disabled', 'true');
+        expect(detail).toHaveAttribute('data-disabled-reason', 'reading');
+    });
+});

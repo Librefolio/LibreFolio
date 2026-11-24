@@ -209,3 +209,24 @@ describe('buildSimulationParameters — every mode the panel can offer', () => {
         }
     });
 });
+
+describe('buildSimulationParameters — the period the days are drawn from (RSK-SIM1)', () => {
+    it('sends no period by default: all the common history is the backend default', () => {
+        for (const process of ['block_bootstrap', 'gbm'] as const) {
+            const params = buildSimulationParameters(state({process, regime: 'none'}));
+            expect(params).not.toHaveProperty('history_start');
+            expect(params).not.toHaveProperty('history_end');
+        }
+        const cleared = buildSimulationParameters(state({historyStart: null, historyEnd: null}));
+        expect(cleared).not.toHaveProperty('history_start');
+        expect(cleared).not.toHaveProperty('history_end');
+    });
+
+    it('sends a chosen period on both engines', () => {
+        for (const process of ['block_bootstrap', 'gbm'] as const) {
+            const params = buildSimulationParameters(state({process, regime: 'none', historyStart: '2020-02-01', historyEnd: '2021-03-31'}));
+            expect(params.history_start).toBe('2020-02-01');
+            expect(params.history_end).toBe('2021-03-31');
+        }
+    });
+});

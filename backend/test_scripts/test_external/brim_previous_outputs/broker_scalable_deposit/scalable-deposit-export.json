@@ -1,0 +1,211 @@
+{
+  "format": "lf-brim-previous-output/1",
+  "comment": "Output of the plugin BEFORE its project-66 lot changed it (P2 contract §2.1). Never re-take it after the code change.",
+  "plugin_code": "broker_scalable_deposit",
+  "plugin_version": "1.2.0",
+  "source_head": "890343101",
+  "captured_on": "2026-11-21",
+  "sample": "broker_scalable_deposit/sample_reports/scalable-deposit-export.csv",
+  "sample_sha256": "2eb90d5244fdae4ac664a4f5df5fd9f139b0f0dcd1767c77948cf40c1e01577e",
+  "extracted_assets": {},
+  "transactions": [
+    {
+      "asset_id": null,
+      "type": "INTEREST",
+      "date": "2026-06-30",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "2.95"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "scalable"
+      ],
+      "description": "Zinsen · id synthD0000000000000008",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": null,
+      "type": "WITHDRAWAL",
+      "date": "2026-06-15",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "-1500"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "scalable"
+      ],
+      "description": "Auszahlung an DE89 3704 0044 0532 0130 00 · id synthD0000000000000007",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": null,
+      "type": "WITHDRAWAL",
+      "date": "2026-06-01",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "-300"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "scalable"
+      ],
+      "description": "Interner Übertrag · id synthD0000000000000006",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": null,
+      "type": "INTEREST",
+      "date": "2026-05-31",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "3.50"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "scalable"
+      ],
+      "description": "Zinsen · id synthD0000000000000005 · ref INTEREST-PAY-account-5e1f0a7b-0002",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": null,
+      "type": "TAX",
+      "date": "2026-05-31",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "-0.92"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "scalable"
+      ],
+      "description": "Tax · Zinsen · id synthD0000000000000005 · ref INTEREST-PAY-account-5e1f0a7b-0002",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": null,
+      "type": "INTEREST",
+      "date": "2026-04-30",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "2.47"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "scalable"
+      ],
+      "description": "Zinsen · id synthD0000000000000004 · ref INTEREST-PAY-account-5e1f0a7b-0001",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": null,
+      "type": "TAX",
+      "date": "2026-04-30",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "-0.65"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "scalable"
+      ],
+      "description": "Tax · Zinsen · id synthD0000000000000004 · ref INTEREST-PAY-account-5e1f0a7b-0001",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": null,
+      "type": "DEPOSIT",
+      "date": "2026-04-02",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "1000"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "scalable"
+      ],
+      "description": "Interner Übertrag · id synthD0000000000000003",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": null,
+      "type": "DEPOSIT",
+      "date": "2026-03-02",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "5000"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "scalable"
+      ],
+      "description": "Einzahlung von DE89 3704 0044 0532 0130 00 · id synthD0000000000000002",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    }
+  ]
+}

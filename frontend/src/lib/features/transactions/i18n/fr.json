@@ -54,7 +54,8 @@
       "TRANSFER": "Transfert d'Actif",
       "FX_CONVERSION": "Change de Devises",
       "ADJUSTMENT": "Ajustement",
-      "CASH_TRANSFER": "Virement"
+      "CASH_TRANSFER": "Virement",
+      "REWARD": "Récompense"
     },
     "refresh": "Actualiser depuis le serveur",
     "noAsset": "(Pas d'actif)",
@@ -136,7 +137,8 @@
         "undo": "Annuler"
       },
       "openFailed": "La transaction n'a pas pu être ouverte",
-      "candidatesFailed": "Les transactions à lier n'ont pas pu être chargées"
+      "candidatesFailed": "Les transactions à lier n'ont pas pu être chargées",
+      "groupSyncHint": "Tant que les lignes de ce groupe (la transaction et ses frais liés) sont toutes nouvelles, elles partagent courtier et actif : les changer ici les change sur chaque ligne du groupe."
     },
     "bulk": {
       "resetRow": "Réinitialiser la ligne",
@@ -193,14 +195,28 @@
       },
       "chargesReadFailed": "Impossible de lire les frais liés de {ids}. «Réinitialiser la ligne» les relit.",
       "deleteSkippedUnread": "{n, plural, one {# transaction n’a pas été supprimée : ses frais liés n’ont pas pu être lus. «Réinitialiser la ligne» les relit.} other {# transactions n’ont pas été supprimées : leurs frais liés n’ont pas pu être lus. «Réinitialiser la ligne» les relit.}}",
-      "rowRef": "ligne {n}"
+      "rowRef": "ligne {n}",
+      "editPartnerInaccessible": "La transaction liée se trouve chez un courtier que vous ne pouvez pas voir : cette ligne ne peut donc pas être modifiée.",
+      "rewardFill": {
+        "pending": "{n, plural, one {# récompense n’a pas de valeur : elle peut être remplie depuis l’historique des prix de l’actif} other {# récompenses n’ont pas de valeur : elles peuvent être remplies depuis l’historique des prix des actifs}}",
+        "button": "Remplir depuis l’historique des prix",
+        "running": "Lecture des prix…",
+        "result": "{filled, plural, one {# remplie} other {# remplies}} avec la clôture de leur jour, {noPrice, plural, one {# sans prix ce jour-là} other {# sans prix ce jour-là}}, {noHistory, plural, one {# actif sans historique de prix} other {# actifs sans historique de prix}}. Les valeurs restent modifiables ; les lignes non remplies attendent encore une valeur.",
+        "failed": "Les prix n’ont pas pu être lus : aucune valeur n’a été remplie. Réessayez."
+      },
+      "cloneChargesReadFailed": "Impossible de lire les frais liés de {ids} : la copie a été faite sans eux.",
+      "cloneChargeFree": "{reason, select, deleted {La copie du frais n'est pas liée : la transaction à laquelle il était lié est marquée pour suppression.} paired {La copie du frais n'est pas liée : la transaction à laquelle il était lié fait partie d'une paire.} other {La copie du frais n'est pas liée : elle ne peut pas être liée à la même transaction.}}"
     },
     "commit": {
       "serverError": "Sauvegarde impossible — erreur serveur"
     },
     "costBasisOverride": {
       "tooltip": "Le coût que vous saisissez à la place du prix de revient moyen : pour l'Exit Tax, un héritage ou des règles fiscales particulières. Auto le calcule à partir de vos achats. Utilisez le sélecteur Total/Par unité ci-dessous pour choisir comment saisir ce montant.",
-      "warningAdjustment": "Le coût de base manuel est vide : sans lui, la transaction ne peut pas être enregistrée. Saisissez ce que ces parts vous ont coûté : 0 pour les nouvelles parts d'une division d'actions. Pour un don, saisissez 0, ou ce que le donateur les a payées : le prix de revient unitaire, et la plus-value sur laquelle vous pourriez être imposé, restent ainsi plus proches de la réalité."
+      "warningAdjustment": "Le coût de base manuel est vide : sans lui, la transaction ne peut pas être enregistrée. Saisissez ce que ces parts vous ont coûté : 0 pour les nouvelles parts d'une division d'actions. Pour un don, saisissez 0, ou ce que le donateur les a payées : le prix de revient unitaire, et la plus-value sur laquelle vous pourriez être imposé, restent ainsi plus proches de la réalité.",
+      "rewardLabel": "Valeur à la réception",
+      "rewardTooltip": "Ce que valaient ces unités le jour où vous les avez reçues : c'est à la fois le revenu de la récompense et le coût du lot qu'elle ouvre.",
+      "warningReward": "La valeur à la réception est vide : sans elle, la récompense ne peut pas être enregistrée. Saisissez ce que valaient ces unités le jour où vous les avez reçues, ou 0 pour les compter sans coût.",
+      "rewardFromHistory": "Depuis l'historique des prix : la clôture du {date}. Modifiez-la si la plateforme indique une autre valeur."
     },
     "wacPreview": {
       "calculating": "Calcul en cours...",
@@ -319,7 +335,7 @@
       "autoCostEmptyPool": "Coût automatique indisponible : aucune unité de cet actif n'était détenue à cette date pour en faire la moyenne. Choisissez Manuel et saisissez ce que ces unités vous ont coûté ; si vous les avez reçues en don, saisissez 0.",
       "autoCostUnknownPool": "Coût automatique indisponible : les unités de cet actif détenues à cette date n'ont aucun coût connu dont faire la moyenne. Choisissez Manuel et saisissez ce que ces unités vous ont coûté.",
       "ledgerUnreadable": "Les soldes de {brokerName} ne peuvent pas être vérifiés : {count, plural, one {# de ses transactions contient} many {# de ses transactions contiennent} other {# de ses transactions contiennent}} une valeur qui n'est pas un nombre. Demandez à l'administrateur de réparer les données.",
-      "costBasisNotAllowed": "❌ {type} ne prend pas de coût de base ici : retirez-le. Seules les unités qui entrent par un Ajustement ou un Transfert d'Actif en ont un.",
+      "costBasisNotAllowed": "❌ {type} ne prend pas de coût de base ici : retirez-le. Seule une transaction qui fait entrer des unités avec une valeur en a un.",
       "costBasisModeIncompatible": "❌ {type} ne prend pas de coût de base ici, donc aucun mode Auto ou Manuel : retirez-le.",
       "costBasisNegative": "Le coût de base ne peut pas être négatif : saisissez 0 ou plus.",
       "pairAdjustmentNotAllowed": "Deux Ajustements ne peuvent pas être liés : pour déplacer des titres entre courtiers, utilisez un Transfert d'Actif.",
@@ -340,7 +356,8 @@
       "chargeParentRefNotFound": "Aucune ligne de cet envoi ne s'appelle « {parentRef} » : le frais ne peut pas y être lié.",
       "chargeParentTwice": "Un frais désigne sa transaction une seule fois : par la ligne de cet envoi ou par une transaction enregistrée, pas les deux.",
       "chargeParentIdInvalid": "La transaction à laquelle un frais est lié doit être une transaction enregistrée (un identifiant positif).",
-      "chargesDeleteIncomplete": "Cette transaction a des frais liés : supprimez-les ou déliez-les dans la même modification."
+      "chargesDeleteIncomplete": "Cette transaction a des frais liés : supprimez-les ou déliez-les dans la même modification.",
+      "costBasisAutoNotAllowed": "❌ {type} prend comme coût de base sa valeur à la réception, jamais le coût moyen : pas de mode Auto, saisissez la valeur."
     },
     "pydantic": {
       "greaterThan": "La valeur doit être supérieure à {gt}",
@@ -425,7 +442,7 @@
       "colAction": "Action",
       "createOne": "Créer l'événement",
       "createTitle": "Créer les événements manquants",
-      "createIntro": "Vérifiez le type et saisissez la valeur de chaque événement, dans la devise de l’actif. Les événements sont créés le jour de la transaction ; liez-les ensuite.",
+      "createIntro": "Vérifiez le type et saisissez la valeur de chaque événement, dans la devise de l’actif. Les événements sont créés le jour de la transaction et les transactions leur sont reliées aussitôt.",
       "createValue": "Valeur",
       "createServes": "{n} transactions",
       "createHint": "Saisissez pour chaque événement une valeur supérieure à 0, avec 6 décimales au plus.",

@@ -41,7 +41,7 @@ describe('when «Riconosci» starts', () => {
         const state = createEnricherRecognitionState();
         expect(state.start(ETF)).toBe(true);
         expect(calls).toHaveLength(1);
-        expect(calls[0].request).toEqual({asset_type: 'ETF', identifiers: {ISIN: 'IE00BK5BQT80', TICKER: 'VWCE'}, price_provider_code: 'justetf'});
+        expect(calls[0].request).toEqual({asset_type: 'ETF', identifiers: {ISIN: 'IE00BK5BQT80', TICKER: 'VWCE'}, price_provider_code: 'justetf', seeds: []});
         expect(state.status).toBe('running');
     });
 
@@ -88,8 +88,21 @@ describe('what it keeps and proposes', () => {
         calls[0].finish({kind: 'done', done: done(['justetf', 'yahoo_finance', 'mockenrich'], ['yahoo_finance', 'justetf'])});
         await flush();
         expect(state.status).toBe('done');
-        expect(state.proposal).toEqual({justetf: {identifier_type: 'ISIN', identifier: 'IE00BK5BQT80'}, yahoo_finance: {identifier_type: 'TICKER', identifier: 'VWCE.DE'}});
-        expect(Object.keys(state.proposal)).toEqual(['justetf', 'yahoo_finance']);
+        // A ticker alone does not enter by itself (ENR-1, R2): it may be another listing, the user reads its name first
+        expect(state.proposal).toEqual({justetf: {identifier_type: 'ISIN', identifier: 'IE00BK5BQT80'}});
+        expect(state.recognitions.yahoo_finance.status, 'the answer itself is still kept, for «Non in elenco»').toBe('found');
+    });
+
+    it('proposes in the default order, by ISIN or LEI, never one found by a ticker', async () => {
+        const state = createEnricherRecognitionState();
+        state.start(ETF);
+        calls[0].onEvent(found('yahoo_finance', 'TICKER', 'VWCE.DE'));
+        calls[0].onEvent(found('gleif', 'LEI', 'EEXSPYGY7X8YAH8ZJF49'));
+        calls[0].onEvent(found('justetf'));
+        calls[0].onEvent(done(['justetf', 'yahoo_finance', 'gleif']));
+        calls[0].finish({kind: 'done', done: done(['justetf', 'yahoo_finance', 'gleif'])});
+        await flush();
+        expect(Object.keys(state.proposal)).toEqual(['justetf', 'gleif']);
     });
 
     it('waits out a refusal for too many requests and asks again by itself, with no action of the user (PROF, E8c)', async () => {
@@ -151,5 +164,140 @@ describe('what it keeps and proposes', () => {
         await flush();
         expect(state.recognitions).toEqual({});
         expect(state.status).toBe('idle');
+    });
+});
+
+describe('an asset that exists asks with what its enrichers accept (ENR-1, R1)', () => {
+    const TICKER_ONLY = {assetType: 'STOCK', identifiers: {TICKER: 'AAPL'}, priceProviderCode: null, acceptedTypes: ['TICKER']};
+
+    it('asks without a whole ISIN: any identifier of an accepted type is enough, the whole set sent', () => {
+        const state = createEnricherRecognitionState();
+        expect(state.canRecognize(TICKER_ONLY)).toBe(true);
+        expect(state.start(TICKER_ONLY)).toBe(true);
+        expect(calls).toHaveLength(1);
+        expect(calls[0].request).toEqual({asset_type: 'STOCK', identifiers: {TICKER: 'AAPL'}, price_provider_code: null, seeds: []});
+    });
+
+    it('a half-typed ISIN is enough when ISIN is accepted (the fields are not being typed)', () => {
+        const state = createEnricherRecognitionState();
+        expect(state.start({...ETF, identifiers: {ISIN: 'IE00'}, acceptedTypes: ['ISIN']})).toBe(true);
+    });
+
+    it('asks once per question: the same input started twice asks once', () => {
+        const state = createEnricherRecognitionState();
+        expect(state.start(TICKER_ONLY)).toBe(true);
+        expect(state.start({...TICKER_ONLY})).toBe(false);
+        expect(calls).toHaveLength(1);
+    });
+
+    it('no identifier of an accepted type: no question, state stays idle', () => {
+        const state = createEnricherRecognitionState();
+        const input = {...ETF, identifiers: {ISIN: 'IE00BK5BQT80'}, acceptedTypes: ['TICKER', 'LEI']};
+        expect(state.canRecognize(input)).toBe(false);
+        expect(state.start(input)).toBe(false);
+        expect(calls).toHaveLength(0);
+        expect(state.status).toBe('idle');
+    });
+
+    it('a blank identifier of an accepted type is not one; nor an empty list of accepted types, nor an asset with no type', () => {
+        const state = createEnricherRecognitionState();
+        expect(state.canRecognize({...TICKER_ONLY, identifiers: {TICKER: '  '}})).toBe(false);
+        expect(state.canRecognize({...TICKER_ONLY, acceptedTypes: []})).toBe(false);
+        expect(state.canRecognize({...TICKER_ONLY, assetType: ''})).toBe(false);
+    });
+
+    it('at creation (no accepted types) a whole ISIN is still needed', () => {
+        const state = createEnricherRecognitionState();
+        expect(state.canRecognize({assetType: 'STOCK', identifiers: {TICKER: 'AAPL'}, priceProviderCode: null})).toBe(false);
+        expect(state.canRecognize(ETF)).toBe(true);
+    });
+});
+
+describe('the price assignment as a seed (ENR-2)', () => {
+    const SEED = {code: 'yfinance', identifier_type: 'TICKER', identifier: 'SWDA.MI', params: {mic: 'XMIL'}};
+    const STOCK = {assetType: 'ETF', identifiers: {TICKER: 'SWDA'}, priceProviderCode: 'yfinance', acceptedTypes: ['TICKER', 'ISIN']};
+
+    it('the request carries the seed, trimmed, its params copied', () => {
+        const state = createEnricherRecognitionState();
+        const params = {mic: 'XMIL'};
+        expect(state.start({...ETF, seed: {...SEED, identifier: '  SWDA.MI ', params}})).toBe(true);
+        expect(calls[0].request.seeds).toEqual([SEED]);
+        expect(calls[0].request.seeds?.[0].params, 'a copy, not the form object').not.toBe(params);
+    });
+
+    it('no seed, or a blank one, sends an empty list', () => {
+        const state = createEnricherRecognitionState();
+        state.start({...ETF, seed: null});
+        state.start({...ETF, seed: {...SEED, identifier: '  '}});
+        expect(calls).toHaveLength(1);
+        expect(calls[0].request.seeds).toEqual([]);
+    });
+
+    it('a different seed is a new question; the same seed is not', () => {
+        const state = createEnricherRecognitionState();
+        expect(state.start({...ETF, seed: SEED})).toBe(true);
+        expect(state.start({...ETF, seed: {...SEED}})).toBe(false);
+        expect(state.start({...ETF, seed: {...SEED, identifier: 'SWDA.L'}})).toBe(true);
+        expect(state.start({...ETF, seed: null})).toBe(true);
+        expect(calls).toHaveLength(3);
+        expect(calls[0].signal.aborted).toBe(true);
+    });
+
+    it('an asset that exists asks with a seed alone when its type is accepted', () => {
+        const state = createEnricherRecognitionState();
+        const alone = {assetType: 'ETF', identifiers: {}, priceProviderCode: 'yfinance', acceptedTypes: ['TICKER'], seed: SEED};
+        expect(state.canRecognize(alone)).toBe(true);
+        expect(state.canRecognize({...alone, seed: {...SEED, identifier_type: 'ISIN'}}), 'a type no enricher accepts').toBe(false);
+        expect(state.start(alone)).toBe(true);
+        expect(calls[0].request).toEqual({asset_type: 'ETF', identifiers: {}, price_provider_code: 'yfinance', seeds: [SEED]});
+    });
+
+    it('at creation a seed without a whole ISIN asks nothing', () => {
+        const state = createEnricherRecognitionState();
+        expect(state.canRecognize({assetType: 'ETF', identifiers: {}, priceProviderCode: 'yfinance', seed: SEED})).toBe(false);
+        expect(state.start({assetType: 'ETF', identifiers: {ISIN: 'IE00'}, priceProviderCode: 'yfinance', seed: SEED})).toBe(false);
+        expect(calls).toHaveLength(0);
+        expect(state.start({...ETF, seed: SEED})).toBe(true);
+    });
+
+    it("trustedTickers is the seed's identifier when TICKER, nothing otherwise or before asking", () => {
+        const state = createEnricherRecognitionState();
+        expect(state.trustedTickers).toEqual([]);
+        state.start({...STOCK, seed: SEED});
+        expect(state.trustedTickers).toEqual(['SWDA.MI']);
+        state.start({...STOCK, seed: {...SEED, identifier_type: 'ISIN', identifier: 'IE00BK5BQT80'}});
+        expect(state.trustedTickers).toEqual([]);
+        state.cancel();
+        expect(state.trustedTickers).toEqual([]);
+    });
+
+    it("a ticker found by the seed's symbol enters the proposal; one found by another ticker does not", async () => {
+        const state = createEnricherRecognitionState();
+        state.start({...STOCK, seed: SEED});
+        calls[0].onEvent(found('yfinance', 'TICKER', 'SWDA.MI'));
+        calls[0].onEvent(found('borsa_italiana', 'TICKER', 'SWDA'));
+        calls[0].onEvent(found('justetf'));
+        calls[0].finish({kind: 'done', done: done(['yfinance', 'borsa_italiana', 'justetf'])});
+        await flush();
+        expect(Object.keys(state.proposal)).toEqual(['yfinance', 'justetf']);
+        expect(state.proposal.yfinance).toEqual({identifier_type: 'TICKER', identifier: 'SWDA.MI'});
+    });
+
+    it('without a seed the same ticker answer does not enter', async () => {
+        const state = createEnricherRecognitionState();
+        state.start(ETF);
+        calls[0].onEvent(found('yfinance', 'TICKER', 'SWDA.MI'));
+        calls[0].finish({kind: 'done', done: done(['yfinance'])});
+        await flush();
+        expect(state.proposal).toEqual({});
+    });
+
+    it('the proposal binding keeps the params of the answer', async () => {
+        const state = createEnricherRecognitionState();
+        state.start({...STOCK, seed: SEED});
+        calls[0].onEvent({...found('yfinance', 'TICKER', 'SWDA.MI'), params: {mic: 'XMIL'}});
+        calls[0].finish({kind: 'done', done: done(['yfinance'])});
+        await flush();
+        expect(state.proposal).toEqual({yfinance: {mic: 'XMIL', identifier_type: 'TICKER', identifier: 'SWDA.MI'}});
     });
 });

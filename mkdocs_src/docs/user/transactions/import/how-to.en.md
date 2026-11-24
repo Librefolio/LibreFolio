@@ -310,6 +310,13 @@ Rows whose missing cost the importer flags are the exception: a position added b
 and their form opens in **Manual** with the cost empty: type it by hand, even if it is 0 — choosing
 **Auto** does not take them off the list.
 
+A **Reward** the file gives no value for (Bitvavo or CoinTracking staking, a Generic CSV `reward` row) is listed in red
+the same way: it waits for the value of one unit on the day it was received. **Fill from price history**, in the blue
+banner above the grid, fills all of them at once with the asset's close of that very day, in the price's currency, and
+says how many it filled, how many had no price that day and how many belong to an asset without stored prices. Those
+stay in red for you to fill; a value already written is never replaced, and every filled value can still be changed.
+See [Reward](../../../financial-theory/instruments/transaction-types/reward.md#the-value-on-receipt).
+
 When the rows arrive, and after **⚡ Validate now** or a refused **Save All**, the grid turns to the
 page of the first row whose [**Auto** cost was refused](../form.md#cost-basis), and highlights it:
 the oldest by date, as correcting it can let the later rows of the same asset at that broker pass.

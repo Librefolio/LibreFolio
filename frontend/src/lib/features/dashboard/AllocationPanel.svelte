@@ -39,9 +39,11 @@
         lockedTab?: AllocationTab;
         /** The key under which the pie / history choice is kept (per user); the default is the Dashboard's own, so a second panel keeps a choice of its own. */
         viewStorageKey?: string;
+        /** Opens the Allocation tab of the portfolio view («Analyze →» beside the title). Only the Overview passes it: another panel shows no link. */
+        onAnalyze?: () => void;
     }
 
-    let {summary, loading, displayCurrency, brokerIds, currentLanguage, allocationHistory, onRequestAllocationHistory, lockedTab, viewStorageKey}: Props = $props();
+    let {summary, loading, displayCurrency, brokerIds, currentLanguage, allocationHistory, onRequestAllocationHistory, lockedTab, viewStorageKey, onAnalyze}: Props = $props();
 
     const allocationTabs = [
         ['type', 'dashboard.typeAllocation'],
@@ -153,6 +155,9 @@
 <div class="lg:col-span-2 bg-lf-card text-lf-primary rounded-xl border border-lf-subtle shadow-sm shadow-lf-shadow-card p-4 flex flex-col gap-3 min-h-[380px] lg:min-h-0" data-testid="allocation-panel">
     <div class="flex items-center gap-2">
         <h2 class="text-sm font-semibold text-lf-secondary">{$_('dashboard.allocation')}</h2>
+        {#if onAnalyze}
+            <button type="button" class="text-xs text-lf-link hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lf-focus" onclick={onAnalyze} data-testid="allocation-analyze">{$_('dashboard.analyzeAllocation')}</button>
+        {/if}
         <div class="ml-auto flex rounded-lg overflow-hidden border border-lf-subtle text-xs font-medium">
             <button
                 class="px-2.5 py-1.5 transition-colors {allocationView === 'now' ? 'bg-lf-action text-lf-on-action' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}"

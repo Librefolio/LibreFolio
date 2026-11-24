@@ -11,13 +11,14 @@ from typing import Mapping, Sequence
 from backend.app.db.models import Transaction, TransactionType
 from backend.app.schemas.portfolio.lots import EconomicAllocationGroupSchema, EconomicLotAllocationSchema, LotIncomeEventKind, LotIncomeEventSchema, TargetOperationAllocationSchema
 from backend.app.services.financial_math.fifo.models import EconomicAllocationGroup, EconomicEvent, FifoEngineResult, FifoInputTransaction, LinkedParent
+from backend.app.services.financial_math.income import INCOME_TYPES, income_value, transaction_type_code
 from backend.app.services.financial_math.lots.conversions import FxRateResolver
 
 # FEE/TAX pools weighted by the controvalue of their trades: their split depends on the trades' rates.
 _TRADE_WEIGHTED_RULES = frozenset({"SAME_DAY_TRADES", "SAME_DAY_MIXED_TRADES", "PREVIOUS_DAY_TRADES"})
 
 
-_ECONOMIC_KIND = {"DIVIDEND": "income", "INTEREST": "income", "FEE": "fees", "TAX": "taxes"}
+_ECONOMIC_KIND = {"DIVIDEND": "income", "INTEREST": "income", "REWARD": "income", "FEE": "fees", "TAX": "taxes"}
 
 
 @dataclass(frozen=True, slots=True)
@@ -52,10 +53,12 @@ def build_income_economic_events(
     asset_currency: str,
     target_currency: str,
 ) -> list[EconomicEvent]:
-    """Build target-value-aware DIVIDEND/INTEREST events for the engine economic stage.
+    """Build target-value-aware DIVIDEND/INTEREST/REWARD events for the engine economic stage.
 
     FX is resolved here (the service owns FX I/O): each event carries the native amount and the
-    amount converted to ``target_currency`` at the transaction date. Eligibility, pooling and
+    amount converted to ``target_currency`` at the transaction date. The income of a transaction is
+    ``financial_math.income.income_value``: a REWARD's value on receipt, with no cash; a REWARD of unknown value
+    makes no event (its income is unknown, never zero). Eligibility, pooling and
     pro-rata allocation are performed by the engine from the replayed fragments (D-1 semantics,
     broker scoped, transfer aware).
     """
@@ -63,16 +66,19 @@ def build_income_economic_events(
     for tx in income_transactions:
         if tx.id is None or tx.asset_id is None:
             continue
-        native_currency = tx.currency or asset_currency
-        target_amount = _engine_target_amount(tx.amount, native_currency, tx.date, fx_resolver)
+        income = income_value(tx, default_currency=asset_currency)
+        if income is None:
+            continue
+        native_currency = income.currency
+        target_amount = _engine_target_amount(income.amount, native_currency, tx.date, fx_resolver)
         events.append(
             EconomicEvent(
                 transaction_id=tx.id,
                 broker_id=tx.broker_id,
                 asset_id=tx.asset_id,
                 date=tx.date,
-                economic_type="DIVIDEND" if tx.type == TransactionType.DIVIDEND else "INTEREST",
-                native_amount=tx.amount,
+                economic_type=transaction_type_code(tx),  # type: ignore[arg-type]  # DIVIDEND, INTEREST or REWARD
+                native_amount=income.amount,
                 native_currency=native_currency,
                 target_amount=target_amount,
                 target_currency=target_currency,
@@ -162,7 +168,7 @@ def extract_income_outputs(
     per_lot_dated: dict[int, list[tuple[date_type, Decimal]]] = defaultdict(list)
     pool_lot_ids: dict[tuple[int, date_type, str, str | None, str], list[int]] = {}
     for group in engine_result.economic_allocation_groups:
-        if group.economic_type not in ("DIVIDEND", "INTEREST"):
+        if group.economic_type not in INCOME_TYPES:
             continue
         eligible_ids: list[int] = []
         for operation in group.operation_allocations:
@@ -185,7 +191,7 @@ def extract_income_outputs(
         eligible_ids = pool_lot_ids.get((event.broker_id, event.date, event.economic_type, event.native_currency, event.target_currency), [])
         income_events_payload.append(
             LotIncomeEventSchema(
-                type=LotIncomeEventKind.DIVIDEND if event.economic_type == "DIVIDEND" else LotIncomeEventKind.INTEREST,
+                type=LotIncomeEventKind(event.economic_type),
                 date=event.date,
                 broker_id=event.broker_id,
                 transaction_id=event.transaction_id,

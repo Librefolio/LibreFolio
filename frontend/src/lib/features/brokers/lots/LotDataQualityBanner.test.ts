@@ -365,3 +365,77 @@ describe('LotDataQualityBanner — the FX actions of the Dashboard banner (proje
         expect(calls).toEqual([[STALE_FX_ACTION, stale!.cta_target, stale]]);
     });
 });
+
+/**
+ * Project 66, M3 (GUARD) — the two orphan codes of a linked charge, drawn like the old orphan codes.
+ *
+ * A charge linked to a trade after the end of the analysis waits for it (M1b, `ASSET_COST_LINKED_PARENT_AFTER_RANGE`);
+ * one linked to an income no lot earned is orphan with it (M2, `ASSET_COST_LINKED_INCOME_NO_ELIGIBLE_LOTS`). Each is a
+ * warning with no lot, the four params of an orphan pool plus its parent's id and day. Beside the ladder's own orphan
+ * cost (`ASSET_COST_NO_ELIGIBLE_LOTS`): one block per code, each a warning in the warning tone, one message per charge
+ * that writes its amount, its day and its parent's day — the catalogue's own sentence, read through the harness' i18n —
+ * and no chip. Green from the start: M3 changes no production code.
+ */
+describe('LotDataQualityBanner — the orphan codes of a linked charge (project 66, M3)', () => {
+    interface LinkedCharge {
+        code: string;
+        messageKey: string;
+        transactionId: number;
+        economicType: string;
+        amount: string;
+        day: string;
+        parentDay: string;
+    }
+
+    const WAITING: LinkedCharge = {code: 'ASSET_COST_LINKED_PARENT_AFTER_RANGE', messageKey: 'dataQuality.assetCostLinkedParentAfterRange', transactionId: 7301, economicType: 'FEE', amount: '5', day: '2024-03-10', parentDay: '2024-03-20'};
+    const ON_ORPHAN_INCOME: LinkedCharge = {code: 'ASSET_COST_LINKED_INCOME_NO_ELIGIBLE_LOTS', messageKey: 'dataQuality.assetCostLinkedIncomeNoEligibleLots', transactionId: 7303, economicType: 'TAX', amount: '1.25', day: '2024-02-12', parentDay: '2024-02-10'};
+    const LADDER: LinkedCharge = {code: 'ASSET_COST_NO_ELIGIBLE_LOTS', messageKey: 'dataQuality.assetCostNoEligibleLots', transactionId: 7201, economicType: 'FEE', amount: '4.90', day: '2024-05-02', parentDay: ''};
+    const CHARGES: readonly LinkedCharge[] = [WAITING, ON_ORPHAN_INCOME];
+
+    /** A charge's issue as `_build_data_quality_report` serialises it: a warning, no lot; a linked one names its parent. */
+    function chargeIssue(charge: LinkedCharge): DataQualityIssue {
+        const parent = charge.parentDay ? {parent_transaction_id: charge.transactionId + 100, parent_date: charge.parentDay} : {};
+        return {
+            domain: 'PORTFOLIO',
+            code: charge.code,
+            severity: 'warning',
+            message_i18n_key: charge.messageKey,
+            message_params: {transaction_id: charge.transactionId, lot_id: null, broker_id: BROKER_ID, related_transaction_id: null, economic_type: charge.economicType, as_of_date: charge.day, target_amount: charge.amount, target_currency: 'EUR', ...parent},
+        };
+    }
+
+    it('draws a warning block per code, each linked charge’s message the catalogue’s sentence with its amount, day and parent’s day, and no chip', async () => {
+        const issues = [chargeIssue(WAITING), chargeIssue(LADDER), chargeIssue(ON_ORPHAN_INCOME)];
+        const {banner, toggle} = mount(issues);
+        expect(banner, 'folded: warnings only').toHaveAttribute('data-tone', 'warning');
+        await unfold(toggle);
+
+        const blocks = within(banner)
+            .queryAllByTestId(/^lot-data-quality-issue-/)
+            .map((block) => block.getAttribute('data-testid'));
+        expect(blocks.sort(), 'a block per code, the linked ones never folded into the ladder’s').toEqual([WAITING, ON_ORPHAN_INCOME, LADDER].map((charge) => `lot-data-quality-issue-${charge.code}`).sort());
+
+        for (const charge of [...CHARGES, LADDER]) {
+            const block = blockOf(banner, charge.code);
+            expect(block, `${charge.code}: a warning`).toHaveAttribute('data-severity', 'warning');
+            expect(block, `${charge.code}: in the warning tone`).toHaveAttribute('data-tone', 'warning');
+            const messages = messagesIn(block);
+            expect(messages, `${charge.code}: one message, the presence barrier for «no chip»`).toHaveLength(1);
+            expect(within(block).queryAllByTestId(/^lot-data-quality-chip-/), `${charge.code}: no lot named, no chip`).toEqual([]);
+
+            const sentence = get(_)(charge.messageKey, {values: chargeIssue(charge).message_params});
+            expect(sentence, `control: the catalogue resolves ${charge.messageKey}`).not.toBe(charge.messageKey);
+            expect(shown(messages[0]), `${charge.code}: the catalogue’s sentence`).toBe(sentence.replace(/\s+/g, ' ').trim());
+            expect(shown(messages[0]), `${charge.code}: its amount`).toContain(charge.amount);
+            expect(shown(messages[0]), `${charge.code}: its day`).toContain(charge.day);
+            if (charge.parentDay) expect(shown(messages[0]), `${charge.code}: its parent’s day`).toContain(charge.parentDay);
+        }
+    });
+
+    it('control: the header counts the three cost codes as three warning categories', async () => {
+        const threeCategories = get(_)('dataQuality.headerWarnings', {values: {warnings: 3}});
+        const {toggle} = mount([chargeIssue(WAITING), chargeIssue(LADDER), chargeIssue(ON_ORPHAN_INCOME)]);
+
+        expect(shown(toggle)).toBe(threeCategories);
+    });
+});

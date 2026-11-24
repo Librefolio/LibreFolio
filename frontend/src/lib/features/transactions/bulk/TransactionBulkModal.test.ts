@@ -39,6 +39,7 @@
  * label.
  */
 import {afterEach, beforeAll, beforeEach, describe, expect, it, vi} from 'vitest';
+import {guideAnchors} from '$lib/features/onboarding/guideAnchors.svelte';
 import {flushSync, tick} from 'svelte';
 import {get, writable} from 'svelte/store';
 import {cleanup, fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
@@ -2294,8 +2295,9 @@ describe('TransactionBulkModal — 66 F7-c1: the charges grouped under their par
 
         await openMenu(gridRow(BUY.id));
         const del = screen.getByTestId('context-menu-action-mark-delete');
-        expect(del, '«del» on a parent whose charges could not be read is off').toBeDisabled();
-        expect(del.getAttribute('title') ?? '', 'and says why').not.toBe('');
+        // 77 SEL-M: off and reachable, its reason in the shared Tooltip and its code in `data-disabled-reason`
+        expect(del, '«del» on a parent whose charges could not be read is off').toHaveAttribute('aria-disabled', 'true');
+        expect(del, 'and says why').toHaveAttribute('data-disabled-reason', 'charges-failed');
         await fireEvent.click(del);
         await settle();
         expect(rowStatus(gridRow(BUY.id)), 'the click marked nothing').toBe('original');
@@ -2376,7 +2378,7 @@ describe('TransactionBulkModal — 66 F7-c1: the charges grouped under their par
 
     // Re-targeted (consultant's decision, 19/11): the menu of an indented row is «Edit row» + «Delete»/«Restore» — «Edit row»
     // is the double-click's twin on touch and from the keyboard. Nothing else: no clone, split, remove or reset.
-    it('the menu of an indented row offers exactly «Edit row» and «Delete» / «Restore»; Delete → del, Restore → linked', async () => {
+    it('the menu of an indented row offers exactly «Edit row», «Clone row» (66 TL-3) and «Delete» / «Restore»; Delete → del, Restore → linked', async () => {
         await openLoaded();
         await fireEvent.click(theChip());
         await settle();
@@ -2386,10 +2388,11 @@ describe('TransactionBulkModal — 66 F7-c1: the charges grouped under their par
         expect(screen.getByTestId('context-menu-action-edit-single'), 'and «Edit row»').toBeInTheDocument();
         expect(
             [...screen.getByTestId('context-menu').querySelectorAll('[data-testid^="context-menu-action-"]')].map((item) => item.getAttribute('data-testid')),
-            'exactly those two',
-        ).toEqual(expect.arrayContaining(['context-menu-action-edit-single', 'context-menu-action-mark-delete']));
-        expect(screen.getByTestId('context-menu').querySelectorAll('[data-testid^="context-menu-action-"]'), 'exactly those two').toHaveLength(2);
-        for (const hidden of ['clone', 'split', 'remove-from-batch', 'reset']) {
+            'exactly those three',
+        ).toEqual(expect.arrayContaining(['context-menu-action-edit-single', 'context-menu-action-clone', 'context-menu-action-mark-delete']));
+        // 66 TL-3 (FEE consultant): «Clone row» is back on a charge under its parent; its copy sits under the same parent.
+        expect(screen.getByTestId('context-menu').querySelectorAll('[data-testid^="context-menu-action-"]'), 'exactly those three').toHaveLength(3);
+        for (const hidden of ['split', 'remove-from-batch', 'reset']) {
             expect(screen.queryByTestId(`context-menu-action-${hidden}`), `no «${hidden}» on a charge`).toBeNull();
         }
         await clickCollectingErrors(screen.getByTestId('context-menu-action-mark-delete'));
@@ -2398,11 +2401,12 @@ describe('TransactionBulkModal — 66 F7-c1: the charges grouped under their par
         expect(theChip(), 'a charge marked: the chip says its group changed').toHaveAttribute('data-charges-modified', 'true');
         expect(rowStatus(gridRow(BUY.id)), 'the parent’s own status does not change').toBe('original');
 
-        // A charge marked «del» is a changed row: its menu still offers «Restore» only (no «reset», no «remove»).
+        // A charge marked «del» is a changed row: its menu still offers «Restore» (no «reset», no «remove»); «Clone row»
+        // too (66 TL-3: its copy is born free when the «Link» rule refuses the parent).
         await openMenu(gridRow(FEE.id));
         expect(screen.getByTestId('context-menu-action-mark-delete'), 'barrier: the menu offers «Restore»').toBeInTheDocument();
         expect(screen.getByTestId('context-menu-action-edit-single'), 'and «Edit row»').toBeInTheDocument();
-        for (const hidden of ['clone', 'remove-from-batch', 'reset']) {
+        for (const hidden of ['remove-from-batch', 'reset']) {
             expect(screen.queryByTestId(`context-menu-action-${hidden}`), `no «${hidden}» on a charge marked «del»`).toBeNull();
         }
         await clickCollectingErrors(screen.getByTestId('context-menu-action-mark-delete'));
@@ -2602,7 +2606,7 @@ describe('TransactionBulkModal — 66 F7-c1: the charges grouped under their par
         await waitFor(() => expect(theChip()).toHaveAttribute('data-charges-count', '2'));
         expect(theChip(), 'read by the Bulk itself: closed').toHaveAttribute('aria-expanded', 'false');
         await openMenu(gridRow(BUY.id));
-        expect(screen.getByTestId('context-menu-action-mark-delete'), 'the charges are read: «del» is on again').toBeEnabled();
+        expect(screen.getByTestId('context-menu-action-mark-delete'), 'the charges are read: «del» is on again').not.toHaveAttribute('aria-disabled');
     });
 
     it('«Delete» on a new charge created in the parent’s Form: the row leaves the Bulk, the chip counts one less, no create is sent', async () => {
@@ -2720,7 +2724,8 @@ describe('TransactionBulkModal — 66 F7-c1: the charges grouped under their par
         async function deleteAction(row: HTMLElement): Promise<{enabled: boolean; reason: string}> {
             await openMenu(row);
             const action = screen.getByTestId('context-menu-action-mark-delete');
-            const verdict = {enabled: !(action as HTMLButtonElement).disabled, reason: action.getAttribute('title') ?? ''};
+            // 77 SEL-M: off with its reason is `aria-disabled`, reachable, its reason code in `data-disabled-reason`
+            const verdict = {enabled: action.getAttribute('aria-disabled') !== 'true', reason: action.getAttribute('data-disabled-reason') ?? ''};
             await fireEvent.keyDown(window, {key: 'Escape'});
             await settle();
             await waitFor(() => expect(screen.queryByTestId('context-menu'), 'the menu closed').toBeNull());
@@ -2834,7 +2839,7 @@ describe('TransactionBulkModal — 66 F7-c1: the charges grouped under their par
         await waitFor(() => expect(theChip(), 'the chip appears with the two charges').toHaveAttribute('data-charges-count', '2'));
         expect(rowStatus(gridRow(BUY.id)), 'the parent is still untouched').toBe('original');
         await openMenu(gridRow(BUY.id));
-        expect(screen.getByTestId('context-menu-action-mark-delete'), '«del» is on again').toBeEnabled();
+        expect(screen.getByTestId('context-menu-action-mark-delete'), '«del» is on again').not.toHaveAttribute('aria-disabled');
         expect(screen.queryByTestId('context-menu-action-reset'), 'and, read, the untouched parent no longer offers «Reset row»').toBeNull();
     });
 
@@ -2844,7 +2849,7 @@ describe('TransactionBulkModal — 66 F7-c1: the charges grouped under their par
 
         await openMenu(gridRow(BUY.id));
 
-        expect(screen.getByTestId('context-menu-action-mark-delete'), 'barrier: the menu is drawn, «del» on').toBeEnabled();
+        expect(screen.getByTestId('context-menu-action-mark-delete'), 'barrier: the menu is drawn, «del» on').not.toHaveAttribute('aria-disabled');
         expect(screen.queryByTestId('context-menu-action-reset'), 'nothing to reset').toBeNull();
     });
 
@@ -3793,7 +3798,7 @@ describe('TransactionBulkModal — 66 F7-c1: the charges grouped under their par
                 const button = linkButton();
                 expect(button, '«Link» is there, off').not.toBeNull();
                 expect(button).toHaveAttribute('aria-disabled', 'true');
-                expect(button).toHaveAttribute('data-reason', 'deleted');
+                expect(button).toHaveAttribute('data-disabled-reason', 'deleted');
                 await fireEvent.click(button!);
                 await settle();
                 expect(screen.queryByTestId(PANEL), 'off: no panel').toBeNull();
@@ -3808,7 +3813,7 @@ describe('TransactionBulkModal — 66 F7-c1: the charges grouped under their par
 
                 expect(linkButton(), '«Link» is there, off').not.toBeNull();
                 expect(linkButton()).toHaveAttribute('aria-disabled', 'true');
-                expect(linkButton()).toHaveAttribute('data-reason', 'twoParents');
+                expect(linkButton()).toHaveAttribute('data-disabled-reason', 'twoParents');
             });
 
             it('new BUY + new FEE: confirm puts the FEE under the BUY, the group open; «Save all» sends the FEE with parent_ref = the BUY’s ref', async () => {
@@ -4331,7 +4336,7 @@ describe('TransactionBulkModal — 66 F7-c1: the charges grouped under their par
             expect(screen.queryByTestId('tx-bulk-delete-selected'), 'premise: the selection toolbar answers the selection').not.toBeNull();
             const button = screen.queryByTestId('promote-toolbar-confirm');
             const offered = button !== null && button.getAttribute('aria-disabled') !== 'true';
-            if (button !== null && !offered) expect(button, 'a merge button drawn off says why: hasCharges').toHaveAttribute('data-reason', 'hasCharges');
+            if (button !== null && !offered) expect(button, 'a merge button drawn off says why: hasCharges').toHaveAttribute('data-disabled-reason', 'hasCharges');
             await setTicked(rowOf(a), false);
             await setTicked(rowOf(b), false);
             return offered;
@@ -5067,7 +5072,7 @@ describe('TransactionBulkModal — 66 F7-c1: the charges grouped under their par
                 const button = promoteButton();
                 expect(button, 'C22: the merge button is drawn, off, when a leg has linked charges (today it is absent)').not.toBeNull();
                 expect(button).toHaveAttribute('aria-disabled', 'true');
-                expect(button).toHaveAttribute('data-reason', 'hasCharges');
+                expect(button).toHaveAttribute('data-disabled-reason', 'hasCharges');
                 expect(screen.queryByTestId('tooltip-content'), 'premise: no reason open yet').toBeNull();
 
                 if (how === 'click') {
@@ -5102,7 +5107,7 @@ describe('TransactionBulkModal — 66 F7-c1: the charges grouped under their par
                 const button = promoteButton();
                 expect(button, 'the merge is offered').not.toBeNull();
                 expect(button).not.toHaveAttribute('aria-disabled');
-                expect(button).not.toHaveAttribute('data-reason');
+                expect(button).not.toHaveAttribute('data-disabled-reason');
                 await fireEvent.click(button!);
                 await settle();
                 expect(rowsShowing(DEP.id, WD.id), 'merged: one row').toHaveLength(1);
@@ -6041,7 +6046,7 @@ describe('TransactionBulkModal — 66 F7-c1: the charges grouped under their par
                 function linkOffer(): string {
                     const button = screen.queryByTestId('tx-bulk-link-charges');
                     if (!button) return 'absent';
-                    return button.getAttribute('aria-disabled') === 'true' ? `off (${button.getAttribute('data-reason') ?? 'no reason'})` : 'on';
+                    return button.getAttribute('aria-disabled') === 'true' ? `off (${button.getAttribute('data-disabled-reason') ?? 'no reason'})` : 'on';
                 }
 
                 /** What the chip in a row's Type cell counts, or `no chip`. */
@@ -6323,7 +6328,248 @@ describe('TransactionBulkModal — 66 F7-c1: the charges grouped under their par
 
                     expect(linkOffer(), 'C22d: two halves, two parents (WITHDRAWAL and DEPOSIT) — «Link» off, twoParents').toBe('off (twoParents)');
                 });
+
+                // ---------------------------------------------------------------
+                // C22e — the update of a split half carries the type the user chose
+                // ---------------------------------------------------------------
+
+                /**
+                 * 66 C22e (FEE consultant + coordinator, 21/11). `resolveOps` strips `type` from the update of every
+                 * split-queued row: the backend's split assigns it (`apply_splits`, on the SAVED side, `pair_sides`). Once the
+                 * user swaps a half in its Form (DEPOSIT ↔ WITHDRAWAL, the swap group the Form offers), the update still goes
+                 * out without a type: the DEPOSIT half turned WITHDRAWAL is sent `{id, cash: −50}`, the split makes it a
+                 * DEPOSIT, rule 11 refuses −50 on a DEPOSIT and the whole batch fails (present since v1.3.0).
+                 *
+                 * The decision: the update carries `type` exactly when the type the Bulk shows for the half (`postSplitType`)
+                 * differs from the one the backend's split gives it (`splitHalfType` on the saved side) —
+                 * `splitTypes.ts`, `splitTypeToSend`. The backend accepts a swap in an update (`SWAP_GROUPS`), and updates run
+                 * after splits, then `link_charges`.
+                 *
+                 * Read through «Save all», the path that fails. `push` stands in for the real Form's Apply: a WITHDRAWAL's
+                 * cash signed negative (`autoNegateCash`), a DEPOSIT's positive; the editor holds a WITHDRAWAL as its
+                 * magnitude (W-B65).
+                 */
+                describe('66 C22e: the update of a swapped split half carries its type', () => {
+                    /** The cash amount of one update, as a number (NaN when it carries none). */
+                    function cashOf(update: Record<string, unknown> | undefined): number {
+                        return Number((update?.cash as {amount?: string} | undefined)?.amount);
+                    }
+
+                    /** The half's own Form, its type swapped to `type` with `cash` as the real Form signs it. Ends on the
+                     *  Form closed and the half's Type cell showing the user's type. */
+                    async function swapHalf(half: TXReadItem, type: 'DEPOSIT' | 'WITHDRAWAL', cash: string): Promise<void> {
+                        await rowAction(gridRow(half.id), 'edit-single');
+                        await waitFor(() => expect(formProbe().open, `premise: the Form of #${half.id} is open`).toBe(true));
+                        const item = ((formProbe().items as TXReadItem[] | null) ?? []).find((candidate) => candidate.id === half.id);
+                        expect(item, `premise: the Form holds #${half.id}`).toBeDefined();
+                        expect(item!.type, `premise: the Form of #${half.id} is handed the other type of its swap group`).not.toBe(type);
+                        await push({broker_id: item!.broker_id, type, date: item!.date, quantity: item!.quantity, asset_id: item!.asset_id, cash: {code: 'EUR', amount: cash}, tags: item!.tags ?? [], description: item!.description});
+                        expect(typeCellTarget(gridRow(half.id)), `premise: the Type cell of #${half.id} shows the user’s ${type}`).toBe(type.toLowerCase());
+                    }
+
+                    const PAIR_SPLIT = [[L_W.id, L_D.id].sort((a, b) => a - b)];
+
+                    // The defect. Today: `{id: 92521, cash: {amount: "-50…"}}`, no type.
+                    it('C22e: the DEPOSIT half swapped to WITHDRAWAL in its Form — «Save all» sends its update with type WITHDRAWAL and cash −50', async () => {
+                        await openSplitUntouched(L_W, L_D);
+                        await swapHalf(L_D, 'WITHDRAWAL', '-50.000000');
+
+                        const body = (await saveAll()) as C22bPayload;
+                        const sent = JSON.stringify({splits: body.splits, updates: body.updates});
+                        expect(splitsOf(body), `premise: the split is in the batch — ${sent}`).toEqual(PAIR_SPLIT);
+                        const updates = updatesOf(body, L_D.id);
+                        expect(updates, `premise: one update for the swapped half — ${sent}`).toHaveLength(1);
+                        expect.soft(updates[0].type, `C22e: the swapped half carries the user’s type, or the split makes it a DEPOSIT — ${sent}`).toBe('WITHDRAWAL');
+                        expect.soft(cashOf(updates[0]), `C22e: and its cash signed as a WITHDRAWAL — ${sent}`).toBe(-50);
+                        expect.soft(updatesOf(body, L_W.id), `C22e: the untouched sender is not sent — ${sent}`).toEqual([]);
+                    });
+
+                    // Guard, green today and after the cure: a half edited without a swap (its note, twice — C22d's route) shows
+                    // the type the split gives it, so its update carries none. The WITHDRAWAL half is the discriminating one: its
+                    // draft holds +50 (W-B65) while the saved side, the one the server reads, is −50.
+                    it.each([
+                        ['the DEPOSIT half', 'dep'],
+                        ['the WITHDRAWAL half', 'wd'],
+                    ] as const)('C22e guard: %s, only its note edited in its Form, twice — «Save all» sends the note and no type', async (_label, which) => {
+                        const half = which === 'dep' ? L_D : L_W;
+                        await openSplitUntouched(L_W, L_D);
+                        await editHalfNote(half, 'C22e note a');
+                        await editHalfNote(half, 'C22e note b');
+
+                        const body = (await saveAll()) as C22bPayload;
+                        const sent = JSON.stringify({splits: body.splits, updates: body.updates});
+                        expect(splitsOf(body), `premise: the split is in the batch — ${sent}`).toEqual(PAIR_SPLIT);
+                        const updates = updatesOf(body, half.id);
+                        expect(
+                            updates.some((update) => update.description === 'C22e note b'),
+                            `premise: the second note is sent — ${sent}`,
+                        ).toBe(true);
+                        expect(
+                            updates.filter((update) => 'type' in update),
+                            `C22e guard: no swap, no type — the split gives #${half.id} its type — ${sent}`,
+                        ).toEqual([]);
+                    });
+
+                    // Both halves swapped: the sender (saved −50) turned DEPOSIT, the receiver (saved +50) turned WITHDRAWAL.
+                    // Today both go out without a type: the WITHDRAWAL half as `cash: −50`, the DEPOSIT half as `cash: +50`.
+                    it('C22e: both halves swapped in their Forms — each update carries its own type and its cash signed by it', async () => {
+                        await openSplitUntouched(L_W, L_D);
+                        await swapHalf(L_D, 'WITHDRAWAL', '-50.000000');
+                        await swapHalf(L_W, 'DEPOSIT', '50.000000');
+                        // The swapped halves now cancel each other (a DEPOSIT +50 on 88, a WITHDRAWAL −50 on 77): the banner
+                        // offers them as a merge, and «Save all» stops at the unseen-suggestions gate until it is looked at.
+                        // A click inside the banner (not on its link, which would merge) marks it seen.
+                        const banner = screen.queryByTestId('promote-suggest-banner');
+                        expect(banner, 'premise: the banner offers the two swapped halves').not.toBeNull();
+                        await fireEvent.click(banner!);
+                        await settle();
+                        expect(screen.queryByTestId('promote-suggest-banner'), 'premise: looking at the banner merges nothing').not.toBeNull();
+
+                        const body = (await saveAll()) as C22bPayload;
+                        const sent = JSON.stringify({splits: body.splits, updates: body.updates});
+                        expect(splitsOf(body), `premise: the split is in the batch — ${sent}`).toEqual(PAIR_SPLIT);
+                        const deposit = updatesOf(body, L_D.id);
+                        const withdrawal = updatesOf(body, L_W.id);
+                        expect([deposit.length, withdrawal.length], `premise: one update for each half — ${sent}`).toEqual([1, 1]);
+                        expect.soft({type: deposit[0].type, cash: cashOf(deposit[0])}, `C22e: the receiver (saved +50) goes out a WITHDRAWAL −50 — ${sent}`).toEqual({type: 'WITHDRAWAL', cash: -50});
+                        expect.soft({type: withdrawal[0].type, cash: cashOf(withdrawal[0])}, `C22e: the sender (saved −50) goes out a DEPOSIT +50 — ${sent}`).toEqual({type: 'DEPOSIT', cash: 50});
+                    });
+
+                    // The swap and a link in one batch: FREE (a saved FEE of nobody, on 77, the DEPOSIT half's broker) linked by
+                    // «Link» to the half swapped to WITHDRAWAL (a parent type either way). One commit holds the split, the
+                    // half's update with its type, and FREE's parent; the backend splits, updates, then links
+                    // (`test_transaction_charge_edits.py`, C22e).
+                    it('C22e: the DEPOSIT half swapped to WITHDRAWAL and FREE linked to it by «Link» — one «Save all»: the split, the half’s update with its type, FREE under the half', async () => {
+                        await openSplitUntouched(L_W, L_D, [FREE]);
+                        await swapHalf(L_D, 'WITHDRAWAL', '-50.000000');
+                        await linkRows(gridRow(L_D.id), gridRow(FREE.id));
+                        expect(chargeOfCell(gridRow(FREE.id)), 'premise: FREE sits under the swapped half').toBe(gridRow(L_D.id).getAttribute('data-row-id'));
+
+                        const body = (await saveAll()) as C22bPayload;
+                        const sent = JSON.stringify({splits: body.splits, updates: body.updates});
+                        expect(splitsOf(body), `premise: the split is in the batch — ${sent}`).toEqual(PAIR_SPLIT);
+                        expect.soft(updatesOf(body, FREE.id), `C22e: FREE is sent under the half, in the same batch — ${sent}`).toEqual([{id: FREE.id, parent_transaction_id: L_D.id}]);
+                        const updates = updatesOf(body, L_D.id);
+                        expect(updates, `premise: one update for the swapped half — ${sent}`).toHaveLength(1);
+                        expect.soft({type: updates[0].type, cash: cashOf(updates[0])}, `C22e: the half goes out a WITHDRAWAL −50, so FREE’s parent is the type the user sees — ${sent}`).toEqual({type: 'WITHDRAWAL', cash: -50});
+                    });
+                });
             });
         });
+    });
+});
+
+// ---------------------------------------------------------------------------
+// 77 SEL-E — the selection's actions on the table's panel, each with its number
+// ---------------------------------------------------------------------------
+
+/**
+ * SEL-E (plan 77): the Bulk's selection actions leave the fixed toolbar for the table's selection panel — the bar at the top
+ * of the table, the balloon when it scrolls away — and each shows the number of rows it takes (Q-SEL-1). Their test ids
+ * stay the Bulk's own (`tx-bulk-delete-selected`, `promote-toolbar-confirm`, …), so the specs that read them keep reading
+ * them. Rows brought in the way an import brings them, as the C-46 guard above does.
+ */
+describe('TransactionBulkModal — the selection on the table panel (77 SEL-E)', () => {
+    async function importTwoLegs(): Promise<void> {
+        mountEditor({action: 'import'});
+        await waitFor(() => expect(wizardProbe().open, 'the import intent opens the wizard').toBe(true));
+        const handOver = wizardProbe().onImportBatch as (creates: Array<{tx: TransactionCreateItem; todos: []}>) => void;
+        const leg = (brokerId: number, quantity: string, description: string) => ({tx: {broker_id: brokerId, type: 'ADJUSTMENT', date: C46.date, asset_id: C46.assetId, quantity, tags: [], description} as TransactionCreateItem, todos: [] as []});
+        handOver([leg(C46.brokerA, '-5', 'SEL-E out'), leg(C46.brokerB, '5', 'SEL-E in')]);
+        await settle();
+    }
+
+    async function tick(description: string): Promise<void> {
+        const checkbox = gridRowDescribed(description).querySelector<HTMLElement>('[data-testid^="dt-row-checkbox-"]');
+        if (!checkbox) throw new Error(`no checkbox on ${description}`);
+        await fireEvent.click(checkbox);
+    }
+
+    it('two ticked legs: «Delete» and the merge sit in the table panel’s bar, each with its number; nothing to reset', async () => {
+        await importTwoLegs();
+        await tick('SEL-E out');
+        await tick('SEL-E in');
+
+        const bar = await screen.findByTestId('selection-toolbar');
+        expect(screen.getByTestId('tx-bulk-body').contains(bar), 'the bar is the table’s, in the body that scrolls').toBe(true);
+        expect(within(bar).getByTestId('tx-bulk-delete-selected-count').textContent?.trim()).toBe('2');
+        expect(within(bar).getByTestId('promote-toolbar-confirm-count').textContent?.trim()).toBe('2');
+        // Two new rows: nothing saved to go back to
+        expect(within(bar).queryByTestId('tx-bulk-reset-selected')).toBeNull();
+    });
+
+    it('the Bulk guide’s «selection» anchor follows the bar: at the top, then in the balloon once the top scrolls away', async () => {
+        // jsdom has no IntersectionObserver: a stub stands in, and the test says when the top of the table leaves the view
+        const observers: Array<{callback: IntersectionObserverCallback; targets: Element[]}> = [];
+        vi.stubGlobal(
+            'IntersectionObserver',
+            class {
+                private entry: {callback: IntersectionObserverCallback; targets: Element[]};
+                constructor(callback: IntersectionObserverCallback) {
+                    this.entry = {callback, targets: []};
+                    observers.push(this.entry);
+                }
+                observe(target: Element) {
+                    this.entry.targets.push(target);
+                }
+                unobserve() {}
+                disconnect() {}
+                takeRecords() {
+                    return [];
+                }
+            },
+        );
+        try {
+            await importTwoLegs();
+            await tick('SEL-E out');
+            const top = await screen.findByTestId('selection-toolbar');
+            await waitFor(() => expect(guideAnchors.get('transaction.bulk.selection'), 'the anchor is the bar at the top').toBe(top));
+
+            for (const observer of observers)
+                observer.callback(
+                    observer.targets.map((target) => ({isIntersecting: false, target}) as IntersectionObserverEntry),
+                    {} as IntersectionObserver,
+                );
+            await waitFor(() => expect(screen.getByTestId('dt-dock')).toHaveAttribute('data-actions', 'true'));
+            const docked = screen.getByTestId('dt-dock').querySelector('[data-testid="selection-toolbar"]');
+            expect(docked, 'premise: the actions are in the balloon').not.toBeNull();
+            await waitFor(() => expect(guideAnchors.get('transaction.bulk.selection'), 'the anchor followed the bar into the balloon').toBe(docked));
+        } finally {
+            vi.unstubAllGlobals();
+        }
+    });
+
+    it('one ticked leg: no merge (it takes two), «Delete» with 1', async () => {
+        await importTwoLegs();
+        await tick('SEL-E out');
+
+        const bar = await screen.findByTestId('selection-toolbar');
+        expect(within(bar).queryByTestId('promote-toolbar-confirm')).toBeNull();
+        expect(within(bar).getByTestId('tx-bulk-delete-selected-count').textContent?.trim()).toBe('1');
+    });
+});
+
+// ---------------------------------------------------------------------------
+// 77 SEL-M part 2 — the Bulk's row menu: off says why
+// ---------------------------------------------------------------------------
+
+/**
+ * SEL-M part 2 (plan 77, Q-SEL-12): a row action that makes sense but is blocked is off with its reason, reachable
+ * (`aria-disabled`, the reason in the shared Tooltip, its code in `data-disabled-reason`). «Edit row» on a pair whose
+ * partner sits on a broker the user cannot read is one; «del» while the charges are read (or could not be) is the other,
+ * covered above by the F7-c1 cases.
+ */
+describe('TransactionBulkModal — the row menu says why (77 SEL-M part 2)', () => {
+    it('«Edit row» on a pair whose partner is on an unreadable broker: off, with its reason', async () => {
+        txStoreSetAll([SAVED_SENDER], []);
+        mountEditor({action: 'edit', txIds: [SAVED_SENDER.id]});
+        const lock = await screen.findByTestId('tx-bulk-partner-lock');
+        const row = lock.closest('tr') as HTMLElement;
+        await fireEvent.contextMenu(row, {clientX: 10, clientY: 10});
+        const edit = await screen.findByTestId('context-menu-action-edit-single');
+        expect(edit).toHaveAttribute('aria-disabled', 'true');
+        expect(edit).toHaveAttribute('data-disabled-reason', 'partner-inaccessible');
+        await fireEvent.click(edit);
+        expect(screen.getByTestId('context-menu'), 'a click on an item that is off runs nothing: the menu stays open').toBeInTheDocument();
     });
 });

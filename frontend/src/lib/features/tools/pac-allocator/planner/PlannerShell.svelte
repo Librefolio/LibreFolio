@@ -87,8 +87,9 @@
         blocked: () => run.running || launching,
     });
     $effect(() => {
-        // Every edit of the draft asks again, after the pause; the class keeps the latest only.
-        void draft.fingerprint;
+        // Every edit of the draft asks again, after the pause; the class keeps the latest only. The target fidelity is
+        // left out: no number of the preview depends on it (R1-F (b) of project 67).
+        void draft.previewFingerprint;
         untrack(() => preview.schedule(draft));
     });
     /** Re-reads the copied facts the user has not changed, right before every «Calcola». */
@@ -121,10 +122,13 @@
 
     const apiVersion = $derived(descriptor.contract_version);
     const uiVersion = $derived(descriptor.ui.version);
-    /** How long the client waits for a calculation: the bar of the waiting panel fills against it. `null` when the descriptor cannot say. */
+    /**
+     * How long the client waits for a calculation: the plan operation's own limit (TURNI 5a of project 67), not the platform's
+     * ceiling. The bar of the waiting panel fills against it. `null` when the descriptor cannot say.
+     */
     const timeoutMs = $derived.by((): number | null => {
         try {
-            return prepareToolRun(profile.toolCode, profile.contractVersion, descriptor).clientTimeoutMs;
+            return prepareToolRun(profile.toolCode, profile.contractVersion, descriptor).clientTimeoutFor(PLANNER_OPERATION);
         } catch {
             return null;
         }

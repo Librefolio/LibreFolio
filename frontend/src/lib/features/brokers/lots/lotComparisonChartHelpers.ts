@@ -191,12 +191,21 @@ export function lotColor(lotId: number, isDark: boolean): string {
     return isDark ? `hsl(${hue} 78% 68%)` : `hsl(${hue} 68% 44%)`;
 }
 
+/** The kinds of asset-linked income the lots analysis returns (`LotIncomeEventKind`): REWARD is income in kind (project 79). */
+export type LotIncomeKind = 'DIVIDEND' | 'INTEREST' | 'REWARD';
+
+/** Whether a value is one of the income kinds the lot charts draw. */
+export function isLotIncomeKind(value: unknown): value is LotIncomeKind {
+    return value === 'DIVIDEND' || value === 'INTEREST' || value === 'REWARD';
+}
+
 /**
- * Gold for dividends, violet for interest, per theme. The dividend gold is the Growth chart's too:
- * one entry, `INCOME_EVENT_COLORS.dividend` in `$lib/theme/chartTheme`.
+ * Gold for dividends, violet for interest, magenta for rewards in kind, per theme. The dividend gold and the reward
+ * magenta are the Growth chart's too: one entry each, `INCOME_EVENT_COLORS` in `$lib/theme/chartTheme`.
  */
-export function incomeEventColor(type: 'DIVIDEND' | 'INTEREST', isDark: boolean): string {
+export function incomeEventColor(type: LotIncomeKind, isDark: boolean): string {
     if (type === 'DIVIDEND') return themed(INCOME_EVENT_COLORS.dividend, isDark);
+    if (type === 'REWARD') return themed(INCOME_EVENT_COLORS.reward, isDark);
     return themed(INCOME_EVENT_COLORS.lotInterest, isDark);
 }
 

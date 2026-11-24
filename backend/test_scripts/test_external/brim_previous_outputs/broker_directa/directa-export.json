@@ -1,0 +1,604 @@
+{
+  "format": "lf-brim-previous-output/1",
+  "comment": "Output of the plugin BEFORE its project-66 lot changed it (P2 contract §2.1). Never re-take it after the code change.",
+  "plugin_code": "broker_directa",
+  "plugin_version": "1.1.0",
+  "source_head": "b44c341c5",
+  "captured_on": "2026-11-21",
+  "sample": "broker_directa/sample_reports/directa-export.csv",
+  "sample_sha256": "bc0376f5070dc04e1238d4a89037e942ede68456f9d5f09468d390668deb7a2d",
+  "extracted_assets": {
+    "2147483647": {
+      "extracted_symbol": "IEMB",
+      "extracted_isin": "IE00B2NPKV68",
+      "extracted_name": "ISHARES JPMORGAN s EMERGING MA",
+      "notices": []
+    },
+    "2147483646": {
+      "extracted_symbol": "CNYB",
+      "extracted_isin": "IE00BYPC1H27",
+      "extracted_name": "ISHARES CHINA CNY BOND UCITS E",
+      "notices": []
+    },
+    "2147483645": {
+      "extracted_symbol": "CXF549",
+      "extracted_isin": "IT0006755497",
+      "extracted_name": "MAR SeP 500 EP 240327",
+      "notices": []
+    },
+    "2147483644": {
+      "extracted_symbol": "M.511185",
+      "extracted_isin": "IT0005595373",
+      "extracted_name": "ALPER FX JUN29 EUR",
+      "notices": []
+    },
+    "2147483643": {
+      "extracted_symbol": "M.510999",
+      "extracted_isin": "IT0005583478",
+      "extracted_name": "BTP VALORE SC MZ30 CUM BONUS",
+      "notices": []
+    },
+    "2147483642": {
+      "extracted_symbol": "ICOV",
+      "extracted_isin": "IE00B3B8Q275",
+      "extracted_name": "ETF COVERED BOND ISH",
+      "notices": []
+    },
+    "2147483641": {
+      "extracted_symbol": "EHYA",
+      "extracted_isin": "IE00BJK55C48",
+      "extracted_name": "ISHARES E HIGH YIELD CORP BOND",
+      "notices": []
+    },
+    "2147483640": {
+      "extracted_symbol": "SMEA",
+      "extracted_isin": "IE00B4K48X80",
+      "extracted_name": "ISHARES MSCI EUROPE UCITS ETF",
+      "notices": []
+    },
+    "2147483639": {
+      "extracted_symbol": "EIMI",
+      "extracted_isin": "IE00BKM4GZ66",
+      "extracted_name": "ISHARES CORE MSCI EMER MKT IMI",
+      "notices": []
+    },
+    "2147483638": {
+      "extracted_symbol": "SWDA",
+      "extracted_isin": "IE00B4L5Y983",
+      "extracted_name": "ISHARES MSCI WORLD (ACC)",
+      "notices": []
+    },
+    "2147483637": {
+      "extracted_symbol": "IWVL",
+      "extracted_isin": "IE00BP3QZB59",
+      "extracted_name": "ISHARES MSCI WORLD VALUE FACT",
+      "notices": []
+    },
+    "2147483636": {
+      "extracted_symbol": "IEVL",
+      "extracted_isin": "IE00BQN1K901",
+      "extracted_name": "ISHARES MSCI EUR VALUE FACTOR",
+      "notices": []
+    },
+    "2147483635": {
+      "extracted_symbol": "IWDP",
+      "extracted_isin": "IE00B1FZS350",
+      "extracted_name": "ETF EPRA DEVMKTS ISH",
+      "notices": []
+    },
+    "2147483634": {
+      "extracted_symbol": "AV",
+      "extracted_isin": "IT0005366601",
+      "extracted_name": "ANTARES VISION",
+      "notices": []
+    }
+  },
+  "transactions": [
+    {
+      "asset_id": null,
+      "type": "DEPOSIT",
+      "date": "2024-12-30",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "1200"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "directa"
+      ],
+      "description": "Conferimento con bonifico",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483647,
+      "type": "DIVIDEND",
+      "date": "2024-12-27",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "20.95"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "directa"
+      ],
+      "description": "Provento etf: ISHARES JPMORGAN s EMERGING MA",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483647,
+      "type": "DIVIDEND",
+      "date": "2024-12-27",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "3.57"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "directa"
+      ],
+      "description": "Rit.provento etf: ISHARES JPMORGAN s EMERGING MA",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483646,
+      "type": "DIVIDEND",
+      "date": "2024-12-27",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "10.94"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "directa"
+      ],
+      "description": "Provento etf: ISHARES CHINA CNY BOND UCITS E",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483646,
+      "type": "DIVIDEND",
+      "date": "2024-12-27",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "2.15"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "directa"
+      ],
+      "description": "Rit.provento etf: ISHARES CHINA CNY BOND UCITS E",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": null,
+      "type": "TAX",
+      "date": "2024-12-27",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "-2.86"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "directa"
+      ],
+      "description": "Ritenuta su plusvalenza",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483645,
+      "type": "DIVIDEND",
+      "date": "2024-12-27",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "11"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "directa"
+      ],
+      "description": "Coupon certif.: MAR SeP 500 EP 240327",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": null,
+      "type": "DEPOSIT",
+      "date": "2024-12-13",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "1200"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "directa"
+      ],
+      "description": "Conferimento con bonifico",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483644,
+      "type": "INTEREST",
+      "date": "2024-12-06",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "71.25"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "directa"
+      ],
+      "description": "Cedola obb.: ALPER FX JUN29 EUR",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483644,
+      "type": "TAX",
+      "date": "2024-12-06",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "-18.53"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "directa"
+      ],
+      "description": "Rit.cedola obb.: ALPER FX JUN29 EUR",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483643,
+      "type": "INTEREST",
+      "date": "2024-12-02",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "24.38"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "directa"
+      ],
+      "description": "Cedola obb.: BTP VALORE SC MZ30 CUM BONUS",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483643,
+      "type": "TAX",
+      "date": "2024-12-02",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "-3.05"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "directa"
+      ],
+      "description": "Rit.cedola obb.: BTP VALORE SC MZ30 CUM BONUS",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483642,
+      "type": "BUY",
+      "date": "2024-12-02",
+      "quantity": "3",
+      "cash": {
+        "code": "EUR",
+        "amount": "-431.04"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "directa"
+      ],
+      "description": "Acquisto: ETF COVERED BOND ISH",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483641,
+      "type": "BUY",
+      "date": "2024-12-02",
+      "quantity": "36",
+      "cash": {
+        "code": "EUR",
+        "amount": "-197.82"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "directa"
+      ],
+      "description": "Acquisto: ISHARES E HIGH YIELD CORP BOND",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483640,
+      "type": "BUY",
+      "date": "2024-12-02",
+      "quantity": "2",
+      "cash": {
+        "code": "EUR",
+        "amount": "-158.58"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "directa"
+      ],
+      "description": "Acquisto: ISHARES MSCI EUROPE UCITS ETF",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483647,
+      "type": "BUY",
+      "date": "2024-12-02",
+      "quantity": "2",
+      "cash": {
+        "code": "EUR",
+        "amount": "-171.06"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "directa"
+      ],
+      "description": "Acquisto: ISHARES JPMORGAN s EMERGING MA",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483639,
+      "type": "BUY",
+      "date": "2024-12-02",
+      "quantity": "4",
+      "cash": {
+        "code": "EUR",
+        "amount": "-132.18"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "directa"
+      ],
+      "description": "Acquisto: ISHARES CORE MSCI EMER MKT IMI",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483646,
+      "type": "BUY",
+      "date": "2024-12-02",
+      "quantity": "39",
+      "cash": {
+        "code": "EUR",
+        "amount": "-196.33"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "directa"
+      ],
+      "description": "Acquisto: ISHARES CHINA CNY BOND UCITS E",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483638,
+      "type": "BUY",
+      "date": "2024-12-02",
+      "quantity": "1",
+      "cash": {
+        "code": "EUR",
+        "amount": "-105.71"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "directa"
+      ],
+      "description": "Acquisto: ISHARES MSCI WORLD (ACC)",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483637,
+      "type": "BUY",
+      "date": "2024-12-02",
+      "quantity": "3",
+      "cash": {
+        "code": "EUR",
+        "amount": "-126.53"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "directa"
+      ],
+      "description": "Acquisto: ISHARES MSCI WORLD VALUE FACT",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483636,
+      "type": "BUY",
+      "date": "2024-12-02",
+      "quantity": "22",
+      "cash": {
+        "code": "EUR",
+        "amount": "-192.24"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "directa"
+      ],
+      "description": "Acquisto: ISHARES MSCI EUR VALUE FACTOR",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483635,
+      "type": "BUY",
+      "date": "2024-12-02",
+      "quantity": "6",
+      "cash": {
+        "code": "EUR",
+        "amount": "-139.68"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "directa"
+      ],
+      "description": "Acquisto: ETF EPRA DEVMKTS ISH",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483634,
+      "type": "SELL",
+      "date": "2024-05-29",
+      "quantity": "-200",
+      "cash": {
+        "code": "EUR",
+        "amount": "666"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "directa"
+      ],
+      "description": "Vendita: ANTARES VISION",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    }
+  ]
+}

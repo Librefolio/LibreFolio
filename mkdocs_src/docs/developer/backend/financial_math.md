@@ -77,7 +77,6 @@ backend/app/services/financial_math/
 ├── price_marks.py           daily mark of an asset: MARKET, TRADE_AVG, CARRIED or MISSING; the days with an observation (observation_dates); an incoming TRANSFER's cost as an estimated trade observation while the asset has nothing else (W-B94)
 ├── series_steps.py          series as steps (D-P4): the point holding a day (value_at), the points of a window clipped (points_between), the steps of a list of change rows (steps_from_rows, Decimals compared with their exponent)
 ├── yield_on_cost.py         Yield on Cost of holdings, replayed from the transaction ledger
-├── acceptable_cost.py       the Rebalancer's table «maximum acceptable cost»: rows to two significant digits, 2·λ·d²/F, λ from euros
 ├── weights.py               a share of a total (none on a total ≤ 0), allocation slices (none on a sum ≤ 0), gross weights, concentration (largest weight, HHI), N_eff, the largest deviation from targets
 ├── splits.py                stock splits in the ledger: the ADJUSTMENT rows linked to a SPLIT asset event (one query), the ids an average-cost replay rescales, the usable-ratio rule, the incoming adjustments without a cost that a SPLIT retype must not orphan, the split a share change implies (`implied_split_ratio`)
 ├── holding_window.py        how long a position has been held at its broker: oldest open lot, a closed position's window, its exits, the move that closed it (`closing_move`)
@@ -96,6 +95,7 @@ backend/app/services/financial_math/
 │   ├── period.py            a period's boundary states, its P&L, the identity that closes it and its residual (the AI Export reconciliation, J-14); the day's P&L change; the period's realized sales (`period_realized_sales`)
 │   ├── contributions.py     a position's row in the Dashboard's Performance table: its period P&L (`position_period_pnl`), return on the start value, annualized returns (a closed flight too short to annualize: `closed_flight_too_short`, MF-A3), the internal-transfer split (P22: `transfer_tract` is the tract of one transfer for one broker)
 │   ├── asset_groups.py      an asset held at several brokers as one row, the Dashboard's «Globale» view (project 74): the sum of its brokers' holdings (`group_holdings`), Performance rows (`group_contributions`), Yield on Cost (`group_yield_on_cost`) and other effects (`merge_by_kind`); every ratio from the sums, never an average and never a replay as one broker
+│   ├── allocation_view.py   the «Allocazione» tab's filtered allocation (lane 80): the slices of a selection of classes (an asset's class: `type_rules.asset_type_content`), without the excluded assets and buckets; what stays outside and what is excluded, base + outside + excluded = NAV; the class × dimension matrix of the whole portfolio; the selection's history in steps (`build_allocation_view`)
 │   ├── position_series.py   a position's series, as steps, for the Dashboard's positions chart: P&L since the period's start (the Performance row's, at each day), its base and the percent on it, from the engine's frames of that position (J5-1, #48; D-P4)
 │   └── engine.py            PortfolioCalculationEngine: loads a scope, runs the steps, caches
 └── lots/                    lots analysis math, called by lots_analysis_service.py
@@ -335,7 +335,8 @@ flight does not: an identical request with a later start builds on its own.
 **One run per page** (FB-14). The Portfolio page asks the report (with the Performance table) and the positions chart
 for the same period; each used to call `calculate()` with its own flags, so the two requests had different blob keys
 and the page built the engine twice. `PortfolioService._engine_run()` is now the one call of `get_report()`,
-`get_positions_contribution()`, `get_positions_series()` and `get_acquisition_funding_history()`: always from t=0,
+`get_positions_contribution()`, `get_positions_series()`, `get_acquisition_funding_history()` and `get_allocation()`
+(the «Allocazione» tab, `POST /portfolio/allocation`: a change of its filters replays nothing): always from t=0,
 with `include_positions`, `include_acquisition_funding` and `period_start` = the period's start. The requests of one
 page share the key: the first builds, the others read the cache or wait on the flight above. Each caller still
 serializes only what its query asks (a report without `include_acquisition_funding` has no funding series). The
@@ -370,7 +371,11 @@ With False every broker counts 1, so no pair links brokers owned at different sh
 movement (or `date_from`, when it is earlier) to `date_to`: a movement dated before `date_from`
 moves the cash, the quantities, the cost pools, the capital and the K/R/W pools like any other —
 the pool rules of a cash movement that reduces no position are one static method,
-`_apply_pool_rule()`. A linked-internal CASH_TRANSFER or FX_CONVERSION leg goes through
+`_apply_pool_rule()`. Inside a day the rows replay in a fixed order: the cash income (DIVIDEND,
+INTEREST) first, then the position additions, the reductions, and the other cash movements. The
+income goes first so that one reinvested the same day — a broker's DRIP — reaches R before the BUY
+that spends it, and the BUY draws on R, not on K (STK1-1, developer decision of 24/11/2026; NAV,
+P&L and income do not depend on the order). A linked-internal CASH_TRANSFER or FX_CONVERSION leg goes through
 `_move_linked_cash()` (developer decision D-MF4): the departure records its `(from R, amount)`
 split in `transfer_splits`, keyed by its transaction id, and its arrival takes it up once,
 bringing back what the departure took from K and R. The gap between the two legs — a
@@ -500,10 +505,10 @@ asset id), plus the Liquidity slice of `by_type` (cash and cash in transit): the
 
 **Allocation slices (MF-C2).** Every allocation dimension — type, sector, geography, asset;
 current and history — takes its percentages from `weights.slice_percents()`: each slice's amount over the signed sum of
-the day's slices, × 100, unrounded, in the mapping's order; `DerivedViewsBuilder` rounds them to 0.01 (`_cents()`). A
+the day's slices, × 100, unrounded, in the mapping's order; `DerivedViewsBuilder` rounds them to 0.01 (`percent_cents()`). A
 slice keeps its sign, so with negative cash and a positive sum the cash slice is below zero and the others add up to
 more than 100 (`{Stock: 1500, Liquidity: −500}` → 150 / −50). When the sum is zero or negative, no slice has a share:
-`slice_percents()` returns None for every slice and `_cents()` keeps it, while `name`, `amount`, `id`, `emoji` and the
+`slice_percents()` returns None for every slice and `percent_cents()` keeps it, while `name`, `amount`, `id`, `emoji` and the
 order (by amount, descending) are unchanged — stocks bought on an overdraft (`{Stock: 500, Liquidity: −500}`), or an
 emptied portfolio (`{Liquidity: 0}`). The contracts carry the None: `AllocationItem.value` (`schemas/portfolio.py`,
 also inside `AllocationHistoryPoint.components`) and the AI Export `AllocationSlice.percent`
@@ -772,7 +777,15 @@ flowchart LR
    (`BigInt` at a fixed scale, half-even to the stored 6 and 12 decimals, no float and no library) — a single
    product or quotient, which the developer decided (25/10/2026) is the frontend's own and does not deserve a
    route. The same file adds the total of a parent with its linked charges (project 66, F1): «Addebito totale» /
-   «Netto incassato», one exact sum per currency of the amounts the user types, never across currencies. The line is the size of the calculation: a small sum or product on the numbers the user types stays in
+   «Netto incassato», one exact sum per currency of the amounts the user types, never across currencies.
+   And the Rebalancer's table «Maximum acceptable cost»
+   (`frontend/src/lib/features/tools/pac-allocator/planner/acceptableCost.ts`, R1-F (b) of project 67, developer
+   decision of 21/11/2026): the rows of misplaced money at 1 %, 2.5 %, 5 % and 10 % of the plan's total to two
+   significant digits, `2·λ·d²/F` per fidelity level, and the «Custom» `λ` from the euros the user types on the
+   reference row, `x·F / (2·d²)` to six significant digits, on exact rationals (`BigInt`). The preview gives `F` and
+   the levels' `λ` (`FIDELITY_LEVEL_WEIGHTS` of `pac_allocator/models.py`, which the plan reads too); the page combines
+   them, so a level chosen or a figure typed changes the table at once, with no call. The plan reads `λ`, never the
+   table, so the table has no backend copy. The line is the size of the calculation: a small sum or product on the numbers the user types stays in
    the browser; anything with a series, a date, a rate or a rule is the backend's. Each exception must be declared
    where it lives.
    The measuring tool takes the backend's annualization floor: `MIN_ANNUALIZATION_DAYS` in
@@ -959,7 +972,7 @@ for. The gate runs with the chart-safety unit tests:
 
 | Command | Runs (under `backend/test_scripts/`) | Covers |
 |---------|--------------------------------------|--------|
-| `./dev.py test services financial-math` | `test_services/test_financial_math/` | `average_cost.py`, `native_cash.py` (its first negative cash day, `test_first_negative_cash.py`), `weights.py` (`test_weights.py`, with the largest deviation from targets; the allocation views on a sum at or below zero, `test_allocation_non_positive_sum.py`), `acceptable_cost.py` (`test_acceptable_cost.py`), `ledger_totals.py`, `splits.py` (`test_splits.py`), `returns.py` (the period rebase and the return ratios, `test_returns_rebase_and_ratios.py`; the verified MWRR root, `test_mwrr_verified_root.py`; the Dashboard's MWRR rule, `period_mwrr()` and `period_mwrr_series()`, `test_period_mwrr.py`; the Dashboard's TWRR rule and the simple ROI's capital, `period_twrr()`, `period_twrr_series()` and `period_roi_cash_flows()`, `test_period_twrr_and_roi_flows.py`; the gain that recovers a drawdown, `required_recovery_return()`, `test_required_recovery_return.py`; the float price return and the observed annualization of a return series, `float_price_return()` and `observed_annualization()`, `test_series_returns.py`; the fixed-period changes of the Assets and FX tables, `fixed_period_dates()` and `fixed_period_changes()`, `test_fixed_period_changes.py`), `portfolio/period.py` (`test_period_and_unit_costs.py`, with `movement_unit_costs()` of `average_cost.py`), `marked_price()` and `AssetMarks` of `portfolio/daily_state.py` (`test_asset_marks.py`), `closed_flight_too_short()` of `portfolio/contributions.py` (`test_contributions_short_flight_and_open_base.py`), the groups of `portfolio/asset_groups.py`, an asset summed over its brokers (`test_asset_groups.py`), `compound_growth()` of `interest.py` (`test_compound_growth.py`, against the day-by-day product in a 60-digit context), its ACT/ACT fraction across years, digit for digit with the year loop, and its memo (`test_act_act_fraction.py`), and the layer guard; a pure unit — the file tests of `test_ledger_totals.py` and the loader tests of `test_splits.py` open private SQLite files under `tmp_path`: no shared database, no server |
+| `./dev.py test services financial-math` | `test_services/test_financial_math/` | `average_cost.py`, `native_cash.py` (its first negative cash day, `test_first_negative_cash.py`), `weights.py` (`test_weights.py`, with the largest deviation from targets; the allocation views on a sum at or below zero, `test_allocation_non_positive_sum.py`), `ledger_totals.py`, `splits.py` (`test_splits.py`), `returns.py` (the period rebase and the return ratios, `test_returns_rebase_and_ratios.py`; the verified MWRR root, `test_mwrr_verified_root.py`; the Dashboard's MWRR rule, `period_mwrr()` and `period_mwrr_series()`, `test_period_mwrr.py`; the Dashboard's TWRR rule and the simple ROI's capital, `period_twrr()`, `period_twrr_series()` and `period_roi_cash_flows()`, `test_period_twrr_and_roi_flows.py`; the gain that recovers a drawdown, `required_recovery_return()`, `test_required_recovery_return.py`; the float price return and the observed annualization of a return series, `float_price_return()` and `observed_annualization()`, `test_series_returns.py`; the fixed-period changes of the Assets and FX tables, `fixed_period_dates()` and `fixed_period_changes()`, `test_fixed_period_changes.py`), `portfolio/period.py` (`test_period_and_unit_costs.py`, with `movement_unit_costs()` of `average_cost.py`), `marked_price()` and `AssetMarks` of `portfolio/daily_state.py` (`test_asset_marks.py`), `closed_flight_too_short()` of `portfolio/contributions.py` (`test_contributions_short_flight_and_open_base.py`), the groups of `portfolio/asset_groups.py`, an asset summed over its brokers (`test_asset_groups.py`), `compound_growth()` of `interest.py` (`test_compound_growth.py`, against the day-by-day product in a 60-digit context), its ACT/ACT fraction across years, digit for digit with the year loop, and its memo (`test_act_act_fraction.py`), and the layer guard; a pure unit — the file tests of `test_ledger_totals.py` and the loader tests of `test_splits.py` open private SQLite files under `tmp_path`: no shared database, no server |
 | `./dev.py test services roi-fifo-utils` | `test_services/test_financial/` | Returns, FIFO lots, price marks, Yield on Cost, the portfolio engine (`test_portfolio_engine/`), and the portfolio and lots services that call them |
 | `./dev.py test services dust-threshold` | `test_services/test_financial/test_portfolio_engine/test_daily_state_dust_threshold.py` | `DailyStateBuilder` holds a position only above the dust threshold ([held positions](#recomputed-days)); also run by `roi-fifo-utils`, so it is out of `all` |
 | `./dev.py test services ownership-share-option` | `test_services/test_financial/test_ownership_share_option.py` | `apply_ownership_share=False` on the report and the positions series ([the whole broker](#whole-broker)); also run by `roi-fifo-utils`, so it is out of `all` |

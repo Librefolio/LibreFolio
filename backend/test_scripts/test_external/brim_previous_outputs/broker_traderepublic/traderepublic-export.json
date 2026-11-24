@@ -1,0 +1,236 @@
+{
+  "format": "lf-brim-previous-output/1",
+  "comment": "Output of the plugin BEFORE its project-66 lot changed it (P2 contract §2.1). Never re-take it after the code change.",
+  "plugin_code": "broker_traderepublic",
+  "plugin_version": "1.2.0",
+  "source_head": "890343101",
+  "captured_on": "2026-11-21",
+  "sample": "broker_traderepublic/sample_reports/traderepublic-export.csv",
+  "sample_sha256": "930fed82f566627336622922d9fa23a836668e8327ca1909fc1a3bfed6208732",
+  "extracted_assets": {
+    "2147483647": {
+      "extracted_symbol": null,
+      "extracted_isin": "IE00BKX55T58",
+      "extracted_name": "FTSE Developed World USD (Dist)",
+      "notices": []
+    },
+    "2147483646": {
+      "extracted_symbol": null,
+      "extracted_isin": "LU1829221024",
+      "extracted_name": "Nasdaq-100 EUR (Acc)",
+      "notices": []
+    },
+    "2147483645": {
+      "extracted_symbol": null,
+      "extracted_isin": "US88160R1014",
+      "extracted_name": "Tesla",
+      "notices": []
+    },
+    "2147483644": {
+      "extracted_symbol": null,
+      "extracted_isin": "SI0031102120",
+      "extracted_name": "Krka",
+      "notices": []
+    }
+  },
+  "transactions": [
+    {
+      "asset_id": null,
+      "type": "WITHDRAWAL",
+      "date": "2024-11-30",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "-10.84"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "traderepublic"
+      ],
+      "description": "Onttrekking: John Doe",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": null,
+      "type": "DEPOSIT",
+      "date": "2024-11-26",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "0.01"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "traderepublic"
+      ],
+      "description": "Storting: John Doe",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483647,
+      "type": "BUY",
+      "date": "2024-07-23",
+      "quantity": "0.052361",
+      "cash": {
+        "code": "EUR",
+        "amount": "-5"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "traderepublic"
+      ],
+      "description": "Aankoop: FTSE Developed World USD (Dist)",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483647,
+      "type": "SELL",
+      "date": "2024-11-29",
+      "quantity": "-0.104341",
+      "cash": {
+        "code": "EUR",
+        "amount": "10.799"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "traderepublic"
+      ],
+      "description": "Verkoop: FTSE Developed World USD (Dist)",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483647,
+      "type": "BUY",
+      "date": "2024-07-16",
+      "quantity": "0.05198",
+      "cash": {
+        "code": "EUR",
+        "amount": "-5"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "traderepublic"
+      ],
+      "description": "Aankoop: FTSE Developed World USD (Dist)",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483647,
+      "type": "DIVIDEND",
+      "date": "2024-09-25",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "0.03"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "traderepublic"
+      ],
+      "description": "Dividend: FTSE Developed World USD (Dist)",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483646,
+      "type": "BUY",
+      "date": "2025-01-16",
+      "quantity": "0.2989",
+      "cash": {
+        "code": "EUR",
+        "amount": "-24.999996"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "traderepublic"
+      ],
+      "description": "Buy: Nasdaq-100 EUR (Acc)",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483645,
+      "type": "SELL",
+      "date": "2024-12-10",
+      "quantity": "-0.2625",
+      "cash": {
+        "code": "EUR",
+        "amount": "86.714375"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "traderepublic"
+      ],
+      "description": "Sell: Tesla",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483644,
+      "type": "BUY",
+      "date": "2024-12-02",
+      "quantity": "5.0",
+      "cash": {
+        "code": "EUR",
+        "amount": "-690.25"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "traderepublic"
+      ],
+      "description": "Buy: Krka",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    }
+  ]
+}

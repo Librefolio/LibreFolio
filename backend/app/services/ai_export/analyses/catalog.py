@@ -1,6 +1,6 @@
 """Public AI Export V1 analysis catalog.
 
-The component runtime exposes eleven task-oriented analyses. Granular datasets
+The component runtime exposes twelve task-oriented analyses. Granular datasets
 remain internal composition blocks, but analyses themselves are public-only:
 there is no second legacy analysis registry or profile catalog.
 """
@@ -24,8 +24,8 @@ from backend.app.services.ai_export.components.types import DetailLevel, Domain
 from backend.app.services.ai_export.datasets.catalog import build_dataset_registry
 from backend.app.services.ai_export.datasets.spec import DatasetRegistry
 
-EXPECTED_ANALYSIS_COUNT = 11
-EXPECTED_PUBLIC_ANALYSIS_COUNT = 11
+EXPECTED_ANALYSIS_COUNT = 12
+EXPECTED_PUBLIC_ANALYSIS_COUNT = 12
 
 _DOMAIN_PAGES: dict[Domain, tuple[str, ...]] = {
     Domain.PORTFOLIO: ("dashboard",),
@@ -134,6 +134,22 @@ PUBLIC_ANALYSES: tuple[AnalysisSpec, ...] = (
                 "deeperTechnical",
                 AdditionalExportPeriod.ONE_YEAR,
                 DetailLevel.COMPACT,
+            ),
+        ),
+    ),
+    # 78 L3: whether protecting the portfolio makes sense now and, only if it does, how; last of the portfolio's menu
+    _analysis(
+        Domain.PORTFOLIO,
+        "protection_strategies",
+        icon="shield",
+        # 78 L8a: the risk evidence (internal) beside the overview, as fiscal_lots takes portfolio.fifo
+        required=("portfolio.overview_and_history", "portfolio.risk_evidence"),
+        suggestions=(
+            _suggest(
+                "portfolio.asset_history",
+                "deeperTechnical",
+                AdditionalExportPeriod.THREE_MONTHS,
+                DetailLevel.STANDARD,
             ),
         ),
     ),
@@ -246,7 +262,7 @@ if len(PUBLIC_ANALYSES) != EXPECTED_ANALYSIS_COUNT:
 def build_analysis_registry(
     dataset_registry: DatasetRegistry | None = None,
 ) -> AnalysisRegistry:
-    """Build the eleven-entry public V1 analysis registry."""
+    """Build the twelve-entry public V1 analysis registry."""
 
     registry = dataset_registry or build_dataset_registry()
     return AnalysisRegistry(PUBLIC_ANALYSES, dataset_registry=registry)

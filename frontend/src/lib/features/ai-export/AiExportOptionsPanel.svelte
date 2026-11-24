@@ -1,6 +1,6 @@
 <script lang="ts">
     import {untrack} from 'svelte';
-    import {Activity, ArrowLeftRight, CalendarClock, CircleHelp, FileText, Landmark, LayoutDashboard, ListOrdered, LoaderCircle, Newspaper, Scale, TrendingUp, Wallet} from 'lucide-svelte';
+    import {Activity, ArrowLeftRight, CalendarClock, CircleHelp, FileText, Landmark, LayoutDashboard, ListOrdered, LoaderCircle, Newspaper, Scale, Shield, TrendingUp, Wallet} from 'lucide-svelte';
 
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import SimpleSelect from '$lib/components/ui/select/SimpleSelect.svelte';
@@ -58,6 +58,7 @@
         'list-ordered': ListOrdered,
         newspaper: Newspaper,
         scale: Scale,
+        shield: Shield,
         'trending-up': TrendingUp,
         wallet: Wallet,
     } as const;

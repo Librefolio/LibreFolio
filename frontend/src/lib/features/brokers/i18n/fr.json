@@ -138,7 +138,8 @@
           "transfer": "Transferts",
           "adjustment": "Ajustements",
           "split": "Split",
-          "income": "Dividende / intérêt"
+          "income": "Dividende / intérêt",
+          "reward": "Récompenses"
         },
         "eventType": {
           "BUY": "Achat",
@@ -149,7 +150,9 @@
           "TRANSFER_ARRIVE": "Transfert",
           "SPLIT": "Split",
           "TRANSFER_IN": "Transfert entrant",
-          "TRANSFER_OUT": "Transfert sortant"
+          "TRANSFER_OUT": "Transfert sortant",
+          "REWARD": "Récompense",
+          "REWARD_MERGE": "Récompense répartie"
         },
         "unitPrice": "Prix unitaire",
         "transitInterval": "Intervalle de transit",
@@ -229,7 +232,9 @@
           "TRANSFER_ARRIVE": "TRANSFERT",
           "SPLIT": "SPLIT",
           "TRANSFER_IN": "TRANSFERT+",
-          "TRANSFER_OUT": "TRANSFERT-"
+          "TRANSFER_OUT": "TRANSFERT-",
+          "REWARD": "RÉCOMPENSE",
+          "REWARD_MERGE": "RÉCOMPENSE+"
         },
         "historyDetail": {
           "openPrice": "Prix d'ouverture",
@@ -293,7 +298,19 @@
       "analysisFailedFix": "Corrigez ces transactions et les lots reviennent :",
       "matchingMethod": "Méthode d'appariement",
       "methodFifoHint": "FIFO : une vente clôt d'abord le lot le plus ancien",
-      "methodLifoHint": "LIFO : une vente clôt d'abord le lot le plus récent"
+      "methodLifoHint": "LIFO : une vente clôt d'abord le lot le plus récent",
+      "incomeMarkerReward": "Récompense",
+      "rewardAllocation": {
+        "label": "Où vont les récompenses",
+        "hint": "Récompenses à part : chaque récompense est un lot à part, à sa valeur à la réception. Récompenses dans les lots : chaque récompense rejoint les lots détenus chez son courtier la veille, sans coût. Une simple vue : rien n'est enregistré.",
+        "ownLot": "Récompenses à part",
+        "merged": "Récompenses dans les lots"
+      },
+      "rewardGroup": {
+        "title": "{n, plural, one {# récompense} other {# récompenses}}",
+        "open": "Afficher les lots des récompenses",
+        "close": "Masquer les lots des récompenses"
+      }
     },
     "createdInSystem": "Créé dans le Système",
     "deleteBlockedTitle": "Impossible de supprimer le courtier",

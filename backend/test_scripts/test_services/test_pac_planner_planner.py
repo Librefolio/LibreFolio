@@ -130,7 +130,7 @@ from backend.app.schemas.pac_allocator.results import (
     PacPlannerUnsupportedResult,
     PlannerResultSnapshot,
 )
-from backend.app.services.pac_allocator import planner, rebalancer_report
+from backend.app.services.pac_allocator import planner, rebalancer_report, seed_runs
 from backend.app.services.pac_allocator.evaluation.errors import ExactEvaluatorError, ExactReplayRejectedError
 from backend.app.services.pac_allocator.evaluation.evaluator import build_exact_policy_view, evaluate_do_nothing, evaluate_exact_candidate
 from backend.app.services.pac_allocator.evaluation.keys import exact_decision_id
@@ -1809,8 +1809,8 @@ def test_currency_catalog_publishes_the_babel_quantum_of_every_referenced_curren
 # far below any enumeration of it (the oracle polls ~89-96 times per candidate).
 _ENUMERATION_CHECKPOINT_BUDGET = 2_000
 
-# The engine window the Tool claims for a plan (``engine_timeout_ms=30_000`` in
-# ``tool_plugins/pac_allocator/plugin.py``), so the X1 scenario is planned exactly as
+# The engine window the Tool claims for a PAC plan (the one-turn row of ``plan_policy`` in
+# ``tool_plugins/pac_allocator/plugin.py``, 30 000 ms), so the X1 scenario is planned exactly as
 # production plans it. A budget handed to SCIP, never an assertion: the test
 # itself neither reads nor asserts on the clock.
 _TOOL_ENGINE_WINDOW_SECONDS = 30.0
@@ -2508,9 +2508,11 @@ def test_pac_plan_reports_its_phases_in_order() -> None:
 
 
 @pytest.mark.parametrize(("fidelity", "total"), [pytest.param(reb.BALANCED, 3, id="weighted"), pytest.param({"kind": "target_first"}, 4, id="target-first")])
-def test_rebalancer_search_counts_the_score_then_the_tie_breaks(fidelity: dict, total: int) -> None:
+def test_rebalancer_search_counts_the_score_then_the_tie_breaks(monkeypatch, fidelity: dict, total: int) -> None:
     """V2 test 2: the search counts the stages of the program by name: the score (or the chain's two) first, then the two
-    named tie-breaks; the canonical vector, one stage per decision, is not counted."""
+    named tie-breaks; the canonical vector, one stage per decision, is not counted. On three usable CPUs, one turn: on
+    fewer, the steps count every turn's stages (TURNI 4d, ``test_pac_planner_seeds.py``)."""
+    monkeypatch.setattr(seed_runs, "usable_cpus", lambda: 3)
     recorder = _Recorder()
     plan_rebalancing(REBALANCER_PLAN_INPUT_ADAPTER.validate_python(reb.t4(fidelity=fidelity)), progress=recorder)
     searches = [message for message in recorder.messages if message[0] == "search"]

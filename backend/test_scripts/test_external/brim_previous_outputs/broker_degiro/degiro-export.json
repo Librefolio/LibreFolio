@@ -1,0 +1,1382 @@
+{
+  "format": "lf-brim-previous-output/1",
+  "comment": "Output of the plugin BEFORE its project-66 lot changed it (P2 contract §2.1). Never re-take it after the code change.",
+  "plugin_code": "broker_degiro",
+  "plugin_version": "2.1.0",
+  "source_head": "595738c0c",
+  "captured_on": "2026-11-21",
+  "sample": "broker_degiro/sample_reports/degiro-export.csv",
+  "sample_sha256": "390567fc40710f94ba482de3ff15bf2bc3ed1ba1bc32e7ec368b947511dd15fb",
+  "extracted_assets": {
+    "2147483647": {
+      "extracted_symbol": null,
+      "extracted_isin": "US1912161007",
+      "extracted_name": "COCA-COLA COMPANY (THE",
+      "notices": []
+    },
+    "2147483646": {
+      "extracted_symbol": null,
+      "extracted_isin": "US56035L1044",
+      "extracted_name": "MAIN STREET CAPITAL CO",
+      "notices": []
+    },
+    "2147483645": {
+      "extracted_symbol": null,
+      "extracted_isin": "US18539C2044",
+      "extracted_name": "CLEARWAY ENERGY INC.",
+      "notices": []
+    },
+    "2147483644": {
+      "extracted_symbol": null,
+      "extracted_isin": "US9256521090",
+      "extracted_name": "VICI PROPERTIES INC. C",
+      "notices": []
+    },
+    "2147483643": {
+      "extracted_symbol": null,
+      "extracted_isin": "CA0641491075",
+      "extracted_name": "BANK NOVA SCOTIA HALIF",
+      "notices": []
+    },
+    "2147483642": {
+      "extracted_symbol": null,
+      "extracted_isin": "IE00B3RBWM25",
+      "extracted_name": "VANGUARD FTSE AW",
+      "notices": []
+    },
+    "2147483641": {
+      "extracted_symbol": null,
+      "extracted_isin": "AU000000FBR4",
+      "extracted_name": "FBR LTD.",
+      "notices": []
+    },
+    "2147483640": {
+      "extracted_symbol": null,
+      "extracted_isin": "IE0031442068",
+      "extracted_name": "ISHARES CORE S&P 500 UCITS ETF USD",
+      "notices": []
+    },
+    "2147483639": {
+      "extracted_symbol": null,
+      "extracted_isin": "US00165C1045",
+      "extracted_name": "AMC ENTERTAINMENT HOLD",
+      "notices": []
+    },
+    "2147483638": {
+      "extracted_symbol": null,
+      "extracted_isin": "IE00BYXG2H39",
+      "extracted_name": "ISHARES NASDAQ US BIOTECHNOLOGY ETF",
+      "notices": []
+    },
+    "2147483637": {
+      "extracted_symbol": null,
+      "extracted_isin": "IE00B0M63391",
+      "extracted_name": "ISHARES KOREA",
+      "notices": []
+    },
+    "2147483636": {
+      "extracted_symbol": null,
+      "extracted_isin": "IE00B4L5Y983",
+      "extracted_name": "ISHARES MSCI WOR A",
+      "notices": []
+    },
+    "2147483635": {
+      "extracted_symbol": null,
+      "extracted_isin": "US00206R1023",
+      "extracted_name": "AT&T INC.",
+      "notices": []
+    },
+    "2147483634": {
+      "extracted_symbol": null,
+      "extracted_isin": "FI4000198031",
+      "extracted_name": "QT GROUP OYJ",
+      "notices": []
+    },
+    "2147483633": {
+      "extracted_symbol": null,
+      "extracted_isin": "US7561091049",
+      "extracted_name": "REALTY INCOME CORP",
+      "notices": []
+    },
+    "2147483632": {
+      "extracted_symbol": null,
+      "extracted_isin": "GB00BPQY8M80",
+      "extracted_name": "AVIVA",
+      "notices": []
+    },
+    "2147483631": {
+      "extracted_symbol": null,
+      "extracted_isin": "US69181V1070",
+      "extracted_name": "OXFORD SQUARE CAPITAL CORP",
+      "notices": []
+    },
+    "2147483630": {
+      "extracted_symbol": null,
+      "extracted_isin": "JP3633400001",
+      "extracted_name": "TOYOTA MOTOR CORP",
+      "notices": []
+    },
+    "2147483629": {
+      "extracted_symbol": null,
+      "extracted_isin": "IE00BYPC1H27",
+      "extracted_name": "ISHARES CHINA CNY BOND UCITS ETF USD",
+      "notices": []
+    }
+  },
+  "transactions": [
+    {
+      "asset_id": null,
+      "type": "DEPOSIT",
+      "date": "2022-12-17",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "27.80"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "degiro"
+      ],
+      "description": "iDEAL Deposit",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": null,
+      "type": "FX_CONVERSION",
+      "date": "2022-12-17",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "1.28"
+      },
+      "link_uuid": "e17ebbca-a01a-5e31-abf0-fe79afcf9348",
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "degiro"
+      ],
+      "description": "Valuta Creditering / Valuta Debitering",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": null,
+      "type": "FX_CONVERSION",
+      "date": "2022-12-17",
+      "quantity": "0",
+      "cash": {
+        "code": "USD",
+        "amount": "-1.36"
+      },
+      "link_uuid": "e17ebbca-a01a-5e31-abf0-fe79afcf9348",
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "degiro"
+      ],
+      "description": "Valuta Creditering / Valuta Debitering",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483647,
+      "type": "DIVIDEND",
+      "date": "2022-12-16",
+      "quantity": "0",
+      "cash": {
+        "code": "USD",
+        "amount": "0.44"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "degiro"
+      ],
+      "description": "Dividend",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483647,
+      "type": "TAX",
+      "date": "2022-12-16",
+      "quantity": "0",
+      "cash": {
+        "code": "USD",
+        "amount": "-0.07"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "degiro"
+      ],
+      "description": "Dividendbelasting",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483646,
+      "type": "DIVIDEND",
+      "date": "2022-12-16",
+      "quantity": "0",
+      "cash": {
+        "code": "USD",
+        "amount": "0.44"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "degiro"
+      ],
+      "description": "Dividend",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483646,
+      "type": "TAX",
+      "date": "2022-12-16",
+      "quantity": "0",
+      "cash": {
+        "code": "USD",
+        "amount": "-0.07"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "degiro"
+      ],
+      "description": "Dividendbelasting",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483645,
+      "type": "DIVIDEND",
+      "date": "2022-12-16",
+      "quantity": "0",
+      "cash": {
+        "code": "USD",
+        "amount": "0.73"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "degiro"
+      ],
+      "description": "Dividend",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483645,
+      "type": "TAX",
+      "date": "2022-12-16",
+      "quantity": "0",
+      "cash": {
+        "code": "USD",
+        "amount": "-0.11"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "degiro"
+      ],
+      "description": "Dividendbelasting",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": null,
+      "type": "FX_CONVERSION",
+      "date": "2022-12-15",
+      "quantity": "0",
+      "cash": {
+        "code": "USD",
+        "amount": "33.90"
+      },
+      "link_uuid": "77071b64-440b-59f7-b1c1-5962136bff07",
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "degiro"
+      ],
+      "description": "Valuta Creditering / Valuta Debitering",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": null,
+      "type": "FX_CONVERSION",
+      "date": "2022-12-15",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "-31.91"
+      },
+      "link_uuid": "77071b64-440b-59f7-b1c1-5962136bff07",
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "degiro"
+      ],
+      "description": "Valuta Creditering / Valuta Debitering",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483644,
+      "type": "FEE",
+      "date": "2022-12-15",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "-1.00"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "degiro"
+      ],
+      "description": "DEGIRO Transactiekosten en/of kosten van derden",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483644,
+      "type": "BUY",
+      "date": "2022-12-15",
+      "quantity": "1",
+      "cash": {
+        "code": "USD",
+        "amount": "-33.90"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "degiro"
+      ],
+      "description": "Koop 1 @ 33,9 USD",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": null,
+      "type": "FX_CONVERSION",
+      "date": "2021-08-10",
+      "quantity": "0",
+      "cash": {
+        "code": "USD",
+        "amount": "-63.97"
+      },
+      "link_uuid": "50aefea5-3ae9-5bae-83d1-d89c6e99376d",
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "degiro"
+      ],
+      "description": "Valuta Debitering / Valuta Creditering",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": null,
+      "type": "FX_CONVERSION",
+      "date": "2021-08-10",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "54.57"
+      },
+      "link_uuid": "50aefea5-3ae9-5bae-83d1-d89c6e99376d",
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "degiro"
+      ],
+      "description": "Valuta Debitering / Valuta Creditering",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483643,
+      "type": "FEE",
+      "date": "2021-08-10",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "-0.50"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "degiro"
+      ],
+      "description": "DEGIRO Transactiekosten en/of kosten van derden",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483643,
+      "type": "SELL",
+      "date": "2021-08-10",
+      "quantity": "-1",
+      "cash": {
+        "code": "USD",
+        "amount": "63.97"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "degiro"
+      ],
+      "description": "Verkoop 1 @ 63,97 USD",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483642,
+      "type": "BUY",
+      "date": "2020-07-13",
+      "quantity": "1",
+      "cash": {
+        "code": "EUR",
+        "amount": "-79.35"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "degiro"
+      ],
+      "description": "Koop 1 @ 79,35 EUR",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483642,
+      "type": "BUY",
+      "date": "2023-04-03",
+      "quantity": "1",
+      "cash": {
+        "code": "EUR",
+        "amount": "-97.93"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "degiro"
+      ],
+      "description": "Koop 1 @ 97,93 EUR",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483641,
+      "type": "BUY",
+      "date": "2021-02-16",
+      "quantity": "500",
+      "cash": {
+        "code": "EUR",
+        "amount": "-19.5"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "degiro"
+      ],
+      "description": "Koop 500 @ 0,039 EUR",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483640,
+      "type": "DIVIDEND",
+      "date": "2024-01-02",
+      "quantity": "0",
+      "cash": {
+        "code": "USD",
+        "amount": "11.82"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "degiro"
+      ],
+      "description": "Dividende",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483639,
+      "type": "FEE",
+      "date": "2021-02-01",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "-1.00"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "degiro"
+      ],
+      "description": "DEGIRO Transactiekosten en/of kosten van derden",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483639,
+      "type": "BUY",
+      "date": "2021-02-01",
+      "quantity": "1",
+      "cash": {
+        "code": "USD",
+        "amount": "-1.2108"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "degiro"
+      ],
+      "description": "Koop 1 @ 1,2108 USD",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483638,
+      "type": "FEE",
+      "date": "2023-08-01",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "-1.00"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "degiro"
+      ],
+      "description": "DEGIRO Transactiekosten en/of kosten van derden",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483638,
+      "type": "SELL",
+      "date": "2023-08-01",
+      "quantity": "-1",
+      "cash": {
+        "code": "EUR",
+        "amount": "5.42"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "degiro"
+      ],
+      "description": "Verkoop 1 @ 5,416 EUR",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483637,
+      "type": "FEE",
+      "date": "2023-07-25",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "-1.00"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "degiro"
+      ],
+      "description": "DEGIRO Transactiekosten en/of kosten van derden",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483637,
+      "type": "BUY",
+      "date": "2023-07-25",
+      "quantity": "1",
+      "cash": {
+        "code": "EUR",
+        "amount": "-42.53"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "degiro"
+      ],
+      "description": "Koop 1 @ 42,53 EUR",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483636,
+      "type": "BUY",
+      "date": "2019-05-15",
+      "quantity": "6",
+      "cash": {
+        "code": "EUR",
+        "amount": "-298.71"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "degiro"
+      ],
+      "description": "Compra 6 ISHARES MSCI WOR A@49,785 EUR (IE00B4L5Y983)",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483636,
+      "type": "FEE",
+      "date": "2024-01-02",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "-1.00"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "degiro"
+      ],
+      "description": "Comissões de transação DEGIRO e/ou taxas de terceiros",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483636,
+      "type": "BUY",
+      "date": "2024-01-02",
+      "quantity": "1",
+      "cash": {
+        "code": "EUR",
+        "amount": "-82.06"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "degiro"
+      ],
+      "description": "Compra 1 ISHARES MSCI WOR A@82,055 EUR (IE00B4L5Y983)",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": null,
+      "type": "FEE",
+      "date": "2024-02-05",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "-2.50"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "degiro"
+      ],
+      "description": "DEGIRO Aansluitingskosten 2024 (Nasdaq - NDQ)",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": null,
+      "type": "FEE",
+      "date": "2024-02-05",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "-2.50"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "degiro"
+      ],
+      "description": "DEGIRO Aansluitingskosten 2024 (Euronext Milan - MIL)",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": null,
+      "type": "FEE",
+      "date": "2024-02-05",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "-2.50"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "degiro"
+      ],
+      "description": "DEGIRO Aansluitingskosten 2024 (Xetra - XET)",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483635,
+      "type": "DIVIDEND",
+      "date": "2024-02-02",
+      "quantity": "0",
+      "cash": {
+        "code": "USD",
+        "amount": "1.39"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "degiro"
+      ],
+      "description": "Dividend",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483634,
+      "type": "FEE",
+      "date": "2024-03-11",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "-4.90"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "degiro"
+      ],
+      "description": "Frais DEGIRO de courtage et/ou de parties tierces",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483634,
+      "type": "BUY",
+      "date": "2024-03-11",
+      "quantity": "6",
+      "cash": {
+        "code": "EUR",
+        "amount": "-479.76"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "degiro"
+      ],
+      "description": "Achat 6 QT GROUP OYJ@79,96 EUR (FI4000198031)",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483633,
+      "type": "DIVIDEND",
+      "date": "2024-03-18",
+      "quantity": "0",
+      "cash": {
+        "code": "USD",
+        "amount": "0.51"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "degiro"
+      ],
+      "description": "Dividende",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483633,
+      "type": "TAX",
+      "date": "2024-03-18",
+      "quantity": "0",
+      "cash": {
+        "code": "USD",
+        "amount": "-0.15"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "degiro"
+      ],
+      "description": "Impôts sur dividende",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": null,
+      "type": "FX_CONVERSION",
+      "date": "2024-06-19",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "0.79"
+      },
+      "link_uuid": "19dbd208-0be6-5f67-80d6-522e311fbfef",
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "degiro"
+      ],
+      "description": "Ingreso Cambio de Divisa / Retirada Cambio de Divisa",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": null,
+      "type": "FX_CONVERSION",
+      "date": "2024-06-19",
+      "quantity": "0",
+      "cash": {
+        "code": "USD",
+        "amount": "-0.85"
+      },
+      "link_uuid": "19dbd208-0be6-5f67-80d6-522e311fbfef",
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "degiro"
+      ],
+      "description": "Ingreso Cambio de Divisa / Retirada Cambio de Divisa",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": null,
+      "type": "DEPOSIT",
+      "date": "2020-10-26",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "25.00"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "degiro"
+      ],
+      "description": "Ingreso",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483632,
+      "type": "SELL",
+      "date": "2024-04-02",
+      "quantity": "-4",
+      "cash": {
+        "code": "GBP",
+        "amount": "19.84"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "degiro"
+      ],
+      "description": "Sell 4 AVIVA@496 GBX (GB00BPQY8M80)",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": null,
+      "type": "FEE",
+      "date": "2024-10-04",
+      "quantity": "0",
+      "cash": {
+        "code": "USD",
+        "amount": "-0.01"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "degiro"
+      ],
+      "description": "DEGIRO Corporate Action Kosten",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": null,
+      "type": "FX_CONVERSION",
+      "date": "2024-09-19",
+      "quantity": "0",
+      "cash": {
+        "code": "USD",
+        "amount": "-457.52"
+      },
+      "link_uuid": "a5da9eff-6566-5f7a-b93b-61cfb299544e",
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "degiro"
+      ],
+      "description": "Levantamento de divisa / CrÃ©dito de divisa",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": null,
+      "type": "FX_CONVERSION",
+      "date": "2024-09-19",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "408.83"
+      },
+      "link_uuid": "a5da9eff-6566-5f7a-b93b-61cfb299544e",
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "degiro"
+      ],
+      "description": "Levantamento de divisa / CrÃ©dito de divisa",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483631,
+      "type": "TAX",
+      "date": "2024-08-01",
+      "quantity": "0",
+      "cash": {
+        "code": "USD",
+        "amount": "-0.53"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "degiro"
+      ],
+      "description": "Impôts sur dividende",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483631,
+      "type": "DIVIDEND",
+      "date": "2024-08-01",
+      "quantity": "0",
+      "cash": {
+        "code": "USD",
+        "amount": "3.50"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "degiro"
+      ],
+      "description": "Dividende",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": null,
+      "type": "FEE",
+      "date": "2024-02-05",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "-2.50"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "degiro"
+      ],
+      "description": "Giro Exchange Connection Fee 2024",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": null,
+      "type": "INTEREST",
+      "date": "2024-08-23",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "0.24"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "degiro"
+      ],
+      "description": "DEGIRO courtesy",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": null,
+      "type": "INTEREST",
+      "date": "2024-08-23",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "0.61"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "degiro"
+      ],
+      "description": "DEGIRO courtesy",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483630,
+      "type": "DIVIDEND",
+      "date": "2024-05-27",
+      "quantity": "0",
+      "cash": {
+        "code": "JPY",
+        "amount": "9999.99"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "degiro"
+      ],
+      "description": "Dividend",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483630,
+      "type": "TAX",
+      "date": "2024-05-27",
+      "quantity": "0",
+      "cash": {
+        "code": "JPY",
+        "amount": "-9999.99"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "degiro"
+      ],
+      "description": "Dividendbelasting",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483630,
+      "type": "FEE",
+      "date": "2024-03-08",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "-9999.99"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "degiro"
+      ],
+      "description": "DEGIRO Transactiekosten en/of kosten van derden",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483630,
+      "type": "BUY",
+      "date": "2024-03-08",
+      "quantity": "30",
+      "cash": {
+        "code": "EUR",
+        "amount": "-9999.99"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "degiro"
+      ],
+      "description": "Koop 30 @ 22,4 EUR",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": null,
+      "type": "FX_CONVERSION",
+      "date": "2025-01-01",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "12.28"
+      },
+      "link_uuid": "55e97415-2f96-5402-b3ee-4b46f890d070",
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "degiro"
+      ],
+      "description": "FX Credit / FX Debit",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": null,
+      "type": "FX_CONVERSION",
+      "date": "2025-01-01",
+      "quantity": "0",
+      "cash": {
+        "code": "USD",
+        "amount": "-12.75"
+      },
+      "link_uuid": "55e97415-2f96-5402-b3ee-4b46f890d070",
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "degiro"
+      ],
+      "description": "FX Credit / FX Debit",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483629,
+      "type": "DIVIDEND",
+      "date": "2024-12-30",
+      "quantity": "0",
+      "cash": {
+        "code": "USD",
+        "amount": "0.23"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "degiro"
+      ],
+      "description": "Dividend",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    }
+  ]
+}

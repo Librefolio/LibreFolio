@@ -98,6 +98,22 @@ function mount(extra: Record<string, unknown> = {}) {
     return {onapply, oncancel, search, test, loadSettings};
 }
 
+function renderWith(extra: Record<string, unknown> = {}) {
+    const onapply = vi.fn();
+    const result = render(AssetEnrichersModal, {
+        open: true,
+        asset: {name: 'Vanguard FTSE All-World', assetType: 'ETF', identifiers: {ISIN: 'IE00BK5BQT80'}},
+        config: CONFIG,
+        readState: STATE,
+        catalogue: CATALOGUE,
+        profileCatalogue: PROFILE,
+        onapply,
+        loadSettings: vi.fn(async () => null),
+        ...extra,
+    });
+    return {onapply, rerender: (props: Record<string, unknown>) => result.rerender(props)};
+}
+
 const chosen = (code: string) => screen.getByTestId(`enricher-row-${code}`);
 const other = (code: string) => screen.getByTestId(`enricher-other-${code}`);
 
@@ -144,10 +160,20 @@ describe('AssetEnrichersModal — the list', () => {
         expect(chosen('keyed').dataset.availability).toBe('not_configured');
     });
 
-    it('an enricher added from «Non in elenco» takes the first identifier type it accepts: the identifier alone unblocks', async () => {
+    it('an enricher added from «Non in elenco» with no matching identifier on the asset is empty and its row opens: the identifier alone unblocks', async () => {
+        const {onapply} = mount({asset: {name: 'Vanguard', assetType: 'ETF', identifiers: {TICKER: 'VWCE'}}});
+        await fireEvent.click(screen.getByTestId('enricher-add-esma'));
+        expect(chosen('esma').dataset.expanded).toBe('true');
+        expect((screen.getByTestId('enricher-identifier-esma') as HTMLInputElement).value).toBe('');
+        await fireEvent.change(screen.getByTestId('enricher-identifier-esma'), {target: {value: 'IE00BK5BQT80'}});
+        expect(chosen('esma').dataset.issue).toBeUndefined();
+        expect((await apply(onapply)).esma).toEqual({identifier_type: 'ISIN', identifier: 'IE00BK5BQT80'});
+    });
+
+    it('«+» fills the binding from the asset identifiers and the row stays closed', async () => {
         const {onapply} = mount();
         await fireEvent.click(screen.getByTestId('enricher-add-esma'));
-        await fireEvent.change(screen.getByTestId('enricher-identifier-esma'), {target: {value: 'IE00BK5BQT80'}});
+        expect(chosen('esma').dataset.expanded).toBe('false');
         expect(chosen('esma').dataset.issue).toBeUndefined();
         expect((await apply(onapply)).esma).toEqual({identifier_type: 'ISIN', identifier: 'IE00BK5BQT80'});
     });
@@ -171,7 +197,7 @@ describe('AssetEnrichersModal — the list', () => {
     });
 
     it('a row without an identifier blocks «Usa questi arricchitori»', async () => {
-        mount();
+        mount({asset: {name: 'Vanguard', assetType: 'ETF', identifiers: {}}});
         await fireEvent.click(screen.getByTestId('enricher-add-esma'));
         expect(chosen('esma').dataset.issue).toBe('no_identifier');
         expect(screen.getByTestId('enrichers-apply')).toBeDisabled();
@@ -219,7 +245,8 @@ describe('AssetEnrichersModal — a row opened', () => {
     });
 
     it('«Usa questi arricchitori» right after typing takes the identifier: no click lost waiting for the field to let the focus go (E7c)', async () => {
-        const {onapply} = mount();
+        // An asset with no identifier: «+» opens the row empty, the user types it (R3 would fill it from an ISIN)
+        const {onapply} = mount({asset: {name: 'Vanguard', assetType: 'ETF', identifiers: {}}});
         await fireEvent.click(screen.getByTestId('enricher-add-esma'));
         // Typed only: no «change», no blur — the user clicks the button straight after the last key
         await fireEvent.input(screen.getByTestId('enricher-identifier-esma'), {target: {value: 'IE00BK5BQT80'}});
@@ -269,5 +296,228 @@ describe('AssetEnrichersModal — a search refused', () => {
         await fireEvent.input(query, {target: {value: 'IE00BK5BQT80'}});
         await fireEvent.keyDown(query, {key: 'Enter'});
         await waitFor(() => expect(screen.getByTestId('enricher-search-refused-yahoo').dataset.status).toBe('rate_limited'));
+    });
+});
+
+const recognized = (code: string, status: string, extra: Record<string, unknown> = {}) => ({code, status, identifier_type: 'ISIN', identifier: 'IE00BK5BQT80', name: `${code} found`, page_url: null, identifiers: {}, conflicts: {}, error: null, ...extra});
+
+describe('AssetEnrichersModal — the identifier type of a row', () => {
+    it('one accepted type: a fixed badge, no select; two: the select', async () => {
+        mount();
+        await fireEvent.click(screen.getByTestId('enricher-edit-justetf'));
+        expect(screen.getByTestId('enricher-type-fixed-justetf').dataset.type).toBe('ISIN');
+        expect(screen.queryByTestId('enricher-type-justetf')).toBeNull();
+        await fireEvent.click(screen.getByTestId('enricher-edit-yahoo'));
+        expect(screen.getByTestId('enricher-type-yahoo')).toBeInTheDocument();
+        expect(screen.queryByTestId('enricher-type-fixed-yahoo')).toBeNull();
+    });
+});
+
+describe('AssetEnrichersModal — the line of «Riconosci» (ENR-1)', () => {
+    it('renders with its state and counts; absent when the caller gives none', () => {
+        mount({line: {state: 'running', answered: 1, asked: 4, found: []}});
+        const line = screen.getByTestId('enrichers-recognition');
+        expect(line.dataset).toMatchObject({state: 'running', answered: '1', asked: '4'});
+    });
+
+    it('no line, no element', () => {
+        mount();
+        expect(screen.queryByTestId('enrichers-recognition')).toBeNull();
+    });
+
+    it('follows the state it is given', async () => {
+        const {rerender} = renderWith({line: {state: 'running', answered: 0, asked: 2, found: []}});
+        expect(screen.getByTestId('enrichers-recognition').dataset.state).toBe('running');
+        await rerender({line: {state: 'found', answered: 2, asked: 2, found: ['esma']}});
+        expect(screen.getByTestId('enrichers-recognition').dataset.state).toBe('found');
+    });
+});
+
+describe("AssetEnrichersModal — «Riconosci»'s proposal (ENR-1, R2)", () => {
+    const ISIN = {identifier_type: 'ISIN', identifier: 'IE00BK5BQT80'};
+
+    it('a proposal arriving after the window opened enters «Scelti» when it adopts', async () => {
+        const {rerender, onapply} = renderWith({config: {}, adopt: true, proposal: {}});
+        expect(screen.queryByTestId('enricher-row-esma')).toBeNull();
+        await rerender({proposal: {esma: ISIN}});
+        await waitFor(() => expect(chosen('esma')).toBeInTheDocument());
+        expect(screen.queryByTestId('enricher-other-esma')).toBeNull();
+        expect((await apply(onapply)).esma).toEqual(ISIN);
+    });
+
+    it('without adopt the proposal stays out', async () => {
+        const {rerender} = renderWith({config: {}, adopt: false, proposal: {}});
+        await rerender({proposal: {esma: ISIN}});
+        expect(screen.queryByTestId('enricher-row-esma')).toBeNull();
+    });
+
+    it('after a removal a new proposal does not re-add what the user took out, nor anything else', async () => {
+        const {rerender} = renderWith({config: {}, adopt: true, proposal: {esma: ISIN}});
+        await waitFor(() => expect(chosen('esma')).toBeInTheDocument());
+        await fireEvent.click(screen.getByTestId('enricher-remove-esma'));
+        await rerender({proposal: {esma: ISIN, justetf: ISIN}});
+        expect(screen.queryByTestId('enricher-row-esma')).toBeNull();
+        expect(screen.queryByTestId('enricher-row-justetf')).toBeNull();
+        expect(other('esma').dataset.reason).toBe('removed');
+    });
+
+    it('after the user typed a binding a new proposal does not enter', async () => {
+        const {rerender} = renderWith({config: {}, adopt: true, proposal: {esma: ISIN}});
+        await waitFor(() => expect(chosen('esma')).toBeInTheDocument());
+        await fireEvent.click(screen.getByTestId('enricher-edit-esma'));
+        await fireEvent.change(screen.getByTestId('enricher-identifier-esma'), {target: {value: 'IE00B3RBWM25'}});
+        await rerender({proposal: {esma: ISIN, justetf: ISIN}});
+        expect(screen.queryByTestId('enricher-row-justetf')).toBeNull();
+    });
+});
+
+describe('AssetEnrichersModal — «Non in elenco» after «Riconosci» (ENR-1)', () => {
+    it('a ticker-only find is marked, shows the name it found, and «+» fills its ticker binding', async () => {
+        const recognitions = {yahoo: recognized('yahoo', 'found', {identifier_type: 'TICKER', identifier: 'VWCE.DE', name: 'Vanguard FTSE All-World UCITS'})};
+        const {onapply} = mount({config: {}, recognitions});
+        expect(other('yahoo').dataset.tickerOnly).toBe('true');
+        expect(screen.getByTestId('enricher-other-name-yahoo').textContent).toContain('Vanguard FTSE All-World UCITS');
+        await fireEvent.click(screen.getByTestId('enricher-add-yahoo'));
+        expect((await apply(onapply)).yahoo).toEqual({identifier_type: 'TICKER', identifier: 'VWCE.DE'});
+    });
+
+    it('a found one by ISIN is not marked ticker-only', () => {
+        mount({config: {}, recognitions: {esma: recognized('esma', 'found')}});
+        expect(other('esma').dataset.tickerOnly).toBeUndefined();
+    });
+
+    it('«+» on a not found one: the asked binding, the row open, the warning shown', async () => {
+        mount({config: {}, recognitions: {esma: recognized('esma', 'not_found')}});
+        await fireEvent.click(screen.getByTestId('enricher-add-esma'));
+        expect(chosen('esma').dataset.expanded).toBe('true');
+        expect(screen.getByTestId('enricher-not-found-with-esma')).toBeInTheDocument();
+        expect((screen.getByTestId('enricher-identifier-esma') as HTMLInputElement).value).toBe('IE00BK5BQT80');
+    });
+
+    it('«+» on a conflict: the asked binding, the row closed, the warning shown', async () => {
+        mount({config: {}, recognitions: {esma: recognized('esma', 'conflict', {conflicts: {LEI: 'OTHERLEI0000000000AA'}})}});
+        await fireEvent.click(screen.getByTestId('enricher-add-esma'));
+        expect(chosen('esma').dataset.expanded).toBe('false');
+        expect(screen.getByTestId('enricher-conflict-with-esma')).toBeInTheDocument();
+        expect(screen.queryByTestId('enricher-not-found-with-esma')).toBeNull();
+    });
+
+    it('«+» on an error: the asked binding, the row closed, no warning', async () => {
+        mount({config: {}, recognitions: {esma: recognized('esma', 'error')}});
+        await fireEvent.click(screen.getByTestId('enricher-add-esma'));
+        expect(chosen('esma').dataset.expanded).toBe('false');
+        expect(screen.queryByTestId('enricher-conflict-with-esma')).toBeNull();
+        expect(screen.queryByTestId('enricher-not-found-with-esma')).toBeNull();
+    });
+});
+
+describe('AssetEnrichersModal — the price assignment chip (ENR-2)', () => {
+    it('renders the provider name and the identifier when given', () => {
+        mount({price: {name: 'Yahoo Finance', identifier: 'SWDA.MI'}});
+        const chip = screen.getByTestId('enrichers-asset-price');
+        expect(chip.textContent).toContain('Yahoo Finance');
+        expect(chip.textContent).toContain('SWDA.MI');
+    });
+
+    it('renders it even for an asset with no identifiers', () => {
+        mount({price: {name: 'Yahoo Finance', identifier: 'SWDA.MI'}, asset: {name: 'X', assetType: 'ETF', identifiers: {}}});
+        expect(screen.getByTestId('enrichers-asset-price')).toBeInTheDocument();
+    });
+
+    it('absent when there is none', () => {
+        mount();
+        expect(screen.queryByTestId('enrichers-asset-price')).toBeNull();
+        cleanup();
+        mount({price: null});
+        expect(screen.queryByTestId('enrichers-asset-price')).toBeNull();
+    });
+
+    it('a ticker found by the price symbol is not «ticker only» in «Non in elenco»; another is', () => {
+        const swda = (identifier: string) => ({code: 'yahoo', status: 'found', identifier_type: 'TICKER', identifier, name: 'iShares', page_url: null, identifiers: {}, conflicts: {}, error: null});
+        mount({recognitions: {yahoo: swda('SWDA.MI')}, trustedTickers: ['SWDA.MI'], config: {}});
+        expect(screen.getByTestId('enricher-other-yahoo').dataset.tickerOnly).toBeUndefined();
+        cleanup();
+        mount({recognitions: {yahoo: swda('SWDA')}, trustedTickers: ['SWDA.MI'], config: {}});
+        expect(screen.getByTestId('enricher-other-yahoo').dataset.tickerOnly).toBe('true');
+    });
+});
+
+describe('AssetEnrichersModal — «Cerca online» (ENR-3)', () => {
+    const FOUND_ISIN = 'IE00B4L5Y983';
+    const YAHOO_ONLY = {yahoo: {identifier_type: 'TICKER', identifier: 'VWRA.L'}};
+    const searchResult = (code: string, identifier: string) => ({event: 'enricher_results', code, status: 'ok', via: 'search', results: [{name: `${code} result`, binding: {identifier_type: 'ISIN', identifier}}], accepted_identifier_types: ['ISIN'], retry_after: null, error_code: null});
+    /** A «Cerca online» that answers esma with a result, and nobody else. */
+    const onlineAnswering = (identifier: string) =>
+        vi.fn(async (request: {q: string; codes: string[]}, options: {onEvent: (event: unknown) => void}) => {
+            if (request.q !== identifier && request.codes.includes('esma')) options.onEvent(searchResult('esma', identifier));
+            return {kind: 'done'};
+        });
+    const NO_ISIN = {name: 'Vanguard FTSE All-World', assetType: 'ETF', identifiers: {TICKER: 'VWRA'}};
+
+    async function searchAndAdd(searchOnline: ReturnType<typeof onlineAnswering>) {
+        await fireEvent.click(screen.getAllByTestId(/^enrichers-search-suggestion-/)[0]);
+        await waitFor(() => expect(screen.getByTestId('enrichers-search').dataset.status).toBe('done'));
+        const add = screen.getAllByTestId(/^enrichers-search-add-/).find((button) => button.dataset.testid?.includes('-esma-'));
+        expect(add, 'esma has a row to add').toBeDefined();
+        await fireEvent.click(add as HTMLElement);
+        expect(searchOnline).toHaveBeenCalled();
+    }
+
+    it('mounts the search on top of the window', () => {
+        mount();
+        expect(screen.getByTestId('enrichers-search')).toBeInTheDocument();
+        expect(screen.getByTestId('enrichers-search-input')).toBeInTheDocument();
+    });
+
+    it('«+» on a result puts the code in «Scelti», the row closed, and out of «Non in elenco» and the pills', async () => {
+        const searchOnline = onlineAnswering(FOUND_ISIN);
+        mount({config: YAHOO_ONLY, asset: NO_ISIN, searchOnline});
+        expect(other('esma').dataset.reason).toBe('new');
+        expect(screen.getByTestId('enrichers-search-pill-esma')).toBeInTheDocument();
+
+        await searchAndAdd(searchOnline);
+        await waitFor(() => expect(screen.getByTestId('enricher-row-esma')).toBeInTheDocument());
+        expect(chosen('esma').dataset.expanded).toBe('false');
+        expect(chosen('esma').dataset.position).toBe('2');
+        expect(screen.queryByTestId('enricher-other-esma')).toBeNull();
+        expect(screen.queryByTestId('enrichers-search-pill-esma')).toBeNull();
+        // The search stays open
+        expect(screen.getByTestId('enrichers-search')).toBeInTheDocument();
+    });
+
+    it('hands back the ISIN of a binding added from the search when the asset has none (R7)', async () => {
+        const searchOnline = onlineAnswering(FOUND_ISIN);
+        const {onapply} = mount({config: YAHOO_ONLY, asset: NO_ISIN, searchOnline});
+        await searchAndAdd(searchOnline);
+        await waitFor(() => expect(screen.getByTestId('enricher-row-esma')).toBeInTheDocument());
+        const config = await apply(onapply);
+        expect(config.esma).toEqual({identifier_type: 'ISIN', identifier: FOUND_ISIN});
+        expect(onapply.mock.calls[0][1]).toEqual({identifiers: {ISIN: FOUND_ISIN}});
+    });
+
+    it('hands back nothing when the asset has the ISIN already', async () => {
+        const searchOnline = onlineAnswering('IE00BK5BQT80');
+        const {onapply} = mount({config: YAHOO_ONLY, searchOnline});
+        await searchAndAdd(searchOnline);
+        await waitFor(() => expect(screen.getByTestId('enricher-row-esma')).toBeInTheDocument());
+        await apply(onapply);
+        expect(onapply.mock.calls[0][1]).toEqual({identifiers: {}});
+    });
+
+    it('hands back nothing for a code that came from «Non in elenco», nor for a search result removed again', async () => {
+        const searchOnline = onlineAnswering(FOUND_ISIN);
+        const {onapply} = mount({config: YAHOO_ONLY, asset: NO_ISIN, searchOnline});
+        await fireEvent.click(screen.getByTestId('enricher-add-esma'));
+        await fireEvent.change(screen.getByTestId('enricher-identifier-esma'), {target: {value: FOUND_ISIN}});
+        await apply(onapply);
+        expect(onapply.mock.calls[0][1]).toEqual({identifiers: {}});
+
+        cleanup();
+        const second = mount({config: YAHOO_ONLY, asset: NO_ISIN, searchOnline});
+        await searchAndAdd(searchOnline);
+        await waitFor(() => expect(screen.getByTestId('enricher-row-esma')).toBeInTheDocument());
+        await fireEvent.click(screen.getByTestId('enricher-remove-esma'));
+        await apply(second.onapply);
+        expect(second.onapply.mock.calls[0][1]).toEqual({identifiers: {}});
     });
 });

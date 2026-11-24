@@ -73,7 +73,6 @@ from backend.app.services.brim_providers.broker_intesa.plugin import IntesaSanpa
 from backend.app.services.brim_providers.broker_revolut.plugin import RevolutBrokerProvider, _parse_revolut_amount, _parse_revolut_datetime, _parse_revolut_quantity
 from backend.app.services.brim_providers.broker_schwab.plugin import SchwabBrokerProvider, _parse_schwab_amount, _parse_schwab_date
 from backend.app.services.brim_providers.broker_trading212.plugin import Trading212BrokerProvider, _parse_trading212_datetime, _parse_trading212_number
-from backend.app.services.brim_providers.broker_xtb.plugin import XTBBrokerProvider
 from backend.app.services.financial_math.portfolio.daily_state import DailyStateBuilder
 from backend.app.services.financial_math.portfolio.models import ClassifiedTransaction
 from backend.app.services.financial_math.price_marks import build_asset_price_series
@@ -278,7 +277,7 @@ def get_sample_files_for_plugin(plugin: BRIMProvider) -> List[Path]:
         return _combined_samples_for(plugin)
     if not SAMPLE_DIR.exists():
         return []
-    return [f for f in SAMPLE_DIR.glob("*.csv") if plugin.can_parse(f)]
+    return [f for ext in ("csv", "xlsx") for f in SAMPLE_DIR.glob(f"*.{ext}") if plugin.can_parse(f)]
 
 
 def _first_sample_for_plugin(plugin: BRIMProvider) -> Path | None:
@@ -313,7 +312,7 @@ def _all_samples_for_plugin(plugin: BRIMProvider) -> List[Path]:
         return []
     matches: list[Path] = []
     for candidate in sorted(SAMPLE_DIR.iterdir()):
-        if not (candidate.is_file() and candidate.suffix.lower() == ".csv"):
+        if not (candidate.is_file() and candidate.suffix.lower() in (".csv", ".xlsx")):
             continue
         name = candidate.name.lower()
         if any(pat in name for pat in patterns):
@@ -997,7 +996,7 @@ class TestGenericCSVDeclaresOnlyWhatItReads:
         """The other brokers' samples whose first row names no date or no type column are not the generic plugin's.
 
         The real-format counterpart of the synthetic refusals: exports with a preamble (Directa, Fineco,
-        Intesa), a ``Type`` without a date (XTB), a date without a type (Delta), the bank's own words
+        Intesa), a date without a type (Delta), the bank's own words
         (Danske, Avanza, Crédit Agricole…). Each keeps its own plugin (``test_all_sample_files_have_compatible_plugin``).
         """
         names = {sample.name for sample in _CSV_SAMPLES_WITHOUT_DATE_AND_TYPE}
@@ -3441,10 +3440,12 @@ class TestFinecoSafeRows:
         assert (notice.context or {}).get("report_issue") is True and (notice.context or {}).get("count") == 1
         assert sorted(line for evidence in notice.evidence for line in evidence.row_numbers) == [_FINECO_FIRST_LINE], "the notice lists the skipped row's line"
 
-    def test_fineco_plugin_version_is_1_5_0(self):
-        """Red today: 1.4.0. Contract (Fineco left the beta, W-B92): the rows it leaves out are now the shared ``rows_not_recognized``
-        and ``rows_unreadable`` notices instead of plain strings, so the output for the same file changes and its version becomes 1.5.0."""
-        assert FinecoBrokerProvider().plugin_version == "1.5.0"
+    def test_fineco_plugin_version_is_at_least_1_5_0(self):
+        """Contract (Fineco left the beta, W-B92): the rows it leaves out are now the shared ``rows_not_recognized`` and
+        ``rows_unreadable`` notices instead of plain strings, so the output for the same file changed and its version became
+        1.5.0. Later versions keep it (1.6.0, project 66 P2a: the commission is linked to its trade; pinned in
+        ``test_brim_fineco.py`` and ``test_brim_row_skips.py``)."""
+        assert tuple(int(part) for part in FinecoBrokerProvider().plugin_version.split(".")) >= (1, 5, 0)
 
 
 # =============================================================================
@@ -5027,7 +5028,7 @@ class TestCreditAgricoleCanonicalCharacterization:
                     "quantity": "0",
                     "cash": {"code": "EUR", "amount": "250.00"},
                     "link_uuid": None,
-                    "ref": None,
+                    "ref": "r6",
                     "parent_ref": None,
                     "parent_transaction_id": None,
                     "tags": ["import", "credit_agricole", "cedole_dividendi_premi_estratti"],
@@ -5045,7 +5046,7 @@ class TestCreditAgricoleCanonicalCharacterization:
                     "cash": {"code": "EUR", "amount": "-31.25"},
                     "link_uuid": None,
                     "ref": None,
-                    "parent_ref": None,
+                    "parent_ref": "r6",
                     "parent_transaction_id": None,
                     "tags": ["import", "credit_agricole", "cedole_dividendi_premi_estratti", "withholding_tax"],
                     "description": "[CEDOLE, DIVIDENDI, PREMI ESTRATTI — ritenuta] CEDOLA:BTP SAMPLE 1/12/2026 IT0000000001 DOS:00000/00000000 NOMINALE: 40.000,00 TASSO: 1,25 ALIQ: 12,50 RITENUTA: 31,25 DATA : 01/06/2026 N.MOVIM: 1",
@@ -5062,7 +5063,7 @@ class TestCreditAgricoleCanonicalCharacterization:
                     "cash": {"code": "EUR", "amount": "-1.50"},
                     "link_uuid": None,
                     "ref": None,
-                    "parent_ref": None,
+                    "parent_ref": "r6",
                     "parent_transaction_id": None,
                     "tags": ["import", "credit_agricole", "commiss_spese_su_operaz_titoli"],
                     "description": "SPESE STACCO CEDOLA DEL 01/06/2026 DOSSIER: 00000/00000000 TIT: IT0000000001",
@@ -6171,61 +6172,6 @@ class TestComputedValuesAreRounded:
 
         costs = _succession_costs(out, self.CA_FUND)
         assert Decimal("4.9812345678912345") in costs, f"a {self.CA_FUND} carried in at 4,9812345678912345 seeds per-unit cost bases {sorted(costs)}: a price read from the file must stay as read (D2)"
-
-
-class TestXTBQuotedHeader:
-    """XTB exports re-saved via LibreOffice/Excel quote every text cell, so the
-    header line becomes ``"ID";"Type";"Time";"Symbol";"Comment";"Amount"`` instead
-    of the bare ``ID;Type;Time;Symbol;Comment;Amount`` (#86). ``can_parse`` compared
-    the raw first line by exact string equality and refused the file, leaving the
-    upload with no compatible plugin: compare the parsed header fields instead."""
-
-    QUOTED_ROWS = [
-        '"ID";"Type";"Time";"Symbol";"Comment";"Amount"',
-        '"530692719";"Stocks/ETF purchase";"12.04.2024 13:01:45";"SPYL.DE";"OPEN BUY 34/42.5658 @ 11.7480";"-399.43"',
-        '"530692720";"Deposit";"15.04.2024 09:00:00";"";"";"1000.00"',
-    ]
-
-    def _write_quoted_csv(self, tmp_path: Path) -> Path:
-        path = tmp_path / "xtb-quoted.csv"
-        path.write_text("\n".join(self.QUOTED_ROWS) + "\n", encoding="utf-8")
-        return path
-
-    def test_xtb_can_parse_accepts_quoted_header(self, tmp_path):
-        assert XTBBrokerProvider().can_parse(self._write_quoted_csv(tmp_path)) is True
-
-    def test_xtb_can_parse_still_accepts_bare_header(self, tmp_path):
-        path = tmp_path / "xtb-bare.csv"
-        path.write_text(
-            "ID;Type;Time;Symbol;Comment;Amount\n"
-            "530692719;Stocks/ETF purchase;12.04.2024 13:01:45;SPYL.DE;OPEN BUY 34/42.5658 @ 11.7480;-399.43\n",
-            encoding="utf-8",
-        )
-        assert XTBBrokerProvider().can_parse(path) is True
-
-    def test_xtb_can_parse_rejects_foreign_header(self, tmp_path):
-        path = tmp_path / "foreign.csv"
-        path.write_text('"Col A";"Col B"\n"1";"2"\n', encoding="utf-8")
-        assert XTBBrokerProvider().can_parse(path) is False
-
-    @pytest.mark.parametrize("quote_all", [False, True], ids=["bare", "quoted"])
-    def test_xtb_parse_extracts_transactions_from_quoted_export(self, tmp_path, quote_all):
-        if quote_all:
-            path = self._write_quoted_csv(tmp_path)
-        else:
-            path = tmp_path / "xtb-bare.csv"
-            path.write_text(
-                "ID;Type;Time;Symbol;Comment;Amount\n"
-                "530692719;Stocks/ETF purchase;12.04.2024 13:01:45;SPYL.DE;OPEN BUY 34/42.5658 @ 11.7480;-399.43\n"
-                "530692720;Deposit;15.04.2024 09:00:00;; ;1000.00\n",
-                encoding="utf-8",
-            )
-        output = XTBBrokerProvider().parse(path, broker_id=1)
-        assert len(output.transactions) == 2
-        assert output.transactions[0].type == TransactionType.BUY
-        assert output.transactions[0].quantity == Decimal("34")
-        assert output.transactions[1].type == TransactionType.DEPOSIT
-        assert output.transactions[1].cash.amount == Decimal("1000.00")
 
 
 if __name__ == "__main__":

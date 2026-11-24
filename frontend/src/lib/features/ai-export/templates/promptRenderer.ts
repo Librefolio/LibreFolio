@@ -1,9 +1,22 @@
 import type {AiExportCatalogCompatibilityResult} from '../catalog/compatibility';
 import {AI_EXPORT_PAGE_FEATURE_LABEL_KEYS, AI_EXPORT_PAGE_LABEL_KEYS, AI_EXPORT_SCHEMA_VERSION, aiExportSelectionKey, isAiExportAnalysisId, type AiExportAnalysisCatalogEntry, type AiExportCompatibleSelection, type AiExportSnapshotResponse} from '../catalog/shared';
 import {renderFencedSection, serializeYaml} from '../serialization';
-import {findAiExportResponseContract} from './responseContracts';
+import {findAiExportResponseContract, type AiExportFollowUpsResponseContract, type AiExportSectionsResponseContract} from './responseContracts';
 import {renderSnapshotDataText, type RenderedSnapshotDataText, type SnapshotFormatDiagnostics, type SnapshotSignalMetric} from './snapshotDataRenderer';
-import {AI_EXPORT_ANSWER_FOCUS_INSTRUCTIONS, AI_EXPORT_DATA_RECEIVED_KEY, AI_EXPORT_DOMAIN_NOTES, AI_EXPORT_SHARED_VERIFICATION_INSTRUCTIONS, aiExportReplyInstructions, findAiExportAnalysisInstruction} from './sharedInstructions';
+import {
+    AI_EXPORT_ANSWER_FOCUS_INSTRUCTIONS,
+    AI_EXPORT_DATA_RECEIVED_KEY,
+    AI_EXPORT_DOMAIN_NOTES,
+    AI_EXPORT_EXPORT_SCOPE_INSTRUCTIONS,
+    AI_EXPORT_GROUND_RULES,
+    AI_EXPORT_HOW_TO_ANSWER,
+    AI_EXPORT_SHARED_VERIFICATION_INSTRUCTIONS,
+    AI_EXPORT_USER_QUESTION_INTRO,
+    aiExportReplyInstructions,
+    findAiExportAnalysisInstruction,
+    type AiExportSectionsInstructionTemplate,
+    type AiExportTaskInstructionTemplate,
+} from './sharedInstructions';
 
 export const AI_EXPORT_RESPONSE_LANGUAGE_DISPLAY_NAMES = ['English', 'Italian', 'French', 'Spanish'] as const;
 export type AiExportResponseLanguageDisplayName = (typeof AI_EXPORT_RESPONSE_LANGUAGE_DISPLAY_NAMES)[number];
@@ -47,7 +60,24 @@ export interface RenderedAiExportPrompt {
     readonly stats: AiExportPromptStats;
 }
 
-export type AiExportPromptSectionId = 'analysis_objective' | 'shared_verification_instructions' | 'response_contract' | 'snapshot_metadata' | 'snapshot_data' | 'additional_librefolio_data' | 'domain_notes' | 'user_notes' | 'answer_focus' | 'legal_notice' | 'response_language' | 'reply_instructions';
+export type AiExportPromptSectionId =
+    | 'export_scope'
+    | 'analysis_objective'
+    | 'shared_verification_instructions'
+    | 'response_contract'
+    | 'task'
+    | 'rules_of_reasoning'
+    | 'how_to_answer'
+    | 'ground_rules'
+    | 'snapshot_metadata'
+    | 'snapshot_data'
+    | 'additional_librefolio_data'
+    | 'domain_notes'
+    | 'user_question'
+    | 'answer_focus'
+    | 'legal_notice'
+    | 'response_language'
+    | 'reply_instructions';
 
 export interface AiExportPromptDiagnosticTextBlock {
     readonly id: string;
@@ -117,19 +147,38 @@ function validateSnapshot(input: RenderAiExportPromptInput): void {
     }
 }
 
-function renderAnalysisObjective(entry: AiExportAnalysisCatalogEntry): string {
+type AnalysisTemplates =
+    | {readonly shape: 'sections'; readonly instruction: AiExportSectionsInstructionTemplate; readonly contract: AiExportSectionsResponseContract}
+    | {readonly shape: 'task'; readonly instruction: AiExportTaskInstructionTemplate; readonly contract: AiExportFollowUpsResponseContract};
+
+/** The analysis's two templates, of one shape (plan 78, L1): a new-shape task with an old-shape contract, or the reverse, fails closed. */
+function analysisTemplates(entry: AiExportAnalysisCatalogEntry): AnalysisTemplates {
     if (!isAiExportAnalysisId(entry.id)) throw new AiExportPromptRenderError('incompatible_selection', `Unknown analysis id: ${entry.id}`);
-    const template = findAiExportAnalysisInstruction(entry.id);
+    const instruction = findAiExportAnalysisInstruction(entry.id);
+    const contract = findAiExportResponseContract(entry.id);
+    if (instruction.shape === 'sections' && contract.shape === 'sections') return {shape: 'sections', instruction, contract};
+    if (instruction.shape === 'task' && contract.shape === 'follow_ups') return {shape: 'task', instruction, contract};
+    throw new AiExportPromptRenderError('incompatible_selection', `Analysis ${entry.id} mixes the two template shapes`);
+}
+
+function renderAnalysisObjective(template: AiExportSectionsInstructionTemplate): string {
     return ['## Analysis Objective', '', template.objective, '', ...template.steps.map((step, index) => `${index + 1}. ${step}`)].join('\n');
+}
+
+/** The new shape's own instructions (78 L1): «Your Task», then «Rules of Reasoning» closed by the usual follow-ups. */
+function renderTask(template: AiExportTaskInstructionTemplate): string {
+    return `## Your Task\n\n${template.task}`;
+}
+
+function renderRulesOfReasoning(template: AiExportTaskInstructionTemplate, contract: AiExportFollowUpsResponseContract): string {
+    return ['## Rules of Reasoning', '', ...template.rules.map((rule) => `- ${rule}`), '', contract.followUps].join('\n');
 }
 
 function renderVerificationInstructions(): string {
     return `## Shared Verification Instructions\n\n${AI_EXPORT_SHARED_VERIFICATION_INSTRUCTIONS}`;
 }
 
-function renderResponseContract(entry: AiExportAnalysisCatalogEntry): string {
-    if (!isAiExportAnalysisId(entry.id)) throw new AiExportPromptRenderError('incompatible_selection', `Unknown analysis id: ${entry.id}`);
-    const contract = findAiExportResponseContract(entry.id);
+function renderResponseContract(contract: AiExportSectionsResponseContract): string {
     const lines = ['## Response Contract', '', `Contract: ${contract.id} v${contract.version}`, '', 'Use these sections in this exact order:'];
     for (const [index, contractSection] of contract.sections.entries()) {
         lines.push(`${index + 1}. **${contractSection.title}**`);
@@ -276,7 +325,8 @@ function renderAdditionalData(input: RenderAiExportPromptInput): string {
     if (input.selection.kind !== 'analysis' || input.selection.entry.kind !== 'analysis') {
         throw new AiExportPromptRenderError('incompatible_selection', 'Additional LibreFolio data guidance requires an analysis selection');
     }
-    const included = new Set(input.snapshot.dataset_manifest.map((entry) => entry.dataset_id));
+    // 78 L10b: a dataset the user cannot select (it reads brokers, and the user owns none) is never suggested.
+    const included = new Set([...input.snapshot.dataset_manifest.map((entry) => entry.dataset_id), ...(input.snapshot.unavailable_dataset_ids ?? [])]);
     const translate = input.translate ?? ((key: string) => key);
     const suggestions = (input.selection.entry.additional_export_suggestions ?? []).filter((suggestion) => !included.has(suggestion.dataset_id));
     const lines = [`## ${translate('aiExport.additionalData.heading')}`, '', translate('aiExport.additionalData.intro')];
@@ -328,12 +378,39 @@ function renderDomainNotes(snapshot: AiExportSnapshotResponse): string {
     });
 }
 
-function renderUserNotes(notes: string): string {
-    return renderFencedSection({
-        heading: 'User Notes',
-        language: 'yaml',
-        content: serializeYaml({user_notes: notes}),
+/**
+ * The user's question (78 L1, both shapes since 78 L2), the thing to answer, safely serialized under a trusted sentence that
+ * keeps it from changing the rules. The new shape puts it last, before the response language; the old shape keeps it
+ * before its trusted closing.
+ */
+function renderUserQuestion(question: string): string {
+    const heading = '## User Question\n\n';
+    const fenced = renderFencedSection({heading: 'User Question', language: 'yaml', content: serializeYaml({user_question: question})});
+    return `${heading}${AI_EXPORT_USER_QUESTION_INTRO}\n\n${fenced.slice(heading.length)}`;
+}
+
+/**
+ * «Export Scope» (78 L10): a filtered Portfolio export that leaves out a broker the user owns says so at the top of the
+ * prompt. The fixed sentence is local; the included and the excluded brokers' names (the user's own text, D12 (b)) come
+ * from the snapshot and are serialized safely under it. Null when the snapshot carries no scope fact: the prompt is then exactly
+ * what it was before L10.
+ */
+function renderExportScope(snapshot: AiExportSnapshotResponse): string | null {
+    const scope = snapshot.export_scope;
+    if (scope === null || scope === undefined) return null;
+    const includedBrokers = scope.included_broker_ids.map((brokerId) => {
+        const entry = snapshot.entity_directory.brokers.find((broker) => broker.broker_id === brokerId);
+        if (!entry) throw new AiExportPromptRenderError('incompatible_snapshot', `Entity directory does not resolve broker ${brokerId}`);
+        return entry.display_name;
     });
+    const heading = '## Export Scope\n\n';
+    const fenced = renderFencedSection({
+        heading: 'Export Scope',
+        language: 'yaml',
+        // Two safe serializations, included first as the sentence reads them: one serializeYaml sorts its keys
+        content: serializeYaml({included_brokers: includedBrokers}) + serializeYaml({excluded_brokers: scope.excluded_brokers.map((broker) => broker.display_name)}),
+    });
+    return `${heading}${AI_EXPORT_EXPORT_SCOPE_INSTRUCTIONS}\n\n${fenced.slice(heading.length)}`;
 }
 
 /**
@@ -376,6 +453,9 @@ function buildAiExportPrompt(input: RenderAiExportPromptInput, diagnostics: bool
     }
 
     const sections: PromptSectionSource[] = [];
+    // 78 L10: a filtered Portfolio export opens every prompt, analysis or Export Data, with the brokers it covers
+    const exportScope = renderExportScope(input.snapshot);
+    if (exportScope !== null) sections.push({id: 'export_scope', content: exportScope});
     const snapshotMetadata = renderSnapshotMetadata(input.snapshot, diagnostics);
     const snapshotData = renderSnapshotData(input.snapshot, diagnostics);
     if (input.selection.kind === 'analysis') {
@@ -384,22 +464,39 @@ function buildAiExportPrompt(input: RenderAiExportPromptInput, diagnostics: bool
         if (notes && !entry.supports_user_notes) {
             throw new AiExportPromptRenderError('unsupported_user_notes', `Analysis ${entry.id} does not support user notes`);
         }
-        sections.push({id: 'analysis_objective', content: renderAnalysisObjective(entry)});
-        sections.push({id: 'shared_verification_instructions', content: renderVerificationInstructions()});
-        sections.push({id: 'response_contract', content: renderResponseContract(entry)});
-        sections.push({id: 'snapshot_metadata', content: snapshotMetadata.content});
-        sections.push({id: 'snapshot_data', content: snapshotData.content});
-        sections.push({id: 'additional_librefolio_data', content: renderAdditionalData(input)});
-        sections.push({id: 'domain_notes', content: renderDomainNotes(input.snapshot)});
-        if (notes) sections.push({id: 'user_notes', content: renderUserNotes(notes)});
-        // The trusted closing, after the untrusted user notes: the answer focus (E-24), the legal notice, then the response
-        // language, the prompt's last word (J, A9)
-        sections.push({id: 'answer_focus', content: renderAnswerFocus()});
-        sections.push({id: 'legal_notice', content: renderLegalNotice(input)});
-        sections.push({
-            id: 'response_language',
-            content: `## Response Language\n\nPlease provide your answer in: ${input.responseLanguage}.`,
-        });
+        const templates = analysisTemplates(entry);
+        const language = {id: 'response_language' as const, content: `## Response Language\n\nPlease provide your answer in: ${input.responseLanguage}.`};
+        if (templates.shape === 'task') {
+            // The new shape (78 L1): the analysis's task and rules, the two shared blocks, the data, the legal notice, then
+            // the user's question, the thing to answer, and the response language, the prompt's last word
+            sections.push({id: 'task', content: renderTask(templates.instruction)});
+            sections.push({id: 'rules_of_reasoning', content: renderRulesOfReasoning(templates.instruction, templates.contract)});
+            sections.push({id: 'how_to_answer', content: `## How to Answer\n\n${AI_EXPORT_HOW_TO_ANSWER}`});
+            sections.push({id: 'ground_rules', content: `## Ground Rules\n\n${AI_EXPORT_GROUND_RULES}`});
+            sections.push({id: 'snapshot_metadata', content: snapshotMetadata.content});
+            sections.push({id: 'snapshot_data', content: snapshotData.content});
+            sections.push({id: 'additional_librefolio_data', content: renderAdditionalData(input)});
+            sections.push({id: 'domain_notes', content: renderDomainNotes(input.snapshot)});
+            sections.push({id: 'legal_notice', content: renderLegalNotice(input)});
+            if (notes) sections.push({id: 'user_question', content: renderUserQuestion(notes)});
+            sections.push(language);
+        } else {
+            sections.push({id: 'analysis_objective', content: renderAnalysisObjective(templates.instruction)});
+            sections.push({id: 'shared_verification_instructions', content: renderVerificationInstructions()});
+            sections.push({id: 'response_contract', content: renderResponseContract(templates.contract)});
+            sections.push({id: 'snapshot_metadata', content: snapshotMetadata.content});
+            sections.push({id: 'snapshot_data', content: snapshotData.content});
+            sections.push({id: 'additional_librefolio_data', content: renderAdditionalData(input)});
+            sections.push({id: 'domain_notes', content: renderDomainNotes(input.snapshot)});
+            // 78 L2: the old shape's user text is the User Question too, under its sentence, but it keeps its place before
+            // the trusted closing (Answer Focus, legal notice, language): «the question last» is proven on the new shape only
+            if (notes) sections.push({id: 'user_question', content: renderUserQuestion(notes)});
+            // The trusted closing, after the untrusted user question: the answer focus (E-24), the legal notice, then the response
+            // language, the prompt's last word (J, A9)
+            sections.push({id: 'answer_focus', content: renderAnswerFocus()});
+            sections.push({id: 'legal_notice', content: renderLegalNotice(input)});
+            sections.push(language);
+        }
     } else {
         sections.push({id: 'snapshot_metadata', content: snapshotMetadata.content});
         sections.push({id: 'snapshot_data', content: snapshotData.content});

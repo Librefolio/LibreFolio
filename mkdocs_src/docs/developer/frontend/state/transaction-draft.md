@@ -172,6 +172,11 @@ The tagged union structure of `PendingOp` simplifies complex composite operation
     fields)` (the sender — quantity for a `TRANSFER`, cash for the others, at or below zero —
     takes the first type) and `postSplitType(op, pendingSplits)`. The Type cell, the Form, **Link**,
     the issue rows and the local split of a new pair all call it.
+  - The update of a split half names a type only when the user swapped it (66 C22e,
+    `splitTypeToSend(op, pendingSplits, saved)`): the backend splits first and gives the half the
+    type of its **saved** side (`pair_sides`), then applies the update. `resolveOps` sends
+    `postSplitType` when it differs from that type and leaves the type out otherwise. The side is
+    read on the saved row, because after a swap the draft holds the amount as its magnitude.
 * **Promote** (`executePromote`) links two independent rows (e.g. a `WITHDRAWAL` and a `DEPOSIT`)
   into a pair of the matching type; both ops take the target type and collapse into one paired
   row, the receiving op becoming the hidden partner (`collapseIntoPaired`). Before the type
@@ -490,10 +495,41 @@ The title counts the top-level rows, as a pair already counts as one. The grid d
 - **«Remove from batch»** on a parent takes along the charges read with it that are still unchanged.
 - **A row leaving the workspace** — «Remove from batch», or «Mark for deletion» / «Delete selected» on a new row — goes
   through `withoutRows` (`bulk/bulkCharges.ts`), the one removal of the workspace: the row leaves with its pair's hidden
-  half, and a parent, new or saved, takes along only the creates born in its Form that still follow it (`followsParent`). Any
-  other new charge stays, as a row of its own owned by nobody, as every saved charge does: one applied in its own Form,
+  half, and a parent, new or saved, takes along only the creates born in its Form that still follow it (`followsParent`)
+  and the copies «Clone» brought with it that nobody changed (`isUntouchedClone`, below). Any other new charge stays, as a row of its own owned by nobody, as every saved charge does: one applied in its own Form,
   which drops `followsParent` (`applyChargePayload`), or one joined with «Link», which never followed (`linkInBulk`
   leaves the flag as it is, and a charge under its parent has no checkbox to be selected).
+
+**An all-new group moves together (66 TL-3b, P-30).** A group is a parent and the charges still linked under it
+(`newGroupOf`, `bulk/bulkCharges.ts`: neither «unlink» nor a saved «del»). While every row of it is a create, its broker
+and asset are shared, both ways: `handleFormPushed` reads the edited row's broker and asset as shown (`followedFields`)
+before the patch, and after `applyChargePayload` `syncNewGroup` writes the one that changed on every row of the group.
+
+- Only a changed field moves, so a group already divergent stays flagged until one of its rows is rewritten; the date
+  never moves (a create that follows its parent takes it one way, as before).
+- The asset moves only when it is not empty and the parent's type takes one (not a Deposit or a Withdrawal), and only
+  onto rows whose type takes one.
+- A row the sync writes loses the import todos on the fields it wrote that its new values answer (`remainingTodos`), as the row of the Form does (a todo on another field stays): an
+  imported group whose rows came without an asset is unblocked by the asset set on any one of them.
+- A group holding a saved row does not move: the batch's `chargeBrokerMismatch` / `chargeAssetMismatch` stay the guard,
+  and nothing changes in the payload.
+- A create that follows its parent (`followsParent`), applied in its own Form, loses the flag before the patch, so the
+  broker, asset and date that Form gives it are kept (`syncFollowers` used to write the parent's back over them).
+- The Form of a row of such a group gets `groupSync`: a line under the broker says the group moves together.
+
+**«Clone» carries the structure (66 TL-3).** A copy keeps its original's date, as «Clone» always did.
+
+- **A parent** brings a copy of each charge still linked under it (`cloneChargesUnder`: neither «del» nor «unlink»), owned
+  by the parent's copy, whose group opens. Each charge copy holds the values it was born with (`clonedFields`); while its
+  values still equal them, broker and asset aside (`isUntouchedClone`), it leaves with the parent's copy (`withoutRows`).
+  `clonedFields` goes with the link (`unlinkCharge`, `linkInBulk`, «unlink» in the parent's Form) and is never sent.
+- **From the pages** (the `clone` intent): a cloned parent with `charges_count` reads its charges first
+  (`GET ?parent_ids`, in batches), then `wireClonedRows` builds the rows: a charge selected with its parent sits under the
+  parent's copy, a charge cloned alone is linked to its saved parent (`parentLinkId`), the charges read become copies
+  under their parent's copy. A failed read copies the parents alone (`tx.bulk.clone.charges-read-failed`, a warning).
+- **«Clone row» in the workspace**, offered on a charge under its parent too: a saved parent whose charges are not all
+  read is read first; a charge's copy is linked to the same parent when the «Link» rule allows it (`cloneChargeLink`,
+  through `bulkLinkSelection`), free otherwise, with a warning that says why (`tx.bulk.clone.charge-free`, `reason`).
 
 **Deleting a parent and keeping its charges.** The same panel, `TxChargesActionModal` («Keep the charges» / «Delete
 all» / «Cancel»), asks on the Transactions page, on a broker's Transactions tab and inside the workspace. The two pages
@@ -567,9 +603,11 @@ Every `hidden` outcome of `linkSelection` wins; then a selected row marked for d
 reason `deleted` (restore the row first); then the page's reasons. A disabled «Link» is the selection bar's pattern
 (`aria-disabled`, the reason in a `Tooltip` reachable by tap and keyboard, `data-reason`). The confirmation is the same
 `TxChargesActionModal`, in `link` mode; `confirmLinkPanel` applies `linkInBulk`, which sets each charge's `chargeOf` to
-the parent and drops `parentUnlink`, `parentLinkId` and `byParentChoice` (keeping `followsParent` as it is), then opens
+the parent and drops `parentUnlink`, `parentLinkId`, `byParentChoice` and `clonedFields` (keeping `followsParent` as it is), then opens
 the group and empties the selection. Nothing else is needed for the save: `chargeParentFields` already turns `chargeOf`
-into `parent_ref` (a new parent) or `parent_transaction_id` (a saved one).
+into `parent_ref` (a new parent) or `parent_transaction_id` (a saved one). A row of the Bulk picked in a parent's
+Form (66 TL-2, «Link an existing charge…», candidates from `bulkChargeCandidates`) comes back through
+`applyChargeDrafts`, which gives it the same operation.
 
 **Naming a row: `txRowRef`.** One helper in `chargeLinkRules.ts` names a row in the texts of the charges:
 `#123` for a saved row, `row N` (`transactions.bulk.rowRef`, no `#`, which in the workspace's banners already means a

@@ -51,7 +51,7 @@ new one.
 
 1. Open **Assets** and create a new asset.
 2. In **Search Online**, type «bitcoin»: the CoinGecko chip is now on, and its results are among the others.
-3. Pick **Bitcoin (BTC)**. LibreFolio fills in the name, the type and the currency, then runs **Test Configuration**:
+3. Pick **Bitcoin**. LibreFolio fills in the name, the type and the currency, then runs **Test Configuration**:
    a price and a few days of history mean the key works.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
@@ -79,7 +79,7 @@ When you create the asset, LibreFolio loads its history: the last year on the De
   [Data Editor](../assets/detail/data-editor.md#import-from-csv).
 - **Self-hosted only**: CoinGecko is offered on instances you run yourself; a hosted service may switch it off.
 - **The data are CoinGecko's**, under [its API terms](https://www.coingecko.com/en/api_terms): whoever creates the key
-  accepts them. LibreFolio shows «Powered by CoinGecko» with its prices, as the terms ask
+  accepts them. LibreFolio credits CoinGecko with «Powered by CoinGecko», as the terms ask
   ([where](../assets/providers/coingecko.md#attribution)).
 - **One key for the whole instance**: every user's CoinGecko assets spend the same account's credits.
 

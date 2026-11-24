@@ -312,7 +312,8 @@ class RevolutBrokerProvider(BRIMProvider):
     def plugin_version(self) -> str:
         # 1.3.0 — a stock split in an Invest file becomes an incoming ADJUSTMENT at no cost, flagged ``possible_split`` (W-B87).
         # 1.2.0 — a stock split in an Invest file is listed in a notice with the link to open an issue (W-B87).
-        return "1.3.0"
+        # 1.4.0 — project 66, P4: a fee or a tax is linked to the booking of its own row.
+        return "1.4.0"
 
     def can_parse(self, file_path: Path) -> bool:
         """Detect Revolut invest or crypto format by checking distinctive headers."""
@@ -561,7 +562,7 @@ class RevolutBrokerProvider(BRIMProvider):
                 next_fake_id -= 1
 
             description = f"{tx_type_key}: {symbol}"
-            self._create_transaction(
+            booking = self._create_transaction(
                 row_num=row_num,
                 transactions=transactions,
                 validation_issues=validation_issues,
@@ -578,7 +579,8 @@ class RevolutBrokerProvider(BRIMProvider):
 
             fee_amount, fee_currency = _parse_revolut_money_with_currency(row.get(COL_FEES, ""))
             if fee_amount and fee_amount != 0:
-                self._create_transaction(
+                self._create_charge_of(
+                    booking,  # project 66 P4: linked to the booking of its own row; free when that booking was refused
                     row_num=row_num,
                     transactions=transactions,
                     validation_issues=validation_issues,

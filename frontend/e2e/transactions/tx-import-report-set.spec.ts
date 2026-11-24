@@ -22,8 +22,11 @@
  * `generic_simple.csv` — invented values). The facts of the main set on a fresh broker come
  * from the backend phase B (RS-B01 in test_brim_api.py, test_brim_danske_bank.py): preview
  * complete on 2020-02-03…2020-06-26; combine outcomes pair 12 · standalone 15 · summarized 7
- * · deferred 1; the combined parse has 27 transactions, H0 2020-02-03, 7 rows before it, 11
- * trades whose charges ask for a decision in the corrections step.
+ * · deferred 1; the combined parse has 37 transactions, H0 2020-02-03, 7 rows before it. Project
+ * 66, P2c: of the 11 trades, the 10 whose sum quantity × price explains are booked at quantity ×
+ * price with their commission as a FEE linked to them (27 rows + 10 FEEs); only Kaamos, priced in
+ * another currency, still asks for a decision in the corrections step. The withdrawal tax names
+ * the withdrawal of its day, and the editor folds it under it.
  *
  * Cleanup: nothing is committed (the tests stop at the review), so what a test writes is its
  * broker and the BRIM files on it — the uploads and the combined file. afterEach leaves the
@@ -294,11 +297,15 @@ const DANSKE = 'broker_danske_bank';
 const GENERIC = 'broker_generic_csv';
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-/** The main synthetic set on a fresh broker (backend phase B). */
+/** The main synthetic set on a fresh broker (backend phase B; project 66, P2c). */
 const MAIN_SET = {
-    transactions: 27,
+    /** 27 rows, and the 10 commissions split out of the trades as FEEs linked to them. */
+    transactions: 37,
     beforeHistory: 7,
-    trades: 11,
+    /** Of the 11 trades, the 10 whose sum quantity × price explains are split. */
+    splitTrades: 10,
+    /** The trades whose charges still ask for a decision: Kaamos alone, priced in another currency. */
+    chargeTodos: 1,
     outcomes: {pair: 12, standalone: 15, summarized: 7, deferred: 1, excluded: 0},
 } as const;
 
@@ -443,6 +450,35 @@ async function uploadsDuring(page: Page, expected: number, action: () => Promise
 }
 
 type JsonCall = {path: string; status: number; request: unknown; body: unknown};
+
+type ParsedTx = {type: string; date: string; asset_id?: number | null; ref?: string | null; parent_ref?: string | null};
+type ParsedSet = {history_start?: string | null; transactions: ParsedTx[]; field_todos: Array<{tx_index: number; context?: Record<string, unknown> | null}>};
+
+/**
+ * What the combined parse states, for the steps that show it (project 66, P2c): its rows, those before H0, the rows the
+ * corrections step lists (a todo with a split hint), the FEEs that name a trade, and the taxes that name a withdrawal.
+ */
+function parsedFacts(body: ParsedSet) {
+    const named = new Map(body.transactions.filter((tx) => tx.ref).map((tx) => [tx.ref as string, tx]));
+    const parentOf = (tx: ParsedTx): ParsedTx | undefined => (tx.parent_ref ? named.get(tx.parent_ref) : undefined);
+    const historyStart = body.history_start ?? '';
+    return {
+        historyStart,
+        parentOf,
+        transactions: body.transactions.length,
+        beforeHistory: body.transactions.filter((tx) => tx.date < historyStart).length,
+        fixRows: new Set(body.field_todos.filter((todo) => todo.context?.split_hint).map((todo) => todo.tx_index)).size,
+        tradeFees: body.transactions.filter((tx) => tx.type === 'FEE' && ['BUY', 'SELL'].includes(parentOf(tx)?.type ?? '')),
+        withdrawalTaxes: body.transactions.filter((tx) => tx.type === 'TAX' && parentOf(tx)?.type === 'WITHDRAWAL'),
+    };
+}
+
+type ParsedFacts = ReturnType<typeof parsedFacts>;
+
+/** The parse of the combined file, armed before the click that starts it (a POST, never served from a cache). */
+function parseResponse(page: Page): Promise<ParsedSet> {
+    return page.waitForResponse((response) => response.request().method() === 'POST' && PARSE_PATH.test(new URL(response.url()).pathname), {timeout: 60_000}).then((response) => response.json() as Promise<ParsedSet>);
+}
 
 /** Record the JSON POSTs whose path matches, from now until the returned `stop()`. */
 function recordJsonPosts(page: Page, match: (pathname: string) => boolean): () => Promise<JsonCall[]> {
@@ -652,9 +688,10 @@ function recordGapFixPosts(page: Page): {count: () => number; stop: () => Promis
 
 /**
  * R1's corridor without its C2 assertions: both exports in one step-1 session → one complete set →
- * its combined file parsed → the notices read past → every charge kept in the corrections → review.
+ * its combined file parsed → the notices read past → the charges still asked for kept in the corrections → review.
+ * Returns the review and what the parse stated.
  */
-async function walkMainSetToReview(page: Page, brokerId: number): Promise<Locator> {
+async function walkMainSetToReview(page: Page, brokerId: number): Promise<{step4: Locator; facts: ParsedFacts}> {
     await dropFiles(page, [CUSTODY_XLSX, CASH_CSV]);
     await expect(pendingRows(page)).toHaveCount(2);
     await assignOwnedBroker(page, brokerId);
@@ -671,23 +708,42 @@ async function walkMainSetToReview(page: Page, brokerId: number): Promise<Locato
     await expect(card).toHaveAttribute('data-selected', 'all');
     const parse = page.getByTestId('import-wizard-parse');
     await expect(parse).toBeEnabled({timeout: 5_000});
+    const parsed = parseResponse(page);
     await parse.click();
     await expect(page.getByTestId('import-wizard-step3')).toBeVisible({timeout: 10_000});
     await waitForParseVerdict(page, 60_000);
+    const facts = parsedFacts(await parsed);
+    expect(facts.fixRows, 'P2c: only the trade priced in another currency asks about its charges').toBe(MAIN_SET.chargeTodos);
 
     await page.getByTestId('import-wizard-continue').click();
     const confirm = page.getByTestId('import-wizard-warning-confirm');
     await expect(confirm).toBeVisible({timeout: 5_000});
     await confirm.click();
     await expect(currentStep(page)).toHaveAttribute('data-step-id', 'fix', {timeout: 30_000});
-    await expect(page.getByTestId('fix-step-row')).toHaveCount(MAIN_SET.trades, {timeout: 10_000});
+    await expect(page.getByTestId('fix-step-row')).toHaveCount(facts.fixRows, {timeout: 10_000});
     await page.getByTestId('fix-step-accept-all').click();
     await expect(page.locator('[data-testid="fix-step-row"][data-decision="pending"]')).toHaveCount(0, {timeout: 10_000});
     await page.getByTestId('import-wizard-fix-continue').click();
     await expect(currentStep(page)).toHaveAttribute('data-step-id', 'review', {timeout: 30_000});
     const step4 = page.getByTestId('import-wizard-step4');
     await waitForSettled(step4, 30_000);
-    return step4;
+    return {step4, facts};
+}
+
+/**
+ * Project 66, P2c: the taxes the parse links to a withdrawal on or after H0 reach the editor inside their withdrawal's
+ * group, closed — the selection holds both (the cash rows of the history). One chip per such withdrawal, counting its tax,
+ * and no label for the tax while the group is closed. Returns how many charges are folded.
+ */
+async function expectTaxesFolded(bulk: Locator, facts: ParsedFacts): Promise<number> {
+    const folded = facts.withdrawalTaxes.filter((tax) => tax.date >= facts.historyStart).length;
+    expect(folded, 'P2c premise: the tax of 2020-06-10 names the withdrawal of its day').toBe(1);
+    const chips = bulk.locator('[data-testid^="tx-bulk-charges-toggle-"]');
+    await expect(chips, 'one group: the withdrawal with its tax').toHaveCount(folded, {timeout: 10_000});
+    await expect(chips).toHaveAttribute('data-charges-count', '1');
+    await expect(chips).toHaveAttribute('aria-expanded', 'false');
+    await expect(bulk.locator('[data-testid="tx-bulk-row-label"][data-charge-of]'), 'the closed group shows no charge row').toHaveCount(0);
+    return folded;
 }
 
 /**
@@ -1525,6 +1581,26 @@ test.describe('Import Wizard — report sets', () => {
         await expect(step3).toHaveAttribute('data-parse-state', 'ok');
         const calls = await stopRecording();
         const combines = calls.filter((call) => call.path === COMBINE_PATH);
+        // P2c: what the parse states — 27 rows and the 10 commissions split out of the trades, each linked to its trade
+        // (same date, same asset); the withdrawal taxes (2019-11-04 before H0, 2020-06-10) name the withdrawal of their day.
+        const facts = parsedFacts(calls.find((call) => PARSE_PATH.test(call.path))?.body as ParsedSet);
+        expect.soft(facts.transactions, 'the rows of the combined parse').toBe(MAIN_SET.transactions);
+        expect.soft(facts.fixRows, 'only the trade priced in another currency asks about its charges').toBe(MAIN_SET.chargeTodos);
+        expect
+            .soft(
+                facts.tradeFees.map((fee) => [fee.date === facts.parentOf(fee)?.date, fee.asset_id === facts.parentOf(fee)?.asset_id]),
+                'every split commission is a FEE linked to its trade, on its date and asset',
+            )
+            .toEqual(Array.from({length: MAIN_SET.splitTrades}, () => [true, true]));
+        expect
+            .soft(
+                facts.withdrawalTaxes.map((tax) => [tax.date, facts.parentOf(tax)?.date]),
+                'each withdrawal tax names the withdrawal of its day',
+            )
+            .toEqual([
+                ['2019-11-04', '2019-11-04'],
+                ['2020-06-10', '2020-06-10'],
+            ]);
         // G (D): every set request names the files left out — none here. Soft, so the rest of R1 still runs and reports.
         expect
             .soft(
@@ -1577,9 +1653,9 @@ test.describe('Import Wizard — report sets', () => {
         const confirm = page.getByTestId('import-wizard-warning-confirm');
         await expect(confirm).toBeVisible({timeout: 5_000});
         await confirm.click();
-        // The 11 trades include their charges: each asks for a decision; "keep all" gives it.
+        // P2c: only the trade priced in another currency still includes its charges and asks for a decision; "keep all" gives it.
         await expect(currentStep(page)).toHaveAttribute('data-step-id', 'fix', {timeout: 30_000});
-        await expect(page.getByTestId('fix-step-row')).toHaveCount(MAIN_SET.trades, {timeout: 10_000});
+        await expect(page.getByTestId('fix-step-row')).toHaveCount(facts.fixRows, {timeout: 10_000});
         await page.getByTestId('fix-step-accept-all').click();
         await expect(page.locator('[data-testid="fix-step-row"][data-decision="pending"]')).toHaveCount(0, {timeout: 10_000});
         await page.getByTestId('import-wizard-fix-continue').click();
@@ -1590,7 +1666,8 @@ test.describe('Import Wizard — report sets', () => {
         // ④ the 7 rows before H0 (2020-02-03) sit behind a counter, out of the total.
         const counter = page.getByTestId('import-wizard-before-history-count');
         await expect(counter, 'the review counts the rows before H0').toHaveAttribute('data-count', String(MAIN_SET.beforeHistory), {timeout: C2_FIRST});
-        const importable = MAIN_SET.transactions - MAIN_SET.beforeHistory;
+        expect(facts.beforeHistory, 'the parse dates as many rows before H0').toBe(MAIN_SET.beforeHistory);
+        const importable = facts.transactions - facts.beforeHistory;
         await showAllRows(page, step4);
         const reviewRows = step4.locator('tbody tr[data-row-id]');
         const lockedToggles = step4.locator('tbody tr[data-row-id] button[aria-pressed][disabled]');
@@ -1600,7 +1677,7 @@ test.describe('Import Wizard — report sets', () => {
 
         // Shown on request: in the table, with a disabled checkbox, never selected, still out of the total.
         await page.getByTestId('import-wizard-before-history-toggle').click();
-        await expect(reviewRows).toHaveCount(MAIN_SET.transactions, {timeout: 5_000});
+        await expect(reviewRows).toHaveCount(facts.transactions, {timeout: 5_000});
         await expect(lockedToggles).toHaveCount(MAIN_SET.beforeHistory);
         await expect(step4.locator('tbody tr[data-row-id] button[aria-pressed="true"][disabled]')).toHaveCount(0);
         await expect(step4).toHaveAttribute('data-total-count', String(importable));
@@ -1923,7 +2000,7 @@ test.describe('Import Wizard — report sets', () => {
     test('R5: Import on a report set opens the gap-fix step — the opening deposit selected, recomputed on Back, handed to the editor tagged gap_fix', async ({page}) => {
         test.setTimeout(180_000);
         const brokerId = await startOnOwnedBroker(page, 'R5');
-        const step4 = await walkMainSetToReview(page, brokerId);
+        const {step4, facts} = await walkMainSetToReview(page, brokerId);
         const selected = await selectOnlyCashRows(page, step4);
         const gapFixCalls = recordGapFixPosts(page);
         const importButton = page.getByTestId('import-wizard-import');
@@ -1966,15 +2043,24 @@ test.describe('Import Wizard — report sets', () => {
         await page.getByTestId('import-wizard-gapfix-continue').click();
         const bulk = await editorAfterHandoff(page);
         await showAllRows(page, bulk);
-        await expect(bulk.getByTestId('tx-bulk-row-label'), 'the selected rows of the review and the selected corrections').toHaveCount(selected + proposalCount, {timeout: 10_000});
+        // P2c: the tax arrives inside its withdrawal's group, closed: one label fewer until the group is opened.
+        const folded = await expectTaxesFolded(bulk, facts);
+        const labels = bulk.getByTestId('tx-bulk-row-label');
+        await expect(labels, 'the selected rows of the review and the selected corrections, the tax folded').toHaveCount(selected - folded + proposalCount, {timeout: 10_000});
         await expect(gapFixRows(bulk), 'as many gap_fix rows as corrections were selected').toHaveCount(proposalCount);
+        const chip = bulk.locator('[data-testid^="tx-bulk-charges-toggle-"]');
+        const withdrawalRow = (await chip.getAttribute('data-testid'))?.replace('tx-bulk-charges-toggle-', '') ?? '';
+        await chip.click();
+        await expect(chip).toHaveAttribute('aria-expanded', 'true', {timeout: 5_000});
+        await expect(bulk.locator(`[data-testid="tx-bulk-row-label"][data-charge-of="${withdrawalRow}"]`), 'opened, the group shows its tax under the withdrawal').toHaveCount(folded);
+        await expect(labels, 'every selected row, the tax included').toHaveCount(selected + proposalCount);
         await closeEditorWithoutSaving(page, bulk);
     });
 
     test('R6: with every correction unticked, none reaches the editor, and the imported rows do', async ({page}) => {
         test.setTimeout(180_000);
         const brokerId = await startOnOwnedBroker(page, 'R6');
-        const step4 = await walkMainSetToReview(page, brokerId);
+        const {step4, facts} = await walkMainSetToReview(page, brokerId);
         const selected = await selectOnlyCashRows(page, step4);
 
         await page.getByTestId('import-wizard-import').click();
@@ -2008,8 +2094,9 @@ test.describe('Import Wizard — report sets', () => {
         await showAllRows(page, bulk);
         await expect(bulk.getByTestId('pagination-prev')).toBeDisabled();
         await expect(bulk.getByTestId('pagination-next')).toBeDisabled();
-        // The imported rows are there, and no correction is.
-        await expect(bulk.getByTestId('tx-bulk-row-label'), 'the selected rows of the review reach the editor').toHaveCount(selected, {timeout: 10_000});
+        // The imported rows are there, and no correction is. P2c: the tax inside its withdrawal's group, closed.
+        const folded = await expectTaxesFolded(bulk, facts);
+        await expect(bulk.getByTestId('tx-bulk-row-label'), 'the selected rows of the review reach the editor, the tax folded').toHaveCount(selected - folded, {timeout: 10_000});
         await expect(gapFixRows(bulk), 'no correction was selected').toHaveCount(0);
         await closeEditorWithoutSaving(page, bulk);
     });

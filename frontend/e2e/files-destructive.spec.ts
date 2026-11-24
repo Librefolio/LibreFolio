@@ -155,6 +155,23 @@ test('static single delete — cancel keeps the row', async ({page}) => {
     await expect(row).toHaveCount(1);
 });
 
+test('static bulk delete (81 U21) — «Delete» asks first, and Cancel deletes nothing and keeps the selection', async ({page}) => {
+    const ids = [await uploadStaticFile(page, uniqueSuffix()), await uploadStaticFile(page, uniqueSuffix())];
+    await openStaticListView(page);
+    for (const id of ids) await page.getByTestId(`dt-row-checkbox-${id}`).click();
+
+    const table = page.getByTestId('files-table-static');
+    await table.getByTestId('toolbar-action-delete').click();
+    await expect(page.getByTestId('confirm-modal-confirm')).toBeVisible({timeout: 5_000});
+    await page.getByTestId('confirm-modal-cancel').click();
+
+    await expect(page.getByTestId('confirm-modal-confirm')).toHaveCount(0);
+    for (const id of ids) {
+        await expect(page.locator(`[data-row-id="${id}"]`), 'Cancel deletes nothing').toHaveCount(1);
+        await expect(page.getByTestId(`dt-row-checkbox-${id}`)).toHaveAttribute('data-state', 'checked');
+    }
+});
+
 test('static bulk delete — the shared selection panel emits file.deleted.bulk for the selected rows', async ({page}) => {
     const ids = [await uploadStaticFile(page, uniqueSuffix()), await uploadStaticFile(page, uniqueSuffix()), await uploadStaticFile(page, uniqueSuffix())];
     await openStaticListView(page);
@@ -173,6 +190,9 @@ test('static bulk delete — the shared selection panel emits file.deleted.bulk 
 
     const since = await eventSeq(page);
     await bulkDelete.click();
+    // 81 U21: nothing is deleted until the user confirms in the project's modal.
+    await expect(page.getByTestId('confirm-modal-confirm')).toBeVisible({timeout: 5_000});
+    await page.getByTestId('confirm-modal-confirm').click();
 
     const ev = await waitForEvent(page, 'file.deleted.bulk', {since});
     expect(ev.detail).toMatchObject({count: ids.length, isBrim: false});
@@ -232,6 +252,10 @@ test('static bulk download (77 SEL-B) — «Download» says how many files and d
     const names: string[] = [];
     page.on('download', (download) => names.push(download.suggestedFilename()));
     await table.getByTestId('toolbar-action-download').click();
+    // 81 U21: the download starts after the user confirms; before that nothing is saved.
+    await expect(page.getByTestId('confirm-modal-confirm')).toBeVisible({timeout: 5_000});
+    expect(names, 'nothing downloaded before the confirmation').toHaveLength(0);
+    await page.getByTestId('confirm-modal-confirm').click();
     await expect.poll(() => names.length, {message: 'one download per selected file', timeout: 10_000}).toBe(ids.length);
     for (const id of ids) await expect(page.locator(`[data-row-id="${id}"]`), 'downloading deletes nothing').toHaveCount(1);
 });
@@ -297,6 +321,9 @@ test('BRIM bulk delete — the shared selection panel deletes the selected repor
 
     const since = await eventSeq(page);
     await bulkDelete.click();
+    // 81 U21: the confirm is the page's `requireConfirm`, the same modal as for the static list.
+    await expect(page.getByTestId('confirm-modal-confirm')).toBeVisible({timeout: 5_000});
+    await page.getByTestId('confirm-modal-confirm').click();
 
     const ev = await waitForEvent(page, 'file.deleted.bulk', {since});
     expect(ev.detail).toMatchObject({count: ids.length, isBrim: true});

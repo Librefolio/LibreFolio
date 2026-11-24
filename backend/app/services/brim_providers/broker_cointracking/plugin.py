@@ -8,7 +8,7 @@ Supported mappings:
 - Trade crypto bought with fiat → BUY; crypto sold for fiat → SELL
 - Crypto deposits/withdrawals → ADJUSTMENT quantity +/- (cashless)
 - Fiat deposits/withdrawals → DEPOSIT / WITHDRAWAL
-- Staking rewards → ADJUSTMENT quantity + (cashless)
+- Staking rewards in crypto → REWARD (cashless; the file gives no value, so each row asks for it); in fiat → INTEREST
 - Fiat fees → separate FEE transaction
 
 Known limits:
@@ -30,11 +30,12 @@ from typing import Dict, List, Optional
 import structlog
 
 from backend.app.db.models import TransactionType
-from backend.app.schemas.brim import FAKE_ASSET_ID_BASE, BRIMExtractedAssetInfo, BRIMParseOutput, BRIMValidationIssue
+from backend.app.schemas.brim import FAKE_ASSET_ID_BASE, BRIMExtractedAssetInfo, BRIMFieldTodo, BRIMParseOutput, BRIMValidationIssue
 from backend.app.schemas.common import Currency, is_fiat_currency
 from backend.app.schemas.transactions.transactions import TXCreateItem
 from backend.app.services.brim.brim_provider import BRIMParseError, BRIMProvider
 from backend.app.services.brim.registry import BRIMProviderRegistry
+from backend.app.services.brim_providers._brim_io import reward_value_todo
 from backend.app.services.platform.provider_registry import register_provider
 
 logger = structlog.get_logger(__name__)
@@ -118,7 +119,9 @@ class CoinTrackingBrokerProvider(BRIMProvider):
 
     @property
     def plugin_version(self) -> str:
-        return "1.0.0"
+        # 1.1.0 — the fiat fee of a row is linked to that row's booking (project 66, P4).
+        # 1.2.0 — a staking reward in crypto is a REWARD whose value the row asks for; its fee stays free (project 79, STK-4b).
+        return "1.2.0"
 
     @property
     def test_file_pattern(self) -> Optional[str]:
@@ -142,6 +145,7 @@ class CoinTrackingBrokerProvider(BRIMProvider):
         transactions: List[TXCreateItem] = []
         warnings: List[str] = []
         validation_issues: List[BRIMValidationIssue] = []
+        field_todos: List[BRIMFieldTodo] = []
         extracted_assets_raw: Dict[int, Dict[str, Optional[str]]] = {}
         asset_to_fake_id: Dict[str, int] = {}
         next_fake_id = FAKE_ASSET_ID_BASE
@@ -164,11 +168,15 @@ class CoinTrackingBrokerProvider(BRIMProvider):
             next_fake_id -= 1
             return asset_id
 
-        def create_fee(row_num: int, tx_date: date_type, fee: Optional[Decimal], fee_cur: str, asset_id: Optional[int], context: str) -> None:
+        def create_fee(row_num: int, tx_date: date_type, fee: Optional[Decimal], fee_cur: str, asset_id: Optional[int], context: str, parent: Optional[TXCreateItem]) -> None:
+            """The fee of a row: a fiat FEE linked to the row's booking (``parent``, project 66 P4; an ADJUSTMENT is no
+            parent, nor is a REWARD, so the fee of a crypto deposit, withdrawal or staking reward stays free), or a crypto fee as an
+            ADJUSTMENT."""
             if fee is None or fee <= 0 or not fee_cur:
                 return
             if is_fiat_currency(fee_cur):
-                self._create_transaction(
+                self._create_charge_of(
+                    parent,
                     row_num=row_num,
                     transactions=transactions,
                     validation_issues=validation_issues,
@@ -240,6 +248,7 @@ class CoinTrackingBrokerProvider(BRIMProvider):
 
                     tx_type_lower = tx_type_raw.lower()
                     asset_id = None
+                    parent: Optional[TXCreateItem] = None  # the row's booking, which its fee is linked to
 
                     if tx_type_lower == "trade":
                         if buy_amount is None or sell_amount is None or not buy_cur or not sell_cur:
@@ -251,7 +260,7 @@ class CoinTrackingBrokerProvider(BRIMProvider):
                         sell_is_fiat = is_fiat_currency(sell_cur)
                         if not buy_is_fiat and sell_is_fiat:
                             asset_id = get_asset_id(buy_cur)
-                            self._create_transaction(
+                            parent = self._create_transaction(
                                 row_num=row_num,
                                 transactions=transactions,
                                 validation_issues=validation_issues,
@@ -267,7 +276,7 @@ class CoinTrackingBrokerProvider(BRIMProvider):
                             )
                         elif buy_is_fiat and not sell_is_fiat:
                             asset_id = get_asset_id(sell_cur)
-                            self._create_transaction(
+                            parent = self._create_transaction(
                                 row_num=row_num,
                                 transactions=transactions,
                                 validation_issues=validation_issues,
@@ -292,7 +301,7 @@ class CoinTrackingBrokerProvider(BRIMProvider):
                             warnings.append(f"Row {row_num}: invalid deposit, skipping")
                             continue
                         if is_fiat_currency(buy_cur):
-                            self._create_transaction(
+                            parent = self._create_transaction(
                                 row_num=row_num,
                                 transactions=transactions,
                                 validation_issues=validation_issues,
@@ -308,7 +317,7 @@ class CoinTrackingBrokerProvider(BRIMProvider):
                             )
                         else:
                             asset_id = get_asset_id(buy_cur)
-                            self._create_transaction(
+                            parent = self._create_transaction(
                                 row_num=row_num,
                                 transactions=transactions,
                                 validation_issues=validation_issues,
@@ -329,7 +338,7 @@ class CoinTrackingBrokerProvider(BRIMProvider):
                             warnings.append(f"Row {row_num}: invalid withdrawal, skipping")
                             continue
                         if is_fiat_currency(sell_cur):
-                            self._create_transaction(
+                            parent = self._create_transaction(
                                 row_num=row_num,
                                 transactions=transactions,
                                 validation_issues=validation_issues,
@@ -345,7 +354,7 @@ class CoinTrackingBrokerProvider(BRIMProvider):
                             )
                         else:
                             asset_id = get_asset_id(sell_cur)
-                            self._create_transaction(
+                            parent = self._create_transaction(
                                 row_num=row_num,
                                 transactions=transactions,
                                 validation_issues=validation_issues,
@@ -366,7 +375,7 @@ class CoinTrackingBrokerProvider(BRIMProvider):
                             warnings.append(f"Row {row_num}: invalid staking reward, skipping")
                             continue
                         if is_fiat_currency(buy_cur):
-                            self._create_transaction(
+                            parent = self._create_transaction(
                                 row_num=row_num,
                                 transactions=transactions,
                                 validation_issues=validation_issues,
@@ -381,28 +390,33 @@ class CoinTrackingBrokerProvider(BRIMProvider):
                                 tags=["import", "cointracking"],
                             )
                         else:
+                            # A reward in kind (project 79, STK-4b): the file gives no value, so the row asks for it
+                            # (decision S4-Q4). A REWARD is no parent: its fee stays a free FEE (decision S4-Q3 (a)).
                             asset_id = get_asset_id(buy_cur)
-                            self._create_transaction(
+                            reward = self._create_transaction(
                                 row_num=row_num,
                                 transactions=transactions,
                                 validation_issues=validation_issues,
                                 context=context,
                                 broker_id=broker_id,
                                 asset_id=asset_id,
-                                type=TransactionType.ADJUSTMENT,
+                                type=TransactionType.REWARD,
                                 date=tx_date,
                                 quantity=abs(buy_amount),
                                 cash=None,
                                 description=f"CoinTracking staking reward {buy_cur}",
                                 tags=["import", "cointracking"],
                             )
+                            if reward is not None:
+                                field_todos.append(reward_value_todo(len(transactions) - 1, row_num, buy_cur))
+                            parent = None
 
                     else:
                         skipped_unknown_types += 1
                         warnings.append(f"Row {row_num}: unknown type '{tx_type_raw}', skipping")
                         continue
 
-                    create_fee(row_num, tx_date, fee_amount, fee_cur, asset_id, context)
+                    create_fee(row_num, tx_date, fee_amount, fee_cur, asset_id, context, parent)
 
         except FileNotFoundError:
             raise BRIMParseError(f"File not found: {file_path}", details={"code": "file_not_found", "context": {"file": file_path.name}}) from None
@@ -436,4 +450,4 @@ class CoinTrackingBrokerProvider(BRIMProvider):
             asset_count=len(extracted_assets_typed),
         )
 
-        return BRIMParseOutput(transactions=transactions, warnings=warnings, validation_issues=validation_issues, extracted_assets=extracted_assets_typed)
+        return BRIMParseOutput(transactions=transactions, warnings=warnings, validation_issues=validation_issues, extracted_assets=extracted_assets_typed, field_todos=field_todos)

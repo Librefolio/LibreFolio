@@ -51,6 +51,7 @@ export interface SelectionToolbarAction {
     disabled: boolean;
     hint?: string;
     reason?: string;
+    testid?: string;
     onClick: () => void;
 }
 
@@ -72,6 +73,7 @@ export function selectionToolbarActions<T>(actions: readonly BulkAction<T>[], se
         disabled: item.state === 'off',
         hint: item.state === 'off' ? item.hint : undefined,
         reason: item.state === 'off' ? item.reason : undefined,
+        testid: item.action.testid,
         onClick: () => run(item.action, item.rows),
     }));
 }

@@ -25,28 +25,45 @@ no asset and no link, the new one the same FEE with its parent's asset and ``par
 
 Until the code exists, every test that calls ``_create_linked_charge`` or ``_ensure_ref`` fails with ``AttributeError``.
 
+What the wave P2b adds to ``brim_charge_links.py`` is checked at the end: identical free charges listed once per row,
+the snapshot of a report set (its members combined as the set API does, each with its sha256), the snapshot file names.
+The same wave adds ``_link_existing_charge(charge, parent, transactions, *, row_num=0)``, which links a charge already
+in the output (degiro, Crédit Agricole link after reading the whole file): its guards, and its parity with
+``_create_linked_charge`` (one shared check, ``_charge_link_check``), close the file.
+
 PURE for the runner: no server, no shared database (the reimport tests open their own in-memory SQLite and dispose it).
 """
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator, Callable
-from contextlib import asynccontextmanager
+import json
+from collections.abc import Callable
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
 from typing import List, Optional
 
 import pytest
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-from sqlmodel import SQLModel
 
-from backend.app.db.models import Broker, TransactionType
+from backend.app.db.models import TransactionType
 from backend.app.schemas.brim import FAKE_ASSET_ID_BASE, BRIMParseOutput, BRIMValidationIssue
 from backend.app.schemas.common import Currency
 from backend.app.schemas.transactions.transactions import TXCreateItem
 from backend.app.services.brim.brim_provider import BRIMProvider
-from backend.test_scripts.brim_charge_links import REF_MAX_LENGTH, assert_charge_link_structure, assert_reimport_adds_nothing, charge_link_structure_problems
+from backend.app.services.brim.registry import BRIMProviderRegistry
+from backend.test_scripts import brim_charge_links
+from backend.test_scripts.brim_charge_links import (
+    REF_MAX_LENGTH,
+    assert_charge_link_structure,
+    assert_reimport_adds_nothing,
+    capture_previous_set_output,
+    charge_link_expectation_problems,
+    charge_link_structure_problems,
+    load_previous_snapshot,
+    previous_output_path,
+    private_broker,
+    sample_input,
+)
 
 BROKER_ID = 7
 DAY = date(2025, 3, 14)
@@ -544,28 +561,10 @@ class BuyOnlyBroker(FakeBroker):
         return BRIMParseOutput(transactions=transactions)
 
 
-@asynccontextmanager
-async def _private_broker() -> AsyncIterator[tuple[AsyncSession, int]]:
-    """This test's own in-memory database with the ORM schema and one broker: never the lane's database."""
-    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
-    async with engine.begin() as connection:
-        await connection.run_sync(SQLModel.metadata.create_all)
-    session = AsyncSession(engine)
-    try:
-        broker = Broker(name="Linked charges reimport")
-        session.add(broker)
-        await session.commit()
-        await session.refresh(broker)
-        yield session, broker.id
-    finally:
-        await session.close()
-        await engine.dispose()
-
-
 async def _reimport(tmp_path: Path, previous: Callable[[], FakeBroker], current: FakeBroker) -> BRIMParseOutput:
     sample = tmp_path / "fake-broker.csv"
     sample.write_text("fake broker export\n", encoding="utf-8")
-    async with _private_broker() as (session, broker_id):
+    async with private_broker() as (session, broker_id):
         previous_rows = previous().parse(sample, broker_id).transactions
         return await assert_reimport_adds_nothing(previous_rows, current, sample, broker_id, session)
 
@@ -595,3 +594,410 @@ class TestReimportAddsNothing:
         output = await _reimport(tmp_path, PreviousVersionBroker, current)
 
         assert [tx.type for tx in output.transactions] == [TransactionType.BUY, TransactionType.FEE]
+
+
+# ─── the helpers of the wave P2b (brim_charge_links.py) ───────────────────────────────────────────────────────────────
+
+
+def _fee_row(**overrides) -> TXCreateItem:
+    """A free FEE of 2.50 EUR on ``DAY``, no asset: the shape of an account's connection fee."""
+    return TXCreateItem(**{**_charge_kwargs(asset_id=None, cash=Currency(code="EUR", amount=Decimal("-2.50"))), **overrides})
+
+
+FEE_KEY = ("FEE", DAY.isoformat(), "-2.50", "EUR", None)
+
+
+class TestIdenticalFreeCharges:
+    """``free`` lists a key once per row: identical free charges (the four connection fees of one day of a DEGIRO
+    statement) are declared without a position."""
+
+    def test_a_key_listed_once_per_row_matches(self):
+        output = BRIMParseOutput(transactions=[_fee_row(), _fee_row()])
+
+        assert charge_link_expectation_problems(output, linked=[], free=[FEE_KEY, FEE_KEY]) == []
+
+    def test_a_key_listed_fewer_times_than_its_rows_is_reported(self):
+        output = BRIMParseOutput(transactions=[_fee_row(), _fee_row()])
+
+        problems = charge_link_expectation_problems(output, linked=[], free=[FEE_KEY])
+        assert any("2 rows match" in problem and "1 time(s)" in problem for problem in problems), problems
+
+    def test_one_of_the_identical_rows_naming_a_parent_is_reported(self):
+        parent = TXCreateItem(**_parent_kwargs(TransactionType.BUY, ref="r1"))
+        output = BRIMParseOutput(transactions=[parent, _fee_row(), _fee_row(parent_ref="r1")])
+
+        problems = charge_link_expectation_problems(output, linked=[], free=[FEE_KEY, FEE_KEY])
+        assert any("should stay free" in problem for problem in problems), problems
+
+
+class TestReportSetSnapshot:
+    """A report-set plugin (Crédit Agricole) is captured on a set of samples: combined by the plugin, written by the core,
+    parsed; each member listed with its sha256. The file names keep the extension of a non-CSV member."""
+
+    SET = "credit_agricole-securities.csv+credit_agricole-account.xlsx"
+
+    @staticmethod
+    def _plugin() -> BRIMProvider:
+        BRIMProviderRegistry.auto_discover()
+        plugin = BRIMProviderRegistry.get_provider_instance("broker_credit_agricole")
+        assert plugin is not None and plugin.is_report_set_plugin, "presence barrier: the Crédit Agricole report-set plugin"
+        return plugin
+
+    @pytest.mark.parametrize(
+        ("sample", "stem"),
+        [
+            ("fineco-export.csv", "fineco-export"),
+            ("credit_agricole-conti.xlsx", "credit_agricole-conti.xlsx"),
+            ("credit_agricole-securities.csv+credit_agricole-account.xlsx", "credit_agricole-securities+credit_agricole-account.xlsx"),
+        ],
+    )
+    def test_the_snapshot_file_name(self, sample: str, stem: str):
+        assert previous_output_path("broker_x", sample).name == f"{stem}.json"
+
+    def test_a_set_is_captured_and_loaded_back(self, tmp_path, monkeypatch):
+        plugin = self._plugin()
+        snapshot = capture_previous_set_output(plugin, self.SET, source_head="0000000", allow_links=True)
+        assert [member["sample"].rsplit("/", 1)[-1] for member in snapshot["members"]] == self.SET.split("+")
+        assert all(len(member["sample_sha256"]) == 64 for member in snapshot["members"])
+
+        monkeypatch.setattr(brim_charge_links, "PREVIOUS_OUTPUTS_DIR", tmp_path)
+        target = previous_output_path(plugin.provider_code, self.SET)
+        target.parent.mkdir(parents=True)
+        target.write_text(json.dumps(snapshot), encoding="utf-8")
+        loaded = load_previous_snapshot(plugin.provider_code, self.SET, BROKER_ID)
+
+        fresh = plugin.parse(sample_input(plugin, self.SET, tmp_path / "combined"), BROKER_ID)
+        assert loaded.transactions == fresh.transactions, "the loaded rows are the parse of the combined set, on the test's broker"
+
+    def test_a_member_that_changed_fails_the_load(self, tmp_path, monkeypatch):
+        plugin = self._plugin()
+        snapshot = capture_previous_set_output(plugin, self.SET, source_head="0000000", allow_links=True)
+        snapshot["members"][1]["sample_sha256"] = "0" * 64
+
+        monkeypatch.setattr(brim_charge_links, "PREVIOUS_OUTPUTS_DIR", tmp_path)
+        target = previous_output_path(plugin.provider_code, self.SET)
+        target.parent.mkdir(parents=True)
+        target.write_text(json.dumps(snapshot), encoding="utf-8")
+        with pytest.raises(AssertionError, match="changed after the snapshot was taken"):
+            load_previous_snapshot(plugin.provider_code, self.SET, BROKER_ID)
+
+
+# ─── _link_existing_charge: a charge already in the output linked afterwards (wave P2b) ───────────────────────────────
+
+
+def _add_charge(provider: BRIMProvider, transactions: List[TXCreateItem], tx_type: TransactionType = TransactionType.FEE, **overrides) -> TXCreateItem:
+    """A free charge created as a plugin creates it before it knows its parent, its validity checked (the premise)."""
+    issues: List[BRIMValidationIssue] = []
+    row = provider._create_transaction(row_num=len(transactions) + 1, transactions=transactions, validation_issues=issues, **_charge_kwargs(tx_type, **overrides))
+    assert row is not None and issues == [], f"premise: a valid free {tx_type.value}; issues {issues}"
+    assert not row.parent_ref, "premise: the charge starts free"
+    return row
+
+
+class TestLinkExistingChargeValid:
+    """Guards of P2b, green at once: a valid link names the parent, gives the charge its ``parent_ref`` and broker."""
+
+    def test_charge_before_its_parent_names_the_parent_by_position(self, provider):
+        """The degiro shape: the charge comes first in the output, the parent after; the output order is kept."""
+        transactions: List[TXCreateItem] = []
+        fee = _add_charge(provider, transactions, asset_id=FAKE_A)
+        buy = _add_parent(provider, transactions, TransactionType.BUY)
+        assert buy.ref is None, "premise: the parent has no name"
+
+        linked = provider._link_existing_charge(fee, buy, transactions, row_num=1)
+
+        assert linked is True
+        assert buy.ref == "r2", f"the parent is named by its position in the output; got {buy.ref!r}"
+        assert fee.parent_ref == "r2"
+        assert fee.parent_transaction_id is None, "a parent of the same file is named by ref, never by id"
+        assert transactions == [fee, buy] and transactions[0] is fee and transactions[1] is buy, "nothing is moved or appended"
+        assert (fee.cash, fee.date, fee.description) == (Currency(code="EUR", amount=Decimal("-2.50")), DAY, "FEE charge"), "the charge keeps its own amount, date and text"
+        assert charge_link_structure_problems(transactions) == []
+
+    def test_parent_named_by_the_plugin_keeps_its_name(self, provider):
+        transactions: List[TXCreateItem] = []
+        buy = _add_parent(provider, transactions, TransactionType.BUY, ref="order-42")
+        fee = _add_charge(provider, transactions)
+
+        assert provider._link_existing_charge(fee, buy, transactions) is True
+
+        assert buy.ref == "order-42"
+        assert fee.parent_ref == "order-42"
+
+    def test_charge_takes_the_parents_broker(self, provider):
+        """Rule 2: the broker is always the parent's, as with ``_create_linked_charge``."""
+        transactions: List[TXCreateItem] = []
+        buy = _add_parent(provider, transactions, TransactionType.BUY)
+        fee = _add_charge(provider, transactions, broker_id=BROKER_ID + 1)
+        assert fee.broker_id == BROKER_ID + 1, "premise: the charge was created on another broker"
+
+        assert provider._link_existing_charge(fee, buy, transactions) is True
+
+        assert fee.broker_id == BROKER_ID
+        assert fee.parent_ref == buy.ref and buy.ref
+
+    def test_two_charges_share_the_parent_named_once(self, provider):
+        transactions: List[TXCreateItem] = []
+        buy = _add_parent(provider, transactions, TransactionType.BUY)
+        fee = _add_charge(provider, transactions)
+        tax = _add_charge(provider, transactions, TransactionType.TAX, cash=Currency(code="EUR", amount=Decimal("-0.20")))
+
+        assert provider._link_existing_charge(fee, buy, transactions) is True
+        name_after_first = buy.ref
+        assert provider._link_existing_charge(tax, buy, transactions) is True
+
+        assert name_after_first == buy.ref == "r1"
+        assert fee.parent_ref == tax.parent_ref == "r1"
+        assert charge_link_structure_problems(transactions) == []
+
+
+#: (charge's own asset, parent type, expected asset after the link). Only the cases that link: the refused ones are below.
+EXISTING_ASSET_RULE = [
+    pytest.param(None, TransactionType.BUY, FAKE_A, id="none-under-Y-takes-Y"),
+    pytest.param(FAKE_A, TransactionType.BUY, FAKE_A, id="Y-under-Y-keeps-Y"),
+    pytest.param(None, TransactionType.DEPOSIT, None, id="none-under-no-asset-stays-without"),
+]
+
+
+@pytest.mark.parametrize(("own_asset", "parent_type", "expected_asset"), EXISTING_ASSET_RULE)
+def test_link_existing_fills_the_asset_only_when_missing(provider, own_asset, parent_type, expected_asset):
+    """Contract §9: a charge without an asset takes the parent's; one with the parent's asset keeps it."""
+    transactions: List[TXCreateItem] = []
+    parent = _add_parent(provider, transactions, parent_type)
+    fee = _add_charge(provider, transactions, asset_id=own_asset)
+
+    assert provider._link_existing_charge(fee, parent, transactions) is True
+
+    assert fee.asset_id == expected_asset, f"asset {expected_asset} expected; got {fee.asset_id}"
+    assert fee.parent_ref == parent.ref and parent.ref
+
+
+#: The links the rules refuse: (parent type, parent overrides, charge type, charge overrides).
+REFUSED_EXISTING = [
+    pytest.param(TransactionType.SELL, {}, TransactionType.FEE, {"asset_id": FAKE_B}, id="charge-with-another-asset"),
+    pytest.param(TransactionType.DEPOSIT, {}, TransactionType.FEE, {"asset_id": FAKE_B}, id="charge-with-asset-under-no-asset"),
+    pytest.param(TransactionType.DEPOSIT, {"link_uuid": PAIR_UUID}, TransactionType.FEE, {}, id="parent-pair-leg"),
+    pytest.param(TransactionType.FEE, {}, TransactionType.TAX, {"asset_id": FAKE_A}, id="tax-on-a-fee"),
+    pytest.param(TransactionType.BUY, {}, TransactionType.FEE, {"asset_id": FAKE_A, "link_uuid": PAIR_UUID}, id="charge-pair-leg"),
+    pytest.param(TransactionType.ADJUSTMENT, {}, TransactionType.FEE, {"asset_id": FAKE_A}, id="parent-adjustment"),
+    pytest.param(TransactionType.CASH_TRANSFER, {}, TransactionType.FEE, {}, id="parent-cash-transfer"),
+]
+
+
+@pytest.mark.parametrize(("parent_type", "parent_overrides", "charge_type", "charge_overrides"), REFUSED_EXISTING)
+def test_link_existing_refused_leaves_everything_untouched(provider, parent_type, parent_overrides, charge_type, charge_overrides):
+    """D10: a refused link is no error. ``False``, the charge byte for byte as it was, the parent unnamed."""
+    transactions: List[TXCreateItem] = []
+    parent = _add_parent(provider, transactions, parent_type, **parent_overrides)
+    charge = _add_charge(provider, transactions, charge_type, **charge_overrides)
+    charge_before, parent_before = charge.model_dump(), parent.model_dump()
+
+    linked = provider._link_existing_charge(charge, parent, transactions, row_num=2)
+
+    assert linked is False
+    assert charge.model_dump() == charge_before, "a refused link changes nothing on the charge"
+    assert parent.model_dump() == parent_before, "nor on the parent"
+    assert parent.ref is None, f"no link, no name; got {parent.ref!r}"
+    assert transactions == [parent, charge] and transactions[0] is parent and transactions[1] is charge
+    assert charge_link_structure_problems(transactions) == []
+
+
+# ─── _link_existing_charge: programming errors ────────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.parametrize("charge_type", [TransactionType.BUY, TransactionType.DEPOSIT], ids=lambda t: t.value)
+def test_link_existing_non_charge_raises(provider, charge_type):
+    transactions: List[TXCreateItem] = []
+    parent = _add_parent(provider, transactions, TransactionType.BUY)
+    other = _add_parent(provider, transactions, charge_type)
+    before = [tx.model_dump() for tx in transactions]
+
+    with pytest.raises(ValueError):
+        provider._link_existing_charge(other, parent, transactions)
+
+    assert [tx.model_dump() for tx in transactions] == before, "nothing is changed"
+
+
+@pytest.mark.parametrize("stray_role", ["charge", "parent"])
+def test_link_existing_row_not_in_transactions_raises(provider, stray_role):
+    """By identity: an equal copy of a row of the list is not that row."""
+    transactions: List[TXCreateItem] = []
+    buy = _add_parent(provider, transactions, TransactionType.BUY)
+    fee = _add_charge(provider, transactions)
+    stray = (fee if stray_role == "charge" else buy).model_copy()
+    assert stray == (fee if stray_role == "charge" else buy), "premise: equal by value, not the row of the list"
+    before = [tx.model_dump() for tx in transactions]
+
+    with pytest.raises(ValueError):
+        if stray_role == "charge":
+            provider._link_existing_charge(stray, buy, transactions)
+        else:
+            provider._link_existing_charge(fee, stray, transactions)
+
+    assert [tx.model_dump() for tx in transactions] == before, "nothing is changed, nothing is named"
+    assert (stray.ref, stray.parent_ref) == (None, None)
+
+
+# ─── parity: _link_existing_charge and _create_linked_charge give the same verdict and the same charge ────────────────
+
+PARITY = [
+    pytest.param(TransactionType.BUY, {}, TransactionType.FEE, {}, True, id="fee-without-asset-under-buy"),
+    pytest.param(TransactionType.BUY, {}, TransactionType.FEE, {"asset_id": FAKE_A, "broker_id": BROKER_ID + 1}, True, id="fee-other-broker-under-buy"),
+    pytest.param(TransactionType.DEPOSIT, {}, TransactionType.TAX, {}, True, id="tax-under-deposit"),
+    pytest.param(TransactionType.SELL, {}, TransactionType.FEE, {"asset_id": FAKE_B}, False, id="fee-another-asset"),
+    pytest.param(TransactionType.DEPOSIT, {"link_uuid": PAIR_UUID}, TransactionType.FEE, {}, False, id="parent-pair-leg"),
+    pytest.param(TransactionType.FEE, {}, TransactionType.TAX, {"asset_id": FAKE_A}, False, id="tax-on-a-fee"),
+    pytest.param(TransactionType.ADJUSTMENT, {}, TransactionType.FEE, {"asset_id": FAKE_A}, False, id="parent-adjustment"),
+]
+
+
+@pytest.mark.parametrize(("parent_type", "parent_overrides", "charge_type", "charge_overrides", "linked"), PARITY)
+def test_link_existing_matches_create_linked(provider, parent_type, parent_overrides, charge_type, charge_overrides, linked):
+    """The two helpers share one check (``_charge_link_check``): for the same inputs, the same verdict, the same charge
+    and the same parent name. Each runs on its own output, parent first, charge second."""
+    created_out: List[TXCreateItem] = []
+    created_parent = _add_parent(provider, created_out, parent_type, **parent_overrides)
+    created = _link(provider, created_out, created_parent, **_charge_kwargs(charge_type, **charge_overrides))
+    assert created is not None, "premise: _create_linked_charge creates the charge"
+
+    existing_out: List[TXCreateItem] = []
+    existing_parent = _add_parent(provider, existing_out, parent_type, **parent_overrides)
+    existing = _add_charge(provider, existing_out, charge_type, **charge_overrides)
+
+    verdict = provider._link_existing_charge(existing, existing_parent, existing_out)
+
+    assert verdict is linked and bool(created.parent_ref) is linked, f"verdicts: existing {verdict}, created {bool(created.parent_ref)}, expected {linked}"
+    assert existing.model_dump() == created.model_dump(), "the same resulting charge"
+    assert existing_parent.ref == created_parent.ref
+
+
+# ─── _create_charge_of: the same-row pattern of P4 (a parent, or None when the plugin's parent was refused) ──────────
+
+
+def _charge_of(provider: BRIMProvider, transactions: List[TXCreateItem], parent: Optional[TXCreateItem], issues: List[BRIMValidationIssue], **kwargs) -> Optional[TXCreateItem]:
+    """``_create_charge_of`` called as a plugin calls it: the return of the parent's ``_create_transaction``, the charge's
+    fields as kwargs."""
+    return provider._create_charge_of(parent, 99, transactions, issues, context="charge row", **kwargs)
+
+
+def _issue_view(issues: List[BRIMValidationIssue]) -> List[tuple]:
+    return [(i.row, i.code, i.field, i.context) for i in issues]
+
+
+#: Charges with no parent to name: (charge type, overrides). The last one has no broker: refused, as by ``_create_transaction``.
+WITHOUT_PARENT = [
+    pytest.param(TransactionType.FEE, {"asset_id": FAKE_A}, id="fee-with-asset"),
+    pytest.param(TransactionType.TAX, {}, id="tax-without-asset"),
+    pytest.param(TransactionType.FEE, {"broker_id": None}, id="fee-without-broker"),
+]
+
+
+@pytest.mark.parametrize(("charge_type", "charge_overrides"), WITHOUT_PARENT)
+def test_charge_of_without_parent_is_create_transaction(provider, charge_type, charge_overrides):
+    """Guard of P4: parent ``None`` (the plugin's booking was refused) → exactly ``_create_transaction`` with the same
+    kwargs: the same row or ``None``, the same issues, free. A booking of an earlier row, in the output just before, is
+    never named nor used."""
+    kwargs = _charge_kwargs(charge_type, **charge_overrides)
+    expected_out: List[TXCreateItem] = []
+    expected_issues: List[BRIMValidationIssue] = []
+    expected = provider._create_transaction(99, expected_out, expected_issues, context="charge row", **kwargs)
+
+    transactions: List[TXCreateItem] = []
+    earlier = _add_parent(provider, transactions, TransactionType.BUY)
+    issues: List[BRIMValidationIssue] = []
+
+    charge = _charge_of(provider, transactions, None, issues, **kwargs)
+
+    assert _issue_view(issues) == _issue_view(expected_issues)
+    if expected is None:
+        assert charge is None and transactions == [earlier], "refused as by _create_transaction: nothing appended"
+    else:
+        assert charge is not None and transactions[-1] is charge and len(transactions) == 2
+        assert charge.model_dump() == expected.model_dump(), "the same row _create_transaction gives"
+        assert charge.parent_ref is None
+    assert earlier.ref is None, f"the earlier booking is not named: got {earlier.ref!r}"
+
+
+#: (parent type, parent overrides, charge type, charge overrides): valid links and refused ones alike.
+CHARGE_OF_PARITY = [
+    pytest.param(TransactionType.BUY, {}, TransactionType.FEE, {}, id="fee-without-asset-under-buy"),
+    pytest.param(TransactionType.BUY, {}, TransactionType.FEE, {"asset_id": FAKE_A, "broker_id": BROKER_ID + 1}, id="fee-other-broker-under-buy"),
+    pytest.param(TransactionType.SELL, {}, TransactionType.TAX, {"asset_id": FAKE_A}, id="tax-under-sell"),
+    pytest.param(TransactionType.DEPOSIT, {}, TransactionType.TAX, {}, id="tax-under-deposit"),
+    pytest.param(TransactionType.SELL, {}, TransactionType.FEE, {"asset_id": FAKE_B}, id="fee-another-asset"),
+    pytest.param(TransactionType.ADJUSTMENT, {}, TransactionType.FEE, {"asset_id": FAKE_A}, id="parent-adjustment"),
+    pytest.param(TransactionType.DEPOSIT, {"link_uuid": PAIR_UUID}, TransactionType.FEE, {}, id="parent-pair-leg"),
+]
+
+
+@pytest.mark.parametrize(("parent_type", "parent_overrides", "charge_type", "charge_overrides"), CHARGE_OF_PARITY)
+def test_charge_of_with_a_parent_is_create_linked_charge(provider, parent_type, parent_overrides, charge_type, charge_overrides):
+    """Guard of P4: a parent given → exactly ``_create_linked_charge`` with the same arguments, each on its own output:
+    the same charge, the same issues, the same parent name, the same rows."""
+    linked_out: List[TXCreateItem] = []
+    linked_parent = _add_parent(provider, linked_out, parent_type, **parent_overrides)
+    linked_issues: List[BRIMValidationIssue] = []
+    expected = _link(provider, linked_out, linked_parent, linked_issues, **_charge_kwargs(charge_type, **charge_overrides))
+    assert expected is not None, "premise: _create_linked_charge creates the charge"
+
+    transactions: List[TXCreateItem] = []
+    parent = _add_parent(provider, transactions, parent_type, **parent_overrides)
+    issues: List[BRIMValidationIssue] = []
+
+    charge = _charge_of(provider, transactions, parent, issues, **_charge_kwargs(charge_type, **charge_overrides))
+
+    assert charge is not None and transactions == [parent, charge] and transactions[1] is charge
+    assert charge.model_dump() == expected.model_dump(), "the same charge _create_linked_charge gives"
+    assert parent.ref == linked_parent.ref, f"the same parent name: {parent.ref!r} vs {linked_parent.ref!r}"
+    assert _issue_view(issues) == _issue_view(linked_issues)
+    assert charge_link_structure_problems(transactions) == []
+
+
+def test_charge_of_a_valid_parent_names_it(provider):
+    """Guard of P4, the link itself: a FEE without an asset under a BUY names the BUY and takes its asset and broker."""
+    transactions: List[TXCreateItem] = []
+    buy = _add_parent(provider, transactions, TransactionType.BUY)
+    issues: List[BRIMValidationIssue] = []
+
+    fee = _charge_of(provider, transactions, buy, issues, **_charge_kwargs())
+
+    assert issues == [] and fee is not None
+    assert buy.ref and fee.parent_ref == buy.ref
+    assert (fee.asset_id, fee.broker_id) == (buy.asset_id, buy.broker_id) == (FAKE_A, BROKER_ID)
+
+
+@pytest.mark.parametrize(("parent_type", "parent_overrides"), INVALID_PARENTS)
+def test_charge_of_an_invalid_parent_is_free_and_leaves_it_unnamed(provider, parent_type, parent_overrides):
+    """Guard of P4 (D10): a parent that cannot be one — an ADJUSTMENT, a CASH_TRANSFER, a leg of a pair, a FEE under a
+    TAX — gives a charge created free, with the plugin's own values and no issue; the parent gets no name."""
+    transactions: List[TXCreateItem] = []
+    parent = _add_parent(provider, transactions, parent_type, **parent_overrides)
+    charge_type = _charge_type_for(parent_type)
+    issues: List[BRIMValidationIssue] = []
+
+    charge = _charge_of(provider, transactions, parent, issues, **_charge_kwargs(charge_type, asset_id=FAKE_B))
+
+    assert charge is not None and issues == [], f"created, no issue; issues {issues}"
+    assert transactions == [parent, charge] and transactions[1] is charge
+    assert not charge.parent_ref and charge.parent_transaction_id is None
+    assert (charge.type, charge.broker_id, charge.asset_id) == (charge_type, BROKER_ID, FAKE_B), "the plugin's own values"
+    assert parent.ref is None, f"no link, no name: got {parent.ref!r}"
+
+
+@pytest.mark.parametrize("with_parent", [False, True], ids=["parent-none", "parent-buy"])
+def test_charge_of_a_refused_charge_is_none_and_an_issue(provider, with_parent):
+    """Guard of P4: a charge the validation refuses (a FEE with a positive amount) → ``None``, nothing appended, and the
+    issues ``_create_transaction`` records for the same row — with a parent or without one."""
+    wrong = _charge_kwargs(cash=Currency(code="EUR", amount=Decimal("2.50")))
+    expected_issues: List[BRIMValidationIssue] = []
+    assert provider._create_transaction(99, [], expected_issues, context="charge row", **{**wrong, "asset_id": FAKE_A}) is None
+    assert expected_issues, "premise: _create_transaction refuses the row"
+    transactions: List[TXCreateItem] = []
+    buy = _add_parent(provider, transactions, TransactionType.BUY)
+    issues: List[BRIMValidationIssue] = []
+
+    charge = _charge_of(provider, transactions, buy if with_parent else None, issues, **wrong)
+
+    assert charge is None
+    assert transactions == [buy], "nothing is appended"
+    assert _issue_view(issues) == _issue_view(expected_issues)

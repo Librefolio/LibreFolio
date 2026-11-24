@@ -377,7 +377,7 @@ export type FooterCells<T> = Record<string, FooterCellContent> | ((rows: T[], se
  *
  * @typeParam T - The row data type
  */
-export interface RowAction<T> extends Omit<ContextMenuItem, 'id' | 'label' | 'disabled' | 'blocked' | 'title' | 'testid' | 'iconClass' | 'labelClass'> {
+export interface RowAction<T> extends Omit<ContextMenuItem, 'id' | 'label' | 'blocked' | 'title' | 'testid' | 'iconClass' | 'labelClass'> {
     /** Unique action identifier */
     id: string;
 
@@ -398,9 +398,6 @@ export interface RowAction<T> extends Omit<ContextMenuItem, 'id' | 'label' | 'di
      * the row menu says why. An action that makes no sense on a row is not off: it is hidden, with `visible`.
      */
     blocked?: (row: T) => SelectionActionBlock | null;
-
-    /** The old form: off with no reason. New actions use `blocked`; this goes once its last users move. */
-    disabled?: (row: T) => boolean;
 
     /** Dynamic CSS class for the icon (e.g. 'animate-spin' when loading) */
     iconClass?: (row: T) => string;
@@ -450,8 +447,14 @@ export interface BulkAction<T> {
     /** Confirmation message - string or function with count */
     confirmMessage?: string | ((count: number) => string);
 
+    /** The confirmation's button, when «Confirm» is too generic for it (81 U21: «Download»). */
+    confirmText?: string | (() => string);
+
     /** Minimum number of rows the action must take, under which it is hidden (the rows it can take, `appliesTo`). */
     minSelection?: number;
+
+    /** The button's test id, when a table keeps one of its own (77 SEL-E: the Bulk's). Absent: `toolbar-action-<id>`. */
+    testid?: string;
 
     // ---- The rule of the selection panel (plan 77, SEL-A; `resolveSelectionAction`) ----
 

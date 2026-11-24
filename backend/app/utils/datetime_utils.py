@@ -4,6 +4,7 @@ Date and time utilities for LibreFolio.
 Provides timezone-aware datetime helpers and date manipulation functions.
 """
 
+import calendar
 from datetime import UTC, date, datetime, timedelta
 from typing import Annotated
 
@@ -137,6 +138,24 @@ def shift_date(value: date, days: int) -> date:
         return value + timedelta(days=days)
     except OverflowError:
         return date.max if days > 0 else date.min
+
+
+def months_before(value: date, months: int) -> date:
+    """The same day ``months`` calendar months before ``value``, held at the end of a shorter month.
+
+    2026-03-31 less one month is 2026-02-28; 2024-02-29 less twelve months is 2023-02-28. The rule of the «1 year»
+    presets of the frontend (``aiExportOptions.subtractMonths``, the Dashboard's ``addMonths(today, -12)``), so a
+    window cut here and one cut there start on the same day (78 L8: the risk evidence of AI Export). Held at
+    ``date.min`` instead of raising when the shift leaves the calendar, as ``shift_date`` is.
+    """
+    if months < 0:
+        raise ValueError("months_before takes a non-negative number of months")
+    index = value.year * 12 + (value.month - 1) - months
+    if index < 12:  # before year 1
+        return date.min
+    year, month_index = divmod(index, 12)
+    month = month_index + 1
+    return date(year, month, min(value.day, calendar.monthrange(year, month)[1]))
 
 
 def day_before(day: date) -> date | None:

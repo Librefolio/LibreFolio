@@ -60,6 +60,7 @@ const BROKER_DETAIL_STEPS = [
     area('broker.detail.header', 'broker-detail-header'),
     cursor('broker.detail.overview', 'broker-tab-panoramica'),
     cursor('broker.detail.positions', 'broker-tab-posizioni'),
+    cursor('broker.detail.allocation', 'broker-tab-allocazione'),
     cursor('broker.detail.transactions', 'broker-tab-transazioni'),
     cursor('broker.detail.info', 'broker-tab-info'),
 ];

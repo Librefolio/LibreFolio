@@ -11,9 +11,10 @@
   value, the only ones carrying `aria-pressed`.
 -->
 <script lang="ts">
-    import {Check, ChevronDown} from 'lucide-svelte';
+    import {Check} from 'lucide-svelte';
     import type {ComponentType} from 'svelte';
 
+    import FilterButton from './FilterButton.svelte';
     import SelectPopover from './SelectPopover.svelte';
 
     export interface CheckMenuItem {
@@ -39,27 +40,14 @@
         floating?: boolean;
     }
 
-    let {label, icon: Icon, items, selected, ontoggle, onclear, clearLabel, testId, floating = false}: Props = $props();
+    let {label, icon, items, selected, ontoggle, onclear, clearLabel, testId, floating = false}: Props = $props();
 
     let active = $derived(selected.length > 0);
 </script>
 
 <SelectPopover testId="{testId}-panel" panelClass="w-60" placement={floating ? {position: 'auto', minWidth: 240} : undefined}>
     {#snippet trigger({open, toggle})}
-        <button
-            type="button"
-            class="inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors {active ? 'border-lf-info-line bg-lf-info-soft text-lf-info-on-soft' : 'border-lf-subtle text-lf-secondary hover:bg-lf-hover'}"
-            aria-expanded={open}
-            onclick={toggle}
-            data-testid="{testId}-button"
-        >
-            <Icon size={13} />
-            {label}
-            {#if active}
-                <span class="rounded-full bg-lf-info px-1.5 text-[10px] font-semibold leading-4 text-lf-on-status">{selected.length}</span>
-            {/if}
-            <ChevronDown size={12} class="transition-transform {open ? 'rotate-180' : ''}" />
-        </button>
+        <FilterButton {label} {icon} count={selected.length} expanded={open} onclick={toggle} testId="{testId}-button" />
     {/snippet}
 
     {#snippet children()}

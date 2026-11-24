@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from backend.app.schemas.common import Currency, DateSpan, OpenDateRangeModel, SafeDecimal, StepSpan, StrictModel
 from backend.app.schemas.portfolio.data_quality import DataQualityReport
-from backend.app.services.financial_math.fifo.models import LotMatchingMethod  # a plain enum of the layer, no service
+from backend.app.services.financial_math.fifo.models import LotMatchingMethod, RewardAllocation  # plain enums of the layer, no service
 
 LotDirection = Literal["LONG", "SHORT"]
 
@@ -65,6 +65,10 @@ class LotsAnalysisQuery(BaseModel):
         default_factory=lambda: [LotMatchingMethod.FIFO],
         description="The orders in which outflows close lots, each answered in its own block of methods: FIFO (oldest lot first), LIFO (most recent first). Default FIFO.",
     )
+    reward_allocation: RewardAllocation = Field(
+        RewardAllocation.OWN_LOT,
+        description="Where a REWARD's units go: OWN_LOT (default), a lot of its own at the value on receipt; MERGED, spread over the lots its broker held the day before, at no cost and with no income booked.",
+    )
 
     @field_validator("target_currency")
     @classmethod
@@ -104,6 +108,7 @@ class LotSummarySchema(StrictModel):
 
     lot_id: int = Field(..., description="Stable lot identifier. Equals opening_transaction_id.")
     opening_transaction_id: int = Field(..., description="Transaction that opened the lot. Equals lot_id.")
+    opening_kind: Optional[LotTimelineEventKind] = Field(None, description="The kind of the event that opened the lot: BUY, REWARD, ADJUSTMENT_IN (SELL for a short lot); None when unknown.")
     asset_id: int
     direction: LotDirection
     opening_broker_id: int
@@ -166,6 +171,9 @@ class LotTimelineEventKind(StrEnum):
     """Presentation-level lot chronology events derived from engine events/closures."""
 
     BUY = "BUY"
+    REWARD = "REWARD"
+    #: A reward merged into the lot in the MERGED view (STK-3): quantity times ``ratio``, cost unchanged
+    REWARD_MERGE = "REWARD_MERGE"
     SELL = "SELL"
     ADJUSTMENT_IN = "ADJUSTMENT_IN"
     ADJUSTMENT_OUT = "ADJUSTMENT_OUT"
@@ -286,14 +294,16 @@ class PerformanceHistoryPoint(StepSpan):
 
 
 class LotIncomeEventKind(StrEnum):
-    """Asset-linked income transaction kinds allocated to LONG lots (plan v3 §11 markers)."""
+    """Asset-linked income transaction kinds allocated to LONG lots (plan v3 §11 markers). REWARD is income in kind: its
+    value on receipt, allocated to the lots held the day before (project 79)."""
 
     DIVIDEND = "DIVIDEND"
     INTEREST = "INTEREST"
+    REWARD = "REWARD"
 
 
 class LotIncomeEventSchema(StrictModel):
-    """A single asset-linked DIVIDEND/INTEREST transaction allocated pro-rata across open LONG lots.
+    """A single asset-linked DIVIDEND/INTEREST/REWARD transaction allocated pro-rata across open LONG lots.
 
     Powers the dashed income markers on the WAC/Value/Return charts (plan v3 §11): one entry per
     income transaction that had at least one open LONG lot on its date. ``amount`` is the whole
@@ -308,7 +318,7 @@ class LotIncomeEventSchema(StrictModel):
     lot_ids: List[int] = Field(default_factory=list, description="LONG lots the income was allocated to at transaction.date.")
 
 
-EconomicTypeLiteral = Literal["FEE", "TAX", "DIVIDEND", "INTEREST"]
+EconomicTypeLiteral = Literal["FEE", "TAX", "DIVIDEND", "INTEREST", "REWARD"]
 
 
 AllocationContextLiteral = Literal["OPENING", "CLOSURE", "INCOME", "HOLDING"]
@@ -324,6 +334,7 @@ AllocationRuleLiteral = Literal[
     "OPEN_LOTS_FALLBACK",
     "LINKED_TRADE",
     "LINKED_INCOME",
+    "REWARD_OWN_LOT",
 ]
 
 
@@ -375,6 +386,7 @@ class LotsAnalysisMetadata(StrictModel):
     selected_lot_ids: Optional[List[int]] = None
     requested_analyses: List[LotAnalysisType]
     matching_methods: List[LotMatchingMethod] = Field(default_factory=lambda: [LotMatchingMethod.FIFO], description="The matching methods computed, in the order asked: the keys of methods.")
+    reward_allocation: RewardAllocation = Field(RewardAllocation.OWN_LOT, description="Where the REWARD units went in this answer: OWN_LOT or MERGED.")
     requested_date_from: Optional[date_type] = None
     requested_date_to: Optional[date_type] = None
     computed_date_from: Optional[date_type] = None

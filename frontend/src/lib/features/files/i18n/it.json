@@ -93,7 +93,10 @@
     "deleteSkipped": "I file che non puoi eliminare sono rimasti al loro posto",
     "backups": "Backup",
     "systemUploader": "Sistema",
-    "docsHelp": "I file che hai caricato: i report dei broker da importare e le immagini che LibreFolio usa, con lo spazio che occupano."
+    "docsHelp": "I file che hai caricato: i report dei broker da importare e le immagini che LibreFolio usa, con lo spazio che occupano.",
+    "confirmBulkDownload": {
+      "message": "Scaricare {n} file?"
+    }
   },
   "files": {
     "deleteFailed": "Impossibile eliminare il file"

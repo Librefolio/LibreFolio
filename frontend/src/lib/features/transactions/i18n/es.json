@@ -54,7 +54,8 @@
       "TRANSFER": "Transferencia de Activos",
       "FX_CONVERSION": "Cambio de Divisas",
       "ADJUSTMENT": "Ajuste",
-      "CASH_TRANSFER": "Transferencia de fondos"
+      "CASH_TRANSFER": "Transferencia de fondos",
+      "REWARD": "Recompensa"
     },
     "refresh": "Recargar desde el servidor",
     "noAsset": "(Sin activo)",
@@ -136,7 +137,8 @@
         "undo": "Deshacer"
       },
       "openFailed": "No se pudo abrir la transacción",
-      "candidatesFailed": "No se pudieron cargar las transacciones para enlazar"
+      "candidatesFailed": "No se pudieron cargar las transacciones para enlazar",
+      "groupSyncHint": "Mientras las filas de este grupo (la transacción y sus gastos vinculados) son todas nuevas, comparten bróker y activo: cambiarlos aquí los cambia en cada fila del grupo."
     },
     "bulk": {
       "resetRow": "Restablecer fila",
@@ -193,14 +195,28 @@
       },
       "chargesReadFailed": "No se pudieron leer los gastos vinculados de {ids}. «Restablecer fila» los vuelve a leer.",
       "deleteSkippedUnread": "{n, plural, one {# transacción no se eliminó: no se pudieron leer sus gastos vinculados. «Restablecer fila» los vuelve a leer.} other {# transacciones no se eliminaron: no se pudieron leer sus gastos vinculados. «Restablecer fila» los vuelve a leer.}}",
-      "rowRef": "fila {n}"
+      "rowRef": "fila {n}",
+      "editPartnerInaccessible": "La transacción vinculada está en un bróker que no puedes ver, así que esta fila no se puede editar.",
+      "rewardFill": {
+        "pending": "{n, plural, one {# recompensa no tiene valor: se puede rellenar desde el historial de precios del activo} other {# recompensas no tienen valor: se pueden rellenar desde el historial de precios de los activos}}",
+        "button": "Rellenar desde el historial de precios",
+        "running": "Leyendo precios…",
+        "result": "{filled, plural, one {# rellenada} other {# rellenadas}} con el cierre de su día, {noPrice, plural, one {# sin precio ese día} other {# sin precio ese día}}, {noHistory, plural, one {# activo sin historial de precios} other {# activos sin historial de precios}}. Los valores se pueden cambiar; las filas no rellenadas siguen esperando un valor.",
+        "failed": "No se pudieron leer los precios: no se rellenó ningún valor. Inténtalo de nuevo."
+      },
+      "cloneChargesReadFailed": "No se pudieron leer los gastos vinculados de {ids}: la copia se hizo sin ellos.",
+      "cloneChargeFree": "{reason, select, deleted {La copia del gasto no está vinculada: la transacción a la que estaba vinculado está marcada para eliminar.} paired {La copia del gasto no está vinculada: la transacción a la que estaba vinculado es parte de un par.} other {La copia del gasto no está vinculada: no se puede vincular a la misma transacción.}}"
     },
     "commit": {
       "serverError": "Guardado imposible — error del servidor"
     },
     "costBasisOverride": {
       "tooltip": "El coste que introduces en lugar del precio medio de compra: para Exit Tax, herencia o reglas fiscales especiales. Auto lo calcula a partir de tus compras. Usa el selector Total/Por unidad de abajo para elegir cómo introducir este importe.",
-      "warningAdjustment": "El coste base manual está vacío: sin él, la transacción no se puede guardar. Escribe lo que te costaron estas participaciones: 0 para las nuevas de un desdoblamiento. Para un regalo, escribe 0, o lo que pagó por ellas el donante: así el precio medio de compra, y la ganancia por la que podrías tributar, quedan más cerca de los reales."
+      "warningAdjustment": "El coste base manual está vacío: sin él, la transacción no se puede guardar. Escribe lo que te costaron estas participaciones: 0 para las nuevas de un desdoblamiento. Para un regalo, escribe 0, o lo que pagó por ellas el donante: así el precio medio de compra, y la ganancia por la que podrías tributar, quedan más cerca de los reales.",
+      "rewardLabel": "Valor al recibirlo",
+      "rewardTooltip": "Lo que valían estas unidades el día en que las recibió: es a la vez el ingreso de la recompensa y el coste del lote que abre.",
+      "warningReward": "El valor al recibirlo está vacío: sin él, la recompensa no se puede guardar. Introduzca lo que valían estas unidades el día en que las recibió, o 0 para contarlas sin coste.",
+      "rewardFromHistory": "Del historial de precios: el cierre del {date}. Cámbielo si la plataforma muestra otro valor."
     },
     "wacPreview": {
       "calculating": "Calculando...",
@@ -319,7 +335,7 @@
       "autoCostEmptyPool": "Coste automático no disponible: en esa fecha no había unidades de este activo que promediar. Elige Manual e introduce lo que te costaron estas unidades; si las recibiste como regalo, escribe 0.",
       "autoCostUnknownPool": "Coste automático no disponible: las unidades de este activo que había en esa fecha no tienen un coste conocido que promediar. Elige Manual e introduce lo que te costaron.",
       "ledgerUnreadable": "No se pueden comprobar los saldos de {brokerName}: {count, plural, one {# de sus transacciones contiene} other {# de sus transacciones contienen}} un valor que no es un número. Pide al administrador que repare los datos.",
-      "costBasisNotAllowed": "❌ {type} no lleva coste base aquí: quítelo. Solo lo llevan las unidades que entran con un Ajuste o una Transferencia de Activos.",
+      "costBasisNotAllowed": "❌ {type} no lleva coste base aquí: quítelo. Solo lo lleva una transacción que hace entrar unidades con un valor.",
       "costBasisModeIncompatible": "❌ {type} no lleva coste base aquí, así que ningún modo Auto o Manual: quítelo.",
       "costBasisNegative": "El coste base no puede ser negativo: escribe 0 o más.",
       "pairAdjustmentNotAllowed": "Dos Ajustes no se pueden enlazar: para mover activos entre brókeres usa una Transferencia de Activos.",
@@ -340,7 +356,8 @@
       "chargeParentRefNotFound": "Ninguna fila de este envío se llama '{parentRef}': el gasto no se puede enlazar.",
       "chargeParentTwice": "Un gasto indica su transacción una sola vez: por la fila de este envío o por una transacción guardada, no ambas.",
       "chargeParentIdInvalid": "La transacción a la que está enlazado un gasto debe ser una transacción guardada (un id positivo).",
-      "chargesDeleteIncomplete": "Esta transacción tiene gastos enlazados: elimínalos o desenlázalos en el mismo cambio."
+      "chargesDeleteIncomplete": "Esta transacción tiene gastos enlazados: elimínalos o desenlázalos en el mismo cambio.",
+      "costBasisAutoNotAllowed": "❌ {type} toma como coste base su valor al recibirlo, nunca el coste medio: sin modo Auto, introduzca el valor."
     },
     "pydantic": {
       "greaterThan": "El valor debe ser mayor que {gt}",
@@ -425,7 +442,7 @@
       "colAction": "Acción",
       "createOne": "Crear evento",
       "createTitle": "Crear los eventos que faltan",
-      "createIntro": "Revisa el tipo e introduce el valor de cada evento, en la moneda del activo. Los eventos se crean el día de la transacción; luego vincúlalos.",
+      "createIntro": "Revisa el tipo e introduce el valor de cada evento, en la moneda del activo. Los eventos se crean el día de la transacción y las transacciones se vinculan a ellos de inmediato.",
       "createValue": "Valor",
       "createServes": "{n} transacciones",
       "createHint": "Introduce para cada evento un valor mayor que 0, con 6 decimales como máximo.",

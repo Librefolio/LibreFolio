@@ -40,6 +40,8 @@
         formatAxisCurrency as sharedFormatAxisCurrency,
         formatAxisPercent,
         incomeEventColor as sharedIncomeEventColor,
+        isLotIncomeKind,
+        type LotIncomeKind,
         logicalRangeFromBuckets,
         lotColor as sharedLotColor,
         lotIdFromSeriesId,
@@ -77,7 +79,7 @@
     type ReturnUnit = 'abs' | 'pct';
 
     export type LotIncomeEvent = {
-        type: 'DIVIDEND' | 'INTEREST';
+        type: LotIncomeKind;
         date: string;
         broker_id: number | null;
         /** `null` when the income has no rate to the target currency. */
@@ -473,6 +475,7 @@
         estimatedAtCostLegend: translateOr($_, 'brokers.lots.estimatedAtCostLegend', 'Dashed neutral lines use value estimated at cost.'),
         incomeDividend: translateOr($_, 'brokers.lots.incomeMarkerDividend', 'Dividend'),
         incomeInterest: translateOr($_, 'brokers.lots.incomeMarkerInterest', 'Interest'),
+        incomeReward: translateOr($_, 'brokers.lots.incomeMarkerReward', 'Reward'),
         incomeType: translateOr($_, 'brokers.lots.incomeMarkerType', 'Type'),
         incomeDate: translateOr($_, 'brokers.lots.incomeMarkerDate', 'Transaction date'),
         incomeBroker: translateOr($_, 'brokers.lots.incomeMarkerBroker', 'Broker'),
@@ -504,7 +507,7 @@
     const hasEstimatedAtCostLots = $derived.by(() => visibleLots.some((lot) => lot.valueSource === 'ESTIMATED_AT_COST'));
 
     const incomeMarkerEvents = $derived.by(() =>
-        (incomeEvents ?? []).filter((event): event is LotIncomeEvent => (event?.type === 'DIVIDEND' || event?.type === 'INTEREST') && !!event.date).sort((left, right) => left.date.localeCompare(right.date) || left.type.localeCompare(right.type) || (left.broker_id ?? -1) - (right.broker_id ?? -1)),
+        (incomeEvents ?? []).filter((event): event is LotIncomeEvent => isLotIncomeKind(event?.type) && !!event.date).sort((left, right) => left.date.localeCompare(right.date) || left.type.localeCompare(right.type) || (left.broker_id ?? -1) - (right.broker_id ?? -1)),
     );
 
     const valuePointsByLotId = $derived.by(() => {
@@ -639,7 +642,7 @@
     });
 
     function incomeEventTypeLabel(type: LotIncomeEvent['type']): string {
-        return type === 'DIVIDEND' ? modeLabels.incomeDividend : modeLabels.incomeInterest;
+        return type === 'DIVIDEND' ? modeLabels.incomeDividend : type === 'REWARD' ? modeLabels.incomeReward : modeLabels.incomeInterest;
     }
 
     /** A distribution's total; «—» when it has no rate to the target currency. */

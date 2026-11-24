@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import bisect
-from collections.abc import Iterable, Iterator, Sequence
+from collections.abc import Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import date as date_type
 from datetime import timedelta
@@ -18,7 +18,7 @@ from backend.app.services.financial_math.average_cost import (
 from backend.app.services.financial_math.native_cash import NativeCash
 
 if TYPE_CHECKING:
-    from backend.app.services.financial_math.portfolio.daily_state import AssetMarks
+    from backend.app.services.financial_math.portfolio.daily_state import AssetClassification, AssetMarks
 
 # =============================================================================
 # DATACLASSES — Internal runtime objects (not API DTOs)
@@ -291,7 +291,7 @@ class DailyPortfolioState:
     # Cash decomposition (Capital Baseline narrative: P&L = NAV - capital_baseline)
     # capital_baseline = cumulative_external_cash_flow (alias, same value)
     book_asset_like: Decimal  # open_cost_basis + in_transit_asset_cost_basis
-    cash_from_contributed_capital: Decimal  # min(cash_like, max(capital_baseline - book_asset_like, 0))
+    cash_from_contributed_capital: Decimal  # the capital pools, sum(K_b), within cash_like (three-pool model, daily_state 4g)
     cash_from_generated_returns: Decimal  # cash_like - cash_from_contributed_capital
     total_pnl: Decimal  # nav_value - capital_baseline
     # Allocation
@@ -659,3 +659,8 @@ class PortfolioCalculationResult:
     # Grouped by position, in the order the replay first met each one, each group by start: summing from Decimal("0"), in
     # this order, the market values (not None) of the frames covering a day gives that day's market_value exactly.
     position_frames: tuple[PositionFrame, ...] | None = None
+    # What the replay split each day's value by (lane 80, B1a): asset_id → its asset type, and asset_id → its countries
+    # and sectors as steps (None: no profile). The filtered allocation views rebuild the split from by_asset with
+    # daily_state.allocation_parts; empty for a result built without a replay.
+    asset_types: dict[int, str] = field(default_factory=dict)
+    asset_classifications: Mapping[int, AssetClassification | None] = field(default_factory=dict)

@@ -15,7 +15,8 @@ def front_broker_unit(verbose: bool = False, ui: bool = False, headed: bool = Fa
     tabUrl (tab query-param sync, shared with dashboard), LotCustodyModal (the opening value read
     from the backend's original_cost, not computed as quantity × price, jsdom), LotAnalysisFailedNotice
     (a FAILED lots analysis: one row per blocking issue with the broker's name, the date and a link to
-    the transaction to fix, jsdom)."""
+    the transaction to fix, jsdom), UnifiedLotsTable's reward lots group (79 STK-2c: one closed row
+    for a broker's reward lots, its selection and mixed state, sort and totals, jsdom)."""
     print_section("Frontend Broker Unit Tests (Vitest)")
     cmd = [
         "npx",
@@ -29,6 +30,8 @@ def front_broker_unit(verbose: bool = False, ui: bool = False, headed: bool = Fa
         "src/lib/features/brokers/lots/LotCustodyModal.test.ts",
         "src/lib/features/brokers/lots/LotAnalysisFailedNotice.test.ts",
         "src/lib/features/brokers/lots/LotDataQualityBanner.test.ts",
+        "src/lib/features/brokers/lots/LotsAnalysisPanel.rewardAllocation.test.ts",
+        "src/lib/features/brokers/lots/UnifiedLotsTable.rewardGroup.test.ts",
     ]
     print(f"\n{Colors.BLUE}Running: Broker Vitest unit tests{Colors.NC}")
     print(f"Command:\n└─▶ $ cd frontend && {' '.join(cmd)}")
@@ -86,6 +89,29 @@ def front_broker_tx_charges_delete(verbose: bool = False, ui: bool = False, head
         return False
     return _run_playwright("brokers/broker-tx-charges-delete.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
+
+def front_broker_tx_link_charges(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """«Link the charges» from the broker's Transactions tab, as on the Transactions page (project 66, TL-5)."""
+    print_section("Frontend Broker Transactions Link Charges Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("brokers/broker-tx-link-charges.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
+def front_broker_tx_view_edit(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """The edit pencil of a row opened read-only from the broker's Transactions tab, on a 375 px phone (project 66, TL-1b)."""
+    print_section("Frontend Broker Transactions View Edit Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("brokers/broker-tx-view-edit.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 def front_broker_page_roles(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run the broker page's per-role E2E: owner, editor and viewer (shared, share 0) see what their role allows."""
@@ -175,7 +201,7 @@ def populate_registry(registry: dict) -> None:
         front_broker_unit,
         test_names=False,
         name="Broker Unit Tests (Vitest)",
-        desc="Unit tests: getBrokerIconUrl fallback chain, reactive broker icon chain (jsdom), BrokerIcon <img> events (jsdom), assetPanelUrl deep-link parsing, tabUrl tab-state sync, LotCustodyModal's opening value read from the backend's original_cost, not computed as quantity × price (jsdom), LotAnalysisFailedNotice's rows for a FAILED lots analysis (jsdom)",
+        desc="Unit tests: getBrokerIconUrl fallback chain, reactive broker icon chain (jsdom), BrokerIcon <img> events (jsdom), assetPanelUrl deep-link parsing, tabUrl tab-state sync, LotCustodyModal's opening value read from the backend's original_cost, not computed as quantity × price (jsdom), LotAnalysisFailedNotice's rows for a FAILED lots analysis (jsdom), UnifiedLotsTable's reward lots group: closed by default, selection and mixed state, sort, totals (jsdom)",
         tests="vitest",
     )
     add_test(cat, "list", front_broker_list, name="Broker List & CRUD Tests", desc="Broker list page, create/edit/delete", prereq="Login working", tests="brokers/brokers.spec.ts")
@@ -195,6 +221,22 @@ def populate_registry(registry: dict) -> None:
         name="Broker Transactions Charges Delete Tests",
         desc="Project 66 F7-d: on the broker's Transactions tab, «Delete» on a BUY with FEE+TAX (row menu or bar) opens the panel before the Bulk; Keep → the BUY goes, its charges stay unlinked; Delete all → all three go — read back by id",
         tests="brokers/broker-tx-charges-delete.spec.ts",
+    )
+    add_test(
+        cat,
+        "broker-tx-link-charges",
+        front_broker_tx_link_charges,
+        name="Broker Transactions Link Charges Tests",
+        desc="Project 66 TL-5: on the broker's Transactions tab, a BUY and a free FEE ticked → «Link» → the panel → confirm: event tx.charges.linked and the FEE points at the BUY, read back by id; a BUY with an asset and a FEE without one → «Link» off with the reason noAsset",
+        tests="brokers/broker-tx-link-charges.spec.ts",
+    )
+    add_test(
+        cat,
+        "broker-tx-view-edit",
+        front_broker_tx_view_edit,
+        name="Broker Transactions View Edit Tests",
+        desc="Project 66 TL-1b: at 375 px, a row of the broker's Transactions tab opened read-only (a FEE linked to a BUY, and the BUY) offers the edit pencil inside the screen; a tap opens that row in edit; the Dashboard's Transactions tab (hideActions) offers no pencil",
+        tests="brokers/broker-tx-view-edit.spec.ts",
     )
     add_test(
         cat,

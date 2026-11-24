@@ -72,12 +72,14 @@ layer — its boundaries, imports and guards — are in `financial-math.instruct
 |---|---|
 | Average purchase cost (WAC), cost-basis steps and conversions | `services/financial_math/average_cost.py` |
 | Cash per broker and currency, its daily value, FX results on cash, the first day a balance ends below zero | `services/financial_math/native_cash.py` |
+| The income of a transaction: cash income (DIVIDEND, INTEREST) and income in kind (REWARD, its value on receipt, no cash) | `services/financial_math/income.py` (`income_value`; the in-kind flows of `native_cash.py` read it) |
 | The days something can change on: an FX reading's candidate days, the days a reading changes, the day after each | `services/financial_math/change_days.py` |
 | Control totals of the ledger (backup manifest, restore check) | `services/financial_math/ledger_totals.py` |
 | Daily portfolio state: NAV, capital baseline, P&L, per-broker contributions; the price of an asset on a day as the replay values it (`AssetMarks`, on the engine's result) | `services/financial_math/portfolio/` (`daily_state.py`, run by `engine.py`) |
 | A period's boundary states, P&L and identity; the day's change of the total P&L | `services/financial_math/portfolio/period.py` |
 | A position's period contribution (Performance table): the transfer split between brokers, return on the start value, annualized window, closed positions | `services/financial_math/portfolio/contributions.py` |
 | An asset held at several brokers as one row (Dashboard «Globale», project 74): its holding, Performance row, Yield on Cost and other effects summed over its brokers, every ratio from the sums | `services/financial_math/portfolio/asset_groups.py` |
+| The filtered allocation of the «Allocazione» tab (lane 80): the slices of a selection of classes, without the excluded assets and buckets, what stays outside and what is excluded (base + outside + excluded = NAV), the class × dimension matrix, the selection's history in steps; an asset's class is `services/assets/type_rules.py`'s `asset_type_content` | `services/financial_math/portfolio/allocation_view.py` |
 | FIFO lots and realized gains | `services/financial_math/fifo/` |
 | Lots analysis: lot summary and histories, economic events, average cost lines, transfers at the scope's edge | `services/financial_math/lots/` |
 | Simple ROI, TWRR, MWRR (and the Dashboard's MWRR and TWRR rules for card and line, the simple ROI's capital), annualization, a period's start (rebasing), net holding return, G/L ratio (of a holding or a group), a change as a fraction of its base, the timing effect, realized gain, price return (also as a float for a return series), the observed annualization factor of a return series (`DAYS_PER_YEAR`, its validator, and both conversions between calendar days and observations), the fixed-period changes of a price or rate (1D … 5Y, both orientations), the gain that recovers a drawdown | `services/financial_math/returns.py` |
@@ -90,7 +92,7 @@ layer — its boundaries, imports and guards — are in `financial-math.instruct
 | A series as steps (date … through): the value of a day, a window, the steps of the change rows | `services/financial_math/series_steps.py` |
 | Yield on Cost | `services/financial_math/yield_on_cost.py` |
 | Stock splits linked to the ledger: their rows, the usable ratio, the incoming adjustments without a cost a SPLIT may not lose by a retype, and the ratio a share change implies (`implied_split_ratio`, an import's «possible split») | `services/financial_math/splits.py` |
-| The Rebalancer's table «maximum acceptable cost»: rows to two significant digits, `2·λ·d²/F`, the custom `λ` from euros | `services/financial_math/acceptable_cost.py` |
+| The Rebalancer's table «maximum acceptable cost»: rows to two significant digits, `2·λ·d²/F`, the custom `λ` from euros | the page, `frontend/src/lib/features/tools/pac-allocator/planner/acceptableCost.ts`: a declared frontend exception (developer decision, 2026-11-21, R1-F (b) of project 67), on the preview's `F` and the levels' `λ` of `services/pac_allocator/models.py` (`FIDELITY_LEVEL_WEIGHTS`). Not to be moved back: the plan reads `λ`, never the table |
 | Weights and concentration: a share of a total, allocation slices, gross weights, largest weight and Herfindahl index, the effective number of positions (N_eff = 10 000 ÷ HHI over the weights renormalized on their own sum, RN-15), the largest deviation of weights from their targets (the Rebalancer's, X14) | `services/financial_math/weights.py` |
 | Holding window of a position: oldest lot still open, a closed position's flight time | `services/financial_math/holding_window.py` |
 | FX conversion | `services/fx/conversion.py` (`convert_bulk`) |

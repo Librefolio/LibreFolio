@@ -51,9 +51,10 @@
  */
 import {afterEach, describe, expect, it, vi} from 'vitest';
 
-import {chartNeutrals} from './chartTheme';
+import {chartNeutrals, GROWTH_SERIES, INCOME_EVENT_COLORS, LOT_GANTT_COLORS, LOT_WAC_COLORS} from './chartTheme';
 import {toRgba} from './colorAlpha';
 import {type ChartRole, type RoleReader, setRoleReader} from './roleColors';
+import {rolePair} from './seriesRoles';
 import {themed, type ThemePair} from './themePair';
 
 /**
@@ -537,5 +538,26 @@ describe('chartNeutrals — the neutrals of the charts, on the colour roles', ()
             expect(malformed, `${themeName(dark)}: a neutral not drawn as #rrggbb or rgba(r,g,b,a) in range — a value the canvas cannot parse is ignored, and the colour before it painted instead`).toEqual([]);
         }
         expect(chartNeutrals(true).tooltip.box.background, 'the theme does not reach the stand-ins: a dark chart would draw its tooltip box in the light card').not.toBe(chartNeutrals(false).tooltip.box.background);
+    });
+});
+
+// =============================================================================
+// Rewards in kind (REWARD, project 79, STK-2b): one magenta, four readers
+// =============================================================================
+
+describe('the reward magenta — one entry, read by the Growth chart and the three lot charts', () => {
+    it('is the pair of the role --lf-cat-index, and every reader holds that very entry', () => {
+        // The role, not the value: the value is tokens.css's (the parity gate of seriesRoles.test.ts keeps the row to it).
+        expect(INCOME_EVENT_COLORS.reward).toEqual(rolePair('--lf-cat-index'));
+        expect(GROWTH_SERIES.reward).toBe(INCOME_EVENT_COLORS.reward);
+        expect(LOT_GANTT_COLORS.events.reward).toBe(INCOME_EVENT_COLORS.reward);
+        expect(LOT_WAC_COLORS.markers.reward).toBe(INCOME_EVENT_COLORS.reward);
+    });
+
+    it('is told apart, in both themes, from the colours it is stacked or drawn beside', () => {
+        for (const theme of ['light', 'dark'] as const) {
+            const neighbours = [GROWTH_SERIES.dividend, GROWTH_SERIES.interest, GROWTH_SERIES.costs, GROWTH_SERIES.deposit, INCOME_EVENT_COLORS.lotInterest, LOT_GANTT_COLORS.events.buy, LOT_WAC_COLORS.markers.buy].map((pair) => pair[theme].toLowerCase());
+            expect(neighbours, `${theme}: the reward magenta repeats a neighbour`).not.toContain(INCOME_EVENT_COLORS.reward[theme].toLowerCase());
+        }
     });
 });

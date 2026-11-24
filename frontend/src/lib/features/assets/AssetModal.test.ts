@@ -69,9 +69,6 @@ vi.mock('$lib/utils/providerHelpers', () => ({
     getAssetProviderParamKeys: vi.fn(() => null),
     getAssetProviderIconUrl: vi.fn(() => null),
     isParametricProvider: vi.fn(() => false),
-    // The attribution line of the search and of the comparison window (76 P4): no provider here asks for one
-    assetProvidersVersion: {subscribe: (run: (value: number) => void) => (run(0), () => undefined)},
-    getAssetProviderAttribution: vi.fn(() => null),
 }));
 vi.mock('$lib/stores/app/toastStore.svelte', () => ({
     toasts: {success: vi.fn(), error: vi.fn(), warning: vi.fn(), info: vi.fn()},
@@ -79,10 +76,6 @@ vi.mock('$lib/stores/app/toastStore.svelte', () => ({
 vi.mock('$lib/stores/reference/assetStore', () => ({
     mergeAssets: vi.fn(),
     invalidateAfterMutation: vi.fn(),
-    // Read by the attribution line (76 P4)
-    assetStoreVersion: {subscribe: (run: (value: number) => void) => (run(0), () => undefined)},
-    ensureAssetsLoaded: vi.fn(async () => undefined),
-    getAssetInfo: vi.fn(() => null),
 }));
 
 import AssetModal from './AssetModal.svelte';
@@ -1722,7 +1715,7 @@ describe('AssetModal — the quote base: the plugin’s suggestion, else the typ
 // reads as URL — and writes `coingecko:<id>` among the other identifiers. The search is the real AssetSearchAutocomplete
 // over a streamed answer, as in the blocks above; the provider list is the cache's (`getAssetProviderAcceptedTypes`).
 describe("AssetModal — a provider's own code from the search (76 P3)", () => {
-    const COIN = {identifier: 'bitcoin', identifier_type: 'OTHER', display_name: 'Bitcoin (BTC)', provider_code: 'coingecko', currency: 'EUR', asset_type: 'CRYPTO', via_web: false, provider_params: {vs_currency: 'EUR'}};
+    const COIN = {identifier: 'bitcoin', identifier_type: 'OTHER', display_name: 'Bitcoin', provider_code: 'coingecko', currency: 'EUR', asset_type: 'CRYPTO', via_web: false, provider_params: {vs_currency: 'EUR'}};
 
     const LOGO = 'https://coin-images.coingecko.com/coins/images/1/large/bitcoin.png';
 
@@ -1739,7 +1732,7 @@ describe("AssetModal — a provider's own code from the search (76 P3)", () => {
         vi.mocked(zodiosApi.probe_provider_config_api_v1_assets_provider_probe_post).mockImplementation((async (body: {operations: string[]}) => {
             const answer = {provider_code: 'coingecko', identifier: 'bitcoin', total_execution_time_ms: 1};
             if (!body.operations.includes('metadata')) return {...answer, current_price: {success: true, execution_time_ms: 1}, history: {success: true, execution_time_ms: 1}};
-            return {...answer, metadata: {success: true, execution_time_ms: 1, patch_data: {display_name: 'Bitcoin (BTC)', asset_type: 'CRYPTO', icon_url: LOGO, identifier_ticker: 'BTC', identifier_other: ['coingecko:bitcoin']}}};
+            return {...answer, metadata: {success: true, execution_time_ms: 1, patch_data: {display_name: 'Bitcoin', asset_type: 'CRYPTO', icon_url: LOGO, identifier_ticker: 'BTC', identifier_other: ['coingecko:bitcoin']}}};
         }) as never);
         // Two accepted types on the panel's own list: with one, the panel would rewrite the type itself and hide what the
         // modal sent first
@@ -1778,7 +1771,7 @@ describe("AssetModal — a provider's own code from the search (76 P3)", () => {
         expect((probe.mock.calls[0][0] as {identifier_type: string}).identifier_type, 'the first read already asks as COINGECKO_ID').toBe('COINGECKO_ID');
         // Its own params only: no `currency` beside `vs_currency`, which its schema does not have (the consultant, 18/11)
         expect((probe.mock.calls[0][0] as {provider_params: unknown}).provider_params).toStrictEqual({vs_currency: 'EUR'});
-        expect(nameInput()).toHaveValue('Bitcoin (BTC)');
+        expect(nameInput()).toHaveValue('Bitcoin');
         await waitFor(() => expect(screen.getByTestId('asset-modal-form').textContent ?? '').toContain('coingecko:bitcoin'));
         // The asset had no icon: the provider's logo fills it
         await waitFor(() => expect(screen.getByTestId('asset-modal-form').querySelector(`img[src="${LOGO}"]`), 'the logo is the icon').not.toBeNull());

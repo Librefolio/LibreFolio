@@ -422,6 +422,8 @@ class _TransportExecutor:
 
     def __init__(self, policy: ToolPlatformPolicy) -> None:
         self.policy = policy
+        # The routes read the CPUs the executor was built with (TURNI of project 67); none here: no CPU table applies.
+        self.usable_cpus = None
         self.runtime_id = f"runtime-{uuid4().hex}"
         self.compute_path_calls: list[str] = []
 
@@ -463,11 +465,11 @@ def _install_transport_fakes(
         "effective_catalog_entries": [],
     }
 
-    def build_tool_catalog(actual_policy: ToolPlatformPolicy) -> ToolCatalogResponse:
+    def build_tool_catalog(actual_policy: ToolPlatformPolicy, *, usable_cpus: int | None = None) -> ToolCatalogResponse:
         builds["build_tool_catalog"].append(actual_policy)
         return ToolCatalogResponse(catalog_version="2", policy=actual_policy, items=[], unavailable=[])
 
-    def effective_catalog_entries(actual_policy: ToolPlatformPolicy) -> tuple[list[ToolDescriptor], tuple[ToolDiscoveryFailure, ...]]:
+    def effective_catalog_entries(actual_policy: ToolPlatformPolicy, *, usable_cpus: int | None = None) -> tuple[list[ToolDescriptor], tuple[ToolDiscoveryFailure, ...]]:
         builds["effective_catalog_entries"].append(actual_policy)
         return [], ()
 

@@ -22,8 +22,9 @@ The profile is the asset's descriptive data, as opposed to its prices:
 - **Details**, by group:
     - **The fund** — management company, tracked index, replication, income treatment (accumulating or
       distributing), domicile, fund currency, inception date, management fee;
-    - **The company** — sector, industry, issuer's country;
-    - **Identity** — legal form and issuer type, beside the asset's ISIN, ticker and other identifiers;
+    - **The company** — sector, industry, issuer's country, website, and the revenue and net income of the last fiscal
+      year, with that year beside them (for example *78,057,000,000 € (fiscal year 2025)*);
+    - **Identity** — legal form and issuer type, beside the asset's ISIN, ticker and other identifiers (the free ones, with no kind, are one row of chips);
     - **The bond** — coupon per period, coupon frequency and type, day count, net yield, accrued interest, issuer,
       minimum lot, interest start date, loyalty bonus, coupon schedule, payout terms.
 
@@ -44,7 +45,7 @@ An **enricher** is a source that reads an asset's profile from a website or a pu
 |---|---|
 | [justETF](../providers/justetf.md) | ETFs and ETCs: description, annual cost, fund size, countries, sectors, the fund's structure (index, management company, replication, income treatment, domicile, currency) |
 | [Yahoo Finance](../providers/yahoo-finance.md) | Shares: description, sector, industry, country, market capitalisation. Funds: description, annual cost, management company, inception date, sectors |
-| [Borsa Italiana](../providers/borsa-italiana.md) | Bonds: coupons, maturity, yields, modified duration, issuer, description, countries, sectors. Shares: sector. Funds: currency, inception date, management fee |
+| [Borsa Italiana](../providers/borsa-italiana.md) | Bonds: coupons, maturity, yields, modified duration, issuer, description, countries, sectors. Shares: sector, and from the company's profile page its description, country, website, and the revenue and net income of the last fiscal year. Funds: currency, inception date, management fee |
 | ESMA (FIRDS) | Any instrument traded on a European market, from the official register of the European Securities and Markets Authority: the issuer's LEI and the legal form; for a bond its maturity, the type of coupon, a fixed coupon and whether a State guarantees it; for a fund whether it accumulates or distributes. It comes after the other sources, filling what they leave empty |
 
 An asset can have several enrichers, **in order**: the order is their priority. For each item, the first enricher in
@@ -73,19 +74,55 @@ number of enrichers chosen. It opens the **Asset enrichers** window:
   asked. Each row shows the identifier the enricher reads, what it fills (costs, countries, sectors, coupons…) and, for
   an asset that already exists, its last read and how it went (*read on …*, *…: not found*, *…: no answer*).
 - Open a row (✏️, **Change the binding**) to **Search on** that source, set the **Identifier type** and the
-  **Identifier** by hand, and **Test the binding**: the test says what it found and what it would fill.
+  **Identifier** by hand, and **Test the binding**: the test says what it found and what it would fill. An enricher
+  that reads one identifier type only shows it as fixed (*ISIN · the only one ESMA (FIRDS) reads*): no choice to make.
 - **Show the other enrichers** lists the ones not in the list, with the reason (*removed by you*, *does not cover this
   asset type*…); **+** adds one back.
 - **Use these enrichers** hands the list back to the asset form. Nothing is saved until you save the asset.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
-    <img class="gallery-img" loading="lazy" data-category="assets" data-name="enrichers-window" alt="The Asset enrichers window: justETF first, Borsa Italiana second, each with its last read, and Yahoo Finance not in the list" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+    <img class="gallery-img" loading="lazy" data-category="assets" data-name="enrichers-window" alt="The Asset enrichers window of an asset with no enrichers: justETF and ESMA recognized and chosen, Yahoo Finance found only by its ticker and left out, and Search online open with three Yahoo Finance listings, each ready to add with +" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
+
+#### 🔎 Recognized on opening {: #enrichers-recognize }
+
+For an asset that exists, opening the window starts the recognition by itself. A full ISIN is not needed: any
+identifier an enricher reads is enough, and so is the asset's price source (the box on top shows it, for example
+*Prices · Yahoo Finance · SWDA.MI*). A line on top says where it stands (*Looking for the enrichers that know this
+asset… 2 of 4 answered*, then *2 enrichers know the asset: …*). Opening the window again does not ask again.
+
+- **An asset with no enrichers**: the ones found enter **Enrichers chosen** already bound, in the default order, until
+  you change the list. Nothing is saved until **Use these enrichers** and then the asset's **Save**.
+- **An asset that already has enrichers** keeps its list: the others found wait in **Not in the list**, with their name
+  and **+**.
+- **A ticker alone** never enters by itself, as it may be another listing: the enricher waits in **Not in the list**
+  (*found only with the ticker …: check it is this one*). The symbol of the asset's price source does enter.
+- **+** fills the binding from what the asset already has (ESMA takes the asset's ISIN). The row opens only if the
+  identifier is still missing, or if nothing was found with it (*Nothing found with …: correct it or search*).
+
+#### 🌐 Search online {: #enrichers-search-online }
+
+**Search online**, at the top of the window, looks for the asset on the sources themselves.
+
+- **Suggestions** — the asset's name, ISIN and ticker: one touch searches. Or type a name, an ISIN or a ticker in the
+  field: it searches after a short pause, from 2 characters.
+- **Enrichers** pills — the enrichers not in your list that cover the asset's type, each with an on/off switch. One
+  without a search of its own (ESMA) says *ISIN only* and answers only when you type or pick an ISIN.
+- A line names the enrichers already in your list, which are not searched (*A wrong one? Remove it with 🗑 and it can
+  be searched again*).
+- Each result is ready to add with **+**: it goes at the end of **Enrichers chosen** and the search stays open. That
+  source's rows and pill go away: one enricher per source.
+- A result with an ISIN different from the asset's, or from one already chosen, says so and asks you to confirm
+  (**Add anyway**).
+- Adding a result that carries an ISIN also asks ESMA once, with that ISIN (*with the ISIN of …*). That ISIN is
+  proposed for the asset's empty ISIN column as a suggested row: it never overwrites one, and a ticker is never
+  proposed.
 
 **At creation**, as soon as the form holds a complete **ISIN**, LibreFolio **recognizes** by itself which enrichers
 know the asset: a line under the form's header says what it found (for example *2 enrichers found: justETF, Borsa Italiana.
 They will be saved with the asset.*) with **Check or change**. It then asks them for their data and fills the empty profile items of the form
-(*Their data are being read now.*). In edit mode nothing starts by itself: open the window to change the list.
+(*Their data are being read now.*). Without a complete ISIN (a symbol picked from a price search, for example), opening
+the **Enrichers** window asks once, as for an asset that exists.
 
 !!! info "🔒 Turned off or not configured"
 
@@ -173,7 +210,7 @@ asset's latest changes, newest first, twenty per page (the pages are in the bar 
 - **Data** — the item;
 - **What changed** — a sentence, such as *Written by hand: …*, *Corrected by hand: from … to …*, *First value read:
   …*, *Up from … to …*, *Left empty on purpose*;
-- **Who** — the person who wrote it by hand, or the source that gave it.
+- **Who** — the person who wrote it by hand, or the source that gave it; a value that was already there before the profile existed reads **System**.
 
 The values that change at every read (fund size, market capitalisation, gross and net yield, modified duration,
 accrued interest) appear here only when written by hand, and with the read that replaced them: their other steps are in

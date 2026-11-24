@@ -35,7 +35,7 @@ Without filters or sorting, the two rows of a linked pair (a transfer or a curre
 
 Each of these opens the bulk workspace, and nothing changes before **Save All**. Editing or deleting one side of a linked pair brings its partner along. Deleting a transaction that has linked charges first asks what to do with them — see [Linked charges](#linked-charges).
 
-**Clone** keeps the original date: it is how you re-record a historical row, for example under another type.
+**Clone** keeps the original date: it is how you re-record a historical row, for example under another type. Cloning a transaction with linked charges copies its charges too, linked to the copy; cloning a charge gives a copy linked to the same transaction. If you remove the copy of a transaction from the batch, the copies of its charges you have not changed go with it. While the copy and its charges are all new, they share broker and asset: correct the asset of the copy, or of one of its charges, and the others follow, each keeping its own date.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
     <img class="gallery-img" data-category="transactions" data-name="clone-flow" alt="Bulk workspace with a cloned transaction row">
@@ -77,10 +77,10 @@ The window lists your **dividends, interest and adjustments** that have an asset
 | Group | Meaning | What you can do |
 |-------|---------|-----------------|
 | **With one event** | Exactly one event of the same asset, on the same day, of the matching type: the row shows its value | **Link** the row, or **Link all** the rows of the group |
-| **Without an event** | The asset has no such event on that day | **Create event** (or **Create all**): enter its value, then link the row; or, when the event is on another day, link it in the transaction (below) |
+| **Without an event** | The asset has no such event on that day | **Create event** (or **Create all**): enter its value, and the event is created and the row linked to it in one step; or, when the event is on another day, link it in the transaction (below) |
 | **Several events** | More than one candidate | **Choose event**: a small window lists them, each with its value and whether it is automatic or entered by hand; nothing is chosen until you pick one, then **Link** |
 
-Each row's action is also in the menu you open with a right-click on the row. **Link all** and **Create all** act on the rows the group's filters leave, and say how many; **Link all** links them in a single save: if any is refused, none is linked. Nothing is linked unless you click.
+Each row's action is also in the menu you open with a right-click on the row. **Link all** and **Create all** act on the rows the group's filters leave, and say how many; **Link all** links them in a single save: if any is refused, none is linked. Nothing is linked unless you click. After **Create event**, only the rows you asked to create are linked, and only when the day now has exactly one event for them; a row that ends up with several events waits for **Choose event**. If the link is refused, the events stay created and the rows appear under **With one event**, ready for **Link**.
 
 To act on some rows only, tick them in the first two groups: the bar above the tables shows **Link** and **Create event**, each with the number of rows it takes, and each acts only on the rows it fits. An action none of the selected rows can take is not shown. The linked rows leave the list and the selection; the other ticked rows stay ticked, so after **Link** the bar still offers **Create event** for the rest. When you scroll the window down, the bar moves into the bar at the bottom; **Esc** there clears the selection and leaves the window open.
 
@@ -98,7 +98,7 @@ To act on some rows only, tick them in the first two groups: the bar above the t
 
 The workspace is a grid of draft rows — marked **new**, **edit** or **del** — where you prepare changes before writing them:
 
-- **Add Row**, **Import** and **Reset All** sit above the grid. Ticking rows adds **Reset selected**, **Delete selected** and, for a matching pair, **🔗 Promote pair** — shown off, with the reason, when one of the two still has linked charges.
+- **Add Row**, **Import** and **Reset All** sit above the grid. Ticking rows shows the selection bar at the top of the table — it moves into the bar at the bottom when you scroll — with **Reset selected**, **Link the charges**, **Delete selected** and, for a matching pair, **🔗 Promote pair**, each with the number of rows it takes. An action that does not apply to the ticked rows is not shown; one that applies but is blocked is shown off, and says why — **Promote pair**, for instance, when one of the two still has linked charges.
 - Rows are checked as you work: problems appear at the top under *Validation errors were found*, and a click takes you to the row. With many rows, automatic checking pauses — press **⚡ Validate now** before saving.
 - When two rows look like the two halves of one transfer or exchange, a green banner offers to **Merge** them — two new rows, two saved ones, or one of each. When it proposes more than one pair, **Merge all (N)** merges them in one go. Where the two rows of a pair have a different description or different tags, one choice applies to every pair: **All left** keeps the description and tags of the first row, as the banner lists it; **All right**, those of the second row; **Combine**, the default, keeps both descriptions and the tags of both rows. A description holds at most 500 characters, as on any transaction: with **Combine**, a pair whose two descriptions together would go past it is not merged, and a message says how many pairs were left — merge them one by one with **Merge**, where you can shorten the description.
 - When the other half is already saved but not in the workspace — a transfer whose first side you imported last month, say — the 💡 button, above the grid and in the row's menu, offers to add it: once it is in, the banner offers the pair.

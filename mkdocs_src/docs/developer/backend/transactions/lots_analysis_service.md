@@ -305,8 +305,9 @@ average-cost lines and, since Y-30, the market price series.
   the missing rates of the WAC lines and of the market price series — each pair in `missing_fx_pairs`, with its
   `MISSING_FX_MARKET` / `MISSING_FX_RATES` issue — and the WAC lines' `MISSING_COST_BASIS`. The issues about what is
   withheld are left out: `REFERENCE_PRICE_FALLBACK` / `REFERENCE_PRICE_UNAVAILABLE`, `ASSET_INCOME_NO_ELIGIBLE_LOTS` /
-  `ASSET_COST_NO_ELIGIBLE_LOTS`, `CURRENT_PRICE_ASSUMED_AT_COST` — the market price series values nothing at cost — and
-  the rates of the lot figures. One exception: when a requested analysis reads income, fees or taxes, the income and
+  `ASSET_COST_NO_ELIGIBLE_LOTS` and the linked charges' `ASSET_COST_LINKED_PARENT_AFTER_RANGE` /
+  `ASSET_COST_LINKED_INCOME_NO_ELIGIBLE_LOTS`, `CURRENT_PRICE_ASSUMED_AT_COST` — the market price series values
+  nothing at cost — and the rates of the lot figures. One exception: when a requested analysis reads income, fees or taxes, the income and
   FEE / TAX events, and the `BUY` / `SELL` amounts that weight the FEE / TAX split, are converted before the replay
   (step 3 above), and a rate missing there is still reported.
 - **The row to fix.** `_build_data_quality_report()` gives each issue that fails the replay

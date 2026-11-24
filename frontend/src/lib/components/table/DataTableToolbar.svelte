@@ -47,6 +47,8 @@
         reason?: string;
         /** The number of rows the action acts on (77 SEL-A, `resolveSelectionAction`): drawn beside it. */
         count?: number;
+        /** The button's test id when the table keeps its own (77 SEL-E); its label and count take it as their prefix. */
+        testid?: string;
     }
 
     interface Props {
@@ -85,6 +87,11 @@
      */
     function offWithReason(action: BulkActionInfo): boolean {
         return !!action.disabled && !!resolve(action.hint);
+    }
+
+    /** The button's test id: the table's own, or `toolbar-action-<id>`. */
+    function testIdOf(action: BulkActionInfo): string {
+        return action.testid ?? `toolbar-action-${action.id}`;
     }
 
     function runAction(action: BulkActionInfo) {
@@ -169,17 +176,17 @@
         data-disabled-reason={action.disabled && action.reason ? action.reason : undefined}
         data-primary={action.primary ? 'true' : 'false'}
         data-danger={action.variant === 'danger' ? 'true' : 'false'}
-        data-testid="toolbar-action-{action.id}"
+        data-testid={testIdOf(action)}
     >
         <action.icon size={16} class={action.iconClass || ''} />
-        <span class="lbl" class:keep={action.primary || action.variant === 'danger'} data-testid="toolbar-action-{action.id}-label">{getShownLabel(action)}</span>
+        <span class="lbl" class:keep={action.primary || action.variant === 'danger'} data-testid="{testIdOf(action)}-label">{getShownLabel(action)}</span>
         {@render countBadge(action)}
     </button>
 {/snippet}
 
 {#snippet countBadge(action: BulkActionInfo)}
     {#if action.count !== undefined}
-        <span class="n" data-testid="toolbar-action-{action.id}-count">{action.count}</span>
+        <span class="n" data-testid="{testIdOf(action)}-count">{action.count}</span>
     {/if}
 {/snippet}
 
@@ -228,7 +235,7 @@
         </div>
     {:else}
         <!-- No selection: the hint holds the row, and there is no bar yet (`selection-toolbar` exists only with a selection). -->
-        <div class="top-bar" data-variant="top">
+        <div class="top-bar" data-variant="top" data-in-head={inHead ? 'true' : undefined}>
             <span class="top-hint" data-testid="selection-toolbar-hint">{hint ?? $t('table.selectionHint')}</span>
         </div>
     {/if}
@@ -249,7 +256,7 @@
                                 disabled={action.disabled && !reachable}
                                 aria-disabled={reachable ? 'true' : undefined}
                                 data-disabled-reason={action.disabled && action.reason ? action.reason : undefined}
-                                data-testid="toolbar-action-{action.id}"
+                                data-testid={testIdOf(action)}
                             >
                                 <action.icon size={16} class={action.iconClass || ''} />
                                 {@render countBadge(action)}
@@ -520,6 +527,13 @@
         align-items: center;
         gap: 0.375rem;
         min-height: 2rem;
+    }
+
+    /* The actions on the selected rows, when they are not floating, sit on the right edge (81 U20); the hint before the
+       first tick sits there too, so the bar grows from one edge and nothing jumps when it appears. A section's head
+       (`in-head`, `data-in-head`) places the bar itself. */
+    .top-bar:not(.in-head):not([data-in-head]) {
+        justify-content: flex-end;
     }
 
     /* In a section's head (77 SEL-D2) the bar keeps one line, so the head keeps its height: below 50rem of head (the

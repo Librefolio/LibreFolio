@@ -1,0 +1,65 @@
+{
+  "format": "lf-brim-previous-output/1",
+  "comment": "Output of the plugin BEFORE its project-66 lot changed it (P2 contract §2.1). Never re-take it after the code change.",
+  "plugin_code": "broker_ibkr",
+  "plugin_version": "1.1.0",
+  "source_head": "a2e85db13",
+  "captured_on": "2026-11-21",
+  "sample": "broker_ibkr/sample_reports/ibkr-default-currency-export.csv",
+  "sample_sha256": "6a92a267beb726e93184a9ea446f0d24efc072491ddef6f64a10a2cccc47a4d9",
+  "extracted_assets": {
+    "2147483647": {
+      "extracted_symbol": null,
+      "extracted_isin": "US0378331005",
+      "extracted_name": null,
+      "notices": []
+    }
+  },
+  "transactions": [
+    {
+      "asset_id": 2147483647,
+      "type": "SELL",
+      "date": "2024-01-30",
+      "quantity": "-5",
+      "cash": {
+        "code": "USD",
+        "amount": "950"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "ibkr"
+      ],
+      "description": "IBKR SELL: US0378331005",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483647,
+      "type": "FEE",
+      "date": "2024-01-30",
+      "quantity": "0",
+      "cash": {
+        "code": "USD",
+        "amount": "-1"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "ibkr",
+        "commission"
+      ],
+      "description": "IBKR commission: US0378331005",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    }
+  ]
+}

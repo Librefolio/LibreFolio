@@ -198,6 +198,8 @@ The **Asset Allocation** panel shows how your portfolio is split, today and over
 
 The panel remembers the view and the tab in this browser, for each user, and shares them with the broker pages.
 
+To look at only a part of your portfolio, with filters, a table and a class-by-dimension matrix, click **Analyze →** beside the panel's title: it opens the [Allocation tab](allocation.md).
+
 ### 🧩 By Asset {: #allocation-by-asset }
 
 Which single assets weigh most? **By Asset** splits the portfolio asset by asset instead of by category.

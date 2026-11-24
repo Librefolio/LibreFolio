@@ -63,7 +63,7 @@ import {currentLanguage} from '$lib/stores/app/language';
 import {uiLocale} from '$lib/stores/app/uiLocale';
 import {getAssetTypeIconUrl, sectorI18nKey} from '$lib/utils/assetTypes';
 import {formatPercent} from '$lib/utils/core/formatPercent';
-// Project 76, P4b: the provider list, stubbed with one attribution; the asset store is not read here.
+// The provider list, stubbed with CoinGecko's attribution (project 76): the window reads none of it, and shows no line (TL42)
 vi.mock('$lib/utils/providerHelpers', async () => ({
     assetProvidersVersion: (await import('svelte/store')).writable(0),
     ensureAssetProvidersCached: vi.fn(async () => undefined),
@@ -634,22 +634,13 @@ describe('ProviderComparisonModal — the quote base row and its note (Z-32 d)',
     });
 });
 
-// Project 76, P4b (the consultant's rule, 18/11): the window compares the provider's own data, so a provider with an
-// attribution has its line in the window's footer.
-describe("ProviderComparisonModal — the provider's attribution (76 P4b)", () => {
-    it('shows the line of a provider with an attribution', async () => {
-        mount([stringDiff('display_name', 'BTC', 'Bitcoin')], {providerCodes: ['coingecko']});
+// TL42 (the developer, 23/11): no «Powered by CoinGecko» in the comparison window; the attribution lives on CoinGecko's
+// own pages. The window compares CoinGecko's data and still draws no attribution line.
+describe('ProviderComparisonModal — no attribution line (76 TL42)', () => {
+    it('with CoinGecko attributed in the provider list: the differences and no attribution link', async () => {
+        mount([stringDiff('display_name', 'BTC', 'Bitcoin')]);
         await settled();
-        const note = screen.getByTestId('comparison-attribution');
-        expect(within(note).getByTestId('provider-attribution-link')).toHaveAttribute('data-provider', 'coingecko');
-    });
-
-    it.each<[string, Record<string, unknown>]>([
-        ['a provider that asks none', {providerCodes: ['yfinance']}],
-        ['a caller that names no provider (the profile window)', {}],
-    ])('shows nothing for %s', async (_label, props) => {
-        mount([stringDiff('display_name', 'BTC', 'Bitcoin')], props);
-        await settled();
-        expect(screen.queryByTestId('comparison-attribution')).toBeNull();
+        expect(screen.getByTestId('comparison-apply')).toBeInTheDocument();
+        expect(screen.queryByTestId('provider-attribution-link')).toBeNull();
     });
 });

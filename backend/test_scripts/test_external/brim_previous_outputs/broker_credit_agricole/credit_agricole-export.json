@@ -1,0 +1,882 @@
+{
+  "format": "lf-brim-previous-output/1",
+  "comment": "Output of the plugin BEFORE its project-66 lot changed it (P2 contract §2.1). Never re-take it after the code change.",
+  "plugin_code": "broker_credit_agricole",
+  "plugin_version": "2.0.0",
+  "source_head": "595738c0c",
+  "captured_on": "2026-11-21",
+  "members": [
+    {
+      "sample": "broker_credit_agricole/sample_reports/credit_agricole-export.csv",
+      "sample_sha256": "6f08853b6fefe61ac91ff980987321c6e80e89ea24f89bd30b36f82c04b958a4"
+    }
+  ],
+  "extracted_assets": {
+    "2147483647": {
+      "extracted_symbol": null,
+      "extracted_isin": null,
+      "extracted_name": "BTP 1/12/2026 1.25%",
+      "notices": []
+    },
+    "2147483646": {
+      "extracted_symbol": null,
+      "extracted_isin": null,
+      "extracted_name": "BTP 05/26 0.55FOICUM",
+      "notices": []
+    },
+    "2147483645": {
+      "extracted_symbol": null,
+      "extracted_isin": null,
+      "extracted_name": "BTP 19-27 0.65FOICUM",
+      "notices": []
+    },
+    "2147483644": {
+      "extracted_symbol": null,
+      "extracted_isin": null,
+      "extracted_name": "BTP 19-27 0.65%FOIEX",
+      "notices": []
+    },
+    "2147483643": {
+      "extracted_symbol": null,
+      "extracted_isin": null,
+      "extracted_name": "BTP 1/08/30 0.95%",
+      "notices": []
+    },
+    "2147483642": {
+      "extracted_symbol": null,
+      "extracted_isin": null,
+      "extracted_name": "BTP 20-25 1.40FOICUM",
+      "notices": []
+    },
+    "2147483641": {
+      "extracted_symbol": null,
+      "extracted_isin": null,
+      "extracted_name": "BTP 17-11-28 FUT CUM",
+      "notices": []
+    },
+    "2147483640": {
+      "extracted_symbol": null,
+      "extracted_isin": null,
+      "extracted_name": "BTP 01/08/31 0,60%",
+      "notices": []
+    },
+    "2147483639": {
+      "extracted_symbol": null,
+      "extracted_isin": null,
+      "extracted_name": "BTP FUT 27-04-37 CUM",
+      "notices": []
+    },
+    "2147483638": {
+      "extracted_symbol": null,
+      "extracted_isin": null,
+      "extracted_name": "BTP FUT 16-11-33 CUM",
+      "notices": []
+    },
+    "2147483637": {
+      "extracted_symbol": null,
+      "extracted_isin": null,
+      "extracted_name": "BTP 15/02/29 0,45%",
+      "notices": []
+    },
+    "2147483636": {
+      "extracted_symbol": null,
+      "extracted_isin": null,
+      "extracted_name": "AMUNDI PRIMO INV LC",
+      "notices": []
+    }
+  },
+  "transactions": [
+    {
+      "asset_id": 2147483647,
+      "type": "ADJUSTMENT",
+      "date": "2024-06-05",
+      "quantity": "14000",
+      "cash": null,
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "credit_agricole"
+      ],
+      "description": "[GIRO ALTRO DOSSIER — successione / transfer-in] BTP 1/12/2026 1.25% (price 95.14, qty 14000)",
+      "cost_basis_override": {
+        "code": "EUR",
+        "amount": "0.9514"
+      },
+      "cost_basis_mode": "manual",
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483646,
+      "type": "ADJUSTMENT",
+      "date": "2024-06-05",
+      "quantity": "10000",
+      "cash": null,
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "credit_agricole"
+      ],
+      "description": "[GIRO ALTRO DOSSIER — successione / transfer-in] BTP 05/26 0.55FOICUM (price 96.42, qty 10000)",
+      "cost_basis_override": {
+        "code": "EUR",
+        "amount": "0.9642"
+      },
+      "cost_basis_mode": "manual",
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483645,
+      "type": "ADJUSTMENT",
+      "date": "2024-06-05",
+      "quantity": "14000",
+      "cash": null,
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "credit_agricole"
+      ],
+      "description": "[GIRO ALTRO DOSSIER — successione / transfer-in] BTP 19-27 0.65FOICUM (price 95.10, qty 14000)",
+      "cost_basis_override": {
+        "code": "EUR",
+        "amount": "0.951"
+      },
+      "cost_basis_mode": "manual",
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483644,
+      "type": "ADJUSTMENT",
+      "date": "2024-06-05",
+      "quantity": "12000",
+      "cash": null,
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "credit_agricole"
+      ],
+      "description": "[GIRO ALTRO DOSSIER — successione / transfer-in] BTP 19-27 0.65%FOIEX (price 95.10, qty 12000)",
+      "cost_basis_override": {
+        "code": "EUR",
+        "amount": "0.951"
+      },
+      "cost_basis_mode": "manual",
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483643,
+      "type": "ADJUSTMENT",
+      "date": "2024-06-05",
+      "quantity": "17000",
+      "cash": null,
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "credit_agricole"
+      ],
+      "description": "[GIRO ALTRO DOSSIER — successione / transfer-in] BTP 1/08/30 0.95% (price 86.09, qty 17000)",
+      "cost_basis_override": {
+        "code": "EUR",
+        "amount": "0.8609"
+      },
+      "cost_basis_mode": "manual",
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483642,
+      "type": "ADJUSTMENT",
+      "date": "2024-06-05",
+      "quantity": "32000",
+      "cash": null,
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "credit_agricole"
+      ],
+      "description": "[GIRO ALTRO DOSSIER — successione / transfer-in] BTP 20-25 1.40FOICUM (price 98.73, qty 32000)",
+      "cost_basis_override": {
+        "code": "EUR",
+        "amount": "0.9873"
+      },
+      "cost_basis_mode": "manual",
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483641,
+      "type": "ADJUSTMENT",
+      "date": "2024-06-05",
+      "quantity": "29000",
+      "cash": null,
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "credit_agricole"
+      ],
+      "description": "[GIRO ALTRO DOSSIER — successione / transfer-in] BTP 17-11-28 FUT CUM (price 88.48, qty 29000)",
+      "cost_basis_override": {
+        "code": "EUR",
+        "amount": "0.8848"
+      },
+      "cost_basis_mode": "manual",
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483640,
+      "type": "ADJUSTMENT",
+      "date": "2024-06-05",
+      "quantity": "17000",
+      "cash": null,
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "credit_agricole"
+      ],
+      "description": "[GIRO ALTRO DOSSIER — successione / transfer-in] BTP 01/08/31 0,60% (price 81.58, qty 17000)",
+      "cost_basis_override": {
+        "code": "EUR",
+        "amount": "0.8158"
+      },
+      "cost_basis_mode": "manual",
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483639,
+      "type": "ADJUSTMENT",
+      "date": "2024-06-05",
+      "quantity": "7000",
+      "cash": null,
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "credit_agricole"
+      ],
+      "description": "[GIRO ALTRO DOSSIER — successione / transfer-in] BTP FUT 27-04-37 CUM (price 72.61, qty 7000)",
+      "cost_basis_override": {
+        "code": "EUR",
+        "amount": "0.7261"
+      },
+      "cost_basis_mode": "manual",
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483638,
+      "type": "ADJUSTMENT",
+      "date": "2024-06-05",
+      "quantity": "19000",
+      "cash": null,
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "credit_agricole"
+      ],
+      "description": "[GIRO ALTRO DOSSIER — successione / transfer-in] BTP FUT 16-11-33 CUM (price 80.16, qty 19000)",
+      "cost_basis_override": {
+        "code": "EUR",
+        "amount": "0.8016"
+      },
+      "cost_basis_mode": "manual",
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483637,
+      "type": "ADJUSTMENT",
+      "date": "2024-06-05",
+      "quantity": "17000",
+      "cash": null,
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "credit_agricole"
+      ],
+      "description": "[GIRO ALTRO DOSSIER — successione / transfer-in] BTP 15/02/29 0,45% (price 87.52, qty 17000)",
+      "cost_basis_override": {
+        "code": "EUR",
+        "amount": "0.8752"
+      },
+      "cost_basis_mode": "manual",
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483647,
+      "type": "ADJUSTMENT",
+      "date": "2024-06-05",
+      "quantity": "13000",
+      "cash": null,
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "credit_agricole"
+      ],
+      "description": "[GIRO ALTRO DOSSIER — successione / transfer-in] BTP 1/12/2026 1.25% (price 97.24, qty 13000)",
+      "cost_basis_override": {
+        "code": "EUR",
+        "amount": "0.9724"
+      },
+      "cost_basis_mode": "manual",
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483646,
+      "type": "ADJUSTMENT",
+      "date": "2024-06-05",
+      "quantity": "10000",
+      "cash": null,
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "credit_agricole"
+      ],
+      "description": "[GIRO ALTRO DOSSIER — successione / transfer-in] BTP 05/26 0.55FOICUM (price 100.00, qty 10000)",
+      "cost_basis_override": {
+        "code": "EUR",
+        "amount": "1.00"
+      },
+      "cost_basis_mode": "manual",
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483645,
+      "type": "ADJUSTMENT",
+      "date": "2024-06-05",
+      "quantity": "13000",
+      "cash": null,
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "credit_agricole"
+      ],
+      "description": "[GIRO ALTRO DOSSIER — successione / transfer-in] BTP 19-27 0.65FOICUM (price 100.00, qty 13000)",
+      "cost_basis_override": {
+        "code": "EUR",
+        "amount": "1.00"
+      },
+      "cost_basis_mode": "manual",
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483644,
+      "type": "ADJUSTMENT",
+      "date": "2024-06-05",
+      "quantity": "12000",
+      "cash": null,
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "credit_agricole"
+      ],
+      "description": "[GIRO ALTRO DOSSIER — successione / transfer-in] BTP 19-27 0.65%FOIEX (price 99.18, qty 12000)",
+      "cost_basis_override": {
+        "code": "EUR",
+        "amount": "0.9918"
+      },
+      "cost_basis_mode": "manual",
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483643,
+      "type": "ADJUSTMENT",
+      "date": "2024-06-05",
+      "quantity": "17000",
+      "cash": null,
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "credit_agricole"
+      ],
+      "description": "[GIRO ALTRO DOSSIER — successione / transfer-in] BTP 1/08/30 0.95% (price 94.97, qty 17000)",
+      "cost_basis_override": {
+        "code": "EUR",
+        "amount": "0.9497"
+      },
+      "cost_basis_mode": "manual",
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483642,
+      "type": "ADJUSTMENT",
+      "date": "2024-06-05",
+      "quantity": "32000",
+      "cash": null,
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "credit_agricole"
+      ],
+      "description": "[GIRO ALTRO DOSSIER — successione / transfer-in] BTP 20-25 1.40FOICUM (price 100.00, qty 32000)",
+      "cost_basis_override": {
+        "code": "EUR",
+        "amount": "1.00"
+      },
+      "cost_basis_mode": "manual",
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483641,
+      "type": "ADJUSTMENT",
+      "date": "2024-06-05",
+      "quantity": "28000",
+      "cash": null,
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "credit_agricole"
+      ],
+      "description": "[GIRO ALTRO DOSSIER — successione / transfer-in] BTP 17-11-28 FUT CUM (price 100.00, qty 28000)",
+      "cost_basis_override": {
+        "code": "EUR",
+        "amount": "1.00"
+      },
+      "cost_basis_mode": "manual",
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483640,
+      "type": "ADJUSTMENT",
+      "date": "2024-06-05",
+      "quantity": "17000",
+      "cash": null,
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "credit_agricole"
+      ],
+      "description": "[GIRO ALTRO DOSSIER — successione / transfer-in] BTP 01/08/31 0,60% (price 90.48, qty 17000)",
+      "cost_basis_override": {
+        "code": "EUR",
+        "amount": "0.9048"
+      },
+      "cost_basis_mode": "manual",
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483639,
+      "type": "ADJUSTMENT",
+      "date": "2024-06-05",
+      "quantity": "7000",
+      "cash": null,
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "credit_agricole"
+      ],
+      "description": "[GIRO ALTRO DOSSIER — successione / transfer-in] BTP FUT 27-04-37 CUM (price 100.00, qty 7000)",
+      "cost_basis_override": {
+        "code": "EUR",
+        "amount": "1.00"
+      },
+      "cost_basis_mode": "manual",
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483638,
+      "type": "ADJUSTMENT",
+      "date": "2024-06-05",
+      "quantity": "18000",
+      "cash": null,
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "credit_agricole"
+      ],
+      "description": "[GIRO ALTRO DOSSIER — successione / transfer-in] BTP FUT 16-11-33 CUM (price 100.00, qty 18000)",
+      "cost_basis_override": {
+        "code": "EUR",
+        "amount": "1.00"
+      },
+      "cost_basis_mode": "manual",
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483637,
+      "type": "ADJUSTMENT",
+      "date": "2024-06-05",
+      "quantity": "17000",
+      "cash": null,
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "credit_agricole"
+      ],
+      "description": "[GIRO ALTRO DOSSIER — successione / transfer-in] BTP 15/02/29 0,45% (price 93.69, qty 17000)",
+      "cost_basis_override": {
+        "code": "EUR",
+        "amount": "0.9369"
+      },
+      "cost_basis_mode": "manual",
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483647,
+      "type": "ADJUSTMENT",
+      "date": "2024-06-05",
+      "quantity": "13000",
+      "cash": null,
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "credit_agricole"
+      ],
+      "description": "[GIRO ALTRO DOSSIER — successione / transfer-in] BTP 1/12/2026 1.25% (price 97.24, qty 13000)",
+      "cost_basis_override": {
+        "code": "EUR",
+        "amount": "0.9724"
+      },
+      "cost_basis_mode": "manual",
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483646,
+      "type": "ADJUSTMENT",
+      "date": "2024-06-05",
+      "quantity": "10000",
+      "cash": null,
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "credit_agricole"
+      ],
+      "description": "[GIRO ALTRO DOSSIER — successione / transfer-in] BTP 05/26 0.55FOICUM (price 100.00, qty 10000)",
+      "cost_basis_override": {
+        "code": "EUR",
+        "amount": "1.00"
+      },
+      "cost_basis_mode": "manual",
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483645,
+      "type": "ADJUSTMENT",
+      "date": "2024-06-05",
+      "quantity": "13000",
+      "cash": null,
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "credit_agricole"
+      ],
+      "description": "[GIRO ALTRO DOSSIER — successione / transfer-in] BTP 19-27 0.65FOICUM (price 100.00, qty 13000)",
+      "cost_basis_override": {
+        "code": "EUR",
+        "amount": "1.00"
+      },
+      "cost_basis_mode": "manual",
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483644,
+      "type": "ADJUSTMENT",
+      "date": "2024-06-05",
+      "quantity": "11000",
+      "cash": null,
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "credit_agricole"
+      ],
+      "description": "[GIRO ALTRO DOSSIER — successione / transfer-in] BTP 19-27 0.65%FOIEX (price 99.18, qty 11000)",
+      "cost_basis_override": {
+        "code": "EUR",
+        "amount": "0.9918"
+      },
+      "cost_basis_mode": "manual",
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483643,
+      "type": "ADJUSTMENT",
+      "date": "2024-06-05",
+      "quantity": "16000",
+      "cash": null,
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "credit_agricole"
+      ],
+      "description": "[GIRO ALTRO DOSSIER — successione / transfer-in] BTP 1/08/30 0.95% (price 94.97, qty 16000)",
+      "cost_basis_override": {
+        "code": "EUR",
+        "amount": "0.9497"
+      },
+      "cost_basis_mode": "manual",
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483642,
+      "type": "ADJUSTMENT",
+      "date": "2024-06-05",
+      "quantity": "31000",
+      "cash": null,
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "credit_agricole"
+      ],
+      "description": "[GIRO ALTRO DOSSIER — successione / transfer-in] BTP 20-25 1.40FOICUM (price 100.00, qty 31000)",
+      "cost_basis_override": {
+        "code": "EUR",
+        "amount": "1.00"
+      },
+      "cost_basis_mode": "manual",
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483641,
+      "type": "ADJUSTMENT",
+      "date": "2024-06-05",
+      "quantity": "28000",
+      "cash": null,
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "credit_agricole"
+      ],
+      "description": "[GIRO ALTRO DOSSIER — successione / transfer-in] BTP 17-11-28 FUT CUM (price 100.00, qty 28000)",
+      "cost_basis_override": {
+        "code": "EUR",
+        "amount": "1.00"
+      },
+      "cost_basis_mode": "manual",
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483640,
+      "type": "ADJUSTMENT",
+      "date": "2024-06-05",
+      "quantity": "16000",
+      "cash": null,
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "credit_agricole"
+      ],
+      "description": "[GIRO ALTRO DOSSIER — successione / transfer-in] BTP 01/08/31 0,60% (price 90.48, qty 16000)",
+      "cost_basis_override": {
+        "code": "EUR",
+        "amount": "0.9048"
+      },
+      "cost_basis_mode": "manual",
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483639,
+      "type": "ADJUSTMENT",
+      "date": "2024-06-05",
+      "quantity": "6000",
+      "cash": null,
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "credit_agricole"
+      ],
+      "description": "[GIRO ALTRO DOSSIER — successione / transfer-in] BTP FUT 27-04-37 CUM (price 100.00, qty 6000)",
+      "cost_basis_override": {
+        "code": "EUR",
+        "amount": "1.00"
+      },
+      "cost_basis_mode": "manual",
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483638,
+      "type": "ADJUSTMENT",
+      "date": "2024-06-05",
+      "quantity": "18000",
+      "cash": null,
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "credit_agricole"
+      ],
+      "description": "[GIRO ALTRO DOSSIER — successione / transfer-in] BTP FUT 16-11-33 CUM (price 100.00, qty 18000)",
+      "cost_basis_override": {
+        "code": "EUR",
+        "amount": "1.00"
+      },
+      "cost_basis_mode": "manual",
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483637,
+      "type": "ADJUSTMENT",
+      "date": "2024-06-05",
+      "quantity": "16000",
+      "cash": null,
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "credit_agricole"
+      ],
+      "description": "[GIRO ALTRO DOSSIER — successione / transfer-in] BTP 15/02/29 0,45% (price 93.69, qty 16000)",
+      "cost_basis_override": {
+        "code": "EUR",
+        "amount": "0.9369"
+      },
+      "cost_basis_mode": "manual",
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483636,
+      "type": "ADJUSTMENT",
+      "date": "2024-06-10",
+      "quantity": "624.36",
+      "cash": null,
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "credit_agricole"
+      ],
+      "description": "[VERS.TITOLI — successione / transfer-in] AMUNDI PRIMO INV LC (price 5.26, qty 624.36)",
+      "cost_basis_override": {
+        "code": "EUR",
+        "amount": "5.26"
+      },
+      "cost_basis_mode": "manual",
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483636,
+      "type": "ADJUSTMENT",
+      "date": "2024-06-10",
+      "quantity": "624.36",
+      "cash": null,
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "credit_agricole"
+      ],
+      "description": "[VERS.TITOLI — successione / transfer-in] AMUNDI PRIMO INV LC (price 5.26, qty 624.36)",
+      "cost_basis_override": {
+        "code": "EUR",
+        "amount": "5.26"
+      },
+      "cost_basis_mode": "manual",
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483636,
+      "type": "ADJUSTMENT",
+      "date": "2024-06-13",
+      "quantity": "618.458",
+      "cash": null,
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "credit_agricole"
+      ],
+      "description": "[VERS.TITOLI — successione / transfer-in] AMUNDI PRIMO INV LC (price 4.98, qty 618.458)",
+      "cost_basis_override": {
+        "code": "EUR",
+        "amount": "4.98"
+      },
+      "cost_basis_mode": "manual",
+      "asset_event_id": null
+    }
+  ]
+}

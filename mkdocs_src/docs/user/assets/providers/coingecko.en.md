@@ -3,6 +3,8 @@
 CoinGecko prices cryptocurrencies: bitcoin, ether, stablecoins and thousands of tokens, in your own currency. It needs
 a free CoinGecko account and its API key, which an administrator sets once for the whole instance.
 
+**[Powered by CoinGecko](https://www.coingecko.com/)**
+
 ## 🔍 What It Offers
 
 - **Current price**: the coin's latest price, in the currency you chose for the asset. LibreFolio asks again every
@@ -83,11 +85,8 @@ LibreFolio's, so the two counts can differ.
 The prices are CoinGecko's, under [CoinGecko's API terms](https://www.coingecko.com/en/api_terms): whoever creates
 the key accepts them. Read them. Among other things, they discourage keeping CoinGecko's data, while LibreFolio stores
 every price it fetches, from any source. They also ask that the data be shown with **«Powered by CoinGecko»** and a
-link to its site. LibreFolio does that for you:
-
-- under the price on the page of a CoinGecko asset;
-- on CoinGecko's card in **Settings › Plugins**;
-- once at the foot of the asset list and of the Dashboard positions, when one of them is priced by CoinGecko.
+link to its site. LibreFolio shows it on CoinGecko's own pages: at the top of this page, and on CoinGecko's card in
+**Settings › Plugins**. A CoinGecko asset carries CoinGecko's icon, and its page links to the coin on coingecko.com.
 
 ## ⚠️ Limits
 

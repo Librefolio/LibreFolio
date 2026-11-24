@@ -4,6 +4,7 @@
     import type {RiskBenchmarkState} from '$lib/features/risk/riskBenchmarkStore.svelte';
 
     import BenchmarkSelect from '../BenchmarkSelect.svelte';
+    import RiskFreeRateField from '../RiskFreeRateField.svelte';
     import {riskFreeParameters} from '../riskFreeRate';
 
     /**
@@ -39,14 +40,9 @@
          */
         period: {start: string; end: string};
         currency: string;
-        /**
-         * The asset the page is about (the Asset Detail, RN-17): a reference that is this asset itself compares nothing
-         * — the old panel's guard, kept — so the comparison is not asked, and a line says why.
-         */
-        subjectAssetId?: number | null;
     }
 
-    let {controller, riskFreePercent, period, currency, subjectAssetId = null}: Props = $props();
+    let {controller, riskFreePercent, period, currency}: Props = $props();
 
     /** The choice in force, resolved by the picker: an id the asset list does not hold reads as null. */
     let selected = $state<number | null>(null);
@@ -67,9 +63,6 @@
      * exactly once per question, which is the number of times the question changed.
      */
     let askedFor = $state<string | null>(null);
-    /** The reference chosen is the page's own asset: nothing to compare. */
-    let isSubject = $derived(selected !== null && subjectAssetId !== null && selected === subjectAssetId);
-
     $effect(() => {
         controller.registerLauncher('comparison', run);
     });
@@ -90,7 +83,7 @@
         // the moment it arrives.
         const ready = controller.catalogState === 'ready';
         const epoch = controller.baseEpoch;
-        if (benchmarkState !== 'set' || selected === null || isSubject) return;
+        if (benchmarkState !== 'set' || selected === null) return;
         const key = `${epoch}|${selected}`;
         // A persisted benchmark that needed a click on every page load would make
         // the persistence worth nothing: the reader would re-choose the same
@@ -107,7 +100,7 @@
     // already on screen goes with it, so the benchmark's row and figures do not outlive the
     // choice that justified them. Bumping first discards a reply still in flight.
     $effect(() => {
-        if (benchmarkState === 'set' && !isSubject) return;
+        if (benchmarkState === 'set') return;
         if (askedFor === null && !controller.comparisonResult) return;
         askedFor = null;
         controller.bumpGeneration('comparison');
@@ -138,7 +131,7 @@
         // The two rates are `historical_kpi`'s (`riskAnalysisHelpers`), so the benchmark's Sharpe
         // and Sortino stand beside the portfolio's on one footing: two parameters, one value, the
         // reader's risk-free rate (RN-21, Q9 bis: one threshold for every «excess» measure).
-        await controller.runGuarded('comparison', () => (benchmarkState !== 'set' || selected === null || isSubject ? null : {code: 'comparison', mode: 'current_composition', parameters: {comparison_asset_id: selected, ...riskFreeParameters(riskFreePercent)}}));
+        await controller.runGuarded('comparison', () => (benchmarkState !== 'set' || selected === null ? null : {code: 'comparison', mode: 'current_composition', parameters: {comparison_asset_id: selected, ...riskFreeParameters(riskFreePercent)}}));
     }
 
     /**
@@ -160,12 +153,13 @@
 <!-- `data-benchmark-id` is the choice in force, `data-benchmark-state` how far the picker got
      confirming it: republished from the picker, because the rest of this page and its tests
      read L3's benchmark here. -->
-<div class="flex items-center gap-2" data-testid="risk-l3-benchmark" data-benchmark-id={selected ?? ''} data-benchmark-state={benchmarkState}>
-    <span class="shrink-0 text-xs text-lf-muted">{$t('risk.levels.l3.benchmark')}</span>
-    <div class="min-w-0 max-w-xs flex-1">
-        <BenchmarkSelect bind:value={selected} bind:state={benchmarkState} measuredAssetIds={[]} {period} {currency} boxClass="w-full" testid="risk-l3-benchmark-select" onchange={choose} />
+<div class="flex flex-wrap items-center gap-x-4 gap-y-2" data-testid="risk-l3-benchmark" data-benchmark-id={selected ?? ''} data-benchmark-state={benchmarkState}>
+    <div class="flex w-full min-w-0 items-center gap-2 sm:w-auto">
+        <span class="shrink-0 text-xs text-lf-muted">{$t('risk.levels.l3.benchmark')}</span>
+        <div class="min-w-0 w-64 max-w-full">
+            <BenchmarkSelect bind:value={selected} bind:state={benchmarkState} measuredAssetIds={[]} {period} {currency} boxClass="w-full" testid="risk-l3-benchmark-select" onchange={choose} />
+        </div>
     </div>
-    {#if isSubject}
-        <span class="text-xs text-lf-muted" data-testid="risk-l3-benchmark-is-subject">{$t('risk.levels.l3.benchmarkIsSubject')}</span>
-    {/if}
+    <!-- The rate sits beside the reference it is read with (81 U25): both set how the rows below are measured. -->
+    <RiskFreeRateField class="" />
 </div>

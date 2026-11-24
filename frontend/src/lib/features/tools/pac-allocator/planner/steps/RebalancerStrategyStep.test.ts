@@ -5,9 +5,10 @@
  * Two strategies as cards: «Invest only» chosen, «Invest and sell» visible but off, «coming soon» (S1: no draft produces
  * `invest_and_sell` before F3b). The target fidelity as five cards (M29): the three levels («Balanced» the default, with
  * its badge), «Target first», «Custom». «Custom» has one field, in euros, inside its card: the most the user accepts to
- * spend for the reference row; the euros go to the preview, which gives λ back to the draft (the draft keeps λ, never the
- * euros). Empty, zero or negative: an error on the field and a local problem of the step. Without the preview's table (a
- * total that cannot be counted yet) the field is off. The table «Maximum acceptable cost» sits under the choices.
+ * spend for the reference row; the preview class turns them into the draft's λ on the preview's total, at once on current
+ * numbers (R1-F (b) of project 67; the draft keeps λ, never the euros). Empty, zero or negative: an error on the field and
+ * a local problem of the step. Without the preview's total (one that cannot be counted yet) the field is off. The table
+ * «Maximum acceptable cost» sits under the choices.
  * Both choices are `ChoiceCards` (G6-3): native radios, one group each; a choice is made on its radio. Nothing reads
  * translated text.
  */
@@ -42,9 +43,8 @@ afterEach(() => {
 const money = (value: string) => ({value: {kind: 'finite_decimal' as const, value}, currency: 'EUR'});
 const number = (value: string) => ({kind: 'finite_decimal' as const, value});
 
-function ready(customEuros: string | null): PreviewReady {
-    const custom = customEuros !== null;
-    const row = (misplaced: string, reference: boolean) => ({misplaced: money(misplaced), reference, cost_aware: money('1'), balanced: money('4'), faithful: money('16'), custom: custom ? money('2') : null});
+/** A ready preview on 20 000 €: the reference row is 1 000 €, and λ 0.6 accepts 60 € for it. */
+function ready(): PreviewReady {
     return {
         operation: 'preview',
         result_state: 'preview_ready',
@@ -54,12 +54,11 @@ function ready(customEuros: string | null): PreviewReady {
         issues: [],
         limit_problems: [],
         items: [],
-        table: {level_weights: {cost_aware: number('0.25'), balanced: number('1'), faithful: number('4')}, rows: [row('200', false), row('500', false), row('1000', true), row('2000', false)]},
-        custom: custom ? {distance_weight: number('0.6'), reference_amount: money(customEuros)} : null,
+        fidelity_level_weights: {cost_aware: number('0.25'), balanced: number('1'), faithful: number('4')},
     };
 }
 
-function setup(numbers: PreviewReady | null = ready(null), state: PlannerPreview['state'] = 'ready') {
+function setup(numbers: PreviewReady | null = ready(), state: PlannerPreview['state'] = 'ready') {
     const draft = new PlannerDraft('EUR', defaultPolicy(REBALANCER_PLANNER_PROFILE), REBALANCER_PLANNER_PROFILE);
     const preview = new PlannerPreview({call: vi.fn(), blocked: () => false});
     preview.state = state;
@@ -120,7 +119,7 @@ describe('the Rebalancer Strategy step', () => {
         expect(choice('target_first').getAttribute('data-selected')).toBe('true');
     });
 
-    it('«Custom»: the euros go to the preview; empty or zero is an error on the field and a problem of the step', async () => {
+    it('«Custom»: the euros go to the preview class; empty or zero is an error on the field and a problem of the step', async () => {
         const {draft, sent} = setup();
         await chooseCustom();
         expect(draft.data.fidelity).toEqual({kind: 'custom', lambda: ''});
@@ -141,12 +140,12 @@ describe('the Rebalancer Strategy step', () => {
         expect(localProblems(draft).map((problem) => `${problem.step}:${problem.key}`)).toContain('strategy:fidelityCustomMissing');
     });
 
-    it("typing new euros clears the draft's λ until the preview gives the new one; a cleared field drops the euros sent", async () => {
+    it("typing new euros clears the draft's λ until they are converted; a cleared field drops the euros waiting", async () => {
         const draft = new PlannerDraft('EUR', defaultPolicy(REBALANCER_PLANNER_PROFILE), REBALANCER_PLANNER_PROFILE);
         draft.data.fidelity = {kind: 'custom', lambda: '0.6'};
         const preview = new PlannerPreview({call: vi.fn(), blocked: () => false});
         preview.state = 'ready';
-        preview.numbers = ready('60');
+        preview.numbers = ready();
         const sent = vi.spyOn(preview, 'setCustomEuros').mockImplementation(() => {});
         render(ProfileHarness, {props: {profile: REBALANCER_PLANNER_PROFILE, child: RebalancerStrategyStep, childProps: {draft, preview}}});
         flushSync();
@@ -162,12 +161,12 @@ describe('the Rebalancer Strategy step', () => {
         expect(draft.data.fidelity).toEqual({kind: 'custom', lambda: ''});
     });
 
-    it('«Custom» with a λ shows the euros the preview gives for it; the table is under the choices', () => {
+    it('«Custom» with a λ shows its euros on the preview total; the table is under the choices', () => {
         const draft = new PlannerDraft('EUR', defaultPolicy(REBALANCER_PLANNER_PROFILE), REBALANCER_PLANNER_PROFILE);
         draft.data.fidelity = {kind: 'custom', lambda: '0.6'};
         const preview = new PlannerPreview({call: vi.fn(), blocked: () => false});
         preview.state = 'ready';
-        preview.numbers = ready('60');
+        preview.numbers = ready();
         render(ProfileHarness, {props: {profile: REBALANCER_PLANNER_PROFILE, child: RebalancerStrategyStep, childProps: {draft, preview}}});
         flushSync();
         expect((screen.getByTestId('rebalancer-planner-fidelity-custom-input') as HTMLInputElement).value).toBe('60');
@@ -175,7 +174,26 @@ describe('the Rebalancer Strategy step', () => {
         expect(localProblems(draft).map((problem) => problem.key)).not.toContain('fidelityCustomMissing');
     });
 
-    it('without the preview table (a total that cannot be counted yet) the «Custom» field is off', async () => {
+    it('a figure typed on current numbers is λ at once: the field keeps the figure, the column shows it (R1-F b)', async () => {
+        const draft = new PlannerDraft('EUR', defaultPolicy(REBALANCER_PLANNER_PROFILE), REBALANCER_PLANNER_PROFILE);
+        const preview = new PlannerPreview({call: vi.fn(), blocked: () => false});
+        preview.state = 'ready';
+        preview.numbers = ready();
+        render(ProfileHarness, {props: {profile: REBALANCER_PLANNER_PROFILE, child: RebalancerStrategyStep, childProps: {draft, preview}}});
+        flushSync();
+        await chooseCustom();
+        const field = screen.getByTestId('rebalancer-planner-fidelity-custom-input') as HTMLInputElement;
+        await fireEvent.input(field, {target: {value: '80'}});
+        flushSync();
+        // 80·20 000/(2·1 000²) = 0.8.
+        expect(draft.data.fidelity).toEqual({kind: 'custom', lambda: '0.8'});
+        expect(field.value).toBe('80');
+        const custom = screen.getAllByTestId('rebalancer-planner-fidelity-cell').filter((cell) => cell.getAttribute('data-level') === 'custom');
+        expect(custom).toHaveLength(4);
+        expect(localProblems(draft).map((problem) => problem.key)).not.toContain('fidelityCustomMissing');
+    });
+
+    it('without the preview total (one that cannot be counted yet) the «Custom» field is off', async () => {
         setup(null, 'error');
         await chooseCustom();
         expect((screen.getByTestId('rebalancer-planner-fidelity-custom-input') as HTMLInputElement).disabled).toBe(true);
@@ -187,7 +205,7 @@ describe('the Rebalancer Strategy step', () => {
         draft.data.fidelity = {kind: 'custom', lambda: '0.6'};
         const preview = new PlannerPreview({call: vi.fn(), blocked: () => false});
         preview.state = 'ready';
-        preview.numbers = ready('60');
+        preview.numbers = ready();
         render(ProfileHarness, {props: {profile: REBALANCER_PLANNER_PROFILE, child: RebalancerStrategyStep, childProps: {draft, preview}}});
         flushSync();
         const card = () => choice('custom');

@@ -13,6 +13,12 @@ AGPL-3.0 of LibreFolio): `broker_degiro/sample_reports/degiro-export.csv` and `b
 Their provenance and licence are in `THIRD_PARTY_LICENSES.md`. Do not add a file taken from a real account or from a source whose licence
 is not written down here.
 
+One sample is derived from a real export, with its owner's consent: `broker_xtb/sample_reports/xtb-export.xlsx`. It is not the
+user's file: a script kept outside the repository rebuilt the workbook from scratch on the same structure, with invented account
+number, ids, payment references and amounts (quantities recomputed so that every total, lot and summary still adds up) and shifted
+times. Only the public instruments, their quoted prices and the days were kept. Another derived sample needs the same: a new workbook,
+never the user's file edited.
+
 ## Test Files
 
 ### Generic CSV Plugin (`broker_generic_csv`)
@@ -102,6 +108,12 @@ Dutch 8-column CSV, the sample of the Export-To-Ghostfolio project (Apache-2.0, 
 | `traderepublic-transactions-excel.csv` | The same rows as Excel saves them back: each line one quoted cell, inner quotes doubled, CRLF                         | The same 15 transactions                                                                                            |
 | `traderepublic-export.csv`             | Dutch 8-column CSV (`;`), with three later English rows                                                                | 9 transactions; the two rows with a fee listed (fee and tax not imported)                                           |
 
+
+### XTB Plugin (`broker_xtb`)
+
+| File            | Description                                                                                                                                                                     | Expected Result                                                                                                                       |
+|-----------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------|
+| `xtb-export.xlsx` | History report workbook (see above: derived from a real export; the plugin reads only this format since 2.0.0): an investment plan on three ETFs, monthly deposits moved from *My Trades* to *Investment Plans*, a partial fill, an ETF quoted in USD | 41 transactions (31 Buy, 10 Deposit) in EUR, the account currency of *Open Positions*; the 20 sub-account transfer rows paired and left out; no notice |
 
 ## File Format
 

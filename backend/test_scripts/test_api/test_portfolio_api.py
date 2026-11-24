@@ -2536,3 +2536,431 @@ class TestNonIsoCurrencyDataQuality:
         assert {where: self._non_iso_issues(quality) for where, quality in quality_by_where.items()} == {where: [expected] for where in self.WHERE}
         assert {where: self._fx_issues_naming(quality, self.STORED) for where, quality in quality_by_where.items()} == {where: [] for where in self.WHERE}
         print_success("A base currency stored as 978: one NON_ISO_CURRENCY with the report currency's key in every data_quality section, no FX pair asked for")
+
+
+# ---------------------------------------------------------------------------
+# Project 79, STK-1 — REWARD (income in kind) through saved rows and the shared backend
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+class TestRewardIncomeInKind:
+    """A REWARD of q units at V/q each on day D is worth a DIVIDEND of V reinvested the same day in a BUY of q units
+    (project 79, STK-1): it opens a lot at cost V, V is income, no capital, no cash.
+
+    Twins under one user of this test, on one new asset quoted in EUR: brokers A and B get the same DEPOSIT (1000 EUR) and
+    BUY (10 units for 1000 EUR); on D, A gets a REWARD of 2 units at V/2, B a DIVIDEND of V and a BUY of 2 units for V,
+    both in the same currency. Every report and lots analysis is scoped to one broker. Prices: 100 on the BUY, 50 on D,
+    120 on the last day.
+
+    Cleanup: the brokers (force: their transactions), the asset (its prices by cascade), the FX rows written by the
+    variant (their exact days), then the user; a failed step is recorded and fails the test after the rest ran.
+
+    The FX variant owns BSD/EUR in 2013. No other test, spec or runner module names BSD (MNT, VUV and the other codes
+    a test relies on having no rate are left alone: a rate here backward-fills into every later date). Before writing it
+    proves that no EUR/BSD rate exists on or before the end of that year (404 from /fx/currencies/convert) and that its
+    row is "inserted", as TestIssue32PurchaseCostInReportCurrency does for EUR/UZS.
+    """
+
+    QUANTITY = Decimal("2")
+    EXPECTED_INCOME_EUR = Decimal("100")  # V in the report currency, in both scenarios
+    FX_CURRENCY = "BSD"
+    FX_YEAR = 2013
+    FX_RATE = "0.25"  # base BSD < quote EUR: 1 BSD = 0.25 EUR, so a REWARD of 2 units at 200 BSD is 400 BSD = 100 EUR
+    TOLERANCE = Decimal("1e-9")
+
+    @pytest.fixture(autouse=True)
+    def _server(self, test_server):
+        pass
+
+    @staticmethod
+    def _created_ids(data: dict) -> dict[int, int]:
+        """The id of every create of a committed batch, by its index in ``creates``."""
+        return {result["index"]: result["ids"][0] for result in data["results"] if result["operation"] == "create"}
+
+    @staticmethod
+    def _day(year: int, month_day: str) -> str:
+        return f"{year}-{month_day}"
+
+    async def _plant_prices(self, client: httpx.AsyncClient, asset_id: int, year: int) -> None:
+        response = await client.post(
+            f"{API_BASE}/assets/prices",
+            json=[{"asset_id": asset_id, "prices": [{"date": self._day(year, day), "close": close, "currency": "EUR"} for day, close in (("03-04", "100"), ("03-15", "50"), ("03-28", "120"))]}],
+            timeout=TIMEOUT,
+        )
+        assert response.status_code == 200, response.text
+
+    async def _seed_twins(self, client: httpx.AsyncClient, broker_a: int, broker_b: int, asset_id: int, *, year: int, currency: str, unit_value: str) -> dict[str, int]:
+        """The twin rows, committed in one batch; the ids this test reads, by role."""
+        day_d = self._day(year, "03-15")
+        value = str(Decimal(unit_value) * self.QUANTITY)
+        creates = []
+        for broker_id in (broker_a, broker_b):
+            creates.append({"broker_id": broker_id, "type": "DEPOSIT", "date": self._day(year, "03-01"), "quantity": "0", "cash": {"code": "EUR", "amount": "1000"}})
+            creates.append({"broker_id": broker_id, "asset_id": asset_id, "type": "BUY", "date": self._day(year, "03-04"), "quantity": "10", "cash": {"code": "EUR", "amount": "-1000"}})
+        creates.append({"broker_id": broker_a, "asset_id": asset_id, "type": "REWARD", "date": day_d, "quantity": str(self.QUANTITY), "cost_basis_override": {"code": currency, "amount": unit_value}, "cost_basis_mode": "manual"})
+        creates.append({"broker_id": broker_b, "asset_id": asset_id, "type": "DIVIDEND", "date": day_d, "quantity": "0", "cash": {"code": currency, "amount": value}})
+        creates.append({"broker_id": broker_b, "asset_id": asset_id, "type": "BUY", "date": day_d, "quantity": str(self.QUANTITY), "cash": {"code": currency, "amount": f"-{value}"}})
+        ids = self._created_ids(await commit_batch(client, creates=creates))
+        return {"a_buy": ids[1], "b_buy": ids[3], "a_reward": ids[4], "b_dividend": ids[5], "b_reinvest": ids[6]}
+
+    async def _report(self, client: httpx.AsyncClient, broker_id: int, year: int) -> dict:
+        response = await post_portfolio_report(
+            client,
+            {
+                "broker_ids": [broker_id],
+                "target_currency": "EUR",
+                "date_range": {"start": self._day(year, "02-01"), "end": self._day(year, "03-28")},
+                "include_summary": True,
+                "include_history": False,
+                "include_allocation_history": False,
+                "include_positions_contribution": True,
+                "include_income_history": True,
+            },
+        )
+        assert response.status_code == 200, response.text
+        return response.json()
+
+    @staticmethod
+    async def _lots(client: httpx.AsyncClient, asset_id: int, broker_id: int, year: int, analyses: list[str]) -> dict:
+        response = await client.post(
+            f"{API_BASE}/portfolio/lots/analysis",
+            json={"asset_id": asset_id, "broker_ids": [broker_id], "target_currency": "EUR", "date_range": {"end": f"{year}-03-28"}, "requested_analyses": analyses},
+            timeout=TIMEOUT,
+        )
+        assert response.status_code == 200, response.text
+        return response.json()["methods"]["FIFO"]
+
+    @staticmethod
+    async def _cleanup(client: httpx.AsyncClient, broker_ids: list[int], asset_id: int | None, errors: list[str]) -> None:
+        if broker_ids:
+            deleted = await client.delete(f"{API_BASE}/brokers", params={"ids": broker_ids, "force": True}, timeout=TIMEOUT)
+            if deleted.status_code != 200 or not all(row["success"] for row in deleted.json()["results"]):
+                errors.append(f"brokers {broker_ids}: {deleted.status_code} {deleted.text}")
+        if asset_id is not None:
+            deleted = await client.delete(f"{API_BASE}/assets", params={"asset_ids": [asset_id]}, timeout=TIMEOUT)
+            if deleted.status_code != 200 or not all(row["success"] for row in deleted.json()["results"]):
+                errors.append(f"asset {asset_id}: {deleted.status_code} {deleted.text}")
+
+    @staticmethod
+    def _amount(currency_value: dict | None) -> Decimal:
+        assert currency_value is not None, "a figure the twins compare is missing"
+        return Decimal(currency_value["amount"])
+
+    @staticmethod
+    def _position_income(report: dict, asset_id: int, broker_id: int) -> Decimal:
+        (row,) = [row for row in report["positions_contribution"]["positions"] if row["asset_id"] == asset_id and row["broker_id"] == broker_id]
+        assert row["period_income"] is not None, row
+        return Decimal(row["period_income"])
+
+    @staticmethod
+    def _income_point(report: dict, day: str) -> dict[str, Decimal]:
+        (point,) = [point for point in report["income_history"]["points"] if point["date"] == day]
+        return {kind: Decimal(point[kind]["amount"]) for kind in ("dividend", "interest", "reward")}
+
+    @staticmethod
+    def _issue_codes(method: dict) -> list[str]:
+        return [issue["code"] for issue in (method.get("data_quality") or {}).get("issues", [])]
+
+    async def test_reward_twin_equals_dividend_plus_buy(self):
+        """Summary, income history, Performance row and lots analysis of A (REWARD) against B (DIVIDEND + BUY)."""
+        print_section("REWARD twin: REWARD of V ≡ DIVIDEND V + BUY")
+        year = 2024
+        day_d = self._day(year, "03-15")
+        errors: list[str] = []
+        broker_ids: list[int] = []
+        asset_id: int | None = None
+        analyses = ["LOT_SUMMARY", "EVENT_HISTORY", "INCOME_EVENTS", "PERFORMANCE_HISTORY"]
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            user_id = await get_current_user_id(client)
+            try:
+                broker_ids.append(await create_broker(client, f"Reward A {uuid.uuid4().hex[:12]}"))
+                broker_ids.append(await create_broker(client, f"Reward B {uuid.uuid4().hex[:12]}"))
+                broker_a, broker_b = broker_ids
+                asset_id = await create_asset(client, asset_type="CRYPTO")
+                ids = await self._seed_twins(client, broker_a, broker_b, asset_id, year=year, currency="EUR", unit_value="50")
+                await self._plant_prices(client, asset_id, year)
+                report_a = await self._report(client, broker_a, year)
+                report_b = await self._report(client, broker_b, year)
+                lots_a = await self._lots(client, asset_id, broker_a, year, analyses)
+                lots_b = await self._lots(client, asset_id, broker_b, year, analyses)
+            finally:
+                await self._cleanup(client, broker_ids, asset_id, errors)
+                await delete_current_test_user(client, user_id)
+        assert errors == [], f"cleanup left rows behind: {errors}"
+
+        # --- Summary: V is income in both, nothing left to «other», the same NAV and P&L ---
+        summary_a, summary_b = report_a["summary"], report_b["summary"]
+        assert self._amount(summary_a["period_income"]) == self._amount(summary_b["period_income"]) == self.EXPECTED_INCOME_EUR
+        for name, summary in (("A", summary_a), ("B", summary_b)):
+            assert abs(self._amount(summary["period_other_result"])) < self.TOLERANCE, f"{name}: period_other_result {summary['period_other_result']}"
+        for figure in ("net_worth", "total_gain_loss", "period_pnl"):
+            assert self._amount(summary_a[figure]) == self._amount(summary_b[figure]), f"{figure}: A {summary_a[figure]} vs B {summary_b[figure]}"
+
+        # --- Income history: A's point on D is a reward, B's a dividend; each series sums to its period_income ---
+        assert self._income_point(report_a, day_d) == {"dividend": Decimal("0"), "interest": Decimal("0"), "reward": self.EXPECTED_INCOME_EUR}
+        assert self._income_point(report_b, day_d) == {"dividend": self.EXPECTED_INCOME_EUR, "interest": Decimal("0"), "reward": Decimal("0")}
+        for name, report in (("A", report_a), ("B", report_b)):
+            total = sum((Decimal(point[kind]["amount"]) for point in report["income_history"]["points"] for kind in ("dividend", "interest", "reward")), Decimal("0"))
+            assert total == self._amount(report["summary"]["period_income"]), f"{name}: income history {total} vs summary"
+
+        # --- Performance row of the asset: V of income at each broker ---
+        assert self._position_income(report_a, asset_id, broker_a) == self._position_income(report_b, asset_id, broker_b) == self.EXPECTED_INCOME_EUR
+
+        # --- Lots analysis of A ---
+        assert lots_a["calculation_status"] == "COMPLETE", (lots_a["calculation_status"], lots_a.get("data_quality"))
+        assert "ASSET_INCOME_NO_ELIGIBLE_LOTS" not in self._issue_codes(lots_a)
+        assert Decimal(lots_a["asset_orphan_income"]) == 0
+        lots_by_id = {lot["lot_id"]: lot for lot in lots_a["lots"]}
+        reward_lot, held_lot = lots_by_id[ids["a_reward"]], lots_by_id[ids["a_buy"]]
+        assert (Decimal(reward_lot["original_quantity"]), Decimal(reward_lot["original_cost"])) == (self.QUANTITY, self.EXPECTED_INCOME_EUR), reward_lot
+        # V goes to the lot held at D-1 (the BUY's), never to the reward's own lot
+        assert Decimal(held_lot["asset_income"]) == self.EXPECTED_INCOME_EUR, held_lot
+        assert Decimal(reward_lot["asset_income"]) == 0, reward_lot
+        (event,) = [event for event in lots_a["income_events"] if event["transaction_id"] == ids["a_reward"]]
+        assert (event["type"], event["date"], Decimal(event["amount"]), event["lot_ids"]) == ("REWARD", day_d, self.EXPECTED_INCOME_EUR, [ids["a_buy"]]), event
+        (group,) = [group for group in lots_a["economic_allocation_groups"] if ids["a_reward"] in group["source_transaction_ids"]]
+        assert (group["economic_type"], group["rule"]) == ("REWARD", "ASSET_INCOME_HOLDINGS"), group
+        (opening,) = [row for row in lots_a["lot_events"] if row["lot_id"] == ids["a_reward"] and row["transaction_id"] == ids["a_reward"] and row["date"] == day_d]
+        assert opening["kind"] == "REWARD", opening  # STK-2b: the reward opens its lot under its own kind
+
+        # --- Lots analysis of B, the twin: the same lot cost, the same income on the held lot, the same performance ---
+        assert lots_b["calculation_status"] == "COMPLETE", (lots_b["calculation_status"], lots_b.get("data_quality"))
+        lots_b_by_id = {lot["lot_id"]: lot for lot in lots_b["lots"]}
+        assert Decimal(lots_b_by_id[ids["b_reinvest"]]["original_cost"]) == Decimal(reward_lot["original_cost"])
+        assert Decimal(lots_b_by_id[ids["b_buy"]]["asset_income"]) == Decimal(held_lot["asset_income"])
+        (dividend_event,) = [event for event in lots_b["income_events"] if event["transaction_id"] == ids["b_dividend"]]
+        assert (Decimal(dividend_event["amount"]), dividend_event["lot_ids"]) == (Decimal(event["amount"]), [ids["b_buy"]]), dividend_event
+        assert lots_a["performance_history"], "presence barrier: A's performance history has steps"
+        assert lots_a["performance_history"] == lots_b["performance_history"], "a REWARD's lot is capital in as the twin's BUY is"
+        print_success("REWARD ≡ DIVIDEND + BUY: summary, income history, Performance row, lots analysis")
+
+    async def test_reward_airdrop_earns_on_its_own_lot(self):
+        """A REWARD with no units held the day before (an airdrop): its income goes to the lot it opens (REWARD_OWN_LOT),
+        never to the orphan pool; no ASSET_INCOME_NO_ELIGIBLE_LOTS, analysis COMPLETE."""
+        print_section("REWARD airdrop: income on its own lot")
+        year = 2024
+        day_d = self._day(year, "03-15")
+        errors: list[str] = []
+        broker_ids: list[int] = []
+        asset_id: int | None = None
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            user_id = await get_current_user_id(client)
+            try:
+                broker_ids.append(await create_broker(client, f"Reward airdrop {uuid.uuid4().hex[:12]}"))
+                (broker_id,) = broker_ids
+                asset_id = await create_asset(client, asset_type="CRYPTO")
+                created = await commit_batch(
+                    client,
+                    creates=[{"broker_id": broker_id, "asset_id": asset_id, "type": "REWARD", "date": day_d, "quantity": "3", "cost_basis_override": {"code": "EUR", "amount": "10"}, "cost_basis_mode": "manual"}],
+                )
+                reward_id = self._created_ids(created)[0]
+                await self._plant_prices(client, asset_id, year)
+                lots = await self._lots(client, asset_id, broker_id, year, ["LOT_SUMMARY", "EVENT_HISTORY", "INCOME_EVENTS"])
+            finally:
+                await self._cleanup(client, broker_ids, asset_id, errors)
+                await delete_current_test_user(client, user_id)
+        assert errors == [], f"cleanup left rows behind: {errors}"
+
+        assert lots["calculation_status"] == "COMPLETE", (lots["calculation_status"], lots.get("data_quality"))
+        assert "ASSET_INCOME_NO_ELIGIBLE_LOTS" not in self._issue_codes(lots)
+        assert Decimal(lots["asset_orphan_income"]) == 0
+        (event,) = [event for event in lots["income_events"] if event["transaction_id"] == reward_id]
+        assert (event["type"], Decimal(event["amount"]), event["lot_ids"]) == ("REWARD", Decimal("30"), [reward_id]), event
+        (group,) = [group for group in lots["economic_allocation_groups"] if reward_id in group["source_transaction_ids"]]
+        assert (group["economic_type"], group["rule"]) == ("REWARD", "REWARD_OWN_LOT"), group
+        reward_lot = next(lot for lot in lots["lots"] if lot["lot_id"] == reward_id)
+        assert (Decimal(reward_lot["original_cost"]), Decimal(reward_lot["asset_income"])) == (Decimal("30"), Decimal("30")), reward_lot
+        (opening,) = [row for row in lots["lot_events"] if row["lot_id"] == reward_id and row["transaction_id"] == reward_id and row["date"] == day_d]
+        assert opening["kind"] == "REWARD", opening
+        print_success("REWARD airdrop: income on its own lot, nothing orphaned")
+
+    async def test_reward_in_a_foreign_currency_matches_its_twin(self):
+        """The twins with V in BSD on an EUR report: the REWARD's value is converted at D's rate as the twin's DIVIDEND is.
+        period_income is equal in both and is V at the planted rate (100 EUR), with no missing pair naming BSD: a missing
+        rate would drop the income from both twins and leave them equal."""
+        print_section("REWARD twin in BSD on an EUR report")
+        year = self.FX_YEAR
+        rate_day = self._day(year, "03-01")
+        errors: list[str] = []
+        broker_ids: list[int] = []
+        asset_id: int | None = None
+        rate_written = False
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            user_id = await get_current_user_id(client)
+            try:
+                probe = await client.post(
+                    f"{API_BASE}/fx/currencies/convert",
+                    json=[{"from_amount": {"code": "EUR", "amount": "1"}, "to": self.FX_CURRENCY, "date_range": {"start": f"{year}-12-31"}}],
+                    timeout=TIMEOUT,
+                )
+                assert probe.status_code == 404, f"precondition broken: an EUR/{self.FX_CURRENCY} rate exists on or before {year}-12-31 ({probe.status_code}: {probe.text})"
+                upsert = await client.post(
+                    f"{API_BASE}/fx/currencies/rate",
+                    json=[{"date": rate_day, "base": self.FX_CURRENCY, "quote": "EUR", "rate": self.FX_RATE, "source": "MANUAL"}],
+                    timeout=TIMEOUT,
+                )
+                assert upsert.status_code == 200, upsert.text
+                rate_written = [row["date"] for row in upsert.json()["results"] if row["action"] == "inserted"] == [rate_day]
+                assert rate_written, f"the {self.FX_CURRENCY}/EUR row must be this test's own: {upsert.text}"
+
+                broker_ids.append(await create_broker(client, f"Reward FX A {uuid.uuid4().hex[:12]}"))
+                broker_ids.append(await create_broker(client, f"Reward FX B {uuid.uuid4().hex[:12]}"))
+                broker_a, broker_b = broker_ids
+                asset_id = await create_asset(client, asset_type="CRYPTO")
+                await self._seed_twins(client, broker_a, broker_b, asset_id, year=year, currency=self.FX_CURRENCY, unit_value="200")
+                await self._plant_prices(client, asset_id, year)
+                report_a = await self._report(client, broker_a, year)
+                report_b = await self._report(client, broker_b, year)
+            finally:
+                await self._cleanup(client, broker_ids, asset_id, errors)
+                if rate_written:
+                    deleted = await client.request(
+                        "DELETE",
+                        f"{API_BASE}/fx/currencies/rate",
+                        json=[{"from": self.FX_CURRENCY, "to": "EUR", "date_range": {"start": rate_day, "end": rate_day}}],
+                        timeout=TIMEOUT,
+                    )
+                    if deleted.status_code != 200 or deleted.json()["total_deleted"] != 1:
+                        errors.append(f"{self.FX_CURRENCY}/EUR rate {rate_day}: {deleted.status_code} {deleted.text}")
+                await delete_current_test_user(client, user_id)
+        assert errors == [], f"cleanup left rows behind: {errors}"
+
+        for name, report in (("A", report_a), ("B", report_b)):
+            summary = report["summary"]
+            pairs = [item["pair"] for item in summary["missing_fx_pairs"]] + [item["pair"] for item in (summary.get("data_quality") or {}).get("missing_fx_pairs", [])]
+            assert [pair for pair in pairs if self.FX_CURRENCY in pair] == [], f"{name}: a missing {self.FX_CURRENCY} pair: {pairs}"
+            assert abs(self._amount(summary["period_other_result"])) < self.TOLERANCE, f"{name}: period_other_result {summary['period_other_result']}"
+        income_a, income_b = self._amount(report_a["summary"]["period_income"]), self._amount(report_b["summary"]["period_income"])
+        assert income_a == income_b, f"REWARD {income_a} vs DIVIDEND {income_b}"
+        assert abs(income_a - self.EXPECTED_INCOME_EUR) < self.TOLERANCE, f"400 BSD at 0.25 EUR/BSD is 100 EUR, got {income_a}"
+        print_success("REWARD in BSD: the same period_income as its twin, 100 EUR")
+
+
+# ---------------------------------------------------------------------------
+# Project 79, STK-3 — «spread rewards across lots»: POST /portfolio/lots/analysis with reward_allocation MERGED
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+class TestRewardAllocationMerged:
+    """The lots analysis of saved rows with ``reward_allocation: "MERGED"`` (project 79, STK-3), beside the same request
+    without the field (OWN_LOT, the default) on the same rows.
+
+    One user of this test, one new asset quoted in EUR, one broker: a DEPOSIT of 1000 EUR, lot A (500 for 150 EUR, 10 Jan
+    2024), lot B (500 for 300 EUR, 10 Feb), a REWARD of 20 units valued 0.50 each on 1 Mar, a price of 0.70 on 20 Mar.
+    MERGED spreads the 20 over A and B (10 each, held at the close of 29 Feb): both lots grow to 510 at their own cost,
+    no lot of the reward's, no REWARD income, one REWARD_MERGE row per lot. An airdrop (a REWARD with nothing held before)
+    keeps a lot of its own at cost 0, with an INFO issue that leaves the analysis COMPLETE.
+
+    Cleanup: the brokers (force: their transactions), the asset (its prices by cascade), then the user; a failed step is
+    recorded and fails the test after the rest ran.
+    """
+
+    YEAR = 2024
+    ANALYSES = ["LOT_SUMMARY", "EVENT_HISTORY", "INCOME_EVENTS"]
+
+    @pytest.fixture(autouse=True)
+    def _server(self, test_server):
+        pass
+
+    async def _plant_price(self, client: httpx.AsyncClient, asset_id: int) -> None:
+        response = await client.post(f"{API_BASE}/assets/prices", json=[{"asset_id": asset_id, "prices": [{"date": f"{self.YEAR}-03-20", "close": "0.70", "currency": "EUR"}]}], timeout=TIMEOUT)
+        assert response.status_code == 200, response.text
+
+    def _reward(self, broker_id: int, asset_id: int) -> dict:
+        return {"broker_id": broker_id, "asset_id": asset_id, "type": "REWARD", "date": f"{self.YEAR}-03-01", "quantity": "20", "cost_basis_override": {"code": "EUR", "amount": "0.50"}, "cost_basis_mode": "manual"}
+
+    async def _analysis(self, client: httpx.AsyncClient, asset_id: int, broker_id: int, allocation: str | None) -> dict:
+        """The whole answer (calculation_metadata is in the common parts, not in the method's block)."""
+        body = {"asset_id": asset_id, "broker_ids": [broker_id], "target_currency": "EUR", "date_range": {"end": f"{self.YEAR}-03-28"}, "requested_analyses": self.ANALYSES}
+        if allocation is not None:
+            body["reward_allocation"] = allocation
+        response = await client.post(f"{API_BASE}/portfolio/lots/analysis", json=body, timeout=TIMEOUT)
+        assert response.status_code == 200, response.text
+        return response.json()
+
+    async def test_merged_spreads_the_reward_over_the_lots_held_the_day_before(self):
+        print_section("STK-3: MERGED spreads a REWARD over the lots held the day before")
+        errors: list[str] = []
+        broker_ids: list[int] = []
+        asset_id: int | None = None
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            user_id = await get_current_user_id(client)
+            try:
+                broker_ids.append(await create_broker(client, f"Reward merged {uuid.uuid4().hex[:12]}"))
+                (broker_id,) = broker_ids
+                asset_id = await create_asset(client, asset_type="CRYPTO")
+                creates = [
+                    {"broker_id": broker_id, "type": "DEPOSIT", "date": f"{self.YEAR}-01-02", "quantity": "0", "cash": {"code": "EUR", "amount": "1000"}},
+                    {"broker_id": broker_id, "asset_id": asset_id, "type": "BUY", "date": f"{self.YEAR}-01-10", "quantity": "500", "cash": {"code": "EUR", "amount": "-150"}},
+                    {"broker_id": broker_id, "asset_id": asset_id, "type": "BUY", "date": f"{self.YEAR}-02-10", "quantity": "500", "cash": {"code": "EUR", "amount": "-300"}},
+                    self._reward(broker_id, asset_id),
+                ]
+                ids = TestRewardIncomeInKind._created_ids(await commit_batch(client, creates=creates))
+                lot_a, lot_b, reward_id = ids[1], ids[2], ids[3]
+                await self._plant_price(client, asset_id)
+                merged = await self._analysis(client, asset_id, broker_id, "MERGED")
+                default = await self._analysis(client, asset_id, broker_id, None)
+            finally:
+                await TestRewardIncomeInKind._cleanup(client, broker_ids, asset_id, errors)
+                await delete_current_test_user(client, user_id)
+        assert errors == [], f"cleanup left rows behind: {errors}"
+
+        # --- The request without the field is OWN_LOT: the reward's own lot at its value, its income booked ---
+        assert default["calculation_metadata"]["reward_allocation"] == "OWN_LOT"
+        own = default["methods"]["FIFO"]
+        own_lots = {lot["lot_id"]: lot for lot in own["lots"]}
+        assert Decimal(own_lots[reward_id]["original_cost"]) == Decimal("10"), own_lots[reward_id]
+        assert [event["transaction_id"] for event in own["income_events"] if event["type"] == "REWARD"] == [reward_id]
+
+        # --- MERGED ---
+        assert merged["calculation_metadata"]["reward_allocation"] == "MERGED"
+        block = merged["methods"]["FIFO"]
+        assert block["calculation_status"] == "COMPLETE", (block["calculation_status"], block.get("data_quality"))
+        lots = {lot["lot_id"]: lot for lot in block["lots"]}
+        assert reward_id not in lots, "the merged reward opened a lot of its own"
+        for lot_id, cost in ((lot_a, Decimal("150")), (lot_b, Decimal("300"))):
+            lot = lots[lot_id]
+            assert (Decimal(lot["original_quantity"]), Decimal(lot["open_quantity"]), Decimal(lot["original_cost"])) == (Decimal("510"), Decimal("510"), cost), lot
+            assert Decimal(lot["asset_income"]) == 0, lot
+        assert [event for event in block["income_events"] if event["type"] == "REWARD"] == []
+        merge_rows = sorted((row["lot_id"], Decimal(row["quantity"]), Decimal(row["ratio"]), row["date"]) for row in block["lot_events"] if row["transaction_id"] == reward_id)
+        assert merge_rows == sorted([(lot_a, Decimal("10"), Decimal("1.02"), f"{self.YEAR}-03-01"), (lot_b, Decimal("10"), Decimal("1.02"), f"{self.YEAR}-03-01")]), merge_rows
+        assert {row["kind"] for row in block["lot_events"] if row["transaction_id"] == reward_id} == {"REWARD_MERGE"}
+        print_success("MERGED: A and B at 510 units, cost unchanged, no REWARD income, two REWARD_MERGE rows")
+
+    async def test_merged_airdrop_keeps_its_own_lot_at_no_cost(self):
+        print_section("STK-3: MERGED airdrop keeps a lot of its own at no cost")
+        errors: list[str] = []
+        broker_ids: list[int] = []
+        asset_id: int | None = None
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            user_id = await get_current_user_id(client)
+            try:
+                broker_ids.append(await create_broker(client, f"Reward merged airdrop {uuid.uuid4().hex[:12]}"))
+                (broker_id,) = broker_ids
+                asset_id = await create_asset(client, asset_type="CRYPTO")
+                reward_id = TestRewardIncomeInKind._created_ids(await commit_batch(client, creates=[self._reward(broker_id, asset_id)]))[0]
+                await self._plant_price(client, asset_id)
+                merged = await self._analysis(client, asset_id, broker_id, "MERGED")
+            finally:
+                await TestRewardIncomeInKind._cleanup(client, broker_ids, asset_id, errors)
+                await delete_current_test_user(client, user_id)
+        assert errors == [], f"cleanup left rows behind: {errors}"
+
+        block = merged["methods"]["FIFO"]
+        assert block["calculation_status"] == "COMPLETE", (block["calculation_status"], block.get("data_quality"))
+        lot = next(lot for lot in block["lots"] if lot["lot_id"] == reward_id)
+        assert (Decimal(lot["original_quantity"]), Decimal(lot["original_cost"]), Decimal(lot["asset_income"])) == (Decimal("20"), Decimal("0"), Decimal("0")), lot
+        (issue,) = [issue for issue in block["data_quality"]["issues"] if issue["code"] == "REWARD_NOT_MERGED_NO_OPEN_LOT"]
+        assert (issue["severity"], issue["message_i18n_key"], issue["message_params"]["transaction_id"]) == ("info", "dataQuality.rewardNotMergedNoOpenLot", reward_id), issue
+        (opening,) = [row for row in block["lot_events"] if row["lot_id"] == reward_id and row["transaction_id"] == reward_id]
+        assert (opening["kind"], Decimal(opening["unit_price"])) == ("REWARD", Decimal("0")), opening
+        assert [event for event in block["income_events"] if event["type"] == "REWARD"] == []
+        print_success("MERGED airdrop: own lot at cost 0, INFO issue, COMPLETE")

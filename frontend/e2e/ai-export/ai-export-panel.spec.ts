@@ -220,7 +220,7 @@ test.describe('AI Export panel', () => {
         expect(Math.abs(buttonBox.width - dropdownBox.width)).toBeLessThan(1);
         const option = page.getByTestId('ai-export-selection-option-portfolio.performance_market_drivers');
         await expect(option).toContainText('Portfolio Performance & Market Drivers', {timeout: 2_000});
-        await expect(option).toContainText('Explain portfolio performance and research dated market drivers for every held Asset.', {timeout: 2_000});
+        await expect(option).toContainText("Explain what drove the portfolio's result in the period, with dated market news for the movements that matter.", {timeout: 2_000});
         const optionDescription = page.getByTestId('ai-export-selection-option-portfolio.performance_market_drivers-description');
         await expect(optionDescription).toHaveCSS('white-space', 'normal', {timeout: 2_000});
         expect(

@@ -1,0 +1,386 @@
+{
+  "format": "lf-brim-previous-output/1",
+  "comment": "Output of the plugin BEFORE its project-66 lot changed it (P2 contract §2.1). Never re-take it after the code change.",
+  "plugin_code": "broker_ibkr",
+  "plugin_version": "1.1.0",
+  "source_head": "a2e85db13",
+  "captured_on": "2026-11-21",
+  "sample": "broker_ibkr/sample_reports/ibkr-trades-export.csv",
+  "sample_sha256": "3971aa083b57611c18494fe02a75735bc6ab5cbe89a53cc2ac90c8a9d1cf692a",
+  "extracted_assets": {
+    "2147483647": {
+      "extracted_symbol": null,
+      "extracted_isin": "CH0111762537",
+      "extracted_name": null,
+      "notices": []
+    },
+    "2147483646": {
+      "extracted_symbol": null,
+      "extracted_isin": "US9220427424",
+      "extracted_name": null,
+      "notices": []
+    }
+  },
+  "transactions": [
+    {
+      "asset_id": 2147483647,
+      "type": "BUY",
+      "date": "2023-05-22",
+      "quantity": "7",
+      "cash": {
+        "code": "CHF",
+        "amount": "-1978.9"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "ibkr"
+      ],
+      "description": "IBKR BUY: CH0111762537",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483647,
+      "type": "FEE",
+      "date": "2023-05-22",
+      "quantity": "0",
+      "cash": {
+        "code": "CHF",
+        "amount": "-5"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "ibkr",
+        "commission"
+      ],
+      "description": "IBKR commission: CH0111762537",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483646,
+      "type": "BUY",
+      "date": "2023-05-22",
+      "quantity": "95",
+      "cash": {
+        "code": "USD",
+        "amount": "-8909.1"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "ibkr"
+      ],
+      "description": "IBKR BUY: US9220427424",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483646,
+      "type": "FEE",
+      "date": "2023-05-22",
+      "quantity": "0",
+      "cash": {
+        "code": "USD",
+        "amount": "-1"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "ibkr",
+        "commission"
+      ],
+      "description": "IBKR commission: US9220427424",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483646,
+      "type": "BUY",
+      "date": "2023-06-09",
+      "quantity": "105",
+      "cash": {
+        "code": "USD",
+        "amount": "-10019.1"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "ibkr"
+      ],
+      "description": "IBKR BUY: US9220427424",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483646,
+      "type": "FEE",
+      "date": "2023-06-09",
+      "quantity": "0",
+      "cash": {
+        "code": "USD",
+        "amount": "-1"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "ibkr",
+        "commission"
+      ],
+      "description": "IBKR commission: US9220427424",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483646,
+      "type": "BUY",
+      "date": "2023-06-09",
+      "quantity": "11",
+      "cash": {
+        "code": "USD",
+        "amount": "-1050.06"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "ibkr"
+      ],
+      "description": "IBKR BUY: US9220427424",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483646,
+      "type": "FEE",
+      "date": "2023-06-09",
+      "quantity": "0",
+      "cash": {
+        "code": "USD",
+        "amount": "-1"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "ibkr",
+        "commission"
+      ],
+      "description": "IBKR commission: US9220427424",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483646,
+      "type": "BUY",
+      "date": "2023-08-03",
+      "quantity": "1",
+      "cash": {
+        "code": "USD",
+        "amount": "-97.84"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "ibkr"
+      ],
+      "description": "IBKR BUY: US9220427424",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483646,
+      "type": "FEE",
+      "date": "2023-08-03",
+      "quantity": "0",
+      "cash": {
+        "code": "USD",
+        "amount": "-0.979"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "ibkr",
+        "commission"
+      ],
+      "description": "IBKR commission: US9220427424",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483646,
+      "type": "BUY",
+      "date": "2023-12-28",
+      "quantity": "2",
+      "cash": {
+        "code": "USD",
+        "amount": "-206.36"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "ibkr"
+      ],
+      "description": "IBKR BUY: US9220427424",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483646,
+      "type": "FEE",
+      "date": "2023-12-28",
+      "quantity": "0",
+      "cash": {
+        "code": "USD",
+        "amount": "-1"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "ibkr",
+        "commission"
+      ],
+      "description": "IBKR commission: US9220427424",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483646,
+      "type": "BUY",
+      "date": "2024-01-26",
+      "quantity": "97",
+      "cash": {
+        "code": "USD",
+        "amount": "-10050.17"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "ibkr"
+      ],
+      "description": "IBKR BUY: US9220427424",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483646,
+      "type": "FEE",
+      "date": "2024-01-26",
+      "quantity": "0",
+      "cash": {
+        "code": "USD",
+        "amount": "-1"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "ibkr",
+        "commission"
+      ],
+      "description": "IBKR commission: US9220427424",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483646,
+      "type": "BUY",
+      "date": "2024-01-29",
+      "quantity": "12",
+      "cash": {
+        "code": "USD",
+        "amount": "-1243.92"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "ibkr"
+      ],
+      "description": "IBKR BUY: US9220427424",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483646,
+      "type": "FEE",
+      "date": "2024-01-29",
+      "quantity": "0",
+      "cash": {
+        "code": "USD",
+        "amount": "-1"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "ibkr",
+        "commission"
+      ],
+      "description": "IBKR commission: US9220427424",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    }
+  ]
+}

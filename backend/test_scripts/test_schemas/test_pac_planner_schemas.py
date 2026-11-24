@@ -786,8 +786,6 @@ REBALANCER_ROOT_DEFAULTED_FIELDS: dict[str, Any] = {
     **{name: value for name, value in ROOT_DEFAULTED_FIELDS.items() if name != "funding_routes"},
     "holdings": [],
     "tax": RebalancerTaxInput(),
-    # The preview's euros of the «custom» fidelity (B4 of project 67): absent unless a preview carries them.
-    "custom_reference_amount": None,
 }
 REBALANCER_ROOT_SCHEMA_DEFAULTS: dict[str, Any] = {
     **REBALANCER_ROOT_DEFAULTED_FIELDS,
@@ -4073,6 +4071,8 @@ def test_distinct_deployment_rejects_identity_count_coverage_and_arithmetic_erro
 # Lot SEEDS (project 67) moves both: two not-proven reasons in the shared NotProvenReasonCode.
 # The largest deviation's item (X14, project 67) moves the Rebalancer's alone: two references on its score.
 # R1-A (project 67, contract §6.8) moves the PAC's alone: a plan needs a step, not an order (``order_rows`` loses its minimum).
+# R1-F (b) (project 67, developer decision of 21/11) moves the Rebalancer's alone: its request loses the preview's euros
+# (``custom_reference_amount``), since the page turns them into λ itself.
 PLANNER_FULL_SCHEMA_FINGERPRINT_CASES = (
     pytest.param(
         PAC_PLAN_INPUT_ADAPTER,
@@ -4083,7 +4083,7 @@ PLANNER_FULL_SCHEMA_FINGERPRINT_CASES = (
     pytest.param(
         REBALANCER_PLAN_INPUT_ADAPTER,
         REBALANCER_PLAN_OUTPUT_ADAPTER,
-        "3606cca81ee095c7f51e17a772dc504e802f7b86c1cb34e359bfe72450070158",
+        "0635fe76bfd96a2df8a2d146ffeef8c3b2aaa84f4073b7c8f40d85b7ac197666",
         id="rebalancer",
     ),
 )
@@ -4684,9 +4684,12 @@ def test_open_canonical_vector_keeps_the_proof_and_reads_as_a_limit() -> None:
 # Lot SEEDS of project 67 moves both: two not-proven reasons in the shared NotProvenReasonCode.
 # The largest deviation's item (X14, project 67) moves the Rebalancer's alone: two references on its score.
 # R1-A (project 67, contract §6.8) moves the PAC's alone: a plan needs a step, not an order (``order_rows`` loses its minimum).
+# R1-F (b) (project 67, developer decision of 21/11) moves the Rebalancer's alone: the page computes the table «maximum
+# acceptable cost», so the request loses ``custom_reference_amount`` and the preview its ``table`` and ``custom`` for the
+# levels' λ (``fidelity_level_weights``).
 TOOL_SCHEMA_FINGERPRINT_CASES = (
     pytest.param("pac_allocator", PAC_TOOL_INPUT_ADAPTER, PAC_TOOL_OUTPUT_ADAPTER, "87437b7ed0926abfc074f79884bac1a85b8044eab723e7ef6b9556219c2da290", id="pac"),
-    pytest.param("portfolio_rebalancer", REBALANCER_TOOL_INPUT_ADAPTER, REBALANCER_TOOL_OUTPUT_ADAPTER, "df1026811263f11b5c63bc91a86631366a2a47fc8ba4c8b24885a671265d33bb", id="rebalancer"),
+    pytest.param("portfolio_rebalancer", REBALANCER_TOOL_INPUT_ADAPTER, REBALANCER_TOOL_OUTPUT_ADAPTER, "a2111f11fe96bee2e25c365b12a6052b13582b18b2260b405a46ec8321e22729", id="rebalancer"),
 )
 
 
@@ -4700,14 +4703,12 @@ def test_tool_schema_fingerprints_are_frozen_and_served(tool_code: str, input_ad
     assert ToolPluginRegistry.get_definition(tool_code).descriptor.schema_fingerprint == fingerprint
 
 
-def test_custom_reference_amount_belongs_to_the_preview() -> None:
-    """B4 (contract §11): the euros of the «custom» fidelity come only with ``preview``; a plan reads λ from the fidelity."""
-    payload = _rebalancer_request()
-    payload["custom_reference_amount"] = {"amount": "60", "currency": "EUR"}
-    _reject_because(REBALANCER_PLAN_INPUT_ADAPTER, payload, "custom_reference_amount belongs to the preview")
-    preview = {**payload, "operation": "preview"}
-    _strict_roundtrip(REBALANCER_PLAN_INPUT_ADAPTER, preview)
-    _reject_because(REBALANCER_PLAN_INPUT_ADAPTER, {**preview, "custom_reference_amount": {"amount": "60", "currency": "USD"}}, "custom_reference_amount must be in the valuation currency")
+@pytest.mark.parametrize("operation", ["plan", "preview"])
+def test_custom_reference_amount_is_gone(operation: str) -> None:
+    """R1-F (b) of project 67: the page turns the euros of the «custom» fidelity into λ itself, so no request carries them
+    any more; the field is refused as any unknown one, the preview's included."""
+    payload = {**_rebalancer_request(), "operation": operation, "custom_reference_amount": {"amount": "60", "currency": "EUR"}}
+    _assert_extra_forbidden(REBALANCER_PLAN_INPUT_ADAPTER, payload, "custom_reference_amount")
 
 
 # ---------------------------------------------------------------------------

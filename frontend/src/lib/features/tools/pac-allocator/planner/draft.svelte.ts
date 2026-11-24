@@ -396,6 +396,12 @@ export class PlannerDraft {
     /** Every editable fact; a result computed on another fingerprint is stale. */
     readonly fingerprint = $derived(JSON.stringify(this.data));
 
+    /**
+     * Every editable fact but the target fidelity: the key of the scenario preview, whose numbers never depend on it
+     * (R1-F (b) of project 67). A level chosen or a figure typed for «Custom» asks no preview: the table is the page's.
+     */
+    readonly previewFingerprint = $derived(JSON.stringify({...this.data, fidelity: null}));
+
     #counter = 0;
     #lastFingerprint = '';
     #revision = 0;

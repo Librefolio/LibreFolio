@@ -21,8 +21,8 @@
     "period": "Periodo AI",
     "periodHelp": "Periodo di esportazione indipendente che termina alla data dello snapshot.",
     "periodCustom": "Personalizzato",
-    "userNotes": "Note per l’AI",
-    "userNotesPlaceholder": "Aggiungi contesto o domande facoltative…",
+    "userNotes": "La tua domanda",
+    "userNotesPlaceholder": "Facoltativa. Fai la tua domanda, o aggiungi il contesto che l’AI deve conoscere…",
     "payloadStats": "Dimensione prompt finale",
     "payloadStatsHelp": "Stima del testo che verrà effettivamente copiato negli appunti.",
     "tokenSeverity": {
@@ -57,11 +57,15 @@
         },
         "performance_market_drivers": {
           "display": "Performance e cause di mercato",
-          "description": "Spiega la performance del portafoglio e ricerca cause di mercato datate per ogni Asset detenuto."
+          "description": "Spiega che cosa ha mosso il risultato del portafoglio nel periodo, con notizie di mercato datate per i movimenti che contano."
         },
         "fiscal_lots": {
           "display": "Strategie per compensare minusvalenze",
           "description": "Valuta come usare minusvalenze disponibili o in scadenza contro plusvalenze potenzialmente compensabili, partendo dai lotti FIFO economici e chiarendo cassetto fiscale, paese, regime, scadenze e regole applicabili."
+        },
+        "protection_strategies": {
+          "display": "Strategie di protezione",
+          "description": "Valuta se oggi ha senso proteggere il portafoglio e, solo in quel caso, con quale strategia."
         }
       },
       "broker": {
@@ -71,7 +75,7 @@
         },
         "performance_market_drivers": {
           "display": "Performance e cause di mercato",
-          "description": "Spiega la performance del Broker selezionato e ricerca cause di mercato datate per ogni Asset detenuto."
+          "description": "Spiega che cosa ha mosso il risultato del Broker selezionato nel periodo, con notizie di mercato datate per i movimenti che contano."
         },
         "fiscal_lots": {
           "display": "Strategie per compensare minusvalenze",
@@ -183,6 +187,10 @@
         "all_data": {
           "display": "Tutti i dati portafoglio",
           "description": "Unione deduplicata di tutti i dataset applicabili al portafoglio."
+        },
+        "risk_evidence": {
+          "display": "Evidenze di Rischio del Portafoglio",
+          "description": "Misure di rischio deterministiche sulle posizioni di oggi, su una finestra fino a 12 mesi che non dipende dal periodo AI: dove si concentra il rischio, la perdita di un mese brutto e le coppie di posizioni che si muovono insieme, con finestra misurata, copertura ed esclusioni."
         }
       },
       "broker": {
@@ -307,6 +315,7 @@
     "tooManyPriceDays": "Questa esportazione leggerebbe troppi giorni di prezzi. Scegli un periodo più breve.",
     "replyInstructions": {
       "dataReceived": "Dati acquisiti, sono pronto per sentire le tue domande."
-    }
+    },
+    "noOwnedBrokers": "Non possiedi nessun broker: questa selezione legge le tue posizioni e la tua liquidità, e quelle dei broker condivisi con te non sono incluse."
   }
 }

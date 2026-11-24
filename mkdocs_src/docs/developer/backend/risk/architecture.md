@@ -21,11 +21,12 @@ the first two is in [Risk UI](../../frontend/components/features/risk-lab.md).
 
 | Caller | Scope it sends | Entry point |
 |---|---|---|
-| Dashboard, **Risk** tab | `{kind: "portfolio", broker_ids}`: the brokers the user **owns** with a positive share, a share never set counting as 100% for the owner (`getOwnedBrokers()`, `stores/reference/brokerStore.ts:262`), whatever the broker filter. The panel mounts only once they are known: without `broker_ids` the backend would widen the scope to every broker the user can see, editor and viewer ones included (`routes/(app)/dashboard/+page.svelte:1101-1110`) | `levels/RiskLevelsPanel.svelte` |
+| Dashboard, **Risk** tab | `{kind: "portfolio", broker_ids}`: the brokers the user **owns** with a positive share, a share never set counting as 100% for the owner (`getOwnedBrokers()`, `stores/reference/brokerStore.ts`), or the subset the broker filter keeps: the brokers of the report on screen (`appliedBrokerIds`, RSK-F). The panel mounts only once they are known: without `broker_ids` the backend would widen the scope to every broker the user can see, editor and viewer ones included (`features/portfolio-view/PortfolioRiskTab.svelte`) | `levels/RiskLevelsPanel.svelte` |
 | Broker Detail, **Risk** tab | `{kind: "portfolio", broker_ids: [id]}` | `levels/RiskLevelsPanel.svelte` |
 | Assets page, **Correlation** tab (the *Asset Global* lab) | `{kind: "asset_set", asset_ids: [...]}` | `AssetSetRiskPanel.svelte` |
 | Asset Detail, **Risk & Scenarios** tab | `{kind: "asset", asset_id}` | `AssetRiskTab.svelte` → `levels/RiskLevelsPanel.svelte` |
-| AI Export drawdown context | Portfolio, broker or asset; `drawdown_summary` only | `RiskService.execute()`, called in-process by `backend/app/services/ai_export/components/drawdown_context.py` |
+| AI Export drawdown context | Portfolio or broker: the export's brokers (`export_risk_scope`, 78 L10); or an asset; `drawdown_summary` only | `RiskService.execute()`, called in-process by `backend/app/services/ai_export/components/drawdown_context.py` |
+| AI Export risk evidence | `{kind: "portfolio", broker_ids}`: the export's brokers, as the drawdown (`export_risk_scope`, 78 L10), `current_composition`, 12 months up to the end of the export period; `risk_contribution`, `historical_var` (95 %, 30 days) and `correlation` in one request | `RiskService.execute()`, called in-process by `backend/app/services/ai_export/components/risk_evidence.py` |
 
 The Svelte paths are relative to `frontend/src/lib/features/risk/`. The AI Export side is
 described in [AI Export Composition](../../architecture/patterns/ai_export_composition.md).
@@ -43,7 +44,7 @@ described in [AI Export Composition](../../architecture/patterns/ai_export_compo
 | `backend/app/services/risk/plan.py` | `AnalyticPlan` — a requested analytic with its plugin and validated parameters — and the predicates on the kind of calculation it asks for (`is_historical_replay_plan()`, `is_hypothetical_plan()`, `is_geography_hypothetical_plan()`, `reads_the_twrr_alone()`). |
 | `backend/app/services/risk/scope.py` | The scope: access, holdings and weights (`load_scope_inputs()` into `ScopeInputs`), the asset lookups, the bulk price load (`prepare_asset_series()`), the exclusions (`scope_exclusions()`); `RiskScopeAccessError` and `RiskScopeNotFoundError`, which the API maps to 403 and 404. |
 | `backend/app/services/risk/replay.py` | A historical replay's own window and series (`prepare_historical_replay_context()`), and the shorter window it may suggest (`verified_replay_range()`). |
-| `backend/app/services/risk/simulation_window.py` | The simulation's own window (RN-16): all the common history up to today, never the page's period (`simulation_window()`), who takes part in it (`simulation_participants()`, the one place that decides: since RN-16b a holding whose history — from the later of its first price and its first rate, `first_useful_day()` — is shorter than the horizon stays out, its weight with the cash, a warning naming it and `excluded_assets` recording it as `shorter_than_horizon` with `horizon_days` and `first_useful_day` in its `details`, unless none reaches the horizon; RN-16c), and the context rebuilt whole from its series (`prepare_simulation_context()`). |
+| `backend/app/services/risk/simulation_window.py` | The simulation's own window (RN-16): all the common history up to today, never the page's period (`simulation_window()`), who takes part in it (`simulation_participants()`, the one place that decides: since RN-16b a holding whose history — from the later of its first price and its first rate, `first_useful_day()` — is shorter than the horizon stays out, its weight with the cash, a warning naming it and `excluded_assets` recording it as `shorter_than_horizon` with `horizon_days` and `first_useful_day` in its `details`, unless none reaches the horizon; RN-16c), the period the user chose to draw the days from (RSK-SIM1: `SimulationParams.history_start`/`history_end`, None for all the common history; a start before it moves to it with the warning `simulation_history_start_moved`, a period with no common day is refused; who takes part is still decided on all the history, `_chosen_window()`), and the context rebuilt whole from its series (`prepare_simulation_context()`, which leaves the available window in `RiskExecutionContext.simulation_history`, reported as `history_available_start`/`_end` and `history_chosen`). |
 | `backend/app/services/risk/results.py` | The execution context (`build_execution_context()`), the gate rules (`available_observations()`, `requires_valid_composition()`), the result envelopes and their metadata (`success_result()`, `unavailable_result()`, `result_metadata()`), the portfolio TWRR series (`portfolio_twrr_returns()`), the warnings and their asset names (`with_warning_asset_names()`). |
 | `backend/app/services/risk/data_quality.py` | The data-quality report a result is judged on (`plan_data_quality()`), its warnings (`data_quality_warnings()`), and the banner issues of an `asset_set` scope (`with_asset_set_quality_issues()`). |
 | `backend/app/services/risk/base.py` | The plugin contract: `RiskAnalytic`, `RiskExecutionContext`, `RiskComputation`, `RiskUnavailableError`, `RiskSeriesInputs`. |
@@ -158,7 +159,8 @@ response echoes the request's own range. A replay bounds its window in
    (`risk_contribution`, `stress`, `comparison`, `historical_var`, `simulation`) is refused with
    `data_unavailable` when the composition is invalid. A historical replay prepares its own window
    ([Replay Coverage](#replay-coverage)), and so does the simulation: all the common history up to today, never the
-   page's period (`risk/simulation_window.py`, RN-16), of the holdings whose history reaches the horizon (RN-16b). Then the observation gate refuses with
+   page's period (`risk/simulation_window.py`, RN-16), of the holdings whose history reaches the horizon (RN-16b), or the
+   period the user chose inside it (RSK-SIM1). Then the observation gate refuses with
    `insufficient_history` any analytic below its `min_observations`.
 7. **Execution.** `await analytic.execute(params, context)`. The default `execute()` runs the
    synchronous `compute()` in a worker thread (`asyncio.to_thread`); `simulation` and
@@ -939,7 +941,7 @@ class MyAnalytic(RiskAnalytic):
 | Plugin folders and their translations | `test_utilities/test_plugin_layout_gate.py`, `test_utilities/test_plugin_i18n_ownership_gate.py` | `utils gate-plugin-layout`, `utils gate-plugin-i18n-ownership` |
 | Schemas | `test_schemas/test_risk_schemas.py` | `schemas risk` |
 | API | `test_api/test_risk_api.py` | `api risk` |
-| End-to-end | `frontend/e2e/portfolio/risk-analysis.spec.ts`, `risk-lab.spec.ts`, `risk-asset-detail.spec.ts`, `risk-benchmark-shared.spec.ts` | `front-portfolio risk`, `front-portfolio risk-lab`, `front-portfolio risk-asset-detail`, `front-portfolio risk-benchmark-shared` |
+| End-to-end | `frontend/e2e/portfolio/risk-analysis.spec.ts`, `risk-lab.spec.ts`, `risk-asset-detail.spec.ts` | `front-portfolio risk`, `front-portfolio risk-lab`, `front-portfolio risk-asset-detail` |
 
 The backend paths are relative to `backend/test_scripts/`.
 

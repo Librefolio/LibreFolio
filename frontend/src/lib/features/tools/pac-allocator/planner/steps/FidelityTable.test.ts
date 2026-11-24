@@ -2,9 +2,10 @@
 /**
  * The table «Maximum acceptable cost» (F3a of project 67, step 10a; M30–M33, N1).
  *
- * The figures are the backend preview's, as it gives them: no figure is computed here. Four rows of money in the wrong
- * place, the reference row marked; one column per level; the «Custom» column only while that choice is active and the
- * answer carries it (M32); «Target first» has no column, a line under the table says so (M33). While the preview waits
+ * The figures are the page's (`acceptableCost.ts`, R1-F (b) of project 67), on the preview's total and the λ of its levels:
+ * the component shows what the helper counts (its own figures are tested there). Four rows of money in the wrong place,
+ * the reference row marked; one column per level; the «Custom» column only while that choice is active with a λ (M32);
+ * «Target first» has no column, a line under the table says so (M33). While the preview waits
  * the figures stay, muted; after a failure the table goes and a line says why. Every figure is the user's money (derived
  * from the total): masked in privacy mode. Nothing reads translated text: figures are compared with the planner's own
  * formatter.
@@ -29,7 +30,7 @@ import {PRIVACY_PLACEHOLDER} from '$lib/utils/privacy/maskable';
 import ProfileHarness from '../../__tests__/ProfileHarness.svelte';
 import type {DraftFidelity} from '../draft.svelte';
 import {formatExactMoneyCompact, formatExactMoneyPlain} from '../format';
-import {PlannerPreview, type PreviewMoney, type PreviewReady} from '../preview.svelte';
+import {PlannerPreview, type PreviewReady} from '../preview.svelte';
 import {REBALANCER_PLANNER_PROFILE} from '../profile';
 import FidelityTable from './FidelityTable.svelte';
 
@@ -47,30 +48,18 @@ const number = (value: string) => ({kind: 'finite_decimal' as const, value});
 /** The table shows two significant digits and the symbol alone (G6-1), as the mockup («up to 4 €», «2,4 €»). */
 const whole = (value: string) => formatExactMoneyCompact(money(value));
 
-/** The mockup's table on 20 000 €, with the custom column at 60 € on the reference row. */
-function ready(custom: boolean): PreviewReady {
-    const row = (misplaced: string, reference: boolean, costs: [string, string, string], customCost: string) => ({
-        misplaced: money(misplaced),
-        reference,
-        cost_aware: money(costs[0]),
-        balanced: money(costs[1]),
-        faithful: money(costs[2]),
-        custom: custom ? money(customCost) : null,
-    });
+/** The mockup's preview on 20 000 €: the table counts 200 / 500 / 1 000 / 2 000, and at λ 0.6 the column 2.4 / 15 / 60 / 240. */
+function ready(total = '20000'): PreviewReady {
     return {
         operation: 'preview',
         result_state: 'preview_ready',
         availability: 'ready',
         valuation_currency: 'EUR',
-        total: money('20000'),
+        total: money(total),
         issues: [],
         limit_problems: [],
         items: [],
-        table: {
-            level_weights: {cost_aware: number('0.25'), balanced: number('1'), faithful: number('4')},
-            rows: [row('200', false, ['1', '4', '16'], '2.4'), row('500', false, ['6.25', '25', '100'], '15'), row('1000', true, ['25', '100', '400'], '60'), row('2000', false, ['100', '400', '1600'], '240')],
-        },
-        custom: custom ? {distance_weight: number('0.6'), reference_amount: money('60')} : null,
+        fidelity_level_weights: {cost_aware: number('0.25'), balanced: number('1'), faithful: number('4')},
     };
 }
 
@@ -97,8 +86,8 @@ function cells(level: string): string[] {
 }
 
 describe('the table «Maximum acceptable cost»', () => {
-    it('shows the preview rows as they come, the reference row marked; no «Custom» column for a level', () => {
-        mount(previewWith('ready', ready(false)));
+    it('shows the rows counted on the preview total, the reference row marked; no «Custom» column for a level', () => {
+        mount(previewWith('ready', ready()));
         expect(cells('misplaced').map((text, index) => text.includes(whole(['200', '500', '1000', '2000'][index])))).toEqual([true, true, true, true]);
         expect(cells('balanced').map((text, index) => text.includes(whole(['4', '25', '100', '400'][index])))).toEqual([true, true, true, true]);
         expect(cells('faithful')[3]).toContain(whole('1600'));
@@ -111,8 +100,8 @@ describe('the table «Maximum acceptable cost»', () => {
         expect(screen.getByTestId('rebalancer-planner-fidelity-total').textContent).toContain(formatExactMoneyPlain(money('20000')));
     });
 
-    it('the «Custom» column is there while that choice is active and the answer carries it', () => {
-        mount(previewWith('ready', ready(true)), {kind: 'custom', lambda: '0.6'});
+    it('the «Custom» column is there while that choice is active with a λ', () => {
+        mount(previewWith('ready', ready()), {kind: 'custom', lambda: '0.6'});
         expect(cells('custom').map((text, index) => text.includes(whole(['2.4', '15', '60', '240'][index])))).toEqual([true, true, true, true]);
         // G6-2: the «Custom» column stands out; the levels do not.
         const highlighted = (level: string) =>
@@ -124,13 +113,16 @@ describe('the table «Maximum acceptable cost»', () => {
         expect(highlighted('balanced')).toEqual(['false', 'false', 'false', 'false']);
         cleanup();
 
-        // Another choice: the column goes, even if the answer still carries it.
-        mount(previewWith('ready', ready(true)), BALANCED);
+        // Another choice: the column goes; «Custom» without a λ yet has none either.
+        mount(previewWith('ready', ready()), BALANCED);
+        expect(cells('custom')).toEqual([]);
+        cleanup();
+        mount(previewWith('ready', ready()), {kind: 'custom', lambda: ''});
         expect(cells('custom')).toEqual([]);
     });
 
     it('stale figures stay, marked; a failed preview removes the table and says why', () => {
-        mount(previewWith('waiting', ready(false)));
+        mount(previewWith('waiting', ready()));
         expect(screen.getByTestId('rebalancer-planner-fidelity').getAttribute('data-stale')).toBe('true');
         expect(cells('balanced')).toHaveLength(4);
         cleanup();
@@ -141,7 +133,7 @@ describe('the table «Maximum acceptable cost»', () => {
     });
 
     it('every figure is masked in privacy mode, both ways', async () => {
-        mount(previewWith('ready', ready(false)));
+        mount(previewWith('ready', ready()));
         const shown = whole('400');
 
         setPrivacyEnabled(true);
@@ -159,22 +151,18 @@ describe('the table «Maximum acceptable cost»', () => {
 
     it('each column is at least as wide as its widest figure: larger money, wider columns (G6d)', () => {
         const minWidths = (): Record<string, number> => Object.fromEntries(['misplaced', 'cost_aware', 'balanced', 'faithful', 'custom'].map((id) => [id, parseFloat((screen.getByTestId(`dt-header-${id}`) as HTMLElement).style.minWidth)]));
-        mount(previewWith('ready', ready(true)), {kind: 'custom', lambda: '0.6'});
+        mount(previewWith('ready', ready()), {kind: 'custom', lambda: '0.6'});
         const small = minWidths();
         cleanup();
 
-        const big = ready(true);
-        const scale = (amount: PreviewMoney | null) => {
-            if (amount?.value.kind === 'finite_decimal') amount.value.value = (BigInt(Math.round(Number(amount.value.value) * 10)) * 100_000_000n).toString();
-        };
-        for (const row of big.table!.rows) [row.misplaced, row.cost_aware, row.balanced, row.faithful, row.custom].forEach(scale);
-        mount(previewWith('ready', big), {kind: 'custom', lambda: '0.6'});
+        // A total a billion times larger: every figure a billion times larger.
+        mount(previewWith('ready', ready('20000000000000')), {kind: 'custom', lambda: '0.6'});
         const large = minWidths();
         for (const id of Object.keys(small)) expect(large[id], id).toBeGreaterThan(small[id]);
     });
 
     it('a columns button moves and hides the columns of this table (G6d)', async () => {
-        mount(previewWith('ready', ready(false)));
+        mount(previewWith('ready', ready()));
         const button = within(screen.getByTestId('rebalancer-planner-fidelity-columns')).getByTestId('column-visibility-toggle');
         await fireEvent.click(button);
         await fireEvent.click(screen.getByTestId('column-visibility-item-faithful'));

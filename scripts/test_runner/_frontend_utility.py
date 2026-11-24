@@ -103,6 +103,7 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/utils/docs/searchLanguage.dom.test.ts",
             "src/lib/utils/docs/movedAnchors.test.ts",
             "src/lib/utils/docs/movedAnchors.dom.test.ts",
+            "src/lib/utils/docs/navEnhance.dom.test.ts",
             "src/hooks.client.test.ts",
             "src/lib/utils/__tests__/text.test.ts",
             "src/lib/types/__tests__/safeAccessors.test.ts",
@@ -116,6 +117,7 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/features/transactions/txTableRows.test.ts",
             "src/lib/features/transactions/chargeLinkRules.test.ts",
             "src/lib/features/transactions/chargesDeleteFlow.svelte.test.ts",
+            "src/lib/features/transactions/chargesLinkFlow.svelte.test.ts",
             "src/lib/features/transactions/txStore.test.ts",
             "src/lib/features/transactions/commitRefusal.test.ts",
             "src/lib/features/transactions/resolveBrimNotice.test.ts",
@@ -127,6 +129,7 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/features/transactions/form/txFormFields.test.ts",
             "src/lib/features/transactions/form/txFormChecks.test.ts",
             "src/lib/features/transactions/form/txTradeAmount.test.ts",
+            "src/lib/features/transactions/form/rewardValue.test.ts",
             "src/lib/features/transactions/form/txCharges.test.ts",
             "src/lib/features/transactions/preFloorDate.test.ts",
             "src/lib/components/charts/echartsTooltipHelpers.test.ts",
@@ -186,6 +189,7 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/features/assets/enrichers/enrichersEditState.test.ts",
             "src/lib/features/assets/enrichers/enricherCalls.test.ts",
             "src/lib/features/assets/enrichers/recognizeStream.test.ts",
+            "src/lib/features/assets/enrichers/enricherSearchStream.test.ts",
             "src/lib/features/assets/bulk/assetBulkEdit.test.ts",
             "src/lib/features/assets/bulk/assetBulkVerify.test.ts",
             "src/lib/features/assets/assetPayload.test.ts",
@@ -233,6 +237,7 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/routes/rootLayoutAwaitingRestore.gate.test.ts",
             "src/signalRendering.gate.test.ts",
             "src/lib/components/ui/docsLinkCoverage.gate.test.ts",
+            "src/lib/components/table/rowMenuCoverage.gate.test.ts",
             "src/lib/api/dashboardReportFixture.test.ts",
             "src/lib/api/openapiDescriptions.test.ts",
             "src/lib/theme/colorAlpha.test.ts",
@@ -267,6 +272,7 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/features/brokers/lots/lotGanttChartHelpers.test.ts",
             "src/lib/features/brokers/lots/lotStateVisual.test.ts",
             "src/lib/features/brokers/lots/unifiedLotsTableHelpers.test.ts",
+            "src/lib/features/brokers/lots/rewardLotGroups.test.ts",
             "src/lib/features/brokers/lots/lotCustodyModalHelpers.test.ts",
             "src/lib/features/brokers/lots/lotCustodyModalHelpers.closureValueLabel.test.ts",
             "src/lib/features/brokers/lots/lotsAnalysisHelpers.test.ts",
@@ -438,6 +444,20 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/components/ui/input/TagInput.test.ts",
             "src/lib/components/ui/input/PasswordInput.test.ts",
             "src/lib/components/ui/input/PasswordStrength.test.ts",
+            "src/lib/components/ui/input/Switch.test.ts",
+            "src/lib/features/allocation/allocationFilters.test.ts",
+            "src/lib/features/allocation/allocationQuery.test.ts",
+            "src/lib/features/allocation/allocationController.test.ts",
+            "src/lib/features/allocation/AllocationBaseTiles.test.ts",
+            "src/lib/features/allocation/AllocationFilterPanel.test.ts",
+            "src/lib/features/allocation/AllocationChips.test.ts",
+            "src/lib/features/allocation/allocationView.test.ts",
+            "src/lib/features/allocation/AllocationTable.test.ts",
+            "src/lib/features/allocation/AllocationDimensionSelect.test.ts",
+            "src/lib/features/allocation/AllocationResults.test.ts",
+            "src/lib/features/allocation/AllocationMatrix.test.ts",
+            "src/lib/features/portfolio-view/PortfolioAllocationTab.test.ts",
+            "src/lib/components/ui/select/FilterButton.test.ts",
             "src/lib/components/ui/select/SimpleSelect.test.ts",
             "src/lib/components/ui/select/SimpleSelect.portal.test.ts",
             "src/lib/components/ui/select/SearchSelect.test.ts",
@@ -506,6 +526,7 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/features/assets/profile/profileAutoAsk.test.ts",
             "src/lib/features/assets/profile/AssetModalProfileRow.test.ts",
             "src/lib/features/assets/enrichers/AssetEnrichersModal.test.ts",
+            "src/lib/features/assets/enrichers/EnricherOnlineSearch.test.ts",
             "src/lib/features/assets/enrichers/enricherRecognition.test.ts",
             "src/lib/features/assets/AssetModal.enrichers.test.ts",
             "src/lib/features/assets/AssetModal.profile.test.ts",
@@ -545,6 +566,8 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/features/transactions/form/TransactionFormModal.charges.test.ts",
             "src/lib/features/transactions/form/TransactionFormModal.parent.test.ts",
             "src/lib/features/transactions/form/TransactionFormModal.link.test.ts",
+            "src/lib/features/transactions/form/TransactionFormModal.reward.test.ts",
+            "src/lib/features/transactions/form/TransactionFormModal.groupSync.test.ts",
             "src/lib/features/transactions/bulk/TransactionPickerModal.test.ts",
             "src/lib/features/transactions/bulk/TransactionBulkModal.test.ts",
             "src/lib/features/transactions/TransactionsTable.privacy.test.ts",
@@ -731,6 +754,7 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/features/tools/pac-allocator/planner/issues.cashLimitRounding.test.ts",
             "src/lib/features/tools/pac-allocator/planner/review.rebalancer.test.ts",
             "src/lib/features/tools/pac-allocator/planner/steps/FidelityTable.test.ts",
+            "src/lib/features/tools/pac-allocator/planner/acceptableCost.test.ts",
             "src/lib/features/tools/pac-allocator/planner/steps/RebalancerStrategyStep.test.ts",
             "src/lib/features/tools/pac-allocator/planner/result/ResultView.rebalancer.test.ts",
             "src/lib/features/tools/pac-allocator/planner/result/OperationalPlan.test.ts",
@@ -1188,6 +1212,18 @@ def front_docs_search_language(verbose: bool = False, ui: bool = False, headed: 
     return _run_playwright("docs/search-language.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_docs_shared_nav(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the documentation's shared menu and English-only developer manual in the browser, desktop and phone: the menu put back from its shared file, a group put back toggles as Material draws it, developer links in English with a read-only selector, an old Italian address redirects (lane 84)."""
+    print_section("Frontend Docs Shared Navigation Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("docs/shared-nav.spec.ts", ui=ui, headed=headed, debug=debug, project="", test_names=test_names, coverage=coverage)
+
+
 def front_page_policy(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run the page policy of H-42, injected by the spec as the managed profile sends it: positive controls, then the documentation's search, the PDF preview and the Dashboard with no enforced violation."""
     print_section("Frontend Page Policy Tests")
@@ -1316,6 +1352,18 @@ def front_datatable_mobile(verbose: bool = False, ui: bool = False, headed: bool
     if not _ensure_test_users():
         return False
     return _run_playwright("layout/datatable-mobile.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
+def front_phone_no_hscroll(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the 375 px control: no page and no window scrolls sideways (81 U22)."""
+    print_section("Frontend Phone No-Sideways-Scroll Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("layout/phone-no-hscroll.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
 def front_datatable_resize(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
@@ -1810,6 +1858,15 @@ def populate_registry(registry: dict) -> None:
     )
     add_test(
         cat,
+        "docs-shared-nav",
+        front_docs_shared_nav,
+        name="Docs Shared Navigation",
+        desc="The documentation's shared menu in the browser (lane 84, lots D and E), on the English and the Italian page of user/fx/: the page as the lane serves it is the shrunk one (data-lf-nav, links standing for groups), the lane answers the language's menu file javascripts/nav/nav.<lang>.<hash>.js 200 and immutable, and the page ends with no such link left: each is the group it replaced, its first page the one the link led to, the groups of the page's own branch open and the current page the one active link; a group put back starts indeterminate (md-toggle--indeterminate: shown expanded, as navigation.expand draws a group outside the page's branch), on a desktop the first click on its label folds it and the second opens it with its first page on screen, on a phone (drawer) the first click opens it; both Playwright projects (desktop, mobile) run; from the Italian page every menu link to the developer manual leads to /developer/ (never /it/developer/), the page it reaches is English with a read-only language selector that does not open and the stored language still Italian; an old /it/developer/ address ends on the English page with its query and anchor; every origin but the lane's refused, no console or page error",
+        prereq="Docs site built after the shared_nav, developer_english_only and minify_html hooks and nav-enhance.js are in (dev.py mkdocs build)",
+        tests="docs/shared-nav.spec.ts",
+    )
+    add_test(
+        cat,
         "page-policy",
         front_page_policy,
         name="Page Policy",
@@ -1889,6 +1946,15 @@ def populate_registry(registry: dict) -> None:
         desc="At 390 px, read-only on seeded data, on Transactions (stickyActions false) and the Files static list (sticky actions): scrolled half an actions cell short of the far right, the actions header sits over its row's actions cell and both end with the table; the selection header and cell have scrolled out past the scroll area's left edge; and, the scroll area bounded to the header and two rows and scrolled down, every header cell stays on its top while the body passes under (Y7, D-Y17; needs the dt-scroll / dt-select-* / dt-actions-* test ids)",
         prereq="Populated DB + test users",
         tests="layout/datatable-mobile.spec.ts",
+    )
+    add_test(
+        cat,
+        "phone-no-hscroll",
+        front_phone_no_hscroll,
+        name="Phone No Sideways Scroll",
+        desc="At 375 px, read-only on seeded data: the Dashboard, Brokers, a broker, Assets, an asset, FX, an FX pair, Transactions, Files and Settings do not scroll sideways, and neither do the transaction window (view and new), the import window, the relink-events window and the new asset, broker and FX-pair windows; a box that ends past the edge is named in the failure, containers that scroll or clip on purpose and fixed popups are out of the measure, and a box hung past the edge on purpose must come back by name (81 U22)",
+        prereq="Populated DB + test users",
+        tests="layout/phone-no-hscroll.spec.ts",
     )
     add_test(
         cat,

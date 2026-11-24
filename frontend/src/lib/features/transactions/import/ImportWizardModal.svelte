@@ -74,7 +74,6 @@
     import {generateUUID} from '$lib/utils/core/uuid';
     import {mapWithConcurrency} from '$lib/features/transactions/import/requestConcurrency';
     import DataTable from '$lib/components/table/DataTable.svelte';
-    import DataTableToolbar from '$lib/components/table/DataTableToolbar.svelte';
     import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
     import OrderableList from '$lib/components/ui/OrderableList.svelte';
     import {scrollOnOverflow, attachOverflowMarqueeToDescendants} from '$lib/actions/scrollOnOverflow';
@@ -4285,7 +4284,9 @@ ${arrow}<span>${label}</span></span>`,
             id: 'viewDetail',
             label: () => $t('importWizard.viewDetail'),
             icon: Eye,
-            disabled: (row) => row.status !== 'done',
+            // A read that failed has no detail (its message and «Read again» stay); one still running says so (77 SEL-M, D3)
+            visible: (row) => row.status !== 'error',
+            blocked: (row) => (row.status !== 'done' ? {hint: () => $t('importWizard.viewDetailReading'), reason: 'reading'} : null),
             onClick: (row) => openParseDetail(row),
         },
         {

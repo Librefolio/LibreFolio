@@ -1,0 +1,462 @@
+{
+  "format": "lf-brim-previous-output/1",
+  "comment": "Output of the plugin BEFORE its project-66 lot changed it (P2 contract §2.1). Never re-take it after the code change.",
+  "plugin_code": "broker_scalable",
+  "plugin_version": "1.2.0",
+  "source_head": "890343101",
+  "captured_on": "2026-11-21",
+  "sample": "broker_scalable/sample_reports/scalable-broker-export.csv",
+  "sample_sha256": "7cbeda481bb79be215b811e9759bd300e818d915f32e1b04cd57add5d99aa0c7",
+  "extracted_assets": {
+    "2147483647": {
+      "extracted_symbol": null,
+      "extracted_isin": "US0378331005",
+      "extracted_name": "Apple Inc.",
+      "notices": []
+    },
+    "2147483646": {
+      "extracted_symbol": null,
+      "extracted_isin": "DE0005557508",
+      "extracted_name": "Deutsche Telekom AG",
+      "notices": []
+    },
+    "2147483645": {
+      "extracted_symbol": null,
+      "extracted_isin": "IE00B4L5Y983",
+      "extracted_name": "iShares Core MSCI World UCITS ETF USD (Acc)",
+      "notices": []
+    },
+    "2147483644": {
+      "extracted_symbol": null,
+      "extracted_isin": "IE00BK5BQT80",
+      "extracted_name": "Vanguard FTSE All-World UCITS ETF (USD) Accumulating",
+      "notices": []
+    },
+    "2147483643": {
+      "extracted_symbol": null,
+      "extracted_isin": "IE00B3RBWM25",
+      "extracted_name": "Vanguard FTSE All-World UCITS ETF (Dist)",
+      "notices": []
+    }
+  },
+  "transactions": [
+    {
+      "asset_id": 2147483647,
+      "type": "SELL",
+      "date": "2026-06-15",
+      "quantity": "-5",
+      "cash": {
+        "code": "EUR",
+        "amount": "902"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "scalable"
+      ],
+      "description": "Apple Inc. · id synthB0000000000000014 · ref SCALEXPORT00012",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483647,
+      "type": "FEE",
+      "date": "2026-06-15",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "-0.99"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "scalable"
+      ],
+      "description": "Order fee · Apple Inc. · id synthB0000000000000014 · ref SCALEXPORT00012",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483647,
+      "type": "TAX",
+      "date": "2026-06-15",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "-24.57"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "scalable"
+      ],
+      "description": "Tax · Apple Inc. · id synthB0000000000000014 · ref SCALEXPORT00012",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483646,
+      "type": "DIVIDEND",
+      "date": "2026-06-10",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "63.26"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "scalable"
+      ],
+      "description": "Deutsche Telekom AG · id SYNTHC0000000000000013",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483647,
+      "type": "BUY",
+      "date": "2026-06-02",
+      "quantity": "5",
+      "cash": {
+        "code": "EUR",
+        "amount": "-750.5"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "scalable"
+      ],
+      "description": "Apple Inc. · id synthB0000000000000011 · ref SCALEXPORT00010",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483647,
+      "type": "FEE",
+      "date": "2026-06-02",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "-0.99"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "scalable"
+      ],
+      "description": "Order fee · Apple Inc. · id synthB0000000000000011 · ref SCALEXPORT00010",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": null,
+      "type": "DEPOSIT",
+      "date": "2026-06-01",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "300"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "scalable"
+      ],
+      "description": "Interner Übertrag · id SYNTHC0000000000000010",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483645,
+      "type": "BUY",
+      "date": "2026-05-20",
+      "quantity": "12",
+      "cash": {
+        "code": "EUR",
+        "amount": "-1181.4"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "scalable"
+      ],
+      "description": "iShares Core MSCI World UCITS ETF USD (Acc) · id synthB0000000000000009 · ref SCALEXPORT00009",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483645,
+      "type": "FEE",
+      "date": "2026-05-20",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "-1.49"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "scalable"
+      ],
+      "description": "Order fee · iShares Core MSCI World UCITS ETF USD (Acc) · id synthB0000000000000009 · ref SCALEXPORT00009",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483644,
+      "type": "BUY",
+      "date": "2026-05-04",
+      "quantity": "3.69249",
+      "cash": {
+        "code": "EUR",
+        "amount": "-500"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "scalable"
+      ],
+      "description": "Vanguard FTSE All-World UCITS ETF (USD) Accumulating · id synthB0000000000000008 · ref SCALEXPORT00008",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": null,
+      "type": "DEPOSIT",
+      "date": "2026-05-04",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "500"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "scalable"
+      ],
+      "description": "Scalable Capital Broker Sparplan · id SYNTHC0000000000000007",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": null,
+      "type": "WITHDRAWAL",
+      "date": "2026-04-15",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "-200"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "scalable"
+      ],
+      "description": "Überweisung an DE89 3704 0044 0532 0130 00 · id SYNTHC0000000000000006",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": null,
+      "type": "WITHDRAWAL",
+      "date": "2026-04-02",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "-1000"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "scalable"
+      ],
+      "description": "Interner Übertrag · id SYNTHC0000000000000005",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": null,
+      "type": "DEPOSIT",
+      "date": "2026-04-01",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "5000"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "scalable"
+      ],
+      "description": "Einzahlung von DE89 3704 0044 0532 0130 00 · id SYNTHC0000000000000004",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": null,
+      "type": "FEE",
+      "date": "2026-03-31",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "-4.99"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "scalable"
+      ],
+      "description": "PRIME+ Abonnement · id SYNTHC0000000000000003",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": null,
+      "type": "INTEREST",
+      "date": "2026-03-20",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "12.5"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "scalable"
+      ],
+      "description": "Tax refund · Steuererstattung · id SYNTHC0000000000000002",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": null,
+      "type": "TAX",
+      "date": "2026-03-10",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "-8.4"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "scalable"
+      ],
+      "description": "Kapitalertragsteuer · id SYNTHC0000000000000001",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": null,
+      "type": "DEPOSIT",
+      "date": "2026-03-05",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "25"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "scalable"
+      ],
+      "description": "Prämie Neukunden · id SYNTHC0000000000000000",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483643,
+      "type": "BUY",
+      "date": "2026-02-10",
+      "quantity": "7",
+      "cash": {
+        "code": "EUR",
+        "amount": "-840"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "scalable"
+      ],
+      "description": "Vanguard FTSE All-World UCITS ETF (Dist) · id synthB0000000000000001",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    }
+  ]
+}

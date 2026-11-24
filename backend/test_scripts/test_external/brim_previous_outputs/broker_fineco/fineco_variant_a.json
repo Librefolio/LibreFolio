@@ -1,0 +1,142 @@
+{
+  "format": "lf-brim-previous-output/1",
+  "comment": "Output of the plugin BEFORE its project-66 lot changed it (P2 contract §2.1). Never re-take it after the code change.",
+  "plugin_code": "broker_fineco",
+  "plugin_version": "1.5.0",
+  "source_head": "890343101",
+  "captured_on": "2026-11-21",
+  "sample": "broker_fineco/sample_reports/fineco_variant_a.csv",
+  "sample_sha256": "2e5a54c71f663ea56bd879757de8002b6c57a04efdae16396b0e8d168474b4ea",
+  "extracted_assets": {
+    "2147483647": {
+      "extracted_symbol": null,
+      "extracted_isin": "IE00BK5BQT80",
+      "extracted_name": "VANGUARD FTSE ALL-WORLD",
+      "notices": []
+    },
+    "2147483646": {
+      "extracted_symbol": null,
+      "extracted_isin": "US5949181045",
+      "extracted_name": "MICROSOFT CORP",
+      "notices": []
+    },
+    "2147483645": {
+      "extracted_symbol": null,
+      "extracted_isin": "IT0005583478",
+      "extracted_name": "BTP VALORE SC MZ30",
+      "notices": []
+    }
+  },
+  "transactions": [
+    {
+      "asset_id": 2147483647,
+      "type": "BUY",
+      "date": "2024-01-10",
+      "quantity": "8",
+      "cash": {
+        "code": "EUR",
+        "amount": "-841.60"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "fineco"
+      ],
+      "description": "Compravendita titoli: VANGUARD FTSE ALL-WORLD",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483646,
+      "type": "BUY",
+      "date": "2024-02-14",
+      "quantity": "3",
+      "cash": {
+        "code": "USD",
+        "amount": "-1126.24"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "fineco"
+      ],
+      "description": "Compravendita titoli: MICROSOFT CORP",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483647,
+      "type": "SELL",
+      "date": "2024-03-20",
+      "quantity": "-2",
+      "cash": {
+        "code": "EUR",
+        "amount": "221.00"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "fineco"
+      ],
+      "description": "Compravendita titoli: VANGUARD FTSE ALL-WORLD",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483646,
+      "type": "DIVIDEND",
+      "date": "2024-04-15",
+      "quantity": "0",
+      "cash": {
+        "code": "USD",
+        "amount": "2.25"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "fineco"
+      ],
+      "description": "Dividendo: MICROSOFT CORP",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483645,
+      "type": "INTEREST",
+      "date": "2024-05-01",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "18.40"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "fineco"
+      ],
+      "description": "Stacco Cedole: BTP VALORE SC MZ30",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    }
+  ]
+}

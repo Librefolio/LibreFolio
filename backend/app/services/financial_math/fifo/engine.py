@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import date
-from decimal import Decimal
+from decimal import ROUND_DOWN, Decimal
 from typing import Callable, Literal, Sequence
 
 from backend.app.services.financial_math.fifo.eligibility import eligible_income_quantity
@@ -30,6 +30,8 @@ from backend.app.services.financial_math.fifo.models import (
     LotMatchingMethod,
     ReferencePriceLookup,
     ReferencePriceResolution,
+    RewardAllocation,
+    RewardMerge,
     SplitQuantitySnapshot,
     TargetOperationAllocation,
     TransactionLike,
@@ -37,6 +39,7 @@ from backend.app.services.financial_math.fifo.models import (
     _require_decimal,
     _require_id,
 )
+from backend.app.services.financial_math.income import IN_KIND_INCOME_TYPES, INCOME_TYPES
 from backend.app.services.financial_math.splits import is_valid_split_ratio
 from backend.app.utils.datetime_utils import day_before
 
@@ -50,8 +53,14 @@ from backend.app.utils.datetime_utils import day_before
 _COST_INVARIANT_TOLERANCE = Decimal("0.01")
 
 # The phase of each event kind within one day (``FifoLotEngine._event_sort_key``): transfers at the start of the day,
-# then splits, then the inflows, and last the outflows (SELL, ADJUSTMENT_OUT).
-_EVENT_PHASES: dict[str, int] = {"TRANSFER_DEPART": 0, "TRANSFER_ARRIVE": 1, "SPLIT": 2, "BUY": 3, "ADJUSTMENT_IN": 3, "SELL": 4, "ADJUSTMENT_OUT": 4}
+# then splits, then a reward merged into the lots (MERGED view, STK-3: first of the day's movements, on the lots held the
+# day before), then the inflows (BUY, REWARD, ADJUSTMENT_IN), and last the outflows (SELL, ADJUSTMENT_OUT).
+_EVENT_PHASES: dict[str, int] = {"TRANSFER_DEPART": 0, "TRANSFER_ARRIVE": 1, "SPLIT": 2, "REWARD_MERGE": 3, "BUY": 4, "REWARD": 4, "ADJUSTMENT_IN": 4, "SELL": 5, "ADJUSTMENT_OUT": 5}
+# The precision of a quantity in the database: the shares of a merged reward are cut to it, the rest goes to one lot.
+_QUANTITY_QUANTUM = Decimal("1e-10")
+# The income types the economic stage allocates to the lots held the day before (D-1): cash income, and a REWARD's value
+# at receipt (income in kind, financial_math.income). A REWARD is never the parent of a linked charge.
+_INCOME_ECONOMIC_TYPES = INCOME_TYPES
 
 
 @dataclass(slots=True)
@@ -115,6 +124,7 @@ class FifoLotEngine:
         target_currency: str = "",
         replay_until: date | None = None,
         matching_method: LotMatchingMethod = LotMatchingMethod.FIFO,
+        reward_allocation: RewardAllocation = RewardAllocation.OWN_LOT,
     ) -> None:
         normalized = [tx if isinstance(tx, FifoInputTransaction) else FifoInputTransaction.from_transaction(tx) for tx in transactions]
         if not normalized:
@@ -134,9 +144,12 @@ class FifoLotEngine:
         # transfer still in transit then, whose units stay in transit.
         self.replay_until = replay_until
         self.matching_method = LotMatchingMethod(matching_method)
+        # STK-3: OWN_LOT gives a REWARD a lot of its own; MERGED spreads its units over the lots the broker held the day before
+        self.reward_allocation = RewardAllocation(reward_allocation)
+        self._reward_merges: list[RewardMerge] = []
         self._tx_by_id = {tx.id: tx for tx in normalized}
         # Project 66 (M2): the income events by id, the parents a linked charge can follow onto the lots that earned them.
-        self._income_by_id = {event.transaction_id: event for event in self.economic_events if event.economic_type in ("DIVIDEND", "INTEREST")}
+        self._income_by_id = {event.transaction_id: event for event in self.economic_events if event.economic_type in ("DIVIDEND", "INTEREST")}  # a REWARD is never a parent
         self._issues: list[FifoDataQualityIssue] = []
         self._lots: dict[int, FifoLot] = {}
         self._intervals: list[FragmentInterval] = []
@@ -150,21 +163,20 @@ class FifoLotEngine:
 
     def run(self) -> FifoEngineResult:
         events = self.classify_events()
+        # One handler per event kind (EventKind); every kind the classification makes has one
+        handlers = {
+            "BUY": self._apply_buy,
+            "SELL": self._apply_sell,
+            "REWARD": self._apply_reward,
+            "REWARD_MERGE": self._apply_reward_merge,
+            "ADJUSTMENT_IN": self._apply_adjustment_in,
+            "ADJUSTMENT_OUT": self._apply_adjustment_out,
+            "TRANSFER_DEPART": self._apply_transfer_depart,
+            "TRANSFER_ARRIVE": self._apply_transfer_arrive,
+            "SPLIT": self._apply_split,
+        }
         for event in events:
-            if event.kind == "BUY":
-                self._apply_buy(event)
-            elif event.kind == "SELL":
-                self._apply_sell(event)
-            elif event.kind == "ADJUSTMENT_IN":
-                self._apply_adjustment_in(event)
-            elif event.kind == "ADJUSTMENT_OUT":
-                self._apply_adjustment_out(event)
-            elif event.kind == "TRANSFER_DEPART":
-                self._apply_transfer_depart(event)
-            elif event.kind == "TRANSFER_ARRIVE":
-                self._apply_transfer_arrive(event)
-            elif event.kind == "SPLIT":
-                self._apply_split(event)
+            handlers[event.kind](event)
         economic = self._allocate_economics()
         return FifoEngineResult(
             asset_id=self.asset_id,
@@ -179,6 +191,8 @@ class FifoLotEngine:
             asset_orphan_income=economic.orphan_income,
             asset_orphan_fees=economic.orphan_fees,
             asset_orphan_taxes=economic.orphan_taxes,
+            reward_allocation=self.reward_allocation,
+            reward_merges=list(self._reward_merges),
         )
 
     def classify_events(self) -> list[FifoEvent]:  # noqa: C901 — tx-type if/elif dispatch mapping to events
@@ -255,6 +269,15 @@ class FifoLotEngine:
                 events.append(FifoEvent(kind="BUY", date=tx.date, transaction_id=tx.id, broker_id=tx.broker_id, quantity=abs(tx.quantity), unit_price=_unit_price(tx.amount, tx.quantity), raw_transaction_ids=(tx.id,)))
             elif tx.type == "SELL":
                 events.append(FifoEvent(kind="SELL", date=tx.date, transaction_id=tx.id, broker_id=tx.broker_id, quantity=abs(tx.quantity), unit_price=_unit_price(tx.amount, tx.quantity), raw_transaction_ids=(tx.id,)))
+            elif tx.type == "REWARD" and tx.quantity > Decimal("0"):
+                # Income in kind (project 79): a lot opened as a BUY at the value of the units on receipt, the row's
+                # per-unit cost_basis_override; without one its cost is unknown and the lot opens at 0
+                # (MISSING_COST_BASIS, reported by the average cost).
+                reward_unit_price = tx.cost_basis_override if tx.cost_basis_override is not None else Decimal("0")
+                # STK-3: in the MERGED view the units join the lots held the day before instead, at no cost
+                reward_kind = "REWARD_MERGE" if self.reward_allocation is RewardAllocation.MERGED else "REWARD"
+                # A merged reward costs nothing: its units come at no cost (and a lot of its own, with no lot to join, opens at 0)
+                events.append(FifoEvent(kind=reward_kind, date=tx.date, transaction_id=tx.id, broker_id=tx.broker_id, quantity=tx.quantity, unit_price=reward_unit_price if reward_kind == "REWARD" else Decimal("0"), raw_transaction_ids=(tx.id,)))
             elif tx.type == "ADJUSTMENT" and tx.quantity > Decimal("0"):
                 # A positive ADJUSTMENT that carries a per-unit cost_basis_override opens a lot
                 # with a real cost basis (e.g. broker-snapshot imports with a known WAC). Without
@@ -307,7 +330,7 @@ class FifoLotEngine:
 
     @staticmethod
     def _event_sort_key(event: FifoEvent) -> tuple[date, int, int, int]:
-        """The replay order: by day; within a day transfer departures, arrivals, splits, then the inflows (BUY,
+        """The replay order: by day; within a day transfer departures, arrivals, splits, then the inflows (BUY, REWARD,
         ADJUSTMENT-in) and last the outflows (SELL, ADJUSTMENT-out); by id inside each phase.
 
         Inflows before outflows (project 69, D4 and D4b, both methods): a transaction carries a day, not a time, and the
@@ -341,6 +364,105 @@ class FifoLotEngine:
                 currency=self._tx_by_id[event.transaction_id].currency,
                 reference_resolution=None,
             )
+
+    def _apply_reward(self, event: FifoEvent) -> None:
+        """A REWARD (project 79) is a BUY at the value of its units on receipt, with no cash: it closes a short of its
+        broker first, then opens a LONG lot at that value, in the cost basis's currency. No reference price: the value
+        on receipt is the lot's cost, as a purchase's price is."""
+        tx = self._tx_by_id[event.transaction_id]
+        price_currency = tx.cost_basis_currency or tx.currency
+        broker_id = _require_id(event.broker_id)
+        closed = self._consume_broker_fragments(
+            broker_id=broker_id,
+            direction="SHORT",
+            quantity=_require_decimal(event.quantity),
+            event_date=event.date,
+            transaction_id=event.transaction_id,
+            close_reason="BUY",
+            close_unit_price=_require_decimal(event.unit_price),
+            close_currency=price_currency,
+        )
+        remainder = _require_decimal(event.quantity) - closed
+        if remainder > Decimal("0"):
+            self._open_lot(
+                transaction_id=event.transaction_id,
+                broker_id=broker_id,
+                opened_at=event.date,
+                direction="LONG",
+                quantity=remainder,
+                unit_price=_require_decimal(event.unit_price),
+                currency=price_currency,
+                reference_resolution=None,
+            )
+
+    def _apply_reward_merge(self, event: FifoEvent) -> None:
+        """A REWARD in the MERGED view (STK-3): its units join the LONG lots its broker held in custody at the close of the
+        day before, pro rata to their open quantity there, at no cost and with no date of their own — a partial split of
+        those lots: their cost stays, their unit cost falls. Units in transit take no part (they are not at the broker).
+
+        Each lot's share is cut to the database's quantity precision; the rest goes to the lot with the most units (the
+        oldest on a tie), so the shares add up to the reward exactly. With no such lot the reward opens a lot of its own at
+        cost 0, and an informational issue says so (``REWARD_NOT_MERGED_NO_OPEN_LOT``).
+        """
+        broker_id = _require_id(event.broker_id)
+        quantity = _require_decimal(event.quantity)
+        cutoff = day_before(event.date)
+        held = {fragment.lot_id for fragment in self._intervals if fragment.direction == "LONG" and fragment.custody_type == "BROKER" and fragment.broker_id == broker_id and fragment.start_date <= cutoff and (fragment.end_date is None or cutoff < fragment.end_date)} if cutoff is not None else set()
+        fragments = [fragment for fragment in self._active_fragments.values() if fragment.direction == "LONG" and fragment.custody_type == "BROKER" and fragment.broker_id == broker_id and fragment.lot_id in held]
+        lot_quantities: dict[int, Decimal] = defaultdict(Decimal)
+        for fragment in fragments:
+            lot_quantities[fragment.lot_id] += fragment.quantity
+        total = sum(lot_quantities.values(), Decimal("0"))
+        if total <= Decimal("0"):
+            # As an OWN_LOT reward, at no cost (the event's price is 0): it covers a short of its broker first
+            self._apply_reward(event)
+            self._issue(
+                code="REWARD_NOT_MERGED_NO_OPEN_LOT",
+                transaction_id=event.transaction_id,
+                lot_id=event.transaction_id,
+                broker_id=broker_id,
+                message="No lot held at the broker the day before: the reward keeps a lot of its own, at no cost.",
+            )
+            return
+        # Largest open quantity first, then the oldest: the first one takes the rest of the rounding
+        order = sorted(lot_quantities, key=lambda lot_id: (-lot_quantities[lot_id], self._lots[lot_id].opening_date, lot_id))
+        shares = {lot_id: (quantity * lot_quantities[lot_id] / total).quantize(_QUANTITY_QUANTUM, rounding=ROUND_DOWN) for lot_id in order}
+        shares[order[0]] += quantity - sum(shares.values(), Decimal("0"))
+        for lot_id in order:
+            share = shares[lot_id]
+            if share <= Decimal("0"):
+                continue
+            self._merge_into_lot(lot_id, [fragment for fragment in fragments if fragment.lot_id == lot_id], share, event)
+
+    def _merge_into_lot(self, lot_id: int, fragments: list[FragmentInterval], share: Decimal, event: FifoEvent) -> None:
+        """Add ``share`` units at no cost to the lot's ``fragments`` at the broker, each part cut to the quantity precision and
+        the largest fragment taking the rest. The merge row's ``ratio`` is the whole lot's growth (its open units anywhere,
+        in transit included), the factor its unit cost falls by."""
+        lot = self._lots[lot_id]
+        lot_quantity = sum((fragment.quantity for fragment in fragments), Decimal("0"))
+        open_before = lot.open_quantity
+        ordered = sorted(fragments, key=lambda fragment: (-fragment.quantity, fragment.fragment_id))
+        additions = {fragment.fragment_id: (share * fragment.quantity / lot_quantity).quantize(_QUANTITY_QUANTUM, rounding=ROUND_DOWN) for fragment in ordered}
+        additions[ordered[0].fragment_id] += share - sum(additions.values(), Decimal("0"))
+        for fragment in ordered:
+            added = additions[fragment.fragment_id]
+            new_quantity = fragment.quantity + added
+            self._transition_fragment(fragment, event.date, new_quantity=new_quantity, new_unit_price=fragment.quantity * fragment.unit_price / new_quantity)
+        lot.open_quantity = sum((fragment.quantity for fragment in self._active_fragments.values() if fragment.lot_id == lot_id), Decimal("0"))
+        lot.original_quantity += share
+        lot.opening_unit_price = lot.original_cost / lot.original_quantity if lot.original_quantity else Decimal("0")
+        if lot.reference_unit_price is not None and open_before > Decimal("0") and lot.open_quantity > Decimal("0"):
+            lot.reference_unit_price *= open_before / lot.open_quantity
+        self._reward_merges.append(
+            RewardMerge(
+                transaction_id=event.transaction_id,
+                date=event.date,
+                broker_id=_require_id(event.broker_id),
+                lot_id=lot_id,
+                added_quantity=share,
+                ratio=(open_before + share) / open_before if open_before > Decimal("0") else (lot_quantity + share) / lot_quantity,
+            )
+        )
 
     def _apply_sell(self, event: FifoEvent) -> None:
         broker_id = _require_id(event.broker_id)
@@ -887,7 +1009,7 @@ class FifoLotEngine:
             fragments_by_lot[fragment.lot_id].append(fragment)
         mutable_accumulators: dict[int, dict[str, Decimal]] = {}
 
-        income_events = [event for event in self.economic_events if event.economic_type in ("DIVIDEND", "INTEREST")]
+        income_events = [event for event in self.economic_events if event.economic_type in _INCOME_ECONOMIC_TYPES]
         stage.orphan_income += self._allocate_income_pools(income_events, fragments_by_lot, stage.groups, mutable_accumulators)
 
         fee_events = [event for event in self.economic_events if event.economic_type == "FEE"]
@@ -906,10 +1028,14 @@ class FifoLotEngine:
         groups: list[EconomicAllocationGroup],
         accumulators: dict[int, dict[str, Decimal]],
     ) -> Decimal:
-        """Allocate DIVIDEND/INTEREST to lots eligible as of D-1 within the paying broker.
+        """Allocate DIVIDEND/INTEREST/REWARD income to lots eligible as of D-1 within the paying broker.
+
+        A REWARD's income is its value on receipt (income in kind), allocated as the dividend of the DIVIDEND + BUY pair
+        it stands for: to the lots held the day before; only when there are none (Q-D: an airdrop, a learning reward),
+        to the lot it opens itself (``REWARD_OWN_LOT``), never as orphan income.
 
         Pool key = (broker, date, economic_type, native_currency, target_currency). Eligibility
-        (open LONG quantity on ``date - 1``) is shared across DIVIDEND and INTEREST since it is a
+        (open LONG quantity on ``date - 1``) is shared across the income types since it is a
         function of holdings, but the two remain distinct audit groups by economic_type. A pool sums the
         signed amounts, as the Dashboard does: a negative correction lowers the income. It is
         allocated entirely (running-remainder conserves the total) or, when no lot is eligible,
@@ -935,6 +1061,11 @@ class FifoLotEngine:
             native_pool = sum((event.native_amount for event in pool_events), Decimal("0"))
             target_pool = sum((event.target_amount for event in pool_events), Decimal("0"))
             source_ids = tuple(sorted(event.transaction_id for event in pool_events))
+            # Project 79, Q-D: a reward with no lot held the day before (an airdrop, a learning reward) earns its income on
+            # the lot it opens itself, never as orphan income: a normal case, not a data error.
+            if not eligible and economic_type in IN_KIND_INCOME_TYPES and (own_lot_group := self._own_lot_group(key, pool_events, source_ids, accumulators)) is not None:
+                groups.append(own_lot_group)
+                continue
             if not eligible:
                 orphan_total += target_pool
                 self._issues.append(
@@ -1014,6 +1145,49 @@ class FifoLotEngine:
                 )
             )
         return orphan_total
+
+    def _own_lot_group(
+        self,
+        key: tuple[int, date, str, str | None, str],
+        pool_events: Sequence[EconomicEvent],
+        source_ids: tuple[int, ...],
+        accumulators: dict[int, dict[str, Decimal]],
+    ) -> EconomicAllocationGroup | None:
+        """The pool of rewards ``key`` names, each on the LONG lot it opened itself (Q-D, rule ``REWARD_OWN_LOT``); None
+        when one of them opened none (its units all covered a short), and the whole pool then follows the orphan rule.
+        Fills ``accumulators`` only when it returns a group."""
+        lots = [self._lots.get(event.transaction_id) for event in pool_events]
+        if any(lot is None or lot.direction != "LONG" for lot in lots):
+            return None
+        broker_id, event_date, economic_type, native_currency, target_currency = key
+        native_pool = sum((event.native_amount for event in pool_events), Decimal("0"))
+        target_pool = sum((event.target_amount for event in pool_events), Decimal("0"))
+        operations: list[TargetOperationAllocation] = []
+        for event in sorted(pool_events, key=lambda item: item.transaction_id):
+            accumulator = accumulators.setdefault(event.transaction_id, _new_economic_accumulator())
+            accumulator["gross_income"] += event.target_amount
+            weight = event.target_amount / target_pool if target_pool != Decimal("0") else Decimal("1") / len(pool_events)
+            operations.append(
+                TargetOperationAllocation(
+                    context="OPENING",
+                    operation_transaction_id=event.transaction_id,
+                    weight=weight,
+                    lot_allocations=(EconomicLotAllocation(lot_id=event.transaction_id, weight=Decimal("1"), native_amount=event.native_amount, target_amount=event.target_amount),),
+                )
+            )
+        return EconomicAllocationGroup(
+            economic_type=economic_type,  # type: ignore[arg-type]  # a pool key's type is an EconomicType
+            asset_id=self.asset_id,
+            broker_id=broker_id,
+            date=event_date,
+            native_currency=native_currency,
+            target_currency=target_currency,
+            rule="REWARD_OWN_LOT",
+            source_transaction_ids=source_ids,
+            native_pool_total=native_pool,
+            target_pool_total=target_pool,
+            operation_allocations=tuple(operations),
+        )
 
     # ------------------------------------------------------------------
     # FEE/TAX allocation (asset-linked costs).
@@ -1560,8 +1734,10 @@ def run_fifo_lot_engine(
     target_currency: str = "",
     replay_until: date | None = None,
     matching_method: LotMatchingMethod = LotMatchingMethod.FIFO,
+    reward_allocation: RewardAllocation = RewardAllocation.OWN_LOT,
 ) -> FifoEngineResult:
-    """Replay ``transactions`` of one asset into lots, matching outflows in ``matching_method`` order (default FIFO)."""
+    """Replay ``transactions`` of one asset into lots, matching outflows in ``matching_method`` order (default FIFO), a
+    REWARD in a lot of its own or merged into the lots held the day before (``reward_allocation``, STK-3)."""
     return FifoLotEngine(
         transactions=transactions,
         broker_shorting=broker_shorting,
@@ -1572,6 +1748,7 @@ def run_fifo_lot_engine(
         target_currency=target_currency,
         replay_until=replay_until,
         matching_method=matching_method,
+        reward_allocation=reward_allocation,
     ).run()
 
 
