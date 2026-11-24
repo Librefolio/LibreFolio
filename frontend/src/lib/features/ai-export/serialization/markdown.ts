@@ -1,5 +1,3 @@
-import {serializeYaml} from './yaml';
-
 const INLINE_MARKDOWN_CHARACTERS = new Set(['\\', '`', '*', '_', '[', ']', '<', '>']);
 const FENCE_LANGUAGE_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._+-]*$/;
 
@@ -7,18 +5,6 @@ export interface FencedSectionOptions {
     heading: string;
     language?: string;
     content: string;
-}
-
-export interface PromptDataBlockValues {
-    snapshotData: unknown;
-    domainNotes: unknown;
-    userNotes: unknown;
-}
-
-export interface PromptDataBlocks {
-    snapshotData: string;
-    domainNotes: string;
-    userNotes: string;
 }
 
 export function createBacktickFence(content: string): string {
@@ -61,24 +47,4 @@ export function renderFencedSection({heading, language = '', content}: FencedSec
     const fence = createBacktickFence(content);
     const contentTerminator = content.endsWith('\n') ? '' : '\n';
     return `## ${escapeMarkdownInlineLabel(heading)}\n\n${fence}${language}\n${content}${contentTerminator}${fence}`;
-}
-
-export function createPromptDataBlocks(values: PromptDataBlockValues): PromptDataBlocks {
-    return {
-        snapshotData: renderFencedSection({
-            heading: 'Snapshot Data',
-            language: 'yaml',
-            content: serializeYaml(values.snapshotData),
-        }),
-        domainNotes: renderFencedSection({
-            heading: 'Domain Notes',
-            language: 'yaml',
-            content: serializeYaml(values.domainNotes),
-        }),
-        userNotes: renderFencedSection({
-            heading: 'User Notes',
-            language: 'yaml',
-            content: serializeYaml(values.userNotes),
-        }),
-    };
 }
