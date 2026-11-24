@@ -1,0 +1,102 @@
+{
+  "allocation": {
+    "tab": "Allocation",
+    "heading": "Où suis-je exposé, en ne regardant qu'une partie ?",
+    "loading": "Chargement de l'allocation…",
+    "failed": "Impossible de charger l'allocation.",
+    "retry": "Réessayer",
+    "empty": "Rien n'est détenu sur cette période.",
+    "subtitle": {
+      "all": "Tout le portefeuille",
+      "scopeAll": "tous les courtiers",
+      "scopeBrokers": "{n} courtiers",
+      "scopeBroker": "ce courtier"
+    },
+    "tiles": {
+      "base": "Base des 100 %",
+      "outside": "Hors du filtre",
+      "excluded": "Exclu des 100 %",
+      "none": "Rien",
+      "ofPortfolio": "du portefeuille",
+      "outsideShort": "Hors du filtre",
+      "excludedShort": "Exclu"
+    },
+    "unattributable": {
+      "in_transit": "Titres en transit entre courtiers",
+      "no_country": "Les liquidités n'ont pas de pays"
+    },
+    "filters": {
+      "button": "Filtres",
+      "classes": "Classes",
+      "excluded": "Hors des 100 %",
+      "assets": "Actifs inclus",
+      "countOf": "{on} sur {total}",
+      "countActive": "{n, plural, one {# actif} other {# actifs}}",
+      "clear": "Retirer les filtres",
+      "remembered": "Mémorisé pour cette page",
+      "searchAssets": "Rechercher des actifs",
+      "noMatch": "Aucun actif ne correspond.",
+      "noAssets": "Aucun actif dans les classes activées."
+    },
+    "classHint": {
+      "STOCK": "aussi les ETF actions",
+      "BOND": "aussi les ETF obligataires",
+      "COMMODITY": "aussi les ETC et ETF de matières premières",
+      "REAL_ESTATE": "aussi les ETF immobiliers",
+      "CRYPTO": "aussi les ETF crypto"
+    },
+    "bucket": {
+      "Unknown": "Non classé",
+      "UnknownHint": "la part sans secteur, pays ou type déclaré",
+      "Other": "Autre",
+      "OtherHint": "le secteur « Autre » des sources"
+    },
+    "chip": {
+      "without": "Sans {name}",
+      "remove": "Retirer {name}"
+    },
+    "dimension": {
+      "label": "Regrouper par",
+      "sector": "Secteur",
+      "geography": "Zone",
+      "type": "Type",
+      "asset": "Actif"
+    },
+    "view": {
+      "label": "Vue",
+      "now": "Maintenant",
+      "history": "Historique"
+    },
+    "table": {
+      "label": "Tableau de l'allocation",
+      "amount": "Montant",
+      "shareOfSelection": "% de la sélection",
+      "shareOfPortfolio": "% du portefeuille",
+      "assets": "Actifs",
+      "excluded": "(exclu)",
+      "ofSlice": "{share} de la tranche",
+      "hint": "Cliquez sur une ligne pour voir les actifs qui la composent. La première colonne % totalise 100, la seconde {share}.",
+      "hintNoShare": "Cliquez sur une ligne pour voir les actifs qui la composent.",
+      "empty": "Rien dans la sélection."
+    },
+    "map": {
+      "captionBefore": "Couleurs sur la sélection : 100 % =",
+      "captionAfter": "du portefeuille"
+    },
+    "pie": {
+      "center": "Base"
+    },
+    "history": {
+      "empty": "Aucun historique pour cette sélection sur la période.",
+      "loading": "Chargement de l'historique…"
+    },
+    "matrix": {
+      "title": "Classe × {dimension}",
+      "hint": "Suit la dimension choisie plus haut. Parts de tout le portefeuille ; les cellules encadrées sont la sélection. Cliquez sur une cellule pour ne garder que sa classe.",
+      "classHeader": "Classe",
+      "unattributed": "Hors des colonnes :",
+      "cell": "{class}, {bucket} : {share}",
+      "cellEmpty": "{class}, {bucket} : rien"
+    }
+  }
+}

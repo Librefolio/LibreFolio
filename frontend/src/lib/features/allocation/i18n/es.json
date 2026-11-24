@@ -1,0 +1,102 @@
+{
+  "allocation": {
+    "tab": "Asignación",
+    "heading": "¿Dónde estoy expuesto, mirando solo una parte?",
+    "loading": "Cargando la asignación…",
+    "failed": "No se pudo cargar la asignación.",
+    "retry": "Reintentar",
+    "empty": "No hay nada en cartera en este periodo.",
+    "subtitle": {
+      "all": "Toda la cartera",
+      "scopeAll": "todos los brókeres",
+      "scopeBrokers": "{n} brókeres",
+      "scopeBroker": "este bróker"
+    },
+    "tiles": {
+      "base": "Base del 100 %",
+      "outside": "Fuera del filtro",
+      "excluded": "Excluido del 100 %",
+      "none": "Nada",
+      "ofPortfolio": "de la cartera",
+      "outsideShort": "Fuera del filtro",
+      "excludedShort": "Excluido"
+    },
+    "unattributable": {
+      "in_transit": "Títulos en tránsito entre brókeres",
+      "no_country": "La liquidez no tiene país"
+    },
+    "filters": {
+      "button": "Filtros",
+      "classes": "Clases",
+      "excluded": "Fuera del 100 %",
+      "assets": "Activos incluidos",
+      "countOf": "{on} de {total}",
+      "countActive": "{n, plural, one {# activo} other {# activos}}",
+      "clear": "Quitar filtros",
+      "remembered": "Recordado para esta página",
+      "searchAssets": "Buscar activos",
+      "noMatch": "Ningún activo coincide.",
+      "noAssets": "Ningún activo en las clases activadas."
+    },
+    "classHint": {
+      "STOCK": "también los ETF de acciones",
+      "BOND": "también los ETF de bonos",
+      "COMMODITY": "también los ETC y ETF de materias primas",
+      "REAL_ESTATE": "también los ETF inmobiliarios",
+      "CRYPTO": "también los ETF de cripto"
+    },
+    "bucket": {
+      "Unknown": "Sin clasificar",
+      "UnknownHint": "la parte sin sector, país o tipo declarado",
+      "Other": "Otro",
+      "OtherHint": "el sector «Otro» de las fuentes"
+    },
+    "chip": {
+      "without": "Sin {name}",
+      "remove": "Quitar {name}"
+    },
+    "dimension": {
+      "label": "Agrupar por",
+      "sector": "Sector",
+      "geography": "Área",
+      "type": "Tipo",
+      "asset": "Activo"
+    },
+    "view": {
+      "label": "Vista",
+      "now": "Ahora",
+      "history": "Histórico"
+    },
+    "table": {
+      "label": "Tabla de la asignación",
+      "amount": "Importe",
+      "shareOfSelection": "% de la selección",
+      "shareOfPortfolio": "% de la cartera",
+      "assets": "Activos",
+      "excluded": "(excluido)",
+      "ofSlice": "{share} de la porción",
+      "hint": "Haz clic en una fila para ver los activos que la componen. La primera columna % suma 100, la segunda {share}.",
+      "hintNoShare": "Haz clic en una fila para ver los activos que la componen.",
+      "empty": "Nada en la selección."
+    },
+    "map": {
+      "captionBefore": "Colores sobre la selección: 100 % =",
+      "captionAfter": "de la cartera"
+    },
+    "pie": {
+      "center": "Base"
+    },
+    "history": {
+      "empty": "No hay histórico para esta selección en el periodo.",
+      "loading": "Cargando el histórico…"
+    },
+    "matrix": {
+      "title": "Clase × {dimension}",
+      "hint": "Sigue la dimensión elegida arriba. Cuotas de toda la cartera; las celdas enmarcadas son la selección. Haz clic en una celda para quedarte solo con su clase.",
+      "classHeader": "Clase",
+      "unattributed": "Fuera de las columnas:",
+      "cell": "{class}, {bucket}: {share}",
+      "cellEmpty": "{class}, {bucket}: nada"
+    }
+  }
+}
