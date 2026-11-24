@@ -6,6 +6,11 @@ internal transfers, swaps, card operations, lockups, and rewards in one format.
 This plugin stays conservative: it imports only clearly classifiable buys,
 sells, and crypto/cash rewards. Internal transfers, swaps, lock/unlock rows,
 and ambiguous movements are skipped with warnings.
+
+A reward paid in a crypto asset (staking, earn interest, card cashback) is a
+REWARD: units with no cash, valued on receipt at Native Amount ÷ Amount in the
+Native Currency (project 79, STK-4a). A reward paid in fiat is cash INTEREST. A
+reward with no crypto units to credit is not imported: a warning names it.
 """
 
 from __future__ import annotations
@@ -21,11 +26,12 @@ from typing import Dict, List, Optional
 import structlog
 
 from backend.app.db.models import TransactionType
-from backend.app.schemas.brim import FAKE_ASSET_ID_BASE, BRIMExtractedAssetInfo, BRIMParseOutput, BRIMValidationIssue
+from backend.app.schemas.brim import FAKE_ASSET_ID_BASE, BRIMExtractedAssetInfo, BRIMFieldTodo, BRIMParseOutput, BRIMValidationIssue
 from backend.app.schemas.common import Currency, is_fiat_currency
 from backend.app.schemas.transactions.transactions import TXCreateItem
 from backend.app.services.brim.brim_provider import BRIMParseError, BRIMProvider
 from backend.app.services.brim.registry import BRIMProviderRegistry
+from backend.app.services.brim_providers._brim_io import reward_unit_value, reward_value_todo
 from backend.app.services.platform.provider_registry import register_provider
 
 logger = structlog.get_logger(__name__)
@@ -109,6 +115,12 @@ class CryptoComBrokerProvider(BRIMProvider):
         return 100
 
     @property
+    def plugin_version(self) -> str:
+        # 1.1.0 — a reward in a crypto asset is a REWARD at its Native Amount; a reward with no crypto units is no longer
+        # cash INTEREST but a warning (project 79, STK-4a).
+        return "1.1.0"
+
+    @property
     def icon_url(self) -> str:
         return "https://crypto.com/favicon.ico"
 
@@ -155,6 +167,7 @@ class CryptoComBrokerProvider(BRIMProvider):
         transactions: List[TXCreateItem] = []
         warnings: List[str] = []
         validation_issues: List[BRIMValidationIssue] = []
+        field_todos: List[BRIMFieldTodo] = []
         extracted_assets: Dict[int, BRIMExtractedAssetInfo] = {}
         asset_to_fake_id: Dict[str, int] = {}
         next_fake_id = FAKE_ASSET_ID_BASE
@@ -230,7 +243,31 @@ class CryptoComBrokerProvider(BRIMProvider):
                             tags=["import", "cryptocom", "crypto"],
                         )
                     elif self._is_reward_kind(kind):
-                        if symbol and not is_fiat_currency(symbol) and amount != 0:
+                        if symbol and not is_fiat_currency(symbol) and amount > 0:
+                            # A reward in kind: its value on receipt per unit from the Native Amount (decision S4-Q1); a
+                            # blank Native Amount or Currency leaves the value to the user, with a blocking todo.
+                            raw_native = _parse_decimal(row.get(COL_NATIVE_AMOUNT, ""))
+                            unit_value = reward_unit_value(raw_native, amount) if native_currency else None
+                            asset_id, next_fake_id = self._get_asset_id(symbol, asset_to_fake_id, extracted_assets, next_fake_id)
+                            created = self._create_transaction(
+                                row_num=row_num,
+                                transactions=transactions,
+                                validation_issues=validation_issues,
+                                context=f"{kind}: {symbol}",
+                                broker_id=broker_id,
+                                asset_id=asset_id,
+                                type=TransactionType.REWARD,
+                                date=tx_date,
+                                quantity=amount,
+                                cash=None,
+                                cost_basis_override=Currency(code=native_currency, amount=unit_value) if unit_value is not None else None,
+                                description=f"{description}{desc_suffix}",
+                                tags=["import", "cryptocom", "reward", "crypto"],
+                            )
+                            if created is not None and unit_value is None:
+                                field_todos.append(reward_value_todo(len(transactions) - 1, row_num, symbol))
+                        elif symbol and not is_fiat_currency(symbol) and amount < 0:
+                            # Units taken back from a reward (a reversal): an outgoing ADJUSTMENT, as before 1.1.0
                             asset_id, next_fake_id = self._get_asset_id(symbol, asset_to_fake_id, extracted_assets, next_fake_id)
                             self._create_transaction(
                                 row_num=row_num,
@@ -261,21 +298,10 @@ class CryptoComBrokerProvider(BRIMProvider):
                                 description=f"{description}{desc_suffix}",
                                 tags=["import", "cryptocom", "reward"],
                             )
-                        elif native_currency and native_amount > 0:
-                            self._create_transaction(
-                                row_num=row_num,
-                                transactions=transactions,
-                                validation_issues=validation_issues,
-                                context=f"{kind}: {native_currency}",
-                                broker_id=broker_id,
-                                asset_id=None,
-                                type=TransactionType.INTEREST,
-                                date=tx_date,
-                                quantity=Decimal("0"),
-                                cash=Currency(code=native_currency, amount=abs(native_amount)),
-                                description=f"{description}{desc_suffix}",
-                                tags=["import", "cryptocom", "reward"],
-                            )
+                        elif native_currency and native_amount != 0:
+                            # No crypto units to credit, only a value (decision S4-Q2): never cash INTEREST, which would be
+                            # money that never arrived, and never a guessed asset. The user adds it by hand if it is real.
+                            warnings.append(f"Row {row_num}: reward '{description}' of {tx_date.isoformat()} worth {native_amount} {native_currency} " f"has no crypto amount to credit, not imported. Add it by hand as a Reward if you received it.")
                         else:
                             warnings.append(f"Row {row_num}: reward has no importable amount, skipping")
                     elif self._should_skip_kind(kind):
@@ -293,7 +319,7 @@ class CryptoComBrokerProvider(BRIMProvider):
 
         logger.info("Crypto.com file parsed", transaction_count=len(transactions), warning_count=len(warnings), asset_count=len(extracted_assets))
 
-        return BRIMParseOutput(transactions=transactions, warnings=warnings, validation_issues=validation_issues, extracted_assets=extracted_assets)
+        return BRIMParseOutput(transactions=transactions, warnings=warnings, validation_issues=validation_issues, extracted_assets=extracted_assets, field_todos=field_todos)
 
     @property
     def test_file_pattern(self) -> Optional[str]:
