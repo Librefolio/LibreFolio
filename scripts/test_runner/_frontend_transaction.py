@@ -322,6 +322,18 @@ def front_tx_bulk_charges_picker(verbose: bool = False, ui: bool = False, headed
     return _run_playwright("transactions/tx-bulk-charges-picker.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_tx_view_open_edit(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """The view's pencil on a row reached with «Open» opens that row in the Bulk, also when the page's list lacks it (project 66, TL-1c)."""
+    print_section("Frontend TX View Open Edit Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("transactions/tx-view-open-edit.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_tx_bulk_promote_charges(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """No pair-promote for a leg that still has linked charges; «scollega» then merge, saved in one batch (project 66, C21)."""
     print_section("Frontend TX Bulk Promote Charges Tests")
@@ -967,6 +979,14 @@ def populate_registry(registry: dict) -> None:
         name="TX Bulk Charges Picker Tests",
         desc="Project 66 TL-2: in the Bulk, «Link an existing charge…» of a parent's form offers the Bulk's rows — a new FEE row (by its row reference) to a new BUY row or to a BUY still in its first form, picked → under the BUY, saved linked; a saved FEE «del» here is not offered, one unlinked here is and saves with its new parent; a saved free FEE outside the Bulk is offered, one also in the Bulk once — read back by id",
         tests="transactions/tx-bulk-charges-picker.spec.ts",
+    )
+    add_test(
+        cat,
+        "tx-view-open-edit",
+        front_tx_view_open_edit,
+        name="TX View Open Edit Tests",
+        desc="Project 66 TL-1c, Transactions page: a second FEE saved after the page loaded, reached with «Open» from its BUY's view (fetched by id, not in the page's list) — the view's pencil opens that FEE in edit in the Bulk, not an empty Bulk; guard: a BUY of the list reached with «Open» from its FEE opens in edit",
+        tests="transactions/tx-view-open-edit.spec.ts",
     )
     add_test(
         cat,
