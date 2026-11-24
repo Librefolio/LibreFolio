@@ -38,9 +38,11 @@
         docsPath?: string;
         /** One asset (the Asset Detail): the docs icon opens the asset page and names the asset's questions (RN-17 c). */
         oneAsset?: boolean;
+        /** The page has no benchmark row for the risk-free rate (the single asset): the field sits under the period line. */
+        riskFreeRate?: boolean;
     }
 
-    let {controller, title = '', subtitle = '', internalSubset = false, assetIds = [], dateStart, dateEnd, targetCurrency, showActions = true, docsPath = 'user/dashboard/risk/', oneAsset = false}: Props = $props();
+    let {controller, title = '', subtitle = '', internalSubset = false, assetIds = [], dateStart, dateEnd, targetCurrency, showActions = true, docsPath = 'user/dashboard/risk/', oneAsset = false, riskFreeRate = false}: Props = $props();
 
     let syncOpen = $state(false);
 
@@ -85,7 +87,7 @@
                 {internalSubset ? $t('risk.internalSubset') : subtitle}
             </p>
         {/if}
-        <RiskPeriodLine {dateStart} {dateEnd} currency={targetCurrency} />
+        <RiskPeriodLine {dateStart} {dateEnd} currency={targetCurrency} {riskFreeRate} />
     </div>
     <div class="flex items-center gap-2">
         {#if showActions}
