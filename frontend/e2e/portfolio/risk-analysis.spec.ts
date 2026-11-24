@@ -4825,6 +4825,9 @@ test.describe('Risk analysis — the reader’s risk-free rate (RN-21)', () => {
         const panel = await openDashboardRisk(page);
         const field = panel.getByTestId('risk-free-rate');
         await expect(field).toHaveValue('0');
+        // 81 U25: the field sits in L3's row, beside «Compare with», and nowhere else on the page.
+        await expect(panel.getByTestId('risk-l3-benchmark').getByTestId('risk-free-rate'), 'the rate is not beside «Compare with»').toHaveCount(1);
+        await expect(panel.getByTestId('risk-free-rate')).toHaveCount(1);
 
         const charged = page.waitForRequest(
             (request) => {
@@ -4882,4 +4885,28 @@ test.describe('Risk analysis — the reader’s risk-free rate (RN-21)', () => {
         await sharpeRequest;
         await expect(page.getByTestId('signal-param-risk-free-rate')).toHaveAttribute('data-percent', '2.5');
     });
+
+    // 81 U25: one row of controls in L3, «Compare with» and the rate. Wide enough they share the row; on a phone the rate
+    // wraps under the picker, and nothing — the field included — pushes the page sideways.
+    for (const [width, sameRow] of [
+        [1280, true],
+        [375, false],
+    ] as const) {
+        test(`the rate sits beside «Compare with» in L3's row and stays on screen at ${width} px (81 U25)`, async ({page}) => {
+            await page.setViewportSize({width, height: 900});
+            const panel = await openDashboardRisk(page);
+            const picker = panel.getByTestId('risk-l3-benchmark-select');
+            const field = panel.getByTestId('risk-free-rate-field');
+            await picker.scrollIntoViewIfNeeded();
+            const pickerBox = await picker.boundingBox();
+            const fieldBox = await field.boundingBox();
+            if (!pickerBox || !fieldBox) throw new Error('L3 drew no picker or no rate field, so there is no row to measure.');
+
+            const overlapsVertically = fieldBox.y < pickerBox.y + pickerBox.height && pickerBox.y < fieldBox.y + fieldBox.height;
+            expect(overlapsVertically, `the field and the picker ${sameRow ? 'are not' : 'are'} on one row at ${width} px`).toBe(sameRow);
+            expect(fieldBox.x + fieldBox.width, 'the rate field leaves the screen').toBeLessThanOrEqual(width);
+            const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+            expect(overflow, 'the page scrolls sideways').toBeLessThanOrEqual(0);
+        });
+    }
 });

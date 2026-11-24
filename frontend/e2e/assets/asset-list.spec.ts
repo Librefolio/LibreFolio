@@ -3188,7 +3188,7 @@ test.describe('Asset list — a card signal bound to the risk-free rate follows 
         ).toBe(true);
 
         await page.getByTestId('assets-tab-correlation').click();
-        const field = page.getByTestId('asset-global-risk-panel').getByTestId('risk-free-rate');
+        const field = page.getByTestId('asset-global-risk-panel').getByTestId('risk-asset-set-benchmark-row').getByTestId('risk-free-rate');
         await expect(field, 'the lab shows the rate field only once its opening selection is analysed (the seeded holdings)').toBeVisible({timeout: 20_000});
         // The answer to the card load at the new rate: the engine must accept it, not only receive it.
         const answeredAtNewRate = page.waitForResponse((response) => sharpeRatesOf(response.request()).includes(0.025), {timeout: 15_000});

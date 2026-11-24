@@ -570,23 +570,6 @@ def front_portfolio_risk_asset_detail(verbose: bool = False, ui: bool = False, h
     return _run_playwright("portfolio/risk-asset-detail.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
-def front_portfolio_risk_benchmark_shared(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
-    """
-    Run the shared-benchmark tests on the asset page's Risk tab.
-
-    One benchmark for every page, kept only in user-scoped localStorage: each
-    Playwright context starts with none, and nothing is written to the server.
-    """
-    print_section("Frontend Risk Shared Benchmark Tests")
-    if not _ensure_frontend_build():
-        return False
-    if not _ensure_db_populated():
-        return False
-    if not _ensure_test_users():
-        return False
-    return _run_playwright("portfolio/risk-benchmark-shared.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
-
-
 def front_portfolio_all(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run all Portfolio frontend tests."""
     if _common.nothing_left_to_run("front-portfolio"):
@@ -834,14 +817,6 @@ def populate_registry(registry: dict) -> None:
         name="Risk Asset Detail Net",
         desc="Asset Detail's Risk tab: the two original nets (Overview preserved with Risk behind its own tab; typed scenarios, replay audit and the simulation view), plus the comparison picker's read-only section of the benchmarks the engine says cannot be measured over the page's period, with their reasons, and a stored benchmark that cannot be measured published as blocked with Compare disabled (D378)",
         tests="portfolio/risk-asset-detail.spec.ts",
-    )
-    add_test(
-        cat,
-        "risk-benchmark-shared",
-        front_portfolio_risk_benchmark_shared,
-        name="Risk Shared Benchmark Tests",
-        desc="Asset page Risk tab on the one shared benchmark: the picker opens on the stored choice and Run compares against it, a stored benchmark that is the asset itself stays shown and flagged while nothing is compared, a choice made there (a held asset) becomes the reader's shared key, and with nothing stored the picker is empty and Run waits for a choice — the choice lives only in user-scoped localStorage",
-        tests="portfolio/risk-benchmark-shared.spec.ts",
     )
     add_test(cat, "all", front_portfolio_all, test_names=False, name="All Portfolio Tests", desc="Run all Portfolio frontend tests")
     registry["front-portfolio"] = cat

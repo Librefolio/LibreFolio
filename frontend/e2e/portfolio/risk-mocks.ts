@@ -11,9 +11,8 @@
  * keep passing while serving a payload the backend no longer produces, and a
  * stale mock does not fail: it reassures.
  *
- * ⚠️ This module is ADDITIVE for its owner: `risk-asset-detail.spec.ts` and
- * `risk-benchmark-shared.spec.ts` import it, so whatever they import may be
- * extended, never removed and never renamed without moving them too.
+ * ⚠️ This module is ADDITIVE for its owner: `risk-asset-detail.spec.ts` imports it,
+ * so whatever it imports may be extended, never removed and never renamed without moving it too.
  */
 import {expect, type Locator, type Page} from '../fixtures/playwright';
 
