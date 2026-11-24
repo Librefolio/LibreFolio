@@ -90,7 +90,7 @@ export const GALLERY_ENRICHERS_CATALOGUE = {
                     'yield_gross',
                     'yield_net',
                 ],
-                STOCK: ['legal_form', 'sector'],
+                STOCK: ['description', 'issuer_country', 'legal_form', 'sector'],
                 FUND: ['fund_currency', 'inception_date', 'management_fee'],
             },
             default_priority: {
