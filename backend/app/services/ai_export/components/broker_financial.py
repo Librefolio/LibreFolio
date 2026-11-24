@@ -313,7 +313,7 @@ async def _build_broker_provenance(context: BuildContext, dependencies: Mapping[
         period_end=scope.period_end,
         engine_source="PortfolioCalculationEngine via a single PortfolioService.get_report call per request, scoped to this broker",
         fifo_methodology="FIFO lots are computed at runtime by FifoLotEngine via LotsAnalysisService; never persisted.",
-        valuation_semantics="wac_per_unit and open_cost_basis are the historical Weighted Average Cost in the target currency: each acquisition is converted at the exchange rate of its own date, so the cost does not move with later rates, and an acquisition recorded without a cost basis adds quantity at zero cost; realized P&L compares each sale's proceeds, or the value an outgoing ADJUSTMENT hands over at its cost basis, converted at its date, with that cost. FIFO lot original_cost/residual_cost_basis are converted at the lot opening date. current_value/current_price/open_value are mark-to-market via the valuation hierarchy (MARKET_PRICE > LAST_TRADE_PRICE > ESTIMATED_AT_COST > MISSING) at the valuation date's rate, so unrealized P&L includes the exchange-rate effect; ESTIMATED_AT_COST (no market quote, no BUY or SELL) counts the book cost instead, with no current_price or unit_price and no unrealized P&L. An ADJUSTMENT is never a price.",
+        valuation_semantics="wac_per_unit and open_cost_basis are the historical Weighted Average Cost in the target currency: each acquisition is converted at the exchange rate of its own date, so the cost does not move with later rates, and an acquisition recorded without a cost basis adds quantity at zero cost; a REWARD (tokens received in kind, e.g. staking) is an acquisition at its value on receipt, also counted as income, and moves no cash; realized P&L compares each sale's proceeds, or the value an outgoing ADJUSTMENT hands over at its cost basis, converted at its date, with that cost. FIFO lot original_cost/residual_cost_basis are converted at the lot opening date. current_value/current_price/open_value are mark-to-market via the valuation hierarchy (MARKET_PRICE > LAST_TRADE_PRICE > ESTIMATED_AT_COST > MISSING) at the valuation date's rate, so unrealized P&L includes the exchange-rate effect; ESTIMATED_AT_COST (no market quote, no BUY or SELL) counts the book cost instead, with no current_price or unit_price and no unrealized P&L. An ADJUSTMENT is never a price.",
         ownership=await _build_ownership_note(context, scope),
         notes=[
             ProvenanceNote(subject="currency", text=f"All monetary amounts are expressed in {scope.target_currency}."),
@@ -637,7 +637,7 @@ BROKER_ALLOCATION_CONCENTRATION_COMPONENT = ComponentSpec(
 
 BROKER_PROVENANCE_COMPONENT = ComponentSpec(
     component_id="broker.provenance",
-    version=3,  # v3 (J-17): the valuation hierarchy includes ESTIMATED_AT_COST
+    version=4,  # v3 (J-17): the valuation hierarchy includes ESTIMATED_AT_COST; v4 (79 STK-5): a REWARD is an acquisition at its value on receipt
     domains=frozenset({Domain.BROKER}),
     output_model=BrokerProvenancePayload,
     builder=_build_broker_provenance,
