@@ -341,6 +341,7 @@ export const NULL_MEANS_NONE_COLUMNS: readonly NullMeansNoneColumn[] = [
     {column: 'minimum', table: 'OUTPUT DEFINITIONS', means: 'an output with no lower bound'},
     {column: 'maximum', table: 'OUTPUT DEFINITIONS', means: 'an output with no upper bound'},
     {column: 'asset_ref', component: 'portfolio.income_timeline', means: 'income not tied to an asset, such as interest on cash'},
+    {column: 'units', component: 'portfolio.income_timeline', means: 'cash income (a dividend or interest): no units received'},
     {column: 'portfolio_weight_percent', table: 'PERIOD SUMMARY', component: 'asset.indicators', means: 'one asset: no portfolio weight'},
     {column: 'portfolio_weight_percent', table: 'PERIOD SUMMARY', component: 'fx.indicators', means: 'one FX pair: no portfolio weight'},
     {column: 'technical_normalized_weight_percent', table: 'PERIOD SUMMARY', component: 'asset.indicators', means: 'one asset: no weight to normalize'},
@@ -1632,8 +1633,8 @@ function technicalPayload(
 // renderer prints with the local meaning of the code. The gap bumps (E-23: `fx.rate_ohlc`, the price components
 // already at 2) add the merged runs of empty buckets, which the continuous-series renderer prints as a gap table.
 const COMPACT_COMPONENT_VERSIONS: ReadonlyMap<string, ReadonlySet<number>> = new Map([
-    ['portfolio.provenance', new Set([1, 2, 3])],
-    ['broker.provenance', new Set([1, 2, 3])],
+    ['portfolio.provenance', new Set([1, 2, 3, 4])],
+    ['broker.provenance', new Set([1, 2, 3, 4])],
     ['portfolio.positions', new Set([1, 2])],
     ['broker.positions', new Set([1, 2])],
     ['portfolio.technical_prices', new Set([1, 2])],
@@ -1651,7 +1652,7 @@ const COMPACT_COMPONENT_VERSIONS: ReadonlyMap<string, ReadonlySet<number>> = new
     ['broker.fifo_summary', new Set([1, 2, 3])],
     ['portfolio.reconciliation', new Set([1, 2])],
     ['broker.reconciliation', new Set([1, 2])],
-    ['portfolio.income_timeline', new Set([1, 2])],
+    ['portfolio.income_timeline', new Set([1, 2, 3])],
     ['broker.cost_efficiency', new Set([1, 2])],
     ['portfolio.drawdown_summary', new Set([1, 2])],
     ['broker.drawdown_summary', new Set([1, 2])],
