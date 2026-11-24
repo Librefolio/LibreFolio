@@ -73,7 +73,6 @@ export type AiExportPromptSectionId =
     | 'snapshot_data'
     | 'additional_librefolio_data'
     | 'domain_notes'
-    | 'user_notes'
     | 'user_question'
     | 'answer_focus'
     | 'legal_notice'
@@ -379,8 +378,9 @@ function renderDomainNotes(snapshot: AiExportSnapshotResponse): string {
 }
 
 /**
- * The new shape's last data section (78 L1): the user's question, the thing to answer, safely serialized as today's notes
- * under a trusted sentence that keeps it from changing the rules.
+ * The user's question (78 L1, both shapes since 78 L2), the thing to answer, safely serialized under a trusted sentence that
+ * keeps it from changing the rules. The new shape puts it last, before the response language; the old shape keeps it
+ * before its trusted closing.
  */
 function renderUserQuestion(question: string): string {
     const heading = '## User Question\n\n';
@@ -410,14 +410,6 @@ function renderExportScope(snapshot: AiExportSnapshotResponse): string | null {
         content: serializeYaml({included_brokers: includedBrokers}) + serializeYaml({excluded_brokers: scope.excluded_brokers.map((broker) => broker.display_name)}),
     });
     return `${heading}${AI_EXPORT_EXPORT_SCOPE_INSTRUCTIONS}\n\n${fenced.slice(heading.length)}`;
-}
-
-function renderUserNotes(notes: string): string {
-    return renderFencedSection({
-        heading: 'User Notes',
-        language: 'yaml',
-        content: serializeYaml({user_notes: notes}),
-    });
 }
 
 /**
@@ -495,8 +487,10 @@ function buildAiExportPrompt(input: RenderAiExportPromptInput, diagnostics: bool
             sections.push({id: 'snapshot_data', content: snapshotData.content});
             sections.push({id: 'additional_librefolio_data', content: renderAdditionalData(input)});
             sections.push({id: 'domain_notes', content: renderDomainNotes(input.snapshot)});
-            if (notes) sections.push({id: 'user_notes', content: renderUserNotes(notes)});
-            // The trusted closing, after the untrusted user notes: the answer focus (E-24), the legal notice, then the response
+            // 78 L2: the old shape's user text is the User Question too, under its sentence, but it keeps its place before
+            // the trusted closing (Answer Focus, legal notice, language): «the question last» is proven on the new shape only
+            if (notes) sections.push({id: 'user_question', content: renderUserQuestion(notes)});
+            // The trusted closing, after the untrusted user question: the answer focus (E-24), the legal notice, then the response
             // language, the prompt's last word (J, A9)
             sections.push({id: 'answer_focus', content: renderAnswerFocus()});
             sections.push({id: 'legal_notice', content: renderLegalNotice(input)});
