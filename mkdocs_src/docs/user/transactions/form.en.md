@@ -97,6 +97,7 @@ A **Fee** or a **Tax** can be linked to the transaction it was paid for: the com
 - **Which transactions can have charges**: a **Buy**, a **Sell**, a **Dividend**, an **Interest**, a **Deposit** or a **Withdrawal**.
 - **Which charges fit**: the same broker, and the same asset (or no asset, when the transaction has none). The date and the currency are free.
 - **Pairs**: a row of a transfer or an exchange can be neither a charge nor a transaction with charges. Split the pair first ([Link or unlink a pair](index.md#link-pairs)).
+- **New groups move together**: in the bulk workspace, while a transaction and its charges are all new rows, they share the broker and the asset. Change either in the form of the transaction or of one of its charges, and every row of the group changes too; the dates stay their own. The form says so under the broker. Once one row of the group is saved, nothing moves together: the workspace flags a charge on another broker or asset, and **Save All** waits until you fix it.
 
 In the form, you change the links in the [bulk workspace](index.md#bulk-workspace), and **Save All** writes them with the rest. When you open a transaction from the list, the form is read-only: you see its links and can move between them, nothing more. The list has its own quick **Link** and delete — see [Linked charges](index.md#linked-charges).
 
