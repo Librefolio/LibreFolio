@@ -4,8 +4,9 @@ Asset profile catalogue (project 68, lot A1): ``backend/app/services/assets/prof
 The catalogue lists every voice of the asset profile and ``normalize_value`` turns a raw value into its stored form.
 Pure: no database, no server, no network.
 
-(a) The catalogue: exactly the 37 voices of plan §3.6, in order, each with its shape, sign, unit, groups, flags,
-    choices and map keys; the structural invariants (numeric shapes carry a sign, only choice voices carry codes, only
+(a) The catalogue: exactly the 41 voices (the 37 of plan §3.6, ``management_fee`` of C2e, ``website``, ``revenue`` and
+    ``net_income`` of BI-PROF), in order, each with its shape, sign, unit, groups, flags, choices, map keys, topic and
+    period (``fiscal_year`` for the two figures of a fiscal year, None for every other voice); the structural invariants (numeric shapes carry a sign, only choice voices carry codes, only
     map voices carry map keys, charted implies key figure, the key figure and volatile sets).
 (b) ``get_voice`` returns the voice, and refuses an unknown key with ``ProfileValueError.key`` set.
 (c) ``normalize_value``, one block per shape: number, percentage, amount, date, text, choice, country, currency, map,
@@ -26,7 +27,7 @@ from pathlib import Path
 
 import pytest
 
-from backend.app.schemas.assets.profile import FAProfileVoice, ProfileGroup, ProfileMapKeys, ProfileShape, ProfileSign, ProfileTopic
+from backend.app.schemas.assets.profile import FAProfileVoice, ProfileGroup, ProfileMapKeys, ProfilePeriod, ProfileShape, ProfileSign, ProfileTopic
 from backend.app.services.assets.profile.catalogue import CATALOGUE, ProfileValueError, get_voice, normalize_value
 
 # ============================================================================
@@ -69,6 +70,10 @@ TOPICS: dict[str, ProfileTopic] = {
     "management_fee": T.COSTS,
     "industry": T.SECTORS,
     "issuer_country": T.ISSUER,
+    # BI-PROF: the company's site is about the issuer; its two figures of a fiscal year are its own topic
+    "website": T.ISSUER,
+    "revenue": T.FINANCIALS,
+    "net_income": T.FINANCIALS,
     "coupon_period_rate": T.COUPONS,
     "coupon_frequency": T.COUPONS,
     "coupon_type": T.COUPONS,
@@ -93,7 +98,7 @@ G = ProfileGroup
 NN = ProfileSign.NON_NEGATIVE
 
 
-def _v(key, shape, *, sign=None, unit=None, groups=(), key_figure=False, charted=False, volatile=False, map_keys=None):
+def _v(key, shape, *, sign=None, unit=None, groups=(), key_figure=False, charted=False, volatile=False, map_keys=None, period=None):
     return FAProfileVoice(
         key=key,
         shape=shape,
@@ -106,12 +111,13 @@ def _v(key, shape, *, sign=None, unit=None, groups=(), key_figure=False, charted
         choices=CHOICES.get(key, ()),
         map_keys=map_keys,
         topic=TOPICS[key],
+        period=period,
     )
 
 
 KF = (G.KEY_FIGURES,)
 
-#: The 38 voices of plan §3.6, in the catalogue's order.
+#: The 41 voices (plan §3.6, C2e, BI-PROF), in the catalogue's order.
 EXPECTED_VOICES: tuple[FAProfileVoice, ...] = (
     _v("geography", S.MAP, groups=(G.CLASSIFICATION,), map_keys=ProfileMapKeys.COUNTRY),
     _v("sector", S.MAP, groups=(G.CLASSIFICATION, G.COMPANY), map_keys=ProfileMapKeys.SECTOR),
@@ -135,6 +141,10 @@ EXPECTED_VOICES: tuple[FAProfileVoice, ...] = (
     _v("management_fee", S.PERCENTAGE, sign=NN, groups=(G.FUND,)),
     _v("industry", S.TEXT, groups=(G.COMPANY,)),
     _v("issuer_country", S.COUNTRY, groups=(G.COMPANY,)),
+    # BI-PROF: the company's site and the two headline figures of its last fiscal year, each dated by that year's end
+    _v("website", S.TEXT, groups=(G.COMPANY,)),
+    _v("revenue", S.AMOUNT, sign=NN, groups=(G.COMPANY,), period=ProfilePeriod.FISCAL_YEAR),
+    _v("net_income", S.AMOUNT, sign=ProfileSign.ANY, groups=(G.COMPANY,), period=ProfilePeriod.FISCAL_YEAR),
     _v("coupon_period_rate", S.PERCENTAGE, sign=NN, groups=(G.BOND,)),
     _v("coupon_frequency", S.CHOICE, groups=(G.BOND,)),
     _v("coupon_type", S.CHOICE, groups=(G.BOND,)),
@@ -160,6 +170,10 @@ EXPECTED_BY_KEY = {v.key: v for v in EXPECTED_VOICES}
 NUMERIC_SHAPES = {S.NUMBER, S.PERCENTAGE, S.AMOUNT, S.TABLE}
 KEY_FIGURE_KEYS = {"withholding_tax", "ter", "fund_size", "market_cap", "yield_gross", "modified_duration", "coupon_rate", "maturity_date"}
 VOLATILE_KEYS = {"fund_size", "market_cap", "yield_gross", "yield_net", "modified_duration", "accrued_interest"}
+#: BI-PROF: the voices whose value is a figure of a fiscal year (the tab names the year beside it).
+FISCAL_YEAR_KEYS = {"revenue", "net_income"}
+#: The amount voices that may be negative (a loss); every other amount is non-negative.
+SIGNED_AMOUNT_KEYS = {"net_income"}
 
 UNKNOWN_KEY = "not_a_profile_voice"
 
@@ -184,10 +198,10 @@ def _keys_of_shape(shape: ProfileShape) -> list[str]:
 
 
 def test_expected_table_is_self_consistent():
-    """Guard on this file's own table: 38 distinct keys (37 of plan §3.6, plus ``management_fee`` of C2e), the choice
-    dict covers exactly the choice voices."""
-    assert len(EXPECTED_KEYS) == 38
-    assert len(set(EXPECTED_KEYS)) == 38
+    """Guard on this file's own table: 41 distinct keys (37 of plan §3.6, ``management_fee`` of C2e, ``website``,
+    ``revenue`` and ``net_income`` of BI-PROF), the choice dict covers exactly the choice voices."""
+    assert len(EXPECTED_KEYS) == 41
+    assert len(set(EXPECTED_KEYS)) == 41
     assert set(CHOICES) == set(_keys_of_shape(S.CHOICE))
 
 
@@ -251,6 +265,21 @@ def test_volatile_set():
 def test_charted_set():
     expected = {"ter", "fund_size", "market_cap", "yield_gross", "modified_duration", "coupon_rate"}
     assert {k for k in EXPECTED_KEYS if CATALOGUE[k].charted} == expected
+
+
+def test_fiscal_year_set():
+    """BI-PROF: exactly the revenue and the net income are figures of a fiscal year; every other voice has no period."""
+    assert {k for k in EXPECTED_KEYS if CATALOGUE[k].period == ProfilePeriod.FISCAL_YEAR} == FISCAL_YEAR_KEYS
+    assert {k for k in EXPECTED_KEYS if CATALOGUE[k].period is not None} == FISCAL_YEAR_KEYS
+    assert {k for k in EXPECTED_KEYS if CATALOGUE[k].shape == S.AMOUNT} >= FISCAL_YEAR_KEYS, "a fiscal year's figure is an amount"
+
+
+def test_period_is_serialized_and_defaults_to_none():
+    """The period travels with the voice as its code (the frontend reads ``period === 'fiscal_year'``), None otherwise."""
+    assert CATALOGUE["revenue"].model_dump(mode="json")["period"] == "fiscal_year"
+    assert CATALOGUE["net_income"].model_dump(mode="json")["period"] == "fiscal_year"
+    assert CATALOGUE["market_cap"].model_dump(mode="json")["period"] is None
+    assert [period.value for period in ProfilePeriod] == ["fiscal_year"]
 
 
 # ============================================================================
@@ -412,7 +441,6 @@ def test_amount_stored_form(key, raw, stored):
 @pytest.mark.parametrize(
     "raw",
     [
-        {"amount": "-1", "currency": "EUR"},
         {"amount": 1.5, "currency": "EUR"},
         {"amount": True, "currency": "EUR"},
         {"amount": "abc", "currency": "EUR"},
@@ -435,6 +463,23 @@ def test_amount_stored_form(key, raw, stored):
 )
 def test_amount_refused(key, raw):
     _refused(key, raw)
+
+
+@pytest.mark.parametrize("key", sorted(set(_keys_of_shape(S.AMOUNT)) - SIGNED_AMOUNT_KEYS))
+def test_negative_amount_refused(key):
+    _refused(key, {"amount": "-1", "currency": "EUR"})
+
+
+def test_signed_amount_keys_are_amounts_of_any_sign():
+    """Guard on this file's own set: the amounts that may be negative are those whose sign is ANY."""
+    assert {k for k in _keys_of_shape(S.AMOUNT) if EXPECTED_BY_KEY[k].sign == ProfileSign.ANY} == SIGNED_AMOUNT_KEYS
+
+
+@pytest.mark.parametrize(("raw", "stored"), [({"amount": "-1", "currency": "EUR"}, {"amount": "-1", "currency": "EUR"}), ({"amount": Decimal("-2.92E+9"), "currency": "eur"}, {"amount": "-2920000000", "currency": "EUR"})])
+def test_net_income_may_be_a_loss(raw, stored):
+    """BI-PROF: a company's net income of a fiscal year may be negative (a loss), its revenue may not."""
+    assert normalize_value("net_income", raw) == stored
+    _refused("revenue", raw)
 
 
 # ============================================================================

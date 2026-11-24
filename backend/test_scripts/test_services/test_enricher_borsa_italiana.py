@@ -9,8 +9,9 @@ What it promises, pinned here with no network:
    degree 10, ``STOCK`` at degree 20 (Yahoo, a later lot, leads stocks), every other type ``None`` (``CRYPTO`` among
    them: the recognize API test without ``codes`` relies on it). Twenty-one bond voices (``description`` among them
    since C2d), never ``inception_date`` (correction C2-fix-1); ``sector`` and ``legal_form`` for a stock, plus
-   ``description`` and ``issuer_country`` when the library has ``ottieni_profilo_societa`` (lot BI-PROF: declared at
-   import, from the plugin's own ``try``/``except ImportError``); ``fund_currency`` and ``inception_date`` for a fund. Binding params ``language`` (select ``en``/``it``, default
+   ``description``, ``issuer_country``, ``website``, ``revenue`` and ``net_income`` when the library has
+   ``ottieni_profilo_societa`` (lot BI-PROF: declared at import, from the plugin's own ``try``/``except ImportError``;
+   seven stock voices with it, written out as a literal); ``fund_currency`` and ``inception_date`` for a fund. Binding params ``language`` (select ``en``/``it``, default
    ``en``, not required), ``mic``, ``platform`` and ``codice_fondo`` (strings, not required), each with an
    ``x-i18n-key`` under ``enrichers.borsa_italiana.`` (the texts are the implementer's: only keys and defaults are
    pinned). ``test_cases`` for the external suite. No import from the price plugin of the same name
@@ -48,7 +49,9 @@ What it promises, pinned here with no network:
      sheet. From the company profile page (lot BI-PROF, section 9), when the plugin's module-level
      ``ottieni_profilo_societa`` is not None: ``description`` ← ``descrizione`` (in the binding's language, as written)
      and ``issuer_country`` ← the ISO alpha-3 of ``indirizzo.paese`` (generic helper ``normalize_country_to_iso3``; a
-     name it does not know leaves the voice out with one log line), both dated by ``ultimo_aggiornamento``. The
+     name it does not know leaves the voice out with one log line) and ``website`` ← ``contatti.sito_web``, those
+     three dated by ``ultimo_aggiornamento``; ``revenue`` and ``net_income`` from the «main data» table, dated by the
+     end of their fiscal year (section 9). The
      per-share pins of this section offer no profile: the plugin asks it, the fake library answers the library's «not
      found», so they test the sheet's voices alone;
    - any other ``tipo`` (an ETF): found, OK, no values;
@@ -70,8 +73,8 @@ What it promises, pinned here with no network:
    every call of that read (the library paces its own requests), and closed exactly once (``chiudi``, or the context
    manager's exit): after a normal read, after a failing binding or a refusal, and when the consumer closes the
    generator early (correction C2b-1). A share whose sheet is read makes one more call, ``ottieni_profilo_societa(isin,
-   mic, lingua, sessione=<the read's session>)``, paced as any other, only when ``keys`` is None or asks
-   ``description`` or ``issuer_country``; ``mic`` is the binding's (upper case), else the one in the sheet's
+   mic, lingua, sessione=<the read's session>)``, paced as any other, only when ``keys`` is None or asks one of
+   the profile's five voices; ``mic`` is the binding's (upper case), else the one in the sheet's
    ``url_pagina`` (``…/<ISIN>-<MIC>.html``), else None. Bonds, funds, ETFs and other sheets never make it. On that call
    ``StrumentoNonTrovato`` / ``StrumentoNonRisolto`` → the sheet's voices, OK; ``RateLimitRaggiunto`` → that item
    ``ERROR`` ``RATE_LIMITED`` and every binding after it the same, without a call; any other error → the sheet's
@@ -100,8 +103,18 @@ What it promises, pinned here with no network:
 9. **Company profile of a share** (lot BI-PROF). The recording ``enel_profile.json`` (the library's own test pages for
    Enel, ``profilo_en`` / ``profilo_it``) rebuilds a ``ProfiloSocieta``: the library's own class when the installed
    library has it, else a stand-in with the same field names (pinned equal to the library's when both exist). Enel:
-   the description of each page as written, ``issuer_country`` ``ITA`` («Italy» on both pages), both dated
-   2026-10-23. The tests drive the plugin's module-level ``ottieni_profilo_societa``, so they run with either library;
+   the description of each page as written, ``issuer_country`` ``ITA`` («Italy» on both pages) and ``website``
+   ``https://www.enel.com/investors/overview``, dated 2026-10-23; ``revenue`` 78 057 000 000 EUR and ``net_income``
+   5 617 000 000 EUR («78057» and «5617» in «EUR - millions» / «EUR - milioni»), dated 2025-12-31 (the fiscal year
+   end of 2025). Website: kept when it starts with ``http(s)://``, «https://» put before a bare domain (``www.x.com``,
+   ``x.com/path``), anything else (``mailto:``, an e-mail address, ``ftp://``, a word) absent with one warning; blank or
+   no contacts, absent and silent. Figures: the rows «Net sales»/«Fatturato» and «Net income»/«Utile netto» (any case;
+   never «Net income (Group share)»/«Utile netto: quota del gruppo»), the most recent year with a number (an empty cell
+   falls back to the year before, each figure on its own), scaled by that year's «Currency & Unit» / «Valuta e unità di
+   misura» (units/unità ×1, thousands/migliaia ×1 000, millions/milioni ×10⁶, billions/miliardi ×10⁹; the currency the
+   part before « - »), dated by that year's «Fiscal year end» / «Chiusura esercizio fiscale». An unknown unit: both
+   figures absent, one warning; no unit or no fiscal year end for that year: that figure absent, silent (never an older
+   year's date). The synthetic tables are built with the library's ``DatoSocietario``. The tests drive the plugin's module-level ``ottieni_profilo_societa``, so they run with either library;
    the declaration is pinned by executing the plugin's source again, with and without the library's function, under
    another module name and with the registration neutralised (the registered module is never reloaded).
 
@@ -204,8 +217,12 @@ BOND_VOICES = frozenset(
     }
 )
 STOCK_VOICES = frozenset({"sector", "legal_form"})
+#: BI-PROF: the voices of the company profile page dated by its last update.
+PAGE_VOICES = frozenset({"description", "issuer_country", "website"})
+#: BI-PROF: the two figures of a fiscal year, dated by its end.
+FISCAL_VOICES = frozenset({"revenue", "net_income"})
 #: BI-PROF: the voices of the company profile page, a stock's only when the library reads that page.
-PROFILE_VOICES = frozenset({"description", "issuer_country"})
+PROFILE_VOICES = PAGE_VOICES | FISCAL_VOICES
 #: BI-PROF: read once at collection, before any fixture patches the library: the installed library has the reader.
 LIBRARY_HAS_PROFILE = hasattr(bis, "ottieni_profilo_societa")
 #: C2b: exactly the two fund voices the fund page gives with a unit and a meaning.
@@ -748,6 +765,9 @@ def test_coverage_and_voices(bi):
     assert BOND_VOICES <= set(CATALOGUE) and len(BOND_VOICES) == 21, "barrier: 21 catalogue voices"
     assert "description" in cls.voices[AssetType.BOND], "C2d: the composed description is a bond voice"
     assert ("description" in cls.voices[AssetType.STOCK]) is LIBRARY_HAS_PROFILE, "C2d: no composed description for a share; BI-PROF: the profile page's, with a library that reads it"
+    if LIBRARY_HAS_PROFILE:
+        assert cls.voices[AssetType.STOCK] == {"sector", "legal_form", "description", "issuer_country", "website", "revenue", "net_income"}, "BI-PROF: seven stock voices, written out"
+    assert set(cls.voices[AssetType.STOCK]) <= set(CATALOGUE), "barrier: catalogue voices"
     assert cls.voices[AssetType.FUND] == FUND_VOICES, f"C2b, C2e: the fund currency, the inception date and the management fee: {sorted(cls.voices[AssetType.FUND])}"
     assert FUND_VOICES <= set(CATALOGUE), "barrier: catalogue voices"
 
@@ -2193,6 +2213,23 @@ class _AddressStandIn:
 
 
 @dataclasses.dataclass
+class _ContactsStandIn:
+    """``ContattiSocieta`` for a library that does not have it: the same field names."""
+
+    telefono: str | None = None
+    email: str | None = None
+    sito_web: str | None = None
+
+
+@dataclasses.dataclass
+class _DatumStandIn:
+    """``DatoSocietario`` for a library that does not have it: the same field names."""
+
+    voce: str
+    valori: dict[int, Any] = dataclasses.field(default_factory=dict)
+
+
+@dataclasses.dataclass
 class _ProfileStandIn:
     """``ProfiloSocieta`` for a library that does not have it: the same field names, the nested rows as recorded."""
 
@@ -2212,6 +2249,13 @@ class _ProfileStandIn:
 
 _PROFILE_FIELDS = tuple(field.name for field in dataclasses.fields(_ProfileStandIn))
 _ADDRESS_FIELDS = tuple(field.name for field in dataclasses.fields(_AddressStandIn))
+_CONTACTS_FIELDS = tuple(field.name for field in dataclasses.fields(_ContactsStandIn))
+_DATUM_FIELDS = tuple(field.name for field in dataclasses.fields(_DatumStandIn))
+#: Enel's website on both pages, and the two figures of 2025 in stored form («78057», «5617» in EUR millions).
+ENEL_WEBSITE = "https://www.enel.com/investors/overview"
+ENEL_FIGURES = {"revenue": {"amount": "78057000000", "currency": "EUR"}, "net_income": {"amount": "5617000000", "currency": "EUR"}}
+#: The end of Enel's fiscal year 2025, which dates both figures.
+FISCAL_YEAR_END = date(2025, 12, 31)
 
 
 def _profile_response(language: str) -> dict[str, Any]:
@@ -2254,8 +2298,25 @@ def _profile(language: str = "en", **overrides: Any) -> Any:
             url_pagina=response["url_pagina"],
         )
     else:
-        profile = _ProfileStandIn(**{**response, "indirizzo": _AddressStandIn(**address) if address is not None else None, "ultimo_aggiornamento": day})
+        profile = _ProfileStandIn(
+            **{
+                **response,
+                "dati_principali": [_datum(row["voce"], {int(year): _cell(value) for year, value in row["valori"].items()}) for row in response["dati_principali"]],
+                "indirizzo": _AddressStandIn(**address) if address is not None else None,
+                "contatti": _ContactsStandIn(**response["contatti"]),
+                "ultimo_aggiornamento": day,
+            }
+        )
     return dataclasses.replace(profile, **overrides)
+
+
+def _datum(label: str, values: dict[int, Any]) -> Any:
+    """One row of the «main data» table: the library's ``DatoSocietario``, else the stand-in."""
+    return bis.DatoSocietario(voce=label, valori=values) if LIBRARY_HAS_PROFILE else _DatumStandIn(voce=label, valori=values)
+
+
+def _with_website(profile: Any, website: str | None) -> Any:
+    return dataclasses.replace(profile, contatti=dataclasses.replace(profile.contatti, sito_web=website))
 
 
 def _with_country(profile: Any, country: str | None) -> Any:
@@ -2280,10 +2341,16 @@ def test_profile_recording_rebuilds_as_the_library_types(language):
     if LIBRARY_HAS_PROFILE:
         assert _PROFILE_FIELDS == tuple(field.name for field in dataclasses.fields(bis.ProfiloSocieta)), "the stand-in has the library's fields"
         assert _ADDRESS_FIELDS == tuple(field.name for field in dataclasses.fields(bis.IndirizzoSocieta)), "the stand-in address has the library's fields"
+        assert _CONTACTS_FIELDS == tuple(field.name for field in dataclasses.fields(bis.ContattiSocieta)), "the stand-in contacts have the library's fields"
+        assert _DATUM_FIELDS == tuple(field.name for field in dataclasses.fields(bis.DatoSocietario)), "the stand-in row has the library's fields"
     profile = _profile(language)
     assert (profile.isin, profile.mic, profile.ultimo_aggiornamento) == (ENEL_ISIN, "MTAA", PROFILE_DATE)
     assert profile.descrizione.startswith(PROFILE_STARTS[language]), profile.descrizione[:60]
     assert profile.indirizzo.paese == "Italy", "the registered office, «Italy» on both pages"
+    assert profile.contatti.sito_web == ENEL_WEBSITE, "barrier: the recorded website, already a web address"
+    rows = {row.voce: row.valori for row in profile.dati_principali}
+    unit, end = ("Currency & Unit", "Fiscal year end") if language == "en" else ("Valuta e unità di misura", "Chiusura esercizio fiscale")
+    assert rows[unit][2025] in ("EUR - millions", "EUR - milioni") and rows[end][2025] == FISCAL_YEAR_END, "barrier: the 2025 unit and fiscal year end"
     if LIBRARY_HAS_PROFILE:
         assert isinstance(profile.azionisti[0].percentuale, Decimal) and isinstance(next(iter(profile.dati_principali[0].valori)), int)
     sheet = _sheet("enel")
@@ -2292,16 +2359,18 @@ def test_profile_recording_rebuilds_as_the_library_types(language):
 
 @pytest.mark.parametrize("language", LANGUAGES)
 def test_profile_voices_of_a_share(plugin, library, language):
-    """Enel: the sheet's voices plus the profile page's description (as written, in the binding's language) and
-    country (ITA), those two dated by the page's last update; one profile call, on the sheet's MIC."""
+    """Enel: the sheet's voices plus the profile page's description (as written, in the binding's language), country
+    (ITA) and website, dated by the page's last update, and the revenue and net income of 2025 scaled from millions,
+    dated by the end of that fiscal year; one profile call, on the sheet's MIC."""
     item = _read_one(plugin, _enel(library, language, _profile(language)))
 
     assert item.status == EnricherReadStatus.OK, item
     description = _profile_response(language)["descrizione"].strip()
-    expected = {**EXPECTED_OTHERS["enel"], "description": description, "issuer_country": "ITA"}
+    expected = {**EXPECTED_OTHERS["enel"], "description": description, "issuer_country": "ITA", "website": ENEL_WEBSITE, **ENEL_FIGURES}
     assert _stored(item.values) == expected
     assert _stored(item.values)["description"].startswith(PROFILE_STARTS[language])
-    assert dict(item.source_dates) == dict.fromkeys(PROFILE_VOICES, PROFILE_DATE), f"the profile's voices dated by its update: {dict(item.source_dates)}"
+    expected_dates = {**dict.fromkeys(PAGE_VOICES, PROFILE_DATE), **dict.fromkeys(FISCAL_VOICES, FISCAL_YEAR_END)}
+    assert dict(item.source_dates) == expected_dates, f"the page's voices dated by its update, the figures by their fiscal year end: {dict(item.source_dates)}"
     assert item.source_date is None
     assert library.calls == [(ENEL_ISIN, None, language, None)], "barrier: one sheet call"
     assert library.profile_calls == [(ENEL_ISIN, "MTAA", language)], f"one profile call, the sheet's MIC, the binding's language: {library.profile_calls}"
@@ -2334,8 +2403,18 @@ def test_profile_mic_from_the_binding_else_the_sheet_url(plugin, library, params
 
 @pytest.mark.parametrize(
     ("keys", "asked"),
-    [(None, True), (["sector"], False), (["sector", "legal_form"], False), (["description"], True), (["issuer_country"], True), (["sector", "description"], True)],
-    ids=["every-voice", "sector", "sheet-voices", "description", "issuer-country", "sector-and-description"],
+    [
+        (None, True),
+        (["sector"], False),
+        (["sector", "legal_form"], False),
+        (["description"], True),
+        (["issuer_country"], True),
+        (["sector", "description"], True),
+        (["website"], True),
+        (["revenue"], True),
+        (["net_income"], True),
+    ],
+    ids=["every-voice", "sector", "sheet-voices", "description", "issuer-country", "sector-and-description", "website", "revenue", "net-income"],
 )
 def test_the_profile_is_read_only_when_one_of_its_voices_is_asked(plugin, library, keys, asked):
     """One more request per share only when it can give something asked: ``keys`` None, or naming a profile voice."""
@@ -2425,7 +2504,7 @@ def test_a_profile_refusal_defers_every_remaining_binding(plugin, library):
 
 def test_an_unknown_country_leaves_the_voice_out_with_one_log_line(plugin, library):
     """A registered office no helper translates: no ``issuer_country`` (never a guess), one log line naming it; the
-    description stays, alone dated."""
+    other voices stay, with their dates."""
     with pytest.raises(ValueError):
         normalize_country_to_iso3(UNKNOWN_COUNTRY)
     binding = _enel(library, profile=_with_country(_profile(), UNKNOWN_COUNTRY))
@@ -2433,30 +2512,41 @@ def test_an_unknown_country_leaves_the_voice_out_with_one_log_line(plugin, libra
         item = _read_one(plugin, binding)
     assert item.status == EnricherReadStatus.OK, item
     assert "issuer_country" not in item.values and "description" in item.values, item.values
-    assert dict(item.source_dates) == {"description": PROFILE_DATE}
+    assert dict(item.source_dates) == {"description": PROFILE_DATE, "website": PROFILE_DATE, **dict.fromkeys(FISCAL_VOICES, FISCAL_YEAR_END)}
     assert len(_log_lines_naming(events, UNKNOWN_COUNTRY)) == 1, f"one log line names the country: {events}"
+
+
+_NO_CONTACTS = {"contatti": None}
+_NO_MAIN_DATA = {"dati_principali": []}
 
 
 @pytest.mark.parametrize(
     ("overrides", "voices"),
-    [({"indirizzo": None}, {"description"}), ({"descrizione": "  "}, {"issuer_country"}), ({"descrizione": None, "indirizzo": None}, set())],
-    ids=["no-address", "blank-description", "nothing"],
+    [
+        ({"indirizzo": None}, PROFILE_VOICES - {"issuer_country"}),
+        ({"descrizione": "  "}, PROFILE_VOICES - {"description"}),
+        (_NO_CONTACTS, PROFILE_VOICES - {"website"}),
+        (_NO_MAIN_DATA, PAGE_VOICES),
+        ({"descrizione": None, "indirizzo": None, **_NO_CONTACTS, **_NO_MAIN_DATA}, frozenset()),
+    ],
+    ids=["no-address", "blank-description", "no-contacts", "no-main-data", "nothing"],
 )
 def test_a_profile_without_a_voice_gives_the_others_silently(plugin, library, overrides, voices):
-    """A page without an address or a description gives what it has, with no log line; a page with neither, the
-    sheet's voices only."""
+    """A page without an address, a description, contacts or a «main data» table gives what it has, with no log line;
+    a page with none of them, the sheet's voices only."""
     with capture_logs() as events:
         item = _read_one(plugin, _enel(library, profile=_profile(**overrides)))
     assert item.status == EnricherReadStatus.OK, item
     assert set(item.values) & PROFILE_VOICES == voices, item.values
-    assert dict(item.source_dates) == dict.fromkeys(voices, PROFILE_DATE)
+    assert dict(item.source_dates) == {key: FISCAL_YEAR_END if key in FISCAL_VOICES else PROFILE_DATE for key in voices}
     assert _warnings_naming(events, ENEL_ISIN) == [], events
 
 
-def test_a_profile_without_an_update_date_dates_nothing(plugin, library):
+def test_a_profile_without_an_update_date_dates_only_the_figures(plugin, library):
+    """No «last update»: the page's voices undated; the figures keep the end of their fiscal year, their own date."""
     item = _read_one(plugin, _enel(library, profile=_profile(ultimo_aggiornamento=None)))
     assert item.status == EnricherReadStatus.OK and PROFILE_VOICES <= set(item.values), item
-    assert dict(item.source_dates) == {}
+    assert dict(item.source_dates) == dict.fromkeys(FISCAL_VOICES, FISCAL_YEAR_END)
 
 
 def test_the_profile_uses_the_read_session_and_its_pace(plugin, library, pace):
@@ -2492,7 +2582,201 @@ def test_stock_voices_declared_by_the_installed_library(monkeypatch, has_reader)
     assert (probe.ottieni_profilo_societa is not None) is has_reader
     voices = probe.BorsaItalianaEnricher.voices
     assert voices[AssetType.STOCK] == (STOCK_VOICES | PROFILE_VOICES if has_reader else STOCK_VOICES), sorted(voices[AssetType.STOCK])
+    assert len(voices[AssetType.STOCK]) == (7 if has_reader else 2), sorted(voices[AssetType.STOCK])
     assert voices[AssetType.BOND] == BOND_VOICES and voices[AssetType.FUND] == FUND_VOICES, "the other types do not depend on it"
     assert hasattr(bis, "ottieni_profilo_societa") is LIBRARY_HAS_PROFILE, "barrier: the installed library is back as it was"
     monkeypatch.setenv(TEST_MODE_VARIABLE, "1")
     assert EnricherRegistry.get_plugin(CODE) is original, "the registered class is still the original"
+
+
+# --- BI-PROF: the two figures of the last fiscal year -------------------------------------------------------------------
+
+#: The labels of the «main data» rows the figures read, per page language.
+_LABELS = {
+    "en": {"revenue": "Net sales", "net_income": "Net income", "group": "Net income (Group share)", "end": "Fiscal year end", "unit": "Currency & Unit"},
+    "it": {"revenue": "Fatturato", "net_income": "Utile netto", "group": "Utile netto: quota del gruppo", "end": "Chiusura esercizio fiscale", "unit": "Valuta e unità di misura"},
+}
+_END_2025, _END_2024 = date(2025, 12, 31), date(2024, 12, 31)
+
+
+def _main_data(language: str = "en", *, revenue=None, net_income=None, group=None, units=None, ends=None, first: tuple[str, ...] = ()) -> list[Any]:
+    """A synthetic «main data» table: each argument the values by year of its row (None: no row). ``first`` lists the
+    rows written before the others, by name."""
+    labels = _LABELS[language]
+    given = {"revenue": revenue, "net_income": net_income, "group": group, "end": ends, "unit": units}
+    order = [*first, *(name for name in given if name not in first)]
+    return [_datum(labels[name], given[name]) for name in order if given[name] is not None]
+
+
+def _figures(plugin, library: FakeLibrary, rows: list[Any], language: str = "en") -> tuple[dict[str, Any], dict[str, date], list[dict[str, Any]]]:
+    """Enel's profile with ``rows`` as its «main data»: the stored figures, their dates and the log lines of the read."""
+    with capture_logs() as events:
+        item = _read_one(plugin, _enel(library, language, _profile(language, dati_principali=rows)))
+    assert item.status == EnricherReadStatus.OK, item
+    assert {"description", "issuer_country", "website"} <= set(item.values), "barrier: the page's other voices are read"
+    stored = _stored(item.values)
+    figures = {key: stored[key] for key in FISCAL_VOICES if key in stored}
+    dates = {key: day for key, day in dict(item.source_dates).items() if key in FISCAL_VOICES}
+    return figures, dates, events
+
+
+@pytest.mark.parametrize(
+    ("language", "unit", "revenue", "net_income"),
+    [
+        ("en", "EUR - units", "78057", "5617"),
+        ("en", "EUR - thousands", "78057000", "5617000"),
+        ("en", "EUR - millions", "78057000000", "5617000000"),
+        ("en", "EUR - billions", "78057000000000", "5617000000000"),
+        ("it", "EUR - unità", "78057", "5617"),
+        ("it", "EUR - migliaia", "78057000", "5617000"),
+        ("it", "EUR - milioni", "78057000000", "5617000000"),
+        ("it", "EUR - miliardi", "78057000000000", "5617000000000"),
+        ("en", "EUR - Millions", "78057000000", "5617000000"),
+        ("it", "eur - MILIONI", "78057000000", "5617000000"),
+        ("en", "USD - thousands", "78057000", "5617000"),
+    ],
+)
+def test_figures_are_scaled_by_the_unit_of_their_year(plugin, library, language, unit, revenue, net_income):
+    """«78057» in «EUR - millions» is 78 057 000 000 EUR: the unit's word (either language, any case) is the factor, the
+    part before « - » the currency (upper case); both figures dated by the fiscal year end of their year."""
+    currency = unit.split(" - ")[0].upper()
+    rows = _main_data(language, revenue={2025: Decimal("78057")}, net_income={2025: Decimal("5617")}, units={2025: unit}, ends={2025: _END_2025})
+    figures, dates, _events = _figures(plugin, library, rows, language)
+    assert figures == {"revenue": {"amount": revenue, "currency": currency}, "net_income": {"amount": net_income, "currency": currency}}
+    assert dates == dict.fromkeys(FISCAL_VOICES, _END_2025)
+
+
+def test_a_fraction_in_billions_and_a_loss(plugin, library):
+    """A figure with decimals is scaled exactly (1.5 billions is 1 500 000 000); a negative net income (a loss) passes
+    the catalogue, whose net income may be negative."""
+    rows = _main_data(revenue={2025: Decimal("1.5")}, net_income={2025: Decimal("-0.371")}, units={2025: "EUR - billions"}, ends={2025: _END_2025})
+    figures, _dates, _events = _figures(plugin, library, rows)
+    assert figures == {"revenue": {"amount": "1500000000", "currency": "EUR"}, "net_income": {"amount": "-371000000", "currency": "EUR"}}
+
+
+def test_an_empty_cell_falls_back_to_the_year_before(plugin, library):
+    """2025's revenue cell is empty: the revenue is 2024's, in 2024's unit and dated by 2024's end; the net income, given
+    for 2025, stays 2025's. Each figure finds its own year."""
+    rows = _main_data(
+        revenue={2025: None, 2024: Decimal("73914"), 2023: Decimal("92882")},
+        net_income={2025: Decimal("5617"), 2024: Decimal("8229")},
+        units={2025: "EUR - millions", 2024: "EUR - thousands"},
+        ends={2025: _END_2025, 2024: _END_2024},
+    )
+    figures, dates, _events = _figures(plugin, library, rows)
+    assert figures == {"revenue": {"amount": "73914000", "currency": "EUR"}, "net_income": {"amount": "5617000000", "currency": "EUR"}}
+    assert dates == {"revenue": _END_2024, "net_income": _END_2025}
+
+
+def test_a_text_cell_is_not_a_figure(plugin, library):
+    """A cell that is not a number (a «n.d.» text) is skipped like an empty one."""
+    rows = _main_data(revenue={2025: "n.d.", 2024: Decimal("73914")}, units={2025: "EUR - millions", 2024: "EUR - millions"}, ends={2025: _END_2025, 2024: _END_2024})
+    figures, dates, _events = _figures(plugin, library, rows)
+    assert figures == {"revenue": {"amount": "73914000000", "currency": "EUR"}}
+    assert dates == {"revenue": _END_2024}
+
+
+@pytest.mark.parametrize("unit", ["EUR - trillions", "EUR", "EUR millions", "euro - millions", "EUR - "], ids=["unknown-word", "no-scale", "no-dash", "not-a-code", "empty-scale"])
+def test_an_unknown_unit_leaves_both_figures_out_with_one_log_line(plugin, library, unit):
+    """A unit the plugin cannot translate: neither figure (never a guessed scale), one warning naming the unit (as the
+    page writes it, trimmed) for the profile, not one per figure."""
+    rows = _main_data(revenue={2025: Decimal("78057")}, net_income={2025: Decimal("5617")}, units={2025: unit}, ends={2025: _END_2025})
+    figures, dates, events = _figures(plugin, library, rows)
+    assert figures == {} and dates == {}
+    assert len([event for event in _warnings_naming(events, ENEL_ISIN) if unit.strip() in repr(event)]) == 1, f"one warning names the unit {unit!r}: {events}"
+
+
+def test_an_unknown_unit_with_one_figure_logs_one_line(plugin, library):
+    """Only the revenue row and an unknown unit: no figure, one warning (the case the per-profile rule above shares)."""
+    rows = _main_data(revenue={2025: Decimal("78057")}, units={2025: "EUR - trillions"}, ends={2025: _END_2025})
+    figures, dates, events = _figures(plugin, library, rows)
+    assert figures == {} and dates == {}
+    assert len([event for event in _warnings_naming(events, ENEL_ISIN) if "EUR - trillions" in repr(event)]) == 1, events
+
+
+@pytest.mark.parametrize(
+    ("units", "ends"),
+    [(None, {2025: _END_2025}), ({2024: "EUR - millions"}, {2025: _END_2025, 2024: _END_2024}), ({2025: "EUR - millions"}, None), ({2025: "EUR - millions"}, {2024: _END_2024}), ({2025: "EUR - millions"}, {2025: "31/12/2025"})],
+    ids=["no-unit-row", "no-unit-for-the-year", "no-end-row", "no-end-for-the-year", "end-not-a-date"],
+)
+def test_a_year_without_its_unit_or_its_end_gives_no_figure_silently(plugin, library, units, ends):
+    """The year of the figure has no unit or no fiscal year end (a date): no figure and no log line; never the unit or
+    the date of another year."""
+    rows = _main_data(revenue={2025: Decimal("78057")}, net_income={2025: Decimal("5617")}, units=units, ends=ends)
+    figures, dates, events = _figures(plugin, library, rows)
+    assert figures == {} and dates == {}
+    assert _warnings_naming(events, ENEL_ISIN) == [], events
+
+
+@pytest.mark.parametrize("language", LANGUAGES)
+def test_the_group_share_row_is_never_the_net_income(plugin, library, language):
+    """Only «Net income (Group share)» / «Utile netto: quota del gruppo» on the page: no net income (the group's share
+    is another figure); written before the plain row, the plain row still wins."""
+    alone = _main_data(language, revenue={2025: Decimal("78057")}, group={2025: Decimal("4261")}, units={2025: "EUR - millions"}, ends={2025: _END_2025})
+    figures, _dates, _events = _figures(plugin, library, alone, language)
+    assert figures == {"revenue": {"amount": "78057000000", "currency": "EUR"}}
+
+    library.profiles.clear()
+    first = _main_data(language, net_income={2025: Decimal("5617")}, group={2025: Decimal("4261")}, units={2025: "EUR - millions"}, ends={2025: _END_2025}, first=("group",))
+    assert first[0].voce == _LABELS[language]["group"], "barrier: the group's share is the first row"
+    figures, _dates, _events = _figures(plugin, library, first, language)
+    assert figures == {"net_income": {"amount": "5617000000", "currency": "EUR"}}
+
+
+def test_row_labels_in_any_case(plugin, library):
+    """The row labels are matched without regard to case («NET SALES», «fiscal YEAR end»)."""
+    rows = [
+        _datum("NET SALES", {2025: Decimal("78057")}),
+        _datum("net income", {2025: Decimal("5617")}),
+        _datum("FISCAL year END", {2025: _END_2025}),
+        _datum("currency & UNIT", {2025: "EUR - millions"}),
+    ]
+    figures, dates, _events = _figures(plugin, library, rows)
+    assert figures == ENEL_FIGURES and dates == dict.fromkeys(FISCAL_VOICES, _END_2025)
+
+
+# --- BI-PROF: the website -------------------------------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("given", "stored"),
+    [
+        ("https://www.enel.com/investors/overview", "https://www.enel.com/investors/overview"),
+        ("http://www.enel.it", "http://www.enel.it"),
+        ("HTTPS://WWW.ENEL.COM", "HTTPS://WWW.ENEL.COM"),
+        ("www.enel.com", "https://www.enel.com"),
+        ("enel.com/investors", "https://enel.com/investors"),
+        ("  www.enel.com  ", "https://www.enel.com"),
+    ],
+    ids=["https", "http", "upper-case-scheme", "bare-www", "bare-with-path", "padded"],
+)
+def test_website_is_a_web_address(plugin, library, given, stored):
+    """``contatti.sito_web``: kept when it starts with http(s)://, «https://» put before a bare domain; dated by the
+    page's last update; no log line."""
+    with capture_logs() as events:
+        item = _read_one(plugin, _enel(library, profile=_with_website(_profile(), given)))
+    assert item.status == EnricherReadStatus.OK, item
+    assert _stored(item.values)["website"] == stored
+    assert item.source_dates["website"] == PROFILE_DATE
+    assert _warnings_naming(events, ENEL_ISIN) == [], events
+
+
+@pytest.mark.parametrize("given", ["mailto:investor.relations@enel.com", "investor.relations@enel.com", "ftp://ftp.enel.com", "javascript:alert(1)", "enel", "www.enel .com"], ids=["mailto", "e-mail", "ftp", "javascript", "word", "inner-space"])
+def test_website_not_a_web_address_is_absent_with_one_log_line(plugin, library, given):
+    """Anything that is not a web address: no ``website`` (never a link the tab could open), one warning naming it; the
+    other voices stay."""
+    with capture_logs() as events:
+        item = _read_one(plugin, _enel(library, profile=_with_website(_profile(), given)))
+    assert item.status == EnricherReadStatus.OK, item
+    assert "website" not in item.values and "website" not in item.source_dates, item.values
+    assert {"description", "issuer_country", *FISCAL_VOICES} <= set(item.values), item.values
+    assert len([event for event in _warnings_naming(events, ENEL_ISIN) if given in repr(event)]) == 1, f"one warning names {given!r}: {events}"
+
+
+@pytest.mark.parametrize("given", [None, "", "   "], ids=["none", "empty", "blank"])
+def test_no_website_is_absent_and_silent(plugin, library, given):
+    with capture_logs() as events:
+        item = _read_one(plugin, _enel(library, profile=_with_website(_profile(), given)))
+    assert item.status == EnricherReadStatus.OK, item
+    assert "website" not in item.values and PAGE_VOICES - {"website"} <= set(item.values), item.values
+    assert _warnings_naming(events, ENEL_ISIN) == [], events

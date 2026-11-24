@@ -286,8 +286,12 @@ stored form. A source text the plugin cannot translate into a choice code leaves
 is never guessed.
 
 Each voice also declares a **topic** (`ProfileTopic`: costs, structure, manager, countries, sectors, coupons, maturity,
-yield, duration, size, legal form, issuer, description). The enrichers window shows what an enricher fills by the
-topics of the voices it declares for the asset's type, not by the voices' names.
+yield, duration, size, financials, legal form, issuer, description). The enrichers window shows what an enricher fills by
+the topics of the voices it declares for the asset's type, not by the voices' names.
+
+A voice that is the figure of a period declares it (`period`): `fiscal_year` for a company's `revenue` and
+`net_income`, the figures of the fiscal year that ends on the value's **source date**. The enricher gives that end date
+in `source_dates`, and the «Profile» tab writes the year beside the value («… (fiscal year 2025)»).
 
 !!! warning "A fund's management fee is not its TER"
 
@@ -587,7 +591,7 @@ The real plugins are the best reference:
 |---|---|---|
 | `backend/app/services/enricher_providers/justetf/plugin.py` | ETFs and ETCs, by ISIN | A library call per page; `source_dates` for countries and sectors (the holdings date); a search over the site's full list; a sector table of the source's own words |
 | `backend/app/services/enricher_providers/yahoo_finance/plugin.py` (code `yfinance`) | Shares first, funds second, by ticker | `keys` used to skip a call; no ISIN returned by `recognize`; a search with `yf.Search`, each result bound by the symbol with the market's suffix (`SWDA.MI`) |
-| `backend/app/services/enricher_providers/borsa_italiana/plugin.py` | Bonds, funds, Milan shares, by ISIN or internal fund code | `params_schema` with `x-i18n-key` labels; the binding's `language`; one library session per read; `management_fee`, not `ter`; `annual_coupon_rate` from `financial_math`; a share's second page (the company profile: `description`, `issuer_country`) read only when `keys` asks for its voices, its voices declared only when the installed library has the reader |
+| `backend/app/services/enricher_providers/borsa_italiana/plugin.py` | Bonds, funds, Milan shares, by ISIN or internal fund code | `params_schema` with `x-i18n-key` labels; the binding's `language`; one library session per read; `management_fee`, not `ter`; `annual_coupon_rate` from `financial_math`; a share's second page (the company profile: `description`, `issuer_country`, `website`, and `revenue` / `net_income` of the last fiscal year, scaled by the table's unit and dated by the fiscal year's end, voices with `period: fiscal_year`) read only when `keys` asks for its voices, its voices declared only when the installed library has the reader |
 | `backend/app/services/enricher_providers/esma/plugin.py` | Every instrument a European market trades, by ISIN, after the sources of each type | Our library `esma-registers` (ESMA's FIRDS register, one call per ISIN); the CFI code read as `legal_form`, a bond's `coupon_type` and `issuer_type`, a fund's `distribution_policy`; the LEI handed to the cascade; a register's «fixed rate» written as `coupon_rate` only when the CFI says fixed |
 | `backend/app/services/enricher_providers/mockenrich/plugin.py` | Test only | Fixed answers for every outcome (`MOCK_NOT_FOUND`, `MOCK_ERROR`, `MOCK_RATE_LIMITED`), no network |
 

@@ -22,7 +22,8 @@ The profile is the asset's descriptive data, as opposed to its prices:
 - **Details**, by group:
     - **The fund** — management company, tracked index, replication, income treatment (accumulating or
       distributing), domicile, fund currency, inception date, management fee;
-    - **The company** — sector, industry, issuer's country;
+    - **The company** — sector, industry, issuer's country, website, and the revenue and net income of the last fiscal
+      year, with that year beside them (for example *78,057,000,000 € (fiscal year 2025)*);
     - **Identity** — legal form and issuer type, beside the asset's ISIN, ticker and other identifiers (the free ones, with no kind, are one row of chips);
     - **The bond** — coupon per period, coupon frequency and type, day count, net yield, accrued interest, issuer,
       minimum lot, interest start date, loyalty bonus, coupon schedule, payout terms.
@@ -44,7 +45,7 @@ An **enricher** is a source that reads an asset's profile from a website or a pu
 |---|---|
 | [justETF](../providers/justetf.md) | ETFs and ETCs: description, annual cost, fund size, countries, sectors, the fund's structure (index, management company, replication, income treatment, domicile, currency) |
 | [Yahoo Finance](../providers/yahoo-finance.md) | Shares: description, sector, industry, country, market capitalisation. Funds: description, annual cost, management company, inception date, sectors |
-| [Borsa Italiana](../providers/borsa-italiana.md) | Bonds: coupons, maturity, yields, modified duration, issuer, description, countries, sectors. Shares: sector, and the company's description and country from its profile page. Funds: currency, inception date, management fee |
+| [Borsa Italiana](../providers/borsa-italiana.md) | Bonds: coupons, maturity, yields, modified duration, issuer, description, countries, sectors. Shares: sector, and from the company's profile page its description, country, website, and the revenue and net income of the last fiscal year. Funds: currency, inception date, management fee |
 | ESMA (FIRDS) | Any instrument traded on a European market, from the official register of the European Securities and Markets Authority: the issuer's LEI and the legal form; for a bond its maturity, the type of coupon, a fixed coupon and whether a State guarantees it; for a fund whether it accumulates or distributes. It comes after the other sources, filling what they leave empty |
 
 An asset can have several enrichers, **in order**: the order is their priority. For each item, the first enricher in

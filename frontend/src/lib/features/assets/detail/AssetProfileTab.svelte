@@ -33,7 +33,7 @@
     import ProfileHistoryClock from '$lib/features/assets/profile/ProfileHistoryClock.svelte';
     import ProfileKeyFigureCard from '$lib/features/assets/profile/ProfileKeyFigureCard.svelte';
     import {loadProfileCatalogue, readAssetProfile, type ProfileVoice, type ProfileVoices} from '$lib/features/assets/profile/profileStore';
-    import {detailGroups, formatProfileDay, formatProfileValue, keyFigureCards, profileCell, profileReadRange, staleSince, type PagePeriod, type ProfileCell, type ProfileFormatContext} from '$lib/features/assets/profile/profileTabState';
+    import {detailGroups, formatProfileDay, formatProfileValue, keyFigureCards, periodLabel, profileCell, profileReadRange, staleSince, type PagePeriod, type ProfileCell, type ProfileFormatContext} from '$lib/features/assets/profile/profileTabState';
 
     interface Props {
         assetId: number;
@@ -131,7 +131,11 @@
     const texts = $derived.by(() => {
         const result: Record<string, string> = {};
         for (const cell of [...cards, ...groups.flatMap((group) => group.cells)]) {
-            if (cell.state === 'value') result[cell.key] = formatProfileValue(cell.voice, cell.step?.value, context);
+            if (cell.state !== 'value') continue;
+            const text = formatProfileValue(cell.voice, cell.step?.value, context);
+            // A fiscal year's figure names its year beside it (BI-PROF)
+            const period = periodLabel(cell, (year) => $t('assets.profile.tab.fiscalYear', {values: {year}}));
+            result[cell.key] = period && text ? `${text} (${period})` : text;
         }
         return result;
     });
