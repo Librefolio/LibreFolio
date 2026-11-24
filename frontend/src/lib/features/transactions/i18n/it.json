@@ -426,7 +426,7 @@
       "colAction": "Azione",
       "createOne": "Crea evento",
       "createTitle": "Crea gli eventi mancanti",
-      "createIntro": "Controlla il tipo e inserisci il valore di ogni evento, nella valuta dell’asset. Gli eventi sono creati nel giorno della transazione; poi collegali.",
+      "createIntro": "Controlla il tipo e inserisci il valore di ogni evento, nella valuta dell’asset. Gli eventi sono creati nel giorno della transazione e le transazioni vengono collegate subito.",
       "createValue": "Valore",
       "createServes": "{n} transazioni",
       "createHint": "Inserisci per ogni evento un valore maggiore di 0, con al massimo 6 decimali.",
