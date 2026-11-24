@@ -220,6 +220,7 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 - **Les aperçus d'images gardent le format du fichier** : les miniatures des fichiers JPEG, WebP et GIF envoyés partaient toujours en PNG, bien plus lourdes pour une photo ; elles arrivent maintenant dans leur propre format.
 - Un dividende ou un intérêt versé et dépensé dans un achat le même jour (par exemple le réinvestissement automatique d'un courtier) compte maintenant comme rendement réinvesti, et non comme capital nouveau, dans les achats du graphique de Croissance et dans la répartition de la trésorerie entre l'argent versé et l'argent généré par le portefeuille. Le patrimoine, le P&L et le revenu ne changent pas.
 - **AI Export : la baisse maximale du portefeuille suit les courtiers de l'export** : elle comptait tous les courtiers que vous pouvez voir, y compris ceux seulement partagés avec vous et ceux retirés par le filtre du Tableau de bord.
+- Site de la documentation : les versions dans les autres langues de chaque page (`hreflang`) pointent vers la bonne page dans le site ; avant, elles perdaient le dossier du site.
 
 ### ⚠️ Changements incompatibles
 

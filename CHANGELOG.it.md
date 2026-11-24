@@ -220,6 +220,7 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 - **Le anteprime delle immagini tengono il formato del file**: le miniature dei file JPEG, WebP e GIF caricati arrivavano sempre in PNG, molto più pesanti per una foto; ora arrivano nel loro formato.
 - Un dividendo o un interesse pagato e speso in un acquisto lo stesso giorno (per esempio il reinvestimento automatico di un broker) ora conta come rendimento reinvestito, non come capitale nuovo, negli acquisti del grafico della Crescita e nella divisione della liquidità fra soldi versati e soldi generati dal portafoglio. Patrimonio, P&L e reddito non cambiano.
 - **AI Export: il calo massimo del portafoglio segue i broker dell'export**: contava tutti i broker che puoi vedere, anche quelli solo condivisi con te e quelli tolti dal filtro della Dashboard.
+- Sito della documentazione: le versioni nelle altre lingue di ogni pagina (`hreflang`) puntano alla pagina giusta dentro il sito; prima perdevano la cartella del sito.
 
 ### ⚠️ Modifiche incompatibili
 

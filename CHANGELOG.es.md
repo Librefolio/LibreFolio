@@ -220,6 +220,7 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 - **Las vistas previas de imágenes conservan el formato del archivo**: las miniaturas de los archivos JPEG, WebP y GIF subidos llegaban siempre en PNG, mucho más pesadas para una foto; ahora llegan en su propio formato.
 - Un dividendo o un interés cobrado y gastado en una compra el mismo día (por ejemplo la reinversión automática de un bróker) ahora cuenta como rendimiento reinvertido, no como capital nuevo, en las compras del gráfico de Crecimiento y en la división de la liquidez entre el dinero aportado y el dinero generado por la cartera. El patrimonio, el P&L y los ingresos no cambian.
 - **AI Export: la caída máxima de la cartera sigue los brókeres del export**: contaba todos los brókeres que puedes ver, incluidos los solo compartidos contigo y los quitados por el filtro del Panel.
+- Sitio de la documentación: las versiones en otros idiomas de cada página (`hreflang`) apuntan a la página correcta dentro del sitio; antes perdían la carpeta del sitio.
 
 ### ⚠️ Cambios incompatibles
 

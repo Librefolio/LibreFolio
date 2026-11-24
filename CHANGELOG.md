@@ -220,6 +220,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Image previews keep the format of the file**: the thumbnails of uploaded JPEG, WebP and GIF files were always sent as PNG, several times heavier for a photo; they now come in their own format.
 - A dividend or interest paid and spent on a purchase the same day (for example a broker's automatic reinvestment) now counts as reinvested returns, not as new capital, in the Growth chart's purchases and in the split of your cash between money you deposited and money the portfolio generated. Net worth, P&L and income do not change.
 - **AI Export: the portfolio drawdown follows the brokers of the export**: it counted every broker you can see, including brokers only shared with you and those left out by the Dashboard's filter.
+- Documentation site: the language alternates of each page (`hreflang`) point to the right page inside the site; before, they lost the site's folder.
 
 ### ⚠️ Breaking changes
 
