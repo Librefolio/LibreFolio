@@ -208,7 +208,8 @@
       "date_unreadable_more": "{n, plural, one {# altra riga ha} other {# altre righe hanno}} una data non valida in questo formato: vale la stessa correzione.",
       "traderepublic_other_account": "{count, plural, one {# riga appartiene} other {# righe appartengono}} a un altro conto, per esempio il conto JUNIOR di un figlio, e {count, plural, one {è stata ignorata} other {sono state ignorate}}: esporta quel conto dal suo accesso e importalo in un broker a parte.",
       "traderepublic_tax_refund": "{count, plural, one {# rimborso d’imposta è stato importato come interesse} other {# rimborsi d’imposta sono stati importati come interessi}} («Tax refund»): sono soldi restituiti dal guadagno dell’investimento, quindi contano nel P&L.",
-      "traderepublic_not_yet_settled": "{count, plural, one {# riga ha una data successiva a oggi: non è ancora regolata ed è stata lasciata fuori} other {# righe hanno una data successiva a oggi: non sono ancora regolate e sono state lasciate fuori}}. Arriveranno con il prossimo export."
+      "traderepublic_not_yet_settled": "{count, plural, one {# riga ha una data successiva a oggi: non è ancora regolata ed è stata lasciata fuori} other {# righe hanno una data successiva a oggi: non sono ancora regolate e sono state lasciate fuori}}. Arriveranno con il prossimo export.",
+      "investimental_order_start_missing": "Ordine {order} ({symbol}, ultimo eseguito il {date} a {price}): il file comincia con quest'ordine già avviato, quindi la quantità intera non si ricava dal file {visible, select, yes {(il file mostra {quantity} per {amount} {currency})} other {(nessuno degli eseguiti che mostra si può contare)}}. L'ordine non è stato importato: inseriscilo a mano dall'estratto."
     },
     "evidenceRowsTitle": "Righe del file",
     "evidenceRowCount": "{n} righe",
@@ -565,7 +566,8 @@
       "rows_unreadable": "L'ultima colonna dice che cosa non si è potuto leggere in ogni riga.",
       "traderepublic_other_account": "Su queste righe la colonna account_type non è DEFAULT.",
       "traderepublic_tax_refund": "Un’imposta positiva è denaro restituito.",
-      "traderepublic_not_yet_settled": "La data (o la value_date) di queste righe è successiva a oggi."
+      "traderepublic_not_yet_settled": "La data (o la value_date) di queste righe è successiva a oggi.",
+      "investimental_order_start_missing": "Ogni riga dice il volume ancora aperto. Le prime righe dell'ordine, con i primi eseguiti, non sono nel file."
     },
     "notesCount": "{n, plural, one {# nota} other {# note}}",
     "noNotices": "Nessun avviso né nota",
