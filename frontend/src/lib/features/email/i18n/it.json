@@ -155,18 +155,18 @@
     },
     "emailChange": {
       "page": {
-        "ready": "Conferma il **nuovo indirizzo email** del tuo account.\nDa ora accederai e riceverai le email con questo indirizzo.",
+        "ready": "Conferma il **nuovo indirizzo email**: da ora lo usi per accedere e per le email.",
         "checking": "Controllo del link…",
         "expired": "Questo link è **scaduto**.\nSe hai chiesto il cambio dal tuo profilo, **chiedi di nuovo il cambio** da lì.\nSe l'indirizzo l'ha cambiato chi ospita l'istanza, chiedigli un nuovo link.",
         "consumed": "Questo link è **già stato usato**.\nSe l'indirizzo è stato cambiato, accedi con quello nuovo.",
-        "revoked": "Questo link **non vale più**: la richiesta è stata annullata o sostituita, oppure l'indirizzo è già di un altro account.\n**Non è cambiato nulla.**\n**Chiedi di nuovo il cambio**, o chiedi a chi ospita l'istanza.",
+        "revoked": "Questo link **non vale più**: la richiesta è stata annullata o sostituita, oppure l'indirizzo è già di un altro account.",
         "unknown": "Questo link **non è valido**.\nAprilo di nuovo, per intero, dall'email.\nSe non funziona ancora, **chiedi di nuovo il cambio** o chiedi a chi ospita l'istanza.",
         "blocked": "Questa istanza è **bloccata** da chi la ospita, quindi il link non si può controllare ora.\nRiaprilo quando l'istanza sarà sbloccata.",
         "missing": "Questo link è **incompleto**.\nAprilo di nuovo dall'email.",
         "error": "Non è stato possibile controllare il link.\nRiprova.",
         "confirm": "Conferma il nuovo indirizzo",
         "notExpected": "Se non ti aspettavi questo cambio, chiudi questa pagina: **non succede nulla**.",
-        "signin": "Per confermare il nuovo indirizzo, **accedi con l'account che ha chiesto il cambio**, non con un altro account che usi.\nSe in questo browser è aperto un altro account, prima viene disconnesso.\nPoi torni qui, e basta **un clic**.",
+        "signin": "Per confermare il nuovo indirizzo, **accedi con l'account che ha chiesto il cambio**.",
         "signinAction": "Accedi con quell'account per confermare",
         "otherAccount": "Questo link appartiene a **un altro account**, non a quello aperto in questo browser.\n**Non è cambiato nulla.**\nEsci, poi accedi con l'account che ha chiesto il cambio.",
         "otherAccountAction": "Esci e accedi con l'account giusto"

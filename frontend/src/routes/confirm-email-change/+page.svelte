@@ -44,6 +44,8 @@
 
     let token = $state<string | null>(null);
     let status = $state<EmailChangePageStatus>('checking');
+    /** The address the click would confirm, as the server says it with `ready` (81 U46): shown as a double check. */
+    let newEmail = $state<string | null>(null);
     /** The step whose failure `error` shows, so that its retry asks that step again: the check on opening, or the click. */
     let failedStep: 'check' | 'confirm' = 'confirm';
 
@@ -117,10 +119,13 @@
         try {
             const answer = await checkEmailChangeLink(reading);
             if (mine !== generation) return;
-            if (answer === 'ready') status = 'ready';
-            else {
+            if (answer.status === 'ready') {
+                newEmail = answer.newEmail;
+                status = 'ready';
+            } else {
+                newEmail = null;
                 keepLink(reading);
-                status = answer;
+                status = answer.status;
             }
         } catch (error) {
             if (mine !== generation) return;
@@ -191,5 +196,5 @@
 <AnimatedBackground />
 
 <AuthPageFrame testId="email-change-page">
-    <EmailChangeCard onconfirm={confirm} onretry={retry} onsignin={signIn} {status} />
+    <EmailChangeCard {newEmail} onconfirm={confirm} onretry={retry} onsignin={signIn} {status} />
 </AuthPageFrame>

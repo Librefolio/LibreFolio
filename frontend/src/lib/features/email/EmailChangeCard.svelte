@@ -5,7 +5,8 @@
   opening the page. A link asked from Profile confirms only with the session of its account (D10): `signin` says so, and
   its button is the one way to the sign-in — the «back to the sign-in» link is not shown beside it. Clicked with another
   account's session, `otheraccount` says the link belongs to another account and its button signs out and opens the
-  sign-in the same way; neither ever names the account. The texts carry their line breaks and their words that matter
+  sign-in the same way; neither ever names the account. With `ready` the page shows the address the click would confirm,
+  on a line of its own (81 U46): the double check of whoever confirms. The texts carry their line breaks and their words that matter
   (`EmphasisText`, lot E4).
 -->
 <script lang="ts">
@@ -17,6 +18,8 @@
 
     interface Props {
         status: EmailChangePageStatus;
+        /** The address the click would confirm, shown with `ready` as a double check (81 U46); none: no line. */
+        newEmail?: string | null;
         /** Spends the link: only the owner's click does, never the opening of the page. */
         onconfirm?: () => void;
         onretry?: () => void;
@@ -24,7 +27,7 @@
         onsignin?: () => void;
     }
 
-    let {status, onconfirm, onretry, onsignin}: Props = $props();
+    let {status, newEmail = null, onconfirm, onretry, onsignin}: Props = $props();
 
     /** Whole keys, so the i18n audit sees each one. */
     const KEYS: Record<EmailChangePageStatus, string> = {
@@ -45,6 +48,10 @@
 <AuthCard data-status={status} testId="email-change-status">
     <div class="space-y-5 text-center">
         <p aria-live="polite" class="text-sm leading-relaxed text-lf-primary" data-testid="email-change-message"><EmphasisText text={$_(KEYS[status])} /></p>
+        {#if status === 'ready' && newEmail}
+            <!-- The address is the server's, shown as text on its own line (never inside the markup of a message) -->
+            <p class="break-all rounded-lg bg-lf-panel px-3 py-2 font-mono text-sm font-semibold text-lf-primary" data-testid="email-change-address">{newEmail}</p>
+        {/if}
         {#if status === 'ready' && onconfirm}
             <button class="w-full bg-lf-action text-lf-on-action font-bold py-3 rounded-lg shadow-md hover:bg-lf-action-hover transition-all active:scale-[0.98]" data-testid="email-change-confirm" onclick={onconfirm} type="button">
                 {$_('email.emailChange.page.confirm')}
