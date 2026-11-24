@@ -1654,8 +1654,8 @@ describe('GlobalSettingsTab — the mobile category dropdown', () => {
     // Both keys claimed (registration_mode by security, A5b), so the list has no Other: All plus the five base categories.
     const ITEMS = [setting('session_ttl_hours', '24', 'int'), setting('registration_mode', 'open', 'string')];
 
-    /** The whole `sm:hidden` block: its trigger, and the list when it is open. */
-    const mobileSection = () => screen.getByText('settings.category').parentElement!;
+    /** The phone box: its trigger, and the list when it is open (the label stands outside it since 81 U38). */
+    const mobileSection = () => screen.getByTestId('global-settings-mobile-category-box');
 
     it('is closed to begin with', async () => {
         await mount(ITEMS);
