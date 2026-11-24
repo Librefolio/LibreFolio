@@ -73,6 +73,7 @@ let calls: Call[] = [];
 const ISIN = 'IE00BK5BQT80';
 const JUSTETF = {identifier_type: 'ISIN', identifier: ISIN};
 const YAHOO = {identifier_type: 'TICKER', identifier: 'VWCE.DE'};
+const ESMA = {identifier_type: 'ISIN', identifier: ISIN};
 const PREFILL = {display_name: 'Vanguard FTSE All-World', asset_type: 'ETF', currency: 'EUR', identifier_isin: ISIN};
 const found = (code: string, binding: {identifier_type: string; identifier: string}) => ({event: 'enricher_result' as const, code, ...binding, status: 'found', name: `${code} name`, page_url: null, identifiers: {}, conflicts: {}, error: null});
 const done = (order: string[]) => ({event: 'done' as const, found_order: order, default_order: order, identifiers: {ISIN}});
@@ -121,15 +122,30 @@ describe('at creation, «Riconosci» by itself', () => {
         expect(calls[0].request).toEqual({asset_type: 'ETF', identifiers: {ISIN}, price_provider_code: null});
         expect(banner()).toHaveAttribute('data-state', 'running');
 
-        await answer(calls[0], [found('yahoo_finance', YAHOO), found('justetf', JUSTETF), done(['justetf', 'yahoo_finance'])]);
+        await answer(calls[0], [found('esma', ESMA), found('justetf', JUSTETF), done(['justetf', 'esma'])]);
         await waitFor(() => expect(button()).toHaveAttribute('data-count', '2'));
         expect(banner()).toHaveAttribute('data-state', 'found');
 
         await fireEvent.click(screen.getByTestId('asset-modal-save'));
         await waitFor(() => expect(createFn()).toHaveBeenCalled());
         const sent = (createFn().mock.calls[0][0] as Array<Record<string, unknown>>)[0];
-        expect(Object.keys(sent.enrichers as object)).toEqual(['justetf', 'yahoo_finance']);
-        expect(sent.enrichers).toEqual({justetf: JUSTETF, yahoo_finance: YAHOO});
+        expect(Object.keys(sent.enrichers as object)).toEqual(['justetf', 'esma']);
+        expect(sent.enrichers).toEqual({justetf: JUSTETF, esma: ESMA});
+    });
+
+    it('never puts in by itself one found by a ticker alone (ENR-1, R2): the creation sends the others', async () => {
+        createFn().mockResolvedValue({results: [{success: true, asset_id: 44}]} as never);
+        render(AssetModal, {open: true, editMode: false, prefillData: PREFILL, initialNoProvider: true, oncreated: vi.fn()});
+        await waitFor(() => expect(calls).toHaveLength(1));
+
+        await answer(calls[0], [found('yahoo_finance', YAHOO), found('justetf', JUSTETF), done(['justetf', 'yahoo_finance'])]);
+        await waitFor(() => expect(banner()).toHaveAttribute('data-state', 'found'));
+        expect(button()).toHaveAttribute('data-count', '1');
+
+        await fireEvent.click(screen.getByTestId('asset-modal-save'));
+        await waitFor(() => expect(createFn()).toHaveBeenCalled());
+        const sent = (createFn().mock.calls[0][0] as Array<Record<string, unknown>>)[0];
+        expect(sent.enrichers).toEqual({justetf: JUSTETF});
     });
 
     it('asks nothing without an ISIN, and sends no enrichers', async () => {

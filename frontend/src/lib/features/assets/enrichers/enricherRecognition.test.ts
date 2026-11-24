@@ -88,8 +88,21 @@ describe('what it keeps and proposes', () => {
         calls[0].finish({kind: 'done', done: done(['justetf', 'yahoo_finance', 'mockenrich'], ['yahoo_finance', 'justetf'])});
         await flush();
         expect(state.status).toBe('done');
-        expect(state.proposal).toEqual({justetf: {identifier_type: 'ISIN', identifier: 'IE00BK5BQT80'}, yahoo_finance: {identifier_type: 'TICKER', identifier: 'VWCE.DE'}});
-        expect(Object.keys(state.proposal)).toEqual(['justetf', 'yahoo_finance']);
+        // A ticker alone does not enter by itself (ENR-1, R2): it may be another listing, the user reads its name first
+        expect(state.proposal).toEqual({justetf: {identifier_type: 'ISIN', identifier: 'IE00BK5BQT80'}});
+        expect(state.recognitions.yahoo_finance.status, 'the answer itself is still kept, for «Non in elenco»').toBe('found');
+    });
+
+    it('proposes in the default order, by ISIN or LEI, never one found by a ticker', async () => {
+        const state = createEnricherRecognitionState();
+        state.start(ETF);
+        calls[0].onEvent(found('yahoo_finance', 'TICKER', 'VWCE.DE'));
+        calls[0].onEvent(found('gleif', 'LEI', 'EEXSPYGY7X8YAH8ZJF49'));
+        calls[0].onEvent(found('justetf'));
+        calls[0].onEvent(done(['justetf', 'yahoo_finance', 'gleif']));
+        calls[0].finish({kind: 'done', done: done(['justetf', 'yahoo_finance', 'gleif'])});
+        await flush();
+        expect(Object.keys(state.proposal)).toEqual(['justetf', 'gleif']);
     });
 
     it('waits out a refusal for too many requests and asks again by itself, with no action of the user (PROF, E8c)', async () => {
@@ -151,5 +164,51 @@ describe('what it keeps and proposes', () => {
         await flush();
         expect(state.recognitions).toEqual({});
         expect(state.status).toBe('idle');
+    });
+});
+
+describe('an asset that exists asks with what its enrichers accept (ENR-1, R1)', () => {
+    const TICKER_ONLY = {assetType: 'STOCK', identifiers: {TICKER: 'AAPL'}, priceProviderCode: null, acceptedTypes: ['TICKER']};
+
+    it('asks without a whole ISIN: any identifier of an accepted type is enough, the whole set sent', () => {
+        const state = createEnricherRecognitionState();
+        expect(state.canRecognize(TICKER_ONLY)).toBe(true);
+        expect(state.start(TICKER_ONLY)).toBe(true);
+        expect(calls).toHaveLength(1);
+        expect(calls[0].request).toEqual({asset_type: 'STOCK', identifiers: {TICKER: 'AAPL'}, price_provider_code: null});
+    });
+
+    it('a half-typed ISIN is enough when ISIN is accepted (the fields are not being typed)', () => {
+        const state = createEnricherRecognitionState();
+        expect(state.start({...ETF, identifiers: {ISIN: 'IE00'}, acceptedTypes: ['ISIN']})).toBe(true);
+    });
+
+    it('asks once per question: the same input started twice asks once', () => {
+        const state = createEnricherRecognitionState();
+        expect(state.start(TICKER_ONLY)).toBe(true);
+        expect(state.start({...TICKER_ONLY})).toBe(false);
+        expect(calls).toHaveLength(1);
+    });
+
+    it('no identifier of an accepted type: no question, state stays idle', () => {
+        const state = createEnricherRecognitionState();
+        const input = {...ETF, identifiers: {ISIN: 'IE00BK5BQT80'}, acceptedTypes: ['TICKER', 'LEI']};
+        expect(state.canRecognize(input)).toBe(false);
+        expect(state.start(input)).toBe(false);
+        expect(calls).toHaveLength(0);
+        expect(state.status).toBe('idle');
+    });
+
+    it('a blank identifier of an accepted type is not one; nor an empty list of accepted types, nor an asset with no type', () => {
+        const state = createEnricherRecognitionState();
+        expect(state.canRecognize({...TICKER_ONLY, identifiers: {TICKER: '  '}})).toBe(false);
+        expect(state.canRecognize({...TICKER_ONLY, acceptedTypes: []})).toBe(false);
+        expect(state.canRecognize({...TICKER_ONLY, assetType: ''})).toBe(false);
+    });
+
+    it('at creation (no accepted types) a whole ISIN is still needed', () => {
+        const state = createEnricherRecognitionState();
+        expect(state.canRecognize({assetType: 'STOCK', identifiers: {TICKER: 'AAPL'}, priceProviderCode: null})).toBe(false);
+        expect(state.canRecognize(ETF)).toBe(true);
     });
 });
