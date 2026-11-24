@@ -16,12 +16,22 @@ import type {EnricherRecognition} from './enrichersEditState';
 
 export const RECOGNIZE_PATH = '/api/v1/assets/enrichers/recognize';
 
-/** What «Riconosci» is asked: the asset's type, the identifiers known, its price provider (first at equal degree). */
+/** A binding to start from (ENR-2): the asset's price assignment, by the price provider's code. */
+export interface RecognizeSeed {
+    code: string;
+    identifier_type: string;
+    identifier: string;
+    params?: Record<string, unknown>;
+}
+
+/** What «Riconosci» is asked: the asset's type, the identifiers known, its price provider (first at equal degree), and
+ *  the bindings to start from. */
 export interface RecognizeRequest {
     asset_type: string;
     identifiers: Record<string, string>;
     price_provider_code?: string | null;
     codes?: string[];
+    seeds?: RecognizeSeed[];
 }
 
 export type EnricherResultEvent = {event: 'enricher_result'} & EnricherRecognition;

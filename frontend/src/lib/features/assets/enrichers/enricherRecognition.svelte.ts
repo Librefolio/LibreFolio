@@ -20,8 +20,8 @@
  * @module features/assets/enrichers/enricherRecognition
  */
 import {getClientSessionGeneration, isClientSessionCurrent} from '$lib/stores/app/clientSession';
-import {entersAlone, type EnricherBinding, type EnricherRecognition} from './enrichersEditState';
-import {recognizeEnrichers, type RecognizeEvent, type RecognizeRequest} from './recognizeStream';
+import {entersAlone, recognitionBinding, type EnricherBinding, type EnricherRecognition} from './enrichersEditState';
+import {recognizeEnrichers, type RecognizeEvent, type RecognizeRequest, type RecognizeSeed} from './recognizeStream';
 
 /** What the asset window knows: its type, its identifiers (type → value), its price provider. */
 export interface RecognitionInput {
@@ -33,6 +33,9 @@ export interface RecognitionInput {
      * absent at creation, where a whole ISIN is needed.
      */
     acceptedTypes?: string[];
+    /** The asset's price assignment (ENR-2): the enricher of the same code is asked first with it, and its identifier
+     *  joins the cascade; for an asset that exists it is enough to ask when the enrichers accept its type. */
+    seed?: RecognizeSeed | null;
 }
 
 export type RecognitionStatus = 'idle' | 'running' | 'done' | 'refused' | 'error';
@@ -40,17 +43,29 @@ export type RecognitionStatus = 'idle' | 'running' | 'done' | 'refused' | 'error
 /** The shape of an ISIN: country, nine characters, a check digit. One being typed is not one yet. */
 const ISIN_SHAPE = /^[A-Z]{2}[A-Z0-9]{9}[0-9]$/;
 
+function seedOf(input: RecognitionInput): RecognizeSeed | null {
+    const seed = input.seed;
+    if (!seed?.code || !seed.identifier_type || !seed.identifier?.trim()) return null;
+    return {code: seed.code, identifier_type: seed.identifier_type, identifier: seed.identifier.trim(), params: {...(seed.params ?? {})}};
+}
+
 function requestOf(input: RecognitionInput): RecognizeRequest | null {
     const identifiers = Object.fromEntries(Object.entries(input.identifiers).filter(([, value]) => value.trim() !== ''));
     if (!input.assetType) return null;
-    const askable = input.acceptedTypes ? input.acceptedTypes.some((type) => type in identifiers) : ISIN_SHAPE.test(identifiers.ISIN ?? '');
+    const seed = seedOf(input);
+    const askable = input.acceptedTypes ? input.acceptedTypes.some((type) => type in identifiers || type === seed?.identifier_type) : ISIN_SHAPE.test(identifiers.ISIN ?? '');
     if (!askable) return null;
-    return {asset_type: input.assetType, identifiers, price_provider_code: input.priceProviderCode || null};
+    return {asset_type: input.assetType, identifiers, price_provider_code: input.priceProviderCode || null, seeds: seed ? [seed] : []};
 }
 
 function keyOf(request: RecognizeRequest): string {
     const identifiers = Object.entries(request.identifiers).sort(([a], [b]) => a.localeCompare(b));
-    return JSON.stringify([request.asset_type, identifiers, request.price_provider_code ?? null]);
+    return JSON.stringify([request.asset_type, identifiers, request.price_provider_code ?? null, request.seeds ?? []]);
+}
+
+/** The tickers a found one may enter by: the seed's, when it is one (ENR-2, R6). */
+function trustedTickersOf(request: RecognizeRequest | null): string[] {
+    return (request?.seeds ?? []).filter((seed) => seed.identifier_type === 'TICKER').map((seed) => seed.identifier);
 }
 
 /** The wait when a refusal for too many requests names none: the limiter's window, a minute. */
@@ -65,6 +80,8 @@ export function createEnricherRecognitionState() {
     let recognitions = $state<Record<string, EnricherRecognition>>({});
     let defaultOrder = $state<string[]>([]);
     let retryAfter = $state<number | null>(null);
+    /** The question asked last: its seed says which ticker a found one may enter by. */
+    let asked = $state<RecognizeRequest | null>(null);
 
     function drop() {
         sequence += 1;
@@ -80,6 +97,7 @@ export function createEnricherRecognitionState() {
     /** Ask `request`, the current question: its answers replace whatever an earlier asking of it left. */
     function ask(request: RecognizeRequest) {
         drop();
+        asked = request;
         status = 'running';
         const mine = sequence;
         const session = getClientSessionGeneration();
@@ -133,6 +151,7 @@ export function createEnricherRecognitionState() {
     function cancel() {
         drop();
         key = null;
+        asked = null;
         status = 'idle';
     }
 
@@ -150,13 +169,18 @@ export function createEnricherRecognitionState() {
         get retryAfter() {
             return retryAfter;
         },
-        /** The found enrichers in the default order, each bound to the identifier it was found by. */
+        /** The tickers a found one may enter by: the seed's of the question asked (ENR-2). */
+        get trustedTickers(): string[] {
+            return trustedTickersOf(asked);
+        },
+        /** The found enrichers in the default order, each bound to the binding it was found by, its parameters too. */
         get proposal(): Record<string, EnricherBinding> {
             const order = defaultOrder.length ? defaultOrder : Object.keys(recognitions);
+            const trusted = trustedTickersOf(asked);
             const proposal: Record<string, EnricherBinding> = {};
             for (const code of order) {
                 const answer = recognitions[code];
-                if (entersAlone(answer)) proposal[code] = {identifier_type: answer.identifier_type, identifier: answer.identifier};
+                if (entersAlone(answer, trusted)) proposal[code] = recognitionBinding(answer);
             }
             return proposal;
         },

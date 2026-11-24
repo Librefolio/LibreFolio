@@ -63,6 +63,9 @@ export interface EnrichersContext {
     recognitions: Record<string, EnricherRecognition>;
     /** The codes «Riconosci» is still asking. */
     searching: string[];
+    /** The tickers a found one may enter by (ENR-2): the price assignment's symbol; any other ticker is the asset's own,
+     *  bare, and never enters by itself (R2, R6). */
+    trustedTickers?: string[];
 }
 
 /** Whether the instance can use a chosen enricher. */
@@ -194,9 +197,14 @@ export function adoptProposal(draft: EnrichersDraft, proposal: Record<string, En
     return {order: Object.keys(proposal), bindings: {...draft.bindings, ...proposal}};
 }
 
-/** A found enricher that enters the list by itself: not one found only by a ticker (R2, another listing is possible). */
-export function entersAlone(recognition: EnricherRecognition | null | undefined): boolean {
-    return recognition?.status === 'found' && recognition.identifier_type !== 'TICKER';
+/**
+ * A found enricher that enters the list by itself: not one found by a ticker (R2, another listing is possible), unless
+ * that ticker is one of `trustedTickers`, the price assignment's symbol (ENR-2, R6: `SWDA.MI`, the listing the asset is
+ * priced on).
+ */
+export function entersAlone(recognition: EnricherRecognition | null | undefined, trustedTickers: readonly string[] = []): boolean {
+    if (recognition?.status !== 'found') return false;
+    return recognition.identifier_type !== 'TICKER' || trustedTickers.includes(recognition.identifier);
 }
 
 /** A new order: the codes given that are chosen, then the chosen ones it did not name, in their order. */
@@ -214,8 +222,9 @@ export function setBinding(draft: EnrichersDraft, code: string, binding: Enriche
 // Bindings
 // =============================================================================
 
-function recognitionBinding(recognition: EnricherRecognition): EnricherBinding {
-    return {identifier_type: recognition.identifier_type, identifier: recognition.identifier};
+/** The binding a recognition answered for: its type and identifier, and its parameters (a seed's, ENR-2). */
+export function recognitionBinding(recognition: EnricherRecognition): EnricherBinding {
+    return {...((recognition.params as Record<string, unknown> | undefined) ?? {}), identifier_type: recognition.identifier_type, identifier: recognition.identifier};
 }
 
 /** A search result or a recognition chosen: its type and identifier, the binding's parameters kept. */
@@ -327,7 +336,7 @@ export function otherRows(draft: EnrichersDraft, context: EnrichersContext): Oth
                 recognition,
                 fills: fillsOf(info, context.assetType),
                 canAdd: reason !== 'not_covering' && reason !== 'not_configured' && reason !== 'searching',
-                tickerOnly: reason === 'found' && !entersAlone(recognition),
+                tickerOnly: reason === 'found' && !entersAlone(recognition, context.trustedTickers),
             };
         });
     return rows.sort((left, right) => OTHER_REASONS.indexOf(left.reason) - OTHER_REASONS.indexOf(right.reason));
