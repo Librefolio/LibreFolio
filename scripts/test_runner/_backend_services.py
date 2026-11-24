@@ -28,6 +28,7 @@ AI_EXPORT_SERVICE_TEST_PATHS = (
     "backend/test_scripts/test_services/test_ai_export_components_asset_fx_integration.py",
     "backend/test_scripts/test_services/test_ai_export_components_broker_adequacy.py",
     "backend/test_scripts/test_services/test_ai_export_components_drawdown_context.py",
+    "backend/test_scripts/test_services/test_ai_export_components_risk_evidence.py",
     "backend/test_scripts/test_services/test_ai_export_components_fx.py",
     "backend/test_scripts/test_services/test_ai_export_components_portfolio_broker_financial.py",
     "backend/test_scripts/test_services/test_ai_export_components_portfolio_broker_integration.py",

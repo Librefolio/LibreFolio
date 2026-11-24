@@ -16,11 +16,11 @@ The component runtime contains:
 
 | Domain    | Components | Registered datasets | Registered analyses | Public data | Public analyses | Page      |
 | --------- | ---------: | ------------------: | ------------------: | ----------: | --------------: | --------- |
-| Portfolio |         21 |                  12 |                   5 |           2 |               5 | Dashboard |
+| Portfolio |         24 |                  13 |                   5 |           2 |               5 | Dashboard |
 | Broker    |         20 |                  12 |                   3 |           2 |               3 | Broker    |
 | Asset     |         15 |                   8 |                   2 |           2 |               2 | Asset     |
 | FX        |         12 |                   8 |                   2 |           2 |               2 | FX        |
-| **Total** |     **68** |              **40** |              **12** |       **8** |          **12** |           |
+| **Total** |     **71** |              **41** |              **12** |       **8** |          **12** |           |
 
 Components are the smallest buildable facts. Datasets can be `public` or
 `internal`; visibility defaults to `internal`. The twelve registered Analyses are
@@ -29,8 +29,8 @@ selection IDs.
 
 ```mermaid
 flowchart LR
-    S["Authoritative sources and engines"] --> C["68 granular components"]
-    C --> D["40 registered datasets"]
+    S["Authoritative sources and engines"] --> C["71 granular components"]
+    C --> D["41 registered datasets"]
     D --> E["8 public Export Data"]
     D --> A["12 public Analyses<br/>+ frontend contracts"]
     A --> P["Request Analysis<br/>full prompt"]
