@@ -25,7 +25,7 @@ plugin asks for settings.*
 
 On the left of the tab, as in **Global Settings**, a menu chooses what the page shows:
 
-- **All**, every plugin;
+- **All**, every plugin once, under its family (the shared settings cards are not repeated here: they are under **Shared**, and a plugin that reads one links to it);
 - **To configure**, only the plugins that still miss something (it appears when one does);
 - one family: **Prices**, **FX rates**, **Imports** (the broker import plugins, with the Transactions icon), **Tools**,
   **Asset profile** and **Shared** (a settings card several plugins share, such as the
