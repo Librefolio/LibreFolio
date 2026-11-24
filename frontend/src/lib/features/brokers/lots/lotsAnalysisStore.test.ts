@@ -43,6 +43,7 @@ interface LotsBody {
     requested_analyses: string[];
     selected_lot_ids?: number[];
     matching_methods?: string[];
+    reward_allocation?: 'OWN_LOT' | 'MERGED';
 }
 
 interface LotsStore {
@@ -151,6 +152,25 @@ describe('lotsAnalysisStore (page cache, phase 1)', () => {
             await store.fetchLotsAnalysis(other);
         }
         expect(lotsApi, 'two different questions shared one cached answer').toHaveBeenCalledTimes(1 + others.length);
+    });
+
+    it('asks «spread rewards across lots» (reward_allocation MERGED) under a key of its own, and leaves the usual key as it was (STK-3)', async () => {
+        const store = await loadStore();
+        lotsApi.mockResolvedValueOnce(answer('own-lot'));
+        await store.fetchLotsAnalysis(MAIN);
+
+        const merged: LotsBody = {...MAIN, reward_allocation: 'MERGED'};
+        expect(store.peekLotsAnalysis(merged), 'the MERGED view shares the key of the usual question').toBeNull();
+        lotsApi.mockResolvedValueOnce(answer('merged'));
+        expect(await store.fetchLotsAnalysis(merged)).toMatchObject(answer('merged'));
+        expect(lotsApi).toHaveBeenCalledTimes(2);
+        expect((lotsApi.mock.calls[1][0] as LotsBody).reward_allocation, 'the MERGED field did not reach the client').toBe('MERGED');
+
+        // The usual question (no field, the panel's OWN_LOT) still finds its own answer, and an undefined field is no field
+        expect(store.peekLotsAnalysis(MAIN)).toMatchObject({response: answer('own-lot'), stale: false});
+        expect(store.peekLotsAnalysis({...MAIN, reward_allocation: undefined})).toMatchObject({response: answer('own-lot'), stale: false});
+        expect(store.peekLotsAnalysis({...MAIN, reward_allocation: 'MERGED'})).toMatchObject({response: answer('merged'), stale: false});
+        expect(lotsApi).toHaveBeenCalledTimes(2);
     });
 
     it('shares one request between identical questions asked at once', async () => {
