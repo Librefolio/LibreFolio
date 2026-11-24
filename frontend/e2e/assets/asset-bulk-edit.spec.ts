@@ -17,7 +17,7 @@
  */
 import {expect, test} from '../fixtures/playwright';
 import type {Page} from '../fixtures/playwright';
-import {login} from '../fixtures/auth-helpers';
+import {login, setLanguage} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
 import {eventSeq, waitForEvent, waitForSettled} from '../fixtures/app-events';
 import {daysAgoIso} from '../fixtures/dates';
@@ -330,6 +330,37 @@ test.describe('Asset bulk edit', () => {
                 const now = await box(`asset-bulk-${field}-now`);
                 expect(now.y, `«Now» of ${field} is under its control`).toBeGreaterThanOrEqual(control.y + control.height - 1);
             }
+        } finally {
+            await deleteOwned(page, owned);
+        }
+    });
+
+    // 81 U45 (testlist 9.3): the first segment of Active and Benchmark said «Leave as is» and was cut («Lascia c…»). It says the
+    // state in one short word now; read in the browser, in the four languages, on a phone and wide: no segment is cut.
+    test('the segments of Active and Benchmark are not cut, in the four languages, at 390 px and wide', async ({page}) => {
+        const owned: Owned = {assetIds: [], brokerIds: []};
+        const token = uniqueToken(6);
+        try {
+            await createAssets(page, owned, token, ['A', 'B', 'C']);
+            // Every cut is collected and said at the end: the report is the table the width is chosen from.
+            const cuts: string[] = [];
+            for (const language of ['en', 'it', 'fr', 'es'] as const) {
+                await setLanguage(page, language);
+                for (const width of [390, 1280]) {
+                    await page.setViewportSize({width, height: 900});
+                    await openBulkEdit(page, token, 3);
+                    await page.getByTestId('asset-bulk-active').scrollIntoViewIfNeeded();
+                    for (const field of ['active', 'is_benchmark']) {
+                        for (const option of ['leave', 'yes', 'no']) {
+                            const cut = await page.getByTestId(`asset-bulk-${field}-${option}`).evaluate((element) => Math.round(element.scrollWidth - element.clientWidth));
+                            if (cut > 0) cuts.push(`${language}@${width} ${field}/${option}: ${cut}px`);
+                        }
+                    }
+                    await page.keyboard.press('Escape');
+                    await expect(page.getByTestId('asset-bulk-edit')).toHaveCount(0);
+                }
+            }
+            expect(cuts, `segments cut by this many pixels: ${cuts.join(' · ')}`).toEqual([]);
         } finally {
             await deleteOwned(page, owned);
         }
