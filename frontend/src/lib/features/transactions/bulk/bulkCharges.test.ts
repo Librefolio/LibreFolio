@@ -1716,3 +1716,421 @@ describe('unlinkCharge — «unlink» only from a saved parent; a pending link i
         expect({charge, ops}).toEqual(before);
     });
 });
+
+// ---------------------------------------------------------------------------
+// TL-3 — «Clona» carries the linked-charges structure (project 66, lot TL-3)
+// ---------------------------------------------------------------------------
+
+/**
+ * TL-3 (FEE consultant): cloning a parent that still has linked charges copies them too, linked to the parent's copy;
+ * the copy of a charge is born linked to the same parent as its original. The pure half lives in `bulkCharges.ts`:
+ *
+ *   - `PendingOp.clonedFields`  a charge copy brought by «Clona» with or under its parent holds the values it was born
+ *                               with; `isUntouchedClone` = a create whose fields still equal them (`sameDraftFields`:
+ *                               decimals exactly, `'10' == '10.00'`; tags by value).
+ *   - `cloneChargeLink`         the link of the copy of a charge cloned ALONE inside the Bulk: its owner (decided by the
+ *                               «Link» rule on a probe create), a saved parent, or free with a reason.
+ *   - `cloneChargesUnder`       the copies of the charges still linked under a parent, owned by the parent's copy.
+ *   - `wireClonedRows`          the page's clone intent: cloned charges wired to their parent's clone (or to the saved
+ *                               parent), the charges read added as copies under their parent's clone.
+ *   - `withoutRows`             a parent's copy trashed takes its untouched charge copies with it; a touched one stays,
+ *                               free.
+ *   - `unlinkCharge`, `linkInBulk`, the «unlink» branch of `applyChargeDrafts`: `clonedFields` goes with the link.
+ *
+ * RED until `bulkCharges.ts` exports the new functions (read through the namespace, `c2`, so only their cases fail) and
+ * the existing ones drop or honour `clonedFields`. `clonedFields` is read through a local cast (`WithClone`) until
+ * `PendingOp` declares it.
+ */
+type WithClone = PendingOp & {clonedFields?: DraftFields};
+type CloneLink = {kind: 'owner'; chargeOf: string} | {kind: 'saved'; parentLinkId: number} | {kind: 'free'; reason: string | null};
+type SameDraftFields = (a: DraftFields, b: DraftFields) => boolean;
+type IsUntouchedClone = (op: PendingOp) => boolean;
+type CloneChargeLink = (src: PendingOp, copyFields: DraftFields, ops: readonly PendingOp[], g: (id: number) => TXReadItem | undefined, opts: LinkOpts, typeOf?: (op: PendingOp) => string) => CloneLink;
+type CloneChargesUnder = (parent: PendingOp, parentCopyTempId: string, ops: readonly PendingOp[], makeCopy: (charge: PendingOp) => PendingOp) => PendingOp[];
+type WireClonedRows = (sources: readonly TXReadItem[], clones: readonly PendingOp[], readCharges: readonly TXReadItem[] | null, makeCreate: (tx: TXReadItem) => PendingOp) => {ops: PendingOp[]; expanded: string[]};
+type WithoutRowsFn = (ops: readonly PendingOp[], ids: Iterable<string>) => PendingOp[];
+type UnlinkChargeFn = (op: PendingOp, ops: readonly PendingOp[], g: (id: number) => TXReadItem | undefined) => PendingOp;
+type LinkInBulkFn = (ops: readonly PendingOp[], parent: PendingOp, charges: readonly PendingOp[]) => PendingOp[];
+
+const sameDraftFields: SameDraftFields = (a, b) => c2<SameDraftFields>('sameDraftFields')(a, b);
+const isUntouchedClone: IsUntouchedClone = (op) => c2<IsUntouchedClone>('isUntouchedClone')(op);
+const cloneChargeLink: CloneChargeLink = (src, copyFields, ops, g, opts, typeOf) => c2<CloneChargeLink>('cloneChargeLink')(src, copyFields, ops, g, opts, typeOf);
+const cloneChargesUnder: CloneChargesUnder = (parent, copyId, ops, makeCopy) => c2<CloneChargesUnder>('cloneChargesUnder')(parent, copyId, ops, makeCopy);
+const wireClonedRows: WireClonedRows = (sources, clones, read, makeCreate) => c2<WireClonedRows>('wireClonedRows')(sources, clones, read, makeCreate);
+const tl3WithoutRows: WithoutRowsFn = (ops, ids) => c2<WithoutRowsFn>('withoutRows')(ops, ids);
+const tl3UnlinkCharge: UnlinkChargeFn = (op, ops, g) => c2<UnlinkChargeFn>('unlinkCharge')(op, ops, g);
+const tl3LinkInBulk: LinkInBulkFn = (ops, parent, charges) => c2<LinkInBulkFn>('linkInBulk')(ops, parent, charges);
+
+/** A saved BUY whose FEE and TAX sit on days of their own (rule 4: a charge's date is free), so «keeps its own date»
+ *  cannot be told apart from «took the parent's». */
+const BUY_D = row(601, 'BUY', {date: '2026-10-01', charges_count: 2, description: 'buy D'});
+const FEE_D = row(602, 'FEE', {parent_transaction_id: 601, date: '2026-10-03', cash: {code: 'EUR', amount: '-1.500000'}, description: 'fee D'});
+const TAX_D = row(603, 'TAX', {parent_transaction_id: 601, date: '2026-10-04', cash: {code: 'EUR', amount: '-0.250000'}, description: 'tax D'});
+
+/** The copy of a saved row as the editor makes it: a create with the row's fields. */
+function copyOf(tempId: string, r: TXReadItem, extra: Omit<OpExtra, 'markedDelete' | 'tempId'> & {clonedFields?: DraftFields} = {}): WithClone {
+    return {...createOp(tempId, fieldsOf(r)), ...extra} as WithClone;
+}
+
+/** A charge copy brought by «Clona» under the parent copy `chargeOf`, born untouched. */
+function broughtCopy(tempId: string, r: TXReadItem, chargeOf: string): WithClone {
+    const fields = fieldsOf(r);
+    return {...createOp(tempId, fields, {chargeOf}), clonedFields: structuredClone(fields)} as WithClone;
+}
+
+describe('TL-3 applyChargeDrafts — an unchanged draft of a cloned charge keeps the copy as it is', () => {
+    it('the parent copy’s Form handed back unchanged: same tempId, the copy’s own date (not the parent’s), no followsParent, still untouched', () => {
+        const parent = copyOf('c-buy', BUY_D);
+        const fee = broughtCopy('c-fee', FEE_D, 'c-buy');
+        expect(fee.fields.date, 'premise: the FEE copy has a date of its own').not.toBe(parent.fields.date);
+        const ops = [parent, fee];
+        const drafts = chargeDraftsFor(parent, ops, get);
+        expect(
+            drafts.map((d) => d.key),
+            'premise: the Form sees the copy as a new charge of the parent',
+        ).toEqual(['op-c-fee']);
+
+        const out = applyChargeDrafts(parent, ops, drafts, makeDeps());
+
+        const kept = byTempId(out, 'c-fee') as WithClone;
+        expect(kept.fields.date, 'its own date, not the parent’s').toBe(FEE_D.date);
+        expect(kept.chargeOf).toBe('c-buy');
+        expect(kept.followsParent, 'a copy never follows its parent').toBeUndefined();
+        expect(kept.clonedFields, 'the values it was born with are kept').toEqual(fieldsOf(FEE_D));
+        expect(out).toHaveLength(2);
+        expect(isUntouchedClone(kept), 'nothing was changed: still an untouched copy').toBe(true);
+    });
+
+    it('a changed draft: the copy stays under the parent copy, but it is no longer untouched', () => {
+        const parent = copyOf('c-buy', BUY_D);
+        const ops = [parent, broughtCopy('c-fee', FEE_D, 'c-buy')];
+        const drafts = chargeDraftsFor(parent, ops, get).map((d) => ({...d, description: 'fee D, changed'}));
+
+        const out = applyChargeDrafts(parent, ops, drafts, makeDeps());
+
+        const changed = byTempId(out, 'c-fee');
+        expect(changed.chargeOf).toBe('c-buy');
+        expect(changed.fields.description).toBe('fee D, changed');
+        expect(isUntouchedClone(changed)).toBe(false);
+    });
+
+    it('«unlink» on a copy in the parent copy’s Form: a row of its own, its own date, chargeOf and clonedFields gone', () => {
+        const parent = copyOf('c-buy', BUY_D);
+        const ops = [parent, broughtCopy('c-fee', FEE_D, 'c-buy')];
+        const drafts = chargeDraftsFor(parent, ops, get).map((d) => ({...d, state: 'unlink' as const}));
+
+        const out = applyChargeDrafts(parent, ops, drafts, makeDeps());
+
+        const free = byTempId(out, 'c-fee') as WithClone;
+        expect({chargeOf: free.chargeOf, followsParent: free.followsParent, clonedFields: free.clonedFields}).toEqual({chargeOf: undefined, followsParent: undefined, clonedFields: undefined});
+        expect(free.fields.date, 'never followed the parent: its own date').toBe(FEE_D.date);
+    });
+});
+
+describe('TL-3 sameDraftFields — two sets of fields equal by value', () => {
+    const base = (): DraftFields => ({...fieldsOf(FEE_D), tags: ['a', 'b']});
+
+    it('the same values in new objects: equal', () => {
+        expect(sameDraftFields(base(), base())).toBe(true);
+    });
+
+    it('decimals compared exactly: 10 == 10.00 in cash and quantity', () => {
+        const a = {...base(), quantity: '2', cash: {code: 'EUR', amount: '10'}};
+        const b = {...base(), quantity: '2.000000', cash: {code: 'EUR', amount: '10.00'}};
+        expect(sameDraftFields(a, b)).toBe(true);
+    });
+
+    it('a different amount, currency, date, note, type or tag: not equal', () => {
+        const a = {...base(), cash: {code: 'EUR', amount: '10'}};
+        expect(sameDraftFields(a, {...a, cash: {code: 'EUR', amount: '10.5'}}), 'amount').toBe(false);
+        expect(sameDraftFields(a, {...a, cash: {code: 'USD', amount: '10'}}), 'currency').toBe(false);
+        expect(sameDraftFields(a, {...a, cash: null}), 'cash removed').toBe(false);
+        expect(sameDraftFields(a, {...a, date: '2026-10-09'}), 'date').toBe(false);
+        expect(sameDraftFields(a, {...a, description: 'other'}), 'note').toBe(false);
+        expect(sameDraftFields(a, {...a, type: 'TAX' as DraftFields['type']}), 'type').toBe(false);
+        expect(sameDraftFields(a, {...a, tags: ['a']}), 'tags').toBe(false);
+    });
+
+    it('tags by value: equal arrays in different objects are equal', () => {
+        expect(sameDraftFields({...base(), tags: ['x', 'y']}, {...base(), tags: ['x', 'y']})).toBe(true);
+    });
+});
+
+describe('TL-3 isUntouchedClone — a copy brought by «Clona», as it was born', () => {
+    it('a create with clonedFields equal to its fields: untouched', () => {
+        expect(isUntouchedClone(broughtCopy('c-fee', FEE_D, 'c-buy'))).toBe(true);
+    });
+
+    it('equal by exact decimals (5 == 5.000000): untouched', () => {
+        const op = broughtCopy('c-fee', FEE_D, 'c-buy');
+        const reformatted = {...op, fields: {...op.fields, cash: {code: 'EUR', amount: `${op.fields.cash!.amount}000`}}} as WithClone;
+        expect(isUntouchedClone(reformatted)).toBe(true);
+    });
+
+    it('a field changed since: touched', () => {
+        const op = broughtCopy('c-fee', FEE_D, 'c-buy');
+        expect(isUntouchedClone({...op, fields: {...op.fields, cash: {code: 'EUR', amount: '7'}}} as WithClone)).toBe(false);
+    });
+
+    it('a create without clonedFields (typed, or cloned alone), or a saved row: never an untouched clone', () => {
+        expect(isUntouchedClone(createOp('n-fee', fieldsOf(FEE_D), {chargeOf: 'c-buy'}))).toBe(false);
+        expect(isUntouchedClone({...editOp(FEE_A, {chargeOf: 't-501'}), clonedFields: fieldsOf(FEE_A)} as WithClone)).toBe(false);
+    });
+});
+
+describe('TL-3 cloneChargeLink — the link of the copy of a charge cloned alone inside the Bulk', () => {
+    const ownerOk = (): PendingOp[] => adoptCharges([editOp(BUY_A), editOp(FEE_A), editOp(TAX_A)], get);
+
+    it('owner present and linkable: born under the same owner', () => {
+        const ops = ownerOk();
+        const src = byTxId(ops, FEE_A.id);
+        expect(cloneChargeLink(src, {...src.fields}, ops, get, LINK_OPTS)).toEqual({kind: 'owner', chargeOf: 't-501'});
+    });
+
+    it('owner a new row of the Bulk (a parent copy): born under that create', () => {
+        const parent = copyOf('c-buy', BUY_D);
+        const src = broughtCopy('c-fee', FEE_D, 'c-buy');
+        expect(cloneChargeLink(src, {...src.fields}, [parent, src], get, LINK_OPTS)).toEqual({kind: 'owner', chargeOf: 'c-buy'});
+    });
+
+    it('the original already «scollega»: free, no reason (no toast)', () => {
+        const ops = ownerOk().map((op) => (op.op === 'edit' && op.txId === FEE_A.id ? ({...op, parentUnlink: true} as PendingOp) : op));
+        const src = byTxId(ops, FEE_A.id);
+        expect(cloneChargeLink(src, {...src.fields}, ops, get, LINK_OPTS)).toEqual({kind: 'free', reason: null});
+    });
+
+    it('owner marked «del» (its charges «del» with it): free, reason deleted', () => {
+        const ops = ownerOk().map((op) => (op.op === 'edit' ? ({...op, markedDelete: true, ...(op.txId === BUY_A.id ? {} : {byParentChoice: true})} as PendingOp) : op));
+        const src = byTxId(ops, FEE_A.id);
+        expect(src.chargeOf, 'premise: the FEE is still owned by the BUY').toBe('t-501');
+        expect(cloneChargeLink(src, {...src.fields}, ops, get, LINK_OPTS)).toEqual({kind: 'free', reason: 'deleted'});
+    });
+
+    it('owner a leg of a pair (a DEPOSIT with its hidden WITHDRAWAL): free, reason paired', () => {
+        const dep = row(640, 'DEPOSIT', {related_transaction_id: 641, cash: {code: 'EUR', amount: '100.000000'}, description: 'paired deposit'});
+        const wd = row(641, 'WITHDRAWAL', {related_transaction_id: 640, cash: {code: 'EUR', amount: '-100.000000'}, description: 'paired withdrawal'});
+        const pairStore = new Map<number, TXReadItem>([dep, wd].map((r) => [r.id, r]));
+        const pairGet = (id: number): TXReadItem | undefined => pairStore.get(id) ?? get(id);
+        const src = createOp('n-fee', fieldsOf(FEE_FREE), {chargeOf: 't-640'});
+        const ops = [editOp(dep), editOp(wd, {pairedWith: 't-640'}), src];
+        expect(cloneChargeLink(src, {...src.fields}, ops, pairGet, LINK_OPTS)).toEqual({kind: 'free', reason: 'paired'});
+    });
+
+    it('the «Link» rule reads the copy’s fields, not the original’s: a copy on another asset is free, reason otherAsset', () => {
+        const ops = ownerOk();
+        const src = byTxId(ops, FEE_A.id);
+        expect(cloneChargeLink(src, {...src.fields, asset_id: 202}, ops, get, LINK_OPTS)).toEqual({kind: 'free', reason: 'otherAsset'});
+    });
+
+    it('a «Link» that would be hidden (the user cannot edit the broker): free, reason hidden', () => {
+        const ops = ownerOk();
+        const src = byTxId(ops, FEE_A.id);
+        expect(cloneChargeLink(src, {...src.fields}, ops, get, {...LINK_OPTS, canEdit: () => false})).toEqual({kind: 'free', reason: 'hidden'});
+    });
+
+    it('typeOf is forwarded to the «Link» rule: an owner read as a type with no charge role hides it', () => {
+        const ops = ownerOk();
+        const src = byTxId(ops, FEE_A.id);
+        const typeOf = (op: PendingOp): string => (op.tempId === 't-501' ? 'TRANSFER' : op.fields.type);
+        expect(cloneChargeLink(src, {...src.fields}, ops, get, LINK_OPTS, typeOf)).toEqual({kind: 'free', reason: 'hidden'});
+    });
+
+    it('no owner, parentLinkId: born linked to that saved parent', () => {
+        const src = editOp(FEE_FREE, {parentLinkId: BUY_B.id});
+        expect(cloneChargeLink(src, {...src.fields}, [src], get, LINK_OPTS)).toEqual({kind: 'saved', parentLinkId: BUY_B.id});
+    });
+
+    it('no owner, a saved parent absent from the Bulk: born linked to that saved parent', () => {
+        const src = editOp(FEE_B);
+        expect(cloneChargeLink(src, {...src.fields}, [src], get, LINK_OPTS)).toEqual({kind: 'saved', parentLinkId: BUY_B.id});
+    });
+
+    it('a chargeOf naming nobody present falls back to the saved parent', () => {
+        const src = editOp(FEE_B, {chargeOf: 'ghost'});
+        expect(cloneChargeLink(src, {...src.fields}, [src], get, LINK_OPTS)).toEqual({kind: 'saved', parentLinkId: BUY_B.id});
+    });
+
+    it('a free charge, saved or new: free, no reason', () => {
+        const saved = editOp(FEE_FREE);
+        const fresh = createOp('n-fee', fieldsOf(FEE_FREE));
+        expect(cloneChargeLink(saved, {...saved.fields}, [saved], get, LINK_OPTS)).toEqual({kind: 'free', reason: null});
+        expect(cloneChargeLink(fresh, {...fresh.fields}, [fresh], get, LINK_OPTS)).toEqual({kind: 'free', reason: null});
+    });
+
+    it('reads its inputs as given', () => {
+        const ops = ownerOk();
+        const before = snapshot(ops);
+        cloneChargeLink(byTxId(ops, FEE_A.id), {...byTxId(ops, FEE_A.id).fields}, ops, get, LINK_OPTS);
+        expect(ops).toEqual(before);
+    });
+});
+
+describe('TL-3 cloneChargesUnder — the copies of the charges still linked under a parent', () => {
+    const makeCopy = (charge: PendingOp): PendingOp => createOp(`copy-${charge.tempId}`, {...charge.fields});
+
+    it('each linked charge copied once, owned by the parent copy, clonedFields = the copy’s fields, in ops order', () => {
+        const ops = adoptCharges([editOp(BUY_A), editOp(FEE_A), editOp(TAX_A), editOp(BUY_B), editOp(FEE_B)], get);
+        const spy = vi.fn(makeCopy);
+
+        const copies = cloneChargesUnder(byTxId(ops, BUY_A.id), 'c-buy', ops, spy) as WithClone[];
+
+        expect(tempIds(copies)).toEqual([`copy-t-${FEE_A.id}`, `copy-t-${TAX_A.id}`]);
+        expect(spy).toHaveBeenCalledTimes(2);
+        for (const copy of copies) {
+            expect(copy.chargeOf).toBe('c-buy');
+            expect(copy.clonedFields).toEqual(copy.fields);
+            expect(isUntouchedClone(copy), copy.tempId).toBe(true);
+        }
+    });
+
+    it('a charge «del» or «scollega» is not copied; a new charge under the parent is', () => {
+        const ops = adoptCharges([editOp(BUY_A), editOp(FEE_A, {markedDelete: true}), editOp(TAX_A, {parentUnlink: true}), editOp(FEE_FREE, {chargeOf: 't-501'}), createOp('n-fee', fieldsOf(FEE_D), {chargeOf: 't-501'})], get);
+
+        const copies = cloneChargesUnder(byTxId(ops, BUY_A.id), 'c-buy', ops, makeCopy);
+
+        expect(tempIds(copies)).toEqual([`copy-t-${FEE_FREE.id}`, 'copy-n-fee']);
+    });
+
+    it('a parent with no linked charge: none; the operations are not mutated', () => {
+        const ops = [editOp(BUY_B), editOp(FEE_FREE)];
+        const before = snapshot(ops);
+        expect(cloneChargesUnder(ops[0], 'c-buy', ops, makeCopy)).toEqual([]);
+        expect(ops).toEqual(before);
+    });
+});
+
+describe('TL-3 wireClonedRows — the page’s clone intent', () => {
+    const makeCreate = (tx: TXReadItem): PendingOp => createOp(`r-${tx.id}`, fieldsOf(tx));
+
+    it('a parent cloned alone: its charges read become copies under its clone, each on its own date; the group opens', () => {
+        const spy = vi.fn(makeCreate);
+        const cBuy = copyOf('c-buy', BUY_D);
+
+        const {ops, expanded} = wireClonedRows([BUY_D], [cBuy], [FEE_D, TAX_D], spy);
+
+        expect(ops).toHaveLength(3);
+        expect(byTempId(ops, 'c-buy'), 'the parent clone comes out as it went in').toEqual(cBuy);
+        for (const [id, date] of [
+            [FEE_D.id, FEE_D.date],
+            [TAX_D.id, TAX_D.date],
+        ] as const) {
+            const copy = byTempId(ops, `r-${id}`) as WithClone;
+            expect(copy.chargeOf).toBe('c-buy');
+            expect(copy.fields.date, 'its original’s date').toBe(date);
+            expect(copy.clonedFields).toEqual(copy.fields);
+        }
+        expect(spy).toHaveBeenCalledTimes(2);
+        expect(expanded).toEqual(['c-buy']);
+    });
+
+    it('a charge cloned alone: its clone is linked to the saved parent (parentLinkId), no clonedFields, nothing read added', () => {
+        const cFee = copyOf('c-fee', FEE_D);
+
+        const {ops, expanded} = wireClonedRows([FEE_D], [cFee], [], makeCreate);
+
+        expect(ops).toHaveLength(1);
+        const fee = ops[0] as WithClone;
+        expect({tempId: fee.tempId, parentLinkId: fee.parentLinkId, chargeOf: fee.chargeOf, clonedFields: fee.clonedFields}).toEqual({tempId: 'c-fee', parentLinkId: BUY_D.id, chargeOf: undefined, clonedFields: undefined});
+        expect(fee.fields.date).toBe(FEE_D.date);
+        expect(expanded).toEqual([]);
+    });
+
+    it('a parent and one of its charges selected together: the charge copied once, under the parent’s clone; the other read', () => {
+        const spy = vi.fn(makeCreate);
+
+        const {ops, expanded} = wireClonedRows([BUY_D, FEE_D], [copyOf('c-buy', BUY_D), copyOf('c-fee', FEE_D)], [FEE_D, TAX_D], spy);
+
+        expect(ops).toHaveLength(3);
+        const fee = byTempId(ops, 'c-fee') as WithClone;
+        expect(fee.chargeOf).toBe('c-buy');
+        expect(fee.parentLinkId, 'linked to the parent’s copy, not to the saved parent').toBeUndefined();
+        expect(fee.clonedFields).toEqual(fee.fields);
+        expect(byTempId(ops, `r-${TAX_D.id}`).chargeOf).toBe('c-buy');
+        expect(spy, 'only the TAX is made from the read').toHaveBeenCalledTimes(1);
+        expect(spy.mock.calls[0][0].id).toBe(TAX_D.id);
+        expect(expanded).toEqual(['c-buy']);
+    });
+
+    it('the read failed (null): no extra copies; a charge selected with its parent is still wired to its clone', () => {
+        const spy = vi.fn(makeCreate);
+        const alone = wireClonedRows([BUY_D], [copyOf('c-buy', BUY_D)], null, spy);
+        expect(tempIds(alone.ops)).toEqual(['c-buy']);
+        expect(alone.expanded).toEqual([]);
+
+        const both = wireClonedRows([BUY_D, FEE_D], [copyOf('c-buy', BUY_D), copyOf('c-fee', FEE_D)], null, spy);
+        expect(both.ops).toHaveLength(2);
+        expect(byTempId(both.ops, 'c-fee').chargeOf).toBe('c-buy');
+        expect(both.expanded).toEqual(['c-buy']);
+        expect(spy).not.toHaveBeenCalled();
+    });
+
+    it('a read charge of a parent not among the sources is ignored; two parents each get their own', () => {
+        const one = wireClonedRows([BUY_D], [copyOf('c-buy', BUY_D)], [FEE_D, FEE_B], makeCreate);
+        expect(tempIds(one.ops).sort()).toEqual(['c-buy', `r-${FEE_D.id}`].sort());
+
+        const two = wireClonedRows([BUY_D, BUY_B], [copyOf('c-buy', BUY_D), copyOf('c-buyb', BUY_B)], [FEE_D, TAX_D, FEE_B], makeCreate);
+        expect(two.ops).toHaveLength(5);
+        expect(byTempId(two.ops, `r-${FEE_B.id}`).chargeOf).toBe('c-buyb');
+        expect(byTempId(two.ops, `r-${TAX_D.id}`).chargeOf).toBe('c-buy');
+        expect([...two.expanded].sort()).toEqual(['c-buy', 'c-buyb']);
+    });
+
+    it('reads its inputs as given', () => {
+        const clones = [copyOf('c-buy', BUY_D), copyOf('c-fee', FEE_D)];
+        const read = [FEE_D, TAX_D];
+        const before = snapshot({clones, read});
+        wireClonedRows([BUY_D, FEE_D], clones, read, makeCreate);
+        expect({clones, read}).toEqual(before);
+    });
+});
+
+describe('TL-3 withoutRows — a parent copy trashed takes its untouched charge copies', () => {
+    it('the untouched copies leave with the parent copy', () => {
+        const out = tl3WithoutRows([copyOf('c-buy', BUY_D), broughtCopy('c-fee', FEE_D, 'c-buy'), broughtCopy('c-tax', TAX_D, 'c-buy')], ['c-buy']);
+        expect(tempIds(out)).toEqual([]);
+    });
+
+    it('a touched copy stays, a row of its own (no chargeOf), with its values', () => {
+        const touched = broughtCopy('c-fee', FEE_D, 'c-buy');
+        touched.fields = {...touched.fields, cash: {code: 'EUR', amount: '7'}};
+        const out = tl3WithoutRows([copyOf('c-buy', BUY_D), touched, broughtCopy('c-tax', TAX_D, 'c-buy')], ['c-buy']);
+        expect(tempIds(out)).toEqual(['c-fee']);
+        expect(out[0].chargeOf).toBeUndefined();
+        expect(out[0].fields).toMatchObject({cash: {code: 'EUR', amount: '7'}, date: FEE_D.date});
+    });
+
+    it('the copies under a parent copy that stays are untouched by the removal of another row', () => {
+        const ops = [copyOf('c-buy', BUY_D), broughtCopy('c-fee', FEE_D, 'c-buy'), editOp(FEE_FREE)];
+        const out = tl3WithoutRows(ops, [`t-${FEE_FREE.id}`]);
+        expect(out).toEqual(ops.slice(0, 2));
+    });
+
+    it('the touched copy left by applyChargeDrafts stays when its parent copy is trashed (the two halves together)', () => {
+        const parent = copyOf('c-buy', BUY_D);
+        const ops = [parent, broughtCopy('c-fee', FEE_D, 'c-buy'), broughtCopy('c-tax', TAX_D, 'c-buy')];
+        const drafts = chargeDraftsFor(parent, ops, get).map((d) => (d.key === 'op-c-fee' ? {...d, cash: {code: 'EUR', amount: '7'}} : d));
+        const edited = applyChargeDrafts(parent, ops, drafts, makeDeps());
+
+        const out = tl3WithoutRows(edited, ['c-buy']);
+
+        expect(tempIds(out), 'the changed FEE copy stays; the untouched TAX copy leaves').toEqual(['c-fee']);
+    });
+});
+
+describe('TL-3 clonedFields goes with the link', () => {
+    it('unlinkCharge: a copy under a parent copy loses chargeOf and clonedFields', () => {
+        const ops = [copyOf('c-buy', BUY_D), broughtCopy('c-fee', FEE_D, 'c-buy')];
+        const out = tl3UnlinkCharge(ops[1], ops, get) as WithClone;
+        expect({chargeOf: out.chargeOf, clonedFields: out.clonedFields}).toEqual({chargeOf: undefined, clonedFields: undefined});
+        expect(out.fields).toEqual(ops[1].fields);
+    });
+
+    it('linkInBulk: a copy linked to another parent loses clonedFields', () => {
+        const other = createOp('n-buy', newBuyFields());
+        const ops = [copyOf('c-buy', BUY_D), broughtCopy('c-fee', FEE_D, 'c-buy'), other];
+        const out = tl3LinkInBulk(ops, other, [ops[1]]);
+        const fee = byTempId(out, 'c-fee') as WithClone;
+        expect(fee.chargeOf).toBe('n-buy');
+        expect(fee.clonedFields).toBeUndefined();
+    });
+});
