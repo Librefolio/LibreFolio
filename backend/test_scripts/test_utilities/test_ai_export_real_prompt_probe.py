@@ -11,6 +11,7 @@ import pytest
 from backend.app.services.accounts.auth_service import hash_password, verify_password
 from backend.test_scripts.diagnostics.ai_export_real_prompt_probe import (
     COMPOSITION_COMPONENTS,
+    NAMED_FILTERED_PROMPT_RETENTION,
     NAMED_PROMPT_RETENTION,
     PUBLIC_CATALOG_V1_ANALYSES,
     PUBLIC_CATALOG_V1_DATASETS,
@@ -301,6 +302,9 @@ def test_broker_scope_diagnostics_distinguish_scope_positions_and_period_contrib
     )
 
     assert diagnostics == {
+        "export_scope_present": False,
+        "export_scope_included_broker_count": None,
+        "export_scope_excluded_broker_count": None,
         "broker_scope_refs": ["B1", "B2"],
         "scoped_broker_count": 2,
         "position_broker_count": 1,
@@ -308,6 +312,20 @@ def test_broker_scope_diagnostics_distinguish_scope_positions_and_period_contrib
         "entity_directory_broker_count": 2,
         "scope_directory_consistent": True,
     }
+
+
+def test_broker_scope_diagnostics_report_the_export_scope_fact_by_counts_only():
+    # 78 L10: a filtered Portfolio export's scope fact, as counts: never a broker id or name in the probe's artifacts
+    diagnostics = measure_broker_scope_diagnostics(
+        {
+            "entity_directory": {"brokers": [{"broker_id": 5, "display_name": "First"}]},
+            "export_scope": {"included_broker_ids": [5], "excluded_brokers": [{"broker_id": index, "display_name": f"Out {index}"} for index in range(10, 16)]},
+            "sections": [{"component_id": "portfolio.provenance", "payload": {"scoped_broker_count": 1, "broker_scope": [5]}}],
+        }
+    )
+
+    assert diagnostics is not None
+    assert (diagnostics["export_scope_present"], diagnostics["export_scope_included_broker_count"], diagnostics["export_scope_excluded_broker_count"]) == (True, 1, 6)
 
 
 def test_deterministic_asset_ranking_uses_history_observations_then_id():
@@ -1645,6 +1663,20 @@ def test_named_and_global_retention_deduplicates_by_stable_key():
         assert set(NAMED_PROMPT_RETENTION[(entry["selection_id"], entry["period_label"], entry["detail_level"])]) <= set(reasons[key])
     assert sum(reason.startswith("global_") for selected_reasons in reasons.values() for reason in selected_reasons) == 9
     assert all(len(selected_reasons) == len(set(selected_reasons)) for selected_reasons in reasons.values())
+
+
+def test_the_filtered_portfolio_case_is_named_once_on_the_first_single_broker_scope():
+    # 78 L10: «named_portfolio_protection_filtered_3m_standard» goes to the first broker-filtered Portfolio prompt only
+    (selection_id, period, detail), names = next(iter(NAMED_FILTERED_PROMPT_RETENTION.items()))
+    whole = {**_public_metric(selection_id, period, detail, 1_000, index=1), "scope_alias": "all"}
+    first = {**_public_metric(selection_id, period, detail, 1_100, index=2), "scope_alias": "broker_anon_01"}
+    second = {**_public_metric(selection_id, period, detail, 1_200, index=3), "scope_alias": "broker_anon_02"}
+
+    reasons = select_prompt_retention_reasons([second, whole, first])
+
+    assert set(names) <= set(reasons[stable_metric_key_text(first)])
+    assert not set(names) & set(reasons.get(stable_metric_key_text(second), []))
+    assert not set(names) & set(reasons.get(stable_metric_key_text(whole), []))
 
 
 def test_selective_retention_promotes_only_selected_and_manifest_is_complete(tmp_path: Path):

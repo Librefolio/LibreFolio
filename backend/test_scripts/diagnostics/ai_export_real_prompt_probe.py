@@ -93,6 +93,13 @@ COMPOSITION_COMPONENTS = (
     "instructions/contracts",
 )
 DISTRIBUTION_PERCENTILES = (10, 25, 75, 90, 95, 99)
+# 78 L10: a Portfolio export filtered on one broker, its own named case: the first single-broker Portfolio scope
+# (``broker_anon_NN``, stable order) of these selections. Its prompt opens with «Export Scope» whenever the user owns
+# another broker. Alone: ``--target-case <user>|portfolio.protection_strategies|3M|standard|broker=<display name>``.
+NAMED_FILTERED_PROMPT_RETENTION: Mapping[tuple[str, str, str], tuple[str, ...]] = {
+    ("portfolio.protection_strategies", "3M", "standard"): ("named_portfolio_protection_filtered_3m_standard",),
+}
+FILTERED_PORTFOLIO_SCOPE_PREFIX = "broker_anon_"
 NAMED_PROMPT_RETENTION: Mapping[tuple[str, str, str], tuple[str, ...]] = {
     ("portfolio.overview_and_history", "3M", "compact"): ("named_portfolio_general_3m_compact",),
     ("portfolio.overview_and_history", "3M", "standard"): ("named_portfolio_general_3m_standard",),
@@ -433,7 +440,13 @@ def measure_broker_scope_diagnostics(snapshot: Mapping[str, object]) -> dict[str
     contributor_count = None
     if isinstance(performance, Mapping) and performance.get("period_contributor_broker_count") is not None:
         contributor_count = int(performance["period_contributor_broker_count"])
+    # 78 L10: the scope fact the prompt opens with when the export leaves out an owned broker
+    export_scope = snapshot.get("export_scope")
+    export_scope = export_scope if isinstance(export_scope, Mapping) else None
     return {
+        "export_scope_present": export_scope is not None,
+        "export_scope_included_broker_count": len(export_scope.get("included_broker_ids") or []) if export_scope else None,
+        "export_scope_excluded_broker_count": len(export_scope.get("excluded_brokers") or []) if export_scope else None,
         "broker_scope_refs": scope_refs,
         "scoped_broker_count": scoped_count,
         "position_broker_count": position_count,
@@ -1630,7 +1643,15 @@ def select_prompt_retention_reasons(entries: Sequence[Mapping[str, object]]) -> 
     """Return deduplicated named + global representative retention reasons."""
     successful = [entry for entry in entries if entry.get("status") == "ok" and isinstance(entry.get("rendered_prompt_chars"), int)]
     reasons: defaultdict[str, list[str]] = defaultdict(list)
+    filtered_named: set[str] = set()
     for entry in sorted(successful, key=stable_metric_key):
+        key = (str(entry.get("selection_id") or ""), str(entry.get("period_label") or ""), str(entry.get("detail_level") or ""))
+        if entry.get("domain") == "portfolio" and str(entry.get("scope_alias") or "").startswith(FILTERED_PORTFOLIO_SCOPE_PREFIX):
+            # 78 L10: the first filtered Portfolio prompt of the selection, once
+            for name in NAMED_FILTERED_PROMPT_RETENTION.get(key, ()):
+                if name not in filtered_named:
+                    filtered_named.add(name)
+                    reasons[stable_metric_key_text(entry)].append(name)
         named = NAMED_PROMPT_RETENTION.get(
             (
                 str(entry.get("selection_id") or ""),
