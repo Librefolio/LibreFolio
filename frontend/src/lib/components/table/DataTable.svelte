@@ -71,6 +71,12 @@
         tableLayout?: 'fixed' | 'auto';
         /** Optional predicate: if returns false, row checkbox is hidden and row is excluded from bulk select */
         isRowSelectable?: (row: T) => boolean;
+        /**
+         * Optional (79 STK-2c): 'partial' draws an unselected row's checkbox in the mixed state, as the header's — a row that
+         * stands for others, part of which are selected (the reward lots group). Selection itself is unchanged; null or
+         * absent: the usual checked / unchecked.
+         */
+        getRowSelectionState?: (row: T) => 'partial' | null;
         /** Tooltip text for non-selectable rows (⊘ icon shown instead of checkbox). */
         disabledRowTooltip?: (row: T) => string | null;
         /** Enable touch long-press (500ms) to toggle row selection (mobile). */
@@ -186,6 +192,7 @@
         getRowStyle,
         tableLayout = 'fixed',
         isRowSelectable,
+        getRowSelectionState,
         disabledRowTooltip,
         enableTouchSelection = false,
         stickyActions = true,
@@ -1235,11 +1242,12 @@
                                     <td class="td-fixed td-select" data-testid="dt-select-cell-{rowId}">
                                         <div class="flex items-center justify-center gap-1">
                                             {#if !isRowSelectable || isRowSelectable(row)}
+                                                {@const rowPartial = !isSelected && getRowSelectionState?.(row) === 'partial'}
                                                 <button
                                                     type="button"
                                                     class="checkbox-btn"
                                                     data-testid="dt-row-checkbox-{rowId}"
-                                                    data-state={isSelected ? 'checked' : 'unchecked'}
+                                                    data-state={isSelected ? 'checked' : rowPartial ? 'partial' : 'unchecked'}
                                                     onclick={(e) => {
                                                         e.stopPropagation();
                                                         toggleRowSelection(rowId);
@@ -1247,6 +1255,8 @@
                                                 >
                                                     {#if isSelected}
                                                         <Check size={16} class="check-icon checked" />
+                                                    {:else if rowPartial}
+                                                        <Check size={16} class="check-icon partial" />
                                                     {:else}
                                                         <span class="check-box"></span>
                                                     {/if}
