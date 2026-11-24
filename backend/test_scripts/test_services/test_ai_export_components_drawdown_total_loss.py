@@ -545,7 +545,8 @@ class TestDrawdownComponentVersion:
     catalog placeholder together — with the same payload shape (schema_version 1). The catalog is imported in the test
     rather than at module level, so a parity failure on import reds these tests only.
 
-    Before MF-D2: 1 on both sides."""
+    Before MF-D2: 1 on both sides. 78 L10 moved `portfolio.drawdown_summary` to version 3 (it measures the export's
+    brokers): the one bump of release 1.4."""
 
     @pytest.mark.parametrize(
         ("component_id", "real"),
@@ -561,4 +562,5 @@ class TestDrawdownComponentVersion:
 
         placeholder = next(spec for spec in catalog.ALL_FOUNDATION_COMPONENTS if spec.component_id == component_id)
         assert real.component_id == component_id
-        assert (real.version, placeholder.version, real.schema_version) == (2, 2, 1)
+        expected_version = 3 if component_id == "portfolio.drawdown_summary" else 2
+        assert (real.version, placeholder.version, real.schema_version) == (expected_version, expected_version, 1)
