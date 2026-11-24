@@ -1343,6 +1343,8 @@ const NORMALIZED_RATIO_FIELDS = new Set([
     'value_at_risk_loss_ratio',
     'expected_shortfall_loss_ratio',
     'worst_window_return_ratio',
+    // 78 L8b: the risk share threshold of portfolio.correlated_pairs (a correlation is not a ratio: it stays a number)
+    'min_risk_share_ratio',
 ]);
 const SIGNED_NORMALIZED_RATIO_FIELDS = new Set(['current_drawdown_ratio', 'maximum_drawdown_ratio']);
 // 78 L8a: a holding's share of risk can pass 100% or go below 0 (it moves against the others); an annualized volatility can
@@ -1385,6 +1387,7 @@ const PUBLIC_RATIO_FIELD_NAMES: Readonly<Record<string, string>> = {
     value_at_risk_loss_ratio: 'value_at_risk_loss_percent',
     expected_shortfall_loss_ratio: 'expected_shortfall_loss_percent',
     worst_window_return_ratio: 'worst_window_return_percent',
+    min_risk_share_ratio: 'min_risk_share_percent',
 };
 
 function finalPathKey(path: string): string {

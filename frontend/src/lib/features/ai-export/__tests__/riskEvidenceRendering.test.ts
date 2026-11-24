@@ -1,10 +1,13 @@
 /**
- * The risk evidence of today's holdings (78 L8a): `portfolio.risk_concentration` and `portfolio.tail_risk` are version 1
- * components, so they take the generic compact renderer. What this file pins:
+ * The risk evidence of today's holdings: `portfolio.risk_concentration`, `portfolio.tail_risk` (78 L8a) and
+ * `portfolio.correlated_pairs` (78 L8b) are version 1 components, so they take the generic compact renderer. What this
+ * file pins:
  * - every ratio is a percentage under a public name that says what it is («loss» for a loss written as a positive number,
  *   «return» for the worst window, which keeps its sign);
  * - a holding's share of risk and an annualized volatility can pass 100% and are not clipped;
- * - holdings are A# refs, never database ids: in the rows, in the holdings that shortened the window and in those left out;
+ * - holdings are A# refs, never database ids: in the rows, in the pairs, in the holdings that shortened the window and in
+ *   those left out;
+ * - a correlation stays a number between -1 and 1, never a percentage; the pairs' risk share threshold is a percentage;
  * - the internal dataset is not one of the public Export Data choices.
  */
 import {describe, expect, it} from 'vitest';
@@ -69,11 +72,32 @@ function sections() {
                 bad_month_semantics: 'Overlapping 30-day windows.',
             },
         },
+        {
+            component_id: 'portfolio.correlated_pairs',
+            component_version: 1,
+            schema_id: 'portfolio.correlated_pairs',
+            schema_version: 1,
+            payload: {
+                ...WINDOW,
+                min_risk_share_ratio: 0.02,
+                min_correlation: 0.8,
+                max_high_pairs: 8,
+                pairs_semantics: 'Pearson correlation of daily returns.',
+                considered_asset_count: 3,
+                considered_pair_count: 3,
+                high_pairs: [{first_asset_id: 9001, second_asset_id: 9002, correlation: 0.9123}],
+                low_pairs: [{first_asset_id: 9002, second_asset_id: 9003, correlation: -0.2345}],
+            },
+        },
     ];
 }
 
 function render(): string {
-    return renderSnapshotDataText(sections(), {kind: 'portfolio', broker_scope: []}).content;
+    // The backend's entity directory names every `*asset_id` of the payloads (`runtime_service._collect_entity_ids`),
+    // `first_asset_id` and `second_asset_id` included; the renderer's own walk reads only `asset_id`.
+    const names: Record<number, string> = {9001: 'Alpha Corp', 9002: 'Beta Fund', 9003: 'Gamma Coin', 9017: 'Delta Stock'};
+    const entityDirectory = {assets: Object.entries(names).map(([id, name]) => ({asset_id: Number(id), display_name: name})), brokers: []};
+    return renderSnapshotDataText(sections(), {kind: 'portfolio', broker_scope: []}, entityDirectory).content;
 }
 
 describe('AI Export risk evidence rendering (78 L8a)', () => {
@@ -104,9 +128,18 @@ describe('AI Export risk evidence rendering (78 L8a)', () => {
         expect(rendered).not.toMatch(/_ratio\b/);
     });
 
+    it('prints a correlation as a number and the weight threshold of the pairs as a percentage', () => {
+        const rendered = render();
+        expect(rendered).toContain('|min_risk_share_percent|2%|');
+        expect(rendered).toContain('|min_correlation|0.8|');
+        expect(rendered).toContain('0.9123');
+        expect(rendered).toContain('-0.2345');
+        expect(rendered).not.toContain('91.23%');
+    });
+
     it('names every holding by its A# ref and never by its database id', () => {
         const rendered = render();
-        for (const id of ['9001', '9002', '9017']) expect(rendered).not.toContain(id);
+        for (const id of ['9001', '9002', '9003', '9017']) expect(rendered).not.toContain(id);
         expect(rendered).not.toContain('asset_unmapped');
         expect(rendered).toMatch(/\bA1\b/);
         expect(rendered).toMatch(/\bA3\b/);
