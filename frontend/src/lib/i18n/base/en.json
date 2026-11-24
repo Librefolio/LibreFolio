@@ -380,7 +380,12 @@
     "confirmBulkAction": "Are you sure you want to perform this action on",
     "filterLabel": "Filter",
     "resetLayout": "Reset layout",
-    "selectionHint": "Select one or more rows to act on them together."
+    "selectionHint": "Select one or more rows to act on them together.",
+    "copyCell": "Copy cell",
+    "copyRow": "Copy row",
+    "cellCopied": "Cell copied",
+    "rowCopied": "Row copied",
+    "copyFailed": "Could not copy to the clipboard"
   },
   "date": {
     "today": "Today",

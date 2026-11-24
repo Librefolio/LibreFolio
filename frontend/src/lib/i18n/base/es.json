@@ -380,7 +380,12 @@
     "confirmBulkAction": "¿Estás seguro de querer realizar esta acción en",
     "filterLabel": "Filtro",
     "resetLayout": "Restablecer disposición",
-    "selectionHint": "Selecciona una o varias filas para actuar sobre todas a la vez."
+    "selectionHint": "Selecciona una o varias filas para actuar sobre todas a la vez.",
+    "copyCell": "Copiar celda",
+    "copyRow": "Copiar fila",
+    "cellCopied": "Celda copiada",
+    "rowCopied": "Fila copiada",
+    "copyFailed": "No se pudo copiar al portapapeles"
   },
   "date": {
     "today": "Hoy",

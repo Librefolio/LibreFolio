@@ -380,7 +380,12 @@
     "confirmBulkAction": "Sei sicuro di voler eseguire questa azione su",
     "filterLabel": "Filtro",
     "resetLayout": "Ripristina disposizione",
-    "selectionHint": "Seleziona una o più righe per agire su tutte insieme."
+    "selectionHint": "Seleziona una o più righe per agire su tutte insieme.",
+    "copyCell": "Copia cella",
+    "copyRow": "Copia riga",
+    "cellCopied": "Cella copiata",
+    "rowCopied": "Riga copiata",
+    "copyFailed": "Impossibile copiare negli appunti"
   },
   "date": {
     "today": "Oggi",

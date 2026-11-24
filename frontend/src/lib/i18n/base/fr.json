@@ -380,7 +380,12 @@
     "confirmBulkAction": "Êtes-vous sûr de vouloir effectuer cette action sur",
     "filterLabel": "Filtre",
     "resetLayout": "Réinitialiser la disposition",
-    "selectionHint": "Sélectionnez une ou plusieurs lignes pour agir sur toutes ensemble."
+    "selectionHint": "Sélectionnez une ou plusieurs lignes pour agir sur toutes ensemble.",
+    "copyCell": "Copier la cellule",
+    "copyRow": "Copier la ligne",
+    "cellCopied": "Cellule copiée",
+    "rowCopied": "Ligne copiée",
+    "copyFailed": "Impossible de copier dans le presse-papiers"
   },
   "date": {
     "today": "Aujourd'hui",
