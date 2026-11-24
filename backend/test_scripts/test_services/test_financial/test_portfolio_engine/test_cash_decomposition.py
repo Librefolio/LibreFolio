@@ -1,12 +1,15 @@
 """Unit tests for Cash Decomposition (Capital Baseline narrative).
 
-Tests validate the formulas:
+Tests validate:
     capital_baseline = cumulative_external_cash_flow
-    book_asset_like = open_cost_basis + in_transit_asset_cost_basis
     cash_like = cash_value + in_transit_cash_value
-    cash_from_contributed_capital = min(cash_like, max(capital_baseline - book_asset_like, 0))
-    cash_from_generated_returns = cash_like - cash_from_contributed_capital
+    cash_from_contributed_capital = the capital pool sum(K_b), cash_from_generated_returns = cash_like - it: the
+        three-pool model (K/R/W per broker, a BUY spends R first), not the capital not invested
+        (capital_baseline - book_asset_like): the two differ once returns are reinvested
     total_pnl = nav_value - capital_baseline
+
+Inside a day the cash income replays first (STK1-1, 24/11/2026): a BUY of the same day spends it, as if it had arrived
+the day before (``TestSameDayIncome``). The examples whose income is meant to stay in cash receive it the next day.
 
 Invariants:
     cash_from_contributed_capital >= 0
@@ -200,17 +203,17 @@ class TestExampleA:
 
 
 class TestExampleB:
-    """DEPOSIT 1000, BUY 1000, INTEREST 100 → 100€ returns in cash."""
+    """DEPOSIT 1000, BUY 1000, then INTEREST 100 the next day → 100€ returns in cash."""
 
     def test_cash_decomposition(self):
         txs = [
             _ctxn(_tx(id=1, dt="2025-01-01", type="DEPOSIT", amount="1000")),
             _ctxn(_tx(id=2, dt="2025-01-01", type="BUY", amount="-1000", quantity="10", asset_id=100)),
-            _ctxn(_tx(id=3, dt="2025-01-01", type="INTEREST", amount="100")),
+            _ctxn(_tx(id=3, dt="2025-01-02", type="INTEREST", amount="100")),
         ]
         ecfs = [(date(2025, 1, 1), 10, Decimal("1000"), "EUR")]
 
-        state = _last_state(txs, ecfs, price_map=_PRICE_MAP_100)
+        state = _last_state(txs, ecfs, price_map=_PRICE_MAP_100, date_to=date(2025, 1, 2))
 
         assert state.cumulative_external_cash_flow == Decimal("1000")
         assert state.cash_value == Decimal("100")  # interest received
@@ -295,7 +298,7 @@ class TestExampleD:
 
 
 class TestExampleE:
-    """DEPOSIT 1000, BUY/P2P 1000, SELL/repayment 100, INTEREST 10."""
+    """DEPOSIT 1000, BUY/P2P 1000, SELL/repayment 100, then INTEREST 10 the next day."""
 
     def test_cash_decomposition(self):
         txs = [
@@ -303,11 +306,11 @@ class TestExampleE:
             _ctxn(_tx(id=2, dt="2025-01-01", type="BUY", amount="-1000", quantity="10", asset_id=100)),
             # Repayment: SELL 1 unit at cost (100)
             _ctxn(_tx(id=3, dt="2025-01-01", type="SELL", amount="100", quantity="-1", asset_id=100)),
-            _ctxn(_tx(id=4, dt="2025-01-01", type="INTEREST", amount="10")),
+            _ctxn(_tx(id=4, dt="2025-01-02", type="INTEREST", amount="10")),
         ]
         ecfs = [(date(2025, 1, 1), 10, Decimal("1000"), "EUR")]
 
-        state = _last_state(txs, ecfs, price_map=_PRICE_MAP_100)
+        state = _last_state(txs, ecfs, price_map=_PRICE_MAP_100, date_to=date(2025, 1, 2))
 
         assert state.cumulative_external_cash_flow == Decimal("1000")
         assert state.cash_value == Decimal("110")  # 1000-1000+100+10=110
@@ -390,16 +393,16 @@ class TestEdgeCases:
         _assert_invariants(state)
 
     def test_fee_reduces_cash(self):
-        """FEE reduces cash → still correctly decomposed."""
+        """FEE reduces cash → still correctly decomposed (interest and fee the day after the purchase)."""
         txs = [
             _ctxn(_tx(id=1, dt="2025-01-01", type="DEPOSIT", amount="1000")),
             _ctxn(_tx(id=2, dt="2025-01-01", type="BUY", amount="-1000", quantity="10", asset_id=100)),
-            _ctxn(_tx(id=3, dt="2025-01-01", type="INTEREST", amount="50")),
-            _ctxn(_tx(id=4, dt="2025-01-01", type="FEE", amount="-10")),
+            _ctxn(_tx(id=3, dt="2025-01-02", type="INTEREST", amount="50")),
+            _ctxn(_tx(id=4, dt="2025-01-02", type="FEE", amount="-10")),
         ]
         ecfs = [(date(2025, 1, 1), 10, Decimal("1000"), "EUR")]
 
-        state = _last_state(txs, ecfs, price_map=_PRICE_MAP_100)
+        state = _last_state(txs, ecfs, price_map=_PRICE_MAP_100, date_to=date(2025, 1, 2))
 
         assert state.cash_value == Decimal("40")  # 1000-1000+50-10=40
         # capital_baseline(1000) - book_asset_like(1000) = 0
@@ -419,3 +422,31 @@ class TestEdgeCases:
         assert state.cash_from_generated_returns == Decimal("0")
         assert state.total_pnl == Decimal("0")
         _assert_invariants(state)
+
+
+# =============================================================================
+# STK1-1: income and a BUY on one day — the BUY spends the income, as if it came the day before
+# =============================================================================
+
+
+class TestSameDayIncome:
+    """DEPOSIT 1000, BUY 1000 and INTEREST 100: the day's income replays first, so the BUY spends it (R first)."""
+
+    @staticmethod
+    def _split(interest_day: str) -> tuple[Decimal, Decimal, Decimal]:
+        txs = [
+            _ctxn(_tx(id=1, dt="2025-01-01", type="DEPOSIT", amount="1000")),
+            _ctxn(_tx(id=2, dt="2025-01-01", type="BUY", amount="-1000", quantity="10", asset_id=100)),
+            _ctxn(_tx(id=3, dt=interest_day, type="INTEREST", amount="100")),
+        ]
+        ecfs = [(date(2025, 1, 1), 10, Decimal("1000"), "EUR")]
+        state = _last_state(txs, ecfs, price_map=_PRICE_MAP_100)
+        _assert_invariants(state)
+        return state.cash_value, state.cash_from_contributed_capital, state.cash_from_generated_returns
+
+    def test_the_buy_spends_the_income_of_its_day(self):
+        """The 100 € left are capital: the purchase took the interest first, then 900 € of the deposit."""
+        assert self._split("2025-01-01") == (Decimal("100"), Decimal("100"), Decimal("0"))
+
+    def test_income_on_the_buy_day_reads_as_income_the_day_before(self):
+        assert self._split("2025-01-01") == self._split("2024-12-31")

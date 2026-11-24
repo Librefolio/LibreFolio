@@ -615,11 +615,11 @@
                 {canAsk}
                 {brokersReady}
                 {ownedBrokerIds}
+                brokerIds={$data.appliedBrokerIds ?? activeBrokerIds ?? null}
                 dateStart={dateRangeCtl.start}
                 dateEnd={dateRangeCtl.end}
                 targetCurrency={appliedCurrency}
                 {summary}
-                {brokerFilterActive}
                 {refreshVersion}
                 onsynced={handleRiskSynced}
             />

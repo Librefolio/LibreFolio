@@ -63,6 +63,12 @@ export interface PortfolioDataState {
     pnlCandles: PortfolioPnlCandleSeries | null;
     /** The currency of the figures on screen: the one the last answer was asked in. Null before the first one. */
     appliedCurrency: string | null;
+    /**
+     * The brokers of the summary on screen: the ones the last main report was asked over, null before the first one. A broker
+     * filter reaches the report after its debounce and its load, so a panel that sets its own question beside the summary — the
+     * Risk tab's (RSK-F) — reads these, not the filter, and its figures never belong to two different scopes.
+     */
+    appliedBrokerIds: number[] | null;
     /** The main report is on its way and the page says it is busy (a background load does not set it, Z-18). */
     reportLoading: boolean;
     /** The contribution is asked and none is on screen: the panel shows its skeleton. */
@@ -173,6 +179,7 @@ const EMPTY: PortfolioDataState = {
     groupedSummary: null,
     pnlCandles: null,
     appliedCurrency: null,
+    appliedBrokerIds: null,
     reportLoading: false,
     contributionLoading: false,
     contributionRefreshing: false,
@@ -254,7 +261,8 @@ export function createPortfolioData(inputs: PortfolioDataInputs, deps: Partial<P
         if (stale()) return outcome;
         const summary = report?.summary as PortfolioSummary | null | undefined;
         if (!summary) return {...outcome, ok: false};
-        state.update((current) => ({...current, summary, history: withLiveLastPoint(current.history, summary)}));
+        // The summary is `scope`'s, which may be a newer filter than the last main report's: its brokers come with it (RSK-F).
+        state.update((current) => ({...current, summary, history: withLiveLastPoint(current.history, summary), appliedBrokerIds: scope.brokerIds ?? null}));
         // «Globale» (project 74): its rows are another question's; asked the same way, so they follow the prices too
         const askedGrouping = grouping();
         if (askedGrouping === 'asset') {
@@ -266,7 +274,7 @@ export function createPortfolioData(inputs: PortfolioDataInputs, deps: Partial<P
         return outcome;
     }
 
-    function applyReport(report: PortfolioReport | null, requested: string | undefined) {
+    function applyReport(report: PortfolioReport | null, scope: PortfolioScope) {
         shownReport = report;
         const history = (report?.history as PortfolioHistoryPoint[] | null | undefined) ?? [];
         patch({
@@ -284,7 +292,8 @@ export function createPortfolioData(inputs: PortfolioDataInputs, deps: Partial<P
             depositHistory: (report?.deposit_history as PortfolioDepositHistorySeries | null | undefined) ?? undefined,
             acquisitionFunding: (report?.acquisition_funding as PortfolioAcquisitionFundingSeries | null | undefined) ?? undefined,
             allocationHistory: (report?.allocation_history as AllocationHistoryDimensions | null | undefined) ?? null,
-            appliedCurrency: requested ?? null,
+            appliedCurrency: scope.currency ?? null,
+            appliedBrokerIds: scope.brokerIds ?? null,
         });
         inputs.onFirstDay?.(history.length > 0 ? history[0].date : null);
         if (report) restartLivePoll();
@@ -311,7 +320,7 @@ export function createPortfolioData(inputs: PortfolioDataInputs, deps: Partial<P
         const scope = inputs.scope();
         const cached = api.peekReport(mainReportCall(scope, {wantsBrokerPnlHistory: inputs.wantsBrokerPnlHistory()}));
         if (!cached) return;
-        applyReport(cached.report, scope.currency);
+        applyReport(cached.report, scope);
         showCachedContribution(scope);
     }
 
@@ -328,7 +337,7 @@ export function createPortfolioData(inputs: PortfolioDataInputs, deps: Partial<P
         const call = mainReportCall(scope, {wantsBrokerPnlHistory: inputs.wantsBrokerPnlHistory()});
 
         const cached = api.peekReport(call);
-        if (cached && cached.report !== shownReport) applyReport(cached.report, scope.currency);
+        if (cached && cached.report !== shownReport) applyReport(cached.report, scope);
         const request = !cached || cached.stale || force ? api.fetchReport(call, force) : null;
         if (showCachedContribution(scope)) void loadContribution({background});
         if (!request) {
@@ -341,13 +350,13 @@ export function createPortfolioData(inputs: PortfolioDataInputs, deps: Partial<P
             const report = await request;
             if (!current() || load !== loadSeq) return;
             if (report) {
-                if (report !== shownReport) applyReport(report, scope.currency);
+                if (report !== shownReport) applyReport(report, scope);
             } else if (propagateError) {
                 throw new Error(inputs.failureMessage?.() ?? 'The portfolio report could not be loaded');
             } else if (cached) {
                 inputs.onRefreshFailed?.();
             } else {
-                applyReport(null, scope.currency);
+                applyReport(null, scope);
             }
         } finally {
             if (current() && load === loadSeq) patch({reportLoading: false});

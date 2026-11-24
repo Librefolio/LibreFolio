@@ -371,7 +371,11 @@ With False every broker counts 1, so no pair links brokers owned at different sh
 movement (or `date_from`, when it is earlier) to `date_to`: a movement dated before `date_from`
 moves the cash, the quantities, the cost pools, the capital and the K/R/W pools like any other —
 the pool rules of a cash movement that reduces no position are one static method,
-`_apply_pool_rule()`. A linked-internal CASH_TRANSFER or FX_CONVERSION leg goes through
+`_apply_pool_rule()`. Inside a day the rows replay in a fixed order: the cash income (DIVIDEND,
+INTEREST) first, then the position additions, the reductions, and the other cash movements. The
+income goes first so that one reinvested the same day — a broker's DRIP — reaches R before the BUY
+that spends it, and the BUY draws on R, not on K (STK1-1, developer decision of 24/11/2026; NAV,
+P&L and income do not depend on the order). A linked-internal CASH_TRANSFER or FX_CONVERSION leg goes through
 `_move_linked_cash()` (developer decision D-MF4): the departure records its `(from R, amount)`
 split in `transfer_splits`, keyed by its transaction id, and its arrival takes it up once,
 bringing back what the departure took from K and R. The gap between the two legs — a

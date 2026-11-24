@@ -318,7 +318,7 @@ levels, L1–L4. The two hosts pass the same props with a different scope. What 
 
 | Host | Scope | What differs |
 |---|---|---|
-| `frontend/src/routes/(app)/dashboard/+page.svelte:1109-1123` | `broker_ids: ownedBrokerIds` (l.230): the brokers the user owns with a share above 0 (`getOwnedBrokers()`, `frontend/src/lib/stores/reference/brokerStore.ts:262`) | The broker filter is not applied: `subtitle` becomes `risk.dashboardFullPortfolio` while it is on (l.1117), and `scopeValue` is `null` then (l.1115), because the summary follows the filter. `assetIds` are the summary's holdings (l.1114). |
+| `frontend/src/lib/features/portfolio-view/PortfolioRiskTab.svelte` | `broker_ids`: the brokers of the report on screen (`appliedBrokerIds`), the owned ones with a share above 0 (`getOwnedBrokers()`, `frontend/src/lib/stores/reference/brokerStore.ts`) or the subset the broker filter keeps (RSK-F) | With a filter on, `internalSubset` prints `risk.internalSubset`. `scopeValue` is the summary's net worth, which belongs to the same brokers. `assetIds` are the summary's holdings. |
 | `frontend/src/routes/(app)/brokers/[id]/+page.svelte:753-767` | `broker_ids: [broker.id]` | `scopeValue` is that broker's net worth (l.759); `internalSubset` prints `risk.internalSubset` (l.761). |
 
 - **No owned broker, no request.** The Dashboard host mounts the panel only when `canAsk` (l.234);
@@ -363,7 +363,7 @@ levels, L1–L4. The two hosts pass the same props with a different scope. What 
   (l.175-176), as stated at `levels/l1/ReturnHistogram.svelte:18` and applied by `barClass()` (l.40-43).
   A bar's `title` gives its range (l.68).
 - **Money.** `lossMoney()` is `scopeValue` × loss (`L1HowMuchItHurts.svelte:72`), shown only for a
-  positive `scopeValue` (l.65): on the Dashboard, never while a broker filter is on; on Broker Detail,
+  positive `scopeValue` (l.65): on the Dashboard, the net worth of the brokers the filter keeps; on Broker Detail,
   over that broker's own net worth (`frontend/src/routes/(app)/brokers/[id]/+page.svelte:759`).
 - **Labels and links.** Each card prints a `technicalName` line
   (`frontend/src/lib/components/ui/display/RiskMetricCard.svelte:108`, keys `risk.levels.l1.technical.*`)

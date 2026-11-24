@@ -44,7 +44,6 @@
     "dashboardTitle": "Risque du portefeuille",
     "brokerTitle": "Risque du courtier",
     "internalSubset": "Risque interne de ce sous-ensemble du courtier",
-    "dashboardFullPortfolio": "Le risque utilise tout le portefeuille ; le filtre de courtier du tableau de bord n'est pas appliqué.",
     "states": {
       "partial": "Partiel",
       "empty": "Aucun résultat",

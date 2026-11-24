@@ -171,7 +171,7 @@ A risk figure is only as good as the prices behind it. When data is missing or o
 
 ## 🔎 Good to Know {: #good-to-know }
 
-- **The Dashboard's tab covers your whole portfolio** — every broker you own with a share above 0% — over the Dashboard's date range and currency. It ignores the broker filter: a subtitle says so, and the amounts under the percentages are hidden while a filter is on.
+- **The Dashboard's tab covers your portfolio** — every broker you own with a share above 0%, at your share — over the Dashboard's date range and currency. A broker filter narrows it as it narrows the other tabs: the risk is then the one of the brokers the filter keeps, and a subtitle says so.
 - **On a broker's page**, the tab shows the same blocks for that broker alone.
 - **Changing the period or the currency** recalculates every block and clears the What If…? results: run them again.
 - **The risk-free rate**, beside **Compare with** in the block *Am I being paid for this risk?* (on a single asset's tab, under the line with the period and the currency), is what you could earn without taking risk: 0% until you set it, applied when you press Enter or leave the field. Sharpe and Sortino count the return above it; **Gains / losses** and the semi-deviation count from it, and their sentences name the rate they used. It is one value for every risk page. The ⓘ beside it suggests where to read one: the latest yield of a short government bill → [Sharpe Ratio](../../financial-theory/technical-analysis/risk-metrics/sharpe-ratio.md)
