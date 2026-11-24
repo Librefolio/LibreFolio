@@ -80,6 +80,9 @@ function inADay(): string {
     return new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
 }
 
+/** The address a simulated link would confirm: the `new_email` of a `ready` check (81 U46), shown on the page as a double check. */
+const LINK_ADDRESS = 'pec-link-address@zq-pec.example.com';
+
 function newAddress(tag: string): string {
     return `pec_${tag}_${uniqueSuffix()}@example.com`;
 }
@@ -349,7 +352,8 @@ async function simulateLinkServer(page: Page, owner: {username: string}): Promis
             server.checks.push(route.request().postDataJSON());
             const here = await whoIsHere();
             const status = here === 'nobody' ? 'signin' : here === 'other' ? 'other_account' : 'ready';
-            await route.fulfill({status: 200, json: checked(CHECK_PATH, schemas.EmailChangeCheckResponse, {status})});
+            // The address comes only with `ready` (81 U46)
+            await route.fulfill({status: 200, json: checked(CHECK_PATH, schemas.EmailChangeCheckResponse, status === 'ready' ? {status, new_email: LINK_ADDRESS} : {status})});
         },
     );
     await page.route(
@@ -380,6 +384,7 @@ async function signInOnTheWayBack(page: Page, user: {username: string; password:
 async function confirmAndStayIn(page: Page): Promise<void> {
     const card = page.getByTestId('email-change-status');
     await expect(card).toHaveAttribute('data-status', 'ready', {timeout: LOAD_MS});
+    await expect(card.getByTestId('email-change-address'), 'the page shows the address the click would confirm (81 U46)').toHaveText(LINK_ADDRESS);
     const since = await eventSeq(page);
     await card.getByTestId('email-change-confirm').click();
     const event = await waitForEvent(page, 'email.change.confirmed', {since, timeout: ACTION_MS});
@@ -401,6 +406,7 @@ test.describe('The link page — knows on opening what the link can do, and stay
         await expect(card, 'The sign-in is asked before any click').toHaveAttribute('data-status', 'signin', {timeout: LOAD_MS});
         expect(page.url(), 'the token leaves the address bar').not.toContain(token);
         await expect(card.getByTestId('email-change-confirm'), 'No confirm button before the sign-in').toHaveCount(0);
+        await expect(card.getByTestId('email-change-address'), 'No address is shown before the sign-in (81 U46)').toHaveCount(0);
         await expect(card.getByTestId('email-change-goto-login'), 'One way to the sign-in, not two').toHaveCount(0);
 
         await card.getByTestId('email-change-signin-action').click();

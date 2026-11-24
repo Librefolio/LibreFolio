@@ -472,6 +472,31 @@ describe('/confirm-email-change — the page knows on opening what the link can 
         expect(mocks.confirm).not.toHaveBeenCalled();
     });
 
+    it('ECP-31 (81 U46): a ready link shows the address the click would confirm, on a line of its own, as a double check', async () => {
+        mocks.check.mockResolvedValue({status: 'ready', new_email: 'new.address@example.test'});
+        openAt(`/confirm-email-change#token=${TOKEN}`);
+        render(EmailChangePage);
+        await expectStatus('ready');
+        expect(screen.getByTestId('email-change-address')).toHaveTextContent('new.address@example.test');
+    });
+
+    it('ECP-32 (81 U46): a ready link whose answer carries no address (an older server) shows none, and still confirms', async () => {
+        mocks.check.mockResolvedValue({status: 'ready'});
+        openAt(`/confirm-email-change#token=${TOKEN}`);
+        render(EmailChangePage);
+        await expectStatus('ready');
+        expect(screen.queryByTestId('email-change-address')).toBeNull();
+        expect(screen.getByTestId('email-change-confirm')).toBeEnabled();
+    });
+
+    it('ECP-33 (81 U46): the address is not shown when the link needs a sign-in or belongs to another account, whatever the answer carries', async () => {
+        mocks.check.mockResolvedValue({status: 'signin', new_email: 'new.address@example.test'});
+        openAt(`/confirm-email-change#token=${TOKEN}`);
+        render(EmailChangePage);
+        await expectStatus('signin');
+        expect(screen.queryByTestId('email-change-address')).toBeNull();
+    });
+
     it('ECP-21: no session of the account (check: signin) → signin at once, before any click; the token kept in the tab', async () => {
         mocks.check.mockResolvedValue({status: 'signin'});
         openAt(`/confirm-email-change#token=${TOKEN}`);
