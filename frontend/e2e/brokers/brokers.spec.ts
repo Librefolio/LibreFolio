@@ -381,4 +381,39 @@ test.describe('Broker CRUD on a disposable account', () => {
         // then fails on a *different* broker while this one really was deleted.
         await expect(page.locator('[data-testid^="broker-card-"]').filter({hasText: editedName})).toHaveCount(0, {timeout: 5000});
     });
+    // 81 U24: in a grid row a card is stretched to the tallest one; the footer must still end on the card's bottom edge, with no band of
+    // the card's own colour under it. A broker with a description and one without differ in height, so one of the two is stretched.
+    test('the footer of a card ends on the card’s bottom edge beside a taller card, at three widths (81 U24)', async ({page, owner}) => {
+        const suffix = uniqueSuffix();
+        const ids: number[] = [];
+        for (const [label, description] of [
+            ['tall', 'A broker with a line of description'],
+            ['short', null],
+        ] as const) {
+            const response = await page.request.post(BROKERS_PATH, {data: [{name: `U24 ${label} ${suffix}`, description}]});
+            expect(response.ok(), `create the ${label} broker: HTTP ${response.status()}`).toBe(true);
+            const created = ((await response.json()) as {results: Array<{broker_id: number | null}>}).results[0].broker_id;
+            if (typeof created !== 'number') throw new Error(`the ${label} broker was not created`);
+            owner.brokerIds.push(created);
+            ids.push(created);
+        }
+
+        await navigateTo(page, '/brokers');
+        await waitForSettled(page.getByTestId('brokers-page'));
+        for (const id of ids) await expect(page.getByTestId(`broker-card-${id}`)).toBeVisible({timeout: ROUND_TRIP_MS});
+
+        for (const width of [1280, 768, 390]) {
+            await page.setViewportSize({width, height: 900});
+            const boxes: Array<{card: {y: number; height: number}; footer: {y: number; height: number}}> = [];
+            for (const id of ids) {
+                const card = await page.getByTestId(`broker-card-${id}`).boundingBox();
+                const footer = await page.getByTestId(`broker-card-footer-${id}`).boundingBox();
+                if (!card || !footer) throw new Error(`broker ${id} has no card or no footer at ${width}px`);
+                boxes.push({card, footer});
+                // The card's own 1 px border sits under the footer.
+                expect(Math.abs(card.y + card.height - (footer.y + footer.height)), `broker ${id} at ${width}px: the footer ends on the card's bottom edge`).toBeLessThanOrEqual(2);
+            }
+            if (width >= 768) expect(Math.abs(boxes[0].card.y + boxes[0].card.height - (boxes[1].card.y + boxes[1].card.height)), `at ${width}px the two cards share a row, so they end together`).toBeLessThanOrEqual(1);
+        }
+    });
 });
