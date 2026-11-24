@@ -315,6 +315,7 @@
     "tooManyPriceDays": "This export would read too many days of prices. Choose a shorter period.",
     "replyInstructions": {
       "dataReceived": "Data received, I'm ready for your questions."
-    }
+    },
+    "noOwnedBrokers": "You own no broker: this selection reads your positions and cash, and those in brokers shared with you are not included."
   }
 }

@@ -1668,6 +1668,8 @@ const COMPACT_COMPONENT_VERSIONS: ReadonlyMap<string, ReadonlySet<number>> = new
     // Plan 68 D5: the classification left identity for its own component, asset.profile.
     ['asset.identity', new Set([1, 2])],
     ['asset.positions_by_broker', new Set([1, 2])],
+    // 78 L10b: `broker_scope_mode` names where the brokers come from, OWNED_BROKERS or REQUESTED_BROKERS.
+    ['asset.position_scope', new Set([1, 2])],
     ['asset.lot_detail', new Set([1, 2, 3, 4])],
     ['portfolio.fifo_lots', new Set([1, 2, 3])],
     ['broker.fifo_lots', new Set([1, 2, 3])],
@@ -1685,7 +1687,8 @@ const COMPACT_COMPONENT_VERSIONS: ReadonlyMap<string, ReadonlySet<number>> = new
     // through the one percentage formula and splits the reason code of an unavailable comparison.
     ['portfolio.allocations_cash', new Set([1, 2])],
     ['broker.concentration_context', new Set([1, 2])],
-    ['broker.concentration_comparison', new Set([1, 2])],
+    // 78 L10b: the comparison's base is the user's owned brokers, whole; a broker not owned is unavailable.
+    ['broker.concentration_comparison', new Set([1, 2, 3])],
     // F-AI (b): a `code` on every effect row and the portfolio's `fx_on_cash_effects`; the shape is otherwise the same.
     ['portfolio.flows_income', new Set([1, 2])],
     ['portfolio.fees_taxes', new Set([1, 2])],

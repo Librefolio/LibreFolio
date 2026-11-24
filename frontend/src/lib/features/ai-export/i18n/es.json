@@ -315,6 +315,7 @@
     "tooManyPriceDays": "Esta exportación leería demasiados días de precios. Elige un periodo más corto.",
     "replyInstructions": {
       "dataReceived": "Datos recibidos, estoy listo para escuchar tus preguntas."
-    }
+    },
+    "noOwnedBrokers": "No posees ningún bróker: esta selección lee tus posiciones y tu efectivo, y los de los brókeres compartidos contigo no se incluyen."
   }
 }

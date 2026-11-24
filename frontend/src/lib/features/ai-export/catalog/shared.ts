@@ -19,13 +19,15 @@ export interface AiExportEntityDirectory {
     readonly brokers: readonly z.output<typeof schemas.AiExportBrokerDirectoryEntry>[];
     readonly fx_pairs: readonly z.output<typeof schemas.AiExportFxPairDirectoryEntry>[];
 }
-export type AiExportSnapshotResponse = Omit<GeneratedAiExportSnapshotResponse, 'analysis_contract' | 'technical_sampling' | 'event_selection' | 'entity_directory' | 'export_scope' | 'meta'> & {
+export type AiExportSnapshotResponse = Omit<GeneratedAiExportSnapshotResponse, 'analysis_contract' | 'technical_sampling' | 'event_selection' | 'entity_directory' | 'export_scope' | 'unavailable_dataset_ids' | 'meta'> & {
     analysis_contract?: z.output<typeof schemas.AiExportAnalysisContract> | null;
     technical_sampling?: AiExportTechnicalSamplingManifest | null;
     event_selection?: z.output<typeof schemas.AiExportEventSelectionManifest> | null;
     entity_directory: AiExportEntityDirectory;
     /** 78 L10: which of the user's brokers a Portfolio export covers, only when it leaves an owned one out. */
     export_scope?: z.output<typeof schemas.AiExportExportScope> | null;
+    /** 78 L10b: datasets this user cannot select now (they read brokers, and the user owns none); the prompt does not suggest them. */
+    unavailable_dataset_ids?: readonly string[];
     meta: Omit<GeneratedAiExportSnapshotMeta, 'history_coverage'> & {
         history_coverage?: z.output<typeof schemas.AiExportHistoryCoverage> | null;
     };
@@ -287,6 +289,7 @@ export function normalizeAiExportSnapshotResponse(response: GeneratedAiExportSna
         technical_sampling: normalizedTechnicalSampling,
         event_selection: eventSelection,
         export_scope: exportScope,
+        unavailable_dataset_ids: response.unavailable_dataset_ids ?? [],
         meta: {
             ...response.meta,
             history_coverage: historyCoverage,

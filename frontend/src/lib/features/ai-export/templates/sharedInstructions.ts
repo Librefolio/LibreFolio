@@ -62,8 +62,13 @@ export const AI_EXPORT_DOMAIN_NOTES: Readonly<Record<AiExportDomain, readonly st
         'FIFO and performance sections use their declared runtime methodologies.',
         "Every amount is the broker's whole figure, not the user's share of it; the user's role and ownership stake are in the provenance section, so apply the stake only when the user's own part is needed.",
     ],
-    asset: ['Position context is limited to accessible brokers in scope.', 'Provider/user descriptions are context; measured market and portfolio facts remain separate.'],
-    fx: ['Rates are quote currency per one unit of base currency.', 'Direct exposure links are cash/trading/valuation-currency links, not look-through economic exposure.'],
+    // 78 L10b (D13): an export without a broker list counts the owned brokers, at the user's share (consultant, bozze-AIX.md §8).
+    asset: ["Where the data includes the user's position, it counts the brokers the user owns, each at the user's ownership share; brokers only shared with the user are left out.", 'Provider/user descriptions are context; measured market and portfolio facts remain separate.'],
+    fx: [
+        'Rates are quote currency per one unit of base currency.',
+        'Direct exposure links are cash/trading/valuation-currency links, not look-through economic exposure.',
+        "Where the data includes the user's exposure, it counts the brokers the user owns, each at the user's ownership share; brokers only shared with the user are left out.",
+    ],
 };
 
 interface AiExportAnalysisInstructionIdentity {

@@ -325,7 +325,8 @@ function renderAdditionalData(input: RenderAiExportPromptInput): string {
     if (input.selection.kind !== 'analysis' || input.selection.entry.kind !== 'analysis') {
         throw new AiExportPromptRenderError('incompatible_selection', 'Additional LibreFolio data guidance requires an analysis selection');
     }
-    const included = new Set(input.snapshot.dataset_manifest.map((entry) => entry.dataset_id));
+    // 78 L10b: a dataset the user cannot select (it reads brokers, and the user owns none) is never suggested.
+    const included = new Set([...input.snapshot.dataset_manifest.map((entry) => entry.dataset_id), ...(input.snapshot.unavailable_dataset_ids ?? [])]);
     const translate = input.translate ?? ((key: string) => key);
     const suggestions = (input.selection.entry.additional_export_suggestions ?? []).filter((suggestion) => !included.has(suggestion.dataset_id));
     const lines = [`## ${translate('aiExport.additionalData.heading')}`, '', translate('aiExport.additionalData.intro')];
