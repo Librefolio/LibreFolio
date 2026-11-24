@@ -212,7 +212,8 @@
       "investimental_order_start_missing": "Order {order} ({symbol}, last fill on {date} at {price}): the file starts with this order already under way, so its whole quantity cannot be read from the file {visible, select, yes {(the file shows {quantity} for {amount} {currency})} other {(none of the fills it shows can be counted)}}. The order was not imported: enter it by hand from your statement.",
       "reward_value": "The file gives no value for this reward: enter the value of a single unit on the day it was received, not the total, to import this row.",
       "investimental_fee_from_order_log": "{count, plural, one {# fee was read from the order log: it may differ slightly from your statement, check it there.} other {# fees were read from the order log: they may differ slightly from your statement, check them there.}}",
-      "xtb_positions_outside_period": "For {count, plural, one {# instrument} other {# instruments}} the quantity imported from this report differs from the quantity XTB shows open: trades made before the report's start (or after its end) are not in the file. Generate the report with the date range «All» to import the whole history."
+      "xtb_positions_outside_period": "For {count, plural, one {# instrument} other {# instruments}} the quantity imported from this report differs from the quantity XTB shows open: trades made before the report's start (or after its end) are not in the file. Generate the report with the date range «All» to import the whole history.",
+      "xtb_tax_refund": "{count, plural, one {# tax refund was imported as interest} other {# tax refunds were imported as interest}} («Tax refund»): money given back from the investment's gain, so it counts in the P&L."
     },
     "evidenceRowsTitle": "Source rows",
     "evidenceRowCount": "{n} rows",
@@ -574,7 +575,8 @@
       "traderepublic_not_yet_settled": "The date (or value_date) of these rows is after today.",
       "investimental_order_start_missing": "Each row gives the volume still open. The first rows of the order, with the first fills, are not in the file.",
       "investimental_fee_from_order_log": "Each fee is the drop, at each fill, of the commission still due on the open part of the order.",
-      "xtb_positions_outside_period": "Open volume from the Open Positions sheet, next to the net quantity of the Cash Operations rows imported."
+      "xtb_positions_outside_period": "Open volume from the Open Positions sheet, next to the net quantity of the Cash Operations rows imported.",
+      "xtb_tax_refund": "A positive tax is money given back."
     },
     "notesCount": "{n, plural, one {# note} other {# notes}}",
     "noNotices": "No warnings or notes",
