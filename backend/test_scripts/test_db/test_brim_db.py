@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 from decimal import Decimal
+from pathlib import Path
 from typing import List
 
 import pytest
@@ -1166,5 +1167,239 @@ class TestWB51QuantityOfADuplicate:
             verdicts = _verdicts(report)
             expected = {0: ("likely", [(readable_id, TransactionType.BUY, BRIMDuplicateLevel.LIKELY_WITH_ASSET)]), 1: ("unique", [])}
             assert verdicts == expected, f"W-B51 (unreadable quantity): the BUY id={unreadable_id}, whose quantity reads None, is no candidate, and the readable id={readable_id} still is: row 0 (0.5) a likely duplicate of {readable_id} alone, row 1 (0.7) new; the check answers {verdicts}"
+        finally:
+            await _delete_transactions(async_session, saved_ids)
+
+
+# =============================================================================
+# CATEGORY 4d: A REWARD IMPORTED AGAIN (project 79, STK-4a)
+# =============================================================================
+#
+# Before 1.1.0 a reward in kind was stored with another type: Coinbase and Crypto.com wrote an ADJUSTMENT whose description
+# carried the value, «… (Value: <total> <currency>)»; Freetrade wrote a free share as a BUY that took its cash. From 1.1.0
+# the same row comes back as a REWARD with no cash and no «(Value: …)». ``detect_tx_duplicates`` looks at the older types
+# for an incoming REWARD (and the other way round), and the level follows the merged-leg rule: the stored description must
+# HOLD the incoming one, once the «(Value: …)» note of the older imports is set aside on both sides (between equivalent
+# types only). So a re-imported reward is a LIKELY duplicate (it starts deselected in the wizard,
+# importDedup.duplicateStatusAllowsAutoSelect), LIKELY_WITH_ASSET once its asset is resolved; texts that do not match make it
+# POSSIBLE (it stays selected). An incoming BUY never matches a stored REWARD: its cash finds no cash there (deliberate).
+#
+# The stored rows carry the descriptions the 1.0.0 plugins really wrote (``git show`` of the plugins before 1.1.0); the
+# incoming ones are parsed by the 1.1.0 plugins from a sample row. Quantities have at most 10 decimals, what the column keeps.
+
+REWARD_SAMPLES = {
+    "broker_coinbase": "coinbase-export.csv",
+    "broker_cryptocom": "cryptocom-export.csv",
+    "broker_freetrade": "freetrade-export.csv",
+}
+
+
+def _reward_sample_csv(tmp_path: Path, plugin_folder: str, starts_with: str, replace: tuple = (), name: str = "one-row") -> Path:
+    """A one-row copy of a plugin's sample: its header and the line that starts with ``starts_with``, each ``(old, new)`` of
+    ``replace`` applied to that line (``tmp_path``; the sample itself is never edited)."""
+    from backend.test_scripts.brim_samples import plugin_samples_dir  # noqa: PLC0415 — test setup — imports after sys.path/db config
+
+    sample = plugin_samples_dir(plugin_folder) / REWARD_SAMPLES[plugin_folder]
+    header, *lines = sample.read_text(encoding="utf-8").splitlines()
+    found = [line for line in lines if line.startswith(starts_with)]
+    assert len(found) == 1, f"setup: {sample.name} must hold one line starting with {starts_with!r}, found {len(found)}"
+    row = found[0]
+    for old, new in replace:
+        assert old in row, f"setup: {old!r} is not in the {sample.name} line {row!r}"
+        row = row.replace(old, new)
+    path = tmp_path / f"{plugin_folder}-{name}.csv"
+    path.write_text(f"{header}\n{row}\n", encoding="utf-8")
+    return path
+
+
+def _parsed_rewards(plugin_folder: str, csv_path: Path, broker_id: int) -> List[TXCreateItem]:
+    """The transactions the 1.1.0 plugin ``plugin_folder`` parses from ``csv_path``, all REWARDs with a value."""
+    from backend.app.services.brim.registry import BRIMProviderRegistry  # noqa: PLC0415 — test setup — imports after sys.path/db config
+
+    BRIMProviderRegistry.auto_discover()
+    plugin = BRIMProviderRegistry.get_provider_instance(plugin_folder)
+    assert plugin is not None and plugin.plugin_version == "1.1.0", f"setup: {plugin_folder} 1.1.0 is registered"
+    output = plugin.parse(csv_path, broker_id=broker_id)
+    assert output.transactions and all(tx.type == TransactionType.REWARD and tx.cost_basis_override is not None for tx in output.transactions), f"setup: {plugin_folder} parses REWARDs with a value: {[(tx.type, tx.cost_basis_override) for tx in output.transactions]}, {output.validation_issues}"
+    return output.transactions
+
+
+# The three rewards of the samples, as 1.1.0 parses them and as 1.0.0 stored them.
+# Coinbase line 2, its 12-decimal quantity cut to 10 (the column keeps 10): «staking income: ETH» + « (Value: <Total> <currency>)».
+COINBASE_REWARD_LINE = "678a8bdefcb176007bfdbXXX"
+COINBASE_QUANTITY = "0.0000378357"
+COINBASE_OLD_TEXT = "staking income: ETH (Value: 0.12649 EUR)"
+# Crypto.com, 2024-11-11: «<description> (Value: <Native Amount> <Native Currency>)<hash suffix>», no hash on this row.
+CRYPTOCOM_REWARD_LINE = "2024-11-11 00:33:50,Cardholder CRO Stake Reward"
+CRYPTOCOM_QUANTITY = "9.9110424"
+CRYPTOCOM_OLD_TEXT = "Cardholder CRO Stake Reward (Value: 1.06944518 EUR)"
+# Freetrade line 13: a BUY of the free share for its Total, «freeshare_order: <Title>».
+FREETRADE_REWARD_LINE = "FTSE All World,FREESHARE_ORDER"
+FREETRADE_QUANTITY = "1"
+FREETRADE_OLD_TEXT = "freeshare_order: FTSE All World"
+
+REWARD_CASES = [
+    pytest.param("broker_coinbase", COINBASE_REWARD_LINE, (("0.000037835729", COINBASE_QUANTITY),), date(2025, 1, 17), TransactionType.ADJUSTMENT, COINBASE_QUANTITY, None, COINBASE_OLD_TEXT, id="coinbase-staking-adjustment"),
+    pytest.param("broker_cryptocom", CRYPTOCOM_REWARD_LINE, (), date(2024, 11, 11), TransactionType.ADJUSTMENT, CRYPTOCOM_QUANTITY, None, CRYPTOCOM_OLD_TEXT, id="cryptocom-stake-adjustment"),
+    pytest.param("broker_freetrade", FREETRADE_REWARD_LINE, (), date(2024, 1, 21), TransactionType.BUY, FREETRADE_QUANTITY, ("-4.95", "GBP"), FREETRADE_OLD_TEXT, id="freetrade-free-share-buy"),
+]
+
+
+async def _save_rows(session: AsyncSession, rows: List[Transaction]) -> List[int]:
+    """Rows saved as an earlier import left them; their ids, read before the commit expires the instances."""
+    session.add_all(rows)
+    await session.flush()
+    ids = [row.id for row in rows]
+    await session.commit()
+    return ids
+
+
+def _old_row(broker_id: int, asset_id: int, day: date, tx_type: TransactionType, quantity: str, cash: tuple | None, description: str) -> Transaction:
+    """A reward as a 1.0.0 plugin stored it: an ADJUSTMENT with no cash, or a BUY with its cash."""
+    amount, currency = cash if cash else ("0", None)
+    return Transaction(broker_id=broker_id, asset_id=asset_id, type=tx_type, date=day, quantity=Decimal(quantity), amount=Decimal(amount), currency=currency, description=description, tags="import")
+
+
+def _stored_reward(broker_id: int, asset_id: int, parsed: TXCreateItem) -> Transaction:
+    """A REWARD saved as a 1.1.0 import commits it: no cash, its value per unit in cost_basis_override."""
+    return Transaction(
+        broker_id=broker_id,
+        asset_id=asset_id,
+        type=TransactionType.REWARD,
+        date=parsed.date,
+        quantity=parsed.quantity,
+        amount=Decimal("0"),
+        currency=None,
+        cost_basis_override=parsed.cost_basis_override.amount,
+        cost_basis_currency=parsed.cost_basis_override.code,
+        description=parsed.description,
+        tags="import",
+    )
+
+
+def _resolved(parsed: TXCreateItem, asset_id: int) -> list:
+    """The asset mapping that resolves the parsed row's placeholder to ``asset_id``."""
+    from backend.app.schemas.brim import BRIMAssetMapping  # noqa: PLC0415 — test setup — imports after sys.path/db config
+
+    return [BRIMAssetMapping(fake_asset_id=parsed.asset_id, selected_asset_id=asset_id)]
+
+
+class TestRewardReimportDuplicates:
+    """A reward stored by a 1.0.0 plugin with its older type, imported again as a REWARD (project 79, STK-4a)."""
+
+    @pytest_asyncio.fixture
+    async def reward_asset(self, async_session: AsyncSession) -> int:
+        """An asset of the test's own for its rows; deleted after them."""
+        import uuid  # noqa: PLC0415 — test setup — imports after sys.path/db config
+
+        asset = Asset(display_name=f"STK-4a reward {uuid.uuid4().hex}", asset_type=AssetType.CRYPTO, currency="EUR", active=True)
+        async_session.add(asset)
+        await async_session.commit()
+        await async_session.refresh(asset)
+        asset_id = asset.id
+        yield asset_id
+        leftover = await async_session.get(Asset, asset_id)
+        if leftover:
+            await async_session.delete(leftover)
+            await async_session.commit()
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(("plugin_folder", "line", "replace", "day", "old_type", "quantity", "old_cash", "old_text"), REWARD_CASES)
+    async def test_a_reward_stored_with_its_old_type_is_a_likely_duplicate(self, async_session: AsyncSession, test_broker: int, reward_asset: int, tmp_path: Path, plugin_folder, line, replace, day, old_type, quantity, old_cash, old_text):
+        """The old row's text holds the new one: LIKELY with the asset unresolved, LIKELY_WITH_ASSET once it is resolved."""
+        (incoming,) = _parsed_rewards(plugin_folder, _reward_sample_csv(tmp_path, plugin_folder, line, replace), test_broker)
+        assert (incoming.date, incoming.quantity) == (day, Decimal(quantity)), f"setup: {plugin_folder} parsed {incoming.date} {incoming.quantity}"
+        assert incoming.description and incoming.description in old_text, f"setup: the 1.0.0 text {old_text!r} holds the 1.1.0 one {incoming.description!r}"
+
+        saved_ids = await _save_rows(async_session, [_old_row(test_broker, reward_asset, day, old_type, quantity, old_cash, old_text)])
+        try:
+            (old_id,) = saved_ids
+            unresolved = _verdicts(await detect_tx_duplicates(transactions=[incoming], broker_id=test_broker, session=async_session))
+            resolved = _verdicts(await detect_tx_duplicates(transactions=[incoming], broker_id=test_broker, session=async_session, asset_mappings=_resolved(incoming, reward_asset)))
+
+            assert unresolved == {0: ("likely", [(old_id, old_type, BRIMDuplicateLevel.LIKELY)])}, f"{plugin_folder}: the REWARD {incoming.description!r} is the {old_type} {old_text!r} (id={old_id}) again; the check answers {unresolved}"
+            assert resolved == {0: ("likely", [(old_id, old_type, BRIMDuplicateLevel.LIKELY_WITH_ASSET)])}, f"{plugin_folder}, asset resolved: the check answers {resolved}"
+        finally:
+            await _delete_transactions(async_session, saved_ids)
+
+    @pytest.mark.asyncio
+    async def test_a_stored_reward_is_found_by_an_incoming_adjustment(self, async_session: AsyncSession, test_broker: int, reward_asset: int, tmp_path: Path):
+        """The other way round: an ADJUSTMENT of the same units finds the stored REWARD, LIKELY with the same text and with the
+        1.0.0 text too: its «(Value: …)» note is set aside between equivalent types."""
+        (parsed,) = _parsed_rewards("broker_coinbase", _reward_sample_csv(tmp_path, "broker_coinbase", COINBASE_REWARD_LINE, (("0.000037835729", COINBASE_QUANTITY),)), test_broker)
+        saved_ids = await _save_rows(async_session, [_stored_reward(test_broker, reward_asset, parsed)])
+        try:
+            (reward_id,) = saved_ids
+            same_text = TXCreateItem(broker_id=test_broker, asset_id=parsed.asset_id, type=TransactionType.ADJUSTMENT, date=parsed.date, quantity=parsed.quantity, description=parsed.description)
+            old_text = TXCreateItem(broker_id=test_broker, asset_id=parsed.asset_id, type=TransactionType.ADJUSTMENT, date=parsed.date, quantity=parsed.quantity, description=COINBASE_OLD_TEXT)
+
+            verdicts = _verdicts(await detect_tx_duplicates(transactions=[same_text, old_text], broker_id=test_broker, session=async_session))
+
+            expected = {0: ("likely", [(reward_id, TransactionType.REWARD, BRIMDuplicateLevel.LIKELY)]), 1: ("likely", [(reward_id, TransactionType.REWARD, BRIMDuplicateLevel.LIKELY)])}
+            assert verdicts == expected, f"the stored REWARD id={reward_id} {parsed.description!r}: found by both ADJUSTMENTs, LIKELY with its own text and with {COINBASE_OLD_TEXT!r}; the check answers {verdicts}"
+        finally:
+            await _delete_transactions(async_session, saved_ids)
+
+    @pytest.mark.asyncio
+    async def test_texts_that_do_not_match_make_a_possible_duplicate(self, async_session: AsyncSession, test_broker: int, reward_asset: int, tmp_path: Path):
+        """Same broker, day and units, an ADJUSTMENT whose text does not hold the REWARD's: POSSIBLE (it stays selected), the
+        general rule for different texts."""
+        (incoming,) = _parsed_rewards("broker_coinbase", _reward_sample_csv(tmp_path, "broker_coinbase", COINBASE_REWARD_LINE, (("0.000037835729", COINBASE_QUANTITY),)), test_broker)
+        saved_ids = await _save_rows(async_session, [_old_row(test_broker, reward_asset, incoming.date, TransactionType.ADJUSTMENT, COINBASE_QUANTITY, None, "ETH received from a friend")])
+        try:
+            (old_id,) = saved_ids
+            verdicts = _verdicts(await detect_tx_duplicates(transactions=[incoming], broker_id=test_broker, session=async_session))
+            assert verdicts == {0: ("possible", [(old_id, TransactionType.ADJUSTMENT, BRIMDuplicateLevel.POSSIBLE)])}, f"the check answers {verdicts}"
+        finally:
+            await _delete_transactions(async_session, saved_ids)
+
+    @pytest.mark.asyncio
+    async def test_a_hashed_cryptocom_reward_is_likely_too(self, async_session: AsyncSession, test_broker: int, reward_asset: int, tmp_path: Path):
+        """Crypto.com 1.0.0 wrote the hash AFTER the value, «<description> (Value: …) (<hash>)»; 1.1.0 writes «<description>
+        (<hash>)». With the «(Value: …)» note set aside the old text holds the new one: a re-imported reward with a hash is a
+        LIKELY duplicate, deselected in the wizard (found by test-author, fixed 24/11/2026)."""
+        tx_hash = "0xabc123"
+        csv_path = _reward_sample_csv(tmp_path, "broker_cryptocom", CRYPTOCOM_REWARD_LINE, (("crypto_wallet,", f"crypto_wallet,{tx_hash}"),))
+        (incoming,) = _parsed_rewards("broker_cryptocom", csv_path, test_broker)
+        assert incoming.description == f"Cardholder CRO Stake Reward ({tx_hash})", f"setup: {incoming.description!r}"
+        old_text = f"Cardholder CRO Stake Reward (Value: 1.06944518 EUR) ({tx_hash})"
+        saved_ids = await _save_rows(async_session, [_old_row(test_broker, reward_asset, incoming.date, TransactionType.ADJUSTMENT, CRYPTOCOM_QUANTITY, None, old_text)])
+        try:
+            (old_id,) = saved_ids
+            verdicts = _verdicts(await detect_tx_duplicates(transactions=[incoming], broker_id=test_broker, session=async_session))
+            assert verdicts == {0: ("likely", [(old_id, TransactionType.ADJUSTMENT, BRIMDuplicateLevel.LIKELY)])}, f"the check answers {verdicts}"
+        finally:
+            await _delete_transactions(async_session, saved_ids)
+
+    @pytest.mark.asyncio
+    async def test_an_incoming_buy_never_matches_a_stored_reward(self, async_session: AsyncSession, test_broker: int, reward_asset: int, tmp_path: Path):
+        """Deliberate: a BUY's cash finds no cash on a REWARD. Row 0, the same REWARD, is the presence barrier: the stored row is
+        reachable on that day; row 1, the free share as a 1.0.0 BUY, is new."""
+        (parsed,) = _parsed_rewards("broker_freetrade", _reward_sample_csv(tmp_path, "broker_freetrade", FREETRADE_REWARD_LINE), test_broker)
+        saved_ids = await _save_rows(async_session, [_stored_reward(test_broker, reward_asset, parsed)])
+        try:
+            (reward_id,) = saved_ids
+            old_buy = TXCreateItem(broker_id=test_broker, asset_id=parsed.asset_id, type=TransactionType.BUY, date=parsed.date, quantity=parsed.quantity, cash=Currency(code="GBP", amount=Decimal("-4.95")), description=FREETRADE_OLD_TEXT)
+
+            verdicts = _verdicts(await detect_tx_duplicates(transactions=[parsed, old_buy], broker_id=test_broker, session=async_session))
+
+            expected = {0: ("likely", [(reward_id, TransactionType.REWARD, BRIMDuplicateLevel.LIKELY)]), 1: ("unique", [])}
+            assert verdicts == expected, f"the stored REWARD id={reward_id}: found by the same REWARD, never by the BUY {FREETRADE_OLD_TEXT!r}; the check answers {verdicts}"
+        finally:
+            await _delete_transactions(async_session, saved_ids)
+
+    @pytest.mark.asyncio
+    async def test_a_different_quantity_is_not_the_same_reward(self, async_session: AsyncSession, test_broker: int, reward_asset: int, tmp_path: Path):
+        """Row 0, the same units, is the presence barrier (LIKELY); row 1, another reward of the same day with other units, is new."""
+        csv_path = _reward_sample_csv(tmp_path, "broker_coinbase", COINBASE_REWARD_LINE, (("0.000037835729", COINBASE_QUANTITY),))
+        other_path = _reward_sample_csv(tmp_path, "broker_coinbase", COINBASE_REWARD_LINE, (("0.000037835729", "0.0000226522"),), name="other-units")
+        (same,) = _parsed_rewards("broker_coinbase", csv_path, test_broker)
+        (other,) = _parsed_rewards("broker_coinbase", other_path, test_broker)
+        saved_ids = await _save_rows(async_session, [_old_row(test_broker, reward_asset, same.date, TransactionType.ADJUSTMENT, COINBASE_QUANTITY, None, COINBASE_OLD_TEXT)])
+        try:
+            (old_id,) = saved_ids
+            verdicts = _verdicts(await detect_tx_duplicates(transactions=[same, other], broker_id=test_broker, session=async_session))
+            expected = {0: ("likely", [(old_id, TransactionType.ADJUSTMENT, BRIMDuplicateLevel.LIKELY)]), 1: ("unique", [])}
+            assert verdicts == expected, f"the ADJUSTMENT id={old_id} of {COINBASE_QUANTITY}: the REWARD of {same.quantity} is it again, the one of {other.quantity} is new; the check answers {verdicts}"
         finally:
             await _delete_transactions(async_session, saved_ids)
