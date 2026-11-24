@@ -509,7 +509,8 @@
       "removeUrl": "Remove URL",
       "toBeRemoved": "To be removed",
       "urlNone": "no URL",
-      "alreadyWithout": "{already} already without"
+      "alreadyWithout": "{already} already without",
+      "triLeave": "Unchanged"
     },
     "docsHelp": {
       "list": "Every asset LibreFolio follows, with the source of its prices, its latest price and its change. Open one for its chart, events and data."

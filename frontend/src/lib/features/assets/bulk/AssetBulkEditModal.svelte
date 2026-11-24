@@ -321,7 +321,8 @@
     }
 
     function triLabel(choice: Tri): string {
-        return choice === 'leave' ? $t('assets.bulkEdit.leave') : choice === 'yes' ? $t('assets.bulkEdit.yes') : $t('assets.bulkEdit.no');
+        // The «leave» segment of a three-state control says the state in one short word (81 U45); the long sentence stays on the text fields' placeholders.
+        return choice === 'leave' ? $t('assets.bulkEdit.triLeave') : choice === 'yes' ? $t('assets.bulkEdit.yes') : $t('assets.bulkEdit.no');
     }
 
     function flagLabel(value: boolean): string {
@@ -387,6 +388,7 @@
     </p>
 {/snippet}
 
+<!-- The «leave» segment takes twice the room of «Yes» and «No» (81 U45): its word is the longest, theirs the shortest. -->
 {#snippet triState(field: 'active' | 'is_benchmark', labelId: string, value: Tri, set: (next: Tri) => void)}
     <div role="radiogroup" aria-labelledby={labelId} class="inline-flex w-full overflow-hidden rounded-lg border border-lf-input" data-testid="asset-bulk-{field}" data-state={value} data-modified={value !== 'leave' ? 'true' : 'false'}>
         {#each TRI_OPTIONS as option (option)}
@@ -395,7 +397,7 @@
                 role="radio"
                 aria-checked={value === option}
                 data-testid="asset-bulk-{field}-{option}"
-                class="min-w-0 flex-1 truncate px-2 py-1.5 text-xs font-medium transition-colors focus-visible:outline-lf-focus {value === option ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-field text-lf-secondary hover:bg-lf-hover'}"
+                class="min-w-0 {option === 'leave' ? 'flex-[2]' : 'flex-1'} truncate px-2 py-1.5 text-xs font-medium transition-colors focus-visible:outline-lf-focus {value === option ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-field text-lf-secondary hover:bg-lf-hover'}"
                 onclick={() => set(option)}
             >
                 {triLabel(option)}

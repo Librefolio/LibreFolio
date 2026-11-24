@@ -509,7 +509,8 @@
       "removeUrl": "Rimuovi URL",
       "toBeRemoved": "Da rimuovere",
       "urlNone": "nessun URL",
-      "alreadyWithout": "{already} già senza"
+      "alreadyWithout": "{already} già senza",
+      "triLeave": "Invariato"
     },
     "docsHelp": {
       "list": "Tutti gli asset che LibreFolio segue, con la fonte dei prezzi, l'ultimo prezzo e la variazione. Aprine uno per grafico, eventi e dati."
