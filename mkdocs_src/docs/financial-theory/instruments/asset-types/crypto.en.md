@@ -11,7 +11,7 @@
 | **Code in LibreFolio** | `CRYPTO` |
 | **Pricing** | 24/7 trading on crypto exchanges (Binance, Coinbase, Kraken, etc.) |
 | **Currency** | Typically quoted in USD, but tradeable against many fiat and crypto pairs |
-| **Dividends** | None for most (some DeFi tokens offer staking rewards) |
+| **Dividends** | None for most; proof-of-stake tokens pay staking rewards in kind, recorded as [Rewards](../transaction-types/reward.md) |
 | **Volatility** | Significantly higher than traditional assets |
 | **Typical providers** | Yahoo Finance (e.g., `BTC-USD`), or prices entered by hand in the [Data Editor](../../../user/assets/detail/data-editor.md) |
 
@@ -37,7 +37,12 @@ Crypto assets trade in **pairs** (e.g., BTC/USD, ETH/BTC). LibreFolio tracks eac
 
 ### ⚡ Staking
 
-Some proof-of-stake (PoS) cryptocurrencies allow holders to "stake" their tokens to earn rewards — functionally similar to [interest](../asset-events/interest.md) on bonds.
+Some proof-of-stake (PoS) cryptocurrencies allow holders to "stake" their tokens to earn rewards — functionally similar to [interest](../asset-events/interest.md) on bonds, but paid in new tokens instead of cash.
+
+In LibreFolio each payment is a [**Reward**](../transaction-types/reward.md): the tokens received, with no cash, valued on
+the day they arrive. That value is income, and it becomes the cost of the new tokens. The Coinbase, Crypto.com, Bitvavo and
+CoinTracking importers record staking this way; when the file gives no value, the bulk workspace fills it from the
+token's price history.
 
 ---
 
