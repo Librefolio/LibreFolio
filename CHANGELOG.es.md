@@ -153,6 +153,8 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 - **Reenlazar eventos**: «Crear evento» ahora crea el evento que falta y enlaza la transacción con él en un solo paso.
 - **Riesgo**: la «Tasa libre de riesgo» ahora está junto a «Comparado con», en el bloque «¿Me están pagando por este riesgo?» del Panel, de la página de un bróker y del laboratorio. En un solo activo el bloque «Respecto a una referencia» desaparece, con su tabla: la comparación sigue en el Panel, en la página de un bróker y en el laboratorio.
 - **Perfil del activo**: un valor que ya existía antes del perfil ahora aparece como «Sistema» en los últimos cambios, y los identificadores libres de un activo forman una fila de etiquetas bajo «Otros identificadores».
+- **La imagen Docker es unos 22 MB más ligera**: los 30 avatares predeterminados están en WebP en la imagen (2,6 MB en lugar de 24,7 MB), igual que las copias que una nueva instancia pone en su carpeta de datos. Las instancias ya iniciadas conservan sus avatares.
+- **El sitio de la documentación es mucho más ligero**: las páginas ya no llevan la sangría del tema; el manual para desarrolladores, solo en inglés, ya no se copia en italiano, francés y español (las direcciones antiguas llevan a la página en inglés, y el selector de idioma indica que el manual está en inglés); cada página ya no lleva el menú entero, que lee una vez por idioma de un solo archivo. El HTML del sitio pasa de 387 MB a unos 55 MB; las páginas se ven y funcionan como antes, y el archivo del menú se descarga una vez por versión.
 
 #### 🎯 Asignador PAC y Herramientas
 
@@ -213,6 +215,7 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 - Riesgo › «¿Qué pasa si…?» en el móvil: los campos de los parámetros de la «Simulación» ahora tienen todos el mismo ancho.
 - Tabla de activos: las columnas del último precio y de las Δ son lo bastante anchas para sus cifras; un precio largo o un «+423,30 %» en francés ya no invade la columna vecina.
 - FX › «Añadir Par»: la leyenda «Proveedores» ahora muestra el icono de cada proveedor, como las rutas de debajo.
+- **Las vistas previas de imágenes conservan el formato del archivo**: las miniaturas de los archivos JPEG, WebP y GIF subidos llegaban siempre en PNG, mucho más pesadas para una foto; ahora llegan en su propio formato.
 
 ### ⚠️ Cambios incompatibles
 

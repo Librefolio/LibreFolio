@@ -283,8 +283,8 @@ frontend/src/lib/
   `{"scope": "personal"}` changes it, for the uploader or an admin. Every `UploadFileInfo` carries `scope` and
   `can_delete`: whether the requesting user may delete the file and change its scope. The full rule, older files
   included: [Uploaded Files: Common and Personal](../../../architecture/security.md#upload-scope)
-- **Seed avatars**: 30 default avatar PNGs copied to `custom-uploads/` on first startup via `seed_default_avatars()`,
-  with uploader `0` (the system): they are common
+- **Seed avatars**: 30 default avatars copied to `custom-uploads/` on first startup via `seed_default_avatars()`,
+  with uploader `0` (the system): they are common. The repository holds them as PNG, the Docker image as WebP (about a tenth of the weight); the seed reads both, and a volume seeded earlier keeps its PNG
 - **Off the event loop**: the handlers of uploaded files (`api/v1/uploads.py`) run the service's synchronous disk work
   (`save_upload`, `list_uploads`, `get_upload_info`, `get_upload_path`, `set_upload_scope`, `delete_upload`) through
   `asyncio.to_thread`

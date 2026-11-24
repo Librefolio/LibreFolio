@@ -896,6 +896,25 @@ other place that must already know it.
 
 ---
 
+## 🇬🇧 The Developer Manual Is Built Once {: #developer-english-only }
+
+`mkdocs-static-i18n` copies a page that has no translation into every language (`fallback_to_default` is one switch for the whole site), so
+the 142 pages of the Developer Manual, English only by design, used to exist four times: 113 MB of HTML and three more canonical addresses
+for the same text. After the build the hook `mkdocs_src/hooks/developer_english_only.py` (listed under `hooks:`, `event_priority(-150)`, for
+`build` and `gh-deploy`) does three things for `it`, `fr` and `es`:
+
+- **A copy becomes a redirect page** of about half a kilobyte: `<meta http-equiv="refresh">`, a script that keeps the query and the `#anchor`,
+  `noindex` and the English page as `canonical`. An old address (`/it/developer/…`, a bookmark, an external link) ends on the English page. A
+  page counts as a copy when no `<name>.<language>.md` translates it: the day one is translated (`index.<language>.md` for the section's home),
+  it stays a real page.
+- **Every link of the other pages leads straight to the English page**: the menu and the text of the Italian, French and Spanish pages link
+  `/developer/…`, so nobody goes through the redirect.
+- **The sitemap (and its `.gz`) and the `hreflang` alternates in the head of the English pages stop naming the copies.**
+
+The language selector (`javascripts/site-lang-selector.js`) shows a page under `/developer/` as English, disabled, with a note in the visitor's
+language («The developer manual is English only»), and leaves the stored language alone: from such a page there is nothing to switch to, and the
+next page in the visitor's language opens in that language. Test: `./dev.py test utils docs-developer-english-only`.
+
 ## Prettier Compatibility
 
 ### The Problem

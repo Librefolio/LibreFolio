@@ -153,6 +153,8 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 - **Relier les événements** : « Créer l'événement » crée maintenant l'événement manquant et y relie la transaction en une seule étape.
 - **Risque** : le « Taux sans risque » est maintenant à côté de « Comparé à », dans le bloc « Suis-je payé pour ce risque ? » du tableau de bord, de la page d'un courtier et du laboratoire. Sur un seul actif, le bloc « Par rapport à une référence » disparaît, avec son tableau : la comparaison reste dans le tableau de bord, la page d'un courtier et le laboratoire.
 - **Profil de l'actif** : une valeur présente avant le profil s'affiche maintenant « Système » dans les dernières modifications, et les identifiants libres d'un actif forment une ligne d'étiquettes sous « Autres identifiants ».
+- **L'image Docker est plus légère d'environ 22 Mo** : les 30 avatars par défaut sont en WebP dans l'image (2,6 Mo au lieu de 24,7 Mo), tout comme les copies qu'une nouvelle instance place dans son dossier de données. Les instances déjà démarrées gardent leurs avatars.
+- **Le site de la documentation est bien plus léger** : les pages ne portent plus l'indentation du thème ; le manuel développeur, en anglais seulement, n'est plus copié en italien, en français et en espagnol (les anciennes adresses mènent à la page anglaise, et le sélecteur de langue indique que le manuel est en anglais) ; chaque page ne porte plus le menu entier, qu'elle lit une fois par langue dans un seul fichier. Le HTML du site passe de 387 Mo à environ 55 Mo ; les pages s'affichent et fonctionnent comme avant, et le fichier du menu se télécharge une fois par version.
 
 #### 🎯 Allocateur PAC et Outils
 
@@ -213,6 +215,7 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 - Risque › « Que se passe-t-il si… ? » sur téléphone : les champs des paramètres de la « Simulation » ont maintenant tous la même largeur.
 - Tableau des actifs : les colonnes du dernier prix et des Δ sont assez larges pour leurs chiffres ; un prix long ou un « +423,30 % » ne déborde plus sur la colonne voisine.
 - FX › « Ajouter Paire » : la légende « Fournisseurs » affiche maintenant l'icône de chaque fournisseur, comme les routes en dessous.
+- **Les aperçus d'images gardent le format du fichier** : les miniatures des fichiers JPEG, WebP et GIF envoyés partaient toujours en PNG, bien plus lourdes pour une photo ; elles arrivent maintenant dans leur propre format.
 
 ### ⚠️ Changements incompatibles
 
