@@ -298,6 +298,18 @@ def front_tx_bulk_charges_link(verbose: bool = False, ui: bool = False, headed: 
     return _run_playwright("transactions/tx-bulk-charges-link.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_tx_clone_charges(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """«Clona» carries the linked-charges structure: a parent's charges copied under its copy, a charge's copy linked to the same parent (project 66, TL-3)."""
+    print_section("Frontend TX Clone Charges Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("transactions/tx-clone-charges.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_tx_bulk_promote_charges(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """No pair-promote for a leg that still has linked charges; «scollega» then merge, saved in one batch (project 66, C21)."""
     print_section("Frontend TX Bulk Promote Charges Tests")
@@ -927,6 +939,14 @@ def populate_registry(registry: dict) -> None:
         name="TX Bulk Charges Link Tests",
         desc="Project 66 F7-d: in the Bulk, «Link» a new BUY + new FEE and a saved BUY + saved free FEE (also by tap on a phone), saved and read back by id; «Open» from a FEE's form to its parent absent from the Bulk adds the parent",
         tests="transactions/tx-bulk-charges-link.spec.ts",
+    )
+    add_test(
+        cat,
+        "tx-clone-charges",
+        front_tx_clone_charges,
+        name="TX Clone Charges Tests",
+        desc="Project 66 TL-3: «Clona» on a BUY with FEE+TAX copies them under the BUY copy on their own dates (page, selection, Bulk «Clona riga»); a FEE cloned alone stays linked to its BUY; a failed charges read copies the BUY alone with a warning; a charge under a «del» parent is copied free with a warning; «del»/«scollega» charges are not copied; trash on the BUY copy takes its untouched charge copies; a copy given another asset (a FEE cloned alone, or the BUY copy) keeps its link, is flagged chargeAssetMismatch and «Save all» is refused whole — read back from the server",
+        tests="transactions/tx-clone-charges.spec.ts",
     )
     add_test(
         cat,
