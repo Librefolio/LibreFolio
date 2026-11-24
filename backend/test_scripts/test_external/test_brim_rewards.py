@@ -18,6 +18,16 @@ Four BRIM plugins learn the REWARD type (units received with no cash, valued on 
 
 And the two shared helpers of ``_brim_io``: ``reward_unit_value`` and ``reward_value_todo``.
 
+Lot STK-4b (project 79) teaches two more crypto plugins a staking reward as a REWARD whose file gives no value, so every
+one carries the ``reward_value`` todo (decision S4-Q4; the wizard's bulk workspace fills it from the price history):
+
+- Bitvavo 1.1.0: ``staking`` with Amount > 0 → REWARD (no cash, no value) + the todo; a negative Amount → an outgoing
+  ADJUSTMENT, no todo. The status ``Distributed`` is settled for a staking row ONLY (every staking row of the sample has
+  it, and 1.0.0 skipped them all); a ``Distributed`` buy or withdrawal is still skipped with its warning, and a staking
+  row with another status (``Pending``) too.
+- CoinTracking 1.2.0: ``Staking`` in a crypto → REWARD + the todo, and its fiat fee a FREE FEE (``parent_ref`` None: a REWARD
+  is no parent, decision S4-Q3 (a)); ``Staking`` in a fiat currency stays a cash INTEREST whose fee names it.
+
 Every synthetic file is written in ``tmp_path`` and owned by its test, so its whole output is asserted exactly; a row is
 found by its file line, never by position in an unowned list. The real samples are only read, never edited.
 
@@ -40,7 +50,9 @@ from backend.app.schemas.brim import BRIMParseOutput
 from backend.app.schemas.common import is_fiat_currency
 from backend.app.schemas.transactions.transactions import TXCreateItem
 from backend.app.services.brim_providers import _brim_io as brim_io
+from backend.app.services.brim_providers.broker_bitvavo.plugin import BitvavoBrokerProvider
 from backend.app.services.brim_providers.broker_coinbase.plugin import CoinbaseBrokerProvider
+from backend.app.services.brim_providers.broker_cointracking.plugin import CoinTrackingBrokerProvider
 from backend.app.services.brim_providers.broker_cryptocom.plugin import CryptoComBrokerProvider
 from backend.app.services.brim_providers.broker_freetrade.plugin import FreetradeBrokerProvider
 from backend.app.services.brim_providers.broker_generic_csv.plugin import GenericCSVBrokerProvider
@@ -92,6 +104,10 @@ FREETRADE_HEADER = [
     "Dividend Withheld Tax Amount",
 ]
 
+BITVAVO_HEADER = ["Timezone", "Date", "Time", "Type", "Currency", "Amount", "Quote Currency", "Quote Price", "Received / Paid Currency", "Received / Paid Amount", "Fee currency", "Fee amount", "Status", "Transaction ID", "Address"]
+COINTRACKING_HEADER = '"Type","Buy","Cur.","Sell","Cur.","Fee","Cur.","Exchange","Group","Comment","Date","Tx-ID"'
+
+BITVAVO_SAMPLE = plugin_samples_dir("broker_bitvavo") / "bitvavo-export.csv"
 COINBASE_SAMPLE = plugin_samples_dir("broker_coinbase") / "coinbase-export.csv"
 CRYPTOCOM_SAMPLE = plugin_samples_dir("broker_cryptocom") / "cryptocom-export.csv"
 FREETRADE_SAMPLE = plugin_samples_dir("broker_freetrade") / "freetrade-export.csv"
@@ -542,3 +558,194 @@ class TestGenericCsvRewards:
         assert output.transactions[0].cost_basis_override is None, "the amount is never read as a value"
         assert {issue.row for issue in output.validation_issues} == {2}, f"the refusal is on line 2: {output.validation_issues}"
         assert _todos(output) == [(0, COST_FIELD, "blocker", REWARD_VALUE)], f"only the imported REWARD asks for its value: {_todos(output)}"
+
+
+# =============================================================================
+# F. BITVAVO (STK-4b)
+# =============================================================================
+
+
+def _bitvavo_row(kind: str, currency: str, amount: str, status: str, tx_id: str, when: str = "2024-02-01", paid: str = "", fee: str = "") -> Dict[str, str]:
+    """A Bitvavo row; a buy pays ``paid`` EUR and its ``fee`` EUR, a staking row has no paid amount nor fee."""
+    return {
+        "Timezone": "Europe/Amsterdam",
+        "Date": when,
+        "Time": "10:00:00",
+        "Type": kind,
+        "Currency": currency,
+        "Amount": amount,
+        "Quote Currency": "EUR" if paid else "",
+        "Received / Paid Currency": "EUR" if paid else "",
+        "Received / Paid Amount": paid,
+        "Fee currency": "EUR" if fee else currency,
+        "Fee amount": fee,
+        "Status": status,
+        "Transaction ID": tx_id,
+    }
+
+
+class TestBitvavoRewards:
+    """Bitvavo 1.1.0: a staking reward is a REWARD asking for its value; «Distributed» is settled for staking rows only."""
+
+    # file lines of the synthetic file below
+    LINE_STAKING_DISTRIBUTED = 3
+    LINE_BUY_DISTRIBUTED = 4
+    LINE_STAKING_NEGATIVE = 5
+    LINE_STAKING_ZERO = 6
+    LINE_STAKING_PENDING = 7
+    LINE_STAKING_COMPLETED = 8
+    LINE_WITHDRAWAL_DISTRIBUTED = 9
+    LINE_STAKING_NEGATIVE_DISTRIBUTED = 10
+
+    @pytest.fixture
+    def output(self, tmp_path: Path) -> BRIMParseOutput:
+        rows = [
+            _bitvavo_row("buy", "BTC", "0.001", "Completed", "tx-buy", paid="-30.00", fee="0.08"),  # line 2 → BUY, FEE
+            _bitvavo_row("staking", "ETH", "0.5", "Distributed", "tx-stake-eth"),  # line 3 → REWARD, todo
+            _bitvavo_row("buy", "ETH", "0.01", "Distributed", "tx-buy-distributed", paid="-20.00", fee="0.05"),  # line 4 → skipped
+            _bitvavo_row("staking", "ADA", "-0.1", "Completed", "tx-stake-back"),  # line 5 → ADJUSTMENT -0.1
+            _bitvavo_row("staking", "BTC", "0", "Distributed", "tx-stake-zero"),  # line 6 → skipped (zero)
+            _bitvavo_row("staking", "ETH", "0.2", "Pending", "tx-stake-pending"),  # line 7 → skipped (not settled)
+            _bitvavo_row("staking", "DOT", "2", "Completed", "tx-stake-dot"),  # line 8 → REWARD, todo
+            _bitvavo_row("withdrawal", "ETH", "-0.3", "Distributed", "tx-withdraw-distributed"),  # line 9 → skipped
+            _bitvavo_row("staking", "SOL", "-0.4", "Distributed", "tx-stake-back-distributed"),  # line 10 → ADJUSTMENT -0.4
+        ]
+        return BitvavoBrokerProvider().parse(_write_csv(tmp_path / "bitvavo-rewards.csv", BITVAVO_HEADER, rows), broker_id=BROKER_ID)
+
+    def test_version(self):
+        assert BitvavoBrokerProvider().plugin_version == "1.1.0"
+
+    def test_the_rows_imported(self, output: BRIMParseOutput):
+        """A buy with its fee comes first, so a todo's tx_index is not its row's position in the file."""
+        assert output.validation_issues == [], f"no row may be refused: {output.validation_issues}"
+        assert _shape(output) == [
+            (TransactionType.BUY, Decimal("0.001")),
+            (TransactionType.FEE, Decimal("0")),
+            (TransactionType.REWARD, Decimal("0.5")),
+            (TransactionType.ADJUSTMENT, Decimal("-0.1")),
+            (TransactionType.REWARD, Decimal("2")),
+            (TransactionType.ADJUSTMENT, Decimal("-0.4")),
+        ], f"lines 4, 6, 7 and 9 are skipped; the rest in file order: {_shape(output)}"
+
+    def test_a_staking_reward_is_a_reward_asking_for_its_value(self, output: BRIMParseOutput):
+        _assert_reward(output.transactions[2], "0.5", None, None, f"ETH staking Distributed (line {self.LINE_STAKING_DISTRIBUTED})")
+        _assert_reward(output.transactions[4], "2", None, None, f"DOT staking Completed (line {self.LINE_STAKING_COMPLETED})")
+        assert _todos(output) == [(2, COST_FIELD, "blocker", REWARD_VALUE), (4, COST_FIELD, "blocker", REWARD_VALUE)], f"one todo per REWARD, on its own index: {_todos(output)}"
+        for todo, line, symbol in zip(output.field_todos, (self.LINE_STAKING_DISTRIBUTED, self.LINE_STAKING_COMPLETED), ("ETH", "DOT"), strict=True):
+            assert output.transactions[todo.tx_index].type == TransactionType.REWARD, f"the todo of line {line} points at a REWARD"
+            assert todo.message.startswith(f"Line {line}:") and symbol in todo.message, f"the todo names its file line and asset: {todo.message!r}"
+        for index, symbol in ((2, "ETH"), (4, "DOT")):
+            assert output.extracted_assets[output.transactions[index].asset_id].extracted_symbol == symbol
+
+    @pytest.mark.parametrize(("index", "quantity", "line"), [(3, "-0.1", LINE_STAKING_NEGATIVE), (5, "-0.4", LINE_STAKING_NEGATIVE_DISTRIBUTED)], ids=["completed", "distributed"])
+    def test_staking_taken_back_stays_an_adjustment_without_todo(self, output: BRIMParseOutput, index: int, quantity: str, line: int):
+        taken_back = output.transactions[index]
+        assert (taken_back.type, taken_back.quantity, taken_back.cash, taken_back.cost_basis_override) == (TransactionType.ADJUSTMENT, Decimal(quantity), None, None), f"line {line}: {taken_back}"
+        assert index not in {todo.tx_index for todo in output.field_todos}, f"line {line}: an outgoing ADJUSTMENT asks for no value"
+
+    @pytest.mark.parametrize("line", [LINE_BUY_DISTRIBUTED, LINE_WITHDRAWAL_DISTRIBUTED, LINE_STAKING_PENDING], ids=["buy-distributed", "withdrawal-distributed", "staking-pending"])
+    def test_distributed_is_settled_for_staking_only(self, output: BRIMParseOutput, line: int):
+        """A Distributed buy or withdrawal is still not a settled row, nor is a Pending staking reward: skipped with a warning."""
+        messages = _warning_of_line(output, line)
+        assert len(messages) == 1 and "is not Completed" in messages[0], f"line {line}: one «not settled» warning, got {messages}"
+
+    def test_a_zero_staking_is_skipped(self, output: BRIMParseOutput):
+        messages = _warning_of_line(output, self.LINE_STAKING_ZERO)
+        assert len(messages) == 1 and "zero staking" in messages[0], f"line {self.LINE_STAKING_ZERO}: {messages}"
+
+    def test_imported_rows_have_no_warning(self, output: BRIMParseOutput):
+        for line in (2, self.LINE_STAKING_DISTRIBUTED, self.LINE_STAKING_NEGATIVE, self.LINE_STAKING_COMPLETED, self.LINE_STAKING_NEGATIVE_DISTRIBUTED):
+            assert _warning_of_line(output, line) == [], f"line {line} is imported: no warning"
+
+    def test_sample_staking_rows_are_rewards_asking_for_their_value(self):
+        """Every staking row of the real sample (all «Distributed», all skipped by 1.0.0) is a REWARD of its Amount with the
+        todo on its own index, matched by the Transaction ID its description carries."""
+        expected = [(line, row) for line, row in _sample_rows(BITVAVO_SAMPLE) if row["Type"].strip().lower() == "staking"]
+        assert expected, f"setup: {BITVAVO_SAMPLE.name} has staking rows"
+        assert {row["Status"] for _, row in expected} == {"Distributed"}, "setup: the sample's staking rows are all Distributed"
+
+        output = BitvavoBrokerProvider().parse(BITVAVO_SAMPLE, broker_id=BROKER_ID)
+        rewards = [tx for tx in output.transactions if tx.type == TransactionType.REWARD]
+        assert len(rewards) == len(expected), f"one REWARD per staking row of the sample: {len(rewards)} for {len(expected)}"
+        todo_of = {todo.tx_index: todo for todo in output.field_todos if todo.reason_code == REWARD_VALUE}
+        assert len(todo_of) == len(expected), f"one reward_value todo per staking row: {_todos(output)}"
+
+        for line, row in expected:
+            tx_id = row["Transaction ID"]
+            matches = [index for index, tx in enumerate(output.transactions) if tx.description and f"({tx_id})" in tx.description]
+            assert len(matches) == 1, f"line {line}: one transaction carries {tx_id}, got {matches}"
+            index = matches[0]
+            reward = output.transactions[index]
+            _assert_reward(reward, row["Amount"], None, None, f"sample line {line}")
+            assert reward.date == date.fromisoformat(row["Date"]), f"sample line {line}: {reward.date}"
+            assert output.extracted_assets[reward.asset_id].extracted_symbol == row["Currency"], f"sample line {line}"
+            todo = todo_of.get(index)
+            assert todo is not None, f"sample line {line}: the REWARD at index {index} has no reward_value todo"
+            assert (todo.field, todo.severity) == (COST_FIELD, "blocker"), todo
+            assert todo.message.startswith(f"Line {line}:") and row["Currency"] in todo.message, f"sample line {line}: {todo.message!r}"
+        assert not [notice.message for notice in output.warnings if "is not Completed" in notice.message], "no sample row is skipped for its status any more"
+
+
+# =============================================================================
+# G. COINTRACKING (STK-4b)
+# =============================================================================
+
+
+def _cointracking_file(tmp_path: Path, rows: Sequence[str]) -> Path:
+    path = tmp_path / "cointracking-rewards.csv"
+    path.write_text("\n".join([COINTRACKING_HEADER, *rows]) + "\n", encoding="utf-8")
+    return path
+
+
+class TestCoinTrackingRewards:
+    """CoinTracking 1.2.0: a crypto staking reward is a REWARD asking for its value, its fiat fee a free FEE."""
+
+    @pytest.fixture
+    def output(self, tmp_path: Path) -> BRIMParseOutput:
+        # INVENTED rows (amounts, dates and symbols made up)
+        rows = [
+            '"Trade","0.01000000","ETH","250.00","EUR","1.00","EUR","Kraken","","","2025-02-01 09:00:00",""',  # line 2 → BUY, FEE linked
+            '"Staking","0.01000000","ETH","","","0.10","EUR","Kraken","","","2025-02-02 09:00:00",""',  # line 3 → REWARD (todo), FEE free
+            '"Staking","4.20","EUR","","","0.30","EUR","Kraken","","","2025-02-03 09:00:00",""',  # line 4 → INTEREST, FEE linked
+            '"Staking","0.50000000","DOT","","","","","Kraken","","","2025-02-04 09:00:00",""',  # line 5 → REWARD (todo)
+        ]
+        return CoinTrackingBrokerProvider().parse(_cointracking_file(tmp_path, rows), broker_id=BROKER_ID)
+
+    def test_version(self):
+        assert CoinTrackingBrokerProvider().plugin_version == "1.2.0"
+
+    def test_the_rows_imported(self, output: BRIMParseOutput):
+        assert output.validation_issues == [], f"no row may be refused: {output.validation_issues}"
+        assert [tx.type for tx in output.transactions] == [
+            TransactionType.BUY,
+            TransactionType.FEE,
+            TransactionType.REWARD,
+            TransactionType.FEE,
+            TransactionType.INTEREST,
+            TransactionType.FEE,
+            TransactionType.REWARD,
+        ], [tx.type.value for tx in output.transactions]
+
+    def test_a_crypto_staking_reward_is_a_reward_asking_for_its_value(self, output: BRIMParseOutput):
+        _assert_reward(output.transactions[2], "0.01", None, None, "ETH staking (line 3)")
+        _assert_reward(output.transactions[6], "0.5", None, None, "DOT staking (line 5)")
+        assert _todos(output) == [(2, COST_FIELD, "blocker", REWARD_VALUE), (6, COST_FIELD, "blocker", REWARD_VALUE)], f"one todo per REWARD, on its own index: {_todos(output)}"
+        assert [todo.message.split(":")[0] for todo in output.field_todos] == ["Line 3", "Line 5"]
+        assert "ETH" in output.field_todos[0].message and "DOT" in output.field_todos[1].message, [todo.message for todo in output.field_todos]
+        assert output.extracted_assets[output.transactions[2].asset_id].extracted_symbol == "ETH"
+
+    def test_the_fee_of_a_reward_is_a_free_fee(self, output: BRIMParseOutput):
+        """A REWARD is no parent (S4-Q3 (a)): its fiat fee is imported as a FEE that names nothing."""
+        reward, fee = output.transactions[2], output.transactions[3]
+        assert fee.type == TransactionType.FEE and fee.date == reward.date, f"the fee of line 3 follows its reward: {fee}"
+        assert fee.cash is not None and (fee.cash.amount, fee.cash.code) == (Decimal("-0.10"), "EUR"), fee.cash
+        assert fee.parent_ref is None and fee.parent_transaction_id is None, f"a REWARD's fee names no parent: parent_ref={fee.parent_ref!r}"
+        if reward.ref is not None:
+            assert not [tx for tx in output.transactions if tx.parent_ref == reward.ref], "no charge names the REWARD"
+
+    def test_guard_other_fees_still_name_their_operation(self, output: BRIMParseOutput):
+        """The trade's fee names the BUY, the fiat staking's fee names its INTEREST: only the REWARD's stays free."""
+        buy, buy_fee, interest, interest_fee = output.transactions[0], output.transactions[1], output.transactions[4], output.transactions[5]
+        assert buy.ref and buy_fee.parent_ref == buy.ref, f"the trade's fee names the BUY: {buy.ref!r} / {buy_fee.parent_ref!r}"
+        assert interest.cash is not None and (interest.cash.amount, interest.cash.code) == (Decimal("4.20"), "EUR"), interest.cash
+        assert interest.ref and interest_fee.parent_ref == interest.ref, f"the fiat staking's fee names its INTEREST: {interest.ref!r} / {interest_fee.parent_ref!r}"

@@ -414,9 +414,9 @@ def external_brim_date_order(verbose: bool = False, test_names: list = None) -> 
 
 
 def external_brim_rewards(verbose: bool = False, test_names: list = None) -> bool:
-    """Test rewards in kind imported as REWARD by Coinbase, Crypto.com, Freetrade and the generic CSV (project 79, STK-4a)."""
+    """Test rewards in kind imported as REWARD by Coinbase, Crypto.com, Freetrade and the generic CSV (project 79, STK-4a), Bitvavo and CoinTracking (STK-4b)."""
     print_section("External: BRIM Rewards Tests")
-    print_info("Testing: reward_unit_value and reward_value_todo, the REWARD rows of four plugins (1.1.0), their value on receipt")
+    print_info("Testing: reward_unit_value and reward_value_todo, the REWARD rows of four plugins (1.1.0), their value on receipt; Bitvavo 1.1.0 and CoinTracking 1.2.0 staking rewards (STK-4b)")
     print_info("Tests: type, units, no cash, per-unit value and currency, the reward_value todo, rows not imported with a warning, samples")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_external/test_brim_rewards.py", test_names or None)
@@ -649,9 +649,9 @@ These tests verify external API integrations:
         "brim-rewards",
         external_brim_rewards,
         name="BRIM Rewards",
-        desc="Test rewards in kind imported as REWARD (project 79, STK-4a): Coinbase, Crypto.com, Freetrade, generic CSV",
+        desc="Test rewards in kind imported as REWARD (project 79, STK-4a): Coinbase, Crypto.com, Freetrade, generic CSV; STK-4b: Bitvavo and CoinTracking staking rewards",
         prereq="Sample files in test fixtures",
-        tests="reward_unit_value, reward_value_todo, REWARD type/units/no cash/value per plugin, the todo, rows not imported, samples, version 1.1.0",
+        tests="reward_unit_value, reward_value_todo, REWARD type/units/no cash/value per plugin, the todo, rows not imported, samples, version 1.1.0; Bitvavo 1.1.0 (staking → REWARD + todo, Distributed settled for staking only, negative → ADJUSTMENT, the sample's 9 rewards), CoinTracking 1.2.0 (crypto staking → REWARD + todo, its fee a free FEE, fiat staking still a linked INTEREST)",
         # PURE: untouched samples and files of tmp_path; no server, no database, no network.
         isolation="pure",
     )
