@@ -537,6 +537,148 @@ class TestAdjustmentRules:
 
 
 # ============================================================================
+# 1.8b REWARD RULES (project 79, STK-1): income in kind — units in, a value per unit, no cash
+# ============================================================================
+
+
+class TestRewardRules:
+    """REWARD: asset required, quantity > 0, no cash, a per-unit cost basis allowed, never linked to an asset event."""
+
+    @staticmethod
+    def _codes(**overrides) -> list[str]:
+        """The error codes ``TXCreateItem`` raises for a REWARD with ``overrides`` (empty when it is valid)."""
+        kwargs = {
+            "broker_id": 1,
+            "asset_id": 1,
+            "type": TransactionType.REWARD,
+            "date": date.today(),
+            "quantity": Decimal("20"),
+            "cost_basis_override": Currency(code="EUR", amount=Decimal("0.50")),
+            "cost_basis_mode": "manual",
+        }
+        kwargs.update(overrides)
+        kwargs = {key: value for key, value in kwargs.items() if value is not _ABSENT}
+        try:
+            TXCreateItem(**kwargs)
+        except ValidationError as exc:
+            return [error["type"] for error in exc.errors()]
+        return []
+
+    def test_reward_valid_with_cost_basis(self):
+        """A REWARD of 20 units at 0.50 EUR each, no cash, is valid and keeps its per-unit cost basis."""
+        tx = TXCreateItem(
+            broker_id=1,
+            asset_id=1,
+            type=TransactionType.REWARD,
+            date=date.today(),
+            quantity=Decimal("20"),
+            cost_basis_override=Currency(code="EUR", amount=Decimal("0.50")),
+            cost_basis_mode="manual",
+        )
+        assert tx.type == TransactionType.REWARD
+        assert tx.quantity == Decimal("20")
+        assert tx.cash is None
+        assert tx.cost_basis_override is not None
+        assert (tx.cost_basis_override.code, tx.cost_basis_override.amount) == ("EUR", Decimal("0.50"))
+
+    def test_reward_valid_without_cost_basis_mode(self):
+        """A cost basis set without a mode is allowed on a REWARD (rule 12b: the metadata admits it for quantity > 0)."""
+        assert self._codes(cost_basis_mode=_ABSENT) == []
+
+    @pytest.mark.parametrize("quantity", ["0", "-5"])
+    def test_reward_quantity_not_positive_refused(self, quantity):
+        """quantity <= 0 → qtyPositive."""
+        assert "qtyPositive" in self._codes(quantity=Decimal(quantity), cost_basis_override=_ABSENT, cost_basis_mode=_ABSENT)
+
+    def test_reward_cash_refused(self):
+        """Any non-zero cash on a REWARD → cashForbidden: a reward in kind moves no cash."""
+        assert "cashForbidden" in self._codes(cash=Currency(code="EUR", amount=Decimal("10")))
+
+    def test_reward_requires_asset(self):
+        """No asset_id → assetRequired."""
+        assert "assetRequired" in self._codes(asset_id=_ABSENT)
+
+    def test_reward_asset_event_refused(self):
+        """A REWARD is not event compatible → eventTypeIncompatible, and REWARD is not among the allowed types."""
+        errors = validate_transaction_business_rules(
+            tx_type=TransactionType.REWARD,
+            asset_id=1,
+            quantity=Decimal("20"),
+            cash=None,
+            asset_event_id=7,
+            cost_basis_mode=None,
+        )
+        refusals = [(error.type, error.context) for error in errors]
+        assert refusals == [("eventTypeIncompatible", {"type": "REWARD", "allowed": "ADJUSTMENT, DIVIDEND, INTEREST"})], refusals
+
+    @pytest.mark.parametrize("mode", ["auto", "auto-detail"])
+    def test_reward_refuses_an_average_cost_mode(self, mode):
+        """Q-B (rule 12c): a REWARD's cost basis is its value on receipt, never the pool's average cost."""
+        assert self._codes(cost_basis_mode=mode) == ["costBasisAutoNotAllowed"]
+        errors = validate_transaction_business_rules(tx_type=TransactionType.REWARD, asset_id=1, quantity=Decimal("20"), cash=None, asset_event_id=None, cost_basis_mode=mode)
+        assert [(error.type, error.context) for error in errors] == [("costBasisAutoNotAllowed", {"type": "REWARD", "mode": mode})]
+
+    def test_reward_takes_a_manual_mode(self):
+        assert self._codes(cost_basis_mode="manual") == []
+
+    def test_guard_adjustment_still_takes_auto(self):
+        """GUARD: rule 12c is the REWARD's alone; a positive ADJUSTMENT may still ask for the average cost."""
+        errors = validate_transaction_business_rules(tx_type=TransactionType.ADJUSTMENT, asset_id=1, quantity=Decimal("20"), cash=None, asset_event_id=None, cost_basis_mode="auto")
+        assert errors == []
+
+    def test_reward_explicit_zero_cost_basis_is_valid(self):
+        """Q-A: an explicit cost basis of 0 is a value (a reward worth nothing), not a missing one."""
+        tx = TXCreateItem(
+            broker_id=1,
+            asset_id=1,
+            type=TransactionType.REWARD,
+            date=date.today(),
+            quantity=Decimal("20"),
+            cost_basis_override=Currency(code="EUR", amount=Decimal("0")),
+            cost_basis_mode="manual",
+        )
+        assert tx.cost_basis_override is not None
+        assert tx.cost_basis_override.amount == Decimal("0")
+
+    def test_reward_metadata(self):
+        """TX_TYPE_METADATA's REWARD row: asset required, cash forbidden, quantity positive, cost basis on the receiving side."""
+        meta = TX_TYPE_METADATA[TransactionType.REWARD]
+        assert (meta.asset_mode, meta.cash_mode, meta.quantity_sign, meta.cost_basis_mode) == ("required", "forbidden", "positive", "required_qty_pos")
+        assert meta.cost_basis_pair is None
+        assert meta.event_compatible is False
+        assert meta.requires_link is False
+
+    def test_cost_basis_auto_false_for_reward_only(self):
+        """STK-2a: TX_TYPE_METADATA.cost_basis_auto is False for REWARD and True for every other type."""
+        assert TX_TYPE_METADATA[TransactionType.REWARD].cost_basis_auto is False
+        others = {tx_type.value: meta.cost_basis_auto for tx_type, meta in TX_TYPE_METADATA.items() if tx_type != TransactionType.REWARD}
+        assert others, "the table lists other types"
+        assert all(value is True for value in others.values()), others
+        assert set(TX_TYPE_METADATA) == set(TransactionType), "every type has a row: none falls back to the field default unseen"
+
+    def test_rule_12c_reads_the_table_not_a_type_list(self, monkeypatch):
+        """Rule 12c follows cost_basis_auto: flipped to False on ADJUSTMENT, an Auto ADJUSTMENT is refused."""
+        adjustment = TX_TYPE_METADATA[TransactionType.ADJUSTMENT]
+        monkeypatch.setitem(TX_TYPE_METADATA, TransactionType.ADJUSTMENT, adjustment.model_copy(update={"cost_basis_auto": False}))
+        for mode in ("auto", "auto-detail"):
+            errors = validate_transaction_business_rules(tx_type=TransactionType.ADJUSTMENT, asset_id=1, quantity=Decimal("20"), cash=None, asset_event_id=None, cost_basis_mode=mode)
+            assert [(error.type, error.context) for error in errors] == [("costBasisAutoNotAllowed", {"type": "ADJUSTMENT", "mode": mode})]
+        manual = validate_transaction_business_rules(tx_type=TransactionType.ADJUSTMENT, asset_id=1, quantity=Decimal("20"), cash=None, asset_event_id=None, cost_basis_mode="manual")
+        assert manual == [], "Manual stays allowed"
+
+    def test_rule_12c_lets_auto_through_where_the_table_allows_it(self, monkeypatch):
+        """The reverse: a REWARD row flipped to cost_basis_auto True takes Auto — no hard-coded REWARD set is left."""
+        reward = TX_TYPE_METADATA[TransactionType.REWARD]
+        monkeypatch.setitem(TX_TYPE_METADATA, TransactionType.REWARD, reward.model_copy(update={"cost_basis_auto": True}))
+        errors = validate_transaction_business_rules(tx_type=TransactionType.REWARD, asset_id=1, quantity=Decimal("20"), cash=None, asset_event_id=None, cost_basis_mode="auto")
+        assert errors == [], [(error.type, error.context) for error in errors]
+
+
+#: Marker for ``TestRewardRules._codes``: leave this keyword out of the request.
+_ABSENT = object()
+
+
+# ============================================================================
 # 1.9 HELPER METHODS
 # ============================================================================
 

@@ -1,0 +1,167 @@
+{
+  "format": "lf-brim-previous-output/1",
+  "comment": "Output of the plugin BEFORE its project-66 lot changed it (P2 contract §2.1). Never re-take it after the code change.",
+  "plugin_code": "broker_fineco",
+  "plugin_version": "1.5.0",
+  "source_head": "890343101",
+  "captured_on": "2026-11-21",
+  "sample": "broker_fineco/sample_reports/fineco_btp_market.csv",
+  "sample_sha256": "bfa893e9c93b06776d00534333d3561c15cc5d31dc4cffcc65de1afa8a8d32b9",
+  "extracted_assets": {
+    "2147483647": {
+      "extracted_symbol": null,
+      "extracted_isin": "IT0005416570",
+      "extracted_name": "BTP 20-25 1.40%",
+      "notices": []
+    },
+    "2147483646": {
+      "extracted_symbol": null,
+      "extracted_isin": "IE00B4L5Y983",
+      "extracted_name": "ISHARES MSCI WORLD ACC",
+      "notices": []
+    },
+    "2147483645": {
+      "extracted_symbol": null,
+      "extracted_isin": "IE00B3B8Q275",
+      "extracted_name": "ETF COVERED BOND ISH",
+      "notices": []
+    }
+  },
+  "transactions": [
+    {
+      "asset_id": 2147483647,
+      "type": "BUY",
+      "date": "2023-09-04",
+      "quantity": "5000",
+      "cash": {
+        "code": "EUR",
+        "amount": "-4920.00"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "fineco"
+      ],
+      "description": "Compravendita titoli: BTP 20-25 1.40%",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483647,
+      "type": "FEE",
+      "date": "2023-09-04",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "-3.50"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "fineco",
+        "fee"
+      ],
+      "description": "Commissioni: BTP 20-25 1.40%",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483646,
+      "type": "BUY",
+      "date": "2023-09-11",
+      "quantity": "2",
+      "cash": {
+        "code": "EUR",
+        "amount": "-208.20"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "fineco"
+      ],
+      "description": "Compravendita titoli: ISHARES MSCI WORLD ACC",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483646,
+      "type": "FEE",
+      "date": "2023-09-11",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "-2.95"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "fineco",
+        "fee"
+      ],
+      "description": "Commissioni: ISHARES MSCI WORLD ACC",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483645,
+      "type": "BUY",
+      "date": "2023-09-18",
+      "quantity": "3",
+      "cash": {
+        "code": "EUR",
+        "amount": "-420.00"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "fineco"
+      ],
+      "description": "Compravendita titoli: ETF COVERED BOND ISH",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483645,
+      "type": "FEE",
+      "date": "2023-09-18",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "-2.95"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "fineco",
+        "fee"
+      ],
+      "description": "Commissioni: ETF COVERED BOND ISH",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    }
+  ]
+}

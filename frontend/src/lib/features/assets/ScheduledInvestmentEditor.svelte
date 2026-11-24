@@ -31,6 +31,7 @@
     import {CurrencySearchSelect} from '$lib/components/ui/select';
     import SingleDatePicker from '$lib/components/ui/date/SingleDatePicker.svelte';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
+    import Switch from '$lib/components/ui/input/Switch.svelte';
     import {generateUUID} from '$lib/utils/core/uuid';
 
     import {numericArrows} from '$lib/actions/numericArrows';
@@ -1213,22 +1214,7 @@
                 </div>
             {/if}
             <span>⚡ {$t('assets.schedule.lateInterest')}</span>
-            <button
-                type="button"
-                data-testid="schedule-late-toggle"
-                data-state={lateRow.enabled ? 'on' : 'off'}
-                onclick={toggleLateInterest}
-                disabled={disabled || readonly}
-                aria-label="Toggle late interest"
-                class="relative inline-flex h-5 w-9 items-center rounded-full transition-colors
-                       {lateRow.enabled ? 'bg-lf-checked' : 'bg-lf-switch-off'}
-                       disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-                <span
-                    class="inline-block h-3.5 w-3.5 rounded-full shadow-sm transition-transform
-                             {lateRow.enabled ? 'translate-x-[18px] bg-lf-switch-knob-on' : 'translate-x-[3px] bg-lf-switch-knob-off border border-lf-input'}"
-                ></span>
-            </button>
+            <Switch size="sm" semantics="pressed" testId="schedule-late-toggle" data-state={lateRow.enabled ? 'on' : 'off'} checked={lateRow.enabled} onchange={toggleLateInterest} disabled={disabled || readonly} label="Toggle late interest" />
         </div>
     {/if}
 

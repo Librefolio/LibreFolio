@@ -27,7 +27,11 @@ Rules:
 * a zero amount changes no figure and never needs a rate;
 * the share scales every amount: an owner counts its own share, any other role the whole
   broker (:func:`effective_share`); a caller that asks for the whole broker (the broker page, D4) counts 1 for
-  every broker (:func:`broker_shares`).
+  every broker (:func:`broker_shares`);
+* income in kind (a REWARD, project 79) moves no cash but is income all the same: it comes in through its own channel
+  (``in_kind``, built by :func:`in_kind_income_movement`), converted in the same call as the cash, and counts in the
+  flows (:meth:`NativeCash.flows`, :meth:`NativeCash.position_flow_steps`, :meth:`NativeCash.sums_by_date`,
+  :meth:`NativeCash.missing_conversions`) and never in a balance, a value or an exchange result.
 """
 
 from __future__ import annotations
@@ -42,12 +46,13 @@ from typing import Any
 from backend.app.schemas.common import Currency
 from backend.app.services.financial_math.change_days import change_days
 from backend.app.services.financial_math.fx_rates import AskedDayRates
+from backend.app.services.financial_math.income import INCOME_TYPES, income_value, is_in_kind_income
 from backend.app.services.fx.conversion import convert_bulk, unit_rate_steps
 
 _ZERO = Decimal("0")
 _ONE = Decimal("1")
 _OWNER = "OWNER"
-_INCOME_TYPES = frozenset({"DIVIDEND", "INTEREST"})
+_INCOME_TYPES = INCOME_TYPES
 _COST_TYPES = frozenset({"FEE", "TAX"})
 
 # Below this size an exchange result is conversion dust, not a result: the same cash converted
@@ -120,6 +125,31 @@ def cash_movement_from_transaction(tx: Any, *, share: Decimal = _ONE) -> CashMov
     )
 
 
+def in_kind_income_movement(tx: Any, *, share: Decimal = _ONE) -> CashMovement | None:
+    """The income in kind of a transaction (a REWARD) as a flow-only movement, or None.
+
+    None for a transaction that moves cash or earns nothing in kind, and for a REWARD whose value is unknown
+    (:func:`~backend.app.services.financial_math.income.income_value`): its income is unknown, never zero, and the
+    lot it opens is reported without a cost. The movement goes to :func:`compute_native_cash` as ``in_kind_income``,
+    never as cash: it changes no balance.
+    """
+    if not is_in_kind_income(tx):
+        return None
+    value = income_value(tx)
+    if value is None:
+        return None
+    return CashMovement(
+        movement_id=tx.id,
+        transaction_type=str(getattr(tx.type, "value", tx.type)),
+        date=tx.date,
+        broker_id=tx.broker_id,
+        asset_id=tx.asset_id,
+        currency=value.currency,
+        amount=value.amount,
+        share=share,
+    )
+
+
 @dataclass(frozen=True, slots=True)
 class MissingCashConversion:
     """A pair that could not be converted, with every date it was needed on."""
@@ -132,7 +162,7 @@ class MissingCashConversion:
 class CashFlows:
     """The cash movements of a period, in the report currency, by type and by position.
 
-    Income (DIVIDEND, INTEREST) keeps its sign; costs (FEE, TAX) are absolute amounts. A
+    Income (DIVIDEND, INTEREST, and REWARD, income in kind) keeps its sign; costs (FEE, TAX) are absolute amounts. A
     movement with no position is unallocated, by broker.
     """
 
@@ -163,13 +193,16 @@ class NativeCash:
 
     ``converted[i]`` is ``movements[i].amount`` in the report currency at the movement's
     date (None when the rate is missing); ``unit_rates[(currency, day)]`` is the value of one
-    unit of ``currency`` on ``day``.
+    unit of ``currency`` on ``day``. ``in_kind`` and ``in_kind_converted`` are the income in kind
+    (:func:`in_kind_income_movement`) and its conversions, by the same rule: flows only, never cash.
     """
 
     report_currency: str
     movements: tuple[CashMovement, ...]
     converted: tuple[Decimal | None, ...]
     unit_rates: Mapping[tuple[str, date_type], Decimal]
+    in_kind: tuple[CashMovement, ...] = ()
+    in_kind_converted: tuple[Decimal | None, ...] = ()
     _balances: dict[int, dict[str, _Balance]] = field(init=False, repr=False, compare=False)
     _first_counted: dict[int, date_type] = field(init=False, repr=False, compare=False)
     _rate_days: dict[str, tuple[date_type, ...]] = field(init=False, repr=False, compare=False)
@@ -184,6 +217,12 @@ class NativeCash:
             raise ValueError(f"{len(converted)} converted amounts for {len(movements)} cash movements")
         object.__setattr__(self, "movements", movements)
         object.__setattr__(self, "converted", converted)
+        in_kind = tuple(self.in_kind)
+        in_kind_converted = tuple(self.in_kind_converted)
+        if len(in_kind_converted) != len(in_kind):
+            raise ValueError(f"{len(in_kind_converted)} converted amounts for {len(in_kind)} income in kind movements")
+        object.__setattr__(self, "in_kind", in_kind)
+        object.__setattr__(self, "in_kind_converted", in_kind_converted)
 
         counted = [movement for movement, value in zip(movements, converted, strict=True) if self._is_counted(movement, value)]
         foreign = [movement for movement in counted if movement.currency != self.report_currency]
@@ -198,6 +237,10 @@ class NativeCash:
         calendar = sorted({day for currency in held for day in rate_days.get(currency, ())})
         object.__setattr__(self, "_change_days", change_days(self._rate_at, held, calendar))
         object.__setattr__(self, "_foreign_brokers", frozenset(movement.broker_id for movement in foreign))
+
+    def _flow_rows(self) -> list[tuple[CashMovement, Decimal | None]]:
+        """Every movement a flow reads, with its conversion: the cash, then the income in kind."""
+        return list(zip(self.movements, self.converted, strict=True)) + list(zip(self.in_kind, self.in_kind_converted, strict=True))
 
     def _is_counted(self, movement: CashMovement, value: Decimal | None) -> bool:
         return movement.amount != 0 and value is not None
@@ -311,7 +354,7 @@ class NativeCash:
         costs_by_position: dict[tuple[int, int], Decimal] = {}
         unallocated_income: dict[int, Decimal] = {}
         unallocated_costs: dict[int, Decimal] = {}
-        for movement, value in zip(self.movements, self.converted, strict=True):
+        for movement, value in self._flow_rows():
             if value is None or not _in_window(movement.date, date_from, date_to):
                 continue
             signed = value * movement.share
@@ -344,16 +387,17 @@ class NativeCash:
         """Each position's income and costs of ``(date_from, date_to]`` as running totals, on the days they change.
 
         ``(broker_id, asset_id)`` → ``[(day, income, costs)]``, ascending, one entry per day holding an income (DIVIDEND,
-        INTEREST) or cost (FEE, TAX) movement of the position: the totals from ``date_from`` (excluded) through that day,
+        INTEREST, REWARD) or cost (FEE, TAX) movement of the position: the totals from ``date_from`` (excluded) through that day,
         by the rules of :meth:`flows` — income signed, costs absolute, at the movement's share, a missing conversion left
         out. One pass instead of a :meth:`flows` call a day (#48); with the movements in date order (the engine's), each
         entry equals ``flows(date_from, day)``'s figures for the position exactly.
         """
-        order = sorted(range(len(self.movements)), key=lambda index: self.movements[index].date)
+        rows = self._flow_rows()
+        order = sorted(range(len(rows)), key=lambda index: rows[index][0].date)
         totals: dict[tuple[int, int], list[Decimal]] = {}
         steps: dict[tuple[int, int], list[tuple[date_type, Decimal, Decimal]]] = {}
         for index in order:
-            movement, value = self.movements[index], self.converted[index]
+            movement, value = rows[index]
             kind = movement.transaction_type
             if value is None or movement.asset_id is None or not _in_window(movement.date, date_from, date_to):
                 continue
@@ -381,7 +425,7 @@ class NativeCash:
         """Counted movements in ``(date_from, date_to]`` summed by date and type, dates ascending."""
         wanted = None if transaction_types is None else frozenset(transaction_types)
         sums: dict[date_type, dict[str, Decimal]] = {}
-        for movement, value in zip(self.movements, self.converted, strict=True):
+        for movement, value in self._flow_rows():
             if not self._is_counted(movement, value) or not _in_window(movement.date, date_from, date_to):
                 continue
             if wanted is not None and movement.transaction_type not in wanted:
@@ -399,7 +443,7 @@ class NativeCash:
         """The pairs that could not be converted for movements in ``(date_from, date_to]``, by pair."""
         wanted = None if transaction_types is None else frozenset(transaction_types)
         dates_by_pair: dict[str, set[date_type]] = {}
-        for movement, value in zip(self.movements, self.converted, strict=True):
+        for movement, value in self._flow_rows():
             if not self._is_missing(movement, value) or not _in_window(movement.date, date_from, date_to):
                 continue
             if wanted is not None and movement.transaction_type not in wanted:
@@ -531,22 +575,34 @@ async def compute_native_cash(
     *,
     report_currency: str,
     rates_until: date_type | None = None,
+    in_kind_income: Sequence[CashMovement] = (),
 ) -> NativeCash:
-    """Every broker's native cash, with its conversions into ``report_currency``.
+    """Every broker's native cash, with its conversions into ``report_currency``, and the income in kind beside it.
 
-    One ``convert_bulk`` call converts each foreign movement at its own date; one ``unit_rate_steps`` call gives one unit
-    of each foreign currency on every day from its first movement through ``rates_until`` (its last movement when None),
-    as steps (P3): the same rates as a request a day, read on the days a rate changes. None is made, and ``session`` is
-    not used, when every non-zero amount is already in the report currency.
+    One ``convert_bulk`` call converts each foreign movement at its own date, the income in kind
+    (:func:`in_kind_income_movement`) included; one ``unit_rate_steps`` call gives one unit of each foreign cash currency
+    on every day from its first movement through ``rates_until`` (its last movement when None), as steps (P3): the same
+    rates as a request a day, read on the days a rate changes. Income in kind holds no balance, so it asks for no unit
+    rate. None is made, and ``session`` is not used, when every non-zero amount is already in the report currency.
     """
     movements = tuple(movements)
+    in_kind = tuple(in_kind_income)
     amount_indexes = [index for index, movement in enumerate(movements) if movement.currency != report_currency and movement.amount != 0]
-    if not amount_indexes:
-        return NativeCash(report_currency=report_currency, movements=movements, converted=tuple(movement.amount for movement in movements), unit_rates={})
+    in_kind_indexes = [index for index, movement in enumerate(in_kind) if movement.currency != report_currency and movement.amount != 0]
+    if not amount_indexes and not in_kind_indexes:
+        return NativeCash(
+            report_currency=report_currency,
+            movements=movements,
+            converted=tuple(movement.amount for movement in movements),
+            unit_rates={},
+            in_kind=in_kind,
+            in_kind_converted=tuple(movement.amount for movement in in_kind),
+        )
 
-    unit_windows = _unit_windows([movements[index] for index in amount_indexes], rates_until)
-    requests = [(Currency(code=movements[index].currency, amount=movements[index].amount), report_currency, movements[index].date) for index in amount_indexes]
+    to_convert = [movements[index] for index in amount_indexes] + [in_kind[index] for index in in_kind_indexes]
+    requests = [(Currency(code=movement.currency, amount=movement.amount), report_currency, movement.date) for movement in to_convert]
     results, _errors = await convert_bulk(session, requests, raise_on_error=False)
+    unit_windows = _unit_windows([movements[index] for index in amount_indexes], rates_until)
     windows = {(currency, report_currency): asked for currency, asked in unit_windows.items()}
     steps = await unit_rate_steps(session, windows) if windows else {}
 
@@ -557,8 +613,18 @@ async def compute_native_cash(
     converted: list[Decimal | None] = [movement.amount for movement in movements]
     for position, index in enumerate(amount_indexes):
         converted[index] = _result(position)
-    unit_rates = AskedDayRates(steps, windows, fixed_destination=report_currency)
-    return NativeCash(report_currency=report_currency, movements=movements, converted=tuple(converted), unit_rates=unit_rates)
+    in_kind_converted: list[Decimal | None] = [movement.amount for movement in in_kind]
+    for position, index in enumerate(in_kind_indexes, start=len(amount_indexes)):
+        in_kind_converted[index] = _result(position)
+    unit_rates: Mapping[tuple[str, date_type], Decimal] = AskedDayRates(steps, windows, fixed_destination=report_currency) if amount_indexes else {}
+    return NativeCash(
+        report_currency=report_currency,
+        movements=movements,
+        converted=tuple(converted),
+        unit_rates=unit_rates,
+        in_kind=in_kind,
+        in_kind_converted=tuple(in_kind_converted),
+    )
 
 
 def _unit_windows(foreign: Sequence[CashMovement], rates_until: date_type | None) -> dict[str, list[tuple[date_type, date_type]]]:

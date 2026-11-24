@@ -520,9 +520,13 @@ class RiskSimulationOutput(StrictModel):
     requested_path_count: Optional[PositiveInt] = Field(None, description="The path count asked for; `path_count` is the one run, lower when the request did not fit the budget.")
     # RN-16 (developer's Q4 c): the history the simulation was estimated on — its own, never the page's period.
     estimation_start: Optional[date] = Field(None, description="Date of the first return the simulation was estimated on.")
-    estimation_end: Optional[date] = Field(None, description="Date of the last return the simulation was estimated on: where the cone starts.")
+    estimation_end: Optional[date] = Field(None, description="Date of the last return the simulation was estimated on: where the cone starts when it drew from all the common history; with a chosen period (history_chosen) the cone starts where the data ends, history_available_end.")
     estimation_observations: Optional[PositiveInt] = Field(None, description="Number of returns the simulation was estimated on.")
     history_truncated: bool = Field(False, description="True when a longer common history existed and only its most recent observations fit the budget.")
+    # RSK-SIM1 (P-7): the window the user may choose a period in, and whether they did.
+    history_available_start: Optional[date] = Field(None, description="First day of all the common history the simulation could draw from: the earliest start a chosen period can have.")
+    history_available_end: Optional[date] = Field(None, description="Last day of that history.")
+    history_chosen: bool = Field(False, description="True when the days were drawn from a period the user chose, not from all the common history.")
 
     @model_validator(mode="after")
     def validate_estimation_window(self) -> RiskSimulationOutput:
@@ -534,6 +538,10 @@ class RiskSimulationOutput(StrictModel):
             raise ValueError("the estimation window carries its start, its end and its observations, or none of them")
         if self.estimation_start is not None and self.estimation_end is not None and self.estimation_end < self.estimation_start:
             raise ValueError("estimation_end must not precede estimation_start")
+        if (self.history_available_start is None) != (self.history_available_end is None):
+            raise ValueError("the available history carries its start and its end, or neither")
+        if self.history_available_start is not None and self.history_available_end < self.history_available_start:
+            raise ValueError("history_available_end must not precede history_available_start")
         return self
 
     @model_validator(mode="after")

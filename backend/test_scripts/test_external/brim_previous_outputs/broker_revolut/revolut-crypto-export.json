@@ -1,0 +1,246 @@
+{
+  "format": "lf-brim-previous-output/1",
+  "comment": "Output of the plugin BEFORE its project-66 lot changed it (P2 contract §2.1). Never re-take it after the code change.",
+  "plugin_code": "broker_revolut",
+  "plugin_version": "1.3.0",
+  "source_head": "a2e85db13",
+  "captured_on": "2026-11-21",
+  "sample": "broker_revolut/sample_reports/revolut-crypto-export.csv",
+  "sample_sha256": "73b4dd1a1e6fc64a57fed8e6a641c3f825f03a7583cc220f43292501b6759f28",
+  "extracted_assets": {
+    "2147483647": {
+      "extracted_symbol": "BTC",
+      "extracted_isin": null,
+      "extracted_name": null,
+      "notices": []
+    },
+    "2147483646": {
+      "extracted_symbol": "ETH",
+      "extracted_isin": null,
+      "extracted_name": null,
+      "notices": []
+    }
+  },
+  "transactions": [
+    {
+      "asset_id": 2147483647,
+      "type": "BUY",
+      "date": "2020-05-05",
+      "quantity": "0.00056077",
+      "cash": {
+        "code": "SEK",
+        "amount": "-50.00"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "revolut"
+      ],
+      "description": "buy: BTC",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483647,
+      "type": "BUY",
+      "date": "2020-06-01",
+      "quantity": "0.00001082",
+      "cash": {
+        "code": "SEK",
+        "amount": "-1.00"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "revolut"
+      ],
+      "description": "buy: BTC",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483647,
+      "type": "SELL",
+      "date": "2020-06-02",
+      "quantity": "-0.00001082",
+      "cash": {
+        "code": "SEK",
+        "amount": "0.93"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "revolut"
+      ],
+      "description": "sell: BTC",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483647,
+      "type": "BUY",
+      "date": "2020-11-19",
+      "quantity": "0.00069453",
+      "cash": {
+        "code": "SEK",
+        "amount": "-108.94"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "revolut"
+      ],
+      "description": "buy: BTC",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483647,
+      "type": "BUY",
+      "date": "2022-03-08",
+      "quantity": "0.00027963",
+      "cash": {
+        "code": "EUR",
+        "amount": "-10.00"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "revolut"
+      ],
+      "description": "buy: BTC",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": null,
+      "type": "FEE",
+      "date": "2022-03-08",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "-0.24"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "revolut"
+      ],
+      "description": "fee: BTC",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483646,
+      "type": "BUY",
+      "date": "2024-02-09",
+      "quantity": "0.00431791",
+      "cash": {
+        "code": "EUR",
+        "amount": "-10.00"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "revolut"
+      ],
+      "description": "buy: ETH",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": null,
+      "type": "FEE",
+      "date": "2024-02-09",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "-0.14"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "revolut"
+      ],
+      "description": "fee: ETH",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483647,
+      "type": "BUY",
+      "date": "2025-05-09",
+      "quantity": "0.00009518",
+      "cash": {
+        "code": "USD",
+        "amount": "-10.00"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "revolut"
+      ],
+      "description": "buy: BTC",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": null,
+      "type": "FEE",
+      "date": "2025-05-09",
+      "quantity": "0",
+      "cash": {
+        "code": "USD",
+        "amount": "-0.24"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "revolut"
+      ],
+      "description": "fee: BTC",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    }
+  ]
+}

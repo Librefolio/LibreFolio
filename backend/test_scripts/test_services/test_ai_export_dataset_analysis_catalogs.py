@@ -117,6 +117,7 @@ EXPECTED_PUBLIC_ANALYSIS_MAPPING = {
     "portfolio.rebalancing": (("portfolio.overview_and_history",), ()),
     "portfolio.performance_market_drivers": (("portfolio.overview_and_history",), ()),
     "portfolio.fiscal_lots": (("portfolio.overview_and_history", "portfolio.fifo"), ()),
+    "portfolio.protection_strategies": (("portfolio.overview_and_history",), ()),
     "broker.review": (("broker.overview_and_history",), ()),
     "broker.performance_market_drivers": (("broker.overview_and_history",), ()),
     "broker.fiscal_lots": (("broker.overview_and_history", "broker.fifo"), ()),
@@ -411,13 +412,13 @@ class TestAssetProfileWiring:
 
 class TestAnalysisCatalog:
     def test_expected_analysis_counts(self):
-        assert EXPECTED_ANALYSIS_COUNT == 11
-        assert EXPECTED_PUBLIC_ANALYSIS_COUNT == 11
-        assert len(PUBLIC_ANALYSES) == 11
+        assert EXPECTED_ANALYSIS_COUNT == 12
+        assert EXPECTED_PUBLIC_ANALYSIS_COUNT == 12
+        assert len(PUBLIC_ANALYSES) == 12
 
     def test_analysis_registry_is_public_only(self, analysis_registry: AnalysisRegistry):
-        assert len(analysis_registry) == 11
-        assert len(analysis_registry.for_visibility(CatalogVisibility.PUBLIC)) == 11
+        assert len(analysis_registry) == 12
+        assert len(analysis_registry.for_visibility(CatalogVisibility.PUBLIC)) == 12
         assert analysis_registry.for_visibility(CatalogVisibility.INTERNAL) == ()
 
     def test_analysis_ids_match_public_mapping(self, analysis_registry: AnalysisRegistry):
@@ -463,7 +464,7 @@ class TestAnalysisCatalog:
         catalog = AiExportSnapshotService.get_catalog()
         assert catalog.catalog_version == AI_EXPORT_CATALOG_VERSION
         assert len(catalog.datasets) == 8
-        assert len(catalog.analyses) == 11
+        assert len(catalog.analyses) == 12
         assert {entry.id for entry in catalog.datasets} == set(EXPECTED_PUBLIC_DATASET_IDS)
         assert {entry.id for entry in catalog.analyses} == set(EXPECTED_PUBLIC_ANALYSIS_MAPPING)
         for entry in catalog.analyses:

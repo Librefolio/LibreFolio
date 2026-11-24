@@ -3052,6 +3052,62 @@ class TestLinkedChargeWithheld:
         assert _lot_fees(result, 2) == _d("2")
 
 
+def _orphan_linked_charge(case: str, economic_type: str):
+    """An orphan linked group of charge 90 (``economic_type``, 4 €), with its precondition asserted.
+
+    - ``waiting-for-its-trade`` (M1b): lot A open; the charge of 10 Mar is linked to BUY 2 of 12 Mar; the end is 11 Mar.
+    - ``waiting-for-its-income`` (M2 §1.3): lot A open; the charge of 10 Mar is linked to a dividend of 12 Mar, known by
+      its facts; the end is 11 Mar.
+    - ``orphan-with-its-income`` (M2, D12): lot C opened on 10 Mar earns nothing of the dividend of that day; the charge
+      of 10 Mar is linked to it.
+    """
+
+    def charge(*, parent: int, **kwargs) -> EconomicEvent:
+        return _linked_cost(90, economic_type, "-4", dt="2025-03-10", parent=parent, **kwargs)
+
+    lot_a = _buy(1, "10", "100", dt="2025-01-15")
+    if case == "waiting-for-its-trade":
+        result = _run_linked([lot_a, _buy(2, "10", "100", dt="2025-03-12")], [charge(parent=2)], replay_until="2025-03-11")
+        _assert_waiting(result, 90, economic_type=economic_type, amount="4", day="2025-03-10", parent_id=2, parent_day="2025-03-12")
+    elif case == "waiting-for-its-income":
+        result = _run_linked([lot_a], [charge(parent=80, parent_facts=_parent_facts("2025-03-12", tx_type="DIVIDEND"))], replay_until="2025-03-11")
+        _assert_waiting(result, 90, economic_type=economic_type, amount="4", day="2025-03-10", parent_id=80, parent_day="2025-03-12", rule=_LINKED_INCOME)
+    else:
+        result = _run_linked([_buy(3, "5", "100", dt="2025-03-10")], [_income(80, "DIVIDEND", "50", dt="2025-03-10"), charge(parent=80)])
+        _assert_orphan_with_its_income(result, 90, economic_type=economic_type, amount="4", day="2025-03-10", parent_id=80, parent_day="2025-03-10")
+    return result
+
+
+class TestOrphanLinkedChargeWithheld:
+    """Project 66, M3 (GUARD): a linked group with no lot — waiting for its parent, or orphan with its income — whose
+    charge has no rate leaves the asset's orphan total of its kind unknown (``orphan_unknown``), and no lot's figures:
+    the group reaches no lot. The control: with every rate known nothing is withheld."""
+
+    _ORPHAN_CASES = ["waiting-for-its-trade", "waiting-for-its-income", "orphan-with-its-income"]
+
+    @pytest.mark.parametrize("case", _ORPHAN_CASES)
+    @pytest.mark.parametrize(("economic_type", "kind"), [pytest.param("FEE", "fees", id="fee"), pytest.param("TAX", "taxes", id="tax")])
+    def test_an_orphan_linked_charge_without_a_rate_leaves_its_kinds_orphan_total_unknown(self, case, economic_type, kind):
+        result = _orphan_linked_charge(case, economic_type)
+        groups = result.economic_allocation_groups
+
+        withheld = withheld_economics(groups, unconvertible_event_ids={90}, unconvertible_trade_ids=set(), trade_currency_by_id={1: "EUR", 2: "EUR", 3: "EUR"})
+
+        assert withheld.orphan_unknown == frozenset({kind})
+        assert withheld.amount_degraded == frozenset({_group_index(groups, 90)})
+        assert withheld.split_degraded == frozenset()
+        assert (withheld.income_from, withheld.fees_from, withheld.taxes_from) == ({}, {}, {})
+
+    @pytest.mark.parametrize("case", _ORPHAN_CASES)
+    @pytest.mark.parametrize("economic_type", ["FEE", "TAX"])
+    def test_control_an_orphan_linked_charge_with_its_rate_withholds_nothing(self, case, economic_type):
+        groups = _orphan_linked_charge(case, economic_type).economic_allocation_groups
+
+        withheld = withheld_economics(groups, unconvertible_event_ids=set(), unconvertible_trade_ids=set(), trade_currency_by_id={1: "EUR", 2: "EUR", 3: "EUR"})
+
+        assert (withheld.orphan_unknown, withheld.amount_degraded, withheld.split_degraded) == (frozenset(), frozenset(), frozenset())
+
+
 class TestTwoChargesLinkedToOneTrade:
     def test_two_charges_of_one_buy_make_two_groups_by_date_and_conserve(self):
         # Guard (MF review of M1): FEE 2 € on the BUY's day and FEE 3 € the day after, both linked to BUY 1. One

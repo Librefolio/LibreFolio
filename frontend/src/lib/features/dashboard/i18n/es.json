@@ -186,6 +186,7 @@
       "growth": "Cómo se ha movido el valor de la cartera en el período: en dinero, como rentabilidad o como ganancias y pérdidas.",
       "allocation": "Cómo se reparte la cartera — por tipo, sector, país o activo — hoy, o a lo largo del tiempo.",
       "positions": "Lo que tienes y lo que rindió cada posición en el período, agrupado por activo o por bróker, en tabla o en mapa."
-    }
+    },
+    "analyzeAllocation": "Analizar →"
   }
 }

@@ -97,10 +97,11 @@ class PnlCandleSeries(StrictModel):
 class IncomeHistoryPoint(BaseModel):
     """One day's signed personal income (G1c, plan §3.4/§4.4).
 
-    Source is every scoped, committed DIVIDEND/INTEREST Transaction — asset-linked
+    Source is every scoped, committed DIVIDEND/INTEREST/REWARD Transaction — asset-linked
     and broker-level (``asset_id=None``) rows alike, never a global AssetEvent
-    declaration. Signed: a legacy negative correction reduces the bucket, it is
-    never abs()'d away. Days with no DIVIDEND/INTEREST activity are omitted from
+    declaration. A REWARD is income in kind: its value at receipt, with no cash.
+    Signed: a legacy negative correction reduces the bucket, it is
+    never abs()'d away. Days with no income activity are omitted from
     the series entirely (a sparse economic-flow series, not a dense one with
     false zeros) — this point type itself never carries a "no data" sentinel.
     """
@@ -108,12 +109,15 @@ class IncomeHistoryPoint(BaseModel):
     date: date_type
     dividend: Currency = Field(..., description="Signed sum of DIVIDEND transactions for this date")
     interest: Currency = Field(..., description="Signed sum of INTEREST transactions for this date")
+    # Optional on the wire (always sent by the service): an answer or a captured report from before 1.4 has none, and
+    # a reader counts a missing one as zero
+    reward: Optional[Currency] = Field(None, description="Sum of REWARD transactions for this date: their value at receipt, income in kind. Absent in an answer from before 1.4: read as zero")
 
 
 class IncomeHistorySeries(StrictModel):
     """The full signed personal income history (G1c — GrowthChart P&L income submode).
 
-    ``sum(dividend) + sum(interest)`` across every point reproduces the canonical
+    ``sum(dividend) + sum(interest) + sum(reward)`` across every point reproduces the canonical
     signed ``PortfolioSummary.period_income`` exactly for the same scope/date
     range (plan §3.4) — same signed-conversion pattern as the summary's own
     income accumulator, not a residual reconciliation. ``missing_fx_pairs``

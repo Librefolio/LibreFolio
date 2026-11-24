@@ -2,10 +2,13 @@
 
 ``preview_pac_allocation`` and ``preview_rebalancing`` (``services/pac_allocator/preview.py``) read the request of ``plan``
 with the engine's normalizer and exact arithmetic, and return the numbers the screen shows before the calculation: the
-total of the plan; for the Rebalancer today's value and weight of every target entry and the table «maximum acceptable
-cost» with the «custom» fidelity both ways. No optimizer: the module never imports SCIP.
+total of the plan; for the Rebalancer today's value and weight of every target entry and the λ of the three fidelity
+levels. No optimizer: the module never imports SCIP.
 
-The figures are those of decisioni-REB §7.3, as exact fractions: the «6» of its table is 25/4 rounded on screen.
+The table «maximum acceptable cost» and the «custom» fidelity are the page's since R1-F (b) of project 67 (developer
+decision of 21/11/2026): their cases (B4 tests 3–6, 12 and the consultant's Q1) live in the Vitest of
+``frontend/src/lib/features/tools/pac-allocator/planner/acceptableCost.ts``. Here the preview gives what the page counts
+them on, and nothing it answers depends on the target fidelity.
 """
 
 from __future__ import annotations
@@ -19,6 +22,7 @@ import pytest
 
 from backend.app.schemas.pac_allocator.exact import exact_fraction
 from backend.app.schemas.pac_allocator.preview import PAC_TOOL_INPUT_ADAPTER, PAC_TOOL_OUTPUT_ADAPTER, REBALANCER_TOOL_INPUT_ADAPTER, REBALANCER_TOOL_OUTPUT_ADAPTER
+from backend.app.services.pac_allocator.models import FIDELITY_LEVEL_WEIGHTS
 from backend.app.services.pac_allocator.planner import plan_rebalancing
 from backend.app.services.pac_allocator.preview import preview_pac_allocation, preview_rebalancing
 from backend.test_scripts.test_schemas.test_pac_planner_schemas import _pac_request
@@ -45,48 +49,35 @@ def _twenty_thousand(**fields) -> dict:
     return reb.request("f-20000", holdings={"asset-a": "10000", "asset-b": "9000"}, cash="1000", weights={"asset-a": "0.5", "asset-b": "0.5"}, **fields)
 
 
-def _table(result) -> list[tuple[Fraction, ...]]:
-    return [(_money(row.misplaced), _money(row.cost_aware), _money(row.balanced), _money(row.faithful)) for row in result.table.rows]
-
-
-def test_preview_table_on_twenty_thousand() -> None:
-    """B4 test 3: rows 200, 500, 1 000, 2 000; at most 1 / 4 / 16, 25/4 / 25 / 100, 25 / 100 / 400, 100 / 400 / 1 600 (cost
-    aware ¼, balanced 1, faithful 4); the reference is the 1 000 row; the λ of the levels travel with the table."""
+def test_preview_gives_the_levels_lambda_and_no_table() -> None:
+    """R1-F (b) of project 67 (was B4 test 3): F and the λ of the three levels as the plan's normalizer reads them (cost aware
+    ¼, balanced 1, faithful 4), the page's columns; no table and no «custom» fidelity in the answer."""
     result = _rebalancer_preview(_twenty_thousand())
     assert result.result_state == "preview_ready" and _money(result.total) == 20_000
-    assert _table(result) == [
-        (200, 1, 4, 16),
-        (500, Fraction(25, 4), 25, 100),
-        (1_000, 25, 100, 400),
-        (2_000, 100, 400, 1_600),
-    ]
-    assert [row.reference for row in result.table.rows] == [False, False, True, False]
-    weights = result.table.level_weights
+    weights = result.fidelity_level_weights
     assert (exact_fraction(weights.cost_aware), exact_fraction(weights.balanced), exact_fraction(weights.faithful)) == (Fraction(1, 4), 1, 4)
-    assert result.custom is None and all(row.custom is None for row in result.table.rows)
+    assert {level: exact_fraction(getattr(weights, level)) for level in FIDELITY_LEVEL_WEIGHTS} == {level: Fraction(weight.numerator, weight.denominator) for level, weight in FIDELITY_LEVEL_WEIGHTS.items()}
+    assert not hasattr(result, "table") and not hasattr(result, "custom")
 
 
-def test_preview_custom_from_euros_gives_lambda_and_column() -> None:
-    """B4 test 4: 60 EUR on the reference row give λ = 3/5, and the column 12/5 (2.4) / 15 / 60 / 240."""
-    result = _rebalancer_preview(_twenty_thousand(), custom_reference_amount={"amount": "60", "currency": "EUR"})
-    assert (exact_fraction(result.custom.distance_weight), _money(result.custom.reference_amount)) == (Fraction(3, 5), 60)
-    assert [_money(row.custom) for row in result.table.rows] == [Fraction(12, 5), 15, 60, 240]
-
-
-def test_preview_custom_from_lambda_gives_the_euros() -> None:
-    """B4 test 5: a custom λ = 3/5 gives back 60 EUR and the same column: the round trip is exact."""
-    result = _rebalancer_preview(_twenty_thousand(fidelity={"kind": "custom", "lambda": "0.6"}))
-    assert (exact_fraction(result.custom.distance_weight), _money(result.custom.reference_amount)) == (Fraction(3, 5), 60)
-    assert [_money(row.custom) for row in result.table.rows] == [Fraction(12, 5), 15, 60, 240]
-
-
-def test_preview_rows_follow_the_scenario_total() -> None:
-    """B4 test 6: on 13 457 EUR the rows are 130, 340, 670, 1 300, and λ is computed with 670, the figure shown, never the
-    exact 5 % (672.85): 60·13 457/(2·670²), to six significant digits (Q1)."""
-    payload = reb.request("f-13457", holdings={"asset-a": "7000", "asset-b": "6000"}, cash="457", weights={"asset-a": "0.5", "asset-b": "0.5"})
-    result = _rebalancer_preview(payload, custom_reference_amount={"amount": "60", "currency": "EUR"})
-    assert [row[0] for row in _table(result)] == [130, 340, 670, 1_300]
-    assert exact_fraction(result.custom.distance_weight) == Fraction(899_332, 1_000_000)
+@pytest.mark.parametrize(
+    "fidelity",
+    [
+        pytest.param({"kind": "level", "level": "cost_aware"}, id="cost-aware"),
+        pytest.param({"kind": "level", "level": "faithful"}, id="faithful"),
+        pytest.param({"kind": "target_first"}, id="target-first"),
+        pytest.param({"kind": "custom", "lambda": "0.6"}, id="custom"),
+        pytest.param({"kind": "custom", "lambda": "1234570000"}, id="custom-large"),
+    ],
+)
+def test_preview_numbers_do_not_depend_on_the_fidelity(fidelity: dict) -> None:
+    """R1-F (b) of project 67: the page keys the preview without the target fidelity (a level chosen or a figure typed asks
+    nothing) and sends «Balanced». That is right only if no field of the answer depends on the fidelity: every field is the
+    same as with «Balanced», but the request's own fingerprint."""
+    balanced = _rebalancer_preview(_twenty_thousand()).model_dump(mode="json")
+    other = _rebalancer_preview(_twenty_thousand(fidelity=fidelity)).model_dump(mode="json")
+    assert balanced["snapshot"].pop("request_fingerprint") != other["snapshot"].pop("request_fingerprint")
+    assert other == balanced
 
 
 def test_preview_current_values_and_weights_per_item() -> None:
@@ -150,17 +141,17 @@ def test_preview_counts_a_positions_only_broker_in_f_and_today() -> None:
 
 
 def test_pac_preview_total_is_the_cash_to_invest() -> None:
-    """B4 test 8: the PAC's total is the cash it invests (the min fixture's 5 EUR); the PAC has no table."""
+    """B4 test 8: the PAC's total is the cash it invests (the min fixture's 5 EUR); the PAC has no fidelity."""
     request = PAC_TOOL_INPUT_ADAPTER.validate_python({**_pac_request(), "operation": "preview"})
     result = preview_pac_allocation(request)
     assert PAC_TOOL_OUTPUT_ADAPTER.validate_json(PAC_TOOL_OUTPUT_ADAPTER.dump_json(result), strict=True) == result
     assert (result.result_state, _money(result.total)) == ("preview_ready", 5)
-    assert not hasattr(result, "table")
+    assert not hasattr(result, "fidelity_level_weights")
 
 
 def test_preview_counts_targets_that_do_not_sum_to_one_and_the_plan_still_refuses_them() -> None:
     """F3a step 8 of project 67: the preview counts while the user is still typing the targets (the plan's «even incomplete»).
-    F, today's items and the table do not depend on the weights: with A and B at 30 % each (total 60 %) T4 still previews
+    F, today's items and the levels' λ do not depend on the weights: with A and B at 30 % each (total 60 %) T4 still previews
     F = 10 000 (the screen shows the control total itself: the ready preview carries no error); the plan refuses the same
     request as before, with `allocation.target_total_not_one`."""
     payload = reb.t4()
@@ -181,7 +172,7 @@ def test_preview_counts_targets_that_do_not_sum_to_one_and_the_plan_still_refuse
 
 def test_preview_numbers_do_not_depend_on_the_weights() -> None:
     """What the preview answers reads no weight: the same scenario with complete weights and with 30 % + 30 % gives the same
-    total, items, table and limit problems (the counted scenario's neutral weights never show)."""
+    total, items, levels' λ and limit problems (the counted scenario's neutral weights never show)."""
     complete = reb.t4()
     complete["target_weights"][0]["maximum"] = {"kind": "amount", "amount": {"amount": "100", "currency": "EUR"}}
     incomplete = reb.t4()
@@ -191,7 +182,7 @@ def test_preview_numbers_do_not_depend_on_the_weights() -> None:
 
     left, right = _rebalancer_preview(complete), _rebalancer_preview(incomplete)
 
-    assert (left.total, left.items, left.table, [issue.code for issue in left.limit_problems]) == (right.total, right.items, right.table, [issue.code for issue in right.limit_problems])
+    assert (left.total, left.items, left.fidelity_level_weights, [issue.code for issue in left.limit_problems]) == (right.total, right.items, right.fidelity_level_weights, [issue.code for issue in right.limit_problems])
     assert [issue.code for issue in left.limit_problems] == ["allocation.bound_max_below_current"]
 
 
@@ -239,8 +230,9 @@ def test_preview_without_a_price_answers_needs_input(product: str) -> None:
     assert not hasattr(result, "total")
 
 
-def test_preview_with_zero_total_has_no_table() -> None:
-    """B4 test 10: a portfolio worth nothing has no total to scale: no table, and the answer says why with its code."""
+def test_preview_with_zero_total_has_no_total() -> None:
+    """B4 test 10: a portfolio worth nothing has no total to scale the page's table on: no total, and the answer says why
+    with its code."""
     payload = reb.t4()
     payload["existing_cash"] = []
     for holding in payload["holdings"]:
@@ -248,7 +240,7 @@ def test_preview_with_zero_total_has_no_table() -> None:
     result = _rebalancer_preview(payload)
     assert result.result_state == "preview_needs_input"
     assert "portfolio_rebalancer.nonpositive_current_portfolio" in {issue.code for issue in result.issues}
-    assert not hasattr(result, "table")
+    assert not hasattr(result, "total") and not hasattr(result, "fidelity_level_weights")
 
 
 _NO_SCIP_PROBE = """
@@ -273,16 +265,10 @@ def test_preview_never_imports_or_calls_scip() -> None:
     assert "PREVIEW-WITHOUT-SCIP-OK" in completed.stdout
 
 
-def test_preview_target_first_has_no_column() -> None:
-    """B4 test 12 (M33): «Target first» has no maximum, so no custom column; the three levels stay."""
-    result = _rebalancer_preview(_twenty_thousand(fidelity={"kind": "target_first"}))
-    assert result.custom is None and all(row.custom is None for row in result.table.rows)
-    assert _table(result)[2] == (1_000, 25, 100, 400)
-
-
 def test_preview_with_a_total_that_does_not_terminate() -> None:
     """A USD Asset at 1.085 USD a EUR makes ``F`` a ratio with no decimal form: the preview is still ready, survives the
-    output union both ways, and every cell is the formula of its row (the schema checks it exactly)."""
+    output union both ways, and gives ``F`` as that exact ratio (the page's table reads its numerator and denominator; its
+    half of this case is in the Vitest of ``acceptableCost.ts``)."""
     payload = reb.request("f-usd", holdings={"asset-a": "5000", "asset-b": "40"}, cash="300", weights={"asset-a": "0.5", "asset-b": "0.5"}, prices={"asset-b": "100"})
     payload["assets"][1]["quote"]["currency"] = "USD"
     payload["fx_rates"] = {"EUR/USD": "1.085"}
@@ -290,7 +276,7 @@ def test_preview_with_a_total_that_does_not_terminate() -> None:
     payload["brokers"][0]["fee_schedules"].append({"fee_schedule_id": "fee-cap-usd-amount", "capability_id": "cap-usd-amount", "side": "buy", "fixed_fee": {"amount": "5", "currency": "USD"}, "rate": "0"})
     route = next(route for route in payload["order_routes"] if route["asset_id"] == "asset-b")
     route.update(capability_id="cap-usd-amount", fee_schedule_id="fee-cap-usd-amount")
-    result = _rebalancer_preview(payload, custom_reference_amount={"amount": "60", "currency": "EUR"})
+    result = _rebalancer_preview(payload)
     total = _money(result.total)
     assert result.result_state == "preview_ready" and total == 5_300 + Fraction(4_000_000, 1_085)
     # 1 085 = 5 · 7 · 31: the 7 and the 31 stay in the denominator, so no decimal holds F.
@@ -312,55 +298,8 @@ def test_preview_result_fits_its_byte_cap_on_a_large_request() -> None:
 
 
 # --------------------------------------------------------------------------
-# The consultant's answer to the B4 checkpoint: Q1 (the custom λ rounded in the backend) and Q2 (limit problems)
+# The consultant's answer to the B4 checkpoint: Q2 (limit problems). Q1, the custom λ, is the page's since R1-F (b).
 # --------------------------------------------------------------------------
-
-
-def _cents(value: Fraction) -> Fraction:
-    """``value`` to the cent, half up: how the screen shows an amount."""
-    return Fraction(int(value * 100 + Fraction(1, 2)), 100)
-
-
-def test_custom_lambda_round_trip_is_stable() -> None:
-    """Q1: on 13 457 EUR, 60 EUR give λ rounded to 6 significant digits, with the euros and the column derived from that λ;
-    sending that λ back gives the same λ and again 60.00 EUR on the reference row."""
-    payload = reb.request("f-13457", holdings={"asset-a": "7000", "asset-b": "6000"}, cash="457", weights={"asset-a": "0.5", "asset-b": "0.5"})
-    first = _rebalancer_preview(payload, custom_reference_amount={"amount": "60", "currency": "EUR"})
-    lam = exact_fraction(first.custom.distance_weight)
-    assert lam != Fraction(60 * 13_457, 2 * 670 * 670)
-    assert len(str(lam.numerator).strip("0")) <= 6 and all(prime in (2, 5) for prime in _prime_factors(lam.denominator))
-    assert _cents(_money(first.custom.reference_amount)) == 60
-    sent = _decimal_text(lam)
-    second = _rebalancer_preview({**payload, "target_fidelity": {"kind": "custom", "lambda": sent}})
-    assert exact_fraction(second.custom.distance_weight) == lam
-    assert _cents(_money(second.custom.reference_amount)) == 60
-    assert [_money(row.custom) for row in second.table.rows] == [_money(row.custom) for row in first.table.rows]
-
-
-def _prime_factors(n: int) -> set[int]:
-    found, factor = set(), 2
-    while factor * factor <= n:
-        while n % factor == 0:
-            found.add(factor)
-            n //= factor
-        factor += 1
-    return found | ({n} if n > 1 else set())
-
-
-def _decimal_text(value: Fraction) -> str:
-    """A terminating fraction as plain decimal text."""
-    scale = 0
-    while (value * 10**scale).denominator != 1:
-        scale += 1
-    digits = str(int(value * 10**scale)).rjust(scale + 1, "0")
-    return digits if scale == 0 else f"{digits[:-scale]}.{digits[-scale:]}"
-
-
-def test_a_tiny_custom_amount_never_gives_a_zero_lambda() -> None:
-    """Q1: 0.01 EUR on F = 200 000 EUR (reference row 10 000) gives λ = 1/100 000, still positive at 6 significant digits."""
-    payload = reb.request("f-200000", holdings={"asset-a": "100000", "asset-b": "90000"}, cash="10000", weights={"asset-a": "0.5", "asset-b": "0.5"})
-    result = _rebalancer_preview(payload, custom_reference_amount={"amount": "0.01", "currency": "EUR"})
-    assert exact_fraction(result.custom.distance_weight) == Fraction(1, 100_000)
 
 
 def _with_limits(payload: dict, *, minimum: str | None = None, maximum: str | None = None) -> dict:

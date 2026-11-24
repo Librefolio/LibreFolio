@@ -12,6 +12,7 @@
     import {ExternalLink, ImageIcon} from 'lucide-svelte';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import SimpleSelect from '$lib/components/ui/select/SimpleSelect.svelte';
+    import Switch from '$lib/components/ui/input/Switch.svelte';
     import SingleDatePicker from '$lib/components/ui/date/SingleDatePicker.svelte';
     import type {CellContent} from './types';
     import {formatCellDate} from './dataTableLogic';
@@ -176,23 +177,16 @@
         <!-- svelte-ignore a11y_no_static_element_interactions -->
         <div class="cell-checkbox-wrapper flex justify-center" onclick={(e) => e.stopPropagation()}>
             <!-- colour: closest role, to review: the on track was emerald-500 (a success green); switch role bg-lf-checked, alt bg-lf-success -->
-            <button
-                type="button"
-                onclick={() => {
-                    if (!cellContent.disabled) cellContent.onchange(!cellContent.value);
-                }}
-                aria-label="Toggle"
-                class="relative inline-flex h-5 w-9 items-center rounded-full transition-colors
-                       {cellContent.value ? 'bg-lf-checked' : 'bg-lf-switch-off'}
-                       {cellContent.disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}"
-                aria-pressed={cellContent.value}
+            <Switch
+                size="sm"
+                semantics="pressed"
+                label="Toggle"
+                checked={cellContent.value}
                 disabled={cellContent.disabled}
-            >
-                <span
-                    class="inline-block h-3.5 w-3.5 rounded-full shadow-sm transition-transform
-                         {cellContent.value ? 'translate-x-[18px] bg-lf-switch-knob-on' : 'translate-x-[3px] bg-lf-switch-knob-off border border-lf-input'}"
-                ></span>
-            </button>
+                onchange={(next) => {
+                    if (!cellContent.disabled) cellContent.onchange(next);
+                }}
+            />
         </div>
     {:else if cellContent.type === 'editable-date'}
         <!-- The app's own date field, never a native date input: that one follows the browser's language, not the app's

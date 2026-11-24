@@ -47,6 +47,10 @@
  *
  * After the cure every test is green.
  *
+ *   C22e (RED, 66 lot C22e) a SAVED CASH_TRANSFER split with «Split pair», its DEPOSIT half turned WITHDRAWAL in its own
+ *       form → «Save all» commits, both halves unpaired WITHDRAWALs. Today the half's update goes out with no type, the
+ *       backend's split makes it a DEPOSIT and refuses its −X. Its own describe, at the end of the file.
+ *
  * ## What is read where
  *
  *   - The row a pair is shown as: its `tx-bulk-date[data-row-id]` (the shown op's tempId), against the tempId each
@@ -79,6 +83,7 @@
  *
  * Runs on the desktop project, like every transactions spec the runner registers.
  */
+import {randomUUID} from 'crypto';
 import {expect, test, type APIRequestContext, type Locator, type Page} from '../fixtures/playwright';
 import {navigateTo} from '../fixtures/auth-helpers';
 import {waitForSettled} from '../fixtures/app-events';
@@ -601,5 +606,135 @@ test.describe('Bulk editor — the sign of a merged pair, and «Split pair» bef
             {row: 'new', broker: 'B', type: 'DEPOSIT', amount: X, linked: null},
         ]);
         expect(await readLedger(page, brokers, {[float]: 'float'}), 'the float, a WITHDRAWAL on A and a DEPOSIT on B, nothing linked').toEqual(ledger);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// 66 C22e — a split half swapped in its form is saved as the type the user chose
+// ---------------------------------------------------------------------------
+
+/** B's float: it funds the half on B once the user turns it into a withdrawal. A different amount from A's: the floats pair with nothing. */
+const FLOAT_B = 4000;
+
+/**
+ * The transactions page → tick both halves of a saved pair → Edit. Two selected rows open the editor with no form of
+ * its own (one row would open one), so the grid is reachable at once; the pair arrives as one row.
+ */
+async function openEditorOnPair(page: Page, ids: [number, number]): Promise<void> {
+    await navigateTo(page, '/transactions');
+    const transactionsPage = page.getByTestId('transactions-page');
+    await expect(transactionsPage).toBeVisible({timeout: UI_TIMEOUT});
+    await waitForSettled(transactionsPage, 20_000);
+    for (const id of ids) {
+        const checkbox = transactionsPage.getByTestId('tx-table').getByTestId(`dt-row-checkbox-tx-${id}`);
+        await expect(checkbox, `half #${id} is on screen`).toBeVisible({timeout: UI_TIMEOUT});
+        if ((await checkbox.getAttribute('data-state')) !== 'checked') await checkbox.click();
+        await expect(checkbox).toHaveAttribute('data-state', 'checked');
+    }
+    const toolbar = transactionsPage.getByTestId('selection-toolbar');
+    await expect(toolbar).toHaveAttribute('data-selected-count', '2');
+    await toolbar.getByTestId('toolbar-action-edit').click();
+    await expect(page.getByTestId('tx-bulk-modal')).toBeVisible({timeout: UI_TIMEOUT});
+}
+
+/**
+ * 66 C22e. «Split pair» on a SAVED CASH_TRANSFER (Case A of `handleSplitRow`) queues a backend split; the DEPOSIT half,
+ * turned WITHDRAWAL in its own form (the swap group the form offers), went out as `{id, cash: −X}` with no type:
+ * `resolveOps` strips the type of every split half, the backend's split makes it a DEPOSIT (`apply_splits`, on the
+ * saved sign), and rule 11 refuses −X on a DEPOSIT — the whole batch fails. RED until the update carries the type the
+ * user chose (`splitTypeToSend`, `bulk/splitTypes.ts`).
+ *
+ * Its own account: two brokers A and B, each funded the day before (A 5000, B 4000: no amount of a leg), and a saved
+ * CASH_TRANSFER of X between them, today: A −X (the sender), B +X (the receiver), linked. Cleanup as above.
+ */
+test.describe('Bulk editor — a split half swapped in its form is saved as the user’s type (66 C22e)', () => {
+    test.setTimeout(90_000);
+
+    let owned: OwnedAccount = emptyOwnedAccount();
+
+    test.beforeEach(() => {
+        owned = emptyOwnedAccount();
+    });
+
+    test.afterEach(async ({page, request}) => {
+        await cleanupOwnedAccount(page, request, owned);
+    });
+
+    test('C22e: a saved CASH_TRANSFER split, its DEPOSIT half turned WITHDRAWAL in its form — «Save all» commits: both halves WITHDRAWAL −X, unlinked', async ({page, request}, testInfo) => {
+        const X = 417;
+        const {brokers, today} = await startOnOwnAccount(page, request, owned, `c22e_${testInfo.project.name}`);
+        const transfer = `C22e transfer ${uniqueSuffix()}`;
+        const [floatA, floatB] = await commitCreates(page, [cashRow(brokers.a, 'DEPOSIT', dayBefore(today), FLOAT, `C22e float A ${uniqueSuffix()}`), cashRow(brokers.b, 'DEPOSIT', dayBefore(today), FLOAT_B, `C22e float B ${uniqueSuffix()}`)], 'fund A and B the day before');
+        const linkUuid = randomUUID();
+        const [sender, receiver] = await commitCreates(
+            page,
+            [
+                {broker_id: brokers.a.id, type: 'CASH_TRANSFER', date: today, quantity: '0', cash: {code: 'EUR', amount: `-${X}`}, link_uuid: linkUuid, description: transfer},
+                {broker_id: brokers.b.id, type: 'CASH_TRANSFER', date: today, quantity: '0', cash: {code: 'EUR', amount: `${X}`}, link_uuid: linkUuid, description: transfer},
+            ],
+            'save the CASH_TRANSFER pair A → B',
+        );
+        const names = {[floatA]: 'float A', [floatB]: 'float B', [sender]: 'sender', [receiver]: 'receiver'};
+        const before = await readLedger(page, brokers, names);
+        expect(before, 'premise: the floats, and the pair linked half to half').toEqual(
+            canonical([
+                {row: 'float A', broker: 'A', type: 'DEPOSIT', amount: FLOAT, linked: null},
+                {row: 'float B', broker: 'B', type: 'DEPOSIT', amount: FLOAT_B, linked: null},
+                {row: 'sender', broker: 'A', type: 'CASH_TRANSFER', amount: -X, linked: receiver},
+                {row: 'receiver', broker: 'B', type: 'CASH_TRANSFER', amount: X, linked: sender},
+            ]),
+        );
+
+        // The editor on the pair; «Split pair» queues the backend split and shows the halves as two rows.
+        await openEditorOnPair(page, [sender, receiver]);
+        const pairRow = bulkRowsWith(page, transfer);
+        await expect(pairRow, 'the saved pair is one row').toHaveCount(1, {timeout: UI_TIMEOUT});
+        await splitThePair(page, pairRow);
+        await expect(page.getByTestId('split-queued-badge'), 'the split is queued').toBeVisible({timeout: UI_TIMEOUT});
+        const rows = bulkRowsWith(page, transfer);
+        await expect(rows, '«Split pair» shows the two halves').toHaveCount(2, {timeout: UI_TIMEOUT});
+        // Found by the broker it sits on — a name only this account has — never by position.
+        const receiverRow = rows.filter({hasText: brokers.b.name});
+        await expect(receiverRow, 'one half on B').toHaveCount(1);
+        await expect(statusOf(receiverRow), 'the half is split-queued').toHaveAttribute('data-status', 'split');
+        // The split branch of the Type cell draws «original → target»: the last icon is the type the half will have.
+        await expect(typeIcon(receiverRow).last(), 'premise: the split gives the half on B a DEPOSIT').toHaveAttribute('src', iconOf('DEPOSIT'));
+
+        // Its own form: the type swapped to WITHDRAWAL, the amount kept (the form signs a withdrawal on the way out).
+        await receiverRow.dblclick();
+        const form = page.getByTestId('tx-form-modal');
+        await expect(form, 'the half’s form opens').toBeVisible({timeout: UI_TIMEOUT});
+        await selectType(page, 'WITHDRAWAL');
+        await applyForm(page);
+        await expect(typeIcon(receiverRow).last(), 'the Type cell shows the user’s WITHDRAWAL').toHaveAttribute('src', iconOf('WITHDRAWAL'));
+        await expect(cashCell(receiverRow), `paying −${X}`).toHaveText(shownAmount('-', X));
+
+        // What the save sends, and what the backend answers.
+        const exchange = await saveCapturing(page);
+        const sent = sentFacts(exchange.request);
+        const answer = answerFacts(exchange);
+        const described = JSON.stringify({ids: {sender, receiver}, splits: sent.splits, updates: sent.updates, answer});
+        testInfo.annotations.push({type: '66 C22e commit', description: described});
+        const receiverUpdates = sent.updates.filter((update) => update.id === receiver);
+        // Either half may be `id_a`: it is the row the pair was shown as, which this test does not pin.
+        const splitPairs = (sent.splits as Array<{id_a: number; id_b: number}>).map((split) => [split.id_a, split.id_b].sort(byNumber));
+        expect.soft(splitPairs, `the split of the saved pair is sent — ${described}`).toEqual([[sender, receiver].sort(byNumber)]);
+        expect
+            .soft(
+                receiverUpdates.map((update) => ({type: update.type ?? null, cash: Number((update.cash as Money | undefined)?.amount)})),
+                `the half on B goes out a WITHDRAWAL of −${X}: the type named, or the split makes it a DEPOSIT — ${described}`,
+            )
+            .toEqual([{type: 'WITHDRAWAL', cash: -X}]);
+        expect.soft({status: answer.status, committed: answer.committed}, `the batch is saved — ${described}`).toEqual({status: 200, committed: true});
+
+        const after = await readLedger(page, brokers, names);
+        expect(after, `both halves unpaired WITHDRAWALs of −${X}, the floats untouched — ${described}`).toEqual(
+            canonical([
+                {row: 'float A', broker: 'A', type: 'DEPOSIT', amount: FLOAT, linked: null},
+                {row: 'float B', broker: 'B', type: 'DEPOSIT', amount: FLOAT_B, linked: null},
+                {row: 'sender', broker: 'A', type: 'WITHDRAWAL', amount: -X, linked: null},
+                {row: 'receiver', broker: 'B', type: 'WITHDRAWAL', amount: -X, linked: null},
+            ]),
+        );
     });
 });

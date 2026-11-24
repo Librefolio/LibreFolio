@@ -1,0 +1,102 @@
+{
+  "allocation": {
+    "tab": "Allocazione",
+    "heading": "Dove sono esposto, guardando solo una parte?",
+    "loading": "Carico l'allocazione…",
+    "failed": "Non sono riuscito a caricare l'allocazione.",
+    "retry": "Riprova",
+    "empty": "In questo periodo non c'è nulla in portafoglio.",
+    "subtitle": {
+      "all": "Tutto il portafoglio",
+      "scopeAll": "tutti i broker",
+      "scopeBrokers": "{n} broker",
+      "scopeBroker": "questo broker"
+    },
+    "tiles": {
+      "base": "Base del 100%",
+      "outside": "Fuori dal filtro",
+      "excluded": "Escluso dal 100%",
+      "none": "Niente",
+      "ofPortfolio": "del portafoglio",
+      "outsideShort": "Fuori dal filtro",
+      "excludedShort": "Escluso"
+    },
+    "unattributable": {
+      "in_transit": "Titoli in transito tra broker",
+      "no_country": "La liquidità non ha un paese"
+    },
+    "filters": {
+      "button": "Filtri",
+      "classes": "Classi",
+      "excluded": "Fuori dal 100%",
+      "assets": "Asset compresi",
+      "countOf": "{on} di {total}",
+      "countActive": "{n, plural, one {# attivo} other {# attivi}}",
+      "clear": "Rimuovi filtri",
+      "remembered": "Ricordato per questa pagina",
+      "searchAssets": "Cerca asset",
+      "noMatch": "Nessun asset corrisponde.",
+      "noAssets": "Nessun asset nelle classi accese."
+    },
+    "classHint": {
+      "STOCK": "anche ETF azionari",
+      "BOND": "anche ETF obbligazionari",
+      "COMMODITY": "anche ETC e ETF materie prime",
+      "REAL_ESTATE": "anche ETF immobiliari",
+      "CRYPTO": "anche ETF cripto"
+    },
+    "bucket": {
+      "Unknown": "Non classificato",
+      "UnknownHint": "la parte senza settore, paese o tipo dichiarato",
+      "Other": "Altro",
+      "OtherHint": "il settore «Altro» delle fonti"
+    },
+    "chip": {
+      "without": "Senza {name}",
+      "remove": "Rimuovi {name}"
+    },
+    "dimension": {
+      "label": "Raggruppa per",
+      "sector": "Settore",
+      "geography": "Area",
+      "type": "Tipo",
+      "asset": "Asset"
+    },
+    "view": {
+      "label": "Vista",
+      "now": "Ora",
+      "history": "Storico"
+    },
+    "table": {
+      "label": "Tabella dell'allocazione",
+      "amount": "Importo",
+      "shareOfSelection": "% della selezione",
+      "shareOfPortfolio": "% del portafoglio",
+      "assets": "Asset",
+      "excluded": "(escluso)",
+      "ofSlice": "{share} della voce",
+      "hint": "Clic su una riga: gli asset che la compongono. La prima colonna % somma 100, la seconda {share}.",
+      "hintNoShare": "Clic su una riga: gli asset che la compongono.",
+      "empty": "Niente nella selezione."
+    },
+    "map": {
+      "captionBefore": "Colori sulla selezione: 100% =",
+      "captionAfter": "del portafoglio"
+    },
+    "pie": {
+      "center": "Base"
+    },
+    "history": {
+      "empty": "Nessuno storico per questa selezione nel periodo.",
+      "loading": "Carico lo storico…"
+    },
+    "matrix": {
+      "title": "Classe × {dimension}",
+      "hint": "Segue la dimensione scelta in alto. Quote del portafoglio intero; le celle con il riquadro sono la selezione. Clic su una cella per tenere solo la sua classe.",
+      "classHeader": "Classe",
+      "unattributed": "Fuori dalle colonne:",
+      "cell": "{class}, {bucket}: {share}",
+      "cellEmpty": "{class}, {bucket}: niente"
+    }
+  }
+}

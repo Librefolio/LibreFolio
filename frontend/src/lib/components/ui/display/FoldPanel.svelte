@@ -5,7 +5,11 @@
   clean-up of the backups). It is a native `<details>`: the keyboard and assistive technology work as they should, and
   the body stays mounted while closed, so what was typed in it is kept.
 
-  Published state: `data-open` (`true|false`) on the root, which carries `testId`.
+  An optional `count` sits at the right end of the title line, small and muted: how many choices inside are on («1 of 6»),
+  readable without opening the panel.
+
+  Published state: `data-open` (`true|false`) on the root, which carries `testId`; the count, when given, is
+  `{testId}-count`.
 -->
 <script lang="ts">
     import type {Snippet} from 'svelte';
@@ -14,13 +18,15 @@
     interface Props {
         /** The title line, already translated. */
         title: string;
+        /** A short text at the right end of the title line, already translated («1 of 6»). Nothing is drawn when empty. */
+        count?: string;
         testId?: string;
         /** Open when mounted (default: closed). */
         open?: boolean;
         children: Snippet;
     }
 
-    let {title, testId, open = $bindable(false), children}: Props = $props();
+    let {title, count, testId, open = $bindable(false), children}: Props = $props();
 </script>
 
 <details class="group rounded-lg border border-lf-subtle" data-testid={testId} data-open={open ? 'true' : 'false'} bind:open>
@@ -30,6 +36,9 @@
     >
         <ChevronRight class="shrink-0 transition-transform group-open:rotate-90" size={16} aria-hidden="true" />
         {title}
+        {#if count}
+            <span class="ml-auto whitespace-nowrap text-xs font-normal tabular-nums text-lf-muted" data-testid={testId ? `${testId}-count` : undefined}>{count}</span>
+        {/if}
     </summary>
     <div class="space-y-3 border-t border-lf-subtle px-3 py-3">
         {@render children()}

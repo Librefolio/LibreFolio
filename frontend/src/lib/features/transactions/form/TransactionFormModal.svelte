@@ -73,6 +73,7 @@
     import {normalizeDecimalInput} from '$lib/utils/core/parseDecimalInput';
     import {preFloorDates} from '$lib/features/transactions/preFloorDate';
     import {calculateTradeValue, tradeHasUnitPrice, type TradeAmountDriver} from '$lib/features/transactions/form/txTradeAmount';
+    import {fetchRewardValue, type RewardValueSuggestion} from '$lib/features/transactions/form/rewardValue';
     import {computeTxFormChecks, type TxFormCell, type TxFormCheckKind} from '$lib/features/transactions/form/txFormChecks';
     import {deduplicateIssues, signLabel, signHintKey} from '$lib/features/transactions/form/txFormFields';
     import {isBulkBalanceIssue} from '$lib/features/transactions/bulk/bulkDisplay';
@@ -927,9 +928,39 @@
         return true;
     });
 
-    // cost_basis_override is meaningful only for units coming in: the receiver of a TRANSFER pair, or an ADJUSTMENT with
-    // a positive quantity. An ADJUSTMENT taking units out has no value (N78-1): it only lowers the quantity.
-    let showCostBasisField = $derived(draft.type === 'TRANSFER' || (draft.type === 'ADJUSTMENT' && (exactDecimalSign(draft.quantity) ?? 0) > 0));
+    // cost_basis_override is meaningful only for units coming in: the receiver of a TRANSFER pair, or a standalone type the
+    // table gives `required_qty_pos` (ADJUSTMENT, REWARD) with a positive quantity. An ADJUSTMENT taking units out has no
+    // value (N78-1): it only lowers the quantity.
+    let showCostBasisField = $derived(draft.type === 'TRANSFER' || (rule.costBasisMode === 'required_qty_pos' && (exactDecimalSign(draft.quantity) ?? 0) > 0));
+
+    // A type whose cost basis is a stated value (`costBasisAuto` false: a REWARD, its value on receipt) never takes the
+    // average cost: the form keeps it on Manual, whatever mode a row or a type change brought (rule 12c refuses Auto).
+    $effect(() => {
+        if (!rule.costBasisAuto && costBasisMode === 'auto') costBasisMode = 'manual';
+    });
+
+    // A REWARD's value on receipt, suggested from the asset's price history (project 79, STK-2a): the close of its day,
+    // or the last one before it, into an empty field only. The note under the field shows while the value is still the
+    // suggestion; the user's own value is never overwritten.
+    let rewardSuggestion = $state<RewardValueSuggestion | null>(null);
+    let rewardSuggestionKey = '';
+    $effect(() => {
+        if (isReadonly || draft.type !== 'REWARD' || draft.asset_id == null || !draft.date || draft.cost_basis_override?.amount?.trim()) return;
+        // The close is per quote base: wait until the asset is in the store, or a bond quoted per 100 would get the close undivided
+        const quoteBase = tradeQuoteBase;
+        if (quoteBase == null) return;
+        const assetId = draft.asset_id;
+        const date = draft.date;
+        const key = `${assetId}|${date}`;
+        if (key === rewardSuggestionKey) return;
+        rewardSuggestionKey = key;
+        void fetchRewardValue(assetId, date, quoteBase).then((suggestion) => {
+            if (!suggestion || draft.type !== 'REWARD' || draft.asset_id !== assetId || draft.date !== date || draft.cost_basis_override?.amount?.trim()) return;
+            rewardSuggestion = suggestion;
+            draft = {...draft, cost_basis_override: {code: suggestion.code, amount: suggestion.amount}};
+        });
+    });
+    let rewardValueDate = $derived(rewardSuggestion && draft.type === 'REWARD' && draft.cost_basis_override?.code === rewardSuggestion.code && draft.cost_basis_override?.amount === rewardSuggestion.amount ? rewardSuggestion.priceDate : null);
 
     // Pair partner chip (only when editing an existing linked tx — non-dual mode).
     let pairPartnerId = $derived(pairLayout ? null : (mainRow?.related_transaction_id ?? null));
@@ -1666,8 +1697,8 @@
         <!-- ============================================================= -->
         <!-- Header -->
         <!-- ============================================================= -->
-        <div class="flex items-center justify-between p-5 pb-4 border-b border-lf-subtle shrink-0">
-            <h2 class="text-lg font-semibold text-lf-primary" data-testid="tx-form-title">
+        <div class="flex items-center justify-between gap-2 p-5 pb-4 border-b border-lf-subtle shrink-0">
+            <h2 class="min-w-0 break-words text-lg font-semibold text-lf-primary" data-testid="tx-form-title">
                 {#if pairLayout}
                     {#if pairLayout === 'fx'}💱{:else if pairLayout === 'transfer_asset'}📦{:else}🏦{/if}
                     {#if mode === 'edit'}
@@ -1695,7 +1726,7 @@
                     👁 {$t('transactions.form.titleView')} #{mainRow?.id}
                 {/if}
             </h2>
-            <div class="flex items-center gap-1">
+            <div class="flex shrink-0 items-center gap-1">
                 {#if isReadonly && onSwitchToEdit && canEdit}
                     <button class="p-2 text-lf-muted hover:text-lf-link hover:bg-lf-hover rounded-lg transition-colors" onclick={onSwitchToEdit} data-testid="tx-form-switch-edit" aria-label="Edit" title={$t('transactions.form.titleEdit') || 'Edit'}>
                         <Pencil size={18} />
@@ -1824,6 +1855,7 @@
                     {onCashInput}
                     {rule}
                     {showCostBasisField}
+                    {rewardValueDate}
                     {typeImmutable}
                     {wacAvailableCurrencies}
                     {handleSyncFx}
@@ -1841,7 +1873,7 @@
             {/if}
 
             <!-- Cost basis override — TRANSFER single-form (editing existing linked pair, non-dual) -->
-            {#if !pairLayout && showCostBasisField && draft.type !== 'ADJUSTMENT'}
+            {#if !pairLayout && showCostBasisField && rule.costBasisMode !== 'required_qty_pos'}
                 <div class="mt-3" data-testid="tx-form-cost-basis-inline">
                     <WacPreviewSection
                         value={displayedCostBasis}

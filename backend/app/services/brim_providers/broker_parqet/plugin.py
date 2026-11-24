@@ -119,7 +119,8 @@ class ParqetBrokerProvider(BRIMProvider):
 
     @property
     def plugin_version(self) -> str:
-        return "1.0.0"
+        # 1.1.0 — project 66, P4: a fee or a tax is linked to the booking of its own row.
+        return "1.1.0"
 
     @property
     def test_file_pattern(self) -> Optional[str]:
@@ -232,7 +233,7 @@ class ParqetBrokerProvider(BRIMProvider):
                         description_parts.append(f"price={price}")
                     description = " | ".join(description_parts)
 
-                    self._create_transaction(
+                    booking = self._create_transaction(
                         row_num=row_num,
                         transactions=transactions,
                         validation_issues=validation_issues,
@@ -248,7 +249,8 @@ class ParqetBrokerProvider(BRIMProvider):
                     )
 
                     if tax != Decimal("0"):
-                        self._create_transaction(
+                        self._create_charge_of(
+                            booking,  # project 66 P4: linked to the booking of its own row; free when that booking was refused
                             row_num=row_num,
                             transactions=transactions,
                             validation_issues=validation_issues,
@@ -264,7 +266,8 @@ class ParqetBrokerProvider(BRIMProvider):
                         )
 
                     if fee != Decimal("0"):
-                        self._create_transaction(
+                        self._create_charge_of(
+                            booking,  # project 66 P4: linked to the booking of its own row; free when that booking was refused
                             row_num=row_num,
                             transactions=transactions,
                             validation_issues=validation_issues,

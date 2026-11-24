@@ -112,7 +112,7 @@
         type BulkDeletePlan,
         type ChargesUnread,
     } from './bulkCharges';
-    import {SPLIT_TYPE_MAP, splitHalfType, postSplitType} from './splitTypes';
+    import {SPLIT_TYPE_MAP, splitHalfType, postSplitType, splitTypeToSend} from './splitTypes';
     import {txRowRef} from '../chargeLinkRules';
     import {canEditBroker} from '$lib/stores/reference/brokerStore';
     import TxChargesActionModal from '../TxChargesActionModal.svelte';
@@ -987,6 +987,8 @@
             }
         }
         // else: target already has 'auto' or 'manual' and no explicit override → preserve
+        // A type whose cost basis is a stated value (`costBasisAuto` false: a REWARD, project 79) never takes Auto
+        if (target.cost_basis_mode === 'auto' && !getTypeRule(target.type).costBasisAuto) target.cost_basis_mode = 'manual';
 
         // Back to the editor's convention, last, so the derivation above reads the Form's payload as it always has
         // (W-B65): the Form pushes signed values, the editor holds a negative-rule value as its magnitude (`fieldsFromTx`),
@@ -1536,8 +1538,13 @@
                 resolved.push({intent: 'create', tempId: d.tempId, partnerTempId: pOp?.tempId, payload: collectCreate(d), partnerPayload});
             } else if (st === 'edited') {
                 const upd = collectUpdate(d);
-                // For split-queued rows, strip type (split handles type change)
-                if (upd && splitTxIds.has((d as any).txId)) delete upd.type;
+                // A split half: the split gives it its type, so the update names one only when the user swapped it
+                // (66 C22e, `splitTypeToSend`); otherwise the type stays out.
+                if (upd && splitTxIds.has((d as any).txId)) {
+                    const handType = splitTypeToSend(d, pendingSplits, txStoreGet((d as any).txId) ?? null);
+                    if (handType) upd.type = handType;
+                    else delete upd.type;
+                }
                 const payload = upd && Object.keys(upd).length > 1 ? upd : undefined;
                 let partnerPayload: Record<string, unknown> | null = null;
                 if (pOp && pOp.op === 'edit') {
@@ -2919,7 +2926,7 @@
             // Q-J57-5 (a) and Q-J57-1 (c): a row the plugin left without a cost mode starts in Auto where its type takes a
             // cost, so the hand-over's validation costs it or refuses it and leads to it; a cost the plugin wrote, or a
             // blocking cost todo, starts it in Manual.
-            op.fields.cost_basis_mode = initialCostBasisMode({mode: op.fields.cost_basis_mode, cost: op.fields.cost_basis_override, costAllowed: costBasisModeAllowed(op.fields)}, item.todos);
+            op.fields.cost_basis_mode = initialCostBasisMode({mode: op.fields.cost_basis_mode, cost: op.fields.cost_basis_override, costAllowed: costBasisModeAllowed(op.fields), autoAllowed: getTypeRule(op.fields.type).costBasisAuto}, item.todos);
             return op;
         });
         const linked = linkPairedImportOps(newOps);

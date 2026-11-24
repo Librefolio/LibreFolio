@@ -379,7 +379,7 @@ def front_asset_profile_create(verbose: bool = False, ui: bool = False, headed: 
 
 
 def front_asset_provider_attribution(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
-    """Run the provider attribution line E2E («Powered by CoinGecko», project 76, P4), on both projects."""
+    """Run the provider attribution line E2E («Powered by CoinGecko», project 76, P4 and TL42), on both projects."""
     print_section("Frontend Asset — Provider Attribution Tests")
     if not _ensure_frontend_build():
         return False
@@ -549,7 +549,7 @@ def populate_registry(registry: dict) -> None:
         "provider-attribution",
         front_asset_provider_attribution,
         name="Asset Provider Attribution",
-        desc="Project 76 P4, desktop and mobile: a price provider's attribution line («Powered by CoinGecko»), once per provider, linked in a new tab, at least 10 px — absent on the Assets list, the Dashboard positions and an asset's detail with the real provider list (no asset uses CoinGecko on the test backend); drawn with one yfinance link when the page's own read of the list gives yfinance a synthetic attribution; on Settings › Plugins (administrator) CoinGecko's asset card carries its real line, justETF's card and CoinGecko's settings group none",
+        desc="Project 76 P4 and TL42, desktop and mobile: a price provider's attribution line («Powered by CoinGecko») lives on its own card only — no attribution link on the Assets list, the Dashboard positions or an asset's detail even when the page's own read of the provider list gives yfinance a synthetic attribution; on Settings › Plugins (administrator) CoinGecko's asset card carries its real line (linked in a new tab, at least 10 px), justETF's card and CoinGecko's settings group none",
         tests="assets/provider-attribution.spec.ts",
     )
     add_test(cat, "all", front_asset_all, test_names=False, name="All Asset Tests", desc="Run all Asset tests (unit + E2E)")

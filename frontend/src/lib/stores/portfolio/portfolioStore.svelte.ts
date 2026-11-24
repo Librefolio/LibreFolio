@@ -101,6 +101,8 @@ export type PortfolioIncomeHistoryPoint = {
     date: string;
     dividend: {code: string; amount: string};
     interest: {code: string; amount: string};
+    /** Rewards in kind (REWARD, project 79): their value on receipt. Absent from an answer older than 1.4. */
+    reward?: {code: string; amount: string};
 };
 
 export type PortfolioIncomeHistorySeries = {

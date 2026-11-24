@@ -499,6 +499,7 @@
         // but a plain static reference to an existing key is safe) — no new i18n key.
         dividend: $_('transactions.types.DIVIDEND'),
         interest: $_('transactions.types.INTEREST'),
+        reward: $_('transactions.types.REWARD'),
         // Batch 2: reuse existing keys — the dashboard KPI's own "Fees & taxes" grouping
         // and the DEPOSIT transaction-type label — no new i18n key for either.
         costs: $_('dashboard.feesAndTaxes'),

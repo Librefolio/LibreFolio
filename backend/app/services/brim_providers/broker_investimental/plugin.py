@@ -167,7 +167,8 @@ class InvestimentalBrokerProvider(BRIMProvider):
 
     @property
     def plugin_version(self) -> str:
-        return "1.0.0"
+        # 1.1.0 — project 66, P4: a fee or a tax is linked to the booking of its own row.
+        return "1.1.0"
 
     @property
     def test_file_pattern(self) -> Optional[str]:
@@ -292,7 +293,7 @@ class InvestimentalBrokerProvider(BRIMProvider):
                 if exchange:
                     description = f"{description} on {exchange}"
 
-                self._create_transaction(
+                booking = self._create_transaction(
                     row_num=selected_row_num,
                     transactions=transactions,
                     validation_issues=validation_issues,
@@ -308,7 +309,8 @@ class InvestimentalBrokerProvider(BRIMProvider):
                 )
 
                 if fee is not None and fee > 0:
-                    self._create_transaction(
+                    self._create_charge_of(
+                        booking,  # project 66 P4: linked to the booking of its own row; free when that booking was refused
                         row_num=selected_row_num,
                         transactions=transactions,
                         validation_issues=validation_issues,

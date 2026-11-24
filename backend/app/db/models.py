@@ -271,6 +271,12 @@ class TransactionType(StrEnum):
       related_transaction_id: only on pairs stored before 22/10/2026; a new pair is refused (use TRANSFER)
       Example: Stock split 2:1 adds 100 shares
 
+    - REWARD: Reward received in units of an asset (staking, rewards, airdrop): income in kind
+      Signs: quantity > 0, amount = 0; cost_basis_override = per-unit value at receipt
+      Counts as a DIVIDEND of that value reinvested the same day in a BUY: it opens a lot at
+      that value and the value is income; no cash moves and no capital is contributed
+      Example: Receive 20 ADA of staking rewards worth €10
+
     == Cash-only transactions (quantity = 0) ==
 
     - DIVIDEND: Dividend payment received
@@ -325,6 +331,7 @@ class TransactionType(StrEnum):
     TRANSFER = "TRANSFER"
     FX_CONVERSION = "FX_CONVERSION"
     CASH_TRANSFER = "CASH_TRANSFER"
+    REWARD = "REWARD"
 
 
 class UserRole(StrEnum):

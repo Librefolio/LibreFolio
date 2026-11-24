@@ -19,13 +19,14 @@
     import {currentLanguage} from '$lib/stores/app/language';
     import {guideAnchor} from '$lib/features/onboarding/guideAnchors.svelte';
     import {onboardingGuide} from '$lib/features/onboarding/onboardingGuide.svelte';
-    import {findPromoteMatch, ensureTypesLoaded, typesVersion, getTypeRule} from '$lib/features/transactions/transactionTypeStore';
+    import {findPromoteMatch, ensureTypesLoaded, typesVersion} from '$lib/features/transactions/transactionTypeStore';
     import type {BrokerLike} from '$lib/utils/broker/brokerColors';
     import type {FilterValue} from '$lib/components/table/types';
     import PromoteMergeModal from '$lib/features/transactions/bulk/PromoteMergeModal.svelte';
     import TransactionActionModal from '$lib/features/transactions/TransactionActionModal.svelte';
     import TxChargesActionModal from '$lib/features/transactions/TxChargesActionModal.svelte';
-    import {linkSelection, linkCommit, txRowRef} from '$lib/features/transactions/chargeLinkRules';
+    import {txRowRef} from '$lib/features/transactions/chargeLinkRules';
+    import {createChargesLinkFlow} from '$lib/features/transactions/chargesLinkFlow.svelte';
     import {createChargesDeleteFlow} from '$lib/features/transactions/chargesDeleteFlow.svelte';
     import EventReconciliationModal from '$lib/features/transactions/EventReconciliationModal.svelte';
     import TransactionBulkModal from '$lib/features/transactions/bulk/TransactionBulkModal.svelte';
@@ -448,13 +449,14 @@
     // 66 F6 — «Link the charges» from the selection bar (Z): one parent + N charges, saved after the confirmation
     // =========================================================================
 
-    let linkState = $derived.by(() => {
-        void $typesVersion;
-        return linkSelection(selectedRows, {roleOf: (type) => getTypeRule(type).chargeRole, canEdit: (brokerId) => canEditBroker(brokerId)});
+    const chargesLink = createChargesLinkFlow({
+        selection: () => selectedRows,
+        onLinked: async () => {
+            clearSelection();
+            await pageBusy.track('tx-reload', () => reload({soft: true}));
+        },
+        issueContext: () => issueContext(),
     });
-    let linkHint = $derived(linkState.kind === 'disabled' ? $_(`transactions.chargesLink.reason.${linkState.reason}`, {values: {type: $_(`transactions.types.${linkState.params.type}`) || linkState.params.type, ref: txRowRef(linkState.params.id, null, $_)}}) : '');
-    let chargesLinkOpen = $state(false);
-    let linking = $state(false);
 
     /**
      * 77 SEL-B: the bulk actions of the table's selection panel, through the rule of `resolveSelectionAction`. Edit and
@@ -474,39 +476,9 @@
             blocked: () => (promoteChargesHolder ? {hint: () => promoteHint, reason: 'hasCharges'} : null),
             onClick: () => onPromotePair(),
         },
-        {
-            id: 'link-charges',
-            icon: Link2,
-            label: () => $_('transactions.chargesLink.action') || 'Link the charges',
-            shortLabel: () => $_('transactions.chargesLink.actionShort') || 'Link',
-            pointless: () => linkState.kind === 'hidden',
-            blocked: () => (linkState.kind === 'disabled' ? {hint: linkHint, reason: linkState.reason} : null),
-            onClick: () => {
-                chargesLinkOpen = true;
-            },
-        },
+        chargesLink.action,
         {id: 'delete', icon: Trash2, label: () => $_('common.delete') || 'Delete', variant: 'danger', appliesTo: (row) => txStoreCanEdit(row.id), onClick: (rows) => onBulkDelete(rows)},
     ]);
-
-    async function confirmLink() {
-        if (linkState.kind !== 'ok') return;
-        const {parent, charges} = linkState;
-        linking = true;
-        try {
-            const result = await commitTransactions(linkCommit(parent, charges), {fallback: $_('transactions.chargesLink.failed') || 'Linking the charges failed'});
-            if (result.committed) {
-                chargesLinkOpen = false;
-                // The parent's badge shows the outcome: an event, no toast.
-                notify({name: 'tx.charges.linked', detail: {parent: parent.id, charges: charges.map((c) => c.id)}});
-                clearSelection();
-                await pageBusy.track('tx-reload', () => reload({soft: true}));
-            } else {
-                toasts.error(commitRefusalMessage(result, $_('transactions.chargesLink.failed') || 'Linking the charges failed', $_, issueContext()));
-            }
-        } finally {
-            linking = false;
-        }
-    }
 
     async function confirmPromote() {
         if (!promoteTarget) return;
@@ -980,7 +952,7 @@
         promoteTarget = null;
     }}
 />
-<TxChargesActionModal open={chargesLinkOpen && linkState.kind === 'ok'} mode="link" parents={linkState.kind === 'ok' ? [linkState.parent] : []} charges={linkState.kind === 'ok' ? linkState.charges : []} loading={linking} onConfirm={confirmLink} onCancel={() => (chargesLinkOpen = false)} />
+<TxChargesActionModal open={chargesLink.open} mode="link" parents={chargesLink.parent ? [chargesLink.parent] : []} charges={chargesLink.charges} loading={chargesLink.linking} onConfirm={chargesLink.confirm} onCancel={chargesLink.cancel} />
 <TxChargesActionModal
     open={chargesDelete.panel != null}
     mode="deleteParent"

@@ -25,8 +25,11 @@ Modules:
   currencies, the pool after every movement, the unit cost each movement carried, and the
   conversions that could not be made.
 * ``native_cash`` — every broker's cash in the currencies it was recorded in: the balances,
-  their value in the report currency on any day, and the period flows by type and position; the first
+  their value in the report currency on any day, and the period flows by type and position (income in kind, a
+  REWARD, as a flow only, never a balance); the first
   day a broker's balance in a currency ends below zero.
+* ``income`` — the income of a transaction in its own currency: a DIVIDEND's or INTEREST's cash, a REWARD's value
+  on receipt (income in kind, no cash), unknown when the value is missing; the income types every reader takes.
 * ``change_days`` — the days something can change on: the days a reading of an FX pair can differ from
   the day before, the days a reading really changes on a calendar, and days with the day after each.
 * ``ledger_totals`` — the control totals of the transaction ledger, with no price, rate or
@@ -63,8 +66,6 @@ Modules:
   of a list of changes, for the report, lots and positions series and every backend reader of them.
 * ``splits`` — the ADJUSTMENT rows linked to a SPLIT asset event, loaded with one query, the ids
   an average-cost replay marks as a rescale, and the rule for a usable split ratio.
-* ``acceptable_cost`` — the Rebalancer's table «maximum acceptable cost»: rows of misplaced money to two significant
-  digits, ``2·λ·d²/F``, and ``λ`` from the euros typed on the reference row (B4 of project 67).
 * ``weights`` — a part's share of a total (none on a total at or below zero), the slices of an
   allocation (none on a sum at or below zero), gross weights, concentration (largest weight, Herfindahl index), and
   the effective number of positions (10 000 over the index of the weights renormalized on their own sum).
@@ -75,7 +76,8 @@ Modules:
 * ``portfolio`` — the daily portfolio state (NAV, capital, P&L, per-broker contributions)
   and the views derived from it (``models``, ``classifier``, ``daily_state`` — with the price of an
   asset on a day as the replay values it, ``AssetMarks`` on the engine's result —,
-  ``derived_views``, ``data_quality``, ``period``, ``contributions``, ``asset_groups``, ``engine``).
+  ``derived_views``, ``data_quality``, ``period``, ``contributions``, ``asset_groups``, ``allocation_view`` — the
+  «Allocazione» tab's filtered allocation —, ``engine``).
 * ``lots`` — the math of the lots analysis: price lookups, conversions (a closure's legs,
   each at its own date), economic events, lot histories and average cost lines (``prices``, ``conversions``, ``economic_events``,
   ``histories``, ``average_cost_lines``).

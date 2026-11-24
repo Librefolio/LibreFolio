@@ -221,7 +221,8 @@ class FinecoBrokerProvider(BRIMProvider):
         # 1.3.0 — dated with the operation date, Operazione; the value date only decides whether a row has settled (B-52).
         # 1.4.0 — a trade's Controvalore already holds its commission, so the BUY/SELL are net of it (W-B92).
         # 1.5.0 — the rows it cannot read or recognise are listed in the two shared notices, with the link to open an issue (W-B86).
-        return "1.5.0"
+        # 1.6.0 — the commission of a row is linked to the operation of that row (project 66, P2a).
+        return "1.6.0"
 
     @property
     def detection_priority(self) -> int:
@@ -404,7 +405,7 @@ class FinecoBrokerProvider(BRIMProvider):
                 # Resolve asset link for asset-bearing types
                 asset_id = _resolve_asset_id(isin, ticker, name, row_num)
 
-                self._create_transaction(
+                operation = self._create_transaction(
                     row_num=row_num,
                     transactions=transactions,
                     validation_issues=validation_issues,
@@ -436,22 +437,27 @@ class FinecoBrokerProvider(BRIMProvider):
                         tags=["import", "fineco", "maturity_premium"],
                     )
 
-                # Variant B: emit a separate FEE transaction for total commissions
+                # Variant B: emit a separate FEE transaction for total commissions, linked to the operation of its row
+                # (project 66). A row refused above leaves its commission free, as before.
                 if fee_total > 0:
-                    self._create_transaction(
-                        row_num=row_num,
-                        transactions=transactions,
-                        validation_issues=validation_issues,
-                        context=f"Fineco commissions: {name}" if name else "Fineco commissions",
-                        broker_id=broker_id,
-                        asset_id=asset_id,
-                        type=TransactionType.FEE,
-                        date=tx_date,
-                        quantity=Decimal("0"),
-                        cash=Currency(code=FEE_CURRENCY, amount=-fee_total),
-                        description=f"Commissioni: {name}" if name else "Commissioni",
-                        tags=["import", "fineco", "fee"],
-                    )
+                    fee_fields = {
+                        "row_num": row_num,
+                        "transactions": transactions,
+                        "validation_issues": validation_issues,
+                        "context": f"Fineco commissions: {name}" if name else "Fineco commissions",
+                        "broker_id": broker_id,
+                        "asset_id": asset_id,
+                        "type": TransactionType.FEE,
+                        "date": tx_date,
+                        "quantity": Decimal("0"),
+                        "cash": Currency(code=FEE_CURRENCY, amount=-fee_total),
+                        "description": f"Commissioni: {name}" if name else "Commissioni",
+                        "tags": ["import", "fineco", "fee"],
+                    }
+                    if operation is None:
+                        self._create_transaction(**fee_fields)
+                    else:
+                        self._create_linked_charge(parent=operation, **fee_fields)
 
         except BRIMParseError:
             raise

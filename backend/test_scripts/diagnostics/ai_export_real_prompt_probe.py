@@ -67,6 +67,7 @@ PUBLIC_CATALOG_V1_ANALYSES = (
     "portfolio.rebalancing",
     "portfolio.performance_market_drivers",
     "portfolio.fiscal_lots",
+    "portfolio.protection_strategies",
     "broker.review",
     "broker.performance_market_drivers",
     "broker.fiscal_lots",
@@ -105,6 +106,7 @@ NAMED_PROMPT_RETENTION: Mapping[tuple[str, str, str], tuple[str, ...]] = {
     ("portfolio.rebalancing", "1Y", "standard"): ("named_portfolio_rebalancing_1y_standard",),
     ("portfolio.performance_market_drivers", "3M", "standard"): ("named_portfolio_performance_drivers_3m_standard",),
     ("portfolio.fiscal_lots", "1Y", "standard"): ("named_portfolio_fiscal_lots_1y_standard",),
+    ("portfolio.protection_strategies", "3M", "standard"): ("named_portfolio_protection_3m_standard",),
     ("broker.overview_and_history", "3M", "standard"): ("named_broker_general_3m_standard",),
     ("broker.overview_and_history", "1Y", "standard"): ("named_broker_general_1y_standard",),
     ("broker.asset_history", "3M", "standard"): ("named_broker_detailed_3m_standard",),
@@ -142,6 +144,7 @@ FINANCIAL_WITH_CONTEXT_SELECTIONS = frozenset(
         "fx.market_and_exposure",
         "portfolio.pac_planning",
         "portfolio.rebalancing",
+        "portfolio.protection_strategies",
         "broker.review",
         "asset.position_review",
         "fx.exposure_impact",
@@ -3706,7 +3709,7 @@ def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         "--profile",
         choices=("tuning-v2", "representative", PUBLIC_CATALOG_V1_PROFILE, "exhaustive"),
         default="tuning-v2",
-        help="tuning-v2 keeps the internal tuning matrix; public-catalog-v1 runs 19 public selections × 3M/1Y × compact/standard/full",
+        help=f"tuning-v2 keeps the internal tuning matrix; public-catalog-v1 runs {len(PUBLIC_CATALOG_V1_SELECTIONS)} public selections × 3M/1Y × compact/standard/full",
     )
     parser.add_argument("--manifest-shape", choices=("legacy", "slim"), default="slim", help="Expected public technical manifest shape")
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
@@ -4123,7 +4126,7 @@ def run_probe(args: argparse.Namespace) -> int:  # noqa: C901 — sequential pro
                 "exact explicit target cases only"
                 if target_cases
                 else (
-                    "exact 19 selections x 3M/1Y x compact/standard/full; no 6M"
+                    f"exact {len(PUBLIC_CATALOG_V1_SELECTIONS)} selections x 3M/1Y x compact/standard/full; no 6M"
                     if public_catalog_v1_run
                     else ("base datasets: 3M/6M/1Y x compact/standard/full; analyses with temporal data: 3M/1Y x compact/standard/full; all_data excluded from tuning" if args.profile == "tuning-v2" else "representative or exhaustive legacy profile")
                 )

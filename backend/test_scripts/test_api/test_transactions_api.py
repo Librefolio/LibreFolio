@@ -14,6 +14,7 @@ Reference: backend/app/api/v1/transactions.py
 """
 
 import uuid
+from contextlib import asynccontextmanager
 from datetime import date, timedelta
 from decimal import Decimal
 from types import SimpleNamespace
@@ -801,6 +802,17 @@ async def test_get_transaction_types(test_server):
         # TRANSFER: forbidden standalone, pair = [forbidden, required_qty_pos]
         assert types_by_code["TRANSFER"]["cost_basis_mode"] == "forbidden"
         assert types_by_code["TRANSFER"]["cost_basis_pair"] == ["forbidden", "required_qty_pos"]
+        # REWARD (project 79, STK-1): income in kind — units in, a value per unit, no cash
+        assert "REWARD" in types_by_code, "GET /transactions/types must list REWARD"
+        reward = types_by_code["REWARD"]
+        assert reward["cost_basis_mode"] == "required_qty_pos"
+        assert reward.get("cost_basis_pair") is None
+        assert reward["cash_mode"] == "forbidden"
+        assert reward["quantity_sign"] == "positive"
+        # STK-2a: whether the cost basis may be the average cost (Auto) — never for a REWARD (rule 12c)
+        assert reward["cost_basis_auto"] is False, "a REWARD's cost basis is its value on receipt: no Auto"
+        assert types_by_code["ADJUSTMENT"]["cost_basis_auto"] is True
+        assert all(t["cost_basis_auto"] is True for code, t in types_by_code.items() if code != "REWARD"), {code: t.get("cost_basis_auto") for code, t in types_by_code.items()}
 
         # Event types should have emoji + compatible_tx_types
         ev_types = data["event_types"]
@@ -1513,3 +1525,157 @@ async def test_get_transactions_rejects_non_positive_asset_event_id(test_server,
         resp = await client.get(f"{API_BASE}/transactions", params={"asset_event_id": bad_id}, timeout=TIMEOUT)
         assert resp.status_code == 422, f"asset_event_id={bad_id} must be rejected with 422; got {resp.status_code}: {resp.text[:300]}"
         print_success(f"✓ asset_event_id={bad_id} rejected")
+
+
+# ============================================================================
+# REWARD — income in kind saved through the real batch (project 79, STK-1)
+# ============================================================================
+
+REWARD_DATE = "2026-02-16"  # after the scope's BUY, so an Auto cost (refused) would have a pool to average
+
+
+@asynccontextmanager
+async def _reward_scope(label: str):
+    """A user of this test, a broker holding 10 units of a new EUR asset (DEPOSIT, BUY), then their removal.
+
+    Yields ``(client, broker_id, asset_id)``. The broker goes first (force: its transactions), then the asset; a failed
+    removal fails the test after the rest of the cleanup ran. The user stays, as every user of this file does: what it
+    owned is gone with its broker."""
+    async with httpx.AsyncClient() as client:
+        _, _, session_cookie = await create_test_user(client)
+        assert session_cookie, "Could not authenticate the test user"
+        broker_id: Optional[int] = None
+        asset_id: Optional[int] = None
+        cleanup_errors: list[str] = []
+        try:
+            broker_resp = await client.post(f"{API_BASE}/brokers", json=[{"name": f"Reward {label} {uuid.uuid4().hex[:10]}", "allow_cash_overdraft": True}], timeout=TIMEOUT)
+            assert broker_resp.status_code == 200, broker_resp.text
+            broker_id = broker_resp.json()["results"][0]["broker_id"]
+            asset_resp = await client.post(f"{API_BASE}/assets", json=[{"display_name": f"Reward {label} {uuid.uuid4().hex[:10]}", "asset_type": "CRYPTO", "currency": "EUR"}], timeout=TIMEOUT)
+            assert asset_resp.status_code in (200, 201), asset_resp.text
+            asset_id = asset_resp.json()["results"][0]["asset_id"]
+            seed = await client.post(
+                f"{API_BASE}/transactions/commit",
+                json={
+                    "creates": [
+                        {"broker_id": broker_id, "type": "DEPOSIT", "date": "2026-02-02", "quantity": "0", "cash": {"code": "EUR", "amount": "1000"}},
+                        {"broker_id": broker_id, "asset_id": asset_id, "type": "BUY", "date": "2026-02-03", "quantity": "10", "cash": {"code": "EUR", "amount": "-500"}},
+                    ]
+                },
+                timeout=TIMEOUT,
+            )
+            assert seed.status_code == 200 and seed.json()["committed"] is True, seed.text
+            yield client, broker_id, asset_id
+        finally:
+            if broker_id is not None:
+                deleted = await client.delete(f"{API_BASE}/brokers", params={"ids": [broker_id], "force": True}, timeout=TIMEOUT)
+                if deleted.status_code != 200 or not all(row["success"] for row in deleted.json()["results"]):
+                    cleanup_errors.append(f"broker {broker_id}: {deleted.status_code} {deleted.text}")
+            if asset_id is not None:
+                deleted = await client.delete(f"{API_BASE}/assets", params={"asset_ids": [asset_id]}, timeout=TIMEOUT)
+                if deleted.status_code != 200 or not all(row["success"] for row in deleted.json()["results"]):
+                    cleanup_errors.append(f"asset {asset_id}: {deleted.status_code} {deleted.text}")
+        assert cleanup_errors == [], f"cleanup left rows behind: {cleanup_errors}"
+
+
+def _reward_row(broker_id: int, asset_id: int, *, cost: Optional[str] = None, mode: Optional[str] = None) -> dict:
+    """A REWARD of 4 units on ``REWARD_DATE``, no cash; ``cost`` the per-unit value in EUR, ``mode`` the cost_basis_mode."""
+    row: dict = {"broker_id": broker_id, "asset_id": asset_id, "type": "REWARD", "date": REWARD_DATE, "quantity": "4"}
+    if cost is not None:
+        row["cost_basis_override"] = {"code": "EUR", "amount": cost}
+    if mode is not None:
+        row["cost_basis_mode"] = mode
+    return row
+
+
+async def _commit(client: httpx.AsyncClient, body: dict) -> dict:
+    """POST /transactions/commit: a refusal is a 200 with committed=false and its issues, never a 5xx or a 422."""
+    response = await client.post(f"{API_BASE}/transactions/commit", json=body, timeout=TIMEOUT)
+    assert response.status_code == 200, f"the batch must answer 200 with issues, got {response.status_code}: {response.text[:500]}"
+    return response.json()
+
+
+async def _broker_rewards(client: httpx.AsyncClient, broker_id: int) -> list[dict]:
+    """The REWARD rows of this test's own broker."""
+    response = await client.get(f"{API_BASE}/transactions", params={"broker_id": broker_id, "types": ["REWARD"]}, timeout=TIMEOUT)
+    assert response.status_code == 200, response.text
+    return [row for row in response.json() if row["broker_id"] == broker_id and row["type"] == "REWARD"]
+
+
+@pytest.mark.asyncio
+class TestRewardSaving:
+    """REWARD through POST /transactions/commit on a saved scope (project 79, STK-1): what saves, what the batch refuses and
+    with which code. The pure rules are in test_transaction_schemas.py; here the whole batch runs (parse, cost checks,
+    update merge, commit) and the row is read back."""
+
+    @pytest.fixture(autouse=True)
+    def _server(self, test_server):
+        yield
+
+    async def test_reward_with_a_value_saves_and_reads_back(self):
+        """4 units at 2.5 EUR each, no cash: committed, read back as REWARD with its per-unit cost basis."""
+        print_section("REWARD: a reward with a value saves")
+        async with _reward_scope("value") as (client, broker_id, asset_id):
+            data = await _commit(client, {"creates": [_reward_row(broker_id, asset_id, cost="2.5", mode="manual")]})
+            assert data["committed"] is True, data["issues"]
+            (reward_id,) = next(result["ids"] for result in data["results"] if result["operation"] == "create" and result["index"] == 0)
+            read = await client.get(f"{API_BASE}/transactions", params={"ids": [reward_id]}, timeout=TIMEOUT)
+            assert read.status_code == 200, read.text
+            row = next(item for item in read.json() if item["id"] == reward_id)
+            assert (row["type"], row["asset_id"], Decimal(row["quantity"])) == ("REWARD", asset_id, Decimal("4"))
+            assert row["cash"] is None or Decimal(row["cash"]["amount"]) == 0, f"a REWARD moves no cash: {row['cash']}"
+            assert (row["cost_basis_override"]["code"], Decimal(row["cost_basis_override"]["amount"])) == ("EUR", Decimal("2.5"))
+        print_success("REWARD saved with its value")
+
+    async def test_reward_without_a_value_is_refused_with_cost_basis_required(self):
+        """No cost basis: the batch refuses the row with costBasisRequired on cost_basis_override, and saves nothing."""
+        print_section("REWARD: no value → costBasisRequired")
+        async with _reward_scope("novalue") as (client, broker_id, asset_id):
+            data = await _commit(client, {"creates": [_reward_row(broker_id, asset_id)]})
+            assert data["committed"] is False, data
+            mine = [issue for issue in data["issues"] if issue["operation"] == "create" and issue["index"] == 0]
+            assert any(issue["code"] == "costBasisRequired" and issue.get("field") == "cost_basis_override" for issue in mine), data["issues"]
+            assert await _broker_rewards(client, broker_id) == [], "a refused batch saves nothing"
+        print_success("REWARD without a value refused: costBasisRequired")
+
+    @pytest.mark.parametrize("mode", ["auto", "auto-detail"])
+    async def test_reward_with_an_average_cost_mode_is_refused_on_create(self, mode):
+        """cost_basis_mode auto/auto-detail on a create: refused with costBasisAutoNotAllowed (rule 12c), saves nothing."""
+        print_section(f"REWARD: create with cost_basis_mode={mode} → costBasisAutoNotAllowed")
+        async with _reward_scope(f"create-{mode}") as (client, broker_id, asset_id):
+            data = await _commit(client, {"creates": [_reward_row(broker_id, asset_id, mode=mode)]})
+            assert data["committed"] is False, data
+            mine = [issue for issue in data["issues"] if issue["operation"] == "create" and issue["index"] == 0]
+            assert any(issue["code"] == "costBasisAutoNotAllowed" for issue in mine), data["issues"]
+            assert await _broker_rewards(client, broker_id) == [], "a refused batch saves nothing"
+        print_success(f"REWARD create with {mode} refused")
+
+    async def test_reward_update_to_an_average_cost_mode_is_refused(self):
+        """A saved REWARD updated with cost_basis_mode auto: refused with costBasisAutoNotAllowed on that row (the broker
+        holds units, so the Auto cost would have had a pool); its stored value stays."""
+        print_section("REWARD: update to cost_basis_mode=auto → costBasisAutoNotAllowed")
+        async with _reward_scope("update-auto") as (client, broker_id, asset_id):
+            created = await _commit(client, {"creates": [_reward_row(broker_id, asset_id, cost="2.5", mode="manual")]})
+            assert created["committed"] is True, created["issues"]
+            (reward_id,) = next(result["ids"] for result in created["results"] if result["operation"] == "create" and result["index"] == 0)
+
+            data = await _commit(client, {"updates": [{"id": reward_id, "cost_basis_mode": "auto"}]})
+            assert data["committed"] is False, data
+            mine = [issue for issue in data["issues"] if issue["operation"] == "update" and issue.get("ref_id") == reward_id]
+            assert any(issue["code"] == "costBasisAutoNotAllowed" for issue in mine), data["issues"]
+
+            (row,) = [item for item in await _broker_rewards(client, broker_id) if item["id"] == reward_id]
+            assert (row["cost_basis_override"]["code"], Decimal(row["cost_basis_override"]["amount"])) == ("EUR", Decimal("2.5")), row
+        print_success("REWARD update to auto refused, value unchanged")
+
+    async def test_reward_with_an_explicit_zero_value_saves(self):
+        """An explicit cost basis of 0 is a value (a reward worth nothing), not a missing one: committed, read back as 0."""
+        print_section("REWARD: explicit 0 saves")
+        async with _reward_scope("zero") as (client, broker_id, asset_id):
+            data = await _commit(client, {"creates": [_reward_row(broker_id, asset_id, cost="0", mode="manual")]})
+            assert data["committed"] is True, data["issues"]
+            (reward_id,) = next(result["ids"] for result in data["results"] if result["operation"] == "create" and result["index"] == 0)
+            (row,) = [item for item in await _broker_rewards(client, broker_id) if item["id"] == reward_id]
+            assert row["cost_basis_override"] is not None, "an explicit 0 is stored, never dropped as missing"
+            assert (row["cost_basis_override"]["code"], Decimal(row["cost_basis_override"]["amount"])) == ("EUR", Decimal("0"))
+        print_success("REWARD with value 0 saved")

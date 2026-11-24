@@ -172,6 +172,11 @@ The tagged union structure of `PendingOp` simplifies complex composite operation
     fields)` (the sender — quantity for a `TRANSFER`, cash for the others, at or below zero —
     takes the first type) and `postSplitType(op, pendingSplits)`. The Type cell, the Form, **Link**,
     the issue rows and the local split of a new pair all call it.
+  - The update of a split half names a type only when the user swapped it (66 C22e,
+    `splitTypeToSend(op, pendingSplits, saved)`): the backend splits first and gives the half the
+    type of its **saved** side (`pair_sides`), then applies the update. `resolveOps` sends
+    `postSplitType` when it differs from that type and leaves the type out otherwise. The side is
+    read on the saved row, because after a swap the draft holds the amount as its magnitude.
 * **Promote** (`executePromote`) links two independent rows (e.g. a `WITHDRAWAL` and a `DEPOSIT`)
   into a pair of the matching type; both ops take the target type and collapse into one paired
   row, the receiving op becoming the hidden partner (`collapseIntoPaired`). Before the type

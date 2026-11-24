@@ -39,6 +39,16 @@ describe('FoldPanel', () => {
         expect(panel()).toHaveAttribute('data-open', 'false');
     });
 
+    it('draws a count at the right of the title line when given, and nothing when not', () => {
+        const {unmount} = render(FoldPanel, {title: 'Classes', testId: 'fold', children});
+        expect(screen.queryByTestId('fold-count'), 'no count, no element').not.toBeInTheDocument();
+        unmount();
+
+        render(FoldPanel, {title: 'Classes', testId: 'fold', children, count: '1 of 6'});
+        expect(screen.getByTestId('fold-count')).toHaveTextContent('1 of 6');
+        expect(screen.getByTestId('fold-toggle'), 'the count is part of the title line').toContainElement(screen.getByTestId('fold-count'));
+    });
+
     it('can start open, and keeps its body in the page while closed', () => {
         render(FoldPanel, {title: 'Advanced', testId: 'fold', children, open: true});
         expect(panel().open).toBe(true);

@@ -3,11 +3,12 @@
 
   Two strategies as cards: «Invest only», the only one before F3b (S1), and «Invest and sell», shown off, «coming soon».
   The target fidelity as five cards: the three levels («Balanced» the default), «Target first», «Custom». «Custom» has one
-  field in euros, inside its card: the most the user accepts to spend for the reference row of the table. The euros go to
-  the preview, which gives λ back to the draft: the draft keeps λ, never the euros, so a new total gives other euros back
-  for the same λ (§7.3). An empty, zero or negative field is an error on the field and a local problem of the step. Without
-  the preview's table (a total that cannot be counted yet) the field is off and the table's line says why. No figure is
-  computed here (N1).
+  field in euros, inside its card: the most the user accepts to spend for the reference row of the table. The preview
+  class turns the euros into the draft's λ on the preview's total (`acceptableCost.ts`, R1-F (b) of project 67): at once
+  when its numbers are current, with no call. The draft keeps λ, never the euros, so a new total gives other euros back
+  for the same λ (§7.3). An empty, zero or negative field is an error on the field and a local problem of the step.
+  Without the preview's total (one that cannot be counted yet) the field is off and the table's line says why. No figure
+  is computed in this component.
 
   Both choices are `ChoiceCards` (G6-3, M6): a group of native radios, the arrow keys moving the choice; «Custom»'s field
   sits in its card through `extra`, outside the radio's label.
@@ -19,6 +20,7 @@
     import type {DraftFidelity, PlannerDraft} from '../draft.svelte';
     import {cldrCurrencyDigits, exactMoneyDisplay, formatExactMoneyPlain, formatPlannerMoneyPlain} from '../format';
     import type {PlannerPreview} from '../preview.svelte';
+    import {referenceAmountFor, referenceMisplaced} from '../acceptableCost';
     import {fidelityName, rebalancerStrategyName} from '../strategyText';
     import ChoiceCards from '$lib/features/brokers/profile/ChoiceCards.svelte';
     import CurrencyCode from '../shared/CurrencyCode.svelte';
@@ -32,7 +34,7 @@
 
     interface Props {
         draft: PlannerDraft;
-        /** The scenario preview (step 8): the table, and λ for the euros typed for «Custom». */
+        /** The scenario preview (step 8): the total, and λ for the euros typed for «Custom». */
         preview: PlannerPreview | null;
     }
 
@@ -45,14 +47,15 @@
 
     const fidelity = $derived(draft.data.fidelity);
     const chosen = $derived<Choice>(fidelity.kind === 'level' ? fidelity.level : fidelity.kind);
-    const table = $derived(preview?.numbers?.table ?? null);
-    const reference = $derived(table?.rows.find((row) => row.reference) ?? null);
+    const total = $derived(preview?.numbers?.total ?? null);
+    /** The reference row's misplaced money; `null` without a total to count it on (the field is then off). */
+    const reference = $derived(total ? referenceMisplaced(total) : null);
 
-    /** The euros as typed; `null` until the user types, so the field shows the preview's euros for the draft's λ. */
+    /** The euros as typed; `null` until the user types, so the field shows the euros of the draft's λ on the total. */
     let typed = $state<string | null>(null);
     const answered = $derived.by(() => {
-        const amount = preview?.numbers?.custom?.reference_amount;
-        if (!amount || fidelity.kind !== 'custom') return '';
+        const amount = total && fidelity.kind === 'custom' ? referenceAmountFor(total, fidelity.lambda) : null;
+        if (!amount) return '';
         return canonicalDecimal(exactMoneyDisplay(amount.value, cldrCurrencyDigits(amount.currency)).text) ?? '';
     });
     const fieldText = $derived(typed ?? answered);
@@ -76,10 +79,10 @@
 
     function typeEuros(text: string): void {
         typed = text;
-        // The draft's λ belongs to the figure the preview converted: a new figure has none until its answer lands, so a
-        // calculation never runs on the λ of an older figure (a problem of the step meanwhile).
+        // The draft's λ belongs to the figure converted: a new figure has none until it is converted (at once on a current
+        // total), so a calculation never runs on the λ of an older figure (a problem of the step meanwhile).
         draft.data.fidelity = {kind: 'custom', lambda: ''};
-        // A figure above zero goes to the preview; anything else withdraws the euros on their way.
+        // A figure above zero becomes λ; anything else withdraws the euros waiting.
         preview?.setCustomEuros(draft, positive(text) ? text : '');
     }
 
@@ -167,7 +170,7 @@
     {#if choice === 'custom' && selected}
         <div class="px-3 pb-3 pl-9">
             <div class="flex flex-wrap items-center gap-2 text-sm text-lf-secondary">
-                <span>{$t(`${S}.customSentence`, {values: {reference: reference ? formatExactMoneyPlain(reference.misplaced, {digits: () => 0}) : '—'}})}</span>
+                <span>{$t(`${S}.customSentence`, {values: {reference: reference ? formatExactMoneyPlain(reference, {digits: () => 0}) : '—'}})}</span>
                 <span class="flex w-52 max-w-full shrink-0 items-center gap-1.5 whitespace-nowrap">
                     {#if isPrivacyEnabled()}
                         <!-- The figure derives from the user's total: masked, as the table's; editable again once privacy is off. -->
@@ -178,7 +181,7 @@
                             inputmode="decimal"
                             class="{INPUT} min-w-0 flex-1 text-right aria-invalid:border-lf-danger"
                             value={fieldText}
-                            disabled={!table}
+                            disabled={!reference}
                             aria-invalid={fieldInvalid ? 'true' : 'false'}
                             aria-label={$t(`${S}.customLabel`)}
                             data-testid={testId('fidelity-custom-input', profile)}

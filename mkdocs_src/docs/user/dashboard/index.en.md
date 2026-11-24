@@ -10,12 +10,13 @@ The Dashboard is your **portfolio's command center** — a single screen that te
 
 ## 🗂️ Tabbed Layout
 
-The Dashboard interface is organized into four primary tabs, allowing you to switch between different levels of detail:
+The Dashboard interface is organized into five primary tabs, allowing you to switch between different levels of detail:
 
 1. **Overview** (default): Key metrics, cash balances, and visual charts of your portfolio.
 2. **[Positions & Analysis](positions.md)**: Open holdings, weights, and detailed tax lot (FIFO) analysis.
-3. **[Risk](#risk-tab)**: The **Portfolio risk** panel, which answers four questions about your portfolio's risk.
-4. **Transactions**: The operations in the selected date range and broker scope, as a paginated, read-only list — double-click a row to open its detail viewer. See [Transactions](../transactions/index.md) for the full guide.
+3. **[Allocation](allocation.md)**: Where you are exposed, looking at only a part of your portfolio: filters by class, asset and bucket, a chart or map, a table and a class-by-dimension matrix.
+4. **[Risk](#risk-tab)**: The **Portfolio risk** panel, which answers four questions about your portfolio's risk.
+5. **Transactions**: The operations in the selected date range and broker scope, as a paginated, read-only list — double-click a row to open its detail viewer. See [Transactions](../transactions/index.md) for the full guide.
 
 ---
 
@@ -125,6 +126,7 @@ Pairs with manual rates only (no provider) get a warning of their own: its **Vie
 - 💰 **[KPI Cards](kpi-cards.md)** — Net Worth, Period P&L, and Returns explained
 - 📊 **[Charts](charts.md)** — Growth Chart and Allocation Panel explained
 - 🔍 **[Positions & Analysis](positions.md)** — Open positions, table vs. map views, and detailed FIFO tax lot analysis.
+- 🥧 **[Allocation](allocation.md)** — Filter your portfolio and see where that part is exposed, by sector, area, type or asset.
 
 ## 🔗 Related theory
 

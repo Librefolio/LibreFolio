@@ -26,6 +26,7 @@ const CHARGE_RULE: TypeRule = {
     pairFormLayout: null,
     costBasisMode: 'forbidden',
     costBasisPair: null,
+    costBasisAuto: true,
     chargeRole: 'charge',
 };
 const RULES = {FEE: CHARGE_RULE, TAX: CHARGE_RULE};

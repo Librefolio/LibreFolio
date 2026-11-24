@@ -35,7 +35,10 @@ What is pinned:
 - E. the numbers (D1): value by value when certain, the file's decimal mark for the ambiguous;
 - F. the languages and the messages (D4): the header decides, English by default; the
   catalogue ``_MESSAGES``; no i18n key that would override it; the orders list (D9);
-- G. identity: version 2.0.0, code, priority, and the two helpers kept.
+- G. identity: version 2.0.0, code, priority, and the two helpers kept;
+- L. the linked charges (project 66, wave P2b): a cost row names the one BUY/SELL of its Order Id, never the leg of
+  its currency conversion; a dividend tax names the one dividend of its date and ISIN (the time picks among several:
+  rule (b), 21/11/2026); anything else stays free.
 
 Every input is a sample of ``sample_reports/`` or is written in ``tmp_path``; every value of the
 synthetic files is invented. No server, no database: this module is pure. How the pairs go
@@ -65,6 +68,15 @@ from backend.app.schemas.brim import BRIMNotice, BRIMParseOutput, BRIMRefusal, i
 from backend.app.schemas.transactions.transactions import TXCreateItem
 from backend.app.services.brim.brim_provider import BRIMParseError, BRIMProvider
 from backend.app.services.brim.registry import BRIMProviderRegistry
+from backend.test_scripts.brim_charge_links import (
+    RowKey,
+    assert_charge_link_structure,
+    assert_expected_charge_links,
+    assert_sample_reimport_adds_nothing,
+    changes_besides_links,
+    load_previous_snapshot,
+    version_tuple,
+)
 from backend.test_scripts.brim_samples import SampleDir
 from scripts.i18n_catalog import load_catalog
 
@@ -74,7 +86,7 @@ from scripts.i18n_catalog import load_catalog
 
 PLUGIN_CODE = "broker_degiro"
 PLUGIN_MODULE = "backend.app.services.brim_providers.broker_degiro.plugin"
-PLUGIN_VERSION = "2.1.0"
+PLUGIN_VERSION = "2.2.0"  # project 66 P2b: the charges are linked
 SAMPLE_DIR = SampleDir()
 NL_SAMPLE = SAMPLE_DIR / "degiro-export.csv"
 EN_SAMPLE = SAMPLE_DIR / "degiro-account-en.csv"
@@ -804,10 +816,11 @@ def _reason_problem(plugin: BRIMProvider, path: Path, accepted: bool, label: str
 class TestIdentity:
     """G — the plugin's identity: the version is bumped (§1.7, the files already parsed show a re-parse); the rest stays."""
 
-    def test_the_version_is_2_1_0(self):
-        """The parse changes for the same input (amounts, currencies, types, pairs, notices): ``plugin_version`` 2.1.0, so the files already parsed offer a new parse.
+    def test_the_version_is_2_2_0(self):
+        """The parse changes for the same input (amounts, currencies, types, pairs, notices): ``plugin_version`` 2.2.0, so the files already parsed offer a new parse.
 
-        2.1.0 (W-B86): the six notices of rows left out carry ``context.report_issue``."""
+        2.1.0 (W-B86): the six notices of rows left out carry ``context.report_issue``. 2.2.0 (project 66 P2b): the costs
+        of an order and the withholding on a dividend are linked to their parent."""
         assert _plugin().plugin_version == PLUGIN_VERSION, f"plugin_version is {_plugin().plugin_version!r}: the rewrite bumps it to {PLUGIN_VERSION}"
 
     def test_code_class_and_priority_are_unchanged(self):
@@ -1208,7 +1221,9 @@ class TestClassification:
         assert {(tx.type.value, _num(tx.quantity)) for tx in out.transactions} == {("BUY", "4"), ("SELL", "-4")}
 
     def test_a_charge_of_an_order_is_a_fee_in_any_language(self, tmp_path: Path):
-        """An Order Id, a negative amount, neither a leg nor a trade: a FEE whatever its words — on the order's asset when the row names its ISIN, without an asset otherwise."""
+        """An Order Id, a negative amount, neither a leg nor a trade: a FEE whatever its words, on the order's asset. A row
+        that names its ISIN carries it; one that does not (the conversion fee) is linked to the order's one trade and takes
+        its asset (project 66 P2b: the link fills an asset that is missing, P1a-b)."""
         rows, expected = _scenario(
             [
                 (Row(f"Nákup 3 {SP500_NAME}@10,5 EUR ({SP500})", amount="-31,50", isin=SP500, product=SP500_NAME, order_id=_order(5), time="14:02"), "BUY"),
@@ -1219,7 +1234,7 @@ class TestClassification:
         out = _parse(_write(tmp_path, rows))
 
         _assert_outcomes(out, rows, expected)
-        assert {_num(tx.cash.amount): _isin(out, tx) for tx in _of_type(out, "FEE")} == {"-2": SP500, "-0.25": None}
+        assert {_num(tx.cash.amount): _isin(out, tx) for tx in _of_type(out, "FEE")} == {"-2": SP500, "-0.25": SP500}
         assert len({tx.asset_id for tx in out.transactions if tx.asset_id is not None}) == 1, "the fee and the purchase name one fake asset"
 
     def test_a_transaction_tax_of_an_order_is_a_tax(self, tmp_path: Path):
@@ -1898,3 +1913,300 @@ class TestRowsLeftOutAreReported:
         assert out.warnings, f"presence barrier: {spec.path.name} gives no notice"
 
         assert [notice.code for notice in out.warnings if (notice.context or {}).get("report_issue") is not True] == [], f"{spec.path.name}: notices without report_issue"
+
+
+# =============================================================================
+# L. LINKED CHARGES (project 66, wave P2b) — a cost row names the trade of its order, a dividend tax its dividend
+# =============================================================================
+#
+# P2 contract §2 and §5 (21/11/2026); decisions of 16/11, «Plugin per plugin» (degiro). A charge is linked only when it has
+# exactly ONE candidate parent, else it stays free:
+#
+# - a cost row (FEE, or the transaction TAX of stamp duty) names the one BUY/SELL with its ``Order Id``; never a leg of the
+#   currency conversion of the same order; an order with several fills, or none, leaves its costs free;
+# - a dividend tax (no ``Order Id``) names the DIVIDEND of its date and ISIN — rule (b), the consultant's of 21/11/2026, which
+#   replaces «date, time and ISIN»: one candidate of that day and ISIN is named whatever the time; among several, an equal
+#   time picks one; zero, or still several after the time: free. Several taxes may name one dividend;
+# - the account's own fees (connection fees, corporate action costs) have no parent.
+#
+# DEGIRO writes an order's costs (and, in the English sample, the dividend tax) ABOVE the row they belong to: the charge is
+# read before its parent, and the output order of today is kept (the snapshot comparison checks it).
+#
+# RED before the code: the expected links of the samples and of the invented files, and the version. Green before and after
+# (guards): the structure, the snapshot comparison (taken at HEAD 595738c0c, plugin 2.1.0), the reimport over the previous
+# version's rows, and the «free» cases — those pass today because nothing links; each has a twin one row away that must link.
+
+
+def _charge_key(kind: str, day: str, amount: str, currency: str, isin: Optional[str] = None) -> RowKey:
+    """A row of a parse output named by what it is (``RowKey``): type, ISO date, amount, currency, ISIN (None: no asset)."""
+    return (kind, day, amount, currency, isin)
+
+
+VICI, NOVA_SCOTIA, AMC, BIOTECH, KOREA, MSCI_WORLD, QT_GROUP, TOYOTA = "US9256521090", "CA0641491075", "US00165C1045", "IE00BYXG2H39", "IE00B0M63391", "IE00B4L5Y983", "FI4000198031", "JP3633400001"
+COCA_COLA, MAIN_STREET, CLEARWAY, REALTY_INCOME, OXFORD_SQUARE = "US1912161007", "US56035L1044", "US18539C2044", "US7561091049", "US69181V1070"
+APPLE, VANGUARD_ALL_WORLD = "US0378331005", "IE00BK5BQT80"
+
+#: Per sample: (linked (charge, parent), free charges). Every FEE/TAX of the output is in one of the two.
+LINK_EXPECTATIONS: Dict[str, Tuple[List[Tuple[RowKey, RowKey]], List[RowKey]]] = {
+    "degiro-export.csv": (
+        [
+            # order costs → the one BUY/SELL of their Order Id (a EUR fee of a USD trade too: rule 4, the currency is free)
+            (_charge_key("FEE", "2022-12-15", "-1.00", "EUR", VICI), _charge_key("BUY", "2022-12-15", "-33.90", "USD", VICI)),  # the order has an FX pair too
+            (_charge_key("FEE", "2021-08-10", "-0.50", "EUR", NOVA_SCOTIA), _charge_key("SELL", "2021-08-10", "63.97", "USD", NOVA_SCOTIA)),  # and here
+            (_charge_key("FEE", "2021-02-01", "-1.00", "EUR", AMC), _charge_key("BUY", "2021-02-01", "-1.2108", "USD", AMC)),
+            (_charge_key("FEE", "2023-08-01", "-1.00", "EUR", BIOTECH), _charge_key("SELL", "2023-08-01", "5.42", "EUR", BIOTECH)),
+            (_charge_key("FEE", "2023-07-25", "-1.00", "EUR", KOREA), _charge_key("BUY", "2023-07-25", "-42.53", "EUR", KOREA)),
+            (_charge_key("FEE", "2024-01-02", "-1.00", "EUR", MSCI_WORLD), _charge_key("BUY", "2024-01-02", "-82.06", "EUR", MSCI_WORLD)),
+            (_charge_key("FEE", "2024-03-11", "-4.90", "EUR", QT_GROUP), _charge_key("BUY", "2024-03-11", "-479.76", "EUR", QT_GROUP)),
+            (_charge_key("FEE", "2024-03-08", "-9999.99", "EUR", TOYOTA), _charge_key("BUY", "2024-03-08", "-9999.99", "EUR", TOYOTA)),
+            # dividend taxes → the one dividend of their date and ISIN (rule (b))
+            (_charge_key("TAX", "2022-12-16", "-0.07", "USD", COCA_COLA), _charge_key("DIVIDEND", "2022-12-16", "0.44", "USD", COCA_COLA)),
+            (_charge_key("TAX", "2022-12-16", "-0.07", "USD", MAIN_STREET), _charge_key("DIVIDEND", "2022-12-16", "0.44", "USD", MAIN_STREET)),
+            (_charge_key("TAX", "2022-12-16", "-0.11", "USD", CLEARWAY), _charge_key("DIVIDEND", "2022-12-16", "0.73", "USD", CLEARWAY)),
+            (_charge_key("TAX", "2024-03-18", "-0.15", "USD", REALTY_INCOME), _charge_key("DIVIDEND", "2024-03-18", "0.51", "USD", REALTY_INCOME)),
+            (_charge_key("TAX", "2024-05-27", "-9999.99", "JPY", TOYOTA), _charge_key("DIVIDEND", "2024-05-27", "9999.99", "JPY", TOYOTA)),
+            # the tax is at 07:40, its dividend at 07:39 (sample lines 60-61): the only dividend of that day and ISIN, the
+            # time does not matter (rule (b))
+            (_charge_key("TAX", "2024-08-01", "-0.53", "USD", OXFORD_SQUARE), _charge_key("DIVIDEND", "2024-08-01", "3.50", "USD", OXFORD_SQUARE)),
+        ],
+        [
+            # the account's own fees: three connection fees and one more of the same day and amount, the corporate action costs
+            *[_charge_key("FEE", "2024-02-05", "-2.50", "EUR")] * 4,
+            _charge_key("FEE", "2024-10-04", "-0.01", "USD"),
+        ],
+    ),
+    "degiro-account-en.csv": (
+        [
+            (_charge_key("FEE", "2025-09-08", "-1.00", "EUR", APPLE), _charge_key("BUY", "2025-09-08", "-901.25", "USD", APPLE)),  # the order has an FX pair too
+            (_charge_key("FEE", "2025-08-25", "-1.00", "EUR", VANGUARD_ALL_WORLD), _charge_key("SELL", "2025-08-25", "356.25", "EUR", VANGUARD_ALL_WORLD)),
+            (_charge_key("FEE", "2025-08-04", "-1.00", "EUR", VANGUARD_ALL_WORLD), _charge_key("BUY", "2025-08-04", "-1124.00", "EUR", VANGUARD_ALL_WORLD)),
+            # the tax is written ABOVE its dividend (sample lines 10-11): the parent comes after the charge
+            (_charge_key("TAX", "2025-09-15", "-0.72", "USD", APPLE), _charge_key("DIVIDEND", "2025-09-15", "4.80", "USD", APPLE)),
+        ],
+        [_charge_key("FEE", "2025-07-02", "-2.50", "EUR")],  # Exchange Connection Fee: an account fee
+    ),
+}
+LINK_SAMPLES = sorted(LINK_EXPECTATIONS)
+
+# Invented rows (no sample has them): one product, one order, one dividend day.
+SAMPLE_ISIN, OTHER_ISIN, SAMPLE_PRODUCT = "XS0000000017", "XS0000000025", "SAMPLE CORP"
+ORDER_ONE = "0f0e0d0c-0000-4000-8000-000000000001"
+DIVIDEND_DAY, DIVIDEND_TIME = "15-09-2025", "07:30"
+
+
+def _order_row(description: str, amount: str, *, currency: str = "EUR", fx: str = "", order_id: str = ORDER_ONE) -> Row:
+    """A row of the invented order ``ORDER_ONE`` on 22-09-2025 at 10:00, about ``SAMPLE_CORP``."""
+    return Row(description, amount=amount, currency=currency, isin=SAMPLE_ISIN, product=SAMPLE_PRODUCT, order_id=order_id, fx=fx)
+
+
+def _fx_legs() -> List[Row]:
+    """The two legs of the order's currency conversion, as DEGIRO writes them first (USD credited, EUR debited)."""
+    return [_order_row("FX Credit", "100,00", currency="USD", fx="1,1000"), _order_row("FX Debit", "-90,91")]
+
+
+def _costs() -> List[Row]:
+    """Two cost rows of the order: DEGIRO's fee (a FEE) and a stamp duty (a transaction TAX, ``plugin.py`` ``_TRANSACTION_TAX``)."""
+    return [_order_row("DEGIRO Transaction and/or third party fees", "-1,00"), _order_row("Stamp Duty", "-0,50")]
+
+
+def _buy(quantity: int, amount: str) -> Row:
+    return _order_row(f"Buy {quantity} SAMPLE CORP@50,00 USD ({SAMPLE_ISIN})", amount, currency="USD")
+
+
+def _dividend_row(description: str, amount: str, *, isin: str = SAMPLE_ISIN, day: str = DIVIDEND_DAY, time: str = DIVIDEND_TIME) -> Row:
+    return Row(description, amount=amount, currency="USD", isin=isin, product=SAMPLE_PRODUCT, day=day, time=time)
+
+
+FEE_KEY = _charge_key("FEE", "2025-09-22", "-1.00", "EUR", SAMPLE_ISIN)
+STAMP_DUTY_KEY = _charge_key("TAX", "2025-09-22", "-0.50", "EUR", SAMPLE_ISIN)
+DIVIDEND_TAX_KEY = _charge_key("TAX", "2025-09-15", "-0.30", "USD", SAMPLE_ISIN)
+
+
+def _of_type(out: BRIMParseOutput, kind: str) -> List[TXCreateItem]:
+    return [tx for tx in out.transactions if tx.type.value == kind]
+
+
+def _fx_parent_problems(out: BRIMParseOutput) -> List[str]:
+    """A leg of a currency conversion named as a parent, or named at all: it is never the parent of a charge."""
+    legs = _of_type(out, "FX_CONVERSION")
+    leg_refs = {tx.ref for tx in legs if tx.ref}
+    problems = [f"FX leg {tx.date} {tx.cash.amount if tx.cash else None} {tx.cash.code if tx.cash else None} has a ref {tx.ref!r}" for tx in legs if tx.ref]
+    problems += [f"{tx.type.value} {tx.date} names the FX leg {tx.parent_ref!r}" for tx in out.transactions if tx.parent_ref and tx.parent_ref in leg_refs]
+    return problems
+
+
+class TestLinkedCharges:
+    """L — project 66, wave P2b (P2 contract §2 and §5): the costs of an order name its one trade, a dividend tax its one
+    dividend; with zero or several candidates the charge stays free; the FX leg of an order is never a parent."""
+
+    # -- the samples ---------------------------------------------------------------------------------------------------
+
+    @pytest.mark.parametrize("sample", LINK_SAMPLES)
+    def test_each_charge_names_its_one_parent(self, sample: str):
+        """RED before P2b: the expected links of the sample, exhaustive (every FEE/TAX is linked or declared free)."""
+        linked, free = LINK_EXPECTATIONS[sample]
+        out = _parse(SAMPLE_DIR / sample)
+
+        assert out.validation_issues == [], f"{sample}: {out.validation_issues}"
+        assert_expected_charge_links(out, f"{PLUGIN_CODE} [{sample}]", linked=linked, free=free)
+
+    @pytest.mark.parametrize("sample", LINK_SAMPLES)
+    def test_the_fx_leg_of_an_order_is_never_a_parent(self, sample: str):
+        """Guard (green today, must stay): an order with a currency conversion and a fee (VICI, BANK NOVA SCOTIA; APPLE in
+        English) — the fee names the trade, the two FX_CONVERSION legs are named by nobody and carry no ``ref``."""
+        out = _parse(SAMPLE_DIR / sample)
+        assert len(_of_type(out, "FX_CONVERSION")) >= 2, f"presence barrier: {sample} has no currency conversion"
+
+        problems = _fx_parent_problems(out)
+        assert not problems, f"{sample}: " + "; ".join(problems)
+
+    @pytest.mark.parametrize("sample", LINK_SAMPLES)
+    def test_the_links_are_well_formed(self, sample: str):
+        assert_charge_link_structure(_parse(SAMPLE_DIR / sample), f"{PLUGIN_CODE} [{sample}]")
+
+    @pytest.mark.parametrize("sample", LINK_SAMPLES)
+    def test_only_the_names_change_from_the_previous_version(self, sample: str):
+        """Guard: every row equals the snapshot's, in order, but for ``ref``/``parent_ref``. The order is today's, although
+        the costs and the English dividend tax are read before their parent."""
+        previous = load_previous_snapshot(PLUGIN_CODE, sample, BROKER_ID)
+        out = _parse(SAMPLE_DIR / sample)
+
+        problems = changes_besides_links(previous.transactions, out.transactions)
+        assert not problems, f"{sample}: the output changed besides its links (snapshot HEAD {previous.source_head}):\n  " + "\n  ".join(problems)
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("sample", LINK_SAMPLES)
+    async def test_reimport_over_the_previous_version_adds_nothing(self, sample: str):
+        """Guard (P2 contract §2.1): the sample, reimported over the rows the previous version saved (without links), adds no row."""
+        out = await assert_sample_reimport_adds_nothing(_plugin(), sample)
+
+        assert out.transactions, f"{sample}: the criterion ran on an empty output"
+
+    def test_the_version_is_above_the_previous_one(self):
+        """RED before P2b: the plugin goes up a version (P2 contract §1)."""
+        for sample in LINK_SAMPLES:
+            previous = load_previous_snapshot(PLUGIN_CODE, sample, BROKER_ID)
+            assert version_tuple(_plugin().plugin_version) > version_tuple(previous.plugin_version), f"{PLUGIN_CODE} {_plugin().plugin_version}: not above the snapshot's {previous.plugin_version} ({sample})"
+
+    # -- an order: exactly one BUY/SELL (invented rows) ------------------------------------------------------------------
+
+    def test_the_costs_of_a_one_fill_order_name_its_trade_not_its_fx_leg(self, tmp_path: Path):
+        """RED before P2b. An order as DEGIRO writes it: the FX pair, the fee, a stamp duty, then the trade (the charges come
+        first). The fee and the stamp duty (a TAX) name the BUY; the FX legs are named by nobody."""
+        out = _parse(_write(tmp_path, [*_fx_legs(), *_costs(), _buy(2, "-100,00")]))
+        assert len(_of_type(out, "FX_CONVERSION")) == 2, f"presence barrier: the FX pair, got {[tx.type.value for tx in out.transactions]}"
+
+        buy = _charge_key("BUY", "2025-09-22", "-100.00", "USD", SAMPLE_ISIN)
+        assert_expected_charge_links(out, "one-fill order", linked=[(FEE_KEY, buy), (STAMP_DUTY_KEY, buy)], free=[])
+        assert not _fx_parent_problems(out), _fx_parent_problems(out)
+
+    def test_an_order_with_an_fx_pair_and_no_trade_leaves_its_costs_free(self, tmp_path: Path):
+        """Guard (green today; the twin above links). The same order without its trade: the only other rows of the Order Id
+        are the FX legs, which are no parent — the costs stay free, and nothing names a leg."""
+        out = _parse(_write(tmp_path, [*_fx_legs(), *_costs()]))
+        assert len(_of_type(out, "FX_CONVERSION")) == 2 and not _of_type(out, "BUY"), f"presence barrier: the FX pair and no trade, got {[tx.type.value for tx in out.transactions]}"
+
+        assert_expected_charge_links(out, "order without a trade", linked=[], free=[FEE_KEY, STAMP_DUTY_KEY])
+        assert not _fx_parent_problems(out), _fx_parent_problems(out)
+
+    def test_an_order_with_two_fills_leaves_its_costs_free(self, tmp_path: Path):
+        """Guard (green today; the one-fill twin links). Two BUY rows of one Order Id (two fills): two candidates, the costs stay free."""
+        out = _parse(_write(tmp_path, [*_costs(), _buy(1, "-50,00"), _buy(2, "-100,00")]))
+        assert len(_of_type(out, "BUY")) == 2, f"presence barrier: two fills, got {[tx.type.value for tx in out.transactions]}"
+
+        assert_expected_charge_links(out, "two fills", linked=[], free=[FEE_KEY, STAMP_DUTY_KEY])
+
+    def test_a_cost_row_names_only_the_trade_of_its_own_order(self, tmp_path: Path):
+        """RED before P2b. Two one-fill orders of the same product on the same minute: each fee names the trade of its
+        Order Id, never the other one (the key is the Order Id, not the product)."""
+        other = "0f0e0d0c-0000-4000-8000-000000000002"
+        rows = [
+            _order_row("DEGIRO Transaction and/or third party fees", "-1,00"),
+            _buy(2, "-100,00"),
+            _order_row("DEGIRO Transaction and/or third party fees", "-2,00", order_id=other),
+            _order_row(f"Buy 1 SAMPLE CORP@50,00 USD ({SAMPLE_ISIN})", "-50,00", currency="USD", order_id=other),
+        ]
+        out = _parse(_write(tmp_path, rows))
+
+        linked = [
+            (FEE_KEY, _charge_key("BUY", "2025-09-22", "-100.00", "USD", SAMPLE_ISIN)),
+            (_charge_key("FEE", "2025-09-22", "-2.00", "EUR", SAMPLE_ISIN), _charge_key("BUY", "2025-09-22", "-50.00", "USD", SAMPLE_ISIN)),
+        ]
+        assert_expected_charge_links(out, "two orders", linked=linked, free=[])
+
+    # -- a dividend tax: the DIVIDEND of its date and ISIN, the time picking among several (rule (b), invented rows) -----
+
+    def test_a_dividend_tax_above_its_dividend_names_it(self, tmp_path: Path):
+        """RED before P2b. The tax is written above its dividend (as in the English sample): read first, linked all the same."""
+        out = _parse(_write(tmp_path, [_dividend_row("Dividend Tax", "-0,30"), _dividend_row("Dividend", "2,00")]))
+
+        assert_expected_charge_links(out, "tax above its dividend", linked=[(DIVIDEND_TAX_KEY, _charge_key("DIVIDEND", "2025-09-15", "2.00", "USD", SAMPLE_ISIN))], free=[])
+
+    def test_a_dividend_tax_with_two_dividends_of_its_time_stays_free(self, tmp_path: Path):
+        """Two dividends of the same date and ISIN, both at the tax's time: the time leaves two candidates, the tax stays free
+        (the one-dividend twin links)."""
+        rows = [_dividend_row("Dividend", "2,00"), _dividend_row("Dividend", "1,50"), _dividend_row("Dividend Tax", "-0,30")]
+        out = _parse(_write(tmp_path, rows))
+        assert len(_of_type(out, "DIVIDEND")) == 2, f"presence barrier: two dividends, got {[tx.type.value for tx in out.transactions]}"
+
+        assert_expected_charge_links(out, "two dividends", linked=[], free=[DIVIDEND_TAX_KEY])
+
+    def test_the_one_dividend_of_its_day_and_isin_is_named_whatever_the_time(self, tmp_path: Path):
+        """Rule (b): the only dividend of the tax's date and ISIN, a minute earlier (as Oxford Square in the sample), is its
+        parent: the time decides only among several."""
+        out = _parse(_write(tmp_path, [_dividend_row("Dividend", "2,00", time="07:29"), _dividend_row("Dividend Tax", "-0,30")]))
+        assert len(_of_type(out, "DIVIDEND")) == 1, f"presence barrier: one dividend, got {[tx.type.value for tx in out.transactions]}"
+
+        assert_expected_charge_links(out, "dividend of another minute", linked=[(DIVIDEND_TAX_KEY, _charge_key("DIVIDEND", "2025-09-15", "2.00", "USD", SAMPLE_ISIN))], free=[])
+
+    @pytest.mark.parametrize(
+        ("differs", "dividend"),
+        [
+            pytest.param("day", _dividend_row("Dividend", "2,00", day="16-09-2025"), id="another-day"),
+            pytest.param("isin", _dividend_row("Dividend", "2,00", isin=OTHER_ISIN), id="another-isin"),
+        ],
+    )
+    def test_a_dividend_tax_without_a_dividend_of_its_date_and_isin_stays_free(self, differs: str, dividend: Row, tmp_path: Path):
+        """One dividend that differs from the tax in its ``differs``: zero candidates, the tax stays free (the twin on the
+        same day and ISIN links)."""
+        out = _parse(_write(tmp_path, [dividend, _dividend_row("Dividend Tax", "-0,30")]))
+        assert len(_of_type(out, "DIVIDEND")) == 1, f"presence barrier: one dividend, got {[tx.type.value for tx in out.transactions]}"
+
+        assert_expected_charge_links(out, f"dividend of another {differs}", linked=[], free=[DIVIDEND_TAX_KEY])
+
+    def test_two_dividends_of_one_day_each_named_by_the_tax_of_its_time(self, tmp_path: Path):
+        """Rule (b): two dividends of the same ISIN and day at different times, each with its tax at its own time — the time
+        picks, each tax names its own dividend."""
+        rows = [
+            _dividend_row("Dividend", "2,00"),
+            _dividend_row("Dividend Tax", "-0,30"),
+            _dividend_row("Dividend", "1,50", time="09:00"),
+            _dividend_row("Dividend Tax", "-0,20", time="09:00"),
+        ]
+        out = _parse(_write(tmp_path, rows))
+        assert len(_of_type(out, "DIVIDEND")) == 2, f"presence barrier: two dividends, got {[tx.type.value for tx in out.transactions]}"
+
+        linked = [
+            (DIVIDEND_TAX_KEY, _charge_key("DIVIDEND", "2025-09-15", "2.00", "USD", SAMPLE_ISIN)),
+            (_charge_key("TAX", "2025-09-15", "-0.20", "USD", SAMPLE_ISIN), _charge_key("DIVIDEND", "2025-09-15", "1.50", "USD", SAMPLE_ISIN)),
+        ]
+        assert_expected_charge_links(out, "two dividends, two times", linked=linked, free=[])
+
+    def test_a_tax_at_neither_time_of_two_dividends_of_its_day_stays_free(self, tmp_path: Path):
+        """Rule (b): two dividends of the same ISIN and day (07:30, 09:00) and one tax at 08:00 — the time picks neither,
+        zero remain: the tax stays free (the twin at 07:30 above links)."""
+        rows = [_dividend_row("Dividend", "2,00"), _dividend_row("Dividend", "1,50", time="09:00"), _dividend_row("Dividend Tax", "-0,30", time="08:00")]
+        out = _parse(_write(tmp_path, rows))
+        assert len(_of_type(out, "DIVIDEND")) == 2, f"presence barrier: two dividends, got {[tx.type.value for tx in out.transactions]}"
+
+        assert_expected_charge_links(out, "tax at neither time", linked=[], free=[DIVIDEND_TAX_KEY])
+
+    def test_two_taxes_of_one_day_name_its_one_dividend(self, tmp_path: Path):
+        """Rule (b): two taxes of the same day and ISIN (07:30 and 07:45) and one dividend: both name it."""
+        rows = [_dividend_row("Dividend Tax", "-0,30"), _dividend_row("Dividend", "2,00"), _dividend_row("Dividend Tax", "-0,10", time="07:45")]
+        out = _parse(_write(tmp_path, rows))
+        assert len(_of_type(out, "TAX")) == 2, f"presence barrier: two taxes, got {[tx.type.value for tx in out.transactions]}"
+
+        dividend = _charge_key("DIVIDEND", "2025-09-15", "2.00", "USD", SAMPLE_ISIN)
+        linked = [(DIVIDEND_TAX_KEY, dividend), (_charge_key("TAX", "2025-09-15", "-0.10", "USD", SAMPLE_ISIN), dividend)]
+        assert_expected_charge_links(out, "two taxes, one dividend", linked=linked, free=[])

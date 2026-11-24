@@ -36,6 +36,7 @@ from backend.app.services.financial_math.fifo.models import (
     ReferencePriceResolution,
     fails_the_replay,
 )
+from backend.app.services.financial_math.income import income_value, is_in_kind_income
 from backend.app.services.financial_math.lots.average_cost_lines import ALL_BROKERS, build_broker_wac_history, build_cumulative_wac_history
 from backend.app.services.financial_math.lots.change_days import DayRange, analysis_event_dates, history_steps, lot_change_days, price_candidate_days
 from backend.app.services.financial_math.lots.conversions import FxRateResolver, collect_fx_needs, collect_performance_fx_needs, convert_closure, needs_market_series, unconvertible_ids
@@ -86,6 +87,7 @@ _ORPHAN_ISSUE_CODES = {
 
 _CUSTODY_KINDS = {
     LotTimelineEventKind.BUY,
+    LotTimelineEventKind.REWARD,
     LotTimelineEventKind.ADJUSTMENT_IN,
     LotTimelineEventKind.TRANSFER_DEPART,
     LotTimelineEventKind.TRANSFER_ARRIVE,
@@ -354,6 +356,11 @@ class LotsAnalysisService:
         # only, which replays up to actual_to (``replay_until``): the units stay in transit, as the Dashboard keeps them.
         late_legs = await self._load_late_transfer_legs(transactions, asset_id=asset_id, scope_broker_ids=scope_broker_ids, date_to=actual_to)
         income_transactions = await self._load_income_transactions(asset_id=asset_id, scope_broker_ids=scope_broker_ids, date_to=actual_to)
+        # Project 79: a REWARD is income in kind as well as the lot it opens. It is already among the scope's rows (it
+        # moves quantity): its income event comes from there, not from a second query.
+        rewards = [tx for tx in transactions if isinstance(tx, Transaction) and is_in_kind_income(tx)]
+        if rewards:
+            income_transactions = sorted([*income_transactions, *rewards], key=lambda tx: (tx.date, tx.id or 0))
         cost_transactions = await self._load_cost_transactions(asset_id=asset_id, scope_broker_ids=scope_broker_ids, date_to=actual_to)
 
         def reference_price_lookup(resolved_asset_id: int, opened_at: date_type) -> ReferencePriceResolution | None:
@@ -379,7 +386,8 @@ class LotsAnalysisService:
         unconvertible_trade_ids: set[int] = set()
         if needs_income_alloc and (income_transactions or cost_transactions):
             for tx in income_transactions:
-                fx_resolver.need(tx.currency or asset.currency, tx.date)
+                income = income_value(tx, default_currency=asset.currency)
+                fx_resolver.need(income.currency if income is not None else tx.currency or asset.currency, tx.date)
             for tx in cost_transactions:
                 fx_resolver.need(tx.currency or asset.currency, tx.date)
             if cost_transactions:
@@ -1405,7 +1413,7 @@ class LotsAnalysisService:
     ) -> list[LotTimelineEventSchema]:
         rows: list[LotTimelineEventSchema] = []
         for event in engine_result.classified_events:
-            if event.kind in {"BUY", "ADJUSTMENT_IN"}:
+            if event.kind in {"BUY", "REWARD", "ADJUSTMENT_IN"}:
                 lot_id = event.transaction_id
                 if lot_id not in selected:
                     continue

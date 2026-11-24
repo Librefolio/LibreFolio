@@ -138,7 +138,8 @@
           "transfer": "Transferencias",
           "adjustment": "Ajustes",
           "split": "Desdoblamiento",
-          "income": "Dividendo / interés"
+          "income": "Dividendo / interés",
+          "reward": "Recompensas"
         },
         "eventType": {
           "BUY": "Compra",
@@ -149,7 +150,8 @@
           "TRANSFER_ARRIVE": "Transferencia",
           "SPLIT": "Desdoblamiento",
           "TRANSFER_IN": "Transferencia de entrada",
-          "TRANSFER_OUT": "Transferencia de salida"
+          "TRANSFER_OUT": "Transferencia de salida",
+          "REWARD": "Recompensa"
         },
         "unitPrice": "Precio unitario",
         "transitInterval": "Intervalo de tránsito",
@@ -229,7 +231,8 @@
           "TRANSFER_ARRIVE": "TRANSFERENCIA",
           "SPLIT": "SPLIT",
           "TRANSFER_IN": "TRANSFERENCIA+",
-          "TRANSFER_OUT": "TRANSFERENCIA-"
+          "TRANSFER_OUT": "TRANSFERENCIA-",
+          "REWARD": "RECOMPENSA"
         },
         "historyDetail": {
           "openPrice": "Precio de apertura",
@@ -293,7 +296,8 @@
       "analysisFailedFix": "Corrige estas transacciones y los lotes volverán:",
       "matchingMethod": "Método de emparejamiento",
       "methodFifoHint": "FIFO: una venta cierra primero el lote más antiguo",
-      "methodLifoHint": "LIFO: una venta cierra primero el lote más reciente"
+      "methodLifoHint": "LIFO: una venta cierra primero el lote más reciente",
+      "incomeMarkerReward": "Recompensa"
     },
     "createdInSystem": "Creado en el Sistema",
     "deleteBlockedTitle": "No se puede eliminar el bróker",

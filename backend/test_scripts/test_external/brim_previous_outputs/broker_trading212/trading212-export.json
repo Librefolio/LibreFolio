@@ -1,0 +1,323 @@
+{
+  "format": "lf-brim-previous-output/1",
+  "comment": "Output of the plugin BEFORE its project-66 lot changed it (P2 contract §2.1). Never re-take it after the code change.",
+  "plugin_code": "broker_trading212",
+  "plugin_version": "1.2.0",
+  "source_head": "a2e85db13",
+  "captured_on": "2026-11-21",
+  "sample": "broker_trading212/sample_reports/trading212-export.csv",
+  "sample_sha256": "7099abfd8c15689257f1172ad06b59f5cfeb69686811bdde4b168d26a21e581b",
+  "extracted_assets": {
+    "2147483647": {
+      "extracted_symbol": "CSCO",
+      "extracted_isin": "US17275R1023",
+      "extracted_name": "Cisco Systems",
+      "notices": []
+    },
+    "2147483646": {
+      "extracted_symbol": "VICI",
+      "extracted_isin": "US9256521090",
+      "extracted_name": "VICI Properties",
+      "notices": []
+    },
+    "2147483645": {
+      "extracted_symbol": "ASTS",
+      "extracted_isin": "US00217D1000",
+      "extracted_name": "AST SpaceMobile",
+      "notices": []
+    },
+    "2147483644": {
+      "extracted_symbol": "ASTR",
+      "extracted_isin": "US04634X2027",
+      "extracted_name": "Astra Space",
+      "notices": []
+    },
+    "2147483643": {
+      "extracted_symbol": "MAIN",
+      "extracted_isin": "US56035L1044",
+      "extracted_name": "Main Street Capital",
+      "notices": []
+    },
+    "2147483642": {
+      "extracted_symbol": "UNP",
+      "extracted_isin": "US9078181081",
+      "extracted_name": "Union Pacific",
+      "notices": []
+    },
+    "2147483641": {
+      "extracted_symbol": "INRG",
+      "extracted_isin": "IE00B1XNHC34",
+      "extracted_name": "iShares Global Clean Energy UCITS ETF",
+      "notices": []
+    }
+  },
+  "transactions": [
+    {
+      "asset_id": null,
+      "type": "DEPOSIT",
+      "date": "2023-12-18",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "31.00"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "trading212"
+      ],
+      "description": "deposit",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483647,
+      "type": "BUY",
+      "date": "2023-12-18",
+      "quantity": "0.0290530000",
+      "cash": {
+        "code": "EUR",
+        "amount": "-1.33"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "trading212"
+      ],
+      "description": "market buy: Cisco Systems",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483646,
+      "type": "BUY",
+      "date": "2023-12-18",
+      "quantity": "0.0410140000",
+      "cash": {
+        "code": "EUR",
+        "amount": "-1.20"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "trading212"
+      ],
+      "description": "market buy: VICI Properties",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483645,
+      "type": "BUY",
+      "date": "2023-12-18",
+      "quantity": "0.2976400000",
+      "cash": {
+        "code": "EUR",
+        "amount": "-1.47"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "trading212"
+      ],
+      "description": "market buy: AST SpaceMobile",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483644,
+      "type": "SELL",
+      "date": "2023-12-26",
+      "quantity": "-0.6125400000",
+      "cash": {
+        "code": "EUR",
+        "amount": "0.70"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "trading212"
+      ],
+      "description": "market sell: Astra Space",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483643,
+      "type": "DIVIDEND",
+      "date": "2023-12-27",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "0.03"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "trading212"
+      ],
+      "description": "dividend (dividend): Main Street Capital (At the time of the dividend, 0.1543340000 shares were present on the broker, yielding 0.194384 EUR per share)",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483643,
+      "type": "TAX",
+      "date": "2023-12-27",
+      "quantity": "0",
+      "cash": {
+        "code": "USD",
+        "amount": "-0.01"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "trading212",
+        "tax"
+      ],
+      "description": "Withholding tax: Main Street Capital",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483642,
+      "type": "DIVIDEND",
+      "date": "2023-12-28",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "0.03"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "trading212"
+      ],
+      "description": "dividend (dividend): Union Pacific (At the time of the dividend, 0.0280492000 shares were present on the broker, yielding 1.06955 EUR per share)",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483642,
+      "type": "TAX",
+      "date": "2023-12-28",
+      "quantity": "0",
+      "cash": {
+        "code": "USD",
+        "amount": "-0.01"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "trading212",
+        "tax"
+      ],
+      "description": "Withholding tax: Union Pacific",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483641,
+      "type": "DIVIDEND",
+      "date": "2024-01-12",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "17.67"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "trading212"
+      ],
+      "description": "dividend (dividend): iShares Global Clean Energy UCITS ETF (At the time of the dividend, 0.0280492000 shares were present on the broker, yielding 629.964 EUR per share)",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": 2147483641,
+      "type": "TAX",
+      "date": "2024-01-12",
+      "quantity": "0",
+      "cash": {
+        "code": "USD",
+        "amount": "-15.02"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "trading212",
+        "tax"
+      ],
+      "description": "Withholding tax: iShares Global Clean Energy UCITS ETF",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    },
+    {
+      "asset_id": null,
+      "type": "INTEREST",
+      "date": "2023-11-06",
+      "quantity": "0",
+      "cash": {
+        "code": "EUR",
+        "amount": "0.01"
+      },
+      "link_uuid": null,
+      "ref": null,
+      "parent_ref": null,
+      "parent_transaction_id": null,
+      "tags": [
+        "import",
+        "trading212"
+      ],
+      "description": "interest on cash",
+      "cost_basis_override": null,
+      "cost_basis_mode": null,
+      "asset_event_id": null
+    }
+  ]
+}

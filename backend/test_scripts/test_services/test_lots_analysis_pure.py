@@ -2062,6 +2062,61 @@ class TestTheTransferRowsOfASameDayMove:
         assert rows == [{"kind": "TRANSFER_ARRIVE", "lot": 1, "date": _J68_DAY, "broker": 2, "source": None, "destination": None, "fragment": f"lot:1/transfer:{_J68_PAIR}/to:2", "transaction": _J68_PAIR}]
 
 
+class TestTheOpeningRowOfARewardInKind:
+    """STK-2b (project 79): a REWARD opens its lot under its own timeline kind, no longer as the BUY it stands for.
+
+    The opening row (``_build_opening_and_split_rows``) takes the engine event's kind; ``REWARD`` is a member of
+    ``LotTimelineEventKind`` and of the custody kinds, so the reward's row reaches the event history and the custody
+    history alike. Before STK-2b the row was a BUY (STK-1): the frontend had no REWARD marker yet.
+    """
+
+    _DAY = date(2024, 3, 15)
+
+    def test_the_kind_exists_in_the_timeline_enum(self):
+        assert LotTimelineEventKind("REWARD") is LotTimelineEventKind.REWARD
+        assert str(LotTimelineEventKind.REWARD) == "REWARD"
+
+    def test_a_reward_is_a_custody_kind_as_a_buy_is(self):
+        """The custody history keeps the rows whose kind is in ``_CUSTODY_KINDS``: a reward's lot must show where it opened."""
+        assert LotTimelineEventKind.REWARD in lots_service_module._CUSTODY_KINDS
+        assert LotTimelineEventKind.BUY in lots_service_module._CUSTODY_KINDS
+
+    def test_the_opening_row_of_a_reward_event_is_kind_reward(self):
+        """A hand-built engine result: one REWARD event of 3 units at 10 EUR, its lot 1. Its one row is REWARD, with the
+        event's quantity, price and broker."""
+        lot = _lot(1, opening_date=self._DAY, original_quantity=D("3"), opening_unit_price=D("10"), original_cost=D("30"), open_quantity=D("3"))
+        event = FifoEvent(kind="REWARD", date=self._DAY, transaction_id=1, broker_id=1, quantity=D("3"), unit_price=D("10"))
+        result = _engine_result(lots=[lot], events=[event])
+
+        rows = _svc()._build_lot_event_rows(engine_result=result, selected_ids=[1], fx_resolver=_resolver("EUR"), lots_by_id={1: lot})
+
+        assert [(row.kind, row.lot_id, row.transaction_id, row.date, row.quantity, row.unit_price, row.broker_id) for row in rows] == [
+            (LotTimelineEventKind.REWARD, 1, 1, self._DAY, D("3"), D("10"), 1),
+        ]
+
+    def test_guard_a_buy_event_still_opens_as_buy(self):
+        """GUARD: the kind is the event's own — a BUY on the same lot reads BUY, so the REWARD above is not a blanket rename."""
+        lot = _lot(1, opening_date=self._DAY, original_quantity=D("3"), opening_unit_price=D("10"), original_cost=D("30"), open_quantity=D("3"))
+        event = FifoEvent(kind="BUY", date=self._DAY, transaction_id=1, broker_id=1, quantity=D("3"), unit_price=D("10"))
+
+        rows = _svc()._build_lot_event_rows(engine_result=_engine_result(lots=[lot], events=[event]), selected_ids=[1], fx_resolver=_resolver("EUR"), lots_by_id={1: lot})
+
+        assert [row.kind for row in rows] == [LotTimelineEventKind.BUY]
+
+    def test_through_the_engine_a_reward_transaction_opens_its_lot_with_a_reward_row(self):
+        """The engine as the service runs it: a REWARD row of 3 units valued 10 EUR each (cost_basis_override) opens lot 1,
+        and the lot history's opening row of that lot is REWARD."""
+        reward = _tx(1, tx_type=TransactionType.REWARD, tx_date=self._DAY, quantity=D("3"), amount=D("0"), currency="EUR", cost_basis_override=D("10"), cost_basis_currency="EUR")
+        result = _engine_run(reward)
+        # Precondition: the engine classified it as a REWARD and opened its lot.
+        assert [event.kind for event in result.classified_events] == ["REWARD"]
+        assert [lot.lot_id for lot in result.lots] == [1]
+
+        rows = _svc()._build_lot_event_rows(engine_result=result, selected_ids=[1], fx_resolver=_resolver("EUR"), lots_by_id={lot.lot_id: lot for lot in result.lots})
+
+        assert [(row.kind, row.transaction_id, row.quantity, row.unit_price) for row in rows if row.lot_id == 1] == [(LotTimelineEventKind.REWARD, 1, D("3"), D("10"))]
+
+
 class TestSmallBuilders:
     def test_known_cumulative_proceeds_of_a_short_lot_uses_the_lot_total(self):
         """A short's proceeds arrived at opening, not at each closure."""

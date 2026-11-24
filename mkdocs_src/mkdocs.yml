@@ -211,6 +211,7 @@ plugins:
             Generic CSV: CSV Generico
             "📊 Dashboard": "📊 Dashboard"
             Positions & Analysis: Posizioni & Analisi
+            Allocation: Allocazione
             Risk: Rischio
             "⚙️ Settings": "⚙️ Impostazioni"
             Profile: Profilo
@@ -518,6 +519,7 @@ plugins:
             Generic CSV: CSV Générique
             "📊 Dashboard": "📊 Tableau de Bord"
             Positions & Analysis: Positions & Analyse
+            Allocation: Allocation
             Risk: Risque
             "⚙️ Settings": "⚙️ Paramètres"
             Profile: Profil
@@ -826,6 +828,7 @@ plugins:
             Generic CSV: CSV Genérico
             "📊 Dashboard": "📊 Panel"
             Positions & Analysis: Posiciones y Análisis
+            Allocation: Asignación
             Risk: Riesgo
             "⚙️ Settings": "⚙️ Configuración"
             Profile: Perfil
@@ -1043,6 +1046,7 @@ nav:
           - KPI Cards: user/dashboard/kpi-cards.md
           - Charts: user/dashboard/charts.md
           - Positions & Analysis: user/dashboard/positions.md
+          - Allocation: user/dashboard/allocation.md
           - Risk: user/dashboard/risk.md
       - 🏦 Brokers:
           - Overview: user/brokers/index.md

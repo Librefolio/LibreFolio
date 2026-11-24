@@ -16,14 +16,14 @@ The component runtime contains:
 
 | Domain    | Components | Registered datasets | Registered analyses | Public data | Public analyses | Page      |
 | --------- | ---------: | ------------------: | ------------------: | ----------: | --------------: | --------- |
-| Portfolio |         21 |                  12 |                   4 |           2 |               4 | Dashboard |
+| Portfolio |         21 |                  12 |                   5 |           2 |               5 | Dashboard |
 | Broker    |         20 |                  12 |                   3 |           2 |               3 | Broker    |
 | Asset     |         15 |                   8 |                   2 |           2 |               2 | Asset     |
 | FX        |         12 |                   8 |                   2 |           2 |               2 | FX        |
-| **Total** |     **68** |              **40** |              **11** |       **8** |          **11** |           |
+| **Total** |     **68** |              **40** |              **12** |       **8** |          **12** |           |
 
 Components are the smallest buildable facts. Datasets can be `public` or
-`internal`; visibility defaults to `internal`. The eleven registered Analyses are
+`internal`; visibility defaults to `internal`. The twelve registered Analyses are
 all public and may compose internal datasets. Direct requests accept only public
 selection IDs.
 
@@ -32,7 +32,7 @@ flowchart LR
     S["Authoritative sources and engines"] --> C["68 granular components"]
     C --> D["40 registered datasets"]
     D --> E["8 public Export Data"]
-    D --> A["11 public Analyses<br/>+ frontend contracts"]
+    D --> A["12 public Analyses<br/>+ frontend contracts"]
     A --> P["Request Analysis<br/>full prompt"]
 ```
 
@@ -52,7 +52,7 @@ sequenceDiagram
     participant C as Clipboard
 
     F->>A: GET /catalog
-    A-->>F: 8 datasets + 11 analyses, V1 identities
+    A-->>F: 8 datasets + 12 analyses, V1 identities
     U->>F: Export Data or Request Analysis
     F->>A: POST /snapshot with selected V1 contract
     A->>R: Authenticated request + accessible broker scope
