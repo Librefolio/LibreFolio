@@ -13,7 +13,10 @@
  *   classification only;
  * - a charted key figure draws its steps; one that is not charted, or has no value in the period, draws nothing;
  * - values are written as the interface writes them: a percentage stored as a fraction in percent, a choice by its
- *   label, an amount with its currency (a public figure of the asset, never masked), a date without a time-zone shift.
+ *   label, an amount with its currency (a public figure of the asset, never masked), a date without a time-zone shift;
+ * - BI-PROF: a fiscal year's figure (`period: 'fiscal_year'`) names its year, the year of its step's `source_date`; any
+ *   other voice, a cell without a value or a step without a source date, nothing; a web address the tab may open is
+ *   http(s) only.
  */
 import {describe, expect, it} from 'vitest';
 import * as tab from './profileTabState';
@@ -251,5 +254,48 @@ describe('«non aggiornato» (D1d)', () => {
         expect(tab.staleSince(tab.profileCell(DURATION, [step({})]))).toBeNull();
         expect(tab.staleSince(tab.profileCell(DURATION, [step({value: null, confirmed_on: '2026-09-18', stale: true})]))).toBeNull();
         expect(tab.staleSince(tab.profileCell(DURATION, []))).toBeNull();
+    });
+});
+
+describe('the year of a fiscal year figure (BI-PROF)', () => {
+    const revenue = voice('revenue', 'amount', {groups: ['company'], period: 'fiscal_year'} as Partial<ProfileVoice>);
+    const marketCap = voice('market_cap', 'amount', {groups: ['key_figures'], key_figure: true});
+    const dated = (source_date: string | null, value: unknown = {amount: '78057000000', currency: 'EUR'}) => ({...step('2026-01-01', '2026-11-17', value), source_date}) as ProfileStep;
+    const label = (year: string) => `FY ${year}`;
+
+    it('is the year of the source date, the end of that fiscal year, handed to the label as text', () => {
+        const seen: unknown[] = [];
+        expect(
+            tab.periodLabel(tab.profileCell(revenue, [dated('2025-12-31')]), (year) => {
+                seen.push(year);
+                return label(year);
+            }),
+        ).toBe('FY 2025');
+        expect(seen).toEqual(['2025']);
+        // a fiscal year ending early in the calendar year is still named by the year of its end
+        expect(tab.periodLabel(tab.profileCell(revenue, [dated('2025-03-31')]), label)).toBe('FY 2025');
+        expect(tab.periodLabel(tab.profileCell(revenue, [dated('2024-06-30'), dated('2025-06-30')]), label)).toBe('FY 2025');
+    });
+
+    it('is null for a voice that is not a period figure, whatever its step says', () => {
+        expect(tab.periodLabel(tab.profileCell(marketCap, [dated('2025-12-31')]), label)).toBeNull();
+        expect(tab.periodLabel(tab.profileCell(voice('website', 'text', {period: null} as Partial<ProfileVoice>), [dated('2025-12-31', 'https://www.enel.com')]), label)).toBeNull();
+    });
+
+    it('is null without a value or without a source date', () => {
+        expect(tab.periodLabel(tab.profileCell(revenue, [dated('2025-12-31', null)]), label), 'emptied').toBeNull();
+        expect(tab.periodLabel(tab.profileCell(revenue, []), label), 'unavailable').toBeNull();
+        expect(tab.periodLabel(tab.profileCell(revenue, [dated(null)]), label), 'no source date').toBeNull();
+        expect(tab.periodLabel(tab.profileCell(revenue, [step('2026-01-01', '2026-11-17', {amount: '1', currency: 'EUR'})]), label), 'no source date field').toBeNull();
+    });
+});
+
+describe('a web address the tab may open (BI-PROF)', () => {
+    it.each(['https://www.enel.com/investors/overview', 'http://www.enel.it', 'HTTPS://WWW.ENEL.COM', 'https://enel.com/a?b=c#d'])('opens %s', (text) => {
+        expect(tab.isWebAddress(text)).toBe(true);
+    });
+
+    it.each(['javascript:alert(1)', 'mailto:investor.relations@enel.com', 'ftp://ftp.enel.com', 'www.enel.com', 'enel.com', 'https://', 'http://', 'https://www.enel .com', ' https://www.enel.com', 'data:text/html,x', ''])('never opens %j', (text) => {
+        expect(tab.isWebAddress(text)).toBe(false);
     });
 });

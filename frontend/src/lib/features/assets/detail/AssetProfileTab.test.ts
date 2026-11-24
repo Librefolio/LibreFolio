@@ -11,7 +11,9 @@
  * - «Modifica i dati» is there only when the page handles it (E8);
  * - E6b2: the clock beside «Descrizione» opens its history, when it has rows and the page handles it;
  * - E6c: with enrichers, «Aggiorna» beside it says the last read and is busy while the page refreshes (never on the next
- *   asset); without any, the box «Nessun arricchitore configurato» with «Configura»; enrichers not known yet, neither.
+ *   asset); without any, the box «Nessun arricchitore configurato» with «Configura»; enrichers not known yet, neither;
+ * - BI-PROF: a fiscal year's figure is written «<value> (fiscal year <year of its source date>)»; without a source date,
+ *   the value alone; the company's website reaches the details as a link.
  *
  * How it is tested: the real tab and its parts, real i18n; the profile memory faked (`profileStore`), the charts stood in.
  */
@@ -45,6 +47,8 @@ import {fireEvent, render, screen, setupI18n, waitFor} from '$test/component';
 import type {AssetProfileRead, ProfileStep, ProfileVoice} from '$lib/features/assets/profile/profileStore';
 import AssetProfileTab from './AssetProfileTab.svelte';
 import {softIdentifiers} from '$lib/utils/assetTypes';
+import {get} from 'svelte/store';
+import {_} from '$lib/i18n';
 
 function voice(key: string, shape: string, extra: Partial<ProfileVoice> = {}): ProfileVoice {
     return {key, shape, sign: null, unit: null, groups: [], key_figure: false, charted: false, volatile: false, choices: [], map_keys: null, topic: 'structure', ...extra} as ProfileVoice;
@@ -245,6 +249,61 @@ describe('AssetProfileTab', () => {
         render(AssetProfileTab, {props: {assetId: 7, period: PERIOD, isin: null, ticker: null, onhistory}});
         await waitFor(() => expect(screen.getByTestId('asset-profile-tab')).toHaveAttribute('data-status', 'ready'));
         expect(screen.queryByTestId('asset-profile-description-history'), 'no rows, no history').toBeNull();
+    });
+});
+
+describe('AssetProfileTab — the company figures of a fiscal year (BI-PROF)', () => {
+    const COMPANY = [
+        ...CATALOGUE,
+        voice('website', 'text', {groups: ['company'], topic: 'issuer'}),
+        voice('revenue', 'amount', {groups: ['company'], topic: 'financials', sign: 'non_negative', period: 'fiscal_year'} as Partial<ProfileVoice>),
+        voice('net_income', 'amount', {groups: ['company'], topic: 'financials', sign: 'any', period: 'fiscal_year'} as Partial<ProfileVoice>),
+    ];
+    const dated = (value: unknown, source_date: string | null) => ({...step(value), source_date}) as ProfileStep;
+
+    beforeAll(async () => {
+        await setupI18n();
+    });
+    beforeEach(() => {
+        store.loadProfileCatalogue.mockReset().mockResolvedValue(COMPANY);
+        store.readAssetProfile.mockReset();
+    });
+
+    it('names the fiscal year of each figure beside its value, from its source date', async () => {
+        store.readAssetProfile.mockResolvedValue({
+            ...FOUND,
+            voices: {
+                revenue: [dated({amount: '78057000000', currency: 'EUR'}, '2025-12-31')],
+                net_income: [dated({amount: '5617000000', currency: 'EUR'}, '2024-12-31')],
+                website: [dated('https://www.enel.com/investors/overview', '2026-10-23')],
+            },
+        });
+        render(AssetProfileTab, {props: {assetId: 7, period: PERIOD, isin: null, ticker: null}});
+        await waitFor(() => expect(screen.getByTestId('asset-profile-tab')).toHaveAttribute('data-status', 'ready'));
+        const year = (value: string) => `(${get(_)('assets.profile.tab.fiscalYear', {values: {year: value}})})`;
+        const revenue = screen.getByTestId('profile-detail-revenue');
+        expect(revenue).toHaveAttribute('data-state', 'value');
+        expect(revenue).toHaveTextContent('EUR');
+        expect(revenue).toHaveTextContent(year('2025'));
+        expect(screen.getByTestId('profile-detail-net_income')).toHaveTextContent(year('2024'));
+        expect(screen.getByTestId('profile-detail-net_income')).not.toHaveTextContent(year('2025'));
+        const website = screen.getByTestId('profile-detail-website');
+        expect(website, 'the website is no period figure: no year beside it').not.toHaveTextContent('(');
+        expect(screen.getByTestId('profile-detail-website-link')).toHaveAttribute('href', 'https://www.enel.com/investors/overview');
+    });
+
+    it('writes the value alone when the figure has no source date, and no year for an emptied one', async () => {
+        store.readAssetProfile.mockResolvedValue({
+            ...FOUND,
+            voices: {revenue: [dated({amount: '78057000000', currency: 'EUR'}, null)], net_income: [dated(null, '2025-12-31')]},
+        });
+        render(AssetProfileTab, {props: {assetId: 7, period: PERIOD, isin: null, ticker: null}});
+        await waitFor(() => expect(screen.getByTestId('asset-profile-tab')).toHaveAttribute('data-status', 'ready'));
+        const revenue = screen.getByTestId('profile-detail-revenue');
+        expect(revenue).toHaveTextContent('EUR');
+        expect(revenue).not.toHaveTextContent('(');
+        expect(screen.getByTestId('profile-detail-net_income')).toHaveAttribute('data-state', 'emptied');
+        expect(screen.getByTestId('profile-detail-net_income')).not.toHaveTextContent('2025');
     });
 });
 
