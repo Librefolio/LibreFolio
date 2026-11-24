@@ -4374,9 +4374,9 @@ test.describe('Risk analysis functional integration', () => {
 
     /**
      * T-4 (testlist of 07/11/2026): on a phone the simulation's parameters are one per row, the label on the left and the field on
-     * the right, every field on one right edge; the days line of the horizon sits under its field and never on the row below.
+     * the right, every field on one right edge and of one width (81 U30); the days line of the horizon sits under its field and never on the row below.
      */
-    test('T-4: at 375 px each simulation parameter is a row, label left and field right, and the horizon days stay off the next row', async ({page}) => {
+    test('T-4: at 375 px each simulation parameter is a row, label left and field right, all fields of one width, and the horizon days stay off the next row', async ({page}) => {
         await page.setViewportSize({width: 375, height: 812});
         await installRiskMocks(page);
         const panel = await openDashboardRisk(page);
@@ -4409,6 +4409,9 @@ test.describe('Risk analysis functional integration', () => {
         }
         const rights = layout.rows.map((entry) => Math.round(entry.field!.right));
         expect(Math.max(...rights) - Math.min(...rights), 'the fields do not share one right edge').toBeLessThanOrEqual(1);
+        // 81 U30: and they are of one width, not a width each (the testlist of 23/11: «campi di input tutti della stessa larghezza»).
+        const widths = layout.rows.map((entry) => ({id: entry.id, width: Math.round(entry.field!.right - entry.field!.left)}));
+        expect(Math.max(...widths.map((entry) => entry.width)) - Math.min(...widths.map((entry) => entry.width)), `the fields are not of one width: ${widths.map((entry) => `${entry.id} ${entry.width}px`).join(', ')}`).toBeLessThanOrEqual(1);
         const horizonField = layout.rows[0].field!;
         expect(layout.days.top, 'the days line is not under the horizon field').toBeGreaterThanOrEqual(horizonField.bottom - 1);
         expect(layout.days.bottom, 'the days line lies on the paths row').toBeLessThanOrEqual(layout.pathsRow.top + 1);

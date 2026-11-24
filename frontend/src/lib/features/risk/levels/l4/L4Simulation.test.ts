@@ -265,3 +265,38 @@ describe('L4Simulation — the period the days are drawn from (RSK-SIM1, P-7)', 
         expect(normalize(line.textContent)).toContain(resolve('risk.simulation.history.chosenNote'));
     });
 });
+
+// 81 U30 (testlist of 23/11: «campi di input tutti della stessa larghezza»): on a phone the parameters keep T-4's rows —
+// label on the left, field on the right — and every field is of one width; from `sm` up each keeps the width it had.
+// `w-full` cannot do it beside a label (the field would take what the label leaves, a width per row), so the one width is
+// a shared fixed one. Classes are the contract here (jsdom draws no media query); the measure at 375 px is the E2E's («T-4»).
+describe('L4Simulation — the parameter fields on a phone are of one width (81 U30)', () => {
+    /** The width class a field has below `sm` (the unprefixed `w-*` tokens) and from `sm` up (`sm:w-*`). */
+    function widths(el: Element): {phone: string[]; fromSm: string[]} {
+        const list = (el.getAttribute('class') ?? '').split(/\s+/);
+        return {phone: list.filter((token) => /^w-/.test(token)), fromSm: list.filter((token) => /^sm:w-/.test(token))};
+    }
+
+    it('gives horizon, paths and seed the same width below `sm`', () => {
+        mount();
+        const phone = ['risk-simulation-horizon', 'risk-simulation-paths', 'risk-simulation-seed'].map((id) => ({id, ...widths(screen.getByTestId(id))}));
+        for (const field of phone) expect(field.phone, `${field.id}: one fixed width below sm`).toHaveLength(1);
+        expect(new Set(phone.map((field) => field.phone[0])).size, `the fields differ below sm: ${phone.map((field) => `${field.id} ${field.phone[0]}`).join(', ')}`).toBe(1);
+    });
+
+    it('gives the sampling select the same width as the inputs below `sm`', async () => {
+        mount();
+        // The select exists only for the parametric process (`gbm`), the «advanced» mode.
+        const advanced = document.querySelector('[data-testid="risk-simulation-mode"][data-mode-id="gbm"] input');
+        await fireEvent.click(advanced as Element);
+        const input = widths(screen.getByTestId('risk-simulation-paths')).phone[0];
+        const sampling = screen.getByTestId('risk-simulation-sampling');
+        const own = [sampling, ...sampling.querySelectorAll('*')].map((el) => widths(el).phone).find((list) => list.length > 0);
+        expect(own, 'the sampling select carries no width of its own below sm').toEqual([input]);
+    });
+
+    it('keeps the width paths had from `sm` up', () => {
+        mount();
+        expect(widths(screen.getByTestId('risk-simulation-paths')).fromSm).toEqual(['sm:w-24']);
+    });
+});
