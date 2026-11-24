@@ -82,7 +82,6 @@ ROW_SKIPS_PENDING = frozenset(
         "broker_relai",
         "broker_saxo",
         "broker_schwab",
-        "broker_xtb",
     }
 )
 
@@ -98,6 +97,7 @@ NEW_VERSIONS = {
     "broker_swissquote": "1.2.0",
     "broker_ibkr": "1.2.0",  # project 66 P4: the commission is linked to its trade
     "broker_fineco": "1.6.0",  # project 66 P2a: the commission is linked to its trade
+    "broker_xtb": "2.0.0",  # lane 83: the History report workbook only (the CSV is no longer read); RowSkips for the rows left out
 }
 
 
@@ -765,6 +765,12 @@ ROW_SKIPS_BY_PLUGIN: Dict[str, PluginSkips] = {
     "broker_ibkr": PluginSkips("ibkr-unknown-direction", "ibkr-invalid-date"),
     "broker_fineco": PluginSkips("fineco-unknown-operation", "fineco-unreadable-date", "left the beta in W-B92: too few cells, unreadable date and empty description are rows_unreadable"),
     OWN_CODE_DANSKE: PluginSkips(None, None, "own code, tested in test_brim_danske_bank.py (W-B85)", own_test="test_brim_danske_bank.py"),
+    "broker_xtb": PluginSkips(
+        None,
+        None,
+        "still beta, but uses the shared notices since lane 83; 2.0.0 reads only the History report workbook (.xlsx), which this file cannot build from a text sample: its unknown, unreadable and unpaired-transfer rows are tested in test_brim_xtb.py",
+        own_test="test_brim_xtb.py",
+    ),
 }
 
 CONTRACT_PARAMS = [pytest.param(plugin, kind, getattr(skips, kind), id=f"{plugin}-{kind}") for plugin, skips in sorted(ROW_SKIPS_BY_PLUGIN.items()) for kind in ("unknown", "unreadable") if getattr(skips, kind) is not None]
