@@ -324,6 +324,18 @@ def front_tx_bulk_charges_picker(verbose: bool = False, ui: bool = False, headed
     return _run_playwright("transactions/tx-bulk-charges-picker.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_tx_bulk_group_sync(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """An all-new group (a new parent and its new linked charges) keeps broker and asset in step inside the Bulk (project 66, TL-3b)."""
+    print_section("Frontend TX Bulk Group Sync Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("transactions/tx-bulk-group-sync.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_tx_view_open_edit(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """The view's pencil on a row reached with «Open» opens that row in the Bulk, also when the page's list lacks it (project 66, TL-1c)."""
     print_section("Frontend TX View Open Edit Tests")
@@ -983,7 +995,7 @@ def populate_registry(registry: dict) -> None:
         "tx-clone-charges",
         front_tx_clone_charges,
         name="TX Clone Charges Tests",
-        desc="Project 66 TL-3: «Clona» on a BUY with FEE+TAX copies them under the BUY copy on their own dates (page, selection, Bulk «Clona riga»); a FEE cloned alone stays linked to its BUY; a failed charges read copies the BUY alone with a warning; a charge under a «del» parent is copied free with a warning; «del»/«scollega» charges are not copied; trash on the BUY copy takes its untouched charge copies; a copy given another asset (a FEE cloned alone, or the BUY copy) keeps its link, is flagged chargeAssetMismatch and «Save all» is refused whole — read back from the server",
+        desc="Project 66 TL-3: «Clona» on a BUY with FEE+TAX copies them under the BUY copy on their own dates (page, selection, Bulk «Clona riga»); a FEE cloned alone stays linked to its BUY; a failed charges read copies the BUY alone with a warning; a charge under a «del» parent is copied free with a warning; «del»/«scollega» charges are not copied; trash on the BUY copy takes its untouched charge copies; a FEE cloned alone given another asset keeps its link, is flagged chargeAssetMismatch and «Save all» is refused whole; TL-3b: the BUY copy given another asset takes its charge copies along (all-new group), saved with each copy on its own date — read back from the server",
         tests="transactions/tx-clone-charges.spec.ts",
     )
     add_test(
@@ -993,6 +1005,14 @@ def populate_registry(registry: dict) -> None:
         name="TX Bulk Charges Picker Tests",
         desc="Project 66 TL-2: in the Bulk, «Link an existing charge…» of a parent's form offers the Bulk's rows — a new FEE row (by its row reference) to a new BUY row or to a BUY still in its first form, picked → under the BUY, saved linked; a saved FEE «del» here is not offered, one unlinked here is and saves with its new parent; a saved free FEE outside the Bulk is offered, one also in the Bulk once — read back by id",
         tests="transactions/tx-bulk-charges-picker.spec.ts",
+    )
+    add_test(
+        cat,
+        "tx-bulk-group-sync",
+        front_tx_bulk_group_sync,
+        name="TX Bulk Group Sync Tests",
+        desc="Project 66 TL-3b: in the Bulk, an all-new group (a BUY copy from «Clona» and its charge copies) keeps broker and asset in step — the asset changed in a charge copy's Form moves the parent and the sibling (help line shown), a FEE born in the parent's Form keeps the asset of its own Form and moves the group; guard: a new BUY with a saved FEE linked under it is not synced (no help line, chargeAssetMismatch, «Save all» refused) — read back from the server",
+        tests="transactions/tx-bulk-group-sync.spec.ts",
     )
     add_test(
         cat,

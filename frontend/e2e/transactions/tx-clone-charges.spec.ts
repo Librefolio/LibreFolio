@@ -22,9 +22,9 @@
  *   (9) Page, a linked FEE cloned alone, the copy's asset changed in its Form (row 5 of the lot's table) → the Form keeps
  *       the link (rule 3 is the backend's); the Bulk's validation flags `chargeAssetMismatch`; «Save all» is refused
  *       whole (`committed: false`, the issue on the copy), the Bulk stays open with the refusal, nothing is saved.
- *  (10) Page, a BUY cloned with its two charges, the BUY copy's asset changed in its Form → the charge copies stay under
- *       it with their own asset (rule 5, no magic); both flagged `chargeAssetMismatch`, «Save all» refused whole (the
- *       issues on the two charge copies, none on the BUY copy), nothing saved half-way.
+ *  (10) Page, a BUY cloned with its two charges, the BUY copy's asset changed in its Form → TL-3b: the BUY copy and its
+ *       charge copies are an all-new group, so the charge copies take the new asset too (they stay under it, each on
+ *       its own date); «Save all» passes, the originals unchanged (their asset included). Reverses TL-3's «no magic».
  *
  * testids relied on: transactions-page · tx-table · tx-charges-badge-<id>[data-expanded] · dt-row-checkbox-tx-<id> ·
  * row-actions-* · context-menu-action-{clone,mark-delete,edit-single} · selection-toolbar[data-selected-count] ·
@@ -299,7 +299,7 @@ async function expectOriginalsUnchanged(page: Page, s: Seeded, extraCharges = 0)
 }
 
 // ---------------------------------------------------------------------------
-// (9)/(10): a copy given another asset, and a save the server refuses
+// (9)/(10): a copy given another asset — refused alone (9), synced with its all-new group (10, TL-3b)
 // ---------------------------------------------------------------------------
 
 /** The seeded asset the copies are moved to: same currency as the BUY's Ethereum, so only the asset differs. */
@@ -352,6 +352,20 @@ async function saveRefused(page: Page, bulk: Locator): Promise<{payload: {create
     expect(body.committed, `the batch was saved: ${JSON.stringify(body)} — payload ${JSON.stringify(payload)}`).toBe(false);
     await waitForSettled(bulk.getByTestId('tx-bulk-modal-root'), 20_000);
     await expect(bulk, 'a refused save keeps the Bulk open').toBeVisible();
+    return {payload, body};
+}
+
+/** «Save all», the batch and the answer captured as they are: the caller asserts what was sent before whether it was
+ *  saved, so a refusal reads as the field that broke it. */
+async function saveCaptured(page: Page, bulk: Locator): Promise<{payload: {creates?: SentCreate[]}; body: {committed?: boolean; issues?: RefusedIssue[]}}> {
+    await waitForSettled(bulk.getByTestId('tx-bulk-modal-root'), 20_000);
+    const commit = bulk.getByTestId('tx-bulk-commit');
+    await expect(commit).toBeEnabled({timeout: 10_000});
+    const requestPromise = page.waitForRequest((req) => req.url().includes('/transactions/commit') && req.method() === 'POST', {timeout: 15_000});
+    const responsePromise = page.waitForResponse((resp) => resp.url().includes('/transactions/commit') && resp.request().method() === 'POST', {timeout: 15_000});
+    await commit.click();
+    const payload = (await requestPromise).postDataJSON() as {creates?: SentCreate[]};
+    const body = (await (await responsePromise).json()) as {committed?: boolean; issues?: RefusedIssue[]};
     return {payload, body};
 }
 
@@ -682,9 +696,10 @@ test.describe('«Clona» carries the linked charges (TL-3)', () => {
         await expectOriginalsUnchanged(page, s);
     });
 
-    // The parent's copy with another asset: «no magic» (rule 5) — the charge copies keep their own asset, so both break
-    // rule 3 and the batch is refused whole, the BUY copy with them.
-    test('(10) page «Clona» on a BUY with two charges, the BUY copy’s asset changed in its Form: the copies stay under it; both flagged chargeAssetMismatch, «Save all» refused, nothing saved', async ({page, request}) => {
+    // TL-3b (developer's rule, reversing TL-3's «no magic»): the BUY copy and its two charge copies are an all-new group,
+    // so the asset changed in the BUY copy's Form is written on the charge copies too. «Save all» passes; each charge copy
+    // keeps its own date; the originals are untouched.
+    test('(10) page «Clona» on a BUY with two charges, the BUY copy’s asset changed in its Form: the charge copies take it (all-new group); «Save all» passes, each copy on its own date, the originals unchanged', async ({page, request}) => {
         const s = (seeded = await seedBuyWithCharges(page, request, owned, 'tl3c10', TWO_CHARGES));
         const {fee, tax} = s.charges;
         const otherAssetId = await seededAssetId(page, OTHER_ASSET.ticker);
@@ -717,36 +732,38 @@ test.describe('«Clona» carries the linked charges (TL-3)', () => {
             await expectUnder(copy, buyCopy, `the ${c.label} copy`);
             await expect(copy.getByTestId('tx-bulk-charge-state')).toHaveAttribute('data-state', 'linked');
         }
-        // The Bulk's own validation (run on the change, no click): one issue per charge copy, the asset rule.
-        await expectIssues(bulk.getByTestId('tx-bulk-issues-header'), 2, 'the pre-save warning');
 
-        const {payload, body} = await saveRefused(page, bulk);
+        const {payload, body} = await saveCaptured(page, bulk);
         const dump = `payload ${JSON.stringify(payload)} — answer ${JSON.stringify(body)}`;
         const creates = payload.creates ?? [];
         expect(creates, dump).toHaveLength(3);
-        const indexOf = (type: string, description: string): number => {
-            const at = creates.findIndex((item) => item.type === type && item.description === description);
-            expect(at, `the payload holds the ${type} «${description}»: ${dump}`).toBeGreaterThanOrEqual(0);
-            return at;
+        const sent = (type: string, description: string): SentCreate => {
+            const found = creates.filter((item) => item.type === type && item.description === description);
+            expect(found, `the payload holds one ${type} «${description}»: ${dump}`).toHaveLength(1);
+            return found[0];
         };
-        const [buyAt, feeAt, taxAt] = [indexOf('BUY', s.buyDescription), indexOf('FEE', fee.description), indexOf('TAX', tax.description)];
-        const ref = creates[buyAt].ref;
-        expect(ref, `the BUY copy carries a ref: ${dump}`).toBeTruthy();
-        expect(creates[buyAt].asset_id, 'the BUY copy is sent with the other asset').toBe(otherAssetId);
-        for (const at of [feeAt, taxAt]) {
-            expect([creates[at].parent_ref, creates[at].asset_id], `a charge copy is sent under the BUY copy, with its original asset: ${dump}`).toEqual([ref, s.assetId]);
-        }
-        const issues = (body.issues ?? []).map((issue) => [issue.operation, issue.index, issue.code, issue.params?.assetId, issue.params?.parentAssetId]);
-        expect(
-            [...issues].sort((a, b) => Number(a[1]) - Number(b[1])),
-            `the server names the two charge copies, not the BUY copy: ${dump}`,
-        ).toEqual([feeAt, taxAt].sort((a, b) => a - b).map((at) => ['create', at, 'chargeAssetMismatch', s.assetId, otherAssetId]));
+        const [buySent, feeSent, taxSent] = [sent('BUY', s.buyDescription), sent('FEE', fee.description), sent('TAX', tax.description)];
+        expect(buySent.ref, `the BUY copy carries a ref: ${dump}`).toBeTruthy();
+        expect([buySent.asset_id, feeSent.asset_id, taxSent.asset_id], `the whole group is sent with the other asset: ${dump}`).toEqual([otherAssetId, otherAssetId, otherAssetId]);
+        expect([feeSent.parent_ref, taxSent.parent_ref], `the charge copies are sent under the BUY copy: ${dump}`).toEqual([buySent.ref, buySent.ref]);
+        expect(body.committed, `the batch was refused: ${dump}`).toBe(true);
+        await expect(bulk).toBeHidden({timeout: 10_000});
 
-        // The refusal is shown with both issues; the Bulk keeps the three copies, the structure intact.
-        await expectIssues(bulk.getByTestId('tx-bulk-error'), 2, 'the refusal');
-        await expect(chip).toHaveAttribute('data-charges-count', '2');
-        // Nothing saved half-way: no new row on the broker, the originals as seeded.
-        expect(await newRowsOnBroker(page, s), dump).toEqual([]);
+        const fresh = await newRowsOnBroker(page, s);
+        const rowsDump = `new rows ${JSON.stringify(fresh)} — ${dump}`;
+        expect(fresh, rowsDump).toHaveLength(3);
+        const newBuy = only(fresh, 'BUY', s.buyDescription, rowsDump);
+        const newFee = only(fresh, 'FEE', fee.description, rowsDump);
+        const newTax = only(fresh, 'TAX', tax.description, rowsDump);
+        expect([newBuy.asset_id, newFee.asset_id, newTax.asset_id], `saved with the other asset: ${rowsDump}`).toEqual([otherAssetId, otherAssetId, otherAssetId]);
+        expect([newFee.parent_transaction_id, newTax.parent_transaction_id], `the new charges point at the new BUY: ${rowsDump}`).toEqual([newBuy.id, newBuy.id]);
+        expect([newBuy.date, newFee.date, newTax.date], 'every copy on its original’s date').toEqual([s.buyDate, fee.date, tax.date]);
+        // The originals as seeded, their asset included.
         await expectOriginalsUnchanged(page, s);
+        const back = await readByIds(page, [s.buyId, fee.id, tax.id]);
+        expect(
+            [s.buyId, fee.id, tax.id].map((id) => back.get(id)?.asset_id),
+            'the originals keep their asset',
+        ).toEqual([s.assetId, s.assetId, s.assetId]);
     });
 });
