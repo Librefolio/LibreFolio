@@ -46,12 +46,14 @@ from dataclasses import dataclass, field
 from typing import Any
 
 import pytest
+from pydantic import ValidationError
 
 from backend.app.config import is_test_mode
 from backend.app.db.models import AssetType
+from backend.app.schemas.assets.enrichers import FAEnricherRecognition, FAEnricherRecognizeRequest
 from backend.app.services.enrichers import bindings
 from backend.app.services.enrichers.base import EnricherBinding, EnricherPlugin, EnricherReadItem, EnricherRecognition, EnricherTerms
-from backend.app.services.enrichers.recognize import IdentifierLearned, Recognized, RecognizeStatus, recognize_cascade
+from backend.app.services.enrichers.recognize import IdentifierLearned, Recognized, RecognizeStatus, Seed, recognize_cascade
 from backend.app.services.enrichers.registry import EnricherRegistry
 from backend.app.services.plugin_settings.fields import release_env_variables
 from backend.test_scripts.test_utils import print_section, print_success
@@ -104,6 +106,8 @@ class Lab:
     code: str
     plugin: EnricherPlugin
     calls: list[tuple[str, str]] = field(default_factory=list)
+    #: The whole binding of every call (ENR-2: the parameters a seed carries), in call order.
+    bindings: list[EnricherBinding] = field(default_factory=list)
 
 
 Answer = Callable[[EnricherBinding], EnricherRecognition]
@@ -123,14 +127,16 @@ def lab() -> Iterator[Callable[..., Lab]]:
     others ``None``) and gives back its ``Lab``. Removed from the registry, with its claims, at teardown."""
     codes: list[str] = []
 
-    def register(name: str, *, accepts: tuple[str, ...] = ("ISIN",), answer: Answer, covers: Sequence[AssetType] = (AssetType.ETF,)) -> Lab:
+    def register(name: str, *, accepts: tuple[str, ...] = ("ISIN",), answer: Answer, covers: Sequence[AssetType] = (AssetType.ETF,), params: Sequence[str] = ()) -> Lab:
         code = f"{LAB_PREFIX}{name}"
         calls: list[tuple[str, str]] = []
+        bindings_seen: list[EnricherBinding] = []
         lock = threading.Lock()
 
         def recognize(self, binding: EnricherBinding) -> EnricherRecognition:  # noqa: ARG001 — the contract's signature
             with lock:
                 calls.append((binding.identifier_type, binding.identifier))
+                bindings_seen.append(binding)
             return answer(binding)
 
         attributes: dict[str, Any] = {
@@ -141,12 +147,13 @@ def lab() -> Iterator[Callable[..., Lab]]:
             "default_priority": {asset_type: (10 if asset_type in covers else None) for asset_type in AssetType},
             "voices": {asset_type: frozenset({"description"}) for asset_type in covers},
             "recognize": recognize,
+            "params_schema": property(lambda self: [{"key": key, "type": "string"} for key in params]),
         }
         codes.append(code)
         EnricherRegistry.register(type(f"{LAB_CLASS_PREFIX}{name}", (_LabMethods,), attributes))
         plugin = EnricherRegistry.get_plugin_instance(code)
         assert isinstance(plugin, EnricherPlugin), f"barrier: {code} is not served after its registration"
-        return Lab(code=code, plugin=plugin, calls=calls)
+        return Lab(code=code, plugin=plugin, calls=calls, bindings=bindings_seen)
 
     yield register
     storage = EnricherRegistry._get_storage()
@@ -157,12 +164,12 @@ def lab() -> Iterator[Callable[..., Lab]]:
         release_env_variables(SETTINGS_FAMILY, code)
 
 
-async def _run(identifiers: dict[str, str], labs: Sequence[Lab | EnricherPlugin], asset_type: AssetType = AssetType.ETF) -> list[Event]:
+async def _run(identifiers: dict[str, str], labs: Sequence[Lab | EnricherPlugin], asset_type: AssetType = AssetType.ETF, seeds: Sequence[Seed] = ()) -> list[Event]:
     """The whole cascade over ``labs``, consumed to its end under ``DEADLINE``."""
     plugins = [item.plugin if isinstance(item, Lab) else item for item in labs]
 
     async def consume() -> list[Event]:
-        return [event async for event in recognize_cascade(asset_type, identifiers, plugins=plugins)]
+        return [event async for event in recognize_cascade(asset_type, identifiers, plugins=plugins, seeds=seeds)]
 
     events = await asyncio.wait_for(consume(), DEADLINE)
     assert all(isinstance(event, (Recognized, IdentifierLearned)) for event in events), f"only Recognized and IdentifierLearned: {events}"
@@ -501,3 +508,219 @@ async def test_mockenrich_does_not_find_an_unknown_isin_and_nothing_is_learned(m
 
     assert [(_asked(answer), answer.status) for answer in _answers(events, MOCK_CODE)] == [(("ISIN", unknown), RecognizeStatus.NOT_FOUND)], f"not found: {events}"
     assert _learned(events) == [], f"nothing learned: {events}"
+
+
+# =============================================================================
+# 5. Seeds (ENR-2): the asset's price assignment starts the cascade
+# =============================================================================
+
+SEED_TICKER = "LABSEED.MI"
+
+
+def _seed(code: str, kind: str, identifier: str, **params: Any) -> Seed:
+    return Seed(code=code, binding=EnricherBinding(identifier_type=kind, identifier=identifier, params=dict(params)))
+
+
+@pytest.mark.asyncio
+async def test_a_seed_of_the_same_code_is_that_enrichers_first_call_with_its_declared_params(lab) -> None:
+    """The seed's identifier is a type the enricher accepts: it is asked with it first, though the ISIN is stronger,
+    with the parameters its ``params_schema`` declares and the undeclared one dropped; the answer's binding carries them."""
+    a = lab("seed_first", accepts=("ISIN", "TICKER"), answer=found(), params=("mic",))
+
+    events = await _run({"ISIN": ISIN}, [a], seeds=[_seed(a.code, "TICKER", SEED_TICKER, mic="XMIL", undeclared="x")])
+
+    assert a.calls == [("TICKER", SEED_TICKER)], f"the seed is the first call, and it finds: {a.calls}"
+    assert a.bindings[0].params == {"mic": "XMIL"}, f"declared params kept, undeclared dropped: {a.bindings[0].params}"
+    answers = _answers(events, a.code)
+    assert len(answers) == 1 and answers[0].status == RecognizeStatus.FOUND, f"barrier: A finds with the seed: {events}"
+    assert _asked(answers[0]) == ("TICKER", SEED_TICKER) and dict(answers[0].binding.params) == {"mic": "XMIL"}, f"the answer's binding carries the seed params: {answers[0]}"
+
+
+@pytest.mark.asyncio
+async def test_a_seed_param_the_enricher_does_not_declare_is_dropped(lab) -> None:
+    a = lab("seed_undeclared", accepts=("TICKER",), answer=found())
+
+    events = await _run({}, [a], seeds=[_seed(a.code, "TICKER", SEED_TICKER, mic="XMIL")])
+
+    assert a.calls == [("TICKER", SEED_TICKER)] and a.bindings[0].params == {}, f"no declared param, none passed: {a.bindings}"
+    assert dict(_answers(events, a.code)[0].binding.params) == {}, f"the answer carries none: {events}"
+
+
+@pytest.mark.asyncio
+async def test_after_a_seed_not_found_the_enricher_goes_on_with_the_identifiers_known_without_repeating_the_seed(lab) -> None:
+    a = lab("seed_then", accepts=("ISIN", "TICKER"), answer=not_found(), params=("mic",))
+
+    events = await _run({"ISIN": ISIN}, [a], seeds=[_seed(a.code, "TICKER", SEED_TICKER, mic="XMIL")])
+
+    assert a.calls == [("TICKER", SEED_TICKER), ("ISIN", ISIN)], f"the seed first, then the ISIN, the seed's ticker not asked twice: {a.calls}"
+    assert a.bindings[1].params == {}, f"the later call is the plain one: {a.bindings[1]}"
+    assert [answer.status for answer in _answers(events, a.code)] == [RecognizeStatus.NOT_FOUND, RecognizeStatus.NOT_FOUND], f"two clean not found: {events}"
+
+
+@pytest.mark.asyncio
+async def test_a_seed_identifier_joins_the_cascade_for_other_enrichers(lab) -> None:
+    """A is the seed's code and accepts only the ISIN: its seed (a TICKER) is no binding for it, but the ticker is
+    known now and another enricher accepting TICKER is asked with it."""
+    a = lab("seed_join_a", accepts=("ISIN",), answer=not_found())
+    t = lab("seed_join_t", accepts=("TICKER",), answer=found())
+
+    events = await _run({"ISIN": ISIN}, [a, t], seeds=[_seed(a.code, "TICKER", SEED_TICKER)])
+
+    assert a.calls == [("ISIN", ISIN)], f"A does not accept the seed's type: it is asked as before: {a.calls}"
+    assert t.calls == [("TICKER", SEED_TICKER)], f"T is asked with the seed's ticker: {t.calls}"
+    assert [answer.status for answer in _answers(events, t.code)] == [RecognizeStatus.FOUND], f"barrier: T answers: {events}"
+
+
+@pytest.mark.asyncio
+async def test_a_seed_of_a_code_with_no_covering_enricher_still_feeds_its_identifier(lab) -> None:
+    t = lab("seed_nocover_t", accepts=("TICKER",), answer=found())
+    other = lab("seed_nocover_stock", accepts=("TICKER",), answer=found(), covers=(AssetType.STOCK,))
+
+    events = await _run({}, [t, other], seeds=[_seed(other.code, "TICKER", SEED_TICKER), _seed("lab_recog_nobody", "TICKER", "OTHER.X")])
+
+    assert other.calls == [], f"the seed's enricher does not cover the type: never asked: {other.calls}"
+    assert t.calls and t.calls[0] in {("TICKER", SEED_TICKER), ("TICKER", "OTHER.X")} and len(_answers(events, t.code)) == 1, f"T is asked with a seed's ticker: {t.calls}"
+
+
+@pytest.mark.asyncio
+async def test_a_seed_ticker_is_tried_before_the_assets_ticker_which_is_still_tried_after_a_not_found(lab) -> None:
+    """R6: the seed ``SWDA.MI`` replaces the asset's ``SWDA``, which goes last, for the seed's enricher and for the
+    others."""
+    seeded = lab("seed_r6_a", accepts=("TICKER",), answer=not_found())
+    other = lab("seed_r6_b", accepts=("TICKER",), answer=not_found())
+
+    await _run({"TICKER": TICKER}, [seeded, other], seeds=[_seed(seeded.code, "TICKER", SEED_TICKER)])
+
+    assert seeded.calls == [("TICKER", SEED_TICKER), ("TICKER", TICKER)], f"the seed's enricher: seed first, the asset's ticker after: {seeded.calls}"
+    assert other.calls == [("TICKER", SEED_TICKER), ("TICKER", TICKER)], f"another enricher too: {other.calls}"
+
+
+@pytest.mark.asyncio
+async def test_a_seed_ticker_that_finds_leaves_the_assets_ticker_unasked(lab) -> None:
+    a = lab("seed_r6_found", accepts=("TICKER",), answer=found())
+
+    await _run({"TICKER": TICKER}, [a], seeds=[_seed(a.code, "TICKER", SEED_TICKER)])
+
+    assert a.calls == [("TICKER", SEED_TICKER)], f"found with the seed: the asset's ticker is never asked: {a.calls}"
+
+
+@pytest.mark.asyncio
+async def test_a_seed_isin_different_from_the_assets_is_a_conflict_first_and_its_enricher_is_never_called(lab) -> None:
+    a = lab("seed_conf_a", accepts=("ISIN",), answer=found(), params=("mic",))
+    b = lab("seed_conf_b", accepts=("ISIN",), answer=not_found())
+
+    events = await _run({"ISIN": ISIN}, [a, b], seeds=[_seed(a.code, "ISIN", ISIN_OTHER, mic="XMIL")])
+
+    first = events[0]
+    assert isinstance(first, Recognized) and first.code == a.code and first.status == RecognizeStatus.CONFLICT, f"the conflict comes first, for A: {events}"
+    assert dict(first.conflicts) == {"ISIN": ISIN_OTHER}, f"it names the seed's ISIN: {first}"
+    assert a.calls == [] and len(_answers(events, a.code)) == 1, f"A is never called, and answers only the conflict: {a.calls}"
+    assert b.calls == [("ISIN", ISIN)], f"the seed's ISIN joins nothing: B is asked with the asset's: {b.calls}"
+    assert _learned(events) == [], f"nothing learned: {events}"
+
+
+@pytest.mark.asyncio
+async def test_a_seed_isin_on_an_asset_without_isin_is_no_conflict_and_joins_the_cascade(lab) -> None:
+    a = lab("seed_noisin_a", accepts=("ISIN", "TICKER"), answer=found(), params=("mic",))
+    b = lab("seed_noisin_b", accepts=("ISIN",), answer=found())
+
+    events = await _run({"TICKER": TICKER}, [a, b], seeds=[_seed(a.code, "ISIN", ISIN, mic="XMIL")])
+
+    assert all(not (isinstance(event, Recognized) and event.status == RecognizeStatus.CONFLICT) for event in events), f"no ISIN to differ from: no conflict: {events}"
+    assert a.calls == [("ISIN", ISIN)] and a.bindings[0].params == {"mic": "XMIL"}, f"the seed's plugin is asked with the seed binding: {a.calls} {a.bindings}"
+    assert b.calls == [("ISIN", ISIN)] and b.bindings[0].params == {}, f"another plugin accepting ISIN is asked with the seed's ISIN: {b.calls}"
+
+
+@pytest.mark.asyncio
+async def test_a_seed_isin_equal_to_the_assets_is_no_conflict(lab) -> None:
+    a = lab("seed_same_isin", accepts=("ISIN",), answer=found(), params=("mic",))
+
+    events = await _run({"ISIN": ISIN}, [a], seeds=[_seed(a.code, "ISIN", ISIN, mic="XMIL")])
+
+    assert [answer.status for answer in _answers(events, a.code)] == [RecognizeStatus.FOUND], f"a plain found: {events}"
+    assert a.calls == [("ISIN", ISIN)] and a.bindings[0].params == {"mic": "XMIL"}, f"asked once, with the seed's params: {a.calls} {a.bindings}"
+
+
+@pytest.mark.asyncio
+async def test_a_strong_seed_conflict_of_a_code_with_no_covering_enricher_says_nothing_and_joins_nothing(lab) -> None:
+    b = lab("seed_conf_nobody_b", accepts=("ISIN",), answer=not_found())
+
+    events = await _run({"ISIN": ISIN}, [b], seeds=[_seed("lab_recog_nobody", "ISIN", ISIN_OTHER)])
+
+    assert [(_asked(answer), answer.status) for answer in _answers(events, b.code)] == [(("ISIN", ISIN), RecognizeStatus.NOT_FOUND)], f"only the asset's ISIN is asked: {events}"
+    assert all(not (isinstance(event, Recognized) and event.status == RecognizeStatus.CONFLICT) for event in events), f"no conflict without an enricher to carry it: {events}"
+
+
+@pytest.mark.asyncio
+async def test_a_seed_alone_without_identifiers_starts_the_cascade(lab) -> None:
+    a = lab("seed_alone", accepts=("TICKER",), answer=found())
+
+    events = await _run({}, [a], seeds=[_seed(a.code, "TICKER", SEED_TICKER)])
+
+    assert a.calls == [("TICKER", SEED_TICKER)] and [answer.status for answer in _answers(events, a.code)] == [RecognizeStatus.FOUND], f"the seed alone asks: {a.calls}"
+
+
+# =============================================================================
+# 6. The request schema with seeds (ENR-2)
+# =============================================================================
+
+
+def _request(**fields: Any) -> FAEnricherRecognizeRequest:
+    return FAEnricherRecognizeRequest.model_validate({"asset_type": "ETF", **fields})
+
+
+GOOD_SEED = {"code": "yfinance", "identifier_type": "TICKER", "identifier": "SWDA.MI", "params": {"mic": "XMIL"}}
+
+
+def test_a_request_with_seeds_is_accepted_and_keeps_them() -> None:
+    request = _request(identifiers={"ISIN": ISIN}, seeds=[GOOD_SEED])
+    assert len(request.seeds) == 1 and request.seeds[0].params == {"mic": "XMIL"} and request.seeds[0].code == "yfinance", f"the seed is kept: {request.seeds}"
+    assert _request(identifiers={"ISIN": ISIN}).seeds == [], "no seeds by default"
+    assert _request(identifiers={"ISIN": ISIN}, seeds=[{**GOOD_SEED, "params": None} | {"params": {}}]).seeds[0].params == {}, "empty params"
+
+
+def test_a_request_with_only_seeds_is_accepted() -> None:
+    assert _request(seeds=[GOOD_SEED]).identifiers == {}, "seeds alone, no identifiers"
+    assert _request(identifiers={}, seeds=[GOOD_SEED]).seeds, "empty identifiers with a seed"
+
+
+@pytest.mark.parametrize("fields", [{}, {"identifiers": {}}, {"identifiers": {"ISIN": "  "}}, {"identifiers": {}, "seeds": []}], ids=["nothing", "empty", "blank", "empty-seeds"])
+def test_a_request_with_neither_identifiers_nor_seeds_is_refused(fields) -> None:
+    with pytest.raises(ValidationError):
+        _request(**fields)
+
+
+@pytest.mark.parametrize(
+    "seed",
+    [
+        {**GOOD_SEED, "extra": 1},
+        {**GOOD_SEED, "identifier": ""},
+        {**GOOD_SEED, "identifier": "x" * 257},
+        {**GOOD_SEED, "identifier_type": ""},
+        {**GOOD_SEED, "identifier_type": "T" * 33},
+        {**GOOD_SEED, "code": "BAD CODE!"},
+        {**GOOD_SEED, "code": "9lives"[:1]},
+        {**GOOD_SEED, "code": ""},
+        {k: v for k, v in GOOD_SEED.items() if k != "code"},
+    ],
+    ids=["extra-key", "empty-identifier", "long-identifier", "empty-type", "long-type", "bad-code", "digit-code", "empty-code", "no-code"],
+)
+def test_a_malformed_seed_is_refused(seed) -> None:
+    with pytest.raises(ValidationError):
+        _request(identifiers={"ISIN": ISIN}, seeds=[seed])
+
+
+def test_a_code_with_a_valid_substring_is_refused() -> None:
+    with pytest.raises(ValidationError):
+        _request(identifiers={"ISIN": ISIN}, seeds=[{**GOOD_SEED, "code": "Bad Code!"}])
+
+
+def test_more_than_eight_seeds_are_refused() -> None:
+    _request(seeds=[GOOD_SEED] * 8)
+    with pytest.raises(ValidationError):
+        _request(seeds=[GOOD_SEED] * 9)
+
+
+def test_a_recognition_carries_params_empty_by_default() -> None:
+    assert FAEnricherRecognition(code="x", identifier_type="ISIN", identifier=ISIN, status="found").params == {}
+    assert FAEnricherRecognition(code="x", identifier_type="ISIN", identifier=ISIN, status="found", params={"mic": "XMIL"}).params == {"mic": "XMIL"}
