@@ -2795,6 +2795,18 @@ describe('TL-3b syncNewGroup — a changed broker or asset written on every row 
         ).toEqual(['quantity']);
         expect(byTempId(out, 'i-tax'), 'the TAX (no asset allowed here) is not written: same reference, its todo kept').toBe(byTempId(ops, 'i-tax'));
     });
+
+    it('guard: the sync answers only the todos of the fields it wrote — a todo on another field stays, even one whose field holds a value', () => {
+        const ops = patched(importedGroup([quantityTodo()], '0'), 'i-buy', {asset_id: NEW_ASSET});
+        expect(byTempId(ops, 'i-fee').fields.quantity, 'premise: the FEE’s quantity is filled').toBe('0');
+        const out = syncNewGroup(ops, 'i-buy', {broker_id: OLD.broker_id, asset_id: null}, syncOpts(ops));
+        const fee = byTempId(out, 'i-fee');
+        expect(fee.fields.asset_id, 'premise: the FEE took the asset').toBe(NEW_ASSET);
+        expect(
+            fee.todos?.map((todo) => todo.field),
+            'the asset todo answered, the quantity todo untouched by the sync',
+        ).toEqual(['quantity']);
+    });
 });
 
 describe('TL-3b isUntouchedClone — broker and asset are left out; sameDraftFields unchanged', () => {

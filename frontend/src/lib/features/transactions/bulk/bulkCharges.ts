@@ -16,6 +16,7 @@ import type {TXReadItem} from '../types';
 import type {DraftFields, PendingOp} from './txBulkTypes';
 import {chargesFromRows, type ChargeDraft, type ChargeType} from '../form/txCharges';
 import {exactDecimalEqual} from '../txPayloadHelpers';
+import {remainingTodos} from './bulkTodos';
 import {linkSelection, type LinkOptions, type LinkReason} from '../chargeLinkRules';
 
 type StoreGet = (id: number) => TXReadItem | undefined;
@@ -635,8 +636,9 @@ export function newGroupOf(ops: readonly PendingOp[], tempId: string): PendingOp
  * values before the change — are written on every row of its all-new group (`newGroupOf`), both ways (66 TL-3b). Only
  * a changed field moves: a group already divergent is not straightened. The asset moves only when it is not empty and
  * the parent's type takes one, and only onto the rows whose type takes one. The date never moves. Rows that do not
- * change keep their reference; outside an all-new group nothing changes. `effective` reads a row as it is shown (a
- * charge that follows its parent shows the parent's values).
+ * change keep their reference; outside an all-new group nothing changes. A row it writes loses the import todos on the fields it
+ * wrote that its new values answer (`remainingTodos`); every other todo stays. `effective` reads a row as it is shown (a charge that follows its parent shows the
+ * parent's values).
  */
 export function syncNewGroup(ops: readonly PendingOp[], tempId: string, before: {broker_id: number; asset_id: number | null}, opts: {effective: (op: PendingOp) => DraftFields; assetAllowed: (type: string) => boolean}): PendingOp[] {
     const group = newGroupOf(ops, tempId);
@@ -653,7 +655,18 @@ export function syncNewGroup(ops: readonly PendingOp[], tempId: string, before: 
         const nextBroker = broker ?? op.fields.broker_id;
         const nextAsset = asset !== undefined && asset !== null && opts.assetAllowed(op.fields.type) ? asset : op.fields.asset_id;
         if (nextBroker === op.fields.broker_id && nextAsset === op.fields.asset_id) return op;
-        return {...op, fields: {...op.fields, broker_id: nextBroker, asset_id: nextAsset}};
+        const next: PendingOp = {...op, fields: {...op.fields, broker_id: nextBroker, asset_id: nextAsset}};
+        // An imported row's todo on a field the sync wrote is answered, as `patchRowFromForm` does for the row of the form;
+        // a todo on any other field stays — the user never opened this row.
+        const written = new Set<string>();
+        if (nextBroker !== op.fields.broker_id) written.add('broker_id');
+        if (nextAsset !== op.fields.asset_id) written.add('asset_id');
+        if (next.todos?.length) {
+            const todos = next.todos.filter((todo) => !written.has(todo.field) || remainingTodos([todo], next.fields).length > 0);
+            if (todos.length) next.todos = todos;
+            else delete next.todos;
+        }
+        return next;
     });
 }
 
