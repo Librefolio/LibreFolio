@@ -16,6 +16,8 @@ an email, needs his explicit yes for that text.
 
 - **The user's language.** Italian to an Italian user (#89), English otherwise (French and other users write English:
   #90). Never machine-sounding: short sentences, the words a person would say.
+- **Call people by their GitHub handle**, `@nick`, never by their first name, in the greeting and whenever you name
+  them (developer, 24/11/2026): «Ciao @giulioboffo», «grazie a @giulioboffo per …».
 - **Open with the person**: «Hi @user, thanks for …!» / «Ciao @user, grazie davvero per …! 🙂». Name what they did well
   (a clear report, a good idea, a careful PR) in a few words, not a paragraph of praise.
 - **One or two emoji at most**, where a person would put them (👋, 🙂, 😊, 🎉, 🚀). None in a bug acknowledgement that is
