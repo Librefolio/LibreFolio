@@ -586,12 +586,13 @@ describe('AI Export compact Snapshot Data renderer', () => {
      * D12(a), issue #32: `portfolio.provenance` and `broker.provenance` move to component version 2
      * (their WAC semantics now name the single average cost) with an unchanged payload shape
      * (schema version 1). J-17 moves them to version 3 (the valuation hierarchy names ESTIMATED_AT_COST,
-     * an ADJUSTMENT is never a price), with the same payload shape again. The renderer knows that shape,
-     * so v2 and v3 render compactly — through the same generic renderer as v1, hence the very same text —
+     * an ADJUSTMENT is never a price), 79 STK-5 to version 4 (a REWARD is an acquisition at its value on
+     * receipt, also income, moving no cash), with the same payload shape again. The renderer knows that shape,
+     * so v2, v3 and v4 render compactly — through the same generic renderer as v1, hence the very same text —
      * while every other version it does not know keeps falling back to YAML. No prompt wording is frozen:
      * the texts below are placeholders.
      */
-    describe('provenance v2 (D12) and v3 (J-17)', () => {
+    describe('provenance v2 (D12), v3 (J-17) and v4 (79 STK-5)', () => {
         type ProvenanceId = 'portfolio.provenance' | 'broker.provenance';
         const directory = {
             assets: [],
@@ -631,6 +632,9 @@ describe('AI Export compact Snapshot Data renderer', () => {
             // J-17. Before J-17: v3 fell back to YAML (the renderer knew v1 and v2 only).
             ['portfolio.provenance', 3],
             ['broker.provenance', 3],
+            // 79 STK-5. Before it: v4 fell back to YAML (the renderer knew v1 to v3).
+            ['portfolio.provenance', 4],
+            ['broker.provenance', 4],
         ] as const)('renders %s v%i (schema 1) compactly, exactly as its v1', (componentId, version) => {
             const v1 = renderSnapshotDataText([provenanceSection(componentId, 1)], targetOf(componentId), directory).content;
             const bumped = renderSnapshotDataText([provenanceSection(componentId, version)], targetOf(componentId), directory).content;
@@ -644,9 +648,9 @@ describe('AI Export compact Snapshot Data renderer', () => {
         });
 
         it.each([
-            // Before J-17 these two were v3, the first version the renderer did not know.
-            ['portfolio.provenance v4', provenanceSection('portfolio.provenance', 4)],
-            ['broker.provenance v4', provenanceSection('broker.provenance', 4)],
+            // The first version the renderer does not know: v3 before J-17, v4 before 79 STK-5, v5 now.
+            ['portfolio.provenance v5', provenanceSection('portfolio.provenance', 5)],
+            ['broker.provenance v5', provenanceSection('broker.provenance', 5)],
             ['portfolio.provenance v2 with schema 2', provenanceSection('portfolio.provenance', 2, 2)],
             ['broker.provenance v3 with schema 2', provenanceSection('broker.provenance', 3, 2)],
             ['portfolio.summary v2 with schema 1', {component_id: 'portfolio.summary', component_version: 2, schema_id: 'portfolio.summary', schema_version: 1, payload: {total: 10, future_field: {must_survive: true}}}],
@@ -3078,6 +3082,8 @@ describe('AI Export compact Snapshot Data renderer', () => {
          *   minimum / maximum                    OUTPUT DEFINITIONS  any                               no lower / upper bound
          *   asset_ref                            any                 portfolio.income_timeline         income tied to no asset, e.g. interest on cash
          *                                                                                              (`IncomeTimelineRow`, `AggregatedIncomeRow`)
+         *   units                                any                 portfolio.income_timeline         cash income (a dividend or interest): no units
+         *                                                                                              received; a REWARD's row holds them (v3, 79 STK-5)
          *   portfolio_weight_percent and         PERIOD SUMMARY      asset.indicators, fx.indicators   one Asset or FX pair has no portfolio weight
          *   technical_normalized_weight_percent                      (four entries)                    (`SingleTargetIndicatorsPayload`)
          *
@@ -3141,6 +3147,8 @@ describe('AI Export compact Snapshot Data renderer', () => {
                 {column: 'minimum', table: 'OUTPUT DEFINITIONS'},
                 {column: 'maximum', table: 'OUTPUT DEFINITIONS'},
                 {column: 'asset_ref', component: 'portfolio.income_timeline'},
+                // 79 STK-5: income_timeline v3, a cash income row has no units received.
+                {column: 'units', component: 'portfolio.income_timeline'},
                 {column: 'portfolio_weight_percent', table: 'PERIOD SUMMARY', component: 'asset.indicators'},
                 {column: 'portfolio_weight_percent', table: 'PERIOD SUMMARY', component: 'fx.indicators'},
                 {column: 'technical_normalized_weight_percent', table: 'PERIOD SUMMARY', component: 'asset.indicators'},
@@ -3357,8 +3365,12 @@ describe('AI Export compact Snapshot Data renderer', () => {
                 return {...convertedIncomeRow(date, assetId), native_amount: {code: 'USD', amount: '8.00'}, target_amount: null, conversion: null, conversion_reason: 'fx_rate_not_found', ...overrides};
             }
 
-            /** `portfolio.income_timeline` v2: at the standard detail its dated rows are `TABLE rows`, at compact its monthly ones `TABLE aggregated_rows`. */
-            function incomeTimelineSection(rows: readonly Record<string, unknown>[], aggregatedRows: readonly Record<string, unknown>[] = []) {
+            /**
+             * `portfolio.income_timeline` (v2 unless `componentVersion` says otherwise): at the standard detail its dated rows are
+             * `TABLE rows`, at compact its monthly ones `TABLE aggregated_rows`. v3 (79 STK-5) adds `reward_count` to the summary
+             * and `units` to every row (null for cash income).
+             */
+            function incomeTimelineSection(rows: readonly Record<string, unknown>[], aggregatedRows: readonly Record<string, unknown>[] = [], componentVersion = 2) {
                 return section(
                     'portfolio.income_timeline',
                     {
@@ -3373,6 +3385,7 @@ describe('AI Export compact Snapshot Data renderer', () => {
                             transaction_count: rows.length + aggregatedRows.length,
                             dividend_count: 1,
                             interest_count: 1,
+                            ...(componentVersion >= 3 ? {reward_count: 0} : {}),
                             distinct_asset_count: 1,
                             distinct_broker_count: 1,
                             earliest_date: '2026-02-10',
@@ -3386,8 +3399,18 @@ describe('AI Export compact Snapshot Data renderer', () => {
                         rows_truncated: false,
                         rows_omitted_count: 0,
                     },
-                    2,
+                    componentVersion,
                 );
+            }
+
+            /** v3 (79 STK-5): a REWARD of First Asset, 4 units received worth 10 EUR on receipt, converted at a known rate. */
+            function rewardIncomeRow(date: string, overrides: Readonly<Record<string, unknown>> = {}) {
+                return convertedIncomeRow(date, 42, {income_type: 'REWARD', native_amount: eur('10'), target_amount: eur('10'), units: '4', ...overrides});
+            }
+
+            /** v3 (79 STK-5): a COMPACT month of First Asset's REWARDs, 10 units received in two rewards worth 25 EUR. */
+            function rewardAggregatedRow(month: string) {
+                return aggregatedIncomeRow(month, 42, {income_type: 'REWARD', transaction_count: 2, native_amounts: [eur('25')], target_amount: eur('25'), units: '10'});
             }
 
             /** A COMPACT month of one Asset's dividends, or of interest on cash (`assetId` null), every amount converted. */
@@ -3546,6 +3569,33 @@ describe('AI Export compact Snapshot Data renderer', () => {
                     next: undefined,
                     render: (overrides) => renderSnapshotDataText([incomeTimelineSection([], [aggregatedIncomeRow('2026-02', null, overrides), aggregatedIncomeRow('2026-03', null, overrides)])], portfolio, directory),
                 },
+                {
+                    entry: 'units',
+                    field: 'units',
+                    // Never on a cash row in the backend's payload: only the baseline the counters are measured against.
+                    filled: '4',
+                    componentId: 'portfolio.income_timeline',
+                    table: 'TABLE rows',
+                    fixture: 'v3 STANDARD, a dividend and interest on cash, no REWARD',
+                    rowCount: 2,
+                    control: 'unavailable_metric',
+                    controlOverride: UNAVAILABLE_CONTROL,
+                    next: undefined,
+                    render: (overrides) => renderSnapshotDataText([incomeTimelineSection([convertedIncomeRow('2026-02-10', 42, overrides), convertedIncomeRow('2026-03-10', null, overrides)], [], 3)], portfolio, directory),
+                },
+                {
+                    entry: 'units',
+                    field: 'units',
+                    filled: '4',
+                    componentId: 'portfolio.income_timeline',
+                    table: 'TABLE aggregated_rows',
+                    fixture: 'v3 COMPACT, a month of dividends and a month of interest on cash, no REWARD',
+                    rowCount: 2,
+                    control: 'unavailable_metric',
+                    controlOverride: UNAVAILABLE_CONTROL,
+                    next: undefined,
+                    render: (overrides) => renderSnapshotDataText([incomeTimelineSection([], [aggregatedIncomeRow('2026-02', 42, overrides), aggregatedIncomeRow('2026-03', null, overrides)], 3)], portfolio, directory),
+                },
                 singleTargetWeightCase('asset.indicators', 'portfolio_weight_percent'),
                 singleTargetWeightCase('asset.indicators', 'technical_normalized_weight_percent'),
                 singleTargetWeightCase('fx.indicators', 'portfolio_weight_percent'),
@@ -3622,6 +3672,28 @@ describe('AI Export compact Snapshot Data renderer', () => {
                     value: (rendered) => assetRef(rendered.entityDirectory, 'First Asset'),
                     render: () => renderSnapshotDataText([incomeTimelineSection([], [aggregatedIncomeRow('2026-02', 42), aggregatedIncomeRow('2026-03', null)])], portfolio, directory),
                 },
+                {
+                    entry: 'units',
+                    componentId: 'portfolio.income_timeline',
+                    table: 'TABLE rows',
+                    label: 'a REWARD beside a dividend (v3 STANDARD)',
+                    key: 'date',
+                    rowWith: '2026-03-12',
+                    rowWithout: '2026-02-10',
+                    value: () => '4',
+                    render: () => renderSnapshotDataText([incomeTimelineSection([convertedIncomeRow('2026-02-10', 42, {units: null}), rewardIncomeRow('2026-03-12')], [], 3)], portfolio, directory),
+                },
+                {
+                    entry: 'units',
+                    componentId: 'portfolio.income_timeline',
+                    table: 'TABLE aggregated_rows',
+                    label: 'a month of REWARDs beside a month of dividends (v3 COMPACT)',
+                    key: 'month',
+                    rowWith: '2026-03',
+                    rowWithout: '2026-02',
+                    value: () => '10',
+                    render: () => renderSnapshotDataText([incomeTimelineSection([], [aggregatedIncomeRow('2026-02', 42, {units: null}), rewardAggregatedRow('2026-03')], 3)], portfolio, directory),
+                },
             ];
 
             /** One prompt holding every scope: the entries' own tables, and the same names where no entry reaches. */
@@ -3634,11 +3706,34 @@ describe('AI Export compact Snapshot Data renderer', () => {
                 ];
             }
 
-            it('exports NULL_MEANS_NONE_COLUMNS with exactly the eleven (column, table, component) entries of the contract', () => {
+            // Before 79 STK-5: eleven entries (no `units`).
+            it('exports NULL_MEANS_NONE_COLUMNS with exactly the twelve (column, table, component) entries of the contract', () => {
                 const entries = exportedEntries();
 
                 // Order aside, exact: an entry more, an entry less or a changed scope is a change to the contract.
                 expect(entries.map(triple).sort()).toEqual(CONTRACT_ENTRIES.map(triple).sort());
+            });
+
+            /*
+             * 79 STK-5: `portfolio.income_timeline` v3 (REWARD rows, `units`, `reward_count`) keeps schema 1, so the renderer
+             * prints it compactly; the next version it does not know (v4) still falls back to YAML.
+             */
+            it('renders portfolio.income_timeline v3 compactly, the REWARD row with its units, and falls back to YAML for v4', () => {
+                const rows = [convertedIncomeRow('2026-02-10', 42, {units: null}), rewardIncomeRow('2026-03-12')];
+                const v3 = renderSnapshotDataText([incomeTimelineSection(rows, [], 3)], portfolio, directory);
+                const block = blockOf(v3, 'portfolio.income_timeline');
+
+                expect(block).not.toContain('PAYLOAD YAML FALLBACK');
+                const table = pipeTableAfter(block, 'TABLE rows');
+                expect(table.header).toContain('units');
+                const reward = rowWhere(table.rows, 'income_type', 'REWARD');
+                expect(reward.get('units')).toBe('4');
+                expect(reward.get('asset_ref')).toBe(assetRef(v3.entityDirectory, 'First Asset'));
+                expect(rowWhere(table.rows, 'income_type', 'DIVIDEND').get('units')).toBe('null');
+                expect(block).toContain('|summary.reward_count|0|');
+
+                const v4 = renderSnapshotDataText([incomeTimelineSection(rows, [], 4)], portfolio, directory);
+                expect(blockOf(v4, 'portfolio.income_timeline')).toContain('PAYLOAD YAML FALLBACK');
             });
 
             it('gives every NULL_MEANS_NONE_COLUMNS entry a non-empty means', () => {
