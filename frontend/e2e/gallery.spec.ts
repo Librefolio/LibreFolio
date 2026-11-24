@@ -1644,6 +1644,59 @@ test.describe('Gallery Screenshots', () => {
             });
         });
 
+        test('dashboard allocation tab - all languages and themes', async ({page}, testInfo) => {
+            // The «Allocazione» tab (lane 80, #89): the top of the tab (the three boxes, the filters, the chart, the table), the filter
+            // panel (a column on a wide screen, the popover of the «Filters» button on a phone) and the Class × dimension matrix. The
+            // report is the snapshot's; the tab asks the allocation of the test user's own (populated) portfolio, and nothing is written.
+            test.setTimeout(420_000);
+            const viewport = getViewport(testInfo);
+            await setupDashboardMockReport(page);
+
+            await forEachLanguageAndTheme(page, async (lang, theme) => {
+                await page.goto('/dashboard');
+                await page.waitForLoadState('networkidle', {timeout: 20_000});
+                await selectOneYearPreset(page);
+                await freezeAnimations(page);
+                await expectDashboardReportLoaded(page);
+
+                await page.getByTestId('dashboard-tab-allocazione').click();
+                const tab = page.getByTestId('dashboard-allocation-tab');
+                await expect(tab).toBeVisible({timeout: 10_000});
+                await waitForSettled(tab, 20_000);
+                // The answer is on screen: the boxes, the chart's frame and the table's rows.
+                await expect(page.getByTestId('dashboard-allocation-tab-tiles-base-amount')).toBeVisible();
+                await expect(page.getByTestId('dashboard-allocation-tab-results-table')).toBeVisible();
+                await expect(page.getByTestId('dashboard-allocation-tab-results-chart')).toBeVisible();
+
+                await frameTarget(page, tab, `${viewport}/${lang}/${theme}/dashboard/allocation-tab`);
+                await screenshot(page, viewport, lang, theme, 'dashboard', 'allocation-tab');
+
+                // The filters: the column on a wide screen; behind the button on a phone, opened for the shot.
+                if (viewport === 'mobile') {
+                    const button = page.getByTestId('dashboard-allocation-tab-filters-button');
+                    await button.click();
+                    const panel = page.getByTestId('dashboard-allocation-tab-filters');
+                    await expect(panel).toBeVisible();
+                    await screenshot(page, viewport, lang, theme, 'dashboard', 'allocation-filters');
+                    await button.click();
+                    await expect(page.getByTestId('dashboard-allocation-tab-filters')).toHaveCount(0);
+                } else {
+                    const column = page.getByTestId('dashboard-allocation-tab-filters-column');
+                    // The column is sticky, `lg:top-4`: it stands 16 px under the top of the screen, where the frame asks for it.
+                    await frameTarget(page, column, `${viewport}/${lang}/${theme}/dashboard/allocation-filters`, 16);
+                    await screenshot(page, viewport, lang, theme, 'dashboard', 'allocation-filters');
+                }
+
+                // The matrix of the dimension on screen (the sector, at the first opening), framed under the table.
+                const matrix = page.getByTestId('dashboard-allocation-tab-results-matrix');
+                await expect(matrix).toBeVisible();
+                await frameTarget(page, matrix, `${viewport}/${lang}/${theme}/dashboard/allocation-matrix`);
+                await screenshot(page, viewport, lang, theme, 'dashboard', 'allocation-matrix');
+
+                await page.evaluate(() => window.scrollTo(0, 0));
+            });
+        });
+
         test('dashboard positions tab - all languages and themes', async ({page}, testInfo) => {
             // Four variants a combination; on the desktop each on a screen as tall as the panel (the map and the chart need a
             // few resizes, they grow with the screen) and back: above the 4-minute default.

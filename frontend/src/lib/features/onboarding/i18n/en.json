@@ -317,6 +317,10 @@
         "info": {
           "title": "Information and sharing",
           "description": "Review account metadata and manage who can view or edit this broker."
+        },
+        "allocation": {
+          "title": "Allocation and filters",
+          "description": "Allocation splits this account's value by sector, area, type or asset, and lets you keep only some classes or leave assets and buckets out of the 100%."
         }
       }
     },

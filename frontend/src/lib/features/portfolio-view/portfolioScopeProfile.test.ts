@@ -23,6 +23,7 @@ describe('portfolioScopeProfile · the Dashboard', () => {
             currency: 'dashboard-target-currency',
             overviewTab: 'dashboard-overview-tab',
             positionsTab: 'dashboard-positions-tab',
+            allocationTab: 'dashboard-allocation-tab',
             riskTab: 'dashboard-risk-tab',
             transactionsTab: 'dashboard-transactions-tab',
             cashBalances: 'dashboard-cash-balances',
@@ -31,6 +32,7 @@ describe('portfolioScopeProfile · the Dashboard', () => {
         expect(portfolio.tabs.map((tab) => [tab.id, tab.testId])).toEqual([
             ['panoramica', 'dashboard-tab-panoramica'],
             ['posizioni', 'dashboard-tab-posizioni'],
+            ['allocazione', 'dashboard-tab-allocazione'],
             ['rischio', 'dashboard-tab-risk'],
             ['transazioni', 'dashboard-tab-transazioni'],
         ]);
@@ -48,7 +50,7 @@ describe('portfolioScopeProfile · the Dashboard', () => {
 
     it('keeps its toolbar thresholds', () => {
         expect(portfolio.toolbar).toEqual({
-            thresholds: {oneRow: 1000, denseRow: 990, stackFilters: 510, oneColumn: 390, noExtraLabel: 410, labelHideActions: 210, labelHideTabs: 460},
+            thresholds: {oneRow: 1000, denseRow: 990, stackFilters: 510, oneColumn: 390, noExtraLabel: 410, labelHideActions: 210, labelHideTabs: 570},
             debugName: 'dashboard',
             pickerMaxWidthTwoRow: undefined,
         });
@@ -65,6 +67,7 @@ describe('portfolioScopeProfile · a broker', () => {
             currency: 'broker-detail-target-currency',
             overviewTab: 'broker-overview-tab',
             positionsTab: 'broker-holdings',
+            allocationTab: 'broker-allocation-tab',
             riskTab: 'broker-risk-tab',
             transactionsTab: 'broker-transactions-tab',
             cashBalances: 'broker-cash-balances',
@@ -73,6 +76,7 @@ describe('portfolioScopeProfile · a broker', () => {
         expect(broker.tabs.map((tab) => [tab.id, tab.testId, tab.guideAnchor ?? null])).toEqual([
             ['panoramica', 'broker-tab-panoramica', 'broker.detail.overview'],
             ['posizioni', 'broker-tab-posizioni', 'broker.detail.positions'],
+            ['allocazione', 'broker-tab-allocazione', 'broker.detail.allocation'],
             ['rischio', 'broker-tab-risk', null],
             ['transazioni', 'broker-tab-transazioni', 'broker.detail.transactions'],
             ['info', 'broker-tab-info', 'broker.detail.info'],
@@ -114,14 +118,15 @@ describe('tabsForProfile', () => {
         expect(tabsForProfile(portfolio, label).map((tab) => [tab.id, tab.label])).toEqual([
             ['panoramica', 'label:panoramica'],
             ['posizioni', 'label:posizioni'],
+            ['allocazione', 'label:allocazione'],
             ['rischio', 'label:rischio'],
             ['transazioni', 'label:transazioni'],
         ]);
-        expect(tabsForProfile(broker, label).map((tab) => tab.id)).toEqual(['panoramica', 'posizioni', 'rischio', 'transazioni', 'info']);
+        expect(tabsForProfile(broker, label).map((tab) => tab.id)).toEqual(['panoramica', 'posizioni', 'allocazione', 'rischio', 'transazioni', 'info']);
     });
 
     it('knows every tab id, and the broker profile has them all', () => {
-        expect([...PORTFOLIO_TAB_IDS]).toEqual(['panoramica', 'posizioni', 'rischio', 'transazioni', 'info']);
+        expect([...PORTFOLIO_TAB_IDS]).toEqual(['panoramica', 'posizioni', 'allocazione', 'rischio', 'transazioni', 'info']);
         expect(broker.tabs.map((tab) => tab.id)).toEqual([...PORTFOLIO_TAB_IDS]);
     });
 });

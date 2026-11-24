@@ -87,6 +87,15 @@ def resource_limit_error(message: str, *, metric: str, actual: int, limit: int, 
 
 
 @dataclass(frozen=True, slots=True)
+class RiskSimulationHistoryContext:
+    """The simulation's history (RSK-SIM1, P-7): the window it could draw its days from — all the common history of its
+    participants, the default — and whether the user chose a period of their own inside it."""
+
+    available: DateRangeModel
+    chosen: bool = False
+
+
+@dataclass(frozen=True, slots=True)
 class RiskHistoricalReplayContext:
     """Prepared replay-only series and original-to-source identity."""
 
@@ -160,6 +169,7 @@ class RiskExecutionContext:
     composition_as_of: Optional[date] = None
     sliced_asset_ids: tuple[int, ...] = ()
     historical_replay: Optional[RiskHistoricalReplayContext] = None
+    simulation_history: Optional[RiskSimulationHistoryContext] = None
     asset_classifications: Mapping[int, RiskAssetClassification] = field(default_factory=dict)
     geography_groups: Mapping[str, frozenset[str]] = field(default_factory=dict)
 

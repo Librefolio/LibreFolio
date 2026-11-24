@@ -81,14 +81,12 @@ export function cashTargetEntries(draft: PlannerDraft) {
 }
 
 /**
- * The target fidelity on the wire. A «custom» fidelity whose λ the preview has not given yet travels, in the preview only,
- * as «Balanced»: the euros typed beside it win there (`custom_reference_amount`), and the plan never sends it so.
+ * The target fidelity on the wire. The preview always sends «Balanced»: no number it answers depends on the fidelity, and
+ * the page keys it without the fidelity (R1-F (b) of project 67), so a λ it would refuse can never leave it unanswered.
+ * The plan sends the draft's.
  */
 export function wireFidelity(fidelity: DraftFidelity, preview = false) {
-    if (fidelity.kind === 'custom') {
-        const lambda = canonicalInput(fidelity.lambda);
-        if (preview && (lambda === null || decimalSign(lambda) !== 1)) return {kind: 'level' as const, level: 'balanced' as const};
-        return {kind: 'custom' as const, lambda: lambda as string};
-    }
+    if (preview) return {kind: 'level' as const, level: 'balanced' as const};
+    if (fidelity.kind === 'custom') return {kind: 'custom' as const, lambda: canonicalInput(fidelity.lambda) as string};
     return fidelity.kind === 'level' ? {kind: 'level' as const, level: fidelity.level} : {kind: 'target_first' as const};
 }

@@ -176,6 +176,8 @@ class RiskService:
                             never_priced_asset_ids=never_priced_asset_ids,
                             horizon_days=plan.params.horizon_days,
                             market_holidays=market_holidays,
+                            history_start=plan.params.history_start,
+                            history_end=plan.params.history_end,
                         )
                     else:
                         plan_context = await prepare_historical_replay_context(

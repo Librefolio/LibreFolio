@@ -73,7 +73,7 @@ export function historyKey(event: HistoryKeyEvent): string {
  */
 export function eventMarkerKind(event: {kind: string; scope_boundary?: unknown}): EventMarkerKind {
     if (scopeBoundaryOf(event) != null) return 'transfer';
-    if (event.kind === 'BUY' || event.kind === 'ADJUSTMENT_IN') return 'open';
+    if (event.kind === 'BUY' || event.kind === 'REWARD' || event.kind === 'ADJUSTMENT_IN') return 'open';
     if (event.kind === 'TRANSFER_DEPART' || event.kind === 'TRANSFER_ARRIVE') return 'transfer';
     if (event.kind === 'SPLIT') return 'split';
     return 'close';

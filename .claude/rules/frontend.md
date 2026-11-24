@@ -47,7 +47,7 @@ frontend/
 
 ## Financial numbers
 
-The frontend computes no financial quantity — cost, P&L, capital, NAV, returns, FX value, yields: it shows the fields the backend computes in `backend/app/services/financial_math/`; interactive measures (the measuring tool, what-if, the aggregates of the lots the user chooses — D-MF6(b)) and the transaction form's trade amount (`txTradeAmount.ts`: one product or quotient on exact decimals, and the total of a parent with its linked charges, one sum per currency, never a route of its own) are the only exceptions, and each must be declared where it lives.
+The frontend computes no financial quantity — cost, P&L, capital, NAV, returns, FX value, yields: it shows the fields the backend computes in `backend/app/services/financial_math/`; interactive measures (the measuring tool, what-if, the aggregates of the lots the user chooses — D-MF6(b)), the transaction form's trade amount (`txTradeAmount.ts`: one product or quotient on exact decimals, and the total of a parent with its linked charges, one sum per currency, never a route of its own) and the Rebalancer's table «Maximum acceptable cost» (`planner/acceptableCost.ts`: its cells on the preview's total and the levels' λ, and the «Custom» λ from the euros typed — developer decision of 21/11/2026, R1-F (b) of project 67, so a choice or a figure changes it at once) are the only exceptions, and each must be declared where it lives.
 
 ## Design System
 

@@ -317,6 +317,10 @@
         "info": {
           "title": "Informations et partage",
           "description": "Vérifiez les métadonnées du compte et gérez les personnes autorisées à consulter ou modifier ce courtier."
+        },
+        "allocation": {
+          "title": "Allocation et filtres",
+          "description": "L'allocation répartit la valeur du compte par secteur, zone, type ou actif, et permet de ne garder que certaines classes ou d'exclure des actifs et des postes des 100 %."
         }
       }
     },

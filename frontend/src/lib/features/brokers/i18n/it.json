@@ -138,7 +138,8 @@
           "transfer": "Trasferimenti",
           "adjustment": "Rettifiche",
           "split": "Split",
-          "income": "Dividendo / interesse"
+          "income": "Dividendo / interesse",
+          "reward": "Premi"
         },
         "eventType": {
           "BUY": "Acquisto",
@@ -149,7 +150,8 @@
           "TRANSFER_ARRIVE": "Trasferimento",
           "SPLIT": "Split",
           "TRANSFER_IN": "Trasferimento in entrata",
-          "TRANSFER_OUT": "Trasferimento in uscita"
+          "TRANSFER_OUT": "Trasferimento in uscita",
+          "REWARD": "Premio"
         },
         "unitPrice": "Prezzo unitario",
         "transitInterval": "Intervallo transito",
@@ -229,7 +231,8 @@
           "TRANSFER_ARRIVE": "TRASFERIMENTO",
           "SPLIT": "SPLIT",
           "TRANSFER_IN": "TRASFERIMENTO+",
-          "TRANSFER_OUT": "TRASFERIMENTO-"
+          "TRANSFER_OUT": "TRASFERIMENTO-",
+          "REWARD": "PREMIO"
         },
         "historyDetail": {
           "openPrice": "Prezzo apertura",
@@ -293,7 +296,8 @@
       "analysisFailedFix": "Correggi queste transazioni e i lotti tornano:",
       "matchingMethod": "Metodo di abbinamento",
       "methodFifoHint": "FIFO: una vendita chiude per primo il lotto più vecchio",
-      "methodLifoHint": "LIFO: una vendita chiude per primo il lotto più recente"
+      "methodLifoHint": "LIFO: una vendita chiude per primo il lotto più recente",
+      "incomeMarkerReward": "Premio"
     },
     "createdInSystem": "Creato nel Sistema",
     "deleteBlockedTitle": "Impossibile eliminare il broker",

@@ -54,7 +54,8 @@
       "TRANSFER": "Transferencia de Activos",
       "FX_CONVERSION": "Cambio de Divisas",
       "ADJUSTMENT": "Ajuste",
-      "CASH_TRANSFER": "Transferencia de fondos"
+      "CASH_TRANSFER": "Transferencia de fondos",
+      "REWARD": "Recompensa"
     },
     "refresh": "Recargar desde el servidor",
     "noAsset": "(Sin activo)",
@@ -201,7 +202,11 @@
     },
     "costBasisOverride": {
       "tooltip": "El coste que introduces en lugar del precio medio de compra: para Exit Tax, herencia o reglas fiscales especiales. Auto lo calcula a partir de tus compras. Usa el selector Total/Por unidad de abajo para elegir cómo introducir este importe.",
-      "warningAdjustment": "El coste base manual está vacío: sin él, la transacción no se puede guardar. Escribe lo que te costaron estas participaciones: 0 para las nuevas de un desdoblamiento. Para un regalo, escribe 0, o lo que pagó por ellas el donante: así el precio medio de compra, y la ganancia por la que podrías tributar, quedan más cerca de los reales."
+      "warningAdjustment": "El coste base manual está vacío: sin él, la transacción no se puede guardar. Escribe lo que te costaron estas participaciones: 0 para las nuevas de un desdoblamiento. Para un regalo, escribe 0, o lo que pagó por ellas el donante: así el precio medio de compra, y la ganancia por la que podrías tributar, quedan más cerca de los reales.",
+      "rewardLabel": "Valor al recibirlo",
+      "rewardTooltip": "Lo que valían estas unidades el día en que las recibió: es a la vez el ingreso de la recompensa y el coste del lote que abre.",
+      "warningReward": "El valor al recibirlo está vacío: sin él, la recompensa no se puede guardar. Introduzca lo que valían estas unidades el día en que las recibió, o 0 para contarlas sin coste.",
+      "rewardFromHistory": "Del historial de precios: el cierre del {date}. Cámbielo si la plataforma muestra otro valor."
     },
     "wacPreview": {
       "calculating": "Calculando...",
@@ -320,7 +325,7 @@
       "autoCostEmptyPool": "Coste automático no disponible: en esa fecha no había unidades de este activo que promediar. Elige Manual e introduce lo que te costaron estas unidades; si las recibiste como regalo, escribe 0.",
       "autoCostUnknownPool": "Coste automático no disponible: las unidades de este activo que había en esa fecha no tienen un coste conocido que promediar. Elige Manual e introduce lo que te costaron.",
       "ledgerUnreadable": "No se pueden comprobar los saldos de {brokerName}: {count, plural, one {# de sus transacciones contiene} other {# de sus transacciones contienen}} un valor que no es un número. Pide al administrador que repare los datos.",
-      "costBasisNotAllowed": "❌ {type} no lleva coste base aquí: quítelo. Solo lo llevan las unidades que entran con un Ajuste o una Transferencia de Activos.",
+      "costBasisNotAllowed": "❌ {type} no lleva coste base aquí: quítelo. Solo lo lleva una transacción que hace entrar unidades con un valor.",
       "costBasisModeIncompatible": "❌ {type} no lleva coste base aquí, así que ningún modo Auto o Manual: quítelo.",
       "costBasisNegative": "El coste base no puede ser negativo: escribe 0 o más.",
       "pairAdjustmentNotAllowed": "Dos Ajustes no se pueden enlazar: para mover activos entre brókeres usa una Transferencia de Activos.",
@@ -341,7 +346,8 @@
       "chargeParentRefNotFound": "Ninguna fila de este envío se llama '{parentRef}': el gasto no se puede enlazar.",
       "chargeParentTwice": "Un gasto indica su transacción una sola vez: por la fila de este envío o por una transacción guardada, no ambas.",
       "chargeParentIdInvalid": "La transacción a la que está enlazado un gasto debe ser una transacción guardada (un id positivo).",
-      "chargesDeleteIncomplete": "Esta transacción tiene gastos enlazados: elimínalos o desenlázalos en el mismo cambio."
+      "chargesDeleteIncomplete": "Esta transacción tiene gastos enlazados: elimínalos o desenlázalos en el mismo cambio.",
+      "costBasisAutoNotAllowed": "❌ {type} toma como coste base su valor al recibirlo, nunca el coste medio: sin modo Auto, introduzca el valor."
     },
     "pydantic": {
       "greaterThan": "El valor debe ser mayor que {gt}",

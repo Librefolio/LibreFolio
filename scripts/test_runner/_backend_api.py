@@ -1102,6 +1102,16 @@ def api_portfolio_group_by(verbose: bool = False, test_names: list[str] | None =
     return run_command(cmd, "Portfolio group_by API tests", verbose=verbose)
 
 
+def api_portfolio_allocation(verbose: bool = False, test_names: list[str] | None = None) -> bool:
+    """Run the tests of POST /portfolio/allocation (lane 80, the «Allocazione» tab)."""
+    print_section("Portfolio Allocation API Tests")
+    print_info("Testing POST /portfolio/allocation: validation, the filtered view on the page's engine run, broker scope, ownership share")
+    print_info("Note: Server will be automatically started and stopped by test")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_portfolio_allocation_api.py", test_names)
+    return run_command(cmd, "Portfolio allocation API tests", verbose=verbose)
+
+
 def api_lots_wac_history(verbose: bool = False, test_names: list[str] | None = None) -> bool:
     """Run the average-cost (WAC) history tests of the lots analysis."""
     print_section("Lots WAC History API Tests")
@@ -1856,6 +1866,13 @@ Tests for REST API endpoints (server auto-started):
     add_test(api, "users-search", api_users_search, name="User Search API", desc="User search, share validation")
     add_test(api, "portfolio", api_portfolio, name="Portfolio API", desc="Summary, history, asset-history, FIFO lots endpoints")
     add_test(api, "portfolio-group-by", api_portfolio_group_by, name="Portfolio group_by API", desc="POST /portfolio/report group_by=asset: an asset summed over its brokers (holdings, groups, Performance rows, other effects)")
+    add_test(
+        api,
+        "portfolio-allocation",
+        api_portfolio_allocation,
+        name="Portfolio Allocation API",
+        desc="POST /portfolio/allocation (lane 80): 401, 422 on an unknown dimension, on Liquidity as an excluded bucket, on an unknown field; «solo azioni» on a real book (the equity ETF in, bond and cash outside, base + outside + excluded = the report's net worth, names, matrix, history); geography (the cash with no country); broker scope, an unreadable broker gives an empty view, the owner's share and the whole broker",
+    )
     add_test(api, "lots-wac-history", api_lots_wac_history, name="Lots WAC History API", desc="BROKER_WAC_HISTORY of the lots analysis (average-cost line, split)")
     add_test(
         api,

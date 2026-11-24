@@ -4098,3 +4098,9 @@ Filed: [[features/F-111]].
 Project 68 (F1b): the subsystem's entity page (profile store, bindings, read and merge, the weekly job, «Aggiorna» with
 `enrichers_read`, the «Profilo» tab and its windows), and the MOB problem from lane 76's triage.
 Filed: [[entities/asset-profile-enrichers]], [[problems/layout-read-before-a-late-list]].
+
+## [2026-11-24] file | Allocation tab: filter by content, own endpoint on the page's engine run
+Project 80 (issue #89), after the merges `a4690b281` and `ae51759a9`: why the class filter goes by content while the charts keep the
+family, why the tab has its own endpoint but no replay of its own, and the identity base + outside + excluded = NAV.
+Filed: [[decisions/allocation-filter-by-content-own-endpoint]].
+

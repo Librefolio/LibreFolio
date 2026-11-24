@@ -26,9 +26,11 @@
         onRequestPnlCandles: () => void;
         /** The tab's test ids: the Dashboard's and a broker's pages keep their own (`portfolioScopeProfile`). */
         testIds: {overviewTab: string; cashBalances: string; cashBalance: string};
+        /** Opens the Allocation tab (the «Analyze →» link of the Allocation card). */
+        onAnalyzeAllocation?: () => void;
     }
 
-    let {snapshot, displayCurrency, brokerIds, onRequestPnlCandles, testIds}: Props = $props();
+    let {snapshot, displayCurrency, brokerIds, onRequestPnlCandles, testIds, onAnalyzeAllocation}: Props = $props();
 
     const summaryLoading = $derived(snapshot.reportLoading && !snapshot.summary);
     const historyLoading = $derived(snapshot.reportLoading && snapshot.history.length === 0);
@@ -81,6 +83,6 @@
         </div>
 
         <!-- Allocation Panel — 2/5 -->
-        <AllocationPanel summary={snapshot.summary} loading={summaryLoading} {displayCurrency} {brokerIds} currentLanguage={$currentLanguage} allocationHistory={snapshot.allocationHistory} />
+        <AllocationPanel summary={snapshot.summary} loading={summaryLoading} {displayCurrency} {brokerIds} currentLanguage={$currentLanguage} allocationHistory={snapshot.allocationHistory} onAnalyze={onAnalyzeAllocation} />
     </div>
 </div>

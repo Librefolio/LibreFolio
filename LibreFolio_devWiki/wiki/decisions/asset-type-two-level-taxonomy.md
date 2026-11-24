@@ -44,6 +44,8 @@ one, `ETF` and `CROWDFUND`; their plain values stay selectable as the residual f
 An unknown value resolves to itself, never to `OTHER`, so a new enum value stays visible and the enum gate complains.
 The analysis of D-K3 expected the allocation pie to file `CROWDFUND_REAL_ESTATE` under Real estate (by content); the
 charts moved to the family view afterwards, so at HEAD it sits in the Crowdfund group. No chart groups by content.
+The «Allocazione» tab (project 80) **filters** by content but still **draws** by family: see
+[[decisions/allocation-filter-by-content-own-endpoint]].
 
 **Provider comparison (R18, step 17).** When a provider proposes a type for an existing asset, a proposal that only
 names the family of the stored subtype (`ETF` against `ETF_STOCK` — Borsa Italiana says `ETF` for all of ETFplus)

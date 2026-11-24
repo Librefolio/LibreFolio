@@ -137,9 +137,10 @@ def build_performance_history(  # noqa: C901 — cash-flow collection loops with
                 if short_lots and not _record_buyback(tx, context, fx_resolver, short_buybacks):
                     invalid_external_flow_from = tx.date if invalid_external_flow_from is None else min(invalid_external_flow_from, tx.date)
             continue
-        # An ADJUSTMENT-in with a cost moves that cost into the scope. An ADJUSTMENT-out has no value (N78-1): a quantity
-        # correction, never a flow, whatever cost basis the row holds.
-        if tx_type == "ADJUSTMENT" and tx.quantity > 0 and _adjustment_native_cost(tx, asset_currency) is not None:
+        # An ADJUSTMENT-in with a cost moves that cost into the scope, and so does a REWARD (project 79), the BUY of the
+        # DIVIDEND + BUY pair it stands for. An ADJUSTMENT-out has no value (N78-1): a quantity correction, never a
+        # flow, whatever cost basis the row holds.
+        if tx_type in ("ADJUSTMENT", "REWARD") and tx.quantity > 0 and _adjustment_native_cost(tx, asset_currency) is not None:
             adjustment_cost = adjustment_cash_flow_cost(tx=tx, asset_currency=asset_currency, fx_resolver=fx_resolver)
             if adjustment_cost is None:
                 invalid_external_flow_from = tx.date if invalid_external_flow_from is None else min(invalid_external_flow_from, tx.date)

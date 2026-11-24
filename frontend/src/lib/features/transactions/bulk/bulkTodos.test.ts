@@ -87,6 +87,8 @@ interface HandedOverRowLike {
     mode: 'auto' | 'manual' | null;
     cost: {code?: string; amount?: string} | null;
     costAllowed: boolean;
+    /** Whether the type's cost basis may be the average cost (`costBasisAuto` of its rule). Missing = true. */
+    autoAllowed?: boolean;
 }
 
 type InitialCostBasisMode = (row: HandedOverRowLike, todos: ReadonlyArray<{field: string; severity?: string}>) => 'auto' | 'manual' | null;
@@ -528,6 +530,63 @@ describe('initialCostBasisMode — Q-J57-5 (a): the mode a row handed over by th
         expect(second, 'the same answer twice').toBe(first);
         expect(row, 'the row: its mode still none, its cost and amount as given, untrimmed').toEqual(rowBefore);
         expect(todos, 'the todos, in their order').toEqual(todosBefore);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// initialCostBasisMode with `autoAllowed` false: a type that never takes the average cost (REWARD, project 79 STK-2a)
+// ---------------------------------------------------------------------------
+
+/**
+ * A REWARD's cost basis is its value on receipt (rule 12c refuses Auto): `TransactionBulkModal` passes the type rule's
+ * `costBasisAuto` as `autoAllowed`, and a row that would start in Auto starts in Manual instead — whether Auto came
+ * from the default (no mode, no cost) or from the plugin's own mode. Every other answer is unchanged, and a row
+ * without `autoAllowed` behaves as before.
+ */
+describe('initialCostBasisMode — autoAllowed false: Auto becomes Manual, nothing else changes (79 STK-2a)', () => {
+    const noAuto = {autoAllowed: false};
+
+    it('no mode, no cost, no todo — Auto by default — starts in Manual', async () => {
+        const initialCostBasisMode = await initialMode();
+
+        expect(initialCostBasisMode(handedOver(noAuto), [])).toBe('manual');
+    });
+
+    it("the plugin's explicit 'auto' starts in Manual too: Auto is refused for this type whoever chose it", async () => {
+        const initialCostBasisMode = await initialMode();
+
+        expect.soft(initialCostBasisMode(handedOver({...noAuto, mode: 'auto'}), []), "'auto'").toBe('manual');
+        expect.soft(initialCostBasisMode(handedOver({...noAuto, mode: 'auto', cost: pluginCost('0')}), []), "'auto' with the currency hint").toBe('manual');
+        expect.soft(initialCostBasisMode(handedOver({...noAuto, mode: 'auto'}), [COST_BASIS_TODO]), "'auto' and a blocking cost todo").toBe('manual');
+    });
+
+    it('an answer that was already Manual or null is unchanged', async () => {
+        const initialCostBasisMode = await initialMode();
+
+        expect.soft(initialCostBasisMode(handedOver({...noAuto, mode: 'manual'}), []), "'manual'").toBe('manual');
+        expect.soft(initialCostBasisMode(handedOver({...noAuto, cost: pluginCost('12.5')}), []), "a cost of '12.5'").toBe('manual');
+        expect.soft(initialCostBasisMode(handedOver(noAuto), [COST_BASIS_TODO]), 'a blocking cost todo').toBe('manual');
+        expect.soft(initialCostBasisMode(handedOver({...noAuto, costAllowed: false}), []), 'a side that takes no cost').toBeNull();
+    });
+
+    it("autoAllowed true, or missing, keeps today's answers: Auto stays Auto", async () => {
+        const initialCostBasisMode = await initialMode();
+
+        expect.soft(initialCostBasisMode(handedOver({autoAllowed: true}), []), 'true, default').toBe('auto');
+        expect.soft(initialCostBasisMode(handedOver({autoAllowed: true, mode: 'auto'}), []), "true, 'auto'").toBe('auto');
+        expect.soft(initialCostBasisMode(handedOver(), []), 'missing, default').toBe('auto');
+        expect.soft(initialCostBasisMode(handedOver({mode: 'auto'}), []), "missing, 'auto'").toBe('auto');
+        expect.soft(initialCostBasisMode(handedOver({autoAllowed: true, cost: pluginCost('3')}), []), "true, a cost of '3'").toBe('manual');
+    });
+
+    it('leaves the row it reads untouched', async () => {
+        const initialCostBasisMode = await initialMode();
+        const row = handedOver({...noAuto, mode: 'auto'});
+        const before = structuredClone(row);
+
+        initialCostBasisMode(row, []);
+
+        expect(row).toEqual(before);
     });
 });
 

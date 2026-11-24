@@ -15,6 +15,7 @@
     import {t} from 'svelte-i18n';
     import {scrollOnOverflow} from '$lib/actions/scrollOnOverflow';
     import {overflowScrollTextClass} from '$lib/utils/overflowScroll';
+    import Switch from '$lib/components/ui/input/Switch.svelte';
 
     export interface CompareCell {
         /** Rendered content (may be HTML when `html` is true). */
@@ -179,18 +180,7 @@
                                     <div class="flex items-center gap-1.5">
                                         {#if showKeep && col.selectable}
                                             <!-- colour: closest role, to review: the on track was emerald-500 (a success green); switch role bg-lf-checked, alt bg-lf-success -->
-                                            <button
-                                                type="button"
-                                                role="switch"
-                                                aria-checked={kept.has(col.id)}
-                                                onclick={() => toggleKept(col.id)}
-                                                aria-label={$t('importWizard.compareModal.keep')}
-                                                title={$t('importWizard.compareModal.keep')}
-                                                class="relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full transition-colors {kept.has(col.id) ? 'bg-lf-checked' : 'bg-lf-switch-off'}"
-                                                data-testid="import-wizard-compare-keep-{col.id}"
-                                            >
-                                                <span class="inline-block h-3.5 w-3.5 transform rounded-full shadow transition-transform {kept.has(col.id) ? 'translate-x-5 bg-lf-switch-knob-on' : 'translate-x-1 bg-lf-switch-knob-off border border-lf-input'}"></span>
-                                            </button>
+                                            <Switch size="sm" class="shrink-0" checked={kept.has(col.id)} onchange={() => toggleKept(col.id)} label={$t('importWizard.compareModal.keep')} title={$t('importWizard.compareModal.keep')} testId="import-wizard-compare-keep-{col.id}" />
                                         {:else}
                                             <span class="shrink-0 text-xs text-lf-muted">{colBadge(i)}</span>
                                         {/if}

@@ -68,6 +68,9 @@
         onCashInput: (value: {code: string; amount: string} | null) => void;
         rule: ReturnType<typeof getTypeRule>;
         showCostBasisField: boolean;
+        /** The day of the close the shown value on receipt comes from, while it is the price history's suggestion (a
+         *  REWARD, project 79); null once the user changes it or when there is none. */
+        rewardValueDate?: string | null;
         typeImmutable: boolean;
         wacAvailableCurrencies: string[];
         handleSyncFx: () => Promise<void>;
@@ -119,6 +122,7 @@
         onCashInput,
         rule,
         showCostBasisField,
+        rewardValueDate = null,
         typeImmutable,
         wacAvailableCurrencies,
         handleSyncFx,
@@ -356,13 +360,17 @@
         {/if}
     </div>
 
-    <!-- Cost basis override — shown inline for ADJUSTMENT (inside fieldset = mandatory section) -->
-    {#if !pairLayout && draft.type === 'ADJUSTMENT' && showCostBasisField}
+    <!-- Cost basis override — shown inline for a standalone type whose incoming units carry one (ADJUSTMENT, REWARD:
+         `required_qty_pos` in the type table), inside the fieldset = mandatory section -->
+    {#if !pairLayout && rule.costBasisMode === 'required_qty_pos' && showCostBasisField}
         <div class="mt-3" data-testid="tx-form-cost-basis-inline">
             <WacPreviewSection
                 value={displayedCostBasis}
                 onChange={onCostBasisChange}
                 mode={costBasisMode}
+                autoAllowed={rule.costBasisAuto}
+                label={draft.type === 'REWARD' ? $t('transactions.costBasisOverride.rewardLabel') || 'Value on receipt' : null}
+                labelTooltip={draft.type === 'REWARD' ? $t('transactions.costBasisOverride.rewardTooltip') || 'The value of these units on the day you received them: it is both the income of the reward and the cost of the lot it opens.' : null}
                 defaultCode={draft.cash?.code ?? 'EUR'}
                 disabled={isReadonly}
                 hideTable={isReadonly}
@@ -381,8 +389,16 @@
             />
             {#if (exactDecimalSign(draft.quantity) ?? 0) > 0 && costBasisMode !== 'auto' && !draft.cost_basis_override?.amount?.trim()}
                 <p class="text-xs text-lf-warning mt-1" data-testid="tx-form-cost-basis-warning">
-                    {$t('transactions.costBasisOverride.warningAdjustment') ||
-                        "The manual cost basis is empty: the transaction can't be saved without it. Enter what these units cost you: 0 for the new shares of a stock split. For a gift, enter 0, or what the donor paid for them: that keeps the weighted average cost, and the gain you may be taxed on, closer to the real ones."}
+                    {#if draft.type === 'REWARD'}
+                        {$t('transactions.costBasisOverride.warningReward') || "The value on receipt is empty: the reward can't be saved without it. Enter what these units were worth on the day you received them; 0 if you count them at no cost."}
+                    {:else}
+                        {$t('transactions.costBasisOverride.warningAdjustment') ||
+                            "The manual cost basis is empty: the transaction can't be saved without it. Enter what these units cost you: 0 for the new shares of a stock split. For a gift, enter 0, or what the donor paid for them: that keeps the weighted average cost, and the gain you may be taxed on, closer to the real ones."}
+                    {/if}
+                </p>
+            {:else if draft.type === 'REWARD' && rewardValueDate}
+                <p class="text-xs text-lf-muted mt-1" data-testid="tx-form-reward-value-from-history">
+                    {$t('transactions.costBasisOverride.rewardFromHistory', {values: {date: rewardValueDate}}) || `From the price history: the close of ${rewardValueDate}. Change it if the platform shows another value.`}
                 </p>
             {/if}
         </div>

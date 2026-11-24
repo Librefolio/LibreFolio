@@ -96,7 +96,7 @@ class AssetPeriodContribution(BaseModel):
         description="Change in unrealized P&L over the period, from the portfolio's own valuation at the two boundaries; an internal transfer that leaves and arrives inside the period splits it between the two brokers at the value on arrival (P22). None when a boundary the position is held at has an unknown unrealized (no rate, incomplete cost)",
     )
     period_realized_gain_loss: Optional[SafeDecimal] = Field(None, description="Realized gain/loss in period: SELLs, and outgoing ADJUSTMENTs with a cost basis (the value handed over, at the rate of its date, against the average cost)")
-    period_income: Optional[SafeDecimal] = Field(None, description="DIVIDEND/INTEREST attributed to this asset in period")
+    period_income: Optional[SafeDecimal] = Field(None, description="DIVIDEND/INTEREST/REWARD attributed to this asset in period (a REWARD: its value on receipt, no cash)")
     period_fees_taxes: Optional[SafeDecimal] = Field(None, description="FEE/TAX attributed to this asset in period (positive value)")
     period_pnl: Optional[SafeDecimal] = Field(None, description="Total period P&L: unrealized_delta + realized + income - fees_taxes")
     period_pnl_percent: Optional[SafeDecimal] = Field(None, description="Period return %: period_pnl / |start_value|. None if start_value=0")

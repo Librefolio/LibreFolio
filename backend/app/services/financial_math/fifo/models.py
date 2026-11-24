@@ -58,6 +58,7 @@ def fails_the_replay(code: str) -> bool:
 EventKind = Literal[
     "BUY",
     "SELL",
+    "REWARD",
     "ADJUSTMENT_IN",
     "ADJUSTMENT_OUT",
     "SPLIT",
@@ -68,7 +69,7 @@ EventKind = Literal[
 # --- Economic stage contract (FEE/TAX/income allocation, target-currency aware) ---
 # Following the module convention (Direction/CustodyType/EventKind), economic
 # taxonomies are Literal aliases rather than Enum classes.
-EconomicType = Literal["FEE", "TAX", "DIVIDEND", "INTEREST"]
+EconomicType = Literal["FEE", "TAX", "DIVIDEND", "INTEREST", "REWARD"]
 AllocationContext = Literal["OPENING", "CLOSURE", "INCOME", "HOLDING"]
 AllocationRule = Literal[
     "ASSET_INCOME_HOLDINGS",
@@ -80,6 +81,7 @@ AllocationRule = Literal[
     "OPEN_LOTS_FALLBACK",
     "LINKED_TRADE",
     "LINKED_INCOME",
+    "REWARD_OWN_LOT",
 ]
 
 

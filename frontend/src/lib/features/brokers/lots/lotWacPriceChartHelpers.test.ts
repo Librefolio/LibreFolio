@@ -336,6 +336,17 @@ describe('eventCategory', () => {
         expect(eventCategory('SPLIT')).toBe('split');
     });
 
+    it('gives a lot opened by a reward in kind its own marker series, not the buys (project 79)', () => {
+        expect(eventCategory('REWARD')).toBe('reward');
+        expect(eventCategory('REWARD')).not.toBe(eventCategory('BUY'));
+    });
+
+    it('reads a reward leg at the scope edge as a transfer, as every kind', () => {
+        expect(eventCategory('REWARD', 'IN')).toBe('transfer');
+        expect(eventCategory('REWARD', 'OUT')).toBe('transfer');
+        expect(eventCategory('REWARD', null)).toBe('reward');
+    });
+
     it('returns null for a kind that draws no marker', () => {
         expect(eventCategory('TRANSFER_DEPART')).toBeNull();
     });
@@ -350,6 +361,13 @@ describe('eventTimelineOrder', () => {
         expect(eventTimelineOrder('ADJUSTMENT_IN')).toBe(3);
         expect(eventTimelineOrder('SELL')).toBe(4);
         expect(eventTimelineOrder('ADJUSTMENT_OUT')).toBe(4);
+    });
+
+    it('replays a reward in kind among the inflows, with BUY and ADJUSTMENT_IN (the engine phase 3, project 79)', () => {
+        expect(eventTimelineOrder('REWARD')).toBe(3);
+        expect(eventTimelineOrder('REWARD')).toBe(eventTimelineOrder('BUY'));
+        expect(eventTimelineOrder('REWARD')).toBeGreaterThan(eventTimelineOrder('SPLIT'));
+        expect(eventTimelineOrder('REWARD')).toBeLessThan(eventTimelineOrder('SELL'));
     });
 });
 
@@ -463,6 +481,17 @@ describe('applyLotEvent', () => {
     it('BUY adds absolute quantity onto the base and adopts the price', () => {
         expect(applyLotEvent(start, ev('BUY', {quantity: '10', unit_price: '3'}))).toEqual({quantity: 10, unitPrice: 3});
         expect(applyLotEvent({quantity: 4, unitPrice: 2}, ev('BUY', {quantity: '-6'}))).toEqual({quantity: 10, unitPrice: 2});
+    });
+
+    it('REWARD opens like a BUY: absolute quantity onto the base, the event price adopted, never blended (project 79)', () => {
+        expect(applyLotEvent(start, ev('REWARD', {quantity: '10', unit_price: '3'}))).toEqual({quantity: 10, unitPrice: 3});
+        // A base of 10 @ 2 and a reward of 10 @ 4: a BUY gives 20 @ 4, an ADJUSTMENT_IN would blend to 20 @ 3.
+        const base = {quantity: 10, unitPrice: 2};
+        expect(applyLotEvent(base, ev('REWARD', {quantity: '10', unit_price: '4'}))).toEqual({quantity: 20, unitPrice: 4});
+        expect(applyLotEvent(base, ev('REWARD', {quantity: '10', unit_price: '4'}))).toEqual(applyLotEvent(base, ev('BUY', {quantity: '10', unit_price: '4'})));
+        expect(applyLotEvent(base, ev('ADJUSTMENT_IN', {quantity: '10', unit_price: '4'}))).toEqual({quantity: 20, unitPrice: 3});
+        expect(applyLotEvent({quantity: 4, unitPrice: 2}, ev('REWARD', {quantity: '-6'}))).toEqual({quantity: 10, unitPrice: 2});
+        expect(applyLotEvent({quantity: 4, unitPrice: 2}, ev('REWARD', {}))).toEqual({quantity: 4, unitPrice: 2});
     });
 
     it('BUY with a null quantity leaves the running quantity unchanged', () => {

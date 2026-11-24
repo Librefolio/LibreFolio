@@ -732,6 +732,42 @@ describe('DataTable — row actions', () => {
         expect(onEdit).toHaveBeenCalledTimes(1);
     });
 
+    // 81 U15 — the right click is the ⋮'s twin, but a field inside the row keeps the browser's own menu (Paste).
+    it.each(['input', 'textarea', 'editable'])('leaves the browser menu on a %s inside the row', async (kind) => {
+        await setupI18n();
+        mount(`actions-field-${kind}`, {rowActions: actions(vi.fn(), vi.fn())});
+
+        const field = kind === 'input' ? document.createElement('input') : kind === 'textarea' ? document.createElement('textarea') : document.createElement('div');
+        if (kind === 'editable') field.setAttribute('contenteditable', 'true');
+        row('r1').querySelector('td.td-data')!.appendChild(field);
+
+        const notCancelled = await fireEvent.contextMenu(field);
+        expect(notCancelled).toBe(true);
+        expect(screen.queryByTestId('context-menu')).toBeNull();
+
+        // The rest of the row still opens the menu, and swallows the browser's.
+        const cancelled = await fireEvent.contextMenu(row('r1').querySelector('td.td-data')!);
+        expect(cancelled).toBe(false);
+        expect(screen.getByTestId('context-menu')).toBeInTheDocument();
+    });
+
+    it('anchors the menu to the ⋮ when the contextmenu comes from the keyboard on it, and Esc gives the focus back', async () => {
+        await setupI18n();
+        mount('actions-keyboard', {rowActions: actions(vi.fn(), vi.fn())});
+
+        const button = screen.getByTestId('row-actions-r1');
+        // jsdom measures every box as zero, and an anchored menu closes itself on a zero box: give the ⋮ a real one.
+        button.getBoundingClientRect = () => ({x: 10, y: 10, left: 10, top: 10, right: 30, bottom: 30, width: 20, height: 20, toJSON: () => ({})});
+
+        await fireEvent.contextMenu(button);
+        expect(screen.getByTestId('context-menu')).toBeInTheDocument();
+        expect(document.activeElement).not.toBe(button);
+
+        await fireEvent.keyDown(window, {key: 'Escape'});
+        await waitFor(() => expect(screen.queryByTestId('context-menu')).toBeNull());
+        expect(document.activeElement).toBe(button);
+    });
+
     it('opens no menu at all on a row where every action is hidden', async () => {
         await setupI18n();
         const onDelete = vi.fn();

@@ -57,11 +57,15 @@
         },
         "performance_market_drivers": {
           "display": "Rendimiento y factores de mercado",
-          "description": "Explica el rendimiento de la cartera e investiga factores de mercado fechados para cada activo mantenido."
+          "description": "Explica qué ha movido el resultado de la cartera en el periodo, con noticias de mercado fechadas para los movimientos que importan."
         },
         "fiscal_lots": {
           "display": "Estrategias para compensar minusvalías",
           "description": "Estudia cómo las minusvalías disponibles o próximas a vencer podrían compensar ganancias elegibles usando lotes FIFO económicos, tras aclarar el registro fiscal oficial, el país, el régimen, los vencimientos y las reglas aplicables."
+        },
+        "protection_strategies": {
+          "display": "Estrategias de protección",
+          "description": "Evalúa si hoy tiene sentido proteger la cartera y, solo en ese caso, con qué estrategia."
         }
       },
       "broker": {
@@ -71,7 +75,7 @@
         },
         "performance_market_drivers": {
           "display": "Rendimiento y factores de mercado",
-          "description": "Explica el rendimiento del bróker seleccionado e investiga factores de mercado fechados para cada activo mantenido."
+          "description": "Explica qué ha movido el resultado del bróker seleccionado en el periodo, con noticias de mercado fechadas para los movimientos que importan."
         },
         "fiscal_lots": {
           "display": "Estrategias para compensar minusvalías",

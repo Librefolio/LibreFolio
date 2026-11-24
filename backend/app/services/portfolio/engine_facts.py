@@ -108,7 +108,7 @@ _HOLDING_TYPES = {TransactionType.BUY, TransactionType.SELL}
 # Transaction types that move a position's quantity: its holding window comes from them
 # (financial_math.holding_window; a split rescales the open lots, a transfer-in opens one
 # dated at its arrival at the receiving broker).
-_LOT_AFFECTING_TYPES = {TransactionType.BUY, TransactionType.SELL, TransactionType.ADJUSTMENT, TransactionType.TRANSFER}
+_LOT_AFFECTING_TYPES = {TransactionType.BUY, TransactionType.SELL, TransactionType.ADJUSTMENT, TransactionType.TRANSFER, TransactionType.REWARD}
 
 
 # Some instruments (e.g. CROWDFUND real-estate loans redeemed via periodic partial

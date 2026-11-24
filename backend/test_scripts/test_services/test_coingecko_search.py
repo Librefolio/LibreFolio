@@ -9,7 +9,7 @@ The contract pinned here:
    reverse map (``OTHER`` → ``URL``) is untouched: a client that sends ``OTHER`` still stores ``URL``.
 2. **Search** asks ``/search?query=…`` and answers its coins only (never its NFTs, exchanges or categories), ordered by
    ``market_cap_rank`` (a coin without a rank last, in CoinGecko's order). A row is ``identifier=<id>``,
-   ``identifier_type=OTHER``, «Name (SYMBOL)», ``type`` CRYPTO, and the user's preferred currency as ``currency`` and as
+   ``identifier_type=OTHER``, the coin's name (as its metadata gives it, TL40), ``type`` CRYPTO, and the user's preferred currency as ``currency`` and as
    ``vs_currency``. A blank query asks nothing.
 3. **Metadata** asks ``/coins/{id}`` with the P0 flags (no localization, tickers, market data, community, developer
    data, sparkline) and answers the name, CRYPTO, the logo (``image.large``), the symbol upper-cased as the ticker, and
@@ -157,7 +157,8 @@ async def test_p3_search_answers_the_coins_by_market_cap_in_the_preferred_curren
     assert rows[0] == {
         "identifier": "pepe",
         "identifier_type": IdentifierType.OTHER,
-        "display_name": "Pepe (PEPE)",
+        # TL40 (testlist 23/11): the coin's name alone, as its metadata gives it; the symbol is the ticker (metadata)
+        "display_name": "Pepe",
         "currency": "EUR",
         "type": AssetType.CRYPTO.value,
         "provider_params": {"vs_currency": "EUR"},
@@ -215,6 +216,22 @@ async def test_p3_metadata_gives_name_type_logo_ticker_and_the_id_among_the_othe
     assert patch.icon_url == _fixture("coin_pepe.json")["body"]["image"]["large"]
     assert patch.identifier_other == ["coingecko:pepe"]
     print_success("Pepe, CRYPTO, PEPE, its logo, coingecko:pepe")
+
+
+@pytest.mark.asyncio
+async def test_tl40_a_coin_has_the_same_name_in_the_search_and_in_its_metadata(monkeypatch: pytest.MonkeyPatch):
+    """TL40 (the developer's testlist, 23/11): an asset created from a search row is named by the row; «Ask the provider»
+    then reads the metadata. The two must give the same name, or the asset window proposes to rename a coin just created
+    («Bitcoin (BTC)» → «Bitcoin»). The name is the coin's own, as every other provider names an asset; the symbol is
+    the asset's ticker, from the metadata. Both read from the P0 recordings of the same coin."""
+    print_section("TL40: one name, from the search and from the metadata")
+    search = _provider(monkeypatch, _Wire(_body("search_pepe.json")))
+    row = next(row for row in await search.search("pepe") if row["identifier"] == "pepe")
+    metadata = await _provider(monkeypatch, _Wire(_body("coin_pepe.json"))).fetch_asset_metadata("pepe", IdentifierType.OTHER, {"vs_currency": "EUR"})
+
+    assert metadata is not None
+    assert row["display_name"] == metadata.display_name == "Pepe", f"search {row['display_name']!r}, metadata {metadata.display_name!r}"
+    print_success("Pepe in both: nothing to rename after the creation")
 
 
 @pytest.mark.asyncio

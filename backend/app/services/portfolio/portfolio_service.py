@@ -3,7 +3,7 @@ Portfolio Service for LibreFolio.
 
 ``PortfolioService`` is the orchestrator for portfolio-level aggregation and reporting. It is composed of one mixin per
 theme, each in its own module of this package: ``data_access`` (brokers, transactions, assets, the engine run),
-``summary``, ``history``, ``positions`` and ``report``. The WAC cost basis (``compute_wac_iterative``, ``wac_pool_holding``)
+``summary``, ``history``, ``positions``, ``report`` and ``allocation`` (the «Allocazione» tab's filtered view). The WAC cost basis (``compute_wac_iterative``, ``wac_pool_holding``)
 is in ``wac``, the small shared pieces in ``engine_facts``. The package re-exports nothing: import a name from the module
 that defines it.
 
@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.app.services.portfolio.allocation import PortfolioAllocationMixin
 from backend.app.services.portfolio.data_access import PortfolioDataMixin
 from backend.app.services.portfolio.history import PortfolioHistoryMixin
 from backend.app.services.portfolio.positions import PortfolioPositionsMixin
@@ -25,7 +26,7 @@ from backend.app.services.portfolio.report import PortfolioReportMixin
 from backend.app.services.portfolio.summary import PortfolioSummaryMixin
 
 
-class PortfolioService(PortfolioDataMixin, PortfolioSummaryMixin, PortfolioHistoryMixin, PortfolioPositionsMixin, PortfolioReportMixin):
+class PortfolioService(PortfolioDataMixin, PortfolioSummaryMixin, PortfolioHistoryMixin, PortfolioPositionsMixin, PortfolioReportMixin, PortfolioAllocationMixin):
     """Orchestrator for portfolio-level calculations.
 
     Aggregates WAC, prices, allocations, ROI metrics (TWRR/MWRR) and FIFO lots

@@ -8,6 +8,7 @@
 <script lang="ts">
     import type {Component} from 'svelte';
     import SettingActions from './SettingActions.svelte';
+    import Switch from '$lib/components/ui/input/Switch.svelte';
 
     interface Props {
         value: boolean;
@@ -64,23 +65,7 @@
         <SettingActions {isModified} {isNonDefault} isLocked={effectiveLocked} {isSaving} {onsave} {onundo} {onreset} />
 
         <!-- Toggle switch -->
-        <button
-            type="button"
-            disabled={effectiveLocked}
-            role="switch"
-            aria-checked={value}
-            aria-label="Toggle {label}"
-            data-testid="setting-toggle-switch"
-            onclick={toggle}
-            class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors
-                {value ? 'bg-lf-checked' : 'bg-lf-switch-off'}
-                {effectiveLocked ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}"
-        >
-            <span
-                class="inline-block h-4 w-4 transform rounded-full transition-transform
-                    {value ? 'translate-x-6 bg-lf-switch-knob-on' : 'translate-x-1 bg-lf-switch-knob-off border border-lf-input'}"
-            ></span>
-        </button>
+        <Switch checked={value} disabled={effectiveLocked} label="Toggle {label}" testId="setting-toggle-switch" onchange={toggle} />
         <span class="text-sm text-lf-secondary w-10">
             {value ? 'ON' : 'OFF'}
         </span>
