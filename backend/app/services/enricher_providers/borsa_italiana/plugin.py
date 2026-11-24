@@ -566,5 +566,5 @@ class BorsaItalianaEnricher(EnricherPlugin):
         for hit in hits:
             binding = EnricherBinding(identifier_type="ISIN", identifier=hit.isin, params={"mic": hit.mic})
             asset_type = _SHEET_ASSET_TYPES.get((_text(hit.tipo) or "").lower())
-            results.append(EnricherSearchResult(name=hit.nome, binding=binding, asset_type=asset_type, page_url=self.page_url(binding)))
+            results.append(EnricherSearchResult(name=hit.nome, binding=binding, asset_type=asset_type, page_url=self.page_url(binding), market=_text(hit.mic)))
         return results
