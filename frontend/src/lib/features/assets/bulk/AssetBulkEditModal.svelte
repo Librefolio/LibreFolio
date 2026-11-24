@@ -555,13 +555,16 @@
                 </div>
 
                 <!-- Zone: Details and classification. One grid: the icon on the left over two rows, User URL and Type stacked on
-                     the right on one column; in every field the label row, then the control (with its Undo), then «Now» under it. -->
+                     the right on one column; in every field the label row, then the control (with its Undo), then «Now» under it.
+                     The icon block (label, round button, «Remove icon», «Now») is centred on one axis, and on a wide window in the
+                     middle of the two rows beside it (81 U44); on a phone it sits above the fields, centred in the window. -->
                 <section class="rounded-xl border border-lf-subtle bg-lf-card p-4" data-testid="asset-bulk-zone-details">
                     <h3 class="mb-3 text-xs font-semibold uppercase tracking-wider text-lf-muted">{$t('assets.bulkEdit.zoneDetails')}</h3>
                     <div class="grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-[minmax(0,14rem)_minmax(0,1fr)]">
-                        <div class="sm:row-span-2" data-testid="asset-bulk-field-icon_url" data-modified={isModified('icon_url') ? 'true' : 'false'}>
-                            {@render fieldHead('icon_url', $t('common.icon'), undefined, 'asset-bulk-icon-label')}
-                            <div class="flex items-center gap-2">
+                        <div class="flex flex-col items-center text-center sm:row-span-2 sm:self-center" data-testid="asset-bulk-field-icon_url" data-modified={isModified('icon_url') ? 'true' : 'false'}>
+                            <div class="w-full [&>div]:justify-center">{@render fieldHead('icon_url', $t('common.icon'), undefined, 'asset-bulk-icon-label')}</div>
+                            <!-- The round button is the block's centre: its Undo hangs beside it, out of the flow, so it does not push it off the axis -->
+                            <div class="relative flex items-center justify-center">
                                 <button
                                     type="button"
                                     class="group relative flex h-16 w-16 shrink-0 items-center justify-center rounded-full {iconUrl ? '' : 'border-2 border-dashed border-lf-input text-lf-muted hover:border-lf-input-hover'}"
@@ -581,7 +584,7 @@
                                         <Upload size={20} />
                                     {/if}
                                 </button>
-                                {@render undoSlot('icon_url')}
+                                <span class="absolute left-full top-1/2 ml-2 -translate-y-1/2">{@render undoSlot('icon_url')}</span>
                             </div>
                             {#if current.icon.with > 0}
                                 <button
