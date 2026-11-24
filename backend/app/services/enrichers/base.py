@@ -87,6 +87,9 @@ class EnricherSearchResult:
     binding: EnricherBinding
     asset_type: AssetType | None = None
     page_url: str | None = None
+    #: The market the result is listed on, as the source names it («Milan», ``XMIL``): two listings of one fund told
+    #: apart (ENR-3, B2). None when the source does not say.
+    market: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
