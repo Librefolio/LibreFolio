@@ -153,3 +153,80 @@ describe('DataTable — a long press on a row control is the control’s (85 D6)
         expect(screen.getByTestId('context-menu')).toBeInTheDocument();
     });
 });
+
+/**
+ * Where the row menu opens (85 BTN-0): a menu opened by a finger's long press (a `contextmenu` while a touch is active)
+ * is the finger's (`ContextMenu` `origin="finger"`, to the left of the finger and above it); a mouse right click and the
+ * ⋮ are a pointer's. The origin is taken when the menu opens: a finger's menu closed, the ⋮ opens a pointer's.
+ */
+describe('DataTable — the origin of the row menu (85 BTN-0)', () => {
+    const rowActions: RowAction<Row>[] = [{id: 'edit', label: 'Edit', icon: Pencil, onClick: vi.fn(), testid: 'act-edit'}];
+
+    it('a contextmenu during a touch on a cell opens a finger’s menu', async () => {
+        mount('origin-finger', {enableContextMenu: true, rowActions});
+        const cell = nameCell('r1');
+        expect(cell).not.toBeNull();
+        await fireEvent.touchStart(cell!);
+        await fireEvent.contextMenu(cell!, {clientX: 200, clientY: 300});
+        expect(screen.getByTestId('context-menu')).toHaveAttribute('data-origin', 'finger');
+        expect(screen.getByTestId('context-menu').hasAttribute('data-placement')).toBe(true);
+    });
+
+    it('a mouse right click with no touch opens a pointer’s menu', async () => {
+        mount('origin-pointer', {enableContextMenu: true, rowActions});
+        const cell = nameCell('r1');
+        expect(cell).not.toBeNull();
+        await fireEvent.contextMenu(cell!, {clientX: 200, clientY: 300});
+        const menu = screen.getByTestId('context-menu');
+        expect(menu).toHaveAttribute('data-origin', 'pointer');
+        expect(menu.hasAttribute('data-placement')).toBe(false);
+    });
+
+    it('the ⋮ opens a pointer’s menu, even right after a finger’s one', async () => {
+        mount('origin-kebab', {enableContextMenu: true, rowActions});
+        const cell = nameCell('r1');
+        expect(cell).not.toBeNull();
+        await fireEvent.touchStart(cell!);
+        await fireEvent.contextMenu(cell!, {clientX: 200, clientY: 300});
+        expect(screen.getByTestId('context-menu')).toHaveAttribute('data-origin', 'finger');
+        await fireEvent.touchEnd(cell!);
+        await fireEvent.keyDown(window, {key: 'Escape'});
+        await advance(200);
+        expect(screen.queryByTestId('context-menu')).toBeNull();
+
+        const kebab = screen.getByTestId('row-actions-r1');
+        // jsdom measures every box as zero, and an anchored menu closes itself on a zero box: give the ⋮ a real one.
+        kebab.getBoundingClientRect = () => ({x: 10, y: 10, left: 10, top: 10, right: 30, bottom: 30, width: 20, height: 20, toJSON: () => ({})});
+        await fireEvent.click(kebab);
+        expect(screen.getByTestId('context-menu')).toHaveAttribute('data-origin', 'pointer');
+    });
+});
+
+/**
+ * The standard button inside a row keeps its own long press (85 D6 with BTN-0): the finger's touch marks the table
+ * (`touchActive`, `dt-touching`), and that must not re-render the cell under the finger — a remounted button loses
+ * the press it was timing and never shows its name.
+ */
+describe('DataTable — a Button in a row keeps its long press while the table marks the touch', () => {
+    function touchPointer(element: Element, type: string): void {
+        const event = new MouseEvent(type, {bubbles: true, cancelable: true, clientX: 10, clientY: 10});
+        Object.defineProperty(event, 'pointerType', {value: 'touch'});
+        element.dispatchEvent(event);
+        flushSync();
+    }
+
+    it('the button under the finger stays the same node, and 500 ms show its name', async () => {
+        mount('touch-controls-name');
+        const button = screen.getByTestId('probe-open-r1');
+        touchPointer(button, 'pointerdown');
+        await fireEvent.touchStart(button);
+        expect(screen.getByTestId('probe-open-r1'), 'the touch re-rendered the cell: a new button lost the press').toBe(button);
+        expect(button.isConnected).toBe(true);
+        await advance(500);
+        expect(screen.getByTestId('probe-open-r1')).toBe(button);
+        const tip = document.querySelector('[role="tooltip"]');
+        expect(tip?.textContent?.trim()).toBe('Open First');
+        touchPointer(button, 'pointerup');
+        await fireEvent.touchEnd(button);
+    });
+});

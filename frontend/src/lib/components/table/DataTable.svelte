@@ -13,10 +13,10 @@
   - Dark mode support
 -->
 <script generics="T" lang="ts">
-    import {onDestroy, onMount, untrack, type Snippet} from 'svelte';
+    import {onDestroy, onMount, untrack, type Component, type Snippet} from 'svelte';
     import {t} from '$lib/i18n';
     import {getUserStorageKey} from '$lib/utils/storage';
-    import {Ban, Check, Filter} from 'lucide-svelte';
+    import {Ban, Check, ClipboardCopy, Copy, Filter} from 'lucide-svelte';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import DataTablePagination from './DataTablePagination.svelte';
     import SelectionPanel from './SelectionPanel.svelte';
@@ -29,6 +29,9 @@
     import type {BulkAction, ColumnDef, ColumnWidthsState, FilterValue, FooterCellContent, FooterCells, PaginationState, RowAction, RowActions, SelectionState, SortState, VisibilityState} from './types';
     import {compareRowsByColumn, holdRowOrder, matchesColumnFilter, paginateFlat, reorderKeepingAbsent, withNewColumns} from './dataTableLogic';
     import {clearTimer} from '$lib/utils/core/clearTimer';
+    import {writeTextToClipboard} from '$lib/utils/clipboard';
+    import {notify} from '$lib/stores/app/notify.svelte';
+    import {cellScreenText, rowScreenText} from './rowCopyText';
 
     interface Props {
         data: T[];
@@ -225,6 +228,12 @@
     // Context menu
     let contextMenuRow = $state<T | null>(null);
     let contextMenuPos = $state<{x: number; y: number} | null>(null);
+    /** What opened the row menu, taken when it opens (`touchActive` clears 100 ms after the finger lifts): a finger's long
+     *  press places it to the left of the finger and above (85 BTN-0); a mouse, a key and the ⋮ keep today's placement. */
+    let contextMenuOrigin = $state<'pointer' | 'finger'>('pointer');
+    /** The row and the data cell a finger's long press opened the menu on: «Copy cell» and «Copy row» read them. */
+    let contextMenuRowElement: HTMLElement | null = null;
+    let contextMenuCell: HTMLElement | null = null;
     let contextMenuAnchor = $state<HTMLElement | null>(null);
 
     // Pagination
@@ -289,6 +298,11 @@
     // native context menu can be suppressed specifically for touch-originated
     // long-press (mobile) without affecting genuine desktop mouse right-click.
     let touchActive = false;
+    /** A finger rests on a row whose long press opens the row menu (and for 100 ms after it lifts): the class
+     *  `dt-touching` on the body of the table, so its text cannot be selected and iOS shows no callout — the long press
+     *  opens the menu only, and «Copy cell» and «Copy row» are in it (85 BTN-0, the developer's choice). A row with no
+     *  menu keeps the browser's selection, so a finger can still copy there; a mouse never sets it. */
+    let touchOnMenuRow = $state(false);
     let touchActiveResetTimer: ReturnType<typeof setTimeout> | null = null;
 
     /** The controls inside a row whose own long press wins over the row's (85 D6): the standard buttons (`lf-btn`,
@@ -302,6 +316,7 @@
 
     function handleTouchStart(row: T, e: TouchEvent) {
         touchActive = true;
+        touchOnMenuRow = enableContextMenu && getVisibleRowActions(row).length > 0;
         if (touchActiveResetTimer != null) {
             clearTimeout(touchActiveResetTimer);
             touchActiveResetTimer = null;
@@ -328,6 +343,7 @@
         if (touchActiveResetTimer != null) clearTimeout(touchActiveResetTimer);
         touchActiveResetTimer = setTimeout(() => {
             touchActive = false;
+            touchOnMenuRow = false;
             touchActiveResetTimer = null;
         }, 100);
     }
@@ -712,6 +728,7 @@
         const rect = button.getBoundingClientRect();
         contextMenuRow = row;
         contextMenuAnchor = button;
+        contextMenuOrigin = 'pointer';
         contextMenuPos = {x: rect.left, y: rect.bottom + 4};
     }
 
@@ -719,9 +736,49 @@
         contextMenuRow = null;
         contextMenuPos = null;
         contextMenuAnchor = null;
+        contextMenuRowElement = null;
+        contextMenuCell = null;
+    }
+
+    /** The two copy items of a finger's row menu (85 BTN-0): a long press opens the menu and never selects text, so the
+     *  copy is here. Always last, after every action of the row; «Copy cell» only on a data cell. */
+    const COPY_CELL_ID = '__lf-copy-cell';
+    const COPY_ROW_ID = '__lf-copy-row';
+
+    function rowMenuItems(row: T): ContextMenuItem[] {
+        const items = rowActionsToMenuItems(getVisibleRowActions(row), row);
+        if (contextMenuOrigin !== 'finger') return items;
+        const copies: ContextMenuItem[] = [];
+        // An item that would copy nothing is not offered.
+        if (contextMenuCell && cellScreenText(contextMenuCell) !== '') copies.push({id: COPY_CELL_ID, label: $t('table.copyCell'), icon: Copy as unknown as Component, testid: 'context-menu-copy-cell'});
+        if (contextMenuRowElement && rowScreenText(contextMenuRowElement).trim() !== '') copies.push({id: COPY_ROW_ID, label: $t('table.copyRow'), icon: ClipboardCopy as unknown as Component, testid: 'context-menu-copy-row'});
+        if (copies.length === 0) return items;
+        return items.length > 0 ? [...items, {type: 'separator'}, ...copies] : copies;
+    }
+
+    /** Copies what the screen shows (privacy masks included), started inside the tap that chose the item. */
+    function copyFromRow(kind: 'cell' | 'row'): void {
+        const source = kind === 'cell' ? contextMenuCell : contextMenuRowElement;
+        if (!source) return;
+        const text = kind === 'cell' ? cellScreenText(source) : rowScreenText(source);
+        let writing: Promise<void>;
+        try {
+            writing = writeTextToClipboard(text);
+        } catch (refusal) {
+            writing = Promise.reject(refusal);
+        }
+        writing.then(
+            () => notify({name: `table.${kind}.copied`, detail: {chars: text.length}, toast: {variant: 'success', message: $t(kind === 'cell' ? 'table.cellCopied' : 'table.rowCopied'), duration: 2000}}),
+            () => notify({name: 'table.copy.failed', detail: {kind}, toast: {variant: 'error', message: $t('table.copyFailed')}}),
+        );
     }
 
     function handleContextMenuAction(actionId: string, row: T): void {
+        if (actionId === COPY_CELL_ID || actionId === COPY_ROW_ID) {
+            copyFromRow(actionId === COPY_CELL_ID ? 'cell' : 'row');
+            closeContextMenu();
+            return;
+        }
         const action = getVisibleRowActions(row).find((candidate) => candidate.id === actionId);
         closeContextMenu();
         if (action) handleRowAction(action, row);
@@ -1169,7 +1226,7 @@
                         {/if}
                     </tr>
                 </thead>
-                <tbody onfocusin={holdOrderOnFocus} onfocusout={releaseOrderOnBlur}>
+                <tbody class:dt-touching={touchOnMenuRow} onfocusin={holdOrderOnFocus} onfocusout={releaseOrderOnBlur}>
                     {#if isLoading}
                         <tr>
                             <td colspan={visibleColumns.length + (effectiveSelectionMode === 'multi' ? 1 : 0) + (showActionsColumn ? 1 : 0)} class="td-loading" data-testid="dt-loading">
@@ -1230,6 +1287,9 @@
                                         }
                                         contextMenuRow = row;
                                         contextMenuAnchor = null;
+                                        contextMenuOrigin = touchActive ? 'finger' : 'pointer';
+                                        contextMenuRowElement = e.currentTarget as HTMLElement;
+                                        contextMenuCell = target?.closest<HTMLElement>('td.td-data') ?? null;
                                         contextMenuPos = {x: e.clientX, y: e.clientY};
                                         return;
                                     }
@@ -1389,7 +1449,7 @@
 <!-- Context menu for right-click / long-press -->
 {#if contextMenuRow != null && contextMenuPos != null}
     {@const cmRow = contextMenuRow}
-    <ContextMenu x={contextMenuPos.x} y={contextMenuPos.y} items={rowActionsToMenuItems(getVisibleRowActions(cmRow), cmRow)} anchorEl={contextMenuAnchor} onAction={(id) => handleContextMenuAction(id, cmRow)} onClose={closeContextMenu} />
+    <ContextMenu x={contextMenuPos.x} y={contextMenuPos.y} items={rowMenuItems(cmRow)} anchorEl={contextMenuAnchor} origin={contextMenuOrigin} onAction={(id) => handleContextMenuAction(id, cmRow)} onClose={closeContextMenu} />
 {/if}
 
 <!-- Confirm modal for bulk actions -->
@@ -1542,6 +1602,19 @@
         syntax: '<color>';
         inherits: true;
         initial-value: transparent;
+    }
+
+    /* A finger on a row: no text selection and no iOS callout (see `touchActive`); a field keeps both. */
+    tbody.dt-touching tr {
+        -webkit-user-select: none;
+        user-select: none;
+        -webkit-touch-callout: none;
+    }
+
+    tbody.dt-touching tr :global(:is(input, textarea, [contenteditable]:not([contenteditable='false']))) {
+        -webkit-user-select: text;
+        user-select: text;
+        -webkit-touch-callout: default;
     }
 
     tbody tr {
