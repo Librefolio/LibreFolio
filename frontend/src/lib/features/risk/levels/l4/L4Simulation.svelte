@@ -266,12 +266,19 @@
         {/if}
     </fieldset>
 
-    <!-- T-4: on a phone one parameter per row, its label on the left and its field on the right; from sm up the fields share a row. -->
+    <!-- T-4: on a phone one parameter per row, its label on the left and its field on the right, every field of one width (w-28, 81 U30); from sm up the fields share a row, each with the width it had. -->
     <div class="flex flex-col gap-3 text-xs text-lf-muted sm:flex-row sm:flex-wrap sm:items-end sm:pb-5">
         <SimulationHorizonField bind:days={horizonDays} bind:valid={horizonValid} onchange={invalidate} phoneRow />
         <label class="flex items-center justify-between gap-3 sm:flex-col sm:items-stretch sm:justify-start sm:gap-1" data-testid="risk-simulation-paths-row">
             {$t('risk.params.paths')}
-            <input type="number" min="1" bind:value={paths} onchange={invalidate} class="w-24 rounded border border-lf-input bg-lf-field px-2 py-1 text-sm text-lf-primary hover:border-lf-input-hover focus:border-lf-focus focus:ring-1 focus:ring-lf-focus" data-testid="risk-simulation-paths" />
+            <input
+                type="number"
+                min="1"
+                bind:value={paths}
+                onchange={invalidate}
+                class="w-28 sm:w-24 rounded border border-lf-input bg-lf-field px-2 py-1 text-sm text-lf-primary hover:border-lf-input-hover focus:border-lf-focus focus:ring-1 focus:ring-lf-focus"
+                data-testid="risk-simulation-paths"
+            />
         </label>
         {#if showSampling}
             <div class="flex items-center justify-between gap-3 sm:flex-col sm:items-stretch sm:justify-start sm:gap-1" data-testid="risk-simulation-sampling-row">
