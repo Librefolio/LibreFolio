@@ -432,4 +432,47 @@ test.describe('Button Lab — a mouse (desktop)', () => {
         await expect(box).toHaveAttribute('data-labels', 'shown');
         await expect(word).toBeVisible();
     });
+    test('BTN-2·0: a cut name shows on a mouse rest; a chip and a coloured ghost act; a group segment and a disclosure toggle', async ({page}) => {
+        await openLab(page);
+
+        // C7: the word of «lab-truncate» is cut by its 10 rem box, so the name opens on a rest.
+        const truncated = page.getByTestId('lab-truncate');
+        const word = truncated.locator('[data-lf-word]');
+        await expect(word).toBeVisible();
+        expect(await word.evaluate((el) => el.scrollWidth > el.clientWidth), 'barrier: the word is cut by its box').toBe(true);
+        await truncated.hover();
+        await expect(tooltip(page)).toBeVisible({timeout: 3_000});
+        await expect(tooltip(page)).toHaveText('A very long asset name that never fits');
+        await page.mouse.move(1, 1);
+        await expect(tooltip(page)).toBeHidden();
+
+        // C4, C5: a chip and a ghost in a state's colour are live buttons.
+        await page.getByTestId('lab-chip').click();
+        await expect(logEntries(page, 'action: chip')).toHaveCount(1);
+        await page.getByTestId('lab-tone-ghost').click();
+        await expect(logEntries(page, 'action: retry')).toHaveCount(1);
+
+        // C2: a segment of the group is a toggle.
+        const grid = page.getByTestId('lab-group-grid');
+        const list = page.getByTestId('lab-group-list');
+        await expect(page.getByTestId('lab-group')).toHaveAttribute('role', 'group');
+        await expect(grid).toHaveAttribute('aria-pressed', 'true');
+        await expect(list).toHaveAttribute('aria-pressed', 'false');
+        await list.click();
+        await expect(list).toHaveAttribute('aria-pressed', 'true');
+        await expect(grid).toHaveAttribute('aria-pressed', 'false');
+        await grid.click();
+        await expect(grid).toHaveAttribute('aria-pressed', 'true');
+
+        // C6: a disclosure says it is open, and opens what it names.
+        const disclosure = page.getByTestId('lab-expanded');
+        await expect(disclosure).toHaveAttribute('aria-expanded', 'false');
+        await expect(page.getByTestId('lab-details')).toHaveCount(0);
+        await disclosure.click();
+        await expect(disclosure).toHaveAttribute('aria-expanded', 'true');
+        await expect(page.getByTestId('lab-details')).toBeVisible();
+        await disclosure.click();
+        await expect(disclosure).toHaveAttribute('aria-expanded', 'false');
+        await expect(page.getByTestId('lab-details')).toHaveCount(0);
+    });
 });

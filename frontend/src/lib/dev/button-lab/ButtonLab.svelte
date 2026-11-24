@@ -6,8 +6,9 @@
   Texts in English on purpose: a developer's bench, never shown to a user.
 -->
 <script lang="ts">
-    import {Download, Pencil, Plus, RefreshCw, Sparkles, Star, Trash2} from 'lucide-svelte';
+    import {Download, LayoutGrid, List, LogOut, Pencil, Plus, RefreshCw, RotateCcw, Sparkles, Star, Trash2} from 'lucide-svelte';
     import Button from '$lib/components/ui/button/Button.svelte';
+    import ButtonGroup from '$lib/components/ui/button/ButtonGroup.svelte';
     import CloseButton from '$lib/components/ui/button/CloseButton.svelte';
     import DataTable from '$lib/components/table/DataTable.svelte';
     import type {ColumnDef, RowAction} from '$lib/components/table/types';
@@ -40,6 +41,9 @@
     });
     let busy = $state(false);
     let starred = $state(false);
+    let view = $state<'grid' | 'list'>('grid');
+    let manualDuration = $state(false);
+    let detailsOpen = $state(false);
     let selection = $state<string[]>([]);
 
     function startBusy() {
@@ -154,6 +158,54 @@
             }}
         />
         <p class="mt-1 text-xs text-lf-muted" data-testid="lab-selection">selected: {selection.join(', ') || 'none'}</p>
+    </section>
+
+    <section class="mb-6">
+        <h2 class="mb-2 font-medium">The shapes of BTN-2·0</h2>
+        <div class="flex flex-wrap items-center gap-2">
+            <Button label="Retry the partial sync" icon={RotateCcw} display="icon" variant="ghost" tone="warning" onclick={() => note('action: retry')} data-testid="lab-tone-ghost" />
+            <Button label="Fix the price" variant="chip" tone="info" size="xs" pill onclick={() => note('action: chip')} data-testid="lab-chip" />
+            <Button label="Manual duration" size="xs" tone="warning" pressed={manualDuration} onclick={() => (manualDuration = !manualDuration)} data-testid="lab-tone-pressed" />
+            <Button label="Details" size="sm" variant="ghost" expanded={detailsOpen} onclick={() => (detailsOpen = !detailsOpen)} data-testid="lab-expanded" />
+            <Button label="Italiano" size="sm" variant="ghost" onclick={() => note('action: language')} data-testid="lab-leading">
+                {#snippet leading()}<span class="emoji-flag text-base">🇮🇹</span>{/snippet}
+            </Button>
+            <Button label="EUR to USD" size="sm" onclick={() => note('action: pair')} data-testid="lab-children">
+                <span class="emoji-flag">🇪🇺</span> EUR → <span class="emoji-flag">🇺🇸</span> USD
+            </Button>
+        </div>
+        {#if detailsOpen}<p class="mt-2 text-xs text-lf-muted" data-testid="lab-details">The details a disclosure opens.</p>{/if}
+
+        <div class="mt-3 flex items-center gap-2">
+            <ButtonGroup label="View" data-testid="lab-group">
+                <Button label="Grid" icon={LayoutGrid} display="icon" pressed={view === 'grid'} onclick={() => (view = 'grid')} data-testid="lab-group-grid" />
+                <Button label="List" icon={List} display="icon" pressed={view === 'list'} onclick={() => (view = 'list')} data-testid="lab-group-list" />
+            </ButtonGroup>
+            <div class="relative w-48">
+                <input class="w-full rounded-lg border border-lf-input bg-lf-field py-1.5 pr-8 pl-2 text-sm text-lf-primary" value="2026-11-24" aria-label="Date" data-testid="lab-dense-field" />
+                <div class="absolute top-1/2 right-1 -translate-y-1/2">
+                    <Button label="Clear the date" icon={Trash2} display="icon" variant="ghost" size="xs" dense onclick={() => note('action: clear date')} data-testid="lab-dense" />
+                </div>
+            </div>
+        </div>
+
+        <div class="mt-3 w-40 rounded-lg border border-lf-subtle p-1" data-testid="lab-truncate-box">
+            <Button label="A very long asset name that never fits" size="sm" truncate class="w-full" onclick={() => note('action: long name')} data-testid="lab-truncate" />
+        </div>
+
+        <div class="mt-3 flex items-center gap-2 rounded-lg border border-lf-warning-line bg-lf-warning-soft p-2 text-sm text-lf-warning-on-soft" data-testid="lab-tint-banner">
+            <span class="flex-1">A banner on the warning fill.</span>
+            <CloseButton tint="warning" size="sm" onclick={() => note('action: close banner')} data-testid="lab-tint" />
+        </div>
+
+        <div class="mt-3 flex w-60 flex-col gap-2 rounded-lg bg-lf-bar p-2 text-lf-bar-text" data-testid="lab-bar">
+            <div class="flex items-center justify-between">
+                <Button label="Collapse" icon={LayoutGrid} display="icon" variant="bar-ghost" onclick={() => note('action: collapse')} data-testid="lab-bar-ghost" />
+                <CloseButton variant="bar-ghost" onclick={() => note('action: close bar')} data-testid="lab-bar-close" />
+            </div>
+            <Button label="Log out" icon={LogOut} variant="bar-solid" size="sm" class="w-full" onclick={() => note('action: log out')} data-testid="lab-bar-solid" />
+            <Button label="v1.4.0" variant="bar-link" size="xs" onclick={() => note('action: version')} data-testid="lab-bar-link" />
+        </div>
     </section>
 
     <p id="lab-anchor" class="text-xs text-lf-muted">The end.</p>
