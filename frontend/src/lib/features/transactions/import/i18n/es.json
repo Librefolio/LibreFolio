@@ -208,7 +208,8 @@
       "date_unreadable_more": "{n, plural, one {# fila más tiene} other {# filas más tienen}} una fecha no válida en este formato: vale la misma corrección.",
       "traderepublic_other_account": "{count, plural, one {# fila pertenece} other {# filas pertenecen}} a otra cuenta, por ejemplo la cuenta JUNIOR de un hijo, y {count, plural, one {se ha ignorado} other {se han ignorado}}: exporta esa cuenta desde su propio acceso e impórtala en un bróker aparte.",
       "traderepublic_tax_refund": "{count, plural, one {# devolución de impuestos se importó como interés} other {# devoluciones de impuestos se importaron como intereses}} («Tax refund»): es dinero devuelto de la ganancia de la inversión, así que cuenta en el P&L.",
-      "traderepublic_not_yet_settled": "{count, plural, one {# fila tiene una fecha posterior a hoy: aún no está liquidada y se ha dejado fuera} other {# filas tienen una fecha posterior a hoy: aún no están liquidadas y se han dejado fuera}}. Llegarán con la próxima exportación."
+      "traderepublic_not_yet_settled": "{count, plural, one {# fila tiene una fecha posterior a hoy: aún no está liquidada y se ha dejado fuera} other {# filas tienen una fecha posterior a hoy: aún no están liquidadas y se han dejado fuera}}. Llegarán con la próxima exportación.",
+      "reward_value": "El archivo no indica el valor de esta recompensa: introduce el valor de una sola unidad el día en que la recibiste, no el total, para importar esta fila."
     },
     "evidenceRowsTitle": "Filas del archivo",
     "evidenceRowCount": "{n} filas",
