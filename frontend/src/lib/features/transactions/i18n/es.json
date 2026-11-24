@@ -195,7 +195,9 @@
       "chargesReadFailed": "No se pudieron leer los gastos vinculados de {ids}. «Restablecer fila» los vuelve a leer.",
       "deleteSkippedUnread": "{n, plural, one {# transacción no se eliminó: no se pudieron leer sus gastos vinculados. «Restablecer fila» los vuelve a leer.} other {# transacciones no se eliminaron: no se pudieron leer sus gastos vinculados. «Restablecer fila» los vuelve a leer.}}",
       "rowRef": "fila {n}",
-      "editPartnerInaccessible": "La transacción vinculada está en un bróker que no puedes ver, así que esta fila no se puede editar."
+      "editPartnerInaccessible": "La transacción vinculada está en un bróker que no puedes ver, así que esta fila no se puede editar.",
+      "cloneChargesReadFailed": "No se pudieron leer los gastos vinculados de {ids}: la copia se hizo sin ellos.",
+      "cloneChargeFree": "{reason, select, deleted {La copia del gasto no está vinculada: la transacción a la que estaba vinculado está marcada para eliminar.} paired {La copia del gasto no está vinculada: la transacción a la que estaba vinculado es parte de un par.} other {La copia del gasto no está vinculada: no se puede vincular a la misma transacción.}}"
     },
     "commit": {
       "serverError": "Guardado imposible — error del servidor"
