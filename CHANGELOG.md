@@ -153,6 +153,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Relink events**: «Create event» now creates the missing event and links the transaction to it in one step.
 - **Risk**: the «Risk-free rate» now sits beside «Compared with», in the block «Am I being paid for this risk?» on the Dashboard, on a broker's page and in the asset-set laboratory. On a single asset the block «Compared with a reference» is gone, with its table: the comparison stays on the Dashboard, on a broker's page and in the laboratory.
 - **Asset profile**: a value that was there before the profile existed now reads «System» in the latest changes, and an asset's free identifiers appear as one row of chips under «Other identifiers».
+- **The Docker image is about 22 MB lighter**: the 30 default avatars are WebP in the image (2.6 MB instead of 24.7 MB), and so are the copies a new instance seeds into its data folder. Instances already started keep the avatars they have.
+- **The documentation site is much lighter**: its pages no longer carry the theme's indentation; the developer manual, English only, is no longer copied into Italian, French and Spanish (the old addresses lead to the English page, and the language selector says the manual is in English); each page no longer carries the whole menu, which it reads once per language from one file. The site's HTML goes from 387 MB to about 55 MB; the pages look and work the same.
 
 #### 🎯 PAC allocator and Tools
 
@@ -213,6 +215,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Risk › «What if…?» on a phone: the «Simulation» parameter fields now all have the same width.
 - Assets table: the last-price and Δ columns are wide enough for their figures, so a long price or a French «+423,30 %» no longer runs into the next column.
 - FX › «Add Pair»: the «Providers» legend now shows each provider's icon, as the routes below it do.
+- **Image previews keep the format of the file**: the thumbnails of uploaded JPEG, WebP and GIF files were always sent as PNG, several times heavier for a photo; they now come in their own format.
 
 ### ⚠️ Breaking changes
 
