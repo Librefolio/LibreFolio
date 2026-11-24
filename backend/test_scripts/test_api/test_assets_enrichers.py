@@ -23,7 +23,11 @@ Test Suite: the enrichers and the profile of an asset through the asset routes (
    ``identifiers`` is a 422; without ``codes`` mockenrich is asked too (only its events read), on CRYPTO, a type no
    real enricher covers. Every other recognize names ``codes``: a real enricher is never reached over the network with
    a fake ISIN.
-6. B4, ``GET /assets/enrichers/{code}/search``: mockenrich does not search → 400 with a detail; unknown code → 404.
+6. B4, ``GET /assets/enrichers/{code}/search``: mockenrich's search answers its mock result (ENR-3: ``Mock <text>``,
+   ``market`` ``MOCK``; the 400 of an enricher without a search is pinned without a server, in
+   ``test_enricher_search_across.py``); unknown code → 404. ENR-3, ``GET /assets/enrichers/search`` (Server-Sent
+   Events): ``q=World`` on ``codes=mockenrich`` → one ``enricher_results`` ok via search with one result, then ``done``;
+   a code not served is ``off``; a text under 2 characters is a 422; without a session a 401.
    ``POST /assets/enrichers/{code}/test``: mockenrich's answer for the binding (found, name, page, the LEI; not found
    for ``UNKNOWN…``); unknown code → 404; an asset of the test bound to the same binding is unchanged after it.
 
@@ -695,14 +699,108 @@ def _absent_code() -> str:
 
 
 @pytest.mark.asyncio
-async def test_search_on_an_enricher_that_does_not_search_is_a_400(test_server):
+async def test_search_on_mockenrich_answers_its_mock_result_with_a_market(test_server):
+    text = f"World{uuid.uuid4().hex[:6]}"
     async with httpx.AsyncClient() as client:
         await _login(client)
-        resp = await client.get(f"{API_BASE}/assets/enrichers/{MOCK_CODE}/search", params={"q": "world"}, timeout=TIMEOUT)
+        resp = await client.get(f"{API_BASE}/assets/enrichers/{MOCK_CODE}/search", params={"q": text}, timeout=TIMEOUT)
 
-    assert resp.status_code == 400, f"mockenrich does not search: {resp.status_code} {resp.text}"
-    detail = resp.json().get("detail")
-    assert isinstance(detail, str) and detail.strip(), f"a detail that says why: {resp.text}"
+    assert resp.status_code == 200, f"mockenrich searches (ENR-3): {resp.status_code} {resp.text}"
+    results = resp.json()
+    assert len(results) == 1, results
+    (result,) = results
+    assert result["name"] == f"Mock {text}"
+    assert result["binding"]["identifier_type"] == "TICKER" and result["binding"]["identifier"] == text.upper()
+    assert result["market"] == "MOCK"
+
+
+async def _across(client: httpx.AsyncClient, params: list[tuple[str, str]]) -> list[dict[str, Any]]:
+    """The events of one ``GET /assets/enrichers/search`` stream, read to its end: each ``data: {json}`` line, in order."""
+    resp = await client.get(f"{API_BASE}/assets/enrichers/search", params=params, timeout=TIMEOUT)
+    assert resp.status_code == 200, f"GET /assets/enrichers/search: {resp.status_code} {resp.text}"
+    assert resp.headers.get("content-type", "").startswith("text/event-stream"), f"a Server-Sent Events stream: {resp.headers.get('content-type')}"
+    events = [json.loads(line.removeprefix("data: ")) for line in resp.text.splitlines() if line.startswith("data: ")]
+    assert events and events[-1]["event"] == "done" and [event["event"] for event in events].count("done") == 1, f"the stream ends with one done event: {events}"
+    return events
+
+
+@pytest.mark.asyncio
+async def test_search_across_one_enricher_answers_ok_via_search_then_done(test_server):
+    text = f"World{uuid.uuid4().hex[:6]}"
+    async with httpx.AsyncClient() as client:
+        await _login(client)
+        events = await _across(client, [("q", text), ("codes", MOCK_CODE)])
+
+    assert [event["event"] for event in events] == ["enricher_results", "done"], events
+    answer, done = events
+    assert set(answer) == {"event", "code", "status", "via", "results", "accepted_identifier_types", "retry_after", "error_code"}, answer
+    assert (answer["code"], answer["status"], answer["via"]) == (MOCK_CODE, "ok", "search")
+    assert (answer["retry_after"], answer["error_code"]) == (None, None)
+    assert {"ISIN", "LEI", "TICKER"} <= set(answer["accepted_identifier_types"])
+    assert len(answer["results"]) == 1, answer
+    (result,) = answer["results"]
+    assert (result["name"], result["market"]) == (f"Mock {text}", "MOCK")
+    assert (result["binding"]["identifier_type"], result["binding"]["identifier"]) == ("TICKER", text.upper())
+    assert done == {"event": "done", "codes": [MOCK_CODE]}
+
+
+@pytest.mark.asyncio
+async def test_search_across_an_unknown_code_is_off_and_the_known_one_still_answers(test_server):
+    absent = _absent_code()
+    async with httpx.AsyncClient() as client:
+        await _login(client)
+        events = await _across(client, [("q", "World"), ("codes", MOCK_CODE), ("codes", absent)])
+
+    assert events[-1] == {"event": "done", "codes": [MOCK_CODE, absent]}
+    by_code = {event["code"]: event for event in events[:-1]}
+    assert set(by_code) == {MOCK_CODE, absent} and len(events) == 3, events
+    assert (by_code[absent]["status"], by_code[absent]["via"], by_code[absent]["results"]) == ("off", None, [])
+    assert by_code[MOCK_CODE]["status"] == "ok" and len(by_code[MOCK_CODE]["results"]) == 1
+
+
+@pytest.mark.asyncio
+async def test_search_across_an_unknown_text_finds_nothing_on_mockenrich(test_server):
+    async with httpx.AsyncClient() as client:
+        await _login(client)
+        events = await _across(client, [("q", "UNKNOWN thing"), ("codes", MOCK_CODE)])
+    answer, _done = events
+    assert (answer["status"], answer["via"], answer["results"]) == ("ok", "search", [])
+
+
+@pytest.mark.asyncio
+async def test_search_across_a_type_mockenrich_does_not_cover_is_not_covering(test_server):
+    """INDEX: the catalogue test above pins that mockenrich has no degree for it."""
+    async with httpx.AsyncClient() as client:
+        await _login(client)
+        events = await _across(client, [("q", "World"), ("codes", MOCK_CODE), ("asset_type", "INDEX")])
+    answer, _done = events
+    assert (answer["status"], answer["results"]) == ("not_covering", [])
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("text", ["a", " a ", "   "], ids=["one", "one-padded", "blank"])
+async def test_search_across_a_text_under_two_characters_is_a_422(test_server, text):
+    async with httpx.AsyncClient() as client:
+        await _login(client)
+        resp = await client.get(f"{API_BASE}/assets/enrichers/search", params=[("q", text), ("codes", MOCK_CODE)], timeout=TIMEOUT)
+    assert resp.status_code == 422, f"{resp.status_code} {resp.text}"
+
+
+@pytest.mark.asyncio
+async def test_search_across_too_many_codes_or_a_bad_code_is_a_422(test_server):
+    async with httpx.AsyncClient() as client:
+        await _login(client)
+        many = await client.get(f"{API_BASE}/assets/enrichers/search", params=[("q", "World")] + [("codes", f"lab_many_{index}") for index in range(17)], timeout=TIMEOUT)
+        bad = await client.get(f"{API_BASE}/assets/enrichers/search", params=[("q", "World"), ("codes", "Not A Code")], timeout=TIMEOUT)
+    assert many.status_code == 422, f"{many.status_code} {many.text}"
+    assert bad.status_code == 422, f"{bad.status_code} {bad.text}"
+
+
+@pytest.mark.asyncio
+async def test_search_across_without_a_session_is_a_401(test_server):
+    async with httpx.AsyncClient() as client:
+        resp = await client.get(f"{API_BASE}/assets/enrichers/search", params=[("q", "World"), ("codes", MOCK_CODE)], timeout=TIMEOUT)
+    assert resp.status_code == 401, f"{resp.status_code} {resp.text}"
 
 
 @pytest.mark.asyncio
