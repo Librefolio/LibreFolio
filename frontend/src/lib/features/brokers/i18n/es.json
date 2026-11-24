@@ -151,7 +151,8 @@
           "SPLIT": "Desdoblamiento",
           "TRANSFER_IN": "Transferencia de entrada",
           "TRANSFER_OUT": "Transferencia de salida",
-          "REWARD": "Recompensa"
+          "REWARD": "Recompensa",
+          "REWARD_MERGE": "Recompensa repartida"
         },
         "unitPrice": "Precio unitario",
         "transitInterval": "Intervalo de tránsito",
@@ -232,7 +233,8 @@
           "SPLIT": "SPLIT",
           "TRANSFER_IN": "TRANSFERENCIA+",
           "TRANSFER_OUT": "TRANSFERENCIA-",
-          "REWARD": "RECOMPENSA"
+          "REWARD": "RECOMPENSA",
+          "REWARD_MERGE": "RECOMPENSA+"
         },
         "historyDetail": {
           "openPrice": "Precio de apertura",
@@ -297,7 +299,11 @@
       "matchingMethod": "Método de emparejamiento",
       "methodFifoHint": "FIFO: una venta cierra primero el lote más antiguo",
       "methodLifoHint": "LIFO: una venta cierra primero el lote más reciente",
-      "incomeMarkerReward": "Recompensa"
+      "incomeMarkerReward": "Recompensa",
+      "rewardAllocation": {
+        "label": "Repartir las recompensas entre los lotes",
+        "hint": "Cada recompensa se une a los lotes mantenidos en su bróker el día anterior, sin coste, en lugar de abrir un lote propio. Solo una vista: no se guarda nada."
+      }
     },
     "createdInSystem": "Creado en el Sistema",
     "deleteBlockedTitle": "No se puede eliminar el bróker",
