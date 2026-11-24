@@ -622,7 +622,9 @@ test.describe('«Configure» on mockprov, from the asset dialog', () => {
         const tokenInput = token.getByTestId('plugin-setting-secret-input');
         const tokenState = token.getByTestId('plugin-setting-secret-state');
         await expect(tokenInput, 'a secret is never prefilled').toHaveValue('');
-        await expect(tokenInput, 'nor offered a saved password').toHaveAttribute('autocomplete', 'new-password');
+        // 81 U39: a masked text field, never a password field (see the administrator's test below): nothing offers to save it.
+        await expect(tokenInput, 'a token is a masked text field, not a password field').toHaveAttribute('type', 'text');
+        await expect(tokenInput, 'nor offered a saved password').toHaveAttribute('autocomplete', 'off');
         await expect(form.getByTestId('plugin-settings-save'), 'nothing typed yet').toBeDisabled();
 
         // Saved: a number and a secret.
@@ -682,7 +684,12 @@ test.describe('«Configure» on mockprov, from the asset dialog', () => {
         const keyState = apiKey.getByTestId('plugin-setting-secret-state');
         await expect(apiKey).toHaveAttribute('data-source', 'none');
         await expect(keyInput, 'a secret is never prefilled').toHaveValue('');
-        await expect(keyInput, 'nor offered a saved password').toHaveAttribute('autocomplete', 'new-password');
+        // 81 U39: the key is not an account's password. A real password field would make the browser offer to save one, under the
+        // user name it takes from the field before; a masked text field is offered nothing.
+        await expect(keyInput, 'a key is a masked text field, not a password field').toHaveAttribute('type', 'text');
+        await expect(keyInput).toHaveAttribute('data-masked', 'true');
+        await expect(keyInput, 'nor offered a saved password').toHaveAttribute('autocomplete', 'off');
+        await expect(form.locator('input[type="password"]'), 'no real password field in the settings form').toHaveCount(0);
 
         // Saved.
         const secret = `e2e-api-key-${uniqueSuffix()}`;

@@ -338,8 +338,13 @@ describe('PluginSettingsForm — one control per field', () => {
         expect(nickname).toHaveValue('mine');
         expect(inSetting('verbose', 'plugin-setting-toggle')).not.toBeChecked();
         const secret = inSetting('api_key', 'plugin-setting-secret-input');
-        expect(secret).toHaveAttribute('type', 'password');
-        expect(secret).toHaveAttribute('autocomplete', 'new-password');
+        // 81 U39: an API key is not an account's password. A real `type="password"` field makes the browser offer to save a
+        // password — with whatever text field comes before it as the user name. The key is a plain text field drawn masked, which
+        // the browser and the password managers never offer to save (`PasswordInput` `neverSaved`).
+        expect(secret, 'no real password field: the browser would offer to save it').toHaveAttribute('type', 'text');
+        expect(secret).toHaveAttribute('data-masked', 'true');
+        expect(secret).toHaveAttribute('autocomplete', 'off');
+        for (const marker of ['data-lpignore', 'data-1p-ignore', 'data-bwignore', 'data-form-type']) expect(secret, `${marker}: the password managers are told to leave it`).toHaveAttribute(marker);
         expect(secret).toHaveValue('');
         expect(queryInSetting('api_key', 'plugin-setting-secret-state'), 'a secret not set, one the caller may set: its input, nothing else').toBeNull();
         expect(saveButton(), 'nothing to save yet').toBeDisabled();
