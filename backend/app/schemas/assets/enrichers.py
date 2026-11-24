@@ -14,7 +14,7 @@ import re
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from backend.app.db.models import AssetType
 from backend.app.schemas.common import StrictModel
@@ -74,14 +74,32 @@ class FAEnrichersCatalogue(StrictModel):
     default_order: Dict[AssetType, List[str]] = Field(..., description="Per asset type, the codes of the enrichers that cover it: by degree, then by code")
 
 
+class FAEnricherSeed(StrictModel):
+    """A binding to start from (ENR-2): today the asset's price assignment. A source's price provider and its enricher
+    share their code (``yfinance``, ``borsa_italiana``, ``justetf``): the enricher of ``code`` is asked first with this
+    binding, with the parameters its ``params_schema`` declares; its identifier joins the cascade."""
+
+    code: str = Field(..., pattern=f"^{ENRICHER_CODE.pattern}$", description="The code of the source (the price provider's)")
+    identifier_type: str = Field(..., min_length=1, max_length=32, description="The type of the identifier (ISIN, TICKER…)")
+    identifier: str = Field(..., min_length=1, max_length=256, description="How the source names the asset")
+    params: Dict[str, Any] = Field(default_factory=dict, description="The source's parameters (Borsa Italiana's mic, platform, codice_fondo…); an enricher keeps only the ones it declares")
+
+
 class FAEnricherRecognizeRequest(StrictModel):
     """``POST /assets/enrichers/recognize``: «recognize» in cascade from the identifiers known (plan B4), also before
-    the asset exists."""
+    the asset exists; ``seeds`` are bindings to start from (ENR-2). At least one identifier or one seed."""
 
     asset_type: AssetType = Field(..., description="The asset's type: only the enrichers that cover it are asked")
-    identifiers: Dict[str, str] = Field(..., min_length=1, description="Type → value of the identifiers known (ISIN, LEI, TICKER…)")
+    identifiers: Dict[str, str] = Field(default_factory=dict, description="Type → value of the identifiers known (ISIN, LEI, TICKER…); may be empty when a seed is given")
     price_provider_code: Optional[str] = Field(None, description="The asset's price provider: at equal degree its enricher comes first in the order")
     codes: Optional[List[str]] = Field(None, description="Only these enrichers; all installed when absent")
+    seeds: List[FAEnricherSeed] = Field(default_factory=list, max_length=8, description="Bindings to start from: the asset's price assignment (ENR-2)")
+
+    @model_validator(mode="after")
+    def _something_to_ask_with(self) -> FAEnricherRecognizeRequest:
+        if not any(str(value).strip() for value in self.identifiers.values()) and not self.seeds:
+            raise ValueError("an identifier or a seed is needed")
+        return self
 
 
 class FAEnricherRecognition(StrictModel):
@@ -96,6 +114,7 @@ class FAEnricherRecognition(StrictModel):
     identifiers: Dict[str, str] = Field(default_factory=dict, description="The other identifiers it knows")
     conflicts: Dict[str, str] = Field(default_factory=dict, description="On a conflict: type → the value it named")
     error: Optional[str] = None
+    params: Dict[str, Any] = Field(default_factory=dict, description="The parameters of the binding it answered for (a seed's, ENR-2): the binding is identifier_type, identifier and these")
 
 
 class FAEnricherSearchResult(StrictModel):
