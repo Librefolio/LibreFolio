@@ -35,7 +35,7 @@ Sin filtros ni ordenación, las dos filas de un par vinculado (una transferencia
 
 Cada una de estas acciones abre el espacio de trabajo masivo, y nada cambia antes de **Guardar todo**. Editar o eliminar un lado de un par vinculado arrastra consigo a su pareja.
 
-**Clonar** conserva la fecha original: así es como vuelves a registrar una fila histórica, por ejemplo con otro tipo. Clonar una transacción con gastos vinculados copia también sus gastos, vinculados a la copia; clonar un gasto da una copia vinculada a la misma transacción. Si quitas del lote la copia de una transacción, se van con ella las copias de sus gastos que no has cambiado.
+**Clonar** conserva la fecha original: así es como vuelves a registrar una fila histórica, por ejemplo con otro tipo. Clonar una transacción con gastos vinculados copia también sus gastos, vinculados a la copia; clonar un gasto da una copia vinculada a la misma transacción. Si quitas del lote la copia de una transacción, se van con ella las copias de sus gastos que no has cambiado. Mientras la copia y sus gastos son todos nuevos, comparten bróker y activo: corrige el activo de la copia, o de uno de sus gastos, y los demás la siguen, cada uno con su fecha.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
     <img class="gallery-img" data-category="transactions" data-name="clone-flow" alt="Espacio de trabajo masivo con una fila de transacción clonada">
