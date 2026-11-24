@@ -193,7 +193,7 @@
                 {/if}
                 {#if option.badge}
                     {#if option.badgeTooltip}
-                        <Tooltip text={option.badgeTooltip} position="left" maxWidth="220px">
+                        <Tooltip text={option.badgeTooltip} position="left" maxWidth="220px" insideControl>
                             <span class="shrink-0 text-[10px] px-1.5 py-0.5 rounded font-medium cursor-help {option.badgeClass || 'bg-lf-neutral text-lf-secondary'}">
                                 {option.badge}
                             </span>

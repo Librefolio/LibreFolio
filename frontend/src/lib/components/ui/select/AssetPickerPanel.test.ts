@@ -686,6 +686,17 @@ describe('AssetPickerPanel, mode="multi": the lab’s «+»', () => {
         expect(meridian).toHaveAttribute('aria-selected', 'true');
     });
 
+    // 85 BTN-0c, D16: the ⚠'s tooltip is only a hover (`insideControl`); its old wrapper stopped the click.
+    it('a click on the ⚠ itself checks the row, as a click on the row does', async () => {
+        mountMulti();
+        const panel = await openMulti();
+        const meridian = multiRow(panel, 16);
+        expect(meridian).not.toHaveAttribute('aria-selected', 'true');
+        await fireEvent.click(within(meridian).getByTestId(`${MULTI}-warning-16`));
+        expect(meridian).toHaveAttribute('aria-selected', 'true');
+        expect(checkedIds(panel)).toContain(16);
+    });
+
     it('lists the ruled-out assets read-only, with their reasons, under the caller’s label', async () => {
         const {onadd} = mountMulti();
         const panel = await openMulti();
@@ -1240,6 +1251,14 @@ describe('AssetPickerPanel, mode="single": SearchSelect’s drop-in', () => {
             expect(singleBlocked()).not.toContainElement(lumen);
 
             await fireEvent.click(lumen);
+            expect(onchange).toHaveBeenCalledExactlyOnceWith(22);
+        });
+
+        // 85 BTN-0c, D16: a click on the ⚠ is the option's click.
+        it('a click on the ⚠ itself chooses the option', async () => {
+            const {onchange} = mountSingle();
+            await openSingle();
+            await fireEvent.click(within(choice(22)).getByTestId(`${SINGLE}-warning-22`));
             expect(onchange).toHaveBeenCalledExactlyOnceWith(22);
         });
 

@@ -513,7 +513,7 @@
 
 {#snippet warningMark(asset: PickerAsset, verdict: PickerVerdict | undefined)}
     {#if verdict?.level === 'warning'}
-        <Tooltip text={verdict.texts.join(' · ')} position="left" interactiveChild>
+        <Tooltip text={verdict.texts.join(' · ')} position="left" insideControl>
             <span class="inline-flex text-lf-warning" data-testid="{testId}-warning-{asset.id}"><AlertTriangle size={13} /></span>
         </Tooltip>
     {/if}

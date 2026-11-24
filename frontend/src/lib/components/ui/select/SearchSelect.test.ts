@@ -621,6 +621,23 @@ describe('AssetSelect — the chosen asset on the trigger', () => {
     });
 });
 
+// 85 BTN-0c, D16: the hint badge of a suggested asset carries a hover-only tooltip (`insideControl`); its old wrapper
+// stopped the click, and a click on the badge chose nothing.
+describe('AssetSelect — a click on the hint badge chooses the option', () => {
+    it('the badge with a tooltip is part of the option: its click chooses the asset', async () => {
+        await setupI18n();
+        const onchange = vi.fn();
+        render(AssetSelect, {value: null, testid: 'hinted-asset', onchange, suggestedIds: [{id: CACHED_ASSET.id, badge: 'probe-hint', badgeTooltip: 'probe: matched by ISIN'}]});
+        const trigger = screen.getByTestId('hinted-asset-trigger');
+        await open(trigger);
+        // The assets load before the list fills: the option itself is the barrier.
+        const option = await waitFor(() => within(dropdown()).getByTestId(`search-select-option-${CACHED_ASSET.id}`));
+        const hint = within(option).getByText('probe-hint');
+        await fireEvent.click(hint);
+        expect(onchange).toHaveBeenCalledExactlyOnceWith(CACHED_ASSET.id);
+    });
+});
+
 describe('SearchSelect — an empty trigger with a long placeholder (Y2 FB-9)', () => {
     it('writes the placeholder on one line that gives way at the trigger edge, never wrapping or leaving the box', async () => {
         await setupI18n();
