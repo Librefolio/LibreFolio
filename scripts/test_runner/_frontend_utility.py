@@ -546,6 +546,7 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/features/fx/FxMissingRate.test.ts",
             "src/lib/features/fx/FxPriceSummary.test.ts",
             "src/lib/features/fx/FxCard.test.ts",
+            "src/lib/features/fx/fxSyncGuard.test.ts",
             "src/lib/features/fx/FxCard.primaryView.test.ts",
             "src/lib/components/charts/PriceChartCompact.test.ts",
             "src/lib/features/fx/FxTable.test.ts",

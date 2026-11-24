@@ -1837,3 +1837,51 @@ fb7bTest.describe('FB-7b FX list: All starts at the first stored rate', () => {
         ).toEqual([]);
     });
 });
+
+/**
+ * 81 U35 — one sync per FX pair at a time (testlist 7.2): while a pair is syncing, every control that would start another
+ * sync of it is off and says why, and nothing is sent twice. The sync's answer is held by the test, so «while it syncs» is a
+ * state the test owns, not a race; the answer is an empty result, enough to end the sync.
+ */
+test.describe('FX list — one sync per pair at a time (81 U35)', () => {
+    const PAIR = 'EUR-USD';
+
+    test.beforeEach(async ({page}) => {
+        await login(page, TEST_USER);
+    });
+
+    test('a pair that is syncing has its button off, with the reason; «Sync all» cannot start over it; both come back when it ends', async ({page}) => {
+        let release!: () => void;
+        const gate = new Promise<void>((resolve) => (release = resolve));
+        let sent = 0;
+        await page.route('**/api/v1/fx/currencies/sync', async (route) => {
+            sent++;
+            await gate;
+            await route.fulfill({status: 200, contentType: 'application/json', body: JSON.stringify({results: [], success_count: 0, errors: [], date_range: {start: daysAgoIso(30), end: todayIso()}, total_points_changed: 0})});
+        });
+        await goToFxPage(page);
+        await page.getByTestId('view-mode-grid').click();
+        const button = page.getByTestId(`fx-pair-sync-${PAIR}`);
+        await expect(button, `premise: ${PAIR} is syncable and idle`).toBeEnabled({timeout: 10_000});
+
+        await button.click();
+
+        await expect.poll(() => sent, {message: 'the sync never went out', timeout: 10_000}).toBe(1);
+        await expect(button, 'the pair that is syncing still offers a sync').toBeDisabled();
+        await expect(button).toHaveAttribute('data-syncing', 'true');
+        const reason = await button.getAttribute('title');
+        expect(reason, 'the button is off with no reason').toBeTruthy();
+        expect(reason, 'the reason does not name the pair').toContain('EUR/USD');
+
+        // «Sync all» covers the pair: the window opens, Start is off and says why.
+        await page.getByTestId('fx-sync-all-button').click();
+        await expect(page.getByTestId('sync-modal-start')).toBeDisabled({timeout: 10_000});
+        await expect(page.getByTestId('sync-modal-blocked')).toContainText('EUR/USD');
+        await page.getByTestId('sync-modal-close').click();
+        expect(sent, 'a second sync of the pair went out').toBe(1);
+
+        release();
+        await expect(button, 'the pair never came back').toBeEnabled({timeout: 15_000});
+        await expect(button).toHaveAttribute('data-syncing', 'false');
+    });
+});

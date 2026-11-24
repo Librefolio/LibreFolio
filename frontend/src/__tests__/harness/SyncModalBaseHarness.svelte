@@ -48,9 +48,11 @@
         onclose?: () => void;
         dateStart?: string;
         dateEnd?: string;
+        /** Why starting is off (the base's `startBlockedReason`, 81 U35). */
+        startBlockedReason?: string | null;
     }
 
-    let {open = $bindable(true), specs, onsynced = () => {}, onclose = () => {}, dateStart = '2024-01-01', dateEnd = '2024-01-31'}: Props = $props();
+    let {open = $bindable(true), specs, onsynced = () => {}, onclose = () => {}, dateStart = '2024-01-01', dateEnd = '2024-01-31', startBlockedReason = null}: Props = $props();
 
     let base: SyncModalBase | undefined = $state(undefined);
 
@@ -68,7 +70,7 @@
     );
 </script>
 
-<SyncModalBase bind:open bind:this={base} {dateEnd} {dateStart} description="harness description" {onclose} {onsynced} {sections} testId="harness-sync-modal" title="harness title"></SyncModalBase>
+<SyncModalBase bind:open bind:this={base} {dateEnd} {dateStart} description="harness description" {onclose} {onsynced} {sections} {startBlockedReason} testId="harness-sync-modal" title="harness title"></SyncModalBase>
 
 {#snippet row(item: SyncResult, syncing: boolean)}
     <div data-changed={item.points_changed} data-fetched={item.points_fetched} data-message={item.message ?? ''} data-row-id={item.id} data-status={item.status} data-syncing={syncing ? 'true' : 'false'} data-testid="sync-result-row">
