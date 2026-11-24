@@ -40,6 +40,8 @@ the merge of several sources, **not** the scheduler and **not** the cache: those
    `read` and `search` alike.
 5. **Plain blocking calls.** `recognize`, `read`, `search` and `page_url` are ordinary blocking functions: the core runs
    them away from the event loop. Do not make them `async`, do not wrap them in `asyncio.to_thread`.
+   A `search` the source refuses for too many requests raises `EnricherRateLimited` (`services/enrichers/base.py`),
+   never an empty list: the route answers 429 `RATE_LIMITED` with `Retry-After`.
 6. **`read` yields, one binding at a time.** It receives a list of bindings (and, optionally, the voices wanted) and
    yields one item per binding as it goes, each with its own outcome: `ok` with the values, `not_found`, or `error`.
    «Not found» is an outcome, never an exception. A plugin that reads everything from one page may ignore the voices
