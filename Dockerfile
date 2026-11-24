@@ -74,6 +74,25 @@ COPY requirements.txt ./
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip install --prefix=/install -r requirements.txt
 
+# --- Default avatars as WebP --------------------------------------------------
+# The repository keeps the 30 default avatars as full-size PNG (24.7 MB: the tests, the E2E specs and a development
+# server read them). The image carries WebP copies at quality 85 (about 2.6 MB), and so does every volume that seeds
+# them at first start (`seed_default_avatars()` reads *.webp as well as *.png). Two stages, because a PNG that reached
+# the final stage would stay in its layer whatever a later `RUN rm` did: `avatars-webp` converts a copy of the folder
+# (with the same Pillow as the runtime, from the pybuilder stage); `backend-src` is `backend/` without the PNGs. The final
+# stage copies both. `.dockerignore` must NOT exclude the PNGs: the conversion reads them from the build context.
+FROM python:3.13-slim AS avatars-webp
+COPY --from=pybuilder /install /usr/local
+COPY scripts/__init__.py /tools/scripts/__init__.py
+COPY scripts/gallery_webp.py /tools/scripts/gallery_webp.py
+COPY scripts/docker/png_to_webp.py /tools/scripts/docker/png_to_webp.py
+COPY backend/staticResources/Avatars/ /avatars/
+RUN python /tools/scripts/docker/png_to_webp.py /avatars
+
+FROM python:3.13-slim AS backend-src
+COPY backend/ /backend/
+RUN find /backend/staticResources/Avatars -iname '*.png' -delete
+
 FROM python:3.13-slim
 
 # Non-root user (overridable at build time). Declared up here because every
@@ -107,8 +126,9 @@ COPY --from=pybuilder /install /usr/local
 # second copy of every file (it added ~300 MB of docs alone, twice).
 COPY --chown=${UID}:${GID} requirements.txt ./
 
-# Copy application code
-COPY --chown=${UID}:${GID} backend/ ./backend/
+# Copy application code: backend/ from the backend-src stage (its default avatars are WebP, see above)
+COPY --chown=${UID}:${GID} --from=backend-src /backend/ ./backend/
+COPY --chown=${UID}:${GID} --from=avatars-webp /avatars/ ./backend/staticResources/Avatars/
 COPY --chown=${UID}:${GID} scripts/ ./scripts/
 COPY --chown=${UID}:${GID} dev.py ./
 

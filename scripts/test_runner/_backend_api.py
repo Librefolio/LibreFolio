@@ -49,6 +49,13 @@ def api_preview_cache(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "Preview cache tests", verbose=verbose)
 
 
+def api_uploads_resize_image(verbose: bool = False, test_names: list = None) -> bool:
+    """Run tests for the image preview of the uploads API (_resize_image)."""
+    print_section("Uploads Resize Image Tests")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_uploads_resize_image.py", test_names)
+    return run_command(cmd, "Uploads resize image tests", verbose=verbose)
+
+
 def api_fx_unit(verbose: bool = False, test_names: list = None) -> bool:
     """Run direct unit tests for FX API handlers (no live server/network)."""
     print_section("FX API Unit Tests")
@@ -1374,6 +1381,15 @@ Tests for REST API endpoints (server auto-started):
     )
     add_test(api, "fx-compress-errors", api_fx_compress_errors, name="FX Compress Errors", desc="split_fx_issues, group_fx_issues, issue detail text")
     add_test(api, "preview-cache", api_preview_cache, name="Preview Cache", desc="PreviewCache in uploads API")
+    # PURE: images in tmp_path, Pillow only; no database, no server, no network.
+    add_test(
+        api,
+        "uploads-resize-image",
+        api_uploads_resize_image,
+        name="Uploads Resize Image",
+        desc="_resize_image of ?img_preview=WxH: the preview is written in the format of the file (PNG, JPEG, MPO as JPEG, WebP, GIF, BMP, TIFF), the box and the aspect kept, a source already inside the box is not resized, a format Pillow cannot write falls back to PNG",
+        isolation="pure",
+    )
     add_test(api, "fx-unit", api_fx_unit, name="FX API Unit", desc="Direct handler unit tests, no live server")
     add_test(api, "fx-sync", api_fx_sync, name="FX Sync API", desc="FX rate synchronization endpoints")
     # PURE: the handler runs in process with convert_bulk replaced by a double; no database, no server.

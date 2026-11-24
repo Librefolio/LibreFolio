@@ -110,6 +110,14 @@
         return p.includes('/developer/');
     }
 
+    /** The note on the selector of an English-only page, in the language the visitor chose (English when unknown). */
+    var EN_ONLY_NOTE = {
+        en: 'The developer manual is English only',
+        it: 'Il manuale per sviluppatori è solo in inglese',
+        fr: 'Le manuel développeur n\u2019existe qu\u2019en anglais',
+        es: 'El manual para desarrolladores solo está en inglés'
+    };
+
     // ── Language state ──────────────────────────────────────────
 
     function getStoredLang() {
@@ -173,6 +181,7 @@
 
         container.querySelector('.site-lang-btn').addEventListener('click', function (e) {
             e.stopPropagation();
+            if (container.classList.contains('lang-readonly')) return;   // English-only page: nothing to switch to
             container.classList.toggle('open');
         });
 
@@ -297,7 +306,13 @@
             /* Readonly mode for EN-only pages */
             .site-lang-selector.lang-readonly {
                 opacity: 0.4;
-                pointer-events: none;
+                cursor: not-allowed;
+            }
+            .site-lang-selector.lang-readonly .site-lang-btn {
+                cursor: not-allowed;
+            }
+            .site-lang-selector.lang-readonly .site-lang-btn:hover {
+                background: transparent;
             }
             .site-lang-selector.lang-readonly .lang-chevron {
                 display: none;
@@ -328,6 +343,7 @@
             var sel = createSelector('en');
             injectSelector(sel);
             sel.classList.add('lang-readonly');
+            sel.title = EN_ONLY_NOTE[getStoredLang()] || EN_ONLY_NOTE.en;
             return;
         }
 
