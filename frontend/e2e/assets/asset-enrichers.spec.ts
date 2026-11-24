@@ -19,7 +19,7 @@ test.describe('Asset enrichers from the asset window (plan 68, E8a)', () => {
 
     test('an enricher chosen in the window is saved with the asset, in its binding', async ({page}) => {
         // The detail page loads cold, then the asset window, then the enrichers' window: more than the default 30 s
-        test.setTimeout(60_000);
+        test.setTimeout(120_000);
         const name = `E2E enrichers ${uniqueToken(8)}`;
         // ISIN-shaped, under the user-assigned «ZZ» prefix: no real instrument carries it
         const isin = `ZZ${uniqueToken(9)}0`.toUpperCase();
@@ -30,27 +30,22 @@ test.describe('Asset enrichers from the asset window (plan 68, E8a)', () => {
             await goToAssetDetailPage(page, String(assetId));
             await openEditAssetModal(page);
 
-            // Edit mode: «Riconosci» never starts by itself, and the asset has no enricher yet
+            // The asset has no enricher yet, and no creation banner (that one is for a new asset)
             const button = page.getByTestId('asset-modal-enrichers');
             await expect(button).toHaveAttribute('data-count', '0');
             await expect(page.getByTestId('asset-modal-enrichers-banner')).toHaveCount(0);
 
+            // In edit mode «Riconosci» starts when the window opens, with the ISIN the asset already holds (ENR-1, R1)
             await button.click();
             const window = page.getByTestId('enrichers-modal');
             await expect(window).toBeVisible();
-            // «The others» start open: the toggle says so (`aria-expanded`); act only if it is not there yet
-            const toggle = window.getByTestId('enrichers-others-toggle');
-            await expect(toggle).toBeVisible();
-            if ((await toggle.getAttribute('aria-expanded')) !== 'true') await toggle.click();
-            await expect(toggle).toHaveAttribute('aria-expanded', 'true');
-            await window.getByTestId('enricher-add-mockenrich').click();
-            const identifier = window.getByTestId('enricher-identifier-mockenrich');
-            await expect(identifier).toBeVisible();
-            if ((await identifier.inputValue()) !== isin) await identifier.fill(isin);
-            await expect(identifier).toHaveValue(isin);
-            // The field commits at every key (E7c): the button is usable right after typing, without letting the field go
+            await expect(window.getByTestId('enrichers-recognition')).toHaveAttribute('data-state', 'found', {timeout: 20_000});
+            // Found, the enricher enters the list by itself (R2), already bound: nothing to type
+            const row = window.getByTestId('enricher-row-mockenrich');
+            await expect(row).toBeVisible();
+            await expect(window.getByTestId('enricher-other-mockenrich')).toHaveCount(0);
             const apply = window.getByTestId('enrichers-apply');
-            await expect(apply, 'the binding is not valid right after typing the identifier').toBeEnabled();
+            await expect(apply).toBeEnabled();
             await apply.click();
             await expect(window).toBeHidden();
             await expect(button).toHaveAttribute('data-count', '1');
@@ -65,12 +60,32 @@ test.describe('Asset enrichers from the asset window (plan 68, E8a)', () => {
                 .poll(
                     async () => {
                         const read = await page.request.get(`${API_BASE}/assets?asset_ids=${assetId}`);
-                        const rows = (await read.json()) as Array<{asset_id: number; enrichers?: {config?: Record<string, {identifier?: string}>} | null}>;
-                        return rows.find((row) => row.asset_id === assetId)?.enrichers?.config?.mockenrich?.identifier ?? null;
+                        const rows = (await read.json()) as Array<{asset_id: number; enrichers?: {config?: Record<string, {identifier?: string; identifier_type?: string}>} | null}>;
+                        const binding = rows.find((row) => row.asset_id === assetId)?.enrichers?.config?.mockenrich;
+                        return binding ? `${binding.identifier_type}:${binding.identifier}` : null;
                     },
                     {timeout: 10_000, message: 'the binding must be stored with the asset'},
                 )
-                .toBe(isin);
+                .toBe(`ISIN:${isin}`);
+
+            // Again: the asset has the enricher now, so nothing adopts; 🗑 sends it to «Non in elenco» and «+» puts it back
+            // already bound (it keeps its binding), the row closed: nothing to type
+            await goToAssetDetailPage(page, String(assetId));
+            await openEditAssetModal(page);
+            await page.getByTestId('asset-modal-enrichers').click();
+            const again = page.getByTestId('enrichers-modal');
+            await expect(again).toBeVisible();
+            await expect(again.getByTestId('enrichers-recognition')).toHaveAttribute('data-state', /^(found|none)$/, {timeout: 20_000});
+            await expect(again.getByTestId('enricher-row-mockenrich')).toBeVisible();
+            await again.getByTestId('enricher-remove-mockenrich').click();
+            await expect(again.getByTestId('enricher-row-mockenrich')).toHaveCount(0);
+            await again.getByTestId('enricher-add-mockenrich').click();
+            const back = again.getByTestId('enricher-row-mockenrich');
+            await expect(back).toBeVisible();
+            await expect(back).toHaveAttribute('data-expanded', 'false');
+            await expect(back).not.toHaveAttribute('data-issue', /.+/);
+            await back.getByTestId('enricher-edit-mockenrich').click();
+            await expect(back.getByTestId('enricher-identifier-mockenrich')).toHaveValue(isin);
         } finally {
             await page.request.delete(`${API_BASE}/assets?asset_ids=${assetId}`);
         }
