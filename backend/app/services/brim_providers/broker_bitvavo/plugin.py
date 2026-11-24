@@ -8,10 +8,13 @@ This plugin parses CSV exports from Bitvavo (crypto exchange).
 - sell → SELL
 - deposit/withdrawal of fiat → DEPOSIT/WITHDRAWAL
 - deposit/withdrawal of crypto → ADJUSTMENT
-- staking → ADJUSTMENT
+- staking → REWARD (units received, no cash; the file gives no value, so each row asks for it: the wizard can fill it
+  from the asset's price history)
 
-Only ``Status=Completed`` rows are imported. Rows with other statuses are
-reported as warnings and skipped.
+Only ``Status=Completed`` rows are imported, and staking rows with
+``Status=Distributed``: Bitvavo's own word for a reward paid out (every staking
+row of its export has it). Rows with other statuses are reported as warnings
+and skipped.
 """
 
 from __future__ import annotations
@@ -27,11 +30,12 @@ from typing import Dict, List, Optional
 import structlog
 
 from backend.app.db.models import TransactionType
-from backend.app.schemas.brim import FAKE_ASSET_ID_BASE, BRIMExtractedAssetInfo, BRIMParseOutput, BRIMValidationIssue
+from backend.app.schemas.brim import FAKE_ASSET_ID_BASE, BRIMExtractedAssetInfo, BRIMFieldTodo, BRIMParseOutput, BRIMValidationIssue
 from backend.app.schemas.common import Currency, is_fiat_currency
 from backend.app.schemas.transactions.transactions import TXCreateItem
 from backend.app.services.brim.brim_provider import BRIMParseError, BRIMProvider
 from backend.app.services.brim.registry import BRIMProviderRegistry
+from backend.app.services.brim_providers._brim_io import reward_value_todo
 from backend.app.services.platform.provider_registry import register_provider
 
 logger = structlog.get_logger(__name__)
@@ -87,6 +91,17 @@ def _parse_decimal(value: str) -> Optional[Decimal]:
         return None
 
 
+# The settled status of a row: «Completed», and «Distributed» for a staking reward, the only status its rows carry
+_SETTLED_STATUS = "completed"
+_SETTLED_STAKING_STATUS = "distributed"
+
+
+def _is_settled(tx_type_raw: str, status: str) -> bool:
+    """Whether a row is booked: Completed, or a staking reward Distributed (paid out to the account)."""
+    status_lower = status.lower()
+    return status_lower == _SETTLED_STATUS or (tx_type_raw == "staking" and status_lower == _SETTLED_STAKING_STATUS)
+
+
 @register_provider(BRIMProviderRegistry)
 class BitvavoBrokerProvider(BRIMProvider):
     """Bitvavo crypto exchange CSV export import plugin."""
@@ -110,6 +125,12 @@ class BitvavoBrokerProvider(BRIMProvider):
     @property
     def detection_priority(self) -> int:
         return 100
+
+    @property
+    def plugin_version(self) -> str:
+        # 1.1.0 — a staking reward is a REWARD whose value the row asks for, and its «Distributed» status is a settled one
+        # (project 79, STK-4b).
+        return "1.1.0"
 
     @property
     def icon_url(self) -> Optional[str]:
@@ -154,6 +175,7 @@ class BitvavoBrokerProvider(BRIMProvider):
         transactions: List[TXCreateItem] = []
         warnings: List[str] = []
         validation_issues: List[BRIMValidationIssue] = []
+        field_todos: List[BRIMFieldTodo] = []
         extracted_assets: Dict[int, BRIMExtractedAssetInfo] = {}
         asset_to_fake_id: Dict[str, int] = {}
         next_fake_id = FAKE_ASSET_ID_BASE
@@ -171,7 +193,7 @@ class BitvavoBrokerProvider(BRIMProvider):
                     tx_type_raw = row.get(COL_TYPE, "").strip().lower()
                     if not tx_type_raw:
                         continue
-                    if status.lower() != "completed":
+                    if not _is_settled(tx_type_raw, status):
                         warnings.append(f"Row {row_num}: status '{status}' is not Completed, skipping")
                         continue
 
@@ -266,20 +288,25 @@ class BitvavoBrokerProvider(BRIMProvider):
                             warnings.append(f"Row {row_num}: zero staking quantity, skipping")
                             continue
                         asset_id, next_fake_id = self._get_asset_id(symbol, asset_to_fake_id, extracted_assets, next_fake_id)
-                        self._create_transaction(
+                        # A staking reward is a REWARD (project 79, STK-4b): the file gives no value, so the row asks for
+                        # it (decision S4-Q4). Units taken back (a negative amount) stay an outgoing ADJUSTMENT.
+                        is_reward = quantity > 0
+                        created = self._create_transaction(
                             row_num=row_num,
                             transactions=transactions,
                             validation_issues=validation_issues,
                             context=f"staking: {symbol}",
                             broker_id=broker_id,
                             asset_id=asset_id,
-                            type=TransactionType.ADJUSTMENT,
+                            type=TransactionType.REWARD if is_reward else TransactionType.ADJUSTMENT,
                             date=tx_date,
                             quantity=quantity,
                             cash=None,
                             description=f"staking: {symbol}{desc_suffix}",
                             tags=["import", "bitvavo", "staking", "crypto"],
                         )
+                        if created is not None and is_reward:
+                            field_todos.append(reward_value_todo(len(transactions) - 1, row_num, symbol))
                     else:
                         warnings.append(f"Row {row_num}: unknown type '{tx_type_raw}', skipping")
                         continue
@@ -329,7 +356,7 @@ class BitvavoBrokerProvider(BRIMProvider):
 
         logger.info("Bitvavo file parsed", transaction_count=len(transactions), warning_count=len(warnings), asset_count=len(extracted_assets))
 
-        return BRIMParseOutput(transactions=transactions, warnings=warnings, validation_issues=validation_issues, extracted_assets=extracted_assets)
+        return BRIMParseOutput(transactions=transactions, warnings=warnings, validation_issues=validation_issues, extracted_assets=extracted_assets, field_todos=field_todos)
 
     @property
     def test_file_pattern(self) -> Optional[str]:

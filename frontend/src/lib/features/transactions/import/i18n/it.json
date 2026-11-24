@@ -209,7 +209,8 @@
       "traderepublic_other_account": "{count, plural, one {# riga appartiene} other {# righe appartengono}} a un altro conto, per esempio il conto JUNIOR di un figlio, e {count, plural, one {è stata ignorata} other {sono state ignorate}}: esporta quel conto dal suo accesso e importalo in un broker a parte.",
       "traderepublic_tax_refund": "{count, plural, one {# rimborso d’imposta è stato importato come interesse} other {# rimborsi d’imposta sono stati importati come interessi}} («Tax refund»): sono soldi restituiti dal guadagno dell’investimento, quindi contano nel P&L.",
       "traderepublic_not_yet_settled": "{count, plural, one {# riga ha una data successiva a oggi: non è ancora regolata ed è stata lasciata fuori} other {# righe hanno una data successiva a oggi: non sono ancora regolate e sono state lasciate fuori}}. Arriveranno con il prossimo export.",
-      "investimental_order_start_missing": "Ordine {order} ({symbol}, ultimo eseguito il {date} a {price}): il file comincia con quest'ordine già avviato, quindi la quantità intera non si ricava dal file {visible, select, yes {(il file mostra {quantity} per {amount} {currency})} other {(nessuno degli eseguiti che mostra si può contare)}}. L'ordine non è stato importato: inseriscilo a mano dall'estratto."
+      "investimental_order_start_missing": "Ordine {order} ({symbol}, ultimo eseguito il {date} a {price}): il file comincia con quest'ordine già avviato, quindi la quantità intera non si ricava dal file {visible, select, yes {(il file mostra {quantity} per {amount} {currency})} other {(nessuno degli eseguiti che mostra si può contare)}}. L'ordine non è stato importato: inseriscilo a mano dall'estratto.",
+      "reward_value": "Il file non dà il valore di questo premio: inserisci il valore di una sola unità nel giorno in cui l'hai ricevuto, non il totale, per importare la riga."
     },
     "evidenceRowsTitle": "Righe del file",
     "evidenceRowCount": "{n} righe",

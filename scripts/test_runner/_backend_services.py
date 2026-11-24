@@ -1729,6 +1729,15 @@ def services_current_prices_bulk(verbose: bool = False, test_names: list = None)
     return run_command(cmd, "Current prices bulk tests", verbose=verbose)
 
 
+def services_reward_values(verbose: bool = False, test_names: list = None) -> bool:
+    """79 STK-4b: the value on receipt of a reward from the stored price history (no lane DB, no server, no network)."""
+    print_section("Services: Reward Values on Receipt (79 STK-4b)")
+    print_info("Testing: services/assets/reward_values.py (reward_unit_value_from_close, reward_values_on_receipt), api/v1/assets/prices.py (query_reward_values)")
+    print_info("Tests: close ÷ quote base rounded to the cost-basis column, no value without a positive close; the close of that very day only, NO_PRICE_THAT_DAY / NO_HISTORY, the price row's currency, request order; 1 001 items 422")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_reward_values.py", test_names)
+    return run_command(cmd, "Reward values tests", verbose=verbose)
+
+
 def services_current_price_fetched_at(verbose: bool = False, test_names: list = None) -> bool:
     """MF-FA: today's price row keeps fetched_at = the time of its last change (private SQLite, no server, no network)."""
     print_section("Services: Current Price fetched_at (MF-FA)")
@@ -4186,6 +4195,16 @@ Note: No backend server required.
         desc="The bulk current-price read of asset providers: C1 FACurrentValueRequest, supports_bulk_current / bulk_current_max_items / get_current_values_bulk with their class-definition guards, mockprov's bulk answer; C2 get_current_prices_bulk reading a bulk provider's group in one call (aligned expiry, group stamp, single-flight, rate limit, failure fallback, chunks); C3 the history refresh reads today's value through the same bulk group before the history (one call, shared with the live read, none for a past range, aligned expiry, refused read fails the refresh, unstorable value noted); C3b the midnight rule (the current quote never replaces a stored or fetched history point of a day before today, it only adds a missing one: yesterday's true close survives, a missing yesterday gets the quote, a resume keeps a close only the DB has); C4 a provider's minimum refresh interval of current values (current_min_refresh_seconds, core.current_cache_ttl and its fallbacks, the TTL of every cache writer and of the group stamp, the plan's call count of 2 per fake hour, a bulk provider refused once then served after the pause)",
         # PURE: schema and class-definition checks, mockprov called directly, and the service on a private SQLite file
         # swapped for the process engine, a private cache, pauses and group clock; no lane DB, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "reward-values",
+        services_reward_values,
+        name="Reward Values on Receipt (79 STK-4b)",
+        desc="POST /assets/prices/reward-values and its reader: the close of that very day (never the day before or after) ÷ the quote base, rounded to the cost-basis column, in the price row's own currency; NO_PRICE_THAT_DAY for a gap or an unusable close, NO_HISTORY for an asset with no stored price or no such asset; request order, a repeated item answered twice; 1 001 items 422 bulk_too_many_items, 1 000 pass",
+        # PURE: the reader on a private in-memory SQLite (create_all), the route through a fresh in-process app
+        # (httpx.ASGITransport) whose session is that database; no lane DB, no server, no network.
         isolation="pure",
     )
     add_test(

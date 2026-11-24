@@ -22,6 +22,8 @@ from backend.app.schemas.prices import (
     FAPriceQueryItem,
     FAPriceQueryResponse,
     FARangeChange,
+    FARewardValueItem,
+    FARewardValueResponse,
     FAUpsert,
     FAUpsertResult,
 )
@@ -30,6 +32,7 @@ from backend.app.services.assets.manager import AssetSourceManager
 from backend.app.services.assets.period_changes import get_period_changes_bulk, live_range_changes
 from backend.app.services.assets.price_sampling import SampleReferenceError, sample_reference_detail
 from backend.app.services.assets.price_store import PriceCurrencyMismatchError, price_currency_mismatch_detail
+from backend.app.services.assets.reward_values import reward_values_on_receipt
 from backend.app.services.signals.planning import SignalRequestValidationError
 from backend.app.utils.date_range_limits import MAX_BULK_ITEMS, MAX_BULK_WRITE_ITEMS, BulkTooManyDaysError, DateOutOfRangeError, bulk_too_many_days_detail, bulk_too_many_items_detail, date_out_of_range_detail
 from backend.app.utils.datetime_utils import latest_range_end
@@ -175,6 +178,24 @@ async def query_prices_bulk(
         # R13-SEC9-3: the log keeps the error; the answer never echoes it (an SQL error names the schema)
         logger.exception(f"Error querying prices bulk: {e}")
         raise HTTPException(status_code=500, detail="Internal error while querying prices") from e
+
+
+@price_router.post("/reward-values", response_model=FARewardValueResponse)
+async def query_reward_values(
+    requests: List[FARewardValueItem],
+    session: AsyncSession = Depends(get_session_generator),
+    _current_user: User = Depends(get_current_user),
+):
+    """The value on receipt of rewards in kind, from the stored price history (project 79, STK-4b).
+
+    For each (asset, day): the close of that very day, never the day before or after, divided by the asset's quote base
+    quantity, in the price's own currency. ``NO_PRICE_THAT_DAY`` when the history has no close that day, ``NO_HISTORY``
+    when the asset has no stored price at all. Reads the database only; at most ``MAX_BULK_ITEMS`` items (422
+    ``bulk_too_many_items``). The transaction form's suggestion and the bulk workspace's «fill from price history» read it.
+    """
+    if len(requests) > MAX_BULK_ITEMS:
+        raise HTTPException(status_code=422, detail=bulk_too_many_items_detail(len(requests), MAX_BULK_ITEMS))
+    return FARewardValueResponse(items=await reward_values_on_receipt(session, requests))
 
 
 @price_router.post("/current", response_model=FACurrentPriceResponse)

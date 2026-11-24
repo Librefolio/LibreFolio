@@ -939,22 +939,20 @@
         if (!rule.costBasisAuto && costBasisMode === 'auto') costBasisMode = 'manual';
     });
 
-    // A REWARD's value on receipt, suggested from the asset's price history (project 79, STK-2a): the close of its day,
-    // or the last one before it, into an empty field only. The note under the field shows while the value is still the
+    // A REWARD's value on receipt, suggested from the asset's price history (project 79, STK-2a, aligned by STK-4b): the
+    // close of that very day, per unit, read by the backend (the same reader as the bulk's «fill from price history»), into
+    // an empty field only. The note under the field shows while the value is still the
     // suggestion; the user's own value is never overwritten.
     let rewardSuggestion = $state<RewardValueSuggestion | null>(null);
     let rewardSuggestionKey = '';
     $effect(() => {
         if (isReadonly || draft.type !== 'REWARD' || draft.asset_id == null || !draft.date || draft.cost_basis_override?.amount?.trim()) return;
-        // The close is per quote base: wait until the asset is in the store, or a bond quoted per 100 would get the close undivided
-        const quoteBase = tradeQuoteBase;
-        if (quoteBase == null) return;
         const assetId = draft.asset_id;
         const date = draft.date;
         const key = `${assetId}|${date}`;
         if (key === rewardSuggestionKey) return;
         rewardSuggestionKey = key;
-        void fetchRewardValue(assetId, date, quoteBase).then((suggestion) => {
+        void fetchRewardValue(assetId, date).then((suggestion) => {
             if (!suggestion || draft.type !== 'REWARD' || draft.asset_id !== assetId || draft.date !== date || draft.cost_basis_override?.amount?.trim()) return;
             rewardSuggestion = suggestion;
             draft = {...draft, cost_basis_override: {code: suggestion.code, amount: suggestion.amount}};

@@ -16,7 +16,7 @@ This plugin parses CSV exports from Freetrade (UK broker).
 - TOP_UP → DEPOSIT
 - WITHDRAWAL → WITHDRAWAL
 - INTEREST_FROM_CASH → INTEREST
-- FREESHARE_ORDER → BUY
+- FREESHARE_ORDER → REWARD (a free share: no cash, valued at its Price per Share in Account Currency)
 
 **Columns:**
 - Title: Asset name
@@ -28,6 +28,7 @@ This plugin parses CSV exports from Freetrade (UK broker).
 - Ticker: Asset symbol
 - ISIN: Asset ISIN
 - Quantity: Number of shares
+- Price per Share in Account Currency: a free share's value on receipt
 """
 
 from __future__ import annotations
@@ -42,11 +43,12 @@ from typing import Dict, List, Optional
 import structlog
 
 from backend.app.db.models import TransactionType
-from backend.app.schemas.brim import FAKE_ASSET_ID_BASE, BRIMExtractedAssetInfo, BRIMParseOutput, BRIMValidationIssue
+from backend.app.schemas.brim import FAKE_ASSET_ID_BASE, BRIMExtractedAssetInfo, BRIMFieldTodo, BRIMParseOutput, BRIMValidationIssue
 from backend.app.schemas.common import Currency
 from backend.app.schemas.transactions.transactions import TXCreateItem
 from backend.app.services.brim.brim_provider import BRIMParseError, BRIMProvider
 from backend.app.services.brim.registry import BRIMProviderRegistry
+from backend.app.services.brim_providers._brim_io import reward_value_todo
 from backend.app.services.platform.provider_registry import register_provider
 
 logger = structlog.get_logger(__name__)
@@ -64,11 +66,13 @@ COL_DIRECTION = "Buy / Sell"
 COL_TICKER = "Ticker"
 COL_ISIN = "ISIN"
 COL_QUANTITY = "Quantity"
+COL_PRICE_ACCOUNT = "Price per Share in Account Currency"
 
 # Type mapping
 TYPE_MAPPINGS: Dict[str, TransactionType] = {
     "order": None,  # Determined by Buy/Sell column
-    "freeshare_order": TransactionType.BUY,
+    # A free share is a reward in kind (project 79, STK-4a; decision S4-Q6): before 1.1.0 a BUY that took cash never spent
+    "freeshare_order": TransactionType.REWARD,
     "dividend": TransactionType.DIVIDEND,
     "top_up": TransactionType.DEPOSIT,
     "withdrawal": TransactionType.WITHDRAWAL,
@@ -145,6 +149,11 @@ class FreetradeBrokerProvider(BRIMProvider):
         return 100
 
     @property
+    def plugin_version(self) -> str:
+        # 1.1.0 — a free share is a REWARD at its price per share, with no cash (project 79, STK-4a).
+        return "1.1.0"
+
+    @property
     def icon_url(self) -> str:
         return "https://cdn.prod.website-files.com/66289cd2c30bc8d40bd60733/66f526a076ad61485c78771c_favicon.png"
 
@@ -177,6 +186,7 @@ class FreetradeBrokerProvider(BRIMProvider):
         transactions: List[TXCreateItem] = []
         warnings: List[str] = []
         validation_issues: List[BRIMValidationIssue] = []
+        field_todos: List[BRIMFieldTodo] = []
         extracted_assets: Dict[int, Dict[str, Optional[str]]] = {}
         asset_to_fake_id: Dict[str, int] = {}
         next_fake_id = FAKE_ASSET_ID_BASE
@@ -232,6 +242,7 @@ class FreetradeBrokerProvider(BRIMProvider):
                     asset_id = None
                     asset_required = tx_type in [
                         TransactionType.BUY,
+                        TransactionType.REWARD,
                         TransactionType.SELL,
                         TransactionType.DIVIDEND,
                     ]
@@ -273,6 +284,14 @@ class FreetradeBrokerProvider(BRIMProvider):
                         amount = -amount
                     if tx_type == TransactionType.WITHDRAWAL and amount and amount > 0:
                         amount = -amount
+                    # A free share (REWARD) moves no cash: its value on receipt is the file's price per share, per unit and
+                    # verbatim, in the account currency. An empty price leaves the value to the user, with a blocking todo.
+                    reward_value = None
+                    if tx_type == TransactionType.REWARD:
+                        unit_price = _parse_freetrade_number(row.get(COL_PRICE_ACCOUNT, ""))
+                        reward_value = Currency(code=currency, amount=unit_price) if unit_price is not None else None
+                        amount = None
+
                     # DIVIDEND/INTEREST are pure cash — CSV may include a residual quantity
                     orig_quantity = quantity
                     if tx_type in (TransactionType.DIVIDEND, TransactionType.INTEREST):
@@ -290,7 +309,7 @@ class FreetradeBrokerProvider(BRIMProvider):
                     tx_desc = f"{desc_str}{desc_extra}"
 
                     # Create transaction
-                    self._create_transaction(
+                    created = self._create_transaction(
                         row_num=row_num,
                         transactions=transactions,
                         validation_issues=validation_issues,
@@ -301,9 +320,12 @@ class FreetradeBrokerProvider(BRIMProvider):
                         date=tx_date,
                         quantity=quantity,
                         cash=Currency(code=currency, amount=amount) if amount else None,
+                        cost_basis_override=reward_value,
                         description=tx_desc,
                         tags=["import", "freetrade"],
                     )
+                    if created is not None and tx_type == TransactionType.REWARD and reward_value is None:
+                        field_todos.append(reward_value_todo(len(transactions) - 1, row_num, ticker or isin))
 
         except FileNotFoundError:
             raise BRIMParseError(f"File not found: {file_path}", details={"code": "file_not_found", "context": {"file": file_path.name}}) from None
@@ -335,6 +357,7 @@ class FreetradeBrokerProvider(BRIMProvider):
             warnings=warnings,
             validation_issues=validation_issues,
             extracted_assets=extracted_assets_typed,
+            field_todos=field_todos,
         )
 
     @property
