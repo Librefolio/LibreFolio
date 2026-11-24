@@ -1,0 +1,402 @@
+{
+ "source": "borsa_italiana",
+ "asset": "enel_profile",
+ "version": "borsa-italiana-scraping 8d6e216f4 (main), the library's own test pages profilo_societa_IT0003128367_{en,it}.html",
+ "recorded_at": "2026-11-24T00:00:00",
+ "calls": {
+  "profilo_en": {
+   "seconds": null,
+   "error": null,
+   "response": {
+    "isin": "IT0003128367",
+    "mic": "MTAA",
+    "descrizione": "Enel S.p.A. is Italian No. 1 producer and distributor of electricity. The activity is organized mainly around two areas: - sales of electricity and natural gas: 186.1 TWh of electricity produced, 249.9 TWh of electricity and 6.3 billion m3 of natural gas sold in 2025. The group also develops an engineering and construction of electric production installations and units activity; - transportation and distribution of electricity: 474.7 TWh of electricity transported in 2025. At the end of 2025, Enel S.p.A. had a 1,881,651 km electricity transportation network. Net sales are distributed geographically as follows: Italy (39%), the United Kingdom (5%), Europe (33%), America (22.6%) and other (0.4%).",
+    "dirigenti": [
+     {
+      "ruolo": "Chief Executive Officer",
+      "nominativo": "Flavio Cattaneo"
+     },
+     {
+      "ruolo": "Administrative & Finance Director",
+      "nominativo": "Stefano De Angelis"
+     },
+     {
+      "ruolo": "Head of Investor Relations",
+      "nominativo": "Omar Al Bayaty"
+     },
+     {
+      "ruolo": "Chief Human Resources Officer",
+      "nominativo": "Elisabetta Colacchia"
+     },
+     {
+      "ruolo": "Strategy Director",
+      "nominativo": "Michela Mossini"
+     },
+     {
+      "ruolo": "Chief Sustainability Officer",
+      "nominativo": "Michela Mossini"
+     },
+     {
+      "ruolo": "General Counsel",
+      "nominativo": "Francesco Puntillo"
+     }
+    ],
+    "anni_disponibili": [
+     2025,
+     2024,
+     2023,
+     2022,
+     2021
+    ],
+    "dati_principali": [
+     {
+      "voce": "Net sales",
+      "valori": {
+       "2025": "78057",
+       "2024": "73914",
+       "2023": "92882",
+       "2022": "135653",
+       "2021": "81900"
+      }
+     },
+     {
+      "voce": "Income from ordinary activities",
+      "valori": {
+       "2025": "80346",
+       "2024": "78947",
+       "2023": "95565",
+       "2022": "140517",
+       "2021": "85719"
+      }
+     },
+     {
+      "voce": "Operating income",
+      "valori": {
+       "2025": "11533",
+       "2024": "15494",
+       "2023": "10832",
+       "2022": "11193",
+       "2021": "7551"
+      }
+     },
+     {
+      "voce": "Cost of financial indebtedness net",
+      "valori": {
+       "2025": "2493",
+       "2024": "2836",
+       "2023": "2893",
+       "2022": "2269",
+       "2021": "2136"
+      }
+     },
+     {
+      "voce": "Equity-accounted companies contribution to income",
+      "valori": {
+       "2025": "-74",
+       "2024": "-210",
+       "2023": "-41",
+       "2022": "-60",
+       "2021": "571"
+      }
+     },
+     {
+      "voce": "Net profit from discontinued activities",
+      "valori": {
+       "2025": null,
+       "2024": null,
+       "2023": "-371",
+       "2022": "-2234",
+       "2021": "0"
+      }
+     },
+     {
+      "voce": "Net income",
+      "valori": {
+       "2025": "5617",
+       "2024": "8229",
+       "2023": "4267",
+       "2022": "2920",
+       "2021": "3857"
+      }
+     },
+     {
+      "voce": "Net income (Group share)",
+      "valori": {
+       "2025": "4261",
+       "2024": "7016",
+       "2023": "3438",
+       "2022": "1682",
+       "2021": "3189"
+      }
+     },
+     {
+      "voce": "Fiscal year end",
+      "valori": {
+       "2025": "2025-12-31",
+       "2024": "2024-12-31",
+       "2023": "2023-12-31",
+       "2022": "2022-12-31",
+       "2021": "2021-12-31"
+      }
+     },
+     {
+      "voce": "Length of fiscal year (month)",
+      "valori": {
+       "2025": "12",
+       "2024": "12",
+       "2023": "12",
+       "2022": "12",
+       "2021": "12"
+      }
+     },
+     {
+      "voce": "Currency & Unit",
+      "valori": {
+       "2025": "EUR - millions",
+       "2024": "EUR - millions",
+       "2023": "EUR - millions",
+       "2022": "EUR - millions",
+       "2021": "EUR - millions"
+      }
+     },
+     {
+      "voce": "Account Standards",
+      "valori": {
+       "2025": "IFRS",
+       "2024": "IFRS",
+       "2023": "IFRS",
+       "2022": "IFRS",
+       "2021": "IFRS"
+      }
+     }
+    ],
+    "azionisti": [
+     {
+      "nominativo": "Institutional and private investors",
+      "percentuale": "75.11"
+     },
+     {
+      "nominativo": "Italian Ministry of Economy and Finance",
+      "percentuale": "23.58"
+     },
+     {
+      "nominativo": "Treasury shares",
+      "percentuale": "1.31"
+     }
+    ],
+    "indirizzo": {
+     "ragione_sociale": "Enel S.p.A.",
+     "via": "Viale Regina Margherita 137",
+     "cap": "00198",
+     "comune": "Roma",
+     "paese": "Italy"
+    },
+    "contatti": {
+     "telefono": "+39 (0)6 8305 7975",
+     "email": "investor.relations@enel.com",
+     "sito_web": "https://www.enel.com/investors/overview"
+    },
+    "fonte": "Cofisem",
+    "ultimo_aggiornamento": "2026-10-23",
+    "url_pagina": "https://www.borsaitaliana.it/borsa/azioni/profilo-societa-dettaglio.html?isin=IT0003128367&mic=MTAA&lang=en"
+   }
+  },
+  "profilo_it": {
+   "seconds": null,
+   "error": null,
+   "response": {
+    "isin": "IT0003128367",
+    "mic": "MTAA",
+    "descrizione": "Enel S.p.A. è il primo produttore e distributore italiano di elettricità. Il fatturato per attività è ripartito come segue: - vendita di elettricità e gas naturale: 186,1 TWh di elettricità prodotta, 249,9 TWh di elettricità e 6,3 miliardi di m3 di gas naturale venduti nel 2025. Inoltre, il gruppo sviluppa attività di ingegneria e costruzione di impianti e unità di generazione elettrica; - trasporto e distribuzione di elettricità: 474,7 TWh di elettricità trasportati nel 2025. A fine 2024 Enel S.p.A. dispone di una rete di distribuzione elettrica pari a 1.881.651 km. La ripartizione geografica del fatturato è la seguente: Italia (39%), Regno Unito (5%), Europa (33%), America (22,6%) e altri paesi (0,4%).",
+    "dirigenti": [
+     {
+      "ruolo": "Amministratore Delegato",
+      "nominativo": "Flavio Cattaneo"
+     },
+     {
+      "ruolo": "Direttore amministrativo e finanziario",
+      "nominativo": "Stefano De Angelis"
+     },
+     {
+      "ruolo": "Direttore delle Relazioni con gli Investitori",
+      "nominativo": "Omar Al Bayaty"
+     },
+     {
+      "ruolo": "Direttore delle Risorse Umane",
+      "nominativo": "Elisabetta Colacchia"
+     },
+     {
+      "ruolo": "Direttore della Strategia",
+      "nominativo": "Michela Mossini"
+     },
+     {
+      "ruolo": "Direttore ESG",
+      "nominativo": "Michela Mossini"
+     },
+     {
+      "ruolo": "Direttore Affari Legali e Societari",
+      "nominativo": "Francesco Puntillo"
+     }
+    ],
+    "anni_disponibili": [
+     2025,
+     2024,
+     2023,
+     2022,
+     2021
+    ],
+    "dati_principali": [
+     {
+      "voce": "Fatturato",
+      "valori": {
+       "2025": "78057",
+       "2024": "73914",
+       "2023": "92882",
+       "2022": "135653",
+       "2021": "81900"
+      }
+     },
+     {
+      "voce": "Proventi dalle attività ordinarie",
+      "valori": {
+       "2025": "80346",
+       "2024": "78947",
+       "2023": "95565",
+       "2022": "140517",
+       "2021": "85719"
+      }
+     },
+     {
+      "voce": "Risultato operativo",
+      "valori": {
+       "2025": "11533",
+       "2024": "15494",
+       "2023": "10832",
+       "2022": "11193",
+       "2021": "7551"
+      }
+     },
+     {
+      "voce": "Costo dell'indebitamento finanziario netto",
+      "valori": {
+       "2025": "2493",
+       "2024": "2836",
+       "2023": "2893",
+       "2022": "2269",
+       "2021": "2136"
+      }
+     },
+     {
+      "voce": "Risultato delle aziende associate al bilancio di Gruppo",
+      "valori": {
+       "2025": "-74",
+       "2024": "-210",
+       "2023": "-41",
+       "2022": "-60",
+       "2021": "571"
+      }
+     },
+     {
+      "voce": "Risultato netto delle attività dismesse",
+      "valori": {
+       "2025": null,
+       "2024": null,
+       "2023": "-371",
+       "2022": "-2234",
+       "2021": "0"
+      }
+     },
+     {
+      "voce": "Utile netto",
+      "valori": {
+       "2025": "5617",
+       "2024": "8229",
+       "2023": "4267",
+       "2022": "2920",
+       "2021": "3857"
+      }
+     },
+     {
+      "voce": "Utile netto: quota del gruppo",
+      "valori": {
+       "2025": "4261",
+       "2024": "7016",
+       "2023": "3438",
+       "2022": "1682",
+       "2021": "3189"
+      }
+     },
+     {
+      "voce": "Chiusura esercizio fiscale",
+      "valori": {
+       "2025": "2025-12-31",
+       "2024": "2024-12-31",
+       "2023": "2023-12-31",
+       "2022": "2022-12-31",
+       "2021": "2021-12-31"
+      }
+     },
+     {
+      "voce": "Durata esercizio fiscale (mesi)",
+      "valori": {
+       "2025": "12",
+       "2024": "12",
+       "2023": "12",
+       "2022": "12",
+       "2021": "12"
+      }
+     },
+     {
+      "voce": "Valuta e unità di misura",
+      "valori": {
+       "2025": "EUR - milioni",
+       "2024": "EUR - milioni",
+       "2023": "EUR - milioni",
+       "2022": "EUR - milioni",
+       "2021": "EUR - milioni"
+      }
+     },
+     {
+      "voce": "Principi Contabili",
+      "valori": {
+       "2025": "IFRS",
+       "2024": "IFRS",
+       "2023": "IFRS",
+       "2022": "IFRS",
+       "2021": "IFRS"
+      }
+     }
+    ],
+    "azionisti": [
+     {
+      "nominativo": "Investitori istituzionali e privati",
+      "percentuale": "75.11"
+     },
+     {
+      "nominativo": "Ministero dell'Economia e delle Finanze italiano",
+      "percentuale": "23.58"
+     },
+     {
+      "nominativo": "Azioni proprie",
+      "percentuale": "1.31"
+     }
+    ],
+    "indirizzo": {
+     "ragione_sociale": "Enel S.p.A.",
+     "via": "Viale Regina Margherita 137",
+     "cap": "00198",
+     "comune": "Roma",
+     "paese": "Italy"
+    },
+    "contatti": {
+     "telefono": "+39 (0)6 8305 7975",
+     "email": "investor.relations@enel.com",
+     "sito_web": "https://www.enel.com/investors/overview"
+    },
+    "fonte": "Cofisem",
+    "ultimo_aggiornamento": "2026-10-23",
+    "url_pagina": "https://www.borsaitaliana.it/borsa/azioni/profilo-societa-dettaglio.html?isin=IT0003128367&mic=MTAA&lang=it"
+   }
+  }
+ }
+}
