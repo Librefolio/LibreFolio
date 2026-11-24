@@ -49,6 +49,13 @@
         wrapperClass?: string;
         /** Child owns native interaction semantics (for example, a button or link). */
         interactiveChild?: boolean;
+        /**
+         * The trigger is a part of a larger control — a badge or an icon inside a row button, an option (85 BTN-0c,
+         * D16): the click belongs to that control. The wrapper is a plain `<span>` that opens on a mouse rest only: no
+         * pin on click, no `stopPropagation`, no tab stop, no touch handling. Without it, a click on the part stopped
+         * at the wrapper and the control never acted (a route of `FxProviderSelect` was not added).
+         */
+        insideControl?: boolean;
         /** Delay before a plain-hover open (T2). Click/tap/keyboard always open
          *  instantly. Pass 0 to restore the pre-T2 instant hover. */
         showDelayMs?: number;
@@ -76,7 +83,7 @@
         children?: Snippet;
     }
 
-    let {text = '', html = '', math = false, position = 'top', maxWidth = '400px', wrapperClass = '', interactiveChild = false, showDelayMs = 500, testId = '', openOnFocus = false, showIf, anchor = null, trigger, open = false, onbodypointer, children}: Props = $props();
+    let {text = '', html = '', math = false, position = 'top', maxWidth = '400px', wrapperClass = '', interactiveChild = false, insideControl = false, showDelayMs = 500, testId = '', openOnFocus = false, showIf, anchor = null, trigger, open = false, onbodypointer, children}: Props = $props();
 
     let visible = $state(false);
     let tooltipElement: HTMLDivElement | undefined = $state(undefined);
@@ -480,6 +487,14 @@
 
 {#if external}
     <!-- External-target mode: the trigger lives elsewhere (pressable); nothing to wrap. -->
+{:else if insideControl}
+    <!-- A part of a larger control: hover names it, every other gesture is the control's. -->
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <span bind:this={triggerElement} class="tooltip-wrapper inside-control {wrapperClass}" data-testid={testId || undefined} onmouseenter={handlePointerEnter} onmouseleave={handlePointerLeave}>
+        {#if children}
+            {@render children()}
+        {/if}
+    </span>
 {:else if interactiveChild}
     <!-- svelte-ignore a11y_click_events_have_key_events -->
     <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -557,6 +572,11 @@
         position: relative;
         display: inline-flex;
         cursor: help;
+    }
+
+    /* The part of a control takes the control's cursor: a click on it is the control's. */
+    .tooltip-wrapper.inside-control {
+        cursor: inherit;
     }
 
     /* Fixed-position tooltip: rendered relative to viewport, never clipped by overflow */

@@ -21,6 +21,7 @@ import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import {createRawSnippet, mount, unmount, flushSync} from 'svelte';
 import {cleanup, fireEvent, render, screen, waitFor, within} from '$test/component';
 import Tooltip from './Tooltip.svelte';
+import TooltipInControlHarness from './__tests__/TooltipInControlHarness.svelte';
 
 /**
  * Evaluate `expression` in the page's own realm — the one inline handlers run in — and return the
@@ -387,5 +388,79 @@ describe('Tooltip — external-target mode (85 BTN-0)', () => {
         await fireEvent.mouseEnter(content);
         await fireEvent.mouseLeave(content);
         expect(onbodypointer.mock.calls).toEqual([[true], [false]]);
+    });
+});
+
+/**
+ * `insideControl` (85 BTN-0c, D16): a tooltip that names a part of a larger control (a provider badge inside a route
+ * row, a ⚠ inside an option) is only a hover. Its wrapper takes no click (it neither pins nor stops the click, so the
+ * control acts), has no role and no tab stop (the control is the one stop), and opens on a mouse rest, closing on leave.
+ * The control case: the same harness without the prop swallows the click — the defect D16 found in the route picker.
+ */
+describe('Tooltip — insideControl: a part of a larger control (85 BTN-0c, D16)', () => {
+    afterEach(() => {
+        vi.useRealTimers();
+    });
+
+    function harness(insideControl: boolean) {
+        const onpress = vi.fn();
+        render(TooltipInControlHarness, {props: {onpress, insideControl}});
+        return {onpress, control: screen.getByTestId('probe-control'), part: screen.getByTestId('probe-part'), badge: screen.getByTestId('probe-badge')};
+    }
+
+    it('a click on the part reaches the control, once, and does not pin the tooltip', async () => {
+        const {onpress, badge} = harness(true);
+        await fireEvent.click(badge);
+        expect(onpress).toHaveBeenCalledTimes(1);
+        expect(screen.queryByTestId('tooltip-content'), 'a click opens nothing: it is the control’s').toBeNull();
+    });
+
+    it('control: the old wrapper (no insideControl) swallows the click, and the control never acts', async () => {
+        const {onpress, badge} = harness(false);
+        await fireEvent.click(badge);
+        expect(onpress, 'the defect D16: the wrapper stopped the click').not.toHaveBeenCalled();
+        expect(screen.getByTestId('tooltip-content'), 'and pinned its own tooltip instead').toBeInTheDocument();
+    });
+
+    it('the part is no tab stop: no role, no tabindex, nothing focusable between the control and the next element', () => {
+        const {part, control} = harness(true);
+        expect(part.hasAttribute('role')).toBe(false);
+        expect(part.hasAttribute('tabindex')).toBe(false);
+        expect(part.tagName).toBe('SPAN');
+        const focusable = [...document.body.querySelectorAll<HTMLElement>('button, a[href], input, select, textarea, [tabindex]')].filter((el) => el.tabIndex >= 0);
+        expect(focusable.map((el) => el.dataset.testid)).toEqual(['probe-control', 'probe-next']);
+        expect(control.contains(part)).toBe(true);
+    });
+
+    it('control: the old wrapper is an extra tab stop inside the control', () => {
+        const {part} = harness(false);
+        expect(part).toHaveAttribute('role', 'button');
+        expect(part).toHaveAttribute('tabindex', '0');
+    });
+
+    it('a mouse rest opens it after the delay, and leaving closes it', async () => {
+        vi.useFakeTimers();
+        const {part} = harness(true);
+        await fireEvent.mouseEnter(part);
+        await vi.advanceTimersByTimeAsync(499);
+        expect(screen.queryByTestId('tooltip-content'), 'not before the delay').toBeNull();
+        await vi.advanceTimersByTimeAsync(1);
+        expect(screen.getByTestId('tooltip-content')).toHaveTextContent('European Central Bank');
+        await fireEvent.mouseLeave(part);
+        await vi.advanceTimersByTimeAsync(1_000);
+        expect(screen.queryByTestId('tooltip-content')).toBeNull();
+    });
+
+    it('a click while it shows does not pin it: leaving still closes it', async () => {
+        vi.useFakeTimers();
+        const {part, badge, onpress} = harness(true);
+        await fireEvent.mouseEnter(part);
+        await vi.advanceTimersByTimeAsync(500);
+        expect(screen.getByTestId('tooltip-content')).toBeInTheDocument();
+        await fireEvent.click(badge);
+        expect(onpress).toHaveBeenCalledTimes(1);
+        await fireEvent.mouseLeave(part);
+        await vi.advanceTimersByTimeAsync(1_000);
+        expect(screen.queryByTestId('tooltip-content'), 'a pinned tooltip would wait thirty seconds').toBeNull();
     });
 });
