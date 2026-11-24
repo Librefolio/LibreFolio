@@ -7466,7 +7466,7 @@
     }
   },
   "user/transactions/import/investimental.en.md": {
-    "md5": "d9155c6de3ce53b576802d4ac89aebb9",
+    "md5": "19ffe4a83e02b3c38af67129a0c3bc59",
     "langs_done": [
       "es",
       "fr",
@@ -7475,15 +7475,15 @@
     "last_translated": "2026-07-22T10:06:25.975277+00:00",
     "langs": {
       "it": {
-        "stamped_at": "2026-11-23T23:35:10.177385+00:00",
+        "stamped_at": "2026-11-24T02:30:16.727162+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
-        "stamped_at": "2026-11-23T23:35:10.177385+00:00",
+        "stamped_at": "2026-11-24T02:30:16.727162+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
-        "stamped_at": "2026-11-23T23:35:10.177385+00:00",
+        "stamped_at": "2026-11-24T02:30:16.727162+00:00",
         "stamped_by": "translate-stamp"
       }
     }
