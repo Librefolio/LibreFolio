@@ -44,6 +44,7 @@ vi.mock('$lib/components/charts/AllocationPieChart.svelte', () => ({default: cha
 import {fireEvent, render, screen, setupI18n, waitFor} from '$test/component';
 import type {AssetProfileRead, ProfileStep, ProfileVoice} from '$lib/features/assets/profile/profileStore';
 import AssetProfileTab from './AssetProfileTab.svelte';
+import {softIdentifiers} from '$lib/utils/assetTypes';
 
 function voice(key: string, shape: string, extra: Partial<ProfileVoice> = {}): ProfileVoice {
     return {key, shape, sign: null, unit: null, groups: [], key_figure: false, charted: false, volatile: false, choices: [], map_keys: null, topic: 'structure', ...extra} as ProfileVoice;
@@ -97,6 +98,13 @@ describe('AssetProfileTab', () => {
         expect(screen.getByTestId('asset-profile-description')).toHaveAttribute('data-state', 'value');
         expect(screen.getByTestId('asset-profile-description')).toHaveTextContent('A world equity fund');
         expect(screen.getByTestId('profile-classification-geography')).toHaveAttribute('data-state', 'value');
+    });
+
+    // 81 U26b: the page hands the tab the asset's free identifiers, and they reach «Identità» as one row of chips.
+    it('passes the free identifiers to the identity group as chips', async () => {
+        render(AssetProfileTab, {props: {assetId: 7, period: PERIOD, isin: null, ticker: null, softIdentifiers: ['WKN A2PKXG']}});
+        await waitFor(() => expect(screen.getByTestId('asset-profile-tab')).toHaveAttribute('data-status', 'ready'));
+        expect(screen.getByTestId('profile-detail-soft-identifier-0')).toHaveTextContent('WKN A2PKXG');
     });
 
     it('reads from the first day of the profile for «Tutti»', async () => {
@@ -237,5 +245,15 @@ describe('AssetProfileTab', () => {
         render(AssetProfileTab, {props: {assetId: 7, period: PERIOD, isin: null, ticker: null, onhistory}});
         await waitFor(() => expect(screen.getByTestId('asset-profile-tab')).toHaveAttribute('data-status', 'ready'));
         expect(screen.queryByTestId('asset-profile-description-history'), 'no rows, no history').toBeNull();
+    });
+});
+
+// 81 U26b: the asset's free identifiers (type `OTHER`) as the page reads them from the asset.
+describe('softIdentifiers', () => {
+    it('lists the non-empty free values in order, and ignores a missing or non-text field', () => {
+        expect(softIdentifiers({identifier_other: ['B', '', 'A', null, 3]})).toEqual(['B', 'A']);
+        expect(softIdentifiers({identifier_other: null})).toEqual([]);
+        expect(softIdentifiers({})).toEqual([]);
+        expect(softIdentifiers({identifier_other: 'WKN'})).toEqual(['WKN']);
     });
 });

@@ -83,6 +83,26 @@ describe('ProfileDetails', () => {
         expect(rows[1]).toContain('123456789');
     });
 
+    // 81 U26b: the asset's «other» identifiers are free values, not a typed id: one row «Other identifiers» with a chip
+    // each (the look of «Modifica asset»'s tag input, read-only), in monospace, never one row per value labelled «other».
+    it('shows the free identifiers as chips in one row, read-only and in monospace', () => {
+        render(ProfileDetails, {props: {groups: GROUPS, texts: TEXTS, isin: null, ticker: 'VWCE', softIdentifiers: ['WKN A2PKXG', 'LU-0001']}});
+        const identity = screen.getByTestId('profile-details-group-identity');
+        const row = within(identity).getByTestId('profile-detail-soft-identifiers');
+        const chips = within(row).getAllByTestId(/^profile-detail-soft-identifier-/);
+        expect(chips.map((chip) => chip.textContent?.trim())).toEqual(['WKN A2PKXG', 'LU-0001']);
+        for (const chip of chips) {
+            expect(chip.className, 'the value is not in monospace').toContain('font-mono');
+            expect(chip.querySelector('button'), 'a read-only chip has no remove control').toBeNull();
+        }
+        expect(within(identity).queryAllByTestId(/^profile-detail-identifier-/), 'a row per free value is still drawn').toHaveLength(0);
+    });
+
+    it('draws no free-identifiers row when the asset has none', () => {
+        render(ProfileDetails, {props: {groups: GROUPS, texts: TEXTS, isin: null, ticker: null}});
+        expect(screen.queryByTestId('profile-detail-soft-identifiers')).toBeNull();
+    });
+
     it('opens the history of a voice with a value, when the page handles it', async () => {
         const onhistory = vi.fn();
         render(ProfileDetails, {props: {groups: GROUPS, texts: TEXTS, isin: null, ticker: null, onhistory}});
