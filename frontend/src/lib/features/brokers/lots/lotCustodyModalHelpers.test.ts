@@ -115,6 +115,8 @@ describe('eventMarkerKind', () => {
         ['TRANSFER_DEPART', 'transfer'],
         ['TRANSFER_ARRIVE', 'transfer'],
         ['SPLIT', 'split'],
+        // A reward merged into the lot (STK-3) rescales it as a split does: quantity up, cost unchanged — never an opening.
+        ['REWARD_MERGE', 'split'],
         ['SELL', 'close'],
         ['ADJUSTMENT_OUT', 'close'],
         ['ANYTHING_ELSE', 'close'],

@@ -347,6 +347,12 @@ describe('eventCategory', () => {
         expect(eventCategory('REWARD', null)).toBe('reward');
     });
 
+    it('draws a reward merged into the lots (REWARD_MERGE, STK-3) on the reward series, a scope-edge leg as a transfer', () => {
+        expect(eventCategory('REWARD_MERGE')).toBe('reward');
+        expect(eventCategory('REWARD_MERGE', null)).toBe('reward');
+        expect(eventCategory('REWARD_MERGE', 'IN')).toBe('transfer');
+    });
+
     it('returns null for a kind that draws no marker', () => {
         expect(eventCategory('TRANSFER_DEPART')).toBeNull();
     });
@@ -368,6 +374,14 @@ describe('eventTimelineOrder', () => {
         expect(eventTimelineOrder('REWARD')).toBe(eventTimelineOrder('BUY'));
         expect(eventTimelineOrder('REWARD')).toBeGreaterThan(eventTimelineOrder('SPLIT'));
         expect(eventTimelineOrder('REWARD')).toBeLessThan(eventTimelineOrder('SELL'));
+    });
+
+    it('replays a reward merged into the lots after the splits and before the inflows (the engine phase 3, STK-3)', () => {
+        expect(eventTimelineOrder('REWARD_MERGE')).toBe(2.5);
+        expect(eventTimelineOrder('REWARD_MERGE')).toBeGreaterThan(eventTimelineOrder('SPLIT'));
+        expect(eventTimelineOrder('REWARD_MERGE')).toBeLessThan(eventTimelineOrder('BUY'));
+        expect(eventTimelineOrder('REWARD_MERGE')).toBeLessThan(eventTimelineOrder('REWARD'));
+        expect(eventTimelineOrder('REWARD_MERGE')).toBeLessThan(eventTimelineOrder('SELL'));
     });
 });
 
@@ -537,6 +551,30 @@ describe('applyLotEvent', () => {
 
     it('SPLIT with a null ratio leaves quantity as the base and price untouched', () => {
         expect(applyLotEvent({quantity: 10, unitPrice: 8}, ev('SPLIT', {}))).toEqual({quantity: 10, unitPrice: 8});
+    });
+
+    it('REWARD_MERGE adds the row quantity to the base and divides the price by the ratio, cost unchanged (STK-3)', () => {
+        // 10 @ 8 and a merge of 10 units at ratio 2: 20 @ 4, the 80 of cost kept
+        expect(applyLotEvent({quantity: 10, unitPrice: 8}, ev('REWARD_MERGE', {quantity: '10', ratio: '2'}))).toEqual({quantity: 20, unitPrice: 4});
+        // The quantity is before + added, never before × ratio: 10 + 3 = 13, where a split would give 20
+        expect(applyLotEvent({quantity: 10, unitPrice: 4}, ev('REWARD_MERGE', {quantity: '3', ratio: '2'}))).toEqual({quantity: 13, unitPrice: 2});
+        // A negative row quantity is read as its size, as an inflow's
+        expect(applyLotEvent({quantity: 10, unitPrice: 8}, ev('REWARD_MERGE', {quantity: '-10', ratio: '2'}))).toEqual({quantity: 20, unitPrice: 4});
+    });
+
+    it('REWARD_MERGE never adopts a row price: the merged units come at no cost', () => {
+        expect(applyLotEvent({quantity: 10, unitPrice: 8}, ev('REWARD_MERGE', {quantity: '10', ratio: '2', unit_price: '99'}))).toEqual({quantity: 20, unitPrice: 4});
+    });
+
+    it('REWARD_MERGE with a missing part carries what it cannot compute', () => {
+        // No ratio: the quantity still grows, the price stays
+        expect(applyLotEvent({quantity: 10, unitPrice: 8}, ev('REWARD_MERGE', {quantity: '10'}))).toEqual({quantity: 20, unitPrice: 8});
+        // No quantity: the quantity stays, the price follows the ratio
+        expect(applyLotEvent({quantity: 10, unitPrice: 8}, ev('REWARD_MERGE', {ratio: '2'}))).toEqual({quantity: 10, unitPrice: 4});
+        // A ratio of 0 divides nothing
+        expect(applyLotEvent({quantity: 10, unitPrice: 8}, ev('REWARD_MERGE', {quantity: '10', ratio: '0'}))).toEqual({quantity: 20, unitPrice: 8});
+        // No running state: a merge opens nothing (it is not an opening row)
+        expect(applyLotEvent(start, ev('REWARD_MERGE', {quantity: '10', ratio: '2'}))).toEqual({quantity: null, unitPrice: null});
     });
 
     it('TRANSFER seeds from the event only while the running state is null', () => {

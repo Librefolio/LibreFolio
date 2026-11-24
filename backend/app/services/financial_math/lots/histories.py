@@ -12,7 +12,7 @@ from typing import Callable, Sequence
 
 from backend.app.db.models import Transaction
 from backend.app.schemas.portfolio.lots import LotPriceHistoryPoint, LotReturnHistoryPoint, LotValueHistoryPoint, MarketPriceHistoryPoint, PerformanceHistoryPoint
-from backend.app.services.financial_math.fifo.models import FifoEngineResult, FifoInputTransaction, FifoLot, FragmentInterval, LotClosure
+from backend.app.services.financial_math.fifo.models import FifoEngineResult, FifoInputTransaction, FifoLot, FragmentInterval, LotClosure, RewardAllocation
 from backend.app.services.financial_math.lots.conversions import ConvertedClosure, FxRateResolver, convert_closure
 from backend.app.services.financial_math.lots.economic_events import NOTHING_WITHHELD, WithheldEconomics
 from backend.app.services.financial_math.lots.prices import opening_reference_price
@@ -138,9 +138,11 @@ def build_performance_history(  # noqa: C901 — cash-flow collection loops with
                     invalid_external_flow_from = tx.date if invalid_external_flow_from is None else min(invalid_external_flow_from, tx.date)
             continue
         # An ADJUSTMENT-in with a cost moves that cost into the scope, and so does a REWARD (project 79), the BUY of the
-        # DIVIDEND + BUY pair it stands for. An ADJUSTMENT-out has no value (N78-1): a quantity correction, never a
-        # flow, whatever cost basis the row holds.
-        if tx_type in ("ADJUSTMENT", "REWARD") and tx.quantity > 0 and _adjustment_native_cost(tx, asset_currency) is not None:
+        # DIVIDEND + BUY pair it stands for — but not in the MERGED view (STK-3), where its units join the lots at no
+        # cost. An ADJUSTMENT-out has no value (N78-1): a quantity correction, never a flow, whatever cost basis the row
+        # holds.
+        reward_with_cost = tx_type == "REWARD" and context.engine_result.reward_allocation is RewardAllocation.OWN_LOT
+        if (tx_type == "ADJUSTMENT" or reward_with_cost) and tx.quantity > 0 and _adjustment_native_cost(tx, asset_currency) is not None:
             adjustment_cost = adjustment_cash_flow_cost(tx=tx, asset_currency=asset_currency, fx_resolver=fx_resolver)
             if adjustment_cost is None:
                 invalid_external_flow_from = tx.date if invalid_external_flow_from is None else min(invalid_external_flow_from, tx.date)

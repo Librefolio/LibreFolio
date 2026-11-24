@@ -205,6 +205,7 @@ async def get_lots_analysis(
             selected_lot_ids=body.selected_lot_ids,
             requested_analyses=body.requested_analyses,
             matching_methods=body.matching_methods,
+            reward_allocation=body.reward_allocation,
         )
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e

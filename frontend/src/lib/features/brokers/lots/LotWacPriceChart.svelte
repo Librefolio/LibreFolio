@@ -665,6 +665,7 @@
         const eventTypeBuy = $_('brokers.lots.chartMarkers.eventType.BUY');
         const eventTypeSell = $_('brokers.lots.chartMarkers.eventType.SELL');
         const eventTypeReward = translateOr($_, 'brokers.lots.chartMarkers.eventType.REWARD', 'Reward');
+        const eventTypeRewardMerge = translateOr($_, 'brokers.lots.chartMarkers.eventType.REWARD_MERGE', 'Reward spread');
         const eventTypeAdjustmentIn = $_('brokers.lots.chartMarkers.eventType.ADJUSTMENT_IN');
         const eventTypeAdjustmentOut = $_('brokers.lots.chartMarkers.eventType.ADJUSTMENT_OUT');
         const eventTypeTransferDepart = $_('brokers.lots.chartMarkers.eventType.TRANSFER_DEPART');
@@ -758,6 +759,7 @@
                 BUY: !eventTypeBuy || eventTypeBuy === 'brokers.lots.chartMarkers.eventType.BUY' ? 'Buy' : eventTypeBuy,
                 SELL: !eventTypeSell || eventTypeSell === 'brokers.lots.chartMarkers.eventType.SELL' ? 'Sale' : eventTypeSell,
                 REWARD: eventTypeReward,
+                REWARD_MERGE: eventTypeRewardMerge,
                 ADJUSTMENT_IN: !eventTypeAdjustmentIn || eventTypeAdjustmentIn === 'brokers.lots.chartMarkers.eventType.ADJUSTMENT_IN' ? 'Adjustment In' : eventTypeAdjustmentIn,
                 ADJUSTMENT_OUT: !eventTypeAdjustmentOut || eventTypeAdjustmentOut === 'brokers.lots.chartMarkers.eventType.ADJUSTMENT_OUT' ? 'Adjustment Out' : eventTypeAdjustmentOut,
                 TRANSFER_DEPART: !eventTypeTransferDepart || eventTypeTransferDepart === 'brokers.lots.chartMarkers.eventType.TRANSFER_DEPART' ? 'Transfer' : eventTypeTransferDepart,

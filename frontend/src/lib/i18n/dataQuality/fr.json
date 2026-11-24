@@ -48,6 +48,7 @@
     "staleFx": "{count} taux de change non à jour, le plus ancien depuis {days} jours — synchronisez les taux pour mettre à jour les totaux",
     "staleFxAfterSync": "Le fournisseur n'a pas encore de taux plus récents pour {pairs} : réessayez plus tard.",
     "assetCostLinkedParentAfterRange": "{economic_type} de {target_amount} {target_currency} du {as_of_date} est liée à une transaction du {parent_date}, après la fin de l'analyse — non allouée tant que l'analyse n'atteint pas cette date",
-    "assetCostLinkedIncomeNoEligibleLots": "{economic_type} de {target_amount} {target_currency} du {as_of_date} est liée à un revenu du {parent_date} qu'aucun lot n'a perçu — non allouée"
+    "assetCostLinkedIncomeNoEligibleLots": "{economic_type} de {target_amount} {target_currency} du {as_of_date} est liée à un revenu du {parent_date} qu'aucun lot n'a perçu — non allouée",
+    "rewardNotMergedNoOpenLot": "Une récompense a gardé son propre lot, sans coût : son courtier ne détenait aucun lot la veille."
   }
 }
