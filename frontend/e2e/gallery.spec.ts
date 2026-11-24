@@ -132,7 +132,7 @@ import {
     settlePacShot,
 } from './fixtures/galleryPac';
 import {closeProviderCompare, fitScreenToCompareDialog, mockProviderCompare, openProviderCompare, restoreCompareScreen, settleProviderCompareShot} from './fixtures/galleryProviderCompare';
-import {serveGalleryEnrichers} from './fixtures/galleryEnrichers';
+import {GALLERY_ENRICHER_QUERY, GALLERY_RECOGNIZED_ASSET, serveGalleryEnricherAnswers, serveGalleryEnrichers} from './fixtures/galleryEnrichers';
 import {expectGalleryEmailStatus, serveGalleryEmailStatus} from './fixtures/galleryEmail';
 import {expectGalleryBackupReady, serveGalleryBackupJob} from './fixtures/galleryBackup';
 import {openAiExportPanel, selectAiExportSelection} from './ai-export/helpers';
@@ -6490,7 +6490,7 @@ test.describe('Gallery Screenshots', () => {
             }
         });
 
-        test('Asset detail profile: latest changes, the history of the data, the enrichers window (plan 68, E12)', async ({page}, testInfo) => {
+        test('Asset detail profile: latest changes, the history of the data (plan 68, E12)', async ({page}, testInfo) => {
             // The seeded fund with a profile history (populate_mock_data.py, PROFILE_HISTORY_FUND): its TER read by justETF,
             // corrected by hand, read again; its fund size read three times; its enrichers justETF and Borsa Italiana. The
             // real enrichers' catalogue is served (galleryEnrichers.ts): a lane serves only mockenrich. Read only: windows
@@ -6534,8 +6534,29 @@ test.describe('Gallery Screenshots', () => {
                     await restoreTallScreen(page);
                     await page.getByTestId('profile-history-close').click();
                     await expect(history).toHaveCount(0);
+                }
+            }
+        });
 
-                    // 3. The enrichers window, over the asset window: justETF first, Borsa Italiana second, with their last read
+        test('Asset enrichers window: recognized on opening, search online (82 ENR-4)', async ({page}, testInfo) => {
+            // The seeded iShares Core MSCI World, no enrichers yet, opened in edit mode: «Riconosci» starts with the window
+            // and «Cerca online» searches by name. Both answered as the real enrichers would (galleryEnrichers.ts): justETF
+            // and ESMA know the ISIN and enter the list, Yahoo Finance found by the bare ticker waits in «Non in elenco»,
+            // the search shows three Yahoo listings. Read only: the window is closed without applying, nothing saved.
+            test.setTimeout(300_000);
+            const viewport = getViewport(testInfo);
+            await serveGalleryEnrichers(page);
+            await serveGalleryEnricherAnswers(page);
+
+            for (const lang of SUPPORTED_LANGUAGES) {
+                await setBrowserLocale(page, lang);
+                for (const theme of THEMES) {
+                    await goToAssetsPage(page);
+                    await setLanguage(page, lang);
+                    await setTheme(page, theme);
+                    await freezeAnimations(page);
+
+                    await openGalleryAsset(page, GALLERY_RECOGNIZED_ASSET.name);
                     const editBtn = page.getByTestId('asset-detail-edit-btn');
                     await expect(editBtn).toBeEnabled({timeout: 10_000});
                     await editBtn.click();
@@ -6543,9 +6564,17 @@ test.describe('Gallery Screenshots', () => {
                     await page.getByTestId('asset-modal-enrichers').click();
                     const enrichers = page.getByTestId('enrichers-modal');
                     await expect(enrichers).toBeVisible({timeout: 10_000});
+
+                    // «Riconosci» on opening: justETF and ESMA chosen, Yahoo Finance by its bare ticker left out
+                    await expect(enrichers.getByTestId('enrichers-recognition'), 'recognized on opening').toHaveAttribute('data-state', 'found', {timeout: 10_000});
                     await expect(enrichers.getByTestId('enricher-row-justetf')).toHaveAttribute('data-position', '1');
-                    await expect(enrichers.getByTestId('enricher-row-justetf')).toHaveAttribute('data-last-read', 'ok');
-                    await expect(enrichers.getByTestId('enricher-row-borsa_italiana')).toHaveAttribute('data-availability', 'ok');
+                    await expect(enrichers.getByTestId('enricher-row-esma')).toHaveAttribute('data-position', '2');
+                    await expect(enrichers.getByTestId('enricher-other-yfinance')).toHaveAttribute('data-ticker-only', 'true');
+
+                    // «Cerca online» by name: Yahoo Finance's listings, each with «+»
+                    await enrichers.getByTestId('enrichers-search-input').fill(GALLERY_ENRICHER_QUERY);
+                    await expect(enrichers.getByTestId('enrichers-search')).toHaveAttribute('data-status', 'done', {timeout: 10_000});
+                    await expect(enrichers.locator('[data-testid^="enrichers-search-row-"][data-code="yfinance"]'), 'three Yahoo listings').toHaveCount(3);
                     await imagesSettled(enrichers);
                     if (viewport === 'desktop') await fitScreenToDialog(page, enrichers, `desktop/${lang}/${theme}/assets/enrichers-window`);
                     await screenshot(page, viewport, lang, theme, 'assets', 'enrichers-window');
