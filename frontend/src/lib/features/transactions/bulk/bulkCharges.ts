@@ -216,7 +216,10 @@ function withDraftValues(op: PendingOp, draft: ChargeDraft): PendingOp {
 /**
  * The form's answer (`_charges`) back onto the operations, one way: nothing typed is lost.
  *   - type, cash and note go to the charge's operation;
- *   - a saved one: `delete` → `markedDelete`, `unlink` → `parentUnlink` (`chargeOf` kept), `linked` clears both;
+ *   - a saved one: `delete` → `markedDelete`, `unlink` → `parentUnlink` (`chargeOf` kept), `linked` clears them and the
+ *     choices of another link (`byParentChoice`, `clonedFields`): the same operation as the bar's «Link» (66 TL-2);
+ *   - a create of the Bulk picked in the form (66 TL-2, `op-<tempId>` not under this parent) joins as «Link» joins it;
+ *     a `delete` never takes it out of the Bulk;
  *   - a `linkNew` (a link made here, never saved) unlinked, or left out by the form, only undoes that link;
  *   - a new draft → a create from `newChargeOp`, owned by the parent and following it (`followsParent`);
  *   - a create of the parent (`op-<tempId>`) deleted, or left out by the form (trashed there), leaves the Bulk;
@@ -239,7 +242,8 @@ export function applyChargeDrafts(parent: PendingOp, ops: readonly PendingOp[], 
             }
             handled.add(out[at].tempId);
             if (draft.state === 'delete') {
-                out.splice(at, 1);
+                // 66 TL-2: only a create of this parent leaves; a row picked from the Bulk was never its, and stays.
+                if (out[at].chargeOf === parent.tempId) out.splice(at, 1);
                 continue;
             }
             const valued = withDraftValues(out[at], draft);
@@ -250,7 +254,9 @@ export function applyChargeDrafts(parent: PendingOp, ops: readonly PendingOp[], 
                 out[at] = valued.followsParent ? {...standalone, fields: {...standalone.fields, broker_id, asset_id, date}} : standalone;
                 continue;
             }
-            out[at] = {...valued, chargeOf: parent.tempId};
+            // 66 TL-2: a create picked from elsewhere in the Bulk joins as «Link» joins it (`linkInBulk`): its earlier link
+            // choices go. One already under this parent keeps what it has (a «Clona» copy stays a copy).
+            out[at] = out[at].chargeOf === parent.tempId ? {...valued, chargeOf: parent.tempId} : {...without(valued, 'parentUnlink', 'parentLinkId', 'byParentChoice', 'clonedFields'), chargeOf: parent.tempId};
             continue;
         }
 
@@ -278,7 +284,8 @@ export function applyChargeDrafts(parent: PendingOp, ops: readonly PendingOp[], 
             // Not a `linkNew`: this parent is the charge's saved one, so «unlink» cuts a saved link (`unlinkCharge`'s first case).
             out[at] = {...without(valued, 'parentLinkId'), chargeOf: parent.tempId, markedDelete: false, parentUnlink: true} as PendingOp;
         } else {
-            out[at] = {...without(valued, 'parentUnlink', 'parentLinkId'), chargeOf: parent.tempId, markedDelete: false} as PendingOp;
+            // 66 TL-2: the same operation the bar's «Link» gives (`linkInBulk`): a choice set by another parent's delete goes too.
+            out[at] = {...without(valued, 'parentUnlink', 'parentLinkId', 'byParentChoice', 'clonedFields'), chargeOf: parent.tempId, markedDelete: false} as PendingOp;
         }
     }
     // What the form left out: a create it trashed leaves; a saved charge it dropped was a link made here (the form
@@ -679,4 +686,51 @@ export function wireClonedRows(sources: readonly TXReadItem[], clones: readonly 
         }
     }
     return {ops: out, expanded};
+}
+
+// ---------------------------------------------------------------------------
+// TL-2 — the charges picker of a parent's form sees the Bulk's rows (FEE consultant, lot TL-2)
+// ---------------------------------------------------------------------------
+
+/** What the form tells the Bulk about the parent it shows: its current broker, asset and type. */
+export interface BulkChargeProbe {
+    broker_id: number;
+    asset_id: number | null;
+    type: string;
+}
+
+/**
+ * The Bulk's operations the charges picker of a parent's form may offer (66 TL-2), by the selection's «Link» rule.
+ * `parent` is the parent's operation, or `null` while its form creates it (a probe create stands in); the probe carries the
+ * form's current broker, asset and type. Every charge (by `typeOf`) other than the parent, not a hidden half of a pair:
+ *   - already owned by this parent (`chargeOf`): in its section, neither offered nor excluded;
+ *   - owned here by another operation and not unlinked: linked — a new parent of the Bulk has no id the bare rule could
+ *     read, so this is said here; a saved one is excluded;
+ *   - otherwise `bulkLinkSelection([probe, charge])`: ok → offered; off or hidden → a saved one is excluded (the form drops
+ *     it from the database's rows: «del», linked to a parent outside the Bulk).
+ * Pure.
+ */
+export function bulkChargeCandidates(parent: PendingOp | null, probe: BulkChargeProbe, ops: readonly PendingOp[], get: StoreGet, opts: LinkOptions, typeOf: (op: PendingOp) => string = (op) => op.fields.type): {candidates: PendingOp[]; excluded: number[]} {
+    const base: DraftFields = parent ? parent.fields : {broker_id: probe.broker_id, asset_id: probe.asset_id, type: probe.type as DraftFields['type'], date: '', quantity: '0', cash: null, tags: [], description: '', asset_event_id: null, cost_basis_override: null, cost_basis_mode: null};
+    const probeParent: PendingOp = parent ? ({...parent, fields: {...base, broker_id: probe.broker_id, asset_id: probe.asset_id, type: probe.type as DraftFields['type']}} as PendingOp) : {op: 'create', tempId: '~tl2-probe-parent', createdSeq: Number.MAX_SAFE_INTEGER, fields: base, link_uuid: null};
+    const withProbe = parent ? ops.map((op) => (op === parent ? probeParent : op)) : [...ops, probeParent];
+    const typeOfProbe = (op: PendingOp): string => (op === probeParent ? probe.type : typeOf(op));
+    const candidates: PendingOp[] = [];
+    const excluded: number[] = [];
+    for (const op of ops) {
+        if (op === parent || op.pairedWith !== undefined || !isChargeType(typeOf(op))) continue;
+        if (parent && op.chargeOf === parent.tempId) continue;
+        const exclude = () => {
+            if (op.op === 'edit') excluded.push(op.txId);
+        };
+        const owner = ownerOf(op, ops);
+        if (owner && !op.parentUnlink) {
+            exclude();
+            continue;
+        }
+        const verdict = bulkLinkSelection([probeParent, op], withProbe, get, opts, typeOfProbe);
+        if (verdict.kind === 'ok') candidates.push(op);
+        else exclude();
+    }
+    return {candidates, excluded};
 }
