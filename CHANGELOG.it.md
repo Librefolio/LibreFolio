@@ -67,6 +67,7 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 - **AI Export: «Strategie di protezione»**, una nuova analisi della Dashboard: dice se adesso ha senso proteggere il portafoglio e, solo se ha senso, come.
 - **Premi in token (staking, airdrop) come tipo di transazione.** Un tipo nuovo, «Premio», registra le unità ricevute come reddito in natura: apre un lotto al loro valore alla ricezione, e quel valore conta come reddito, come un dividendo reinvestito lo stesso giorno: nessun movimento di contante e nessun capitale aggiunto. Lotti, costo medio, redditi, Yield on Cost e P&L del periodo lo leggono. Nella finestra della transazione un Premio chiede il «Valore alla ricezione», proposto dallo storico dei prezzi dell'asset e sempre modificabile. Nella vista Reddito della Dashboard i premi sono una serie a sé, in magenta, e i grafici dei lotti li segnano. Nell'analisi dei lotti di un broker, l'interruttore «Distribuisci i premi sui lotti» (spento di default) ripartisce ogni premio sui lotti già aperti invece di mostrarlo come lotto a sé. (#90)
 - **Rischio › Simulazione, il periodo da cui pescare i giorni**: «Giorni pescati da» offre «Tutta la storia comune» (il predefinito) o «Un periodo scelto», dentro la storia comune delle posizioni, per un tratto più calmo o più agitato. Un inizio prima della storia comune si sposta al suo primo giorno, con un avviso.
+- **Valore dei premi dallo storico prezzi**: nel Bulk, i premi importati senza valore (lo staking di Bitvavo e CoinTracking, il CSV generico) si riempiono con un clic su «Riempi dallo storico prezzi»: la chiusura dell'asset di quel giorno, per unità, nella valuta del prezzo. I giorni senza prezzo salvato restano a te, e un conteggio dice quanti ne sono stati riempiti.
 
 #### 🎯 Ribilanciatore e Allocatore PAC
 
@@ -145,6 +146,7 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 - Nella finestra di una coppia di valute, un clic su un fornitore della legenda mostra o nasconde la sua descrizione; un doppio clic apre la sua guida.
 - **AI Export: le analisi «Performance e cause di mercato» rispondono subito**: il prompt chiede una risposta diretta di circa una pagina, che finisce con le domande utili da fare dopo, invece di un lungo rapporto a sezioni fisse.
 - **Tabelle**: il clic destro su una riga apre lo stesso menu del suo ⋮ (dentro un campo di testo resta il menu del browser, per Incolla), e la barra della selezione sta sul bordo destro della tabella. In File, eliminare o scaricare più file insieme ora chiede prima una conferma.
+- **Premi in natura dagli import**: Coinbase (staking, premi, guadagni dei corsi), Crypto.com (premi in cripto, interessi Earn, cashback della carta), Freetrade (azioni gratuite), Bitvavo e CoinTracking (staking) li importano come Premi: le unità ricevute senza contante. Un'azione gratuita di Freetrade non toglie più contante dal conto, e un premio Crypto.com senza quantità in cripto non è più un interesse in contanti: un avviso lo nomina. Il CSV generico legge le righe `REWARD` (anche `staking`, `airdrop`…) e ne chiede il valore. Un file già importato segna ogni premio come probabile doppione della vecchia riga. La finestra del Premio propone solo la chiusura del giorno del premio.
 
 #### 🎯 Allocatore PAC e Strumenti
 
@@ -156,6 +158,7 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 
 ### 🐛 Corretto
 
+- Bitvavo: i premi di staking (stato «Distributed») venivano scartati e mai importati; ora entrano come Premi.
 - Investimental (beta): un ordine eseguito in più parti si importa con tutta la quantità e tutto l'importo eseguiti; prima entrava solo l'ultima parte (un ordine di vendita di 210 quote arrivava come 64). Se hai già importato un ordine così, cancella una volta quella transazione e reimporta il file: la transazione corretta arriva come nuova. Un file che comincia con un ordine già avviato non può dare la sua quantità intera: quell'ordine resta fuori, e un avviso mostra cosa c'è nel file, perché tu lo inserisca a mano.
 - Dopo un cambio del tipo di un asset, l'allocazione «Per tipo» mostrava ancora il tipo vecchio fino a 24 ore.
 - Sul telefono la finestra della transazione non scorre più di lato quando l'asset ha un nome lungo: i campi tornano a stare nello schermo, in visualizza e in modifica. Il difetto c'era già nella 1.3.0.

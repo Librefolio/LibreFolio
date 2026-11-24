@@ -67,6 +67,7 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 - **AI Export: «Estrategias de protección»**, un nuevo análisis del Panel: dice si ahora tiene sentido proteger tu cartera y, solo si lo tiene, cómo.
 - **Recompensas en tokens (staking, airdrops) como tipo de transacción.** Un tipo nuevo, «Recompensa», registra las unidades recibidas como ingreso en especie: abre un lote a su valor al recibirlas, y ese valor cuenta como ingreso, como un dividendo reinvertido el mismo día: sin movimiento de efectivo ni capital añadido. Los lotes, el coste medio, los ingresos, el Yield on Cost y el P&L del periodo lo leen. En la ventana de la transacción, una Recompensa pide el «Valor al recibirlo», precargado desde el historial de precios del activo y siempre editable. En la vista de Ingresos del Panel, las recompensas son una serie propia, en magenta, y los gráficos de lotes las marcan. En el análisis de lotes de un bróker, el interruptor «Repartir las recompensas entre los lotes» (desactivado por defecto) reparte cada recompensa entre los lotes ya abiertos en lugar de mostrarla como un lote propio. (#90)
 - **Riesgo › Simulación, el periodo del que se toman los días**: «Días tomados de» ofrece «Toda la historia común» (por defecto) o «Un periodo elegido», dentro de la historia común de las posiciones, para un tramo más tranquilo o más agitado. Un inicio anterior a la historia común pasa a su primer día, con un aviso.
+- **Valor de las recompensas desde el historial de precios**: en el Bulk, las recompensas importadas sin valor (el staking de Bitvavo y CoinTracking, el CSV genérico) se rellenan con un clic en «Rellenar desde el historial de precios»: el cierre del activo de ese mismo día, por unidad, en la moneda del precio. Los días sin precio guardado quedan para ti, y un contador dice cuántas se rellenaron.
 
 #### 🎯 Reequilibrador de cartera y Asignador PAC
 
@@ -145,6 +146,7 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 - En la ventana de un par de divisas, un clic en un proveedor de la leyenda muestra u oculta su descripción; un doble clic abre su guía.
 - **AI Export: los análisis «Rendimiento y factores de mercado» responden primero**: el prompt pide una respuesta directa de una página aproximadamente, que termina con las preguntas útiles para hacer después, en lugar de un largo informe en secciones fijas.
 - **Tablas**: un clic derecho en una fila abre el mismo menú que su ⋮ (dentro de un campo de texto sigue el menú del navegador, para Pegar), y la barra de selección se sitúa en el borde derecho de la tabla. En Archivos, eliminar o descargar varios archivos a la vez ahora pide confirmación antes.
+- **Recompensas en especie desde las importaciones**: Coinbase (staking, recompensas, ingresos de cursos), Crypto.com (recompensas en cripto, intereses Earn, cashback de la tarjeta), Freetrade (acciones gratuitas), Bitvavo y CoinTracking (staking) las importan como Recompensas: las unidades recibidas sin efectivo. Una acción gratuita de Freetrade ya no resta efectivo de la cuenta, y una recompensa de Crypto.com sin cantidad en cripto ya no es un interés en efectivo: un aviso la nombra. El CSV genérico lee las filas `REWARD` (también `staking`, `airdrop`…) y pide su valor. Un archivo ya importado marca cada recompensa como probable duplicado de la fila antigua. La ventana de la Recompensa propone solo el cierre del día de la recompensa.
 
 #### 🎯 Asignador PAC y Herramientas
 
@@ -156,6 +158,7 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 
 ### 🐛 Corregido
 
+- Bitvavo: las recompensas de staking (estado «Distributed») se descartaban y nunca se importaban; ahora entran como Recompensas.
 - Investimental (beta): una orden ejecutada en varias partes se importa con toda la cantidad y todo el importe ejecutados; antes solo entraba su última parte (una orden de venta de 210 participaciones llegaba como 64). Si ya importaste una orden así, borra una vez esa transacción e importa de nuevo el archivo: la transacción corregida llega como nueva. Un archivo que empieza con una orden ya en curso no puede dar su cantidad total: esa orden se deja fuera, y un aviso muestra lo que tiene el archivo para que la introduzcas a mano.
 - Tras cambiar el tipo de un activo, la asignación «Por tipo» seguía mostrando el tipo anterior hasta 24 horas.
 - En el móvil, la ventana de una transacción ya no se desplaza de lado cuando el activo tiene un nombre largo: los campos vuelven a caber en la pantalla, al verla y al editarla. El defecto ya estaba en la 1.3.0.

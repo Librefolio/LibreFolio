@@ -67,6 +67,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **AI Export: Protection Strategies**, a new Dashboard analysis: it says whether protecting your portfolio makes sense now and, only if it does, how.
 - **Token rewards (staking, airdrops) as a transaction type.** A new type, «Reward», records units received as income in kind: it opens a lot at their value on receipt, and that value counts as income, as a dividend reinvested the same day would — no cash moves and no capital is added. Lots, average cost, income, Yield on Cost and the period's P&L read it. In the transaction form a Reward takes its «Value on receipt», prefilled from the asset's price history and always editable. The Dashboard's income view shows rewards as a series of their own, in magenta, and the lots charts mark them. In a broker's lots analysis, the «Spread rewards across lots» switch (off by default) spreads each reward over the lots already open instead of showing it as a lot of its own. (#90)
 - **Risk › Simulation, the period the days are drawn from**: «Days drawn from» offers «All the common history» (the default) or «A period I choose», inside the holdings' common history, for a calmer or rougher stretch. A start before the common history moves to its first day, with a warning.
+- **Fill reward values from price history**: in the Bulk workspace, rewards imported without a value (Bitvavo and CoinTracking staking, the Generic CSV) can be filled in one click with «Fill from price history»: the asset's close of that very day, per unit, in the price's currency. Days with no stored price are left for you, and a count says how many were filled.
 
 #### 🎯 Portfolio rebalancer and PAC allocator
 
@@ -145,6 +146,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - In the dialog of an FX pair, a click on a provider of the legend shows or hides its description; a double click opens its guide.
 - **AI Export: the «Portfolio Performance & Market Drivers» and «Broker Performance & Market Drivers» analyses answer first**: the prompt now asks for a direct answer of about a page, ending with the follow-up questions worth asking, instead of a long report in fixed sections.
 - **Tables**: a right click on a row opens the same menu as its ⋮ (inside a text field the browser's own menu stays, for Paste), and the selection bar sits on the table's right edge. In Files, deleting or downloading several files at once now asks for confirmation first.
+- **Rewards in kind from imports**: Coinbase (staking, rewards, learning income), Crypto.com (crypto rewards, earn interest, card cashback), Freetrade (free shares), Bitvavo and CoinTracking (staking) now import them as Rewards: the units received with no cash. A Freetrade free share no longer takes cash from the account, and a Crypto.com reward with no crypto amount is no longer cash interest: a warning names it. The Generic CSV reads `REWARD` rows (also `staking`, `airdrop`…) and asks for their value. A file imported before marks each reward as a likely duplicate of the old row. The Reward form suggests only the close of the reward's own day.
 
 #### 🎯 PAC allocator and Tools
 
@@ -156,6 +158,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🐛 Fixed
 
+- Bitvavo: staking rewards (status «Distributed») were skipped and never imported; they are now imported as Rewards.
 - Investimental (beta): an order filled in several parts is imported with its whole executed quantity and amount; before, only its last part came in (an order selling 210 shares was imported as 64). If you imported such an order before, delete that trade once and import the file again: the corrected trade arrives as a new one. A file that starts with an order already under way cannot give its whole quantity: that order is left out, and a warning shows what the file has, for you to enter it by hand.
 - After an asset's type was changed, the «By type» allocation kept showing the old type for up to 24 hours.
 - On a phone, the transaction window no longer scrolls sideways when the asset has a long name: the fields shrink to the screen again, in view and in edit. The defect was already in 1.3.0.
