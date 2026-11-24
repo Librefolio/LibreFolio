@@ -97,8 +97,9 @@ def _amount_or_none(amount: Decimal) -> Decimal | None:
     return amount if amount else None
 
 
-def _cents(percent: Decimal | None) -> Decimal | None:
-    """An allocation slice's share rounded to 0.01; None stays None (a sum at or below zero, MF-C2)."""
+def percent_cents(percent: Decimal | None) -> Decimal | None:
+    """An allocation slice's share rounded to 0.01; None stays None (a sum at or below zero, MF-C2). The filtered
+    allocation view (``allocation_view``) rounds its shares here too."""
     return percent.quantize(Decimal("0.01")) if percent is not None else None
 
 
@@ -455,7 +456,7 @@ class DerivedViewsBuilder:
             return [
                 {
                     "name": name,
-                    "value": _cents(percents[name]),
+                    "value": percent_cents(percents[name]),
                     "amount": amt,
                     "emoji": sector_emoji(name) if use_sector_emoji else None,
                 }
@@ -475,11 +476,11 @@ class DerivedViewsBuilder:
         def components(state: DailyPortfolioState) -> list[dict]:
             d = getattr(state, attr, {})
             percents = slice_percents(d)
-            return [{"name": name, "value": _cents(percents[name]), "amount": amt} for name, amt in sorted(d.items(), key=lambda x: -x[1])]
+            return [{"name": name, "value": percent_cents(percents[name]), "amount": amt} for name, amt in sorted(d.items(), key=lambda x: -x[1])]
 
-        return self._component_steps(components, date_from)
+        return self.component_steps(components, date_from)
 
-    def _component_steps(self, components: Callable[[DailyPortfolioState], list[dict]], date_from: date_type | None) -> list[dict]:
+    def component_steps(self, components: Callable[[DailyPortfolioState], list[dict]], date_from: date_type | None) -> list[dict]:
         """``{date, through, components}`` steps from ``date_from`` to the end: one per run of identical components."""
         window = self.window_range(date_from or None, None)
         if window is None:
@@ -501,7 +502,7 @@ class DerivedViewsBuilder:
             component = {
                 "name": "Liquidity" if asset_id is None else names.get(asset_id, f"Asset {asset_id}"),
                 "id": asset_id,
-                "value": _cents(percents[asset_id]),
+                "value": percent_cents(percents[asset_id]),
                 "amount": amount,
             }
             if with_emoji:
@@ -515,6 +516,15 @@ class DerivedViewsBuilder:
             return {asset_id for segment in self.daily_states.iter_segments(date_from, None) for asset_id in segment.state.by_asset}
         return {asset_id for state in self._window(date_from, None) for asset_id in state.by_asset}
 
+    def allocation_has_cash(self, date_from: date_type | None = None) -> bool:
+        """True when the Liquidity slice (the cash and the cash in transit) is not zero on some day from ``date_from`` on:
+        the «Allocazione» tab lists the class only then (lane 80)."""
+        if self._dates is None:
+            states = (segment.state for segment in self.daily_states.iter_segments(date_from, None))
+        else:
+            states = iter(self._window(date_from, None))
+        return any(state.cash_value + state.in_transit_cash_value != 0 for state in states)
+
     def build_asset_allocation_current(self, names: Mapping[int, str]) -> list[dict]:
         """The asset dimension of the allocation on the last day (AllocationItem-like dicts, ``id`` = the asset's)."""
         if not self.daily_states:
@@ -524,7 +534,7 @@ class DerivedViewsBuilder:
     def build_asset_allocation_history(self, names: Mapping[int, str], date_from: date_type | None = None) -> list[dict]:
         """The asset dimension's history from ``date_from``: ``{date, through, components}`` steps, as
         build_allocation_history."""
-        return self._component_steps(lambda state: self._asset_components(state, names, with_emoji=False), date_from)
+        return self.component_steps(lambda state: self._asset_components(state, names, with_emoji=False), date_from)
 
     def build_data_quality_report(self, **kwargs: Any) -> DataQualityReport:
         """The data-quality report of these daily states: see ``data_quality.build_data_quality_report``."""

@@ -32,6 +32,7 @@
     import {CLEARED_CELL} from './DataEditorTypes';
     import {uiLocale} from '$lib/stores/app/uiLocale';
     import {formatPrice} from '$lib/utils/core/formatFixed';
+    import Switch from '$lib/components/ui/input/Switch.svelte';
 
     // =========================================================================
     // Props
@@ -675,19 +676,7 @@
                     </Tooltip>
                     <!-- Horizontal switch lever -->
                     <!-- colour: closest role, to review: the «hide stale» switch was amber when on (it sits beside the amber warning count); switch roles bg-lf-checked, alt bg-lf-warning -->
-                    <button
-                        class="relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none
-                                   {hideStale ? 'bg-lf-checked' : 'bg-lf-switch-off'}"
-                        onclick={() => (hideStale = !hideStale)}
-                        role="switch"
-                        aria-checked={hideStale}
-                        aria-label={hideStale ? $t('dataEditor.staleShow', {values: {n: staleCount}}) : $t('dataEditor.staleHide', {values: {n: staleCount}})}
-                    >
-                        <span
-                            class="inline-block h-3.5 w-3.5 transform rounded-full shadow-sm transition-transform
-                                     {hideStale ? 'translate-x-4.5 bg-lf-switch-knob-on' : 'translate-x-0.5 bg-lf-switch-knob-off border border-lf-input'}"
-                        ></span>
-                    </button>
+                    <Switch size="sm" checked={hideStale} onchange={(next) => (hideStale = next)} label={hideStale ? $t('dataEditor.staleShow', {values: {n: staleCount}}) : $t('dataEditor.staleHide', {values: {n: staleCount}})} />
                 </div>
             {/if}
             {#if modifiedCount > 0}

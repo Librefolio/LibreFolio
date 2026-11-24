@@ -349,6 +349,12 @@ class PortfolioCalculationEngine:
         # The held assets' countries and sectors (plan 68, D2): a read of an enricher, a hand edit or a «Dimentica» moves
         # the allocation without moving any other fingerprint
         classification_fingerprint = await rows_fingerprint(self.db, held_asset_ids, CLASSIFICATION_VOICES)
+        # The held assets' types (lane 80, B1a-0): the result splits each day by type (by_type), and an edit of a type
+        # moves no other fingerprint, so the run kept the old type for the cache's 24 hours
+        asset_type_fingerprint: tuple = ()
+        if held_asset_ids:
+            asset_type_rows = await self.db.execute(select(Asset.id, Asset.asset_type).where(Asset.id.in_(held_asset_ids)).order_by(Asset.id))
+            asset_type_fingerprint = tuple((asset_id, getattr(asset_type, "value", asset_type)) for asset_id, asset_type in asset_type_rows.all())
 
         # Blob key: independent of date range (blob stores its own range).
         # The access fingerprint (role + share per broker) MUST be part of the
@@ -366,6 +372,7 @@ class PortfolioCalculationEngine:
             fx_fingerprint,
             split_fingerprint,
             classification_fingerprint,
+            asset_type_fingerprint,
             include_candles,
             include_acquisition_funding,
             # #48: the position frames are in the result only when asked

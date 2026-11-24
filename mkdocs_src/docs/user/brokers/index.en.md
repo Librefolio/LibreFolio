@@ -100,7 +100,7 @@ The **Overview** answers "how is this account doing?" with the same blocks as th
 - **KPI cards** — **Period P&L**, **Returns** and **Net Worth** ([KPI Cards](../dashboard/kpi-cards.md)).
 - **Cash Balances** — the cash held here at the end of the period, per currency.
 - **Growth chart** — the **Abs**, **%** and **P&L** views, with P&L as **Line**, **Candles** or **Income** ([Portfolio Growth Chart](../dashboard/charts.md#portfolio-growth-chart), [P&L mode](../dashboard/charts.md#pnl-mode)). The view you pick is shared with the Dashboard.
-- **Allocation** — by type, sector and geography ([Allocation Panel](../dashboard/charts.md#allocation-panel)).
+- **Allocation** — by type, sector and geography ([Allocation Panel](../dashboard/charts.md#allocation-panel)); **Analyze →** opens the broker's [Allocation tab](../dashboard/allocation.md), where you can keep only some classes and leave assets out of the 100%.
 
 Coming back to a broker you already opened shows its last figures at once, refreshed in the background if something changed ([Coming back and refreshing](../dashboard/index.md#coming-back-and-refreshing)). **Refresh** recalculates on demand, the **Risk** tab and the lots panel included.
 

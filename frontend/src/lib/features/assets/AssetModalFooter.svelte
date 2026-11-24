@@ -6,6 +6,7 @@
     import {_ as t} from '$lib/i18n';
     import {Info, Loader2} from 'lucide-svelte';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
+    import Switch from '$lib/components/ui/input/Switch.svelte';
 
     interface Props {
         active: boolean;
@@ -35,18 +36,7 @@
             <span id="asset-active-label" class="text-sm font-medium text-lf-secondary">
                 {active ? $t('common.active') : $t('assets.edit.status.inactive')}
             </span>
-            <button
-                type="button"
-                role="switch"
-                aria-checked={active}
-                aria-labelledby="asset-active-label"
-                data-testid="asset-active-toggle"
-                disabled={saving}
-                onclick={() => (active = !active)}
-                class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {active ? 'bg-lf-checked' : 'bg-lf-switch-off'}"
-            >
-                <span class="inline-block h-4 w-4 transform rounded-full shadow transition-transform {active ? 'translate-x-6 bg-lf-switch-knob-on' : 'translate-x-1 bg-lf-switch-knob-off border border-lf-input'}"></span>
-            </button>
+            <Switch checked={active} labelledby="asset-active-label" testId="asset-active-toggle" disabled={saving} dim={false} onchange={(next) => (active = next)} />
         </div>
 
         <span class="mx-1 hidden h-5 w-px bg-lf-subtle sm:block"></span>
@@ -58,18 +48,7 @@
             <span id="asset-benchmark-label" class="text-sm font-medium text-lf-secondary">
                 {$t('assets.modal.benchmark')}
             </span>
-            <button
-                type="button"
-                role="switch"
-                aria-checked={isBenchmark}
-                aria-labelledby="asset-benchmark-label"
-                data-testid="asset-benchmark-toggle"
-                disabled={saving}
-                onclick={() => (isBenchmark = !isBenchmark)}
-                class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {isBenchmark ? 'bg-lf-checked' : 'bg-lf-switch-off'}"
-            >
-                <span class="inline-block h-4 w-4 transform rounded-full shadow transition-transform {isBenchmark ? 'translate-x-6 bg-lf-switch-knob-on' : 'translate-x-1 bg-lf-switch-knob-off border border-lf-input'}"></span>
-            </button>
+            <Switch checked={isBenchmark} labelledby="asset-benchmark-label" testId="asset-benchmark-toggle" disabled={saving} dim={false} onchange={(next) => (isBenchmark = next)} />
         </div>
     </div>
 
