@@ -459,7 +459,7 @@ class TestComponentRegistryConstruction:
 class TestDatasetAnalysisRegistryConstruction:
     def test_dataset_registry_totals_and_asset_fx_subsets(self):
         registry = build_asset_fx_dataset_registry()
-        assert len(registry) == EXPECTED_DATASET_COUNT == 40
+        assert len(registry) == EXPECTED_DATASET_COUNT == 41
         asset_datasets = {d.dataset_id for d in registry.for_domain(Domain.ASSET)}
         fx_datasets = {d.dataset_id for d in registry.for_domain(Domain.FX)}
         assert asset_datasets == {
@@ -494,7 +494,7 @@ class TestDatasetAnalysisRegistryConstruction:
     def test_dataset_registry_builds_over_supplied_component_registry(self):
         component_registry = build_asset_fx_component_registry()
         dataset_registry = build_asset_fx_dataset_registry(component_registry)
-        assert len(dataset_registry) == 40
+        assert len(dataset_registry) == 41
 
     def test_analysis_registry_builds_over_supplied_dataset_registry(self):
         dataset_registry = build_asset_fx_dataset_registry()

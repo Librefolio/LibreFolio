@@ -571,10 +571,31 @@ def get_upload_by_user(file_id: str, user_id: int) -> Optional[UploadFileInfo]:
     return None
 
 
+#: The formats of the default avatar files, with the type each is stored under. The repository keeps PNG; the Docker image
+#: carries the same avatars as WebP (the ``avatars-webp`` stage of the Dockerfile), about a tenth of the weight.
+DEFAULT_AVATAR_TYPES = {".png": "image/png", ".webp": "image/webp"}
+
+
+def _default_avatar_files(avatars_src: Path) -> list[Path]:
+    """The avatar files to seed, in name order: one per name, the WebP when a name has both formats."""
+    chosen: dict[str, Path] = {}
+    for avatar_file in sorted(avatars_src.iterdir()):
+        suffix = avatar_file.suffix.lower()
+        if not avatar_file.is_file() or suffix not in DEFAULT_AVATAR_TYPES:
+            continue
+        known = chosen.get(avatar_file.stem)
+        if known is None or suffix == ".webp":
+            chosen[avatar_file.stem] = avatar_file
+    return [chosen[stem] for stem in sorted(chosen)]
+
+
 def seed_default_avatars() -> int:
     """
     Copy default avatar images from staticResources/Avatars/ into custom-uploads
     on first startup (when custom-uploads is empty or the marker doesn't exist).
+
+    The folder holds PNG in the repository and WebP in the Docker image; both are read, and a name that has both is
+    seeded once, as WebP. A volume seeded earlier keeps the files it has (the marker stops a second seed).
 
     Uses user_id=0 (system) as the uploader since no real user exists yet.
 
@@ -599,7 +620,7 @@ def seed_default_avatars() -> int:
     count = 0
     now = utcnow()
 
-    for avatar_file in sorted(avatars_src.glob("*.png")):
+    for avatar_file in _default_avatar_files(avatars_src):
         content = avatar_file.read_bytes()
         file_id = str(uuid.uuid4())
         ext = avatar_file.suffix.lower()
@@ -613,7 +634,7 @@ def seed_default_avatars() -> int:
             "id": file_id,
             "original_name": avatar_file.name,
             "extension": ext,
-            "mime_type": "image/png",
+            "mime_type": DEFAULT_AVATAR_TYPES[ext],
             "size_bytes": len(content),
             "uploaded_at": now.isoformat(),
             "uploaded_by_user_id": 0,

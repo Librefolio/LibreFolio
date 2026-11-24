@@ -195,7 +195,16 @@
       "chargesReadFailed": "Impossibile leggere le spese collegate di {ids}. «Reimposta riga» le rilegge.",
       "deleteSkippedUnread": "{n, plural, one {# transazione non è stata eliminata: non è stato possibile leggere le sue spese collegate. «Reimposta riga» le rilegge.} other {# transazioni non sono state eliminate: non è stato possibile leggere le loro spese collegate. «Reimposta riga» le rilegge.}}",
       "rowRef": "riga {n}",
-      "editPartnerInaccessible": "La transazione collegata è su un broker che non puoi vedere: per questo la riga non si modifica."
+      "editPartnerInaccessible": "La transazione collegata è su un broker che non puoi vedere: per questo la riga non si modifica.",
+      "rewardFill": {
+        "pending": "{n, plural, one {# premio non ha un valore: si può riempire dallo storico prezzi dell'asset} other {# premi non hanno un valore: si possono riempire dallo storico prezzi degli asset}}",
+        "button": "Riempi dallo storico prezzi",
+        "running": "Lettura dei prezzi…",
+        "result": "{filled, plural, one {# riempito} other {# riempiti}} con la chiusura del loro giorno, {noPrice, plural, one {# senza prezzo in quel giorno} other {# senza prezzo in quel giorno}}, {noHistory, plural, one {# asset senza storico prezzi} other {# asset senza storico prezzi}}. I valori si possono modificare; le righe non riempite aspettano ancora un valore.",
+        "failed": "Non è stato possibile leggere i prezzi: nessun valore è stato riempito. Riprova."
+      },
+      "cloneChargesReadFailed": "Impossibile leggere le spese collegate di {ids}: la copia è stata fatta senza.",
+      "cloneChargeFree": "{reason, select, deleted {La copia della spesa non è collegata: la transazione a cui era collegata è segnata da eliminare.} paired {La copia della spesa non è collegata: la transazione a cui era collegata è metà di una coppia.} other {La copia della spesa non è collegata: non si può collegare alla stessa transazione.}}"
     },
     "commit": {
       "serverError": "Salvataggio impossibile — errore del server"

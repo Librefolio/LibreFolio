@@ -9,14 +9,16 @@
  *     ADJUSTMENT, but without the Auto/Manual toggle (`tx-form-cost-basis-toggle`): the mode is always Manual, even for a
  *     row handed in with `cost_basis_mode: 'auto'` or none;
  *   - an empty value shows the warning (`tx-form-cost-basis-warning`);
- *   - an empty value is filled from the asset's stored prices (one `query_prices_bulk…` call for [date, date]) and the
- *     note `tx-form-reward-value-from-history` shows while the value is that suggestion;
+ *   - an empty value is filled from the asset's stored close of that very day, per unit, as the backend's one reader
+ *     answers it (STK-4b: one `query_reward_values…` call with `[{asset_id, date}]`; the form neither waits for the
+ *     asset's quote base nor divides — the backend does) and the note `tx-form-reward-value-from-history` shows while
+ *     the value is that suggestion; an answer without a value (no close that day, no history) fills nothing;
  *   - a value the user typed, before or after the answer, is never overwritten; a REWARD that holds a value, or a form
  *     in view mode, asks nothing.
  *
  * Harness: the one of TransactionFormModal.test.ts (stores with their loaders stubbed, `$lib/api` a proxy of vi.fn),
- * with a types answer holding BUY, ADJUSTMENT and REWARD. The price query is reset before every test: `clearAllMocks`
- * keeps implementations, and an answer left by one test would fill the next one's field.
+ * with a types answer holding BUY, ADJUSTMENT and REWARD. The reward-value query is reset before every test:
+ * `clearAllMocks` keeps implementations, and an answer left by one test would fill the next one's field.
  *
  * Asserted: data-testid and payloads. Never a translated label.
  */
@@ -156,7 +158,7 @@ const TYPES_WITH_REWARD = schemas.TXTypesResponse.parse({
 const ASSET_ID = 42;
 const DAY = '2024-03-10';
 
-const priceQuery = () => vi.mocked(zodiosApi.query_prices_bulk_api_v1_assets_prices_query_post);
+const rewardQuery = () => vi.mocked(zodiosApi.query_reward_values_api_v1_assets_prices_reward_values_post);
 
 function txRow(overrides: Record<string, unknown> = {}) {
     return {
@@ -186,14 +188,19 @@ function mountReward(overrides: Record<string, unknown> = {}, props: Record<stri
     return {onPushDraft, onClose, ...result};
 }
 
-/** A price answer holding `close` for the asset on `date`. */
-function priceAnswer(close: string, currency = 'USD', date = DAY, assetId = ASSET_ID) {
-    return {items: [{asset_id: assetId, prices: [{date, close, currency, open: null, high: null, low: null, volume: null, backward_fill_info: null}], events: [], errors: []}]} as never;
+/** The reader's answer: the asset's value on receipt on `date`, per unit, as the backend computed it. */
+function rewardAnswer(amount: string, currency = 'USD', date = DAY, assetId = ASSET_ID) {
+    return {items: [{asset_id: assetId, date, status: 'FILLED', value: {code: currency, amount}}]} as never;
+}
+
+/** The reader's answer without a value: `status` NO_PRICE_THAT_DAY or NO_HISTORY. */
+function noValueAnswer(status: 'NO_PRICE_THAT_DAY' | 'NO_HISTORY', date = DAY, assetId = ASSET_ID) {
+    return {items: [{asset_id: assetId, date, status, value: null}]} as never;
 }
 
 /** Let the suggestion's promise chain (query → fetchRewardValue → the form's `.then`) run out, then render. */
 async function settleSuggestion() {
-    for (const result of priceQuery().mock.results) await result.value;
+    for (const result of rewardQuery().mock.results) await result.value;
     for (let i = 0; i < 20; i++) await Promise.resolve();
     await tick();
 }
@@ -228,10 +235,10 @@ describe('TransactionFormModal — a REWARD states its value on receipt (79 STK-
     beforeEach(async () => {
         vi.clearAllMocks();
         guideAnchors.clear();
-        priceQuery().mockReset();
-        priceQuery().mockResolvedValue({items: []} as never);
+        rewardQuery().mockReset();
+        rewardQuery().mockResolvedValue(noValueAnswer('NO_HISTORY'));
         vi.mocked(zodiosApi.get_transaction_types_api_v1_transactions_types_get).mockResolvedValue(TYPES_WITH_REWARD);
-        // The form asks for a suggestion only once the asset (its quote base) is in the store
+        // The asset in the store, as the form normally has it (the suggestion itself no longer waits for it: STK-4b)
         resetAssetStore();
         mergeAssets([{id: ASSET_ID, display_name: 'Reward asset', currency: 'EUR', quote_base_quantity: 1, active: true}]);
         await setupI18n();
@@ -262,7 +269,7 @@ describe('TransactionFormModal — a REWARD states its value on receipt (79 STK-
         await screen.findByTestId('tx-form-cost-basis-inline');
         expect(screen.getByTestId('tx-form-cost-basis-toggle')).toBeInTheDocument();
         await settleSuggestion();
-        expect(priceQuery(), 'only a REWARD suggests its value from the price history').not.toHaveBeenCalled();
+        expect(rewardQuery(), 'only a REWARD suggests its value from the price history').not.toHaveBeenCalled();
     });
 
     it.each(['0', ''])('quantity %j: no value field (units in only)', async (quantity) => {
@@ -279,7 +286,7 @@ describe('TransactionFormModal — a REWARD states its value on receipt (79 STK-
         mountReward({cost_basis_mode: mode});
 
         await screen.findByTestId('tx-form-cost-basis-inline');
-        await waitFor(() => expect(priceQuery()).toHaveBeenCalledTimes(1));
+        await waitFor(() => expect(rewardQuery()).toHaveBeenCalledTimes(1));
         await settleSuggestion();
         // The warning shows only outside Auto: here it proves the forced Manual too.
         expect(screen.getByTestId('tx-form-cost-basis-warning')).toBeInTheDocument();
@@ -291,7 +298,7 @@ describe('TransactionFormModal — a REWARD states its value on receipt (79 STK-
         const {onPushDraft} = mountReward({cost_basis_mode: 'auto'});
 
         await screen.findByTestId('tx-form-cost-basis-inline');
-        await waitFor(() => expect(priceQuery()).toHaveBeenCalledTimes(1));
+        await waitFor(() => expect(rewardQuery()).toHaveBeenCalledTimes(1));
         await settleSuggestion();
         await typeAmount('3.5');
         await waitFor(() => expect(screen.queryByTestId('tx-form-cost-basis-warning')).toBeNull());
@@ -306,13 +313,14 @@ describe('TransactionFormModal — a REWARD states its value on receipt (79 STK-
     //  The suggestion from the price history
     // -------------------------------------------------------------------------------------------------------
 
-    it('an empty value is filled from the stored close: one query for [date, date], the note shows, no warning', async () => {
-        priceQuery().mockResolvedValue(priceAnswer('61.250000', 'USD', '2024-03-08'));
+    it('an empty value is filled from the close of that day: one reader query for {asset, day}, the note shows, no warning', async () => {
+        // The reader keeps the stored form of the close (61.250000 at base 1): the field shows it without trailing zeros
+        rewardQuery().mockResolvedValue(rewardAnswer('61.250000', 'USD'));
         const {onPushDraft} = mountReward();
 
         await waitFor(() => expect(amountInput()).toHaveValue('61.25'));
-        expect(priceQuery()).toHaveBeenCalledTimes(1);
-        expect(priceQuery().mock.calls[0][0]).toEqual([{asset_id: ASSET_ID, date_range: {start: DAY, end: DAY}, include_price: true, include_events: false}]);
+        expect(rewardQuery()).toHaveBeenCalledTimes(1);
+        expect(rewardQuery().mock.calls[0][0]).toEqual([{asset_id: ASSET_ID, date: DAY}]);
         expect(screen.getByTestId('tx-form-reward-value-from-history')).toBeInTheDocument();
         expect(screen.queryByTestId('tx-form-cost-basis-warning')).toBeNull();
 
@@ -323,34 +331,58 @@ describe('TransactionFormModal — a REWARD states its value on receipt (79 STK-
         expect(Number(override.amount)).toBe(61.25);
     });
 
-    it('the form waits for the asset in the store before asking, then divides the close by its quote base', async () => {
-        // A bond quoted per 100: asked before the store knows its base, the close would be taken undivided
+    it('the form asks without waiting for the asset in the store, and never divides: the value is per unit as answered', async () => {
+        // STK-4b: the backend divides the close by the quote base. A bond quoted per 100 answers 0.985 per unit; the
+        // form shows it as given, before and after the store learns the base of 100.
         resetAssetStore();
-        priceQuery().mockResolvedValue(priceAnswer('98.5', 'EUR'));
+        rewardQuery().mockResolvedValue(rewardAnswer('0.985', 'EUR'));
         mountReward();
-        await settleSuggestion();
-        expect(priceQuery(), 'no asset in the store yet: no query').not.toHaveBeenCalled();
+
+        await waitFor(() => expect(rewardQuery(), 'no asset in the store yet: the form asks all the same').toHaveBeenCalledTimes(1));
+        await waitFor(() => expect(amountInput()).toHaveValue('0.985'));
 
         mergeAssets([{id: ASSET_ID, display_name: 'Reward bond', currency: 'EUR', quote_base_quantity: 100, active: true}]);
-        await waitFor(() => expect(amountInput()).toHaveValue('0.985'));
-        expect(priceQuery()).toHaveBeenCalledTimes(1);
+        await settleSuggestion();
+        expect(amountInput(), 'the store learning the base divides nothing').toHaveValue('0.985');
+        expect(rewardQuery(), 'and asks nothing again').toHaveBeenCalledTimes(1);
+    });
+
+    it.each(['NO_PRICE_THAT_DAY', 'NO_HISTORY'] as const)('%s: nothing is filled, the warning stays', async (status) => {
+        rewardQuery().mockResolvedValue(noValueAnswer(status));
+        mountReward();
+
+        await waitFor(() => expect(rewardQuery()).toHaveBeenCalledTimes(1));
+        await settleSuggestion();
+        expect(amountInput()).toHaveValue('');
+        expect(screen.getByTestId('tx-form-cost-basis-warning')).toBeInTheDocument();
+        expect(screen.queryByTestId('tx-form-reward-value-from-history')).toBeNull();
+    });
+
+    it('an answer for another day fills nothing: only the reward day is read', async () => {
+        rewardQuery().mockResolvedValue(rewardAnswer('61.25', 'USD', '2024-03-08'));
+        mountReward();
+
+        await waitFor(() => expect(rewardQuery()).toHaveBeenCalledTimes(1));
+        await settleSuggestion();
+        expect(amountInput()).toHaveValue('');
+        expect(screen.queryByTestId('tx-form-reward-value-from-history')).toBeNull();
     });
 
     it('calibration of settleSuggestion: once it returns, a suggestion that arrives is already on screen', async () => {
         // The negative cases below («asks nothing», «never overwritten») rest on settleSuggestion having let the
         // suggestion's chain run out. This positive proves it does: red here means those negatives prove nothing.
-        priceQuery().mockResolvedValue(priceAnswer('61.25'));
+        rewardQuery().mockResolvedValue(rewardAnswer('61.25'));
         mountReward();
 
         await screen.findByTestId('tx-form-cost-basis-inline');
-        await waitFor(() => expect(priceQuery()).toHaveBeenCalledTimes(1));
+        await waitFor(() => expect(rewardQuery()).toHaveBeenCalledTimes(1));
         await settleSuggestion();
         expect(screen.getByTestId('tx-form-reward-value-from-history')).toBeInTheDocument();
         expect(amountInput()).toHaveValue('61.25');
     });
 
     it('a suggested value the user changes is the user’s: the note goes, the typed value stays', async () => {
-        priceQuery().mockResolvedValue(priceAnswer('61.25'));
+        rewardQuery().mockResolvedValue(rewardAnswer('61.25'));
         mountReward();
 
         await waitFor(() => expect(screen.getByTestId('tx-form-reward-value-from-history')).toBeInTheDocument());
@@ -358,17 +390,17 @@ describe('TransactionFormModal — a REWARD states its value on receipt (79 STK-
 
         await waitFor(() => expect(screen.queryByTestId('tx-form-reward-value-from-history')).toBeNull());
         expect(amountInput()).toHaveValue('70');
-        expect(priceQuery(), 'no new query for the same asset and day').toHaveBeenCalledTimes(1);
+        expect(rewardQuery(), 'no new query for the same asset and day').toHaveBeenCalledTimes(1);
     });
 
     it('a value typed while the price query is still out is never overwritten by its answer', async () => {
         let answer: (value: unknown) => void = () => undefined;
-        priceQuery().mockReturnValue(new Promise((resolve) => (answer = resolve)) as never);
+        rewardQuery().mockReturnValue(new Promise((resolve) => (answer = resolve)) as never);
         const {onPushDraft} = mountReward();
 
-        await waitFor(() => expect(priceQuery()).toHaveBeenCalledTimes(1));
+        await waitFor(() => expect(rewardQuery()).toHaveBeenCalledTimes(1));
         await typeAmount('7');
-        answer(priceAnswer('61.25'));
+        answer(rewardAnswer('61.25'));
         await settleSuggestion();
 
         expect(amountInput()).toHaveValue('7');
@@ -383,7 +415,7 @@ describe('TransactionFormModal — a REWARD states its value on receipt (79 STK-
         await screen.findByTestId('tx-form-cost-basis-inline');
         await waitFor(() => expect(amountInput()).toHaveValue('5'));
         await settleSuggestion();
-        expect(priceQuery()).not.toHaveBeenCalled();
+        expect(rewardQuery()).not.toHaveBeenCalled();
         expect(screen.queryByTestId('tx-form-reward-value-from-history')).toBeNull();
     });
 
@@ -392,21 +424,21 @@ describe('TransactionFormModal — a REWARD states its value on receipt (79 STK-
 
         await screen.findByTestId('tx-form-quantity');
         await settleSuggestion();
-        expect(priceQuery()).not.toHaveBeenCalled();
+        expect(rewardQuery()).not.toHaveBeenCalled();
     });
 
     it('a new day with the value still empty asks again, once, for that day', async () => {
         mountReward();
 
-        await waitFor(() => expect(priceQuery()).toHaveBeenCalledTimes(1));
+        await waitFor(() => expect(rewardQuery()).toHaveBeenCalledTimes(1));
         await settleSuggestion();
         expect(screen.getByTestId('tx-form-cost-basis-warning'), 'premise: nothing stored on the first day').toBeInTheDocument();
 
-        priceQuery().mockResolvedValue(priceAnswer('12', 'EUR', '2024-03-12'));
+        rewardQuery().mockResolvedValue(rewardAnswer('12', 'EUR', '2024-03-12'));
         await setFormDate('2024-03-12');
 
-        await waitFor(() => expect(priceQuery()).toHaveBeenCalledTimes(2));
-        expect(priceQuery().mock.calls[1][0]).toEqual([{asset_id: ASSET_ID, date_range: {start: '2024-03-12', end: '2024-03-12'}, include_price: true, include_events: false}]);
+        await waitFor(() => expect(rewardQuery()).toHaveBeenCalledTimes(2));
+        expect(rewardQuery().mock.calls[1][0]).toEqual([{asset_id: ASSET_ID, date: '2024-03-12'}]);
         await waitFor(() => expect(amountInput()).toHaveValue('12'));
         expect(screen.getByTestId('tx-form-reward-value-from-history')).toBeInTheDocument();
     });

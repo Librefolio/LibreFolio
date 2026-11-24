@@ -199,6 +199,15 @@
     const MATCHING_METHODS: LotMatchingMethod[] = ['FIFO', 'LIFO'];
     /** The method chosen in the header: FIFO when the panel opens on an asset, never saved (project 69, D1). */
     let activeMethod = $state<LotMatchingMethod>('FIFO');
+    /** Where the rewards' units go (project 79, STK-3): OWN_LOT when the panel opens, MERGED with «spread rewards across
+     *  lots» on. Never saved, as the method (D1). MERGED is asked with a request of its own, only while it is on. */
+    let rewardAllocation = $state<'OWN_LOT' | 'MERGED'>('OWN_LOT');
+    /** Whether the scope has a reward (its opening or merge rows, or its income): the switch shows only then, or while on. */
+    const scopeHasRewards = $derived(lotEvents.some((event) => event.kind === 'REWARD' || event.kind === 'REWARD_MERGE') || incomeEvents.some((event) => event.type === 'REWARD'));
+    // P-27: the selector shows only when the panel's scope holds a REWARD. While MERGED is on it stays, so the user can always
+    // go back; MERGED is reachable only from a scope with rewards and starts over at OWN_LOT when the scope changes.
+    const showRewardAllocation = $derived(scopeHasRewards || rewardAllocation === 'MERGED');
+    const REWARD_ALLOCATIONS = ['OWN_LOT', 'MERGED'] as const;
     /** The method whose block is on screen, published on the panel (`data-matching-method`): it follows `activeMethod` once the block is applied. */
     let shownMethod = $state<LotMatchingMethod | null>(null);
     /** The answers last put on screen: a reload that finds the same cached answer leaves the charts alone. */
@@ -285,7 +294,7 @@
         shownMethod = null;
     }
 
-    async function loadMain(currentAssetId: number, currentBrokerIds: number[], currentCurrency: string, force = false) {
+    async function loadMain(currentAssetId: number, currentBrokerIds: number[], currentCurrency: string, force = false, allocation: 'OWN_LOT' | 'MERGED' = rewardAllocation) {
         const version = ++fetchVersion;
         const body = {
             asset_id: currentAssetId,
@@ -293,6 +302,8 @@
             target_currency: currentCurrency,
             requested_analyses: MAIN_ANALYSES,
             matching_methods: MATCHING_METHODS,
+            // Only when on: the usual request, and its cache key, stay as they were
+            ...(allocation === 'MERGED' ? {reward_allocation: 'MERGED' as const} : {}),
         };
         // What the cache holds goes on screen at once; only a stale or missing answer is asked.
         const cached = peekLotsAnalysis(body);
@@ -333,7 +344,7 @@
         selectionRange = asObject<{start: string; end: string}>(response.range);
     }
 
-    async function loadSelectionHistories(currentAssetId: number, currentBrokerIds: number[], currentCurrency: string, ids: number[], method: LotMatchingMethod, force = false) {
+    async function loadSelectionHistories(currentAssetId: number, currentBrokerIds: number[], currentCurrency: string, ids: number[], method: LotMatchingMethod, force = false, allocation: 'OWN_LOT' | 'MERGED' = rewardAllocation) {
         const version = ++selectionFetchVersion;
         if (ids.length === 0) {
             shownSelection = null;
@@ -349,6 +360,7 @@
             selected_lot_ids: ids,
             requested_analyses: SELECTION_ANALYSES,
             matching_methods: [method],
+            ...(allocation === 'MERGED' ? {reward_allocation: 'MERGED' as const} : {}),
         };
         const cached = peekLotsAnalysis(body);
         if (cached) {
@@ -388,14 +400,25 @@
         panelEl.scrollIntoView({behavior: 'smooth', block: 'start'});
     }
 
+    // Another asset, other brokers, or the panel opened again: the rewards in lots of their own (STK-3, P-27). Declared before
+    // the loads, so the first request for the new scope is already OWN_LOT, never a MERGED one thrown away; a scope with no
+    // reward never keeps MERGED, so the selector never shows there.
+    let allocationScope: string | null = null;
+    $effect(() => {
+        const scope = open && assetId != null ? `${assetId}|${[...brokerIds].sort((a, b) => a - b).join(',')}` : null;
+        if (scope === allocationScope) return;
+        allocationScope = scope;
+        untrack(() => (rewardAllocation = 'OWN_LOT'));
+    });
+
     // The inputs are read here, so they are what the effects track; the loads run untracked,
     // because putting a cached answer on screen reads and writes the selection synchronously.
     // Each of these loads is one the page asked for (the panel opens, its scope or selection changes, the
     // page's Refresh), so it holds the page's Refresh button (Y11); a background refresh does not come here.
     $effect(() => {
         if (!(open && assetId != null && ready)) return;
-        const [currentAssetId, currentBrokerIds, currentCurrency] = [assetId, brokerIds, currency];
-        untrack(() => void pageBusy.track('lots-panel-load', () => loadMain(currentAssetId, currentBrokerIds, currentCurrency)));
+        const [currentAssetId, currentBrokerIds, currentCurrency, allocation] = [assetId, brokerIds, currency, rewardAllocation];
+        untrack(() => void pageBusy.track('lots-panel-load', () => loadMain(currentAssetId, currentBrokerIds, currentCurrency, false, allocation)));
     });
 
     // `effectiveSelectionIds` is a new array whenever an answer lands, even with the same lots (a silent reload after a
@@ -406,11 +429,11 @@
             askedSelectionKey = null;
             return;
         }
-        const [currentAssetId, currentBrokerIds, currentCurrency, ids, method] = [assetId, brokerIds, currency, effectiveSelectionIds, activeMethod];
-        const key = JSON.stringify([currentAssetId, currentBrokerIds, currentCurrency, ids, method]);
+        const [currentAssetId, currentBrokerIds, currentCurrency, ids, method, allocation] = [assetId, brokerIds, currency, effectiveSelectionIds, activeMethod, rewardAllocation];
+        const key = JSON.stringify([currentAssetId, currentBrokerIds, currentCurrency, ids, method, allocation]);
         if (key === askedSelectionKey) return;
         askedSelectionKey = key;
-        untrack(() => void pageBusy.track('lots-selection-load', () => loadSelectionHistories(currentAssetId, currentBrokerIds, currentCurrency, ids, method)));
+        untrack(() => void pageBusy.track('lots-selection-load', () => loadSelectionHistories(currentAssetId, currentBrokerIds, currentCurrency, ids, method, false, allocation)));
     });
 
     let lastRefreshVersion = untrack(() => refreshVersion);
@@ -573,6 +596,30 @@
                         </button>
                     {/each}
                 </div>
+                {#if showRewardAllocation}
+                    <!-- Project 79, STK-3 / P-27: where the rewards' units go — lots of their own, or spread over the lots held
+                         the day before (a request of its own). Shown only when the scope holds a REWARD. -->
+                    <div
+                        class="mr-1 flex overflow-hidden rounded-lg border border-lf-subtle text-xs font-medium"
+                        role="group"
+                        aria-label={$_('brokers.lots.rewardAllocation.label')}
+                        title={$_('brokers.lots.rewardAllocation.hint')}
+                        data-testid="lots-reward-allocation-selector"
+                        data-state={rewardAllocation}
+                    >
+                        {#each REWARD_ALLOCATIONS as allocation, index (allocation)}
+                            <button
+                                type="button"
+                                class="px-2.5 py-1 transition-colors focus-visible:outline-lf-focus {index > 0 ? 'border-l border-lf-subtle' : ''} {rewardAllocation === allocation ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}"
+                                onclick={() => (rewardAllocation = allocation)}
+                                aria-pressed={rewardAllocation === allocation}
+                                data-testid="lots-reward-allocation-{allocation}"
+                            >
+                                {$_(allocation === 'OWN_LOT' ? 'brokers.lots.rewardAllocation.ownLot' : 'brokers.lots.rewardAllocation.merged')}
+                            </button>
+                        {/each}
+                    </div>
+                {/if}
                 <button aria-label={$_('brokers.lots.viewAsset')} class="p-1.5 rounded-lg text-lf-muted hover:text-lf-link hover:bg-lf-hover transition-colors" onclick={() => goto(`/assets/${assetId}`)} data-testid="lots-analysis-panel-asset-link" title={$_('brokers.lots.viewAsset')}>
                     <ExternalLink size={16} />
                 </button>

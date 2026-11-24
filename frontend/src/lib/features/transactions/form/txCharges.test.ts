@@ -355,3 +355,45 @@ describe('buildChargesBatch — linkNew rows', () => {
         ]);
     });
 });
+
+// ---------------------------------------------------------------------------------------------------------------
+//  TL-2 — a row the picker took from the Bulk. A new row of the Bulk is a mirror with a synthetic negative id and its
+//  key (`_bulkKey: 'op-<tempId>'`): the draft is that row's own (`chargeDraftsFor` keys a new charge the same way), so
+//  `applyChargeDrafts` links the create itself and never makes a copy. RED until `chargeFromPicked` reads `_bulkKey`.
+// ---------------------------------------------------------------------------------------------------------------
+
+/** A mirror of a Bulk row as the Bulk hands it to the picker (`panelItem`: signed as the ledger, no parent). */
+function bulkMirror(fields: Partial<TXReadItem> & {id: number; type: string}, bulk: {_bulkKey?: string; _rowRef?: string}): TXReadItem {
+    return {...row({parent_transaction_id: null, ...fields}), ...bulk} as TXReadItem;
+}
+
+describe('chargeFromPicked — a new row of the Bulk (TL-2)', () => {
+    it('a row carrying _bulkKey gives that row’s draft: its key, no id, no original, linked, and no linkNew', () => {
+        const draft = chargeFromPicked(bulkMirror({id: -3, type: 'FEE', cash: {code: 'EUR', amount: '-2.50'}, description: 'bulk fee'}, {_bulkKey: 'op-n-fee', _rowRef: 'row 4'}));
+        expect(draft).toEqual({key: 'op-n-fee', id: null, state: 'linked', type: 'FEE', cash: {amount: '2.5', code: 'EUR'}, description: 'bulk fee', original: null});
+        expect(draft).not.toHaveProperty('linkNew');
+    });
+
+    it('a new TAX with no amount yet: cash null, no description → empty', () => {
+        const draft = chargeFromPicked(bulkMirror({id: -9, type: 'TAX', cash: null, description: null}, {_bulkKey: 'op-n-tax'}));
+        expect(draft).toEqual({key: 'op-n-tax', id: null, state: 'linked', type: 'TAX', cash: null, description: '', original: null});
+        expect(draft).not.toHaveProperty('linkNew');
+    });
+
+    it('a row with _bulkKey that is no charge answers null', () => {
+        expect(chargeFromPicked(bulkMirror({id: -4, type: 'BUY', cash: {code: 'EUR', amount: '-100'}}, {_bulkKey: 'op-n-buy'}))).toBeNull();
+    });
+
+    it('guard: a saved row of the Bulk (its txId, no _bulkKey) is today’s picked saved charge, linkNew', () => {
+        expect(chargeFromPicked(bulkMirror({id: 20, type: 'FEE', cash: {code: 'EUR', amount: '-5.00'}, description: 'bank'}, {_rowRef: '#20'}))).toEqual({
+            key: 'saved-20',
+            id: 20,
+            state: 'linked',
+            linkNew: true,
+            type: 'FEE',
+            cash: {amount: '5', code: 'EUR'},
+            description: 'bank',
+            original: {type: 'FEE', cash: {amount: '5', code: 'EUR'}, description: 'bank'},
+        });
+    });
+});

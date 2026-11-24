@@ -142,7 +142,8 @@ PUBLIC_ANALYSES: tuple[AnalysisSpec, ...] = (
         Domain.PORTFOLIO,
         "protection_strategies",
         icon="shield",
-        required=("portfolio.overview_and_history",),
+        # 78 L8a: the risk evidence (internal) beside the overview, as fiscal_lots takes portfolio.fifo
+        required=("portfolio.overview_and_history", "portfolio.risk_evidence"),
         suggestions=(
             _suggest(
                 "portfolio.asset_history",

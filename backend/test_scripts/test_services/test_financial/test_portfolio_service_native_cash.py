@@ -39,6 +39,10 @@ S3, S4 on the mixed scope, S5 and S7. Pinned, green before and after F-W: S4 res
 EUR-only broker, and S6, cash in transit, whose exchange result stays in the residual (a
 documented limit, as is S5's conversion spread).
 
+79 STK-5, TestIncomeTimelineEqualsPeriodIncome: with a REWARD in the window, the AI Export
+``portfolio.income_timeline`` total equals the summary's period_income (the release condition), in
+May 2041, EUR only, on a user and a broker of its own: both sides read that user's brokers alone.
+
 Isolation: no other test uses SBD, VUV, TOP, WST, FJD or KMF, nor the years 2039 and 2040, so no
 row outside a test can give these currencies a rate or a movement. Each test owns its users and
 brokers, in a session that is rolled back; each F-W scenario has a month of 2040 to itself.
@@ -72,12 +76,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 import backend.app.services.financial_math.native_cash as native_cash_module
 import backend.app.services.financial_math.portfolio.engine as portfolio_engine_module
-from backend.app.db.models import Broker, BrokerUserAccess, FxRate, Transaction, TransactionType, User, UserRole
+from backend.app.db.models import Asset, AssetType, Broker, BrokerUserAccess, FxRate, Transaction, TransactionType, User, UserRole
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.common import Currency, OpenDateRangeModel
 from backend.app.schemas.portfolio.history import CostHistorySeries, DepositHistorySeries, IncomeHistorySeries
 from backend.app.schemas.portfolio.report import PortfolioReportQuery
 from backend.app.schemas.portfolio.summary import BrokerBreakdown, OtherPeriodEffectCode, PortfolioSummary, PositionsContribution
+from backend.app.services.ai_export.components.portfolio_income import PORTFOLIO_INCOME_TIMELINE_COMPONENTS, IncomeTimelineStatus
+from backend.app.services.ai_export.components.registry import ComponentRegistry
+from backend.app.services.ai_export.components.types import BuildScope, DetailLevel, Domain
+from backend.app.services.ai_export.dependencies import BuildContext, build_bucket_plan_for_scope
 from backend.app.services.portfolio import report as report_module
 from backend.app.services.portfolio import wac as wac_module
 from backend.app.services.portfolio.portfolio_service import PortfolioService
@@ -523,6 +531,89 @@ class TestPeriodIncomeParity:
         top_dates = _missing_dates(summary, "TOP/EUR")
         if date(2039, 3, 3) not in (top_dates or []):
             problems.append(f"{when}: TOP/EUR should be missing on 2039-03-03, the summary reports {top_dates}")
+        assert not problems, "\n".join(problems)
+
+
+# =============================================================================
+# TestIncomeTimelineEqualsPeriodIncome (79 STK-5)
+# =============================================================================
+
+
+class TestIncomeTimelineEqualsPeriodIncome:
+    """79 STK-5, the release condition: the AI Export ``portfolio.income_timeline`` total and the report's
+    ``period_income`` are one figure, with a REWARD (income in kind) in the window."""
+
+    @pytest.mark.asyncio
+    async def test_timeline_target_total_equals_summary_period_income_with_a_reward(self, session, keep_alive, test_user):
+        """Broker R, owned at 0.5 by test_user; asset X in EUR. DEPOSIT 1000 EUR on 2041-05-01, BUY 100 X for
+        300 EUR on 05-02; inside the window (2041-05-02, 2041-05-31]: DIVIDEND 12 EUR on X (05-05), its negative
+        correction −2 (05-09), REWARD 4 X valued 2.5 EUR each (05-12, no cash) and INTEREST 3 EUR on cash (05-20).
+        Summary period_income (0.5 × (12 − 2 + 10 + 3)) = 11.5; the income timeline of the same user, scope and
+        window: target_total 11.5 EUR, reward_count 1 — the same figure.
+
+        Isolation: no other test of this module uses 2041; the session is rolled back."""
+        broker = await _owned_broker(session, keep_alive, test_user, "R", Decimal("0.5"))
+        asset = Asset(display_name=f"PfNc STK5 X {uuid4().hex[:12]}", currency="EUR", asset_type=AssetType.CRYPTO)
+        await _persist(session, keep_alive, asset)
+
+        def _asset_row(tx_type: TransactionType, on: date, *, quantity: str = "0", amount: str = "0", currency: str | None = "EUR", cbo: str | None = None) -> Transaction:
+            return Transaction(
+                broker_id=broker.id,
+                asset_id=asset.id,
+                type=tx_type,
+                date=on,
+                quantity=Decimal(quantity),
+                amount=Decimal(amount),
+                currency=currency,
+                cost_basis_override=None if cbo is None else Decimal(cbo),
+                cost_basis_currency=None if cbo is None else "EUR",
+            )
+
+        await _persist(
+            session,
+            keep_alive,
+            _cash_row(broker, TransactionType.DEPOSIT, date(2041, 5, 1), "1000", "EUR"),
+            _asset_row(TransactionType.BUY, date(2041, 5, 2), quantity="100", amount="-300"),
+            _asset_row(TransactionType.DIVIDEND, date(2041, 5, 5), amount="12"),
+            _asset_row(TransactionType.DIVIDEND, date(2041, 5, 9), amount="-2"),
+            _asset_row(TransactionType.REWARD, date(2041, 5, 12), quantity="4", currency=None, cbo="2.5"),
+            _cash_row(broker, TransactionType.INTEREST, date(2041, 5, 20), "3", "EUR"),
+        )
+        start, end = date(2041, 5, 2), date(2041, 5, 31)
+
+        summary = await PortfolioService(session).get_summary(user_id=test_user.id, target_currency_override="EUR", date_from=start, date_to=end)
+
+        scope = BuildScope(
+            request_id="pfnc-stk5-income",
+            user_id=test_user.id,
+            domain=Domain.PORTFOLIO,
+            detail_level=DetailLevel.FULL,
+            period_start=start,
+            period_end=end,
+            target_currency="EUR",
+            broker_scope=(broker.id,),
+        )
+        context = BuildContext(
+            ComponentRegistry(PORTFOLIO_INCOME_TIMELINE_COMPONENTS),
+            request_id=scope.request_id,
+            scope=scope,
+            bucket_plan=build_bucket_plan_for_scope(scope),
+            session=session,
+        )
+        payload = (await context.resolve("portfolio.income_timeline", required=True)).payload
+
+        period_income = summary.period_income.amount if summary.period_income is not None else None
+        timeline_total = Decimal(str(payload["summary"]["target_total"]["amount"])) if payload.get("summary") and payload["summary"].get("target_total") else None
+        when = f"({start}, {end}]"
+        problems = _value_problems(
+            when,
+            [
+                ("timeline status", IncomeTimelineStatus.OK.value, payload.get("status")),
+                ("timeline reward_count", 1, (payload.get("summary") or {}).get("reward_count")),
+                ("summary period_income", Decimal("11.5"), period_income),
+                ("timeline target_total, against the summary period_income", period_income, timeline_total),
+            ],
+        )
         assert not problems, "\n".join(problems)
 
 

@@ -44,6 +44,7 @@ def front_tx_unit(verbose: bool = False, ui: bool = False, headed: bool = False,
         "src/lib/features/transactions/import/AnalyzeStep.test.ts",
         "src/lib/features/transactions/import/UploadStep.test.ts",
         "src/lib/features/transactions/bulk/bulkTodos.test.ts",
+        "src/lib/features/transactions/bulk/bulkTodos.rewardFill.test.ts",
         "src/lib/features/transactions/bulk/bulkCharges.test.ts",
         "src/lib/features/transactions/bulk/splitTypes.test.ts",
         "src/lib/features/transactions/bulk/selectionGuards.test.ts",
@@ -51,6 +52,7 @@ def front_tx_unit(verbose: bool = False, ui: bool = False, headed: bool = False,
         "src/lib/features/transactions/bulk/TxBulkBanners.possibleSplit.test.ts",
         "src/lib/features/transactions/import/ReviewStep.possibleSplit.test.ts",
         "src/lib/features/transactions/bulk/TxBulkBanners.preFloor.test.ts",
+        "src/lib/features/transactions/bulk/TxBulkBanners.rewardFill.test.ts",
         "src/lib/features/transactions/import/ReviewStep.preFloor.test.ts",
         "src/lib/features/transactions/transactionTypeStore.test.ts",
         "src/lib/features/transactions/filterState.test.ts",
@@ -296,6 +298,30 @@ def front_tx_bulk_charges_link(verbose: bool = False, ui: bool = False, headed: 
     if not _ensure_test_users():
         return False
     return _run_playwright("transactions/tx-bulk-charges-link.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
+def front_tx_clone_charges(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """«Clona» carries the linked-charges structure: a parent's charges copied under its copy, a charge's copy linked to the same parent (project 66, TL-3)."""
+    print_section("Frontend TX Clone Charges Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("transactions/tx-clone-charges.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
+def front_tx_bulk_charges_picker(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """«Link an existing charge…» of a parent's form inside the Bulk sees the Bulk's rows (project 66, TL-2)."""
+    print_section("Frontend TX Bulk Charges Picker Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("transactions/tx-bulk-charges-picker.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
 def front_tx_bulk_promote_charges(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
@@ -816,6 +842,18 @@ def front_tx_reward_form(verbose: bool = False, ui: bool = False, headed: bool =
     return _run_playwright("transactions/tx-reward-form.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_tx_reward_fill(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the bulk «fill from price history» E2E test (79 STK-4b: imported REWARDs valued at the close of their day)."""
+    print_section("Frontend TX Reward Fill Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("transactions/tx-reward-fill.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_tx_bulk_row_order(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run the BulkModal same-date creation-order E2E test (C4: E-order)."""
     print_section("Frontend TX Bulk Row Order Tests")
@@ -927,6 +965,22 @@ def populate_registry(registry: dict) -> None:
         name="TX Bulk Charges Link Tests",
         desc="Project 66 F7-d: in the Bulk, «Link» a new BUY + new FEE and a saved BUY + saved free FEE (also by tap on a phone), saved and read back by id; «Open» from a FEE's form to its parent absent from the Bulk adds the parent",
         tests="transactions/tx-bulk-charges-link.spec.ts",
+    )
+    add_test(
+        cat,
+        "tx-clone-charges",
+        front_tx_clone_charges,
+        name="TX Clone Charges Tests",
+        desc="Project 66 TL-3: «Clona» on a BUY with FEE+TAX copies them under the BUY copy on their own dates (page, selection, Bulk «Clona riga»); a FEE cloned alone stays linked to its BUY; a failed charges read copies the BUY alone with a warning; a charge under a «del» parent is copied free with a warning; «del»/«scollega» charges are not copied; trash on the BUY copy takes its untouched charge copies; a copy given another asset (a FEE cloned alone, or the BUY copy) keeps its link, is flagged chargeAssetMismatch and «Save all» is refused whole — read back from the server",
+        tests="transactions/tx-clone-charges.spec.ts",
+    )
+    add_test(
+        cat,
+        "tx-bulk-charges-picker",
+        front_tx_bulk_charges_picker,
+        name="TX Bulk Charges Picker Tests",
+        desc="Project 66 TL-2: in the Bulk, «Link an existing charge…» of a parent's form offers the Bulk's rows — a new FEE row (by its row reference) to a new BUY row or to a BUY still in its first form, picked → under the BUY, saved linked; a saved FEE «del» here is not offered, one unlinked here is and saves with its new parent; a saved free FEE outside the Bulk is offered, one also in the Bulk once — read back by id",
+        tests="transactions/tx-bulk-charges-picker.spec.ts",
     )
     add_test(
         cat,
@@ -1103,6 +1157,14 @@ def populate_registry(registry: dict) -> None:
         tests="transactions/tx-broker-icon-hydration.spec.ts",
     )
     add_test(cat, "tx-reward-form", front_tx_reward_form, name="TX Reward Form Tests", desc="79 STK-2a: REWARD through the FormModal, its value on receipt prefilled from the price history, no Auto toggle, a typed value saved", tests="transactions/tx-reward-form.spec.ts")
+    add_test(
+        cat,
+        "tx-reward-fill",
+        front_tx_reward_fill,
+        name="TX Reward Fill Tests",
+        desc="79 STK-4b: a generic CSV of two REWARDs imported into the bulk editor, «fill from price history»: the day with a close filled (Manual, the close, its currency), the gap day left open though the day before has a close; banner data-pending / result counts and the tx.bulk.rewards.filled event; nothing saved",
+        tests="transactions/tx-reward-fill.spec.ts",
+    )
     add_test(cat, "tx-bulk-row-order", front_tx_bulk_row_order, name="TX Bulk Row Order Tests", desc="C4 E-order: five new same-date rows keep their creation order in the BulkModal grid, read by owned description; editor discarded, nothing saved", tests="transactions/tx-bulk-row-order.spec.ts")
     add_test(
         cat,

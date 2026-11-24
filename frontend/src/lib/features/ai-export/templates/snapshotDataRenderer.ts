@@ -341,6 +341,7 @@ export const NULL_MEANS_NONE_COLUMNS: readonly NullMeansNoneColumn[] = [
     {column: 'minimum', table: 'OUTPUT DEFINITIONS', means: 'an output with no lower bound'},
     {column: 'maximum', table: 'OUTPUT DEFINITIONS', means: 'an output with no upper bound'},
     {column: 'asset_ref', component: 'portfolio.income_timeline', means: 'income not tied to an asset, such as interest on cash'},
+    {column: 'units', component: 'portfolio.income_timeline', means: 'cash income (a dividend or interest): no units received'},
     {column: 'portfolio_weight_percent', table: 'PERIOD SUMMARY', component: 'asset.indicators', means: 'one asset: no portfolio weight'},
     {column: 'portfolio_weight_percent', table: 'PERIOD SUMMARY', component: 'fx.indicators', means: 'one FX pair: no portfolio weight'},
     {column: 'technical_normalized_weight_percent', table: 'PERIOD SUMMARY', component: 'asset.indicators', means: 'one asset: no weight to normalize'},
@@ -1334,9 +1335,22 @@ const NORMALIZED_RATIO_FIELDS = new Set([
     'distance_to_min_ratio',
     'distance_to_max_ratio',
     'value_ratio',
+    // 78 L8a: the risk evidence of today's holdings (portfolio.risk_concentration, portfolio.tail_risk)
+    'weight_ratio',
+    'risk_share_ratio',
+    'portfolio_volatility_ratio',
+    'cash_weight_ratio',
+    'excluded_weight_ratio',
+    'value_at_risk_loss_ratio',
+    'expected_shortfall_loss_ratio',
+    'worst_window_return_ratio',
+    // 78 L8b: the risk share threshold of portfolio.correlated_pairs (a correlation is not a ratio: it stays a number)
+    'min_risk_share_ratio',
 ]);
 const SIGNED_NORMALIZED_RATIO_FIELDS = new Set(['current_drawdown_ratio', 'maximum_drawdown_ratio']);
-const UNBOUNDED_NORMALIZED_RATIO_FIELDS = new Set(['remaining_to_peak_ratio', 'distance_to_min_ratio', 'distance_to_max_ratio']);
+// 78 L8a: a holding's share of risk can pass 100% or go below 0 (it moves against the others); an annualized volatility can
+// pass 100%; the worst 30-day window keeps its sign and may be a gain.
+const UNBOUNDED_NORMALIZED_RATIO_FIELDS = new Set(['remaining_to_peak_ratio', 'distance_to_min_ratio', 'distance_to_max_ratio', 'risk_share_ratio', 'portfolio_volatility_ratio', 'worst_window_return_ratio']);
 const MONETARY_RESIDUAL_FIELDS = new Set(['period_other_result', 'reconciliation_diff', 'residual']);
 /** Leaves whose value names a payload field (`unavailable[].field`, `missing_fields`), not free text. */
 const FIELD_REFERENCE_KEYS: ReadonlySet<string> = new Set(['field', 'missing_fields']);
@@ -1365,6 +1379,16 @@ const PUBLIC_RATIO_FIELD_NAMES: Readonly<Record<string, string>> = {
     distance_to_min_ratio: 'distance_to_min_percent',
     distance_to_max_ratio: 'distance_to_max_percent',
     value_ratio: 'value_percent',
+    // 78 L8a: «loss» where the number is a loss written as a positive number, «return» where it keeps its sign.
+    weight_ratio: 'weight_percent',
+    risk_share_ratio: 'risk_share_percent',
+    portfolio_volatility_ratio: 'portfolio_volatility_annualized_percent',
+    cash_weight_ratio: 'cash_weight_percent',
+    excluded_weight_ratio: 'excluded_weight_percent',
+    value_at_risk_loss_ratio: 'value_at_risk_loss_percent',
+    expected_shortfall_loss_ratio: 'expected_shortfall_loss_percent',
+    worst_window_return_ratio: 'worst_window_return_percent',
+    min_risk_share_ratio: 'min_risk_share_percent',
 };
 
 function finalPathKey(path: string): string {
@@ -1632,8 +1656,8 @@ function technicalPayload(
 // renderer prints with the local meaning of the code. The gap bumps (E-23: `fx.rate_ohlc`, the price components
 // already at 2) add the merged runs of empty buckets, which the continuous-series renderer prints as a gap table.
 const COMPACT_COMPONENT_VERSIONS: ReadonlyMap<string, ReadonlySet<number>> = new Map([
-    ['portfolio.provenance', new Set([1, 2, 3])],
-    ['broker.provenance', new Set([1, 2, 3])],
+    ['portfolio.provenance', new Set([1, 2, 3, 4])],
+    ['broker.provenance', new Set([1, 2, 3, 4])],
     ['portfolio.positions', new Set([1, 2])],
     ['broker.positions', new Set([1, 2])],
     ['portfolio.technical_prices', new Set([1, 2])],
@@ -1651,7 +1675,7 @@ const COMPACT_COMPONENT_VERSIONS: ReadonlyMap<string, ReadonlySet<number>> = new
     ['broker.fifo_summary', new Set([1, 2, 3])],
     ['portfolio.reconciliation', new Set([1, 2])],
     ['broker.reconciliation', new Set([1, 2])],
-    ['portfolio.income_timeline', new Set([1, 2])],
+    ['portfolio.income_timeline', new Set([1, 2, 3])],
     ['broker.cost_efficiency', new Set([1, 2])],
     ['portfolio.drawdown_summary', new Set([1, 2])],
     ['broker.drawdown_summary', new Set([1, 2])],

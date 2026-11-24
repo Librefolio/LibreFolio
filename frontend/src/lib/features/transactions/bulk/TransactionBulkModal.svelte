@@ -34,7 +34,8 @@
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
     import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
     import BrimEvidenceTable from '$lib/features/transactions/import/BrimEvidenceTable.svelte';
-    import {initialCostBasisMode, remainingTodos, withoutPossibleSplit, possibleSplitEntries as buildSplitEntries, type PossibleSplitEntry} from './bulkTodos';
+    import {initialCostBasisMode, remainingTodos, withoutPossibleSplit, possibleSplitEntries as buildSplitEntries, rewardFillCandidates, applyRewardFill, type PossibleSplitEntry, type RewardFillAnswer, type RewardFillCounts} from './bulkTodos';
+    import {fetchRewardValues} from '$lib/features/transactions/form/rewardValue';
     import {isPreFloorDateTodo, preFloorEntries as buildPreFloorEntries} from '$lib/features/transactions/preFloorDate';
     import EventCreateMiniModal from '../events/EventCreateMiniModal.svelte';
     import {resolveBrimTodoMessage} from '$lib/features/transactions/resolveBrimNotice';
@@ -112,6 +113,11 @@
         unlinkCharge,
         type BulkDeletePlan,
         type ChargesUnread,
+        cloneChargeLink,
+        cloneChargesUnder,
+        wireClonedRows,
+        bulkChargeCandidates,
+        type BulkChargeProbe,
     } from './bulkCharges';
     import {SPLIT_TYPE_MAP, splitHalfType, postSplitType, splitTypeToSend} from './splitTypes';
     import {txRowRef} from '../chargeLinkRules';
@@ -397,7 +403,7 @@
     // =========================================================================
 
     /** Resolve initialRows from intent (if provided) or use legacy initialRows prop. */
-    function resolveInitialRows(): {rows: TXReadItem[]; status?: 'delete'; autoForm: string | null} {
+    function resolveInitialRows(): {rows: TXReadItem[]; status?: 'delete'; autoForm: string | null; cloneSources?: TXReadItem[]} {
         if (intent) {
             if (intent.action === 'create') {
                 return {rows: [], autoForm: 'create'};
@@ -460,7 +466,8 @@
                     if (link) (c as any).link_uuid = link;
                     return c;
                 });
-                return {rows: cloned, autoForm: cloned.length === 1 ? 'create' : null};
+                // 66 TL-3: the originals, aligned with their clones, so the charges' structure is carried over.
+                return {rows: cloned, autoForm: cloned.length === 1 ? 'create' : null, cloneSources: resolved};
             }
             // edit — auto-open FormModal only for single-row intent (user selected 1 row)
             return {rows: resolved, autoForm: txIds.length === 1 ? 'edit' : null};
@@ -476,7 +483,10 @@
         // is open (66 F7-c1: the charges the Bulk reads, `txStoreAddExtras`) re-ran this whole effect, which rebuilds the
         // rows from the intent: every unsaved edit was lost.
         void intent;
-        const {rows, status: initSt, autoForm} = untrack(() => resolveInitialRows());
+        const {rows, status: initSt, autoForm, cloneSources} = untrack(() => resolveInitialRows());
+        // 66 TL-3: «Clona» on a parent with linked charges reads them first (`GET ?parent_ids`), then builds the rows.
+        const cloneParents = untrack(() => (cloneSources ?? []).filter((source) => (source.charges_count ?? 0) > 0).map((source) => source.id));
+        const cloneGeneration = ++cloneChargesGeneration;
         // K-2: the nested form or wizard opens automatically once per open. Set when it is scheduled before the load
         // ends; the load's end then opens nothing the user may have closed meanwhile.
         let autoOpenScheduled = false;
@@ -512,12 +522,12 @@
             // Collapse paired rows: keep only the "from" half with partner
             // metadata populated. No dependency on isTypesLoaded — pair detection
             // uses related_transaction_id (not getTypeRule().requiresPair).
-            let next: PendingOp[] = rows.length > 0 ? buildInitialOps(rows, initSt) : [];
+            let next: PendingOp[] = rows.length > 0 ? buildInitialOps(rows, initSt, cloneSources ? {sources: cloneSources, read: []} : undefined) : [];
 
             // B4-fix: Build ops eagerly but only assign after types are loaded,
             // because getTypeRule() returns FALLBACK_RULE (requiresPair=false)
             // until _ruleMap is populated → paired rows render as singles.
-            if (isTypesLoaded()) {
+            if (isTypesLoaded() && cloneParents.length === 0) {
                 // Fast path: types already cached → assign + auto-open immediately.
                 ops = next;
                 setBaseline(next);
@@ -552,13 +562,17 @@
             // K-4: the language read untracked. Tracked, a language change re-ran this whole effect, which rebuilds the
             // rows from the intent: every unsaved edit was lost.
             await Promise.all([ensureBrokersLoaded(), ensureCurrenciesLoaded(untrack(() => $currentLanguage)), ensureAssetsLoaded(), ensureTypesLoaded()]);
+            const cloneRead = cloneParents.length > 0 ? await readCloneCharges(cloneParents) : [];
+            // An answer for an editor closed or reopened meanwhile changes nothing.
+            if (cloneGeneration !== cloneChargesGeneration || !untrack(() => open)) return;
             untrack(() => {
                 // B4-fix: if ops was deferred (slow path), rebuild + assign now.
                 if (ops.length === 0 && rows.length > 0) {
-                    const next2 = buildInitialOps(rows, initSt);
+                    const next2 = buildInitialOps(rows, initSt, cloneSources ? {sources: cloneSources, read: cloneRead} : undefined);
                     ops = next2;
                     setBaseline(next2);
                     enterOps(next2);
+                    if (cloneRead === null) notifyCloneChargesUnread(cloneParents);
                 }
                 if (!autoOpenScheduled && !formOpen) {
                     scheduleAutoOpen(autoForm, ops);
@@ -575,8 +589,15 @@
      * The charges of the page's choice (`chargeIds`, 66 F7-d: «Delete all» or «Keep») are the parent's choice
      * (`byParentChoice`), so «Restore» on the parent takes them back; a charge the user selected is not among them.
      */
-    function buildInitialOps(rows: TXReadItem[], initSt: 'delete' | undefined): PendingOp[] {
+    function buildInitialOps(rows: TXReadItem[], initSt: 'delete' | undefined, clone?: {sources: TXReadItem[]; read: TXReadItem[] | null}): PendingOp[] {
         let next: PendingOp[] = initSt === 'delete' ? rows.filter((r) => r.id > 0).map((r) => editOpFromTx(r.id, {markedDelete: true})) : rows.map((r) => (r.id > 0 ? editOpFromTx(r.id) : createOpFromClone(r, (r as any).link_uuid)));
+        if (clone) {
+            // 66 TL-3: each cloned charge under its parent's clone (or linked to its saved parent), and the charges read
+            // of each cloned parent as copies under its clone. Their groups start open: the user brought them.
+            const wired = wireClonedRows(clone.sources, next, clone.read, (charge) => createOpFromClone(charge));
+            next = wired.ops;
+            if (wired.expanded.length > 0) expandedParents = new Set([...expandedParents, ...wired.expanded]);
+        }
         const unlinkIds = new Set(intent?.action === 'delete' ? (intent.unlinkIds ?? []) : []);
         if (unlinkIds.size > 0) {
             const present = new Set(next.map((op) => opTxId(op)).filter((id): id is number => id != null));
@@ -598,6 +619,32 @@
             // The parent of an intent's charge is its saved one: `unlinkCharge` cuts that link (`parentUnlink`).
             return {...(unlinked ? unlinkCharge(op, next, txStoreGet) : op), ...(chosen ? {byParentChoice: true as const} : {})};
         });
+    }
+
+    /** 66 TL-3: bumped on every open, so the charges read for a clone answer only the open that asked for them. */
+    let cloneChargesGeneration = 0;
+
+    /** 66 TL-3: the linked charges of the parents a «Clona» copies, read in batches of `CHARGES_READ_BATCH`; `null` when a
+     *  read failed (the parents are then copied alone, and a toast says so). */
+    async function readCloneCharges(parentIds: number[]): Promise<TXReadItem[] | null> {
+        const found: TXReadItem[] = [];
+        try {
+            for (let at = 0; at < parentIds.length; at += CHARGES_READ_BATCH) {
+                const batch = parentIds.slice(at, at + CHARGES_READ_BATCH);
+                const answer = (await zodiosApi.query_transactions_api_v1_transactions_get({queries: {parent_ids: batch}} as never)) as unknown;
+                if (!Array.isArray(answer)) return null;
+                found.push(...(answer as TXReadItem[]).filter((charge) => charge.parent_transaction_id != null && batch.includes(charge.parent_transaction_id)));
+            }
+        } catch {
+            // The API client writes the failure to the console (H-60); the toast tells the user.
+            return null;
+        }
+        return found;
+    }
+
+    /** 66 TL-3: the charges of these parents could not be read: each parent was copied alone. */
+    function notifyCloneChargesUnread(parentIds: readonly number[]) {
+        notify({name: 'tx.bulk.clone.charges-read-failed', detail: {parentIds: [...parentIds]}, toast: {variant: 'warning', message: $t('transactions.bulk.cloneChargesReadFailed', {values: {ids: shortIdList(parentIds)}})}});
     }
 
     /** Schedule auto-open of the nested FormModal based on the mode. */
@@ -1043,6 +1090,24 @@
         return txRowRef(id, id === null ? (visualRowLabels.get(op.tempId) ?? null) : null, $t);
     }
 
+    /**
+     * 66 TL-2: the Bulk's rows the charges picker of the open Form may offer, read on the Bulk's state by the selection's
+     * «Link» rule (`bulkChargeCandidates`; the parent is the row the Form edits, or none while it creates it). Each is a
+     * mirror as the panels show it, free: a saved one keeps its id, a new one gets a negative one and its key
+     * (`_bulkKey`), and both their name (`_rowRef`). The parent picker reads the database only, as before.
+     */
+    function formBulkCandidates(mode: 'charges' | 'parent', probe: BulkChargeProbe): {rows: TXReadItem[]; exclude: number[]} | null {
+        if (mode !== 'charges') return null;
+        const parent = formEditingTempId !== null ? (ops.find((d) => d.tempId === formEditingTempId) ?? null) : null;
+        const {candidates, excluded} = bulkChargeCandidates(parent, probe, ops, txStoreGet, {roleOf: (type) => getTypeRule(type).chargeRole, canEdit: (brokerId) => canEditBroker(brokerId)}, (op) => postSplitType(op, pendingSplits));
+        let synthetic = 0;
+        const rows = candidates.map((op): TXReadItem => {
+            const id = op.op === 'edit' ? op.txId : -++synthetic;
+            return {...panelItem(op), id, parent_transaction_id: null, related_transaction_id: null, _rowRef: bulkRowRef(op), ...(op.op === 'create' ? {_bulkKey: `op-${op.tempId}`} : {})} as TXReadItem;
+        });
+        return {rows, exclude: excluded};
+    }
+
     /** A row as the panel shows it: the editor's values, signed as the ledger holds them. */
     function panelItem(op: PendingOp, parentTxId?: number): TXReadItem {
         // 66 C22d: a half of a queued split is shown with the type the split gives it (`postSplitType`).
@@ -1166,33 +1231,46 @@
         );
     }
 
-    /** Clone a row as a new row. */
-    function cloneRow(tempId: string) {
-        const src = ops.find((d) => d.tempId === tempId);
+    /**
+     * Clone a row as a new row. 66 TL-3: a parent brings a copy of each charge still linked under it (neither «del» nor
+     * «scollega»), owned by its copy, whose group opens; a saved parent whose charges are not all read yet is read first,
+     * and copied alone if that read fails (a toast says so). A charge's copy is born linked to the same parent, when the
+     * «Link» rule allows it (`cloneChargeLink`), free otherwise, with a toast saying why. Every copy keeps its original's date.
+     */
+    async function cloneRow(tempId: string) {
+        let src = ops.find((d) => d.tempId === tempId);
         if (!src) return;
+        if (src.op === 'edit' && parentChargesMissing(src)) {
+            const read = await ensureParentCharges(tempId);
+            src = ops.find((d) => d.tempId === tempId);
+            if (!src) return;
+            if (!read) notifyCloneChargesUnread([(src as PendingOp & {txId: number}).txId]);
+        }
+        const copyOf = (row: PendingOp): PendingOp => ({op: 'create', tempId: generateUUID(), createdSeq: nextCreatedSeq(), fields: structuredClone($state.snapshot(followedFields(row))) as DraftFields, link_uuid: null});
         // T3: the source row's date is preserved (correction workflow) — not reset to today.
-        const clone: PendingOp = {
-            op: 'create',
-            tempId: generateUUID(),
-            createdSeq: nextCreatedSeq(),
-            fields: {...src.fields},
-            link_uuid: getTypeRule(src.fields.type as TransactionTypeCode)?.requiresPair ? generateUUID() : null,
-        };
+        const clone: PendingOp = {...copyOf(src), link_uuid: getTypeRule(src.fields.type as TransactionTypeCode)?.requiresPair ? generateUUID() : null};
+        const added: PendingOp[] = [clone];
         // Clone hidden partner if exists
         const srcPartner = getPartnerOp(tempId);
         if (srcPartner) {
-            const partnerClone: PendingOp = {
-                op: 'create',
-                tempId: generateUUID(),
-                createdSeq: nextCreatedSeq(),
-                fields: {...srcPartner.fields},
-                link_uuid: clone.link_uuid, // share link_uuid
-                pairedWith: clone.tempId,
-            };
-            ops = [...ops, clone, partnerClone];
-        } else {
-            ops = [...ops, clone];
+            added.push({...copyOf(srcPartner), link_uuid: clone.link_uuid, pairedWith: clone.tempId});
         }
+        if (src.fields.type === 'FEE' || src.fields.type === 'TAX') {
+            const link = cloneChargeLink(src, clone.fields, ops, txStoreGet, {roleOf: (type) => getTypeRule(type).chargeRole, canEdit: (brokerId) => canEditBroker(brokerId)}, (op) => postSplitType(op, pendingSplits));
+            if (link.kind === 'owner') {
+                clone.chargeOf = link.chargeOf;
+                openGroup(link.chargeOf);
+            } else if (link.kind === 'saved') {
+                clone.parentLinkId = link.parentLinkId;
+            } else if (link.reason !== null) {
+                notify({name: 'tx.bulk.clone.charge-free', detail: {reason: link.reason, tempId: clone.tempId}, toast: {variant: 'warning', message: $t('transactions.bulk.cloneChargeFree', {values: {reason: link.reason}})}});
+            }
+        } else if (!srcPartner) {
+            const charges = cloneChargesUnder(src, clone.tempId, ops, copyOf);
+            added.push(...charges);
+            if (charges.length > 0) openGroup(clone.tempId);
+        }
+        ops = [...ops, ...added];
     }
 
     /** 66 C22 (§5.1): reset rows back to what is saved. A merge still waiting for the save (`pendingPromotes`) that
@@ -2506,8 +2584,8 @@
             id: 'clone',
             icon: Copy,
             label: () => $t('transactions.bulk.cloneRow') || 'Clone row',
-            onClick: (row: PendingOp) => cloneRow(row.tempId),
-            visible: (row: PendingOp) => !indentedIds.has(row.tempId),
+            // 66 TL-3: offered on a charge under its parent again (the FEE consultant); its copy sits under the same parent.
+            onClick: (row: PendingOp) => void cloneRow(row.tempId),
         },
         {
             id: 'split',
@@ -2757,6 +2835,35 @@
             }
             return merged;
         });
+    }
+    // «Fill from price history» (project 79, STK-4b): the rows with an open `reward_value` todo get the asset's close of
+    // that very day, per unit, from the backend's one reader; the outcome is a count shown in the blockers banner.
+    let rewardFillPending = $derived(rewardFillCandidates(ops).length);
+    let rewardFillRunning = $state(false);
+    let rewardFillResult = $state<(RewardFillCounts & {failed: boolean}) | null>(null);
+    async function fillRewardsFromHistory() {
+        const candidates = rewardFillCandidates(ops);
+        if (candidates.length === 0 || rewardFillRunning) return;
+        rewardFillRunning = true;
+        try {
+            const asked = candidates.filter((candidate) => candidate.assetId != null);
+            const answers = asked.length > 0 ? await fetchRewardValues(asked.map((candidate) => ({assetId: candidate.assetId as number, date: candidate.date}))) : [];
+            if (answers === null) {
+                rewardFillResult = {filled: 0, noPrice: 0, noHistory: 0, failed: true};
+                return;
+            }
+            const fill: RewardFillAnswer[] = candidates.map((candidate) => {
+                if (candidate.assetId == null) return {tempId: candidate.tempId, status: 'NO_HISTORY', value: null};
+                const answer = answers[asked.indexOf(candidate)];
+                return {tempId: candidate.tempId, status: answer?.status ?? 'NO_PRICE_THAT_DAY', value: answer?.suggestion ? {code: answer.suggestion.code, amount: answer.suggestion.amount} : null};
+            });
+            const result = applyRewardFill(ops, fill);
+            ops = result.ops;
+            rewardFillResult = {...result.counts, failed: false};
+            notify({name: 'tx.bulk.rewards.filled', detail: {...result.counts}});
+        } finally {
+            rewardFillRunning = false;
+        }
     }
     let splitCreateAsset = $derived(splitCreateEntry?.assetId != null ? getAssetInfo(splitCreateEntry.assetId) : null);
     /** Human-readable list of the auto-derived fields still awaiting verification (for the Save-gate dialog). */
@@ -4358,6 +4465,10 @@
             {preFloorEntries}
             onSplitCreate={(entry) => (splitCreateEntry = entry)}
             onSplitLink={linkSplitEvent}
+            {rewardFillPending}
+            {rewardFillRunning}
+            {rewardFillResult}
+            onRewardFill={fillRewardsFromHistory}
         />
 
         <!-- Toolbar (Bugfix-2 §U9: action buttons right-aligned, most important first
@@ -4540,6 +4651,7 @@
     openKey={formKey}
     getBulkContext={() => getBulkContextExcluding(formEditingTempId)}
     allowChargeEdits={formChargeEdits}
+    bulkCandidates={formBulkCandidates}
     getWacResult={(tempId) => {
         // Direct lookup (standalone ADJUSTMENT)
         const direct = wacResults.get(tempId);

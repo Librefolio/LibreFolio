@@ -28,9 +28,11 @@ from __future__ import annotations
 
 from datetime import date as date_type
 from decimal import Decimal
+from enum import StrEnum
 from typing import Annotated, List, Literal, Optional, Union
 
 from pydantic import (
+    BaseModel,
     ConfigDict,
     Field,
     field_validator,
@@ -467,6 +469,39 @@ class FAPriceQueryResponse(BaseListResponse[FAPriceQueryResult]):
     Inherits from BaseListResponse[FAPriceQueryResult]:
     - items: List[FAPriceQueryResult]  (one per asset queried)
     """
+
+
+# ============================================================================
+# REWARD VALUES ON RECEIPT (project 79, STK-4b)
+# ============================================================================
+
+
+class RewardValueStatus(StrEnum):
+    """What the price history gives for a reward's day: a value, no price that day, or no history at all."""
+
+    FILLED = "FILLED"
+    NO_PRICE_THAT_DAY = "NO_PRICE_THAT_DAY"
+    NO_HISTORY = "NO_HISTORY"
+
+
+class FARewardValueItem(StrictModel):
+    """One reward asked for: its asset and its day."""
+
+    asset_id: int = Field(..., description="The asset the reward was received in")
+    date: date_type = Field(..., description="The day the reward was received")
+
+
+class FARewardValueResult(BaseModel):
+    """The value on receipt of one reward, read from the stored price history."""
+
+    asset_id: int = Field(..., description="The asset asked for")
+    date: date_type = Field(..., description="The day asked for")
+    status: RewardValueStatus = Field(..., description="FILLED: the asset has a close on that very day; NO_PRICE_THAT_DAY: it has a history, but no close that day (never the day before or after); NO_HISTORY: no stored price at all, or no such asset")
+    value: Optional[Currency] = Field(None, description="With FILLED: the value of one unit, the close divided by the asset's quote base quantity, in the price's own currency (never converted)")
+
+
+class FARewardValueResponse(BaseListResponse[FARewardValueResult]):
+    """The value on receipt of each reward asked for, in the order asked."""
 
 
 # ============================================================================

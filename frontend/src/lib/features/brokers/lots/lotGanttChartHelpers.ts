@@ -266,7 +266,7 @@ export function eventMarkerKind(kind: string, scopeBoundary?: ScopeBoundary | nu
     if (kind === 'ADJUSTMENT_OUT') return 'ADJUSTMENT_OUT';
     if (kind === 'SPLIT') return 'SPLIT';
     if (kind === 'SELL') return 'SELL';
-    if (kind === 'REWARD') return 'REWARD';
+    if (kind === 'REWARD' || kind === 'REWARD_MERGE') return 'REWARD';
     return 'BUY';
 }
 

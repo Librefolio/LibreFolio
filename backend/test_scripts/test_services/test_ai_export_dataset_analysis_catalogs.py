@@ -73,6 +73,7 @@ EXPECTED_INTERNAL_DATASET_IDS = (
     "portfolio.asset_snapshot",
     "portfolio.asset_comparison",
     "portfolio.drawdown_context",
+    "portfolio.risk_evidence",  # 78 L8a
     "portfolio.income_evidence",
     "portfolio.technical",
     "portfolio.fifo",
@@ -117,7 +118,7 @@ EXPECTED_PUBLIC_ANALYSIS_MAPPING = {
     "portfolio.rebalancing": (("portfolio.overview_and_history",), ()),
     "portfolio.performance_market_drivers": (("portfolio.overview_and_history",), ()),
     "portfolio.fiscal_lots": (("portfolio.overview_and_history", "portfolio.fifo"), ()),
-    "portfolio.protection_strategies": (("portfolio.overview_and_history",), ()),
+    "portfolio.protection_strategies": (("portfolio.overview_and_history", "portfolio.risk_evidence"), ()),
     "broker.review": (("broker.overview_and_history",), ()),
     "broker.performance_market_drivers": (("broker.overview_and_history",), ()),
     "broker.fiscal_lots": (("broker.overview_and_history", "broker.fifo"), ()),
@@ -152,14 +153,14 @@ def analysis_registry(dataset_registry: DatasetRegistry) -> AnalysisRegistry:
 
 class TestDatasetCatalog:
     def test_expected_dataset_counts(self):
-        assert EXPECTED_DATASET_COUNT == 40
+        assert EXPECTED_DATASET_COUNT == 41
         assert EXPECTED_PUBLIC_DATASET_COUNT == 8
         assert len(PUBLIC_DATASETS) == 8
 
     def test_dataset_registry_has_public_and_internal_entries(self, dataset_registry: DatasetRegistry):
-        assert len(dataset_registry) == 40
+        assert len(dataset_registry) == 41
         assert len(dataset_registry.for_visibility(CatalogVisibility.PUBLIC)) == 8
-        assert len(dataset_registry.for_visibility(CatalogVisibility.INTERNAL)) == 32
+        assert len(dataset_registry.for_visibility(CatalogVisibility.INTERNAL)) == 33
 
     def test_dataset_ids_and_visibility_match_v1_contract(self, dataset_registry: DatasetRegistry):
         actual_ids = {spec.dataset_id for spec in dataset_registry}
@@ -181,16 +182,16 @@ class TestDatasetCatalog:
 
 
 class TestIntegratedComponentCatalog:
-    def test_production_registry_has_all_68_real_components_in_frozen_order(
+    def test_production_registry_has_all_71_real_components_in_frozen_order(
         self,
         component_registry: ComponentRegistry,
     ):
-        """D5 (plan 68): asset.profile is the 68th component (before D5: 67)."""
+        """D5 (plan 68): asset.profile is the 68th component (before D5: 67); 78 L8a adds two risk evidence components, L8b the third."""
         expected_order = tuple(spec.component_id for spec in ALL_FOUNDATION_COMPONENTS)
 
-        assert len(ALL_FOUNDATION_COMPONENTS) == 68
-        assert len(ALL_REAL_COMPONENTS) == 68
-        assert len(ALL_COMPONENTS) == 68
+        assert len(ALL_FOUNDATION_COMPONENTS) == 71
+        assert len(ALL_REAL_COMPONENTS) == 71
+        assert len(ALL_COMPONENTS) == 71
         assert component_registry.canonical_order == expected_order
         assert tuple(spec.component_id for spec in ALL_COMPONENTS) == expected_order
         assert all(spec.output_model is not FoundationComponentPayload for spec in component_registry)
@@ -211,18 +212,19 @@ class TestIntegratedComponentCatalog:
             assert real.builder is not placeholder.builder
 
     @pytest.mark.parametrize("component_id", ["portfolio.provenance", "broker.provenance"])
-    def test_provenance_components_are_version_3_on_both_sides_of_the_catalog(
+    def test_provenance_components_are_version_4_on_both_sides_of_the_catalog(
         self,
         component_registry: ComponentRegistry,
         component_id: str,
     ):
         """D12(a), issue #32: the provenance semantics moved to the single average cost (version 2);
         J-17: the valuation hierarchy names ESTIMATED_AT_COST and an ADJUSTMENT is never a price
-        (version 3) — on the real spec AND on its frozen placeholder, which the replacement validation
+        (version 3); 79 STK-5: a REWARD is an acquisition at its value on receipt, also income, moving no
+        cash (version 4) — on the real spec AND on its frozen placeholder, which the replacement validation
         requires to be equal. The payload shape does not change: schema_version stays 1. Pins the
         numbers, so a bump on one side only cannot stay green.
 
-        Before J-17: version 2 on the three sides."""
+        Before J-17: version 2 on the three sides; before 79 STK-5: version 3."""
         placeholder = next(spec for spec in ALL_FOUNDATION_COMPONENTS if spec.component_id == component_id)
         real = next(spec for spec in ALL_REAL_COMPONENTS if spec.component_id == component_id)
         registered = component_registry.get(component_id)
@@ -236,9 +238,9 @@ class TestIntegratedComponentCatalog:
             "registered version": registered.version,
             "schema_version": real.schema_version,
         } == {
-            "placeholder version": 3,
-            "real version": 3,
-            "registered version": 3,
+            "placeholder version": 4,
+            "real version": 4,
+            "registered version": 4,
             "schema_version": 1,
         }
 

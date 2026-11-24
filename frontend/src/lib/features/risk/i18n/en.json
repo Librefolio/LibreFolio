@@ -44,7 +44,6 @@
     "dashboardTitle": "Portfolio risk",
     "brokerTitle": "Broker risk",
     "internalSubset": "Internal risk of this broker subset",
-    "dashboardFullPortfolio": "Risk uses the full portfolio; the dashboard broker filter is not applied.",
     "states": {
       "partial": "Partial",
       "empty": "No result yet",

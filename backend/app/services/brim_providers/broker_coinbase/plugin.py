@@ -13,7 +13,7 @@ This plugin parses CSV exports from Coinbase (crypto exchange).
 **Supported Transaction Types:**
 - Buy → BUY
 - Sell → SELL
-- Staking Income / Rewards Income → INTEREST
+- Staking Income / Rewards Income / Learning Reward → REWARD (income in kind, at the Subtotal's value)
 - Convert → BUY (of target asset)
 - Send → WITHDRAWAL (of crypto)
 - Receive → DEPOSIT (of crypto)
@@ -24,6 +24,7 @@ This plugin parses CSV exports from Coinbase (crypto exchange).
 - Asset: Crypto symbol
 - Quantity Transacted: Amount
 - Price Currency: Currency code
+- Subtotal: value of the row before fees (a reward's value on receipt)
 - Total (inclusive of fees and/or spread): Net amount
 - Fees and/or Spread: Transaction fees
 """
@@ -41,11 +42,12 @@ from typing import Dict, List, Optional
 import structlog
 
 from backend.app.db.models import TransactionType
-from backend.app.schemas.brim import FAKE_ASSET_ID_BASE, BRIMExtractedAssetInfo, BRIMParseOutput, BRIMValidationIssue
+from backend.app.schemas.brim import FAKE_ASSET_ID_BASE, BRIMExtractedAssetInfo, BRIMFieldTodo, BRIMParseOutput, BRIMValidationIssue
 from backend.app.schemas.common import Currency
 from backend.app.schemas.transactions.transactions import TXCreateItem
 from backend.app.services.brim.brim_provider import BRIMParseError, BRIMProvider
 from backend.app.services.brim.registry import BRIMProviderRegistry
+from backend.app.services.brim_providers._brim_io import reward_unit_value, reward_value_todo
 from backend.app.services.platform.provider_registry import register_provider
 
 logger = structlog.get_logger(__name__)
@@ -59,6 +61,7 @@ COL_TYPE = "Transaction Type"
 COL_ASSET = "Asset"
 COL_QUANTITY = "Quantity Transacted"
 COL_CURRENCY = "Price Currency"
+COL_SUBTOTAL = "Subtotal"
 COL_TOTAL = "Total (inclusive of fees and/or spread)"
 COL_FEES = "Fees and/or Spread"
 
@@ -66,9 +69,10 @@ COL_FEES = "Fees and/or Spread"
 TYPE_MAPPINGS: Dict[str, TransactionType] = {
     "buy": TransactionType.BUY,
     "sell": TransactionType.SELL,
-    "staking income": TransactionType.ADJUSTMENT,
-    "rewards income": TransactionType.ADJUSTMENT,
-    "learning reward": TransactionType.ADJUSTMENT,
+    # Rewards in kind (project 79, STK-4a): before 1.1.0 an ADJUSTMENT at no cost, the value only in the description
+    "staking income": TransactionType.REWARD,
+    "rewards income": TransactionType.REWARD,
+    "learning reward": TransactionType.REWARD,
     "convert": TransactionType.BUY,  # Treat as buy of target
 }
 
@@ -147,6 +151,11 @@ class CoinbaseBrokerProvider(BRIMProvider):
         return 100
 
     @property
+    def plugin_version(self) -> str:
+        # 1.1.0 — staking, rewards and learning income are REWARD rows at the Subtotal's value (project 79, STK-4a).
+        return "1.1.0"
+
+    @property
     def icon_url(self) -> str:
         return "https://www.coinbase.com/favicon.ico"
 
@@ -177,6 +186,7 @@ class CoinbaseBrokerProvider(BRIMProvider):
         transactions: List[TXCreateItem] = []
         warnings: List[str] = []
         validation_issues: List[BRIMValidationIssue] = []
+        field_todos: List[BRIMFieldTodo] = []
         extracted_assets: Dict[int, Dict[str, Optional[str]]] = {}
         asset_to_fake_id: Dict[str, int] = {}
         next_fake_id = FAKE_ASSET_ID_BASE
@@ -251,15 +261,14 @@ class CoinbaseBrokerProvider(BRIMProvider):
                     if tx_type == TransactionType.BUY and amount and amount > 0:
                         amount = -amount
 
-                    # For ADJUSTMENT (like crypto staking rewards), quantity is kept, but cash must be zero.
-                    # We store the valuation details in the description.
-                    is_reward_adjustment = tx_type == TransactionType.ADJUSTMENT and tx_type_raw in ("staking income", "rewards income", "learning reward")
-
+                    # A reward in kind (REWARD): units with no cash, its value on receipt per unit from the Subtotal (decision
+                    # S4-Q1), in the Price Currency. An empty Subtotal leaves the row to the user, with a blocking todo.
                     desc_extra = ""
-                    if is_reward_adjustment:
-                        if amount and amount != 0:
-                            desc_extra = f" (Value: {amount} {currency})"
-                        amount = None  # cash must be None for ADJUSTMENT
+                    reward_value = None
+                    if tx_type == TransactionType.REWARD:
+                        unit_value = reward_unit_value(_parse_coinbase_amount(row.get(COL_SUBTOTAL, "")), quantity)
+                        reward_value = Currency(code=currency, amount=unit_value) if unit_value is not None else None
+                        amount = None  # a REWARD moves no cash
 
                     # INTEREST/DIVIDEND are pure cash — no quantity.
                     orig_quantity = quantity
@@ -275,7 +284,7 @@ class CoinbaseBrokerProvider(BRIMProvider):
                     tx_desc = f"{desc_str}{desc_extra}"
 
                     # Create transaction
-                    self._create_transaction(
+                    created = self._create_transaction(
                         row_num=row_num,
                         transactions=transactions,
                         validation_issues=validation_issues,
@@ -286,9 +295,12 @@ class CoinbaseBrokerProvider(BRIMProvider):
                         date=tx_date,
                         quantity=quantity,
                         cash=Currency(code=currency, amount=amount) if amount else None,
+                        cost_basis_override=reward_value,
                         description=tx_desc,
                         tags=["import", "coinbase", "crypto"],
                     )
+                    if created is not None and tx_type == TransactionType.REWARD and reward_value is None:
+                        field_todos.append(reward_value_todo(len(transactions) - 1, row_num, asset))
 
                     # Handle fees as separate transaction
                     fees = _parse_coinbase_amount(row.get(COL_FEES, ""))
@@ -338,6 +350,7 @@ class CoinbaseBrokerProvider(BRIMProvider):
             warnings=warnings,
             validation_issues=validation_issues,
             extracted_assets=extracted_assets_typed,
+            field_todos=field_todos,
         )
 
     @property

@@ -258,6 +258,42 @@ def utils_gallery_webp(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "Gallery WebP tests", verbose=verbose)
 
 
+def utils_png_to_webp(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the Docker stage that turns the default avatars into WebP (lane 84)."""
+    print_section("Utils: PNG to WebP (Docker avatars stage)")
+    print_info("Testing: scripts/docker/png_to_webp.py")
+    print_info("Tests: PNG become WebP under the same names and are deleted, a broken PNG / empty or missing folder fails the build, alpha kept, run as a script")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_png_to_webp.py", test_names)
+    return run_command(cmd, "PNG to WebP tests", verbose=verbose)
+
+
+def utils_docs_minify_html(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the hook that removes Material's indentation from the built pages (lane 84-C)."""
+    print_section("Utils: Docs minify HTML")
+    print_info("Testing: mkdocs_src/hooks/minify_html.py, and a sample of the built site (when there is one)")
+    print_info("Tests: the same DOM before and after, pre/code/kbd/textarea/script/style and the inside of a tag untouched, idempotent, not run for serve or in the nested language build")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_docs_minify_html.py", test_names)
+    return run_command(cmd, "Docs minify HTML tests", verbose=verbose)
+
+
+def utils_docs_developer_english_only(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the hook that builds the developer manual once, in English (lane 84-E)."""
+    print_section("Utils: Docs developer English only")
+    print_info("Testing: mkdocs_src/hooks/developer_english_only.py, and a copy of a few real pages (when the site is built)")
+    print_info("Tests: copies become redirects, links go to the English pages, sitemap and hreflang stop naming them, a translated page stays, idempotent")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_docs_developer_english_only.py", test_names)
+    return run_command(cmd, "Docs developer English only tests", verbose=verbose)
+
+
+def utils_docs_shared_nav(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the hook that writes the documentation menu once per language (lane 84-D)."""
+    print_section("Utils: Docs shared navigation")
+    print_info("Testing: mkdocs_src/hooks/shared_nav.py, docs/javascripts/nav-enhance.js (its contract), and a copy of real pages (when the site is built)")
+    print_info("Tests: Material's pruning rule, the shared menu with paths from the root, the round trip gives every page the menu it had, 404 and serve untouched")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_docs_shared_nav.py", test_names)
+    return run_command(cmd, "Docs shared navigation tests", verbose=verbose)
+
+
 def utils_docs_mermaid_colours(verbose: bool = False, test_names: list = None) -> bool:
     """Test that a Mermaid node with its own fill also sets its text colour (E9C)."""
     print_section("Utils: Docs Mermaid Colours")
@@ -770,6 +806,42 @@ Tests for utility modules and helper functions:
         name="Gallery WebP",
         desc="scripts/gallery_webp.py: the gallery's PNGs get a WebP beside them (quality 85, alpha kept); only a PNG with no WebP or newer than it is converted, a second run does nothing, a broken PNG is reported and stops nothing and leaves no WebP; dev.py counts it as a failure of the gallery",
         # Throwaway PNG trees in tmp_path, Pillow only: no DB, no server, no network, no repo writes.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "png-to-webp",
+        utils_png_to_webp,
+        name="PNG to WebP (Docker avatars)",
+        desc="scripts/docker/png_to_webp.py, run by the avatars-webp stage of the Dockerfile: the default avatars become WebP (quality 85) under the same names and the PNG are deleted so none reaches the image; a broken PNG, an empty folder or a missing folder fails the build; the repository keeps the full-size PNG",
+        # Throwaway PNG folders in tmp_path, Pillow only: no DB, no server, no network, no repo writes.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "docs-minify-html",
+        utils_docs_minify_html,
+        name="Docs minify HTML",
+        desc="mkdocs_src/hooks/minify_html.py: after the build every page loses Material's indentation and blank lines (387 → 242 MB of HTML) and keeps the same DOM; whitespace stays inside pre, code, kbd, textarea, script, style and inside a tag; idempotent; skipped for serve and for the nested per-language build; a sample of the built site (when there is one) is the same DOM",
+        # Strings and files in tmp_path, the built site read only: no DB, no server, no network, no repo writes.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "docs-developer-english-only",
+        utils_docs_developer_english_only,
+        name="Docs developer English only",
+        desc="mkdocs_src/hooks/developer_english_only.py: after the build the copies of the English-only developer manual under it/fr/es become redirect pages to the English page (113 MB of HTML saved), the links of the other pages lead straight to the English pages, sitemap.xml(.gz) and the hreflang alternates stop naming the copies; a page with a <name>.<lang>.md source stays; idempotent; skipped for serve and the nested per-language build",
+        # Trees in tmp_path and a copy of a few real pages (read only): no DB, no server, no network, no repo writes.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "docs-shared-nav",
+        utils_docs_shared_nav,
+        name="Docs shared navigation",
+        desc="mkdocs_src/hooks/shared_nav.py: after the build each page keeps the menu Material draws for a pruned navigation (the branch of the page whole, every other group one link to its first page) and the whole menu of the language is written once, javascripts/nav/nav.<lang>.<hash>.js, read by nav-enhance.js before Material starts; the round trip (the script's algorithm in Python, same keys) gives every page the menu it had, on a synthetic site and on a copy of real pages; a group the shared menu does not hold stays whole; 404.html and serve untouched; the menu comes before the code in the file; the hook is registered",
+        # Trees in tmp_path and a copy of a few real pages (read only): no DB, no server, no network, no repo writes.
         isolation="pure",
     )
     add_test(

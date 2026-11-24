@@ -3,11 +3,13 @@
 
   Moved whole out of `PortfolioView.svelte` (Y6-7, delivery 2): markup and `data-testid`s are the view's, unchanged.
 
-  The risk scope is the *whole* portfolio — every broker the user owns (F2, as the rest of the Dashboard) — even when a
-  broker filter is on, which is what the subtitle announces. Never without `broker_ids`: the backend would widen it to every
-  broker the user can see, editor and viewer ones included, so the panel mounts only once the owned brokers are known.
-  `summary` follows the filter, so its net worth belongs to a different question: passing it would print one broker's money
-  beside every broker's risk.
+  The risk scope is the one of the summary on screen (`brokerIds`): every broker the user owns (F2, as the rest of the
+  Dashboard), or the subset a broker filter keeps — a filter narrows the risk as it narrows every other tab (RSK-F, the
+  developer, 24/11/2026: «i filtri se ci sono vanno rispettati»). Those are the brokers of the report on screen, not of the
+  filter: the report lands after the filter's debounce, and until then the summary's net worth and holdings are still the old
+  scope's, so the panel asks the same scope its money comes from. Never without `broker_ids`: the backend would widen it to
+  every broker the user can see, editor and viewer ones included, so the panel mounts only once the owned brokers are known,
+  and an empty set falls back to them.
 -->
 <script lang="ts">
     import {_} from '$lib/i18n';
@@ -24,18 +26,27 @@
         /** The owned brokers are known (possibly none): tells "nothing owned" from "still loading". */
         brokersReady: boolean;
         ownedBrokerIds: number[];
+        /** The brokers of the summary on screen (the last report's), the owned ones or the filter's subset; null before the first. */
+        brokerIds: number[] | null;
         dateStart: string;
         dateEnd: string;
         targetCurrency: string;
-        /** The summary of the brokers the filter keeps: it names the assets held, never the value of the risk scope. */
+        /** The summary of `brokerIds`: the assets held and the value of the risk scope. */
         summary: PortfolioSummary | null;
-        brokerFilterActive: boolean;
         refreshVersion: number;
         /** The panel synced prices or rates: the view reloads its report. */
         onsynced: () => void | Promise<void>;
     }
 
-    let {testId, broker, canAsk, brokersReady, ownedBrokerIds, dateStart, dateEnd, targetCurrency, summary, brokerFilterActive, refreshVersion, onsynced}: Props = $props();
+    let {testId, broker, canAsk, brokersReady, ownedBrokerIds, brokerIds, dateStart, dateEnd, targetCurrency, summary, refreshVersion, onsynced}: Props = $props();
+
+    const scopeBrokerIds = $derived(brokerIds && brokerIds.length > 0 ? brokerIds : ownedBrokerIds);
+    /** A subset of the owned brokers (a broker filter): the header says the risk is the one of that subset. */
+    const subset = $derived.by(() => {
+        const owned = new Set(ownedBrokerIds);
+        const asked = new Set(scopeBrokerIds);
+        return asked.size !== owned.size || [...asked].some((id) => !owned.has(id));
+    });
 </script>
 
 <div data-testid={testId}>
@@ -59,14 +70,14 @@
         />
     {:else if canAsk}
         <RiskLevelsPanel
-            scope={{kind: 'portfolio', broker_ids: ownedBrokerIds}}
+            scope={{kind: 'portfolio', broker_ids: scopeBrokerIds}}
             {dateStart}
             {dateEnd}
             {targetCurrency}
             assetIds={[...new Set((summary?.holdings ?? []).map((holding) => holding.asset_id))]}
-            scopeValue={brokerFilterActive || !summary ? null : parseFloat(summary.net_worth.amount)}
+            scopeValue={summary ? parseFloat(summary.net_worth.amount) : null}
             title={$_('risk.dashboardTitle')}
-            subtitle={brokerFilterActive ? $_('risk.dashboardFullPortfolio') : ''}
+            internalSubset={subset}
             {refreshVersion}
             {onsynced}
         />

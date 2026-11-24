@@ -195,7 +195,16 @@
       "chargesReadFailed": "Could not read the linked charges of {ids}. «Reset row» on the row reads them again.",
       "deleteSkippedUnread": "{n, plural, one {# transaction was not deleted: its linked charges could not be read. «Reset row» reads them again.} other {# transactions were not deleted: their linked charges could not be read. «Reset row» reads them again.}}",
       "rowRef": "row {n}",
-      "editPartnerInaccessible": "The linked transaction is on a broker you cannot see, so this row cannot be edited."
+      "editPartnerInaccessible": "The linked transaction is on a broker you cannot see, so this row cannot be edited.",
+      "rewardFill": {
+        "pending": "{n, plural, one {# reward has no value: it can be filled from the asset's price history} other {# rewards have no value: they can be filled from the assets' price history}}",
+        "button": "Fill from price history",
+        "running": "Reading prices…",
+        "result": "{filled, plural, one {# filled} other {# filled}} with the close of their day, {noPrice, plural, one {# without a price on that day} other {# without a price on that day}}, {noHistory, plural, one {# asset without price history} other {# assets without price history}}. The values can be changed; the rows not filled still wait for a value.",
+        "failed": "The prices could not be read: no value was filled. Try again."
+      },
+      "cloneChargesReadFailed": "Could not read the linked charges of {ids}: the copy was made without them.",
+      "cloneChargeFree": "{reason, select, deleted {The copy of the charge is not linked: its parent is marked for deletion.} paired {The copy of the charge is not linked: its parent is half of a pair.} other {The copy of the charge is not linked: it cannot be linked to the same transaction.}}"
     },
     "commit": {
       "serverError": "Save failed — server error"

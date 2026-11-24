@@ -101,6 +101,38 @@ def test_parse_iso_date_accepts_string_and_date():
 
 
 # ============================================================================
+# TESTS: months_before (78 L8a: the 12-month window of the AI Export risk evidence)
+# ============================================================================
+
+
+@pytest.mark.parametrize(
+    ("value", "months", "expected"),
+    [
+        (date(2026, 11, 23), 12, date(2025, 11, 23)),
+        (date(2026, 3, 31), 1, date(2026, 2, 28)),
+        (date(2024, 2, 29), 12, date(2023, 2, 28)),
+        (date(2025, 2, 28), 12, date(2024, 2, 28)),
+        (date(2026, 1, 15), 1, date(2025, 12, 15)),
+        (date(2026, 5, 31), 0, date(2026, 5, 31)),
+        (date(9999, 12, 31), 0, date(9999, 12, 31)),
+        (date(2, 1, 1), 12, date(1, 1, 1)),
+    ],
+)
+def test_months_before_keeps_the_day_held_at_the_end_of_a_shorter_month(value: date, months: int, expected: date):
+    """The rule of the frontend's «1 year» presets (`subtractMonths(end, 12)`, `addMonths(today, -12)`)."""
+    assert datetime_utils.months_before(value, months) == expected
+
+
+def test_months_before_holds_at_the_start_of_the_calendar():
+    assert datetime_utils.months_before(date(1, 6, 1), 12) == date.min
+
+
+def test_months_before_refuses_a_negative_shift():
+    with pytest.raises(ValueError, match="non-negative"):
+        datetime_utils.months_before(date(2026, 1, 1), -1)
+
+
+# ============================================================================
 # TESTS: shift_date (W-B71)
 # ============================================================================
 #

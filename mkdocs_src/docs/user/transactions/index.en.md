@@ -35,7 +35,7 @@ Without filters or sorting, the two rows of a linked pair (a transfer or a curre
 
 Each of these opens the bulk workspace, and nothing changes before **Save All**. Editing or deleting one side of a linked pair brings its partner along. Deleting a transaction that has linked charges first asks what to do with them — see [Linked charges](#linked-charges).
 
-**Clone** keeps the original date: it is how you re-record a historical row, for example under another type.
+**Clone** keeps the original date: it is how you re-record a historical row, for example under another type. Cloning a transaction with linked charges copies its charges too, linked to the copy; cloning a charge gives a copy linked to the same transaction. If you remove the copy of a transaction from the batch, the copies of its charges you have not changed go with it.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
     <img class="gallery-img" data-category="transactions" data-name="clone-flow" alt="Bulk workspace with a cloned transaction row">

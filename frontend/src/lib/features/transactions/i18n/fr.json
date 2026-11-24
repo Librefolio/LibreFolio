@@ -195,7 +195,16 @@
       "chargesReadFailed": "Impossible de lire les frais liés de {ids}. «Réinitialiser la ligne» les relit.",
       "deleteSkippedUnread": "{n, plural, one {# transaction n’a pas été supprimée : ses frais liés n’ont pas pu être lus. «Réinitialiser la ligne» les relit.} other {# transactions n’ont pas été supprimées : leurs frais liés n’ont pas pu être lus. «Réinitialiser la ligne» les relit.}}",
       "rowRef": "ligne {n}",
-      "editPartnerInaccessible": "La transaction liée se trouve chez un courtier que vous ne pouvez pas voir : cette ligne ne peut donc pas être modifiée."
+      "editPartnerInaccessible": "La transaction liée se trouve chez un courtier que vous ne pouvez pas voir : cette ligne ne peut donc pas être modifiée.",
+      "rewardFill": {
+        "pending": "{n, plural, one {# récompense n’a pas de valeur : elle peut être remplie depuis l’historique des prix de l’actif} other {# récompenses n’ont pas de valeur : elles peuvent être remplies depuis l’historique des prix des actifs}}",
+        "button": "Remplir depuis l’historique des prix",
+        "running": "Lecture des prix…",
+        "result": "{filled, plural, one {# remplie} other {# remplies}} avec la clôture de leur jour, {noPrice, plural, one {# sans prix ce jour-là} other {# sans prix ce jour-là}}, {noHistory, plural, one {# actif sans historique de prix} other {# actifs sans historique de prix}}. Les valeurs restent modifiables ; les lignes non remplies attendent encore une valeur.",
+        "failed": "Les prix n’ont pas pu être lus : aucune valeur n’a été remplie. Réessayez."
+      },
+      "cloneChargesReadFailed": "Impossible de lire les frais liés de {ids} : la copie a été faite sans eux.",
+      "cloneChargeFree": "{reason, select, deleted {La copie du frais n'est pas liée : la transaction à laquelle il était lié est marquée pour suppression.} paired {La copie du frais n'est pas liée : la transaction à laquelle il était lié fait partie d'une paire.} other {La copie du frais n'est pas liée : elle ne peut pas être liée à la même transaction.}}"
     },
     "commit": {
       "serverError": "Sauvegarde impossible — erreur serveur"

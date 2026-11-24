@@ -72,6 +72,10 @@ export type PendingOp = ({op: 'create'} | {op: 'edit'; txId: number; markedDelet
     /** Project 66 (F7-c2): the «del» or «scollega» on this charge was set by its parent's delete choice (the panel V1,
      *  or the page's «Keep the charges»). «Restore» on the parent undoes only those; one set by hand stays. */
     byParentChoice?: true;
+    /** Project 66 (TL-3): a charge copy brought by «Clona» with its parent's copy (or under the same parent): the values it
+     *  was born with. While its values still equal them (`isUntouchedClone`) it leaves with its new parent
+     *  (`withoutRows`); it goes with the link (`unlinkCharge`, `linkInBulk`). Never sent: the payload reads `fields`. */
+    clonedFields?: DraftFields;
 };
 
 /** Single source of truth: WAC results per auto-op (keyed by tempId).

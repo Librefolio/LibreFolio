@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from backend.app.schemas.common import Currency, DateSpan, OpenDateRangeModel, SafeDecimal, StepSpan, StrictModel
 from backend.app.schemas.portfolio.data_quality import DataQualityReport
-from backend.app.services.financial_math.fifo.models import LotMatchingMethod  # a plain enum of the layer, no service
+from backend.app.services.financial_math.fifo.models import LotMatchingMethod, RewardAllocation  # plain enums of the layer, no service
 
 LotDirection = Literal["LONG", "SHORT"]
 
@@ -65,6 +65,10 @@ class LotsAnalysisQuery(BaseModel):
         default_factory=lambda: [LotMatchingMethod.FIFO],
         description="The orders in which outflows close lots, each answered in its own block of methods: FIFO (oldest lot first), LIFO (most recent first). Default FIFO.",
     )
+    reward_allocation: RewardAllocation = Field(
+        RewardAllocation.OWN_LOT,
+        description="Where a REWARD's units go: OWN_LOT (default), a lot of its own at the value on receipt; MERGED, spread over the lots its broker held the day before, at no cost and with no income booked.",
+    )
 
     @field_validator("target_currency")
     @classmethod
@@ -104,6 +108,7 @@ class LotSummarySchema(StrictModel):
 
     lot_id: int = Field(..., description="Stable lot identifier. Equals opening_transaction_id.")
     opening_transaction_id: int = Field(..., description="Transaction that opened the lot. Equals lot_id.")
+    opening_kind: Optional[LotTimelineEventKind] = Field(None, description="The kind of the event that opened the lot: BUY, REWARD, ADJUSTMENT_IN (SELL for a short lot); None when unknown.")
     asset_id: int
     direction: LotDirection
     opening_broker_id: int
@@ -167,6 +172,8 @@ class LotTimelineEventKind(StrEnum):
 
     BUY = "BUY"
     REWARD = "REWARD"
+    #: A reward merged into the lot in the MERGED view (STK-3): quantity times ``ratio``, cost unchanged
+    REWARD_MERGE = "REWARD_MERGE"
     SELL = "SELL"
     ADJUSTMENT_IN = "ADJUSTMENT_IN"
     ADJUSTMENT_OUT = "ADJUSTMENT_OUT"
@@ -379,6 +386,7 @@ class LotsAnalysisMetadata(StrictModel):
     selected_lot_ids: Optional[List[int]] = None
     requested_analyses: List[LotAnalysisType]
     matching_methods: List[LotMatchingMethod] = Field(default_factory=lambda: [LotMatchingMethod.FIFO], description="The matching methods computed, in the order asked: the keys of methods.")
+    reward_allocation: RewardAllocation = Field(RewardAllocation.OWN_LOT, description="Where the REWARD units went in this answer: OWN_LOT or MERGED.")
     requested_date_from: Optional[date_type] = None
     requested_date_to: Optional[date_type] = None
     computed_date_from: Optional[date_type] = None

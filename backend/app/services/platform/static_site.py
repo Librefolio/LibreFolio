@@ -12,7 +12,9 @@ An address that leads nowhere under ``/api`` or ``/mkdocs`` (the API's pages and
 browser's page request to ``/`` and answers a client's call with the 404 JSON of the API (FB-23, ``address_not_found``).
 
 Caching: the chunks under ``_app/immutable/`` are cached for a year (their names change with their content); every
-other file of ``_app`` (``env.js``, ``version.json``) and every HTML document is revalidated (F28).
+other file of ``_app`` (``env.js``, ``version.json``) and every HTML document is revalidated (F28). In the documentation,
+the shared menu of each language, ``javascripts/nav/nav.<language>.<hash>.js`` (lane 84-D), is named after the hash of its
+content and is cached for a year too (``is_content_hashed_doc_file``); the rest of the site is as before.
 
 ``spa_inline_script_hashes()`` gives the hashes of the inline scripts of the build's pages, which the managed profile's
 report-only policy allows (H-52, ``security_headers.py``).
@@ -20,6 +22,7 @@ report-only policy allows (H-52, ``security_headers.py``).
 
 import base64
 import hashlib
+import re
 from html.parser import HTMLParser
 from pathlib import Path
 
@@ -117,6 +120,16 @@ def address_not_found(request: Request) -> Response:
     return JSONResponse({"detail": "Not Found"}, status_code=404)
 
 
+#: The documentation's shared menu: ``mkdocs_src/hooks/shared_nav.py`` names it after the hash of the whole file, so a
+#: new build with other content is another name (``test_docs_shared_nav`` pins the hook's side of this contract).
+_CONTENT_HASHED_DOC_FILE = re.compile(r"javascripts/nav/nav\.[a-z]{2}\.[0-9a-f]{10}\.js")
+
+
+def is_content_hashed_doc_file(relative: str) -> bool:
+    """Whether a path below the documentation's root (``javascripts/nav/nav.it.0123456789.js``) names a file after its content."""
+    return _CONTENT_HASHED_DOC_FILE.fullmatch(relative) is not None
+
+
 def _revalidated_file(path: Path) -> FileResponse:
     """A file of a build, told to revalidate when it is an HTML document."""
     return FileResponse(path, headers=REVALIDATE_HTML if path.suffix == ".html" else None)
@@ -171,6 +184,8 @@ def mkdocs_static(path: str, request: Request):  # pragma: no cover
         target = target / "index.html"
 
     if target.exists() and target.is_file():
+        if is_content_hashed_doc_file(requested_path):
+            return FileResponse(target, headers={"Cache-Control": IMMUTABLE_CACHE_CONTROL})
         return _revalidated_file(target)
 
     return address_not_found(request)

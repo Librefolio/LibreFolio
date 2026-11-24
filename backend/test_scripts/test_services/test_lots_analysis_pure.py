@@ -50,7 +50,7 @@ from backend.app.services.financial_math.average_cost import (
 )
 from backend.app.services.financial_math.fifo import models as fifo_models
 from backend.app.services.financial_math.fifo.engine import run_fifo_lot_engine
-from backend.app.services.financial_math.fifo.models import EconomicAllocationGroup, FifoDataQualityIssue, FifoEngineResult, FifoEvent, FifoInputTransaction, FifoLot, FragmentInterval, LotClosure, LotMatchingMethod
+from backend.app.services.financial_math.fifo.models import EconomicAllocationGroup, FifoDataQualityIssue, FifoEngineResult, FifoEvent, FifoInputTransaction, FifoLot, FragmentInterval, LotClosure, LotMatchingMethod, RewardAllocation, RewardMerge
 from backend.app.services.financial_math.lots.average_cost_lines import ALL_BROKERS, average_cost_points, build_broker_wac_history, build_cumulative_wac_history
 from backend.app.services.financial_math.lots.conversions import FxRateResolver, collect_fx_needs, collect_performance_fx_needs
 from backend.app.services.financial_math.lots.economic_events import build_cost_economic_events, build_engine_transactions, build_income_economic_events, withheld_economics
@@ -70,7 +70,7 @@ from backend.app.services.financial_math.lots.histories import (
 from backend.app.services.financial_math.lots.prices import opening_reference_price
 from backend.app.services.financial_math.lots.scope_boundary import BoundaryLeg
 from backend.app.services.financial_math.price_marks import AssetPriceSeries, ObservationKind, PriceObservation, build_asset_price_series
-from backend.app.services.portfolio.lots_analysis_service import LotsAnalysisService, _parse_transfer_pair_id
+from backend.app.services.portfolio.lots_analysis_service import LotsAnalysisService, _lot_opening_kinds, _parse_transfer_pair_id, _rewards_at_no_cost
 
 # --------------------------------------------------------------------------- #
 # Builders
@@ -4956,3 +4956,407 @@ class TestTheLinkedIncomeOrphanIssueIsAnOrphanWarning:
         assert (params["transaction_id"], params["broker_id"], params["economic_type"], params["as_of_date"]) == (4, 1, "FEE", "2024-03-13")
         assert (params["target_amount"], params["target_currency"]) == stated
         assert (params["parent_transaction_id"], params["parent_date"]) == (5, "2024-03-10")
+
+
+# --------------------------------------------------------------------------- #
+# Project 79, STK-3 — «spread rewards across lots» (reward_allocation MERGED)
+# --------------------------------------------------------------------------- #
+
+_STK3_REWARD_DAY = date(2024, 3, 1)
+_STK3_ANALYSES = [
+    LotAnalysisType.LOT_SUMMARY,
+    LotAnalysisType.EVENT_HISTORY,
+    LotAnalysisType.INCOME_EVENTS,
+    LotAnalysisType.BROKER_WAC_HISTORY,
+    LotAnalysisType.CUMULATIVE_WAC_HISTORY,
+    LotAnalysisType.PERFORMANCE_HISTORY,
+]
+
+
+def _stk3_reward(tx_id: int = 3, *, quantity: str = "20", unit_value: str = "0.50", currency: str = "EUR") -> Transaction:
+    """A REWARD as stored: units in, amount 0, no cash currency, its value a unit in cost_basis_*."""
+    return _tx(tx_id, tx_type=TransactionType.REWARD, tx_date=_STK3_REWARD_DAY, quantity=D(quantity), amount=D("0"), currency=None, cost_basis_override=D(unit_value), cost_basis_currency=currency)
+
+
+def _stk3_golden() -> list[Transaction]:
+    """Plan §5 in 2024: lot 1, 500 @0.30 (150 EUR); lot 2, 500 @0.60 (300 EUR); REWARD 3 of 20 units at 0.50 on 1 Mar."""
+    return [
+        _tx(1, tx_date=date(2024, 1, 10), quantity=D("500"), amount=D("-150"), currency="EUR"),
+        _tx(2, tx_date=date(2024, 2, 10), quantity=D("500"), amount=D("-300"), currency="EUR"),
+        _stk3_reward(),
+    ]
+
+
+async def _stk3_analysis(monkeypatch, rows: list[Transaction], allocation: RewardAllocation):
+    """get_lots_analysis_methods on the rows (FIFO, EUR, up to 20 Mar, no price): the common parts and the FIFO block."""
+    response = await _service_on_rows(monkeypatch, rows).get_lots_analysis_methods(
+        user_id=1,
+        asset_id=7,
+        broker_ids=[1],
+        date_from=None,
+        date_to=_MAR_20,
+        target_currency="EUR",
+        selected_lot_ids=None,
+        requested_analyses=_STK3_ANALYSES,
+        matching_methods=[LotMatchingMethod.FIFO],
+        reward_allocation=allocation,
+    )
+    return response, response.methods[LotMatchingMethod.FIFO]
+
+
+def _stk3_last_wac(points) -> tuple[Decimal, Decimal]:
+    """(wac, pool quantity) of the step holding the reading day."""
+    [last] = [point for point in points if point.date <= _MAR_20 <= point.through]
+    return last.wac, last.pool_qty
+
+
+class TestRewardAllocationMergedService:
+    """STK-3 through the whole service on in-memory rows (``_service_on_rows``): each MERGED reading is set beside its
+    OWN_LOT twin on the same rows, so an absence in MERGED (no income, no capital flow) is one OWN_LOT shows present."""
+
+    @pytest.mark.asyncio
+    async def test_the_allocation_is_echoed_in_the_metadata(self, monkeypatch):
+        merged, _ = await _stk3_analysis(monkeypatch, _stk3_golden(), RewardAllocation.MERGED)
+        own, _ = await _stk3_analysis(monkeypatch, _stk3_golden(), RewardAllocation.OWN_LOT)
+        assert (merged.calculation_metadata.reward_allocation, own.calculation_metadata.reward_allocation) == (RewardAllocation.MERGED, RewardAllocation.OWN_LOT)
+
+    @pytest.mark.asyncio
+    async def test_the_empty_scope_echoes_it_too(self, monkeypatch):
+        response = await _service_on_rows(monkeypatch, []).get_lots_analysis_methods(
+            user_id=1,
+            asset_id=7,
+            broker_ids=[1],
+            date_from=None,
+            date_to=_MAR_20,
+            target_currency="EUR",
+            selected_lot_ids=None,
+            requested_analyses=[LotAnalysisType.LOT_SUMMARY],
+            matching_methods=[LotMatchingMethod.FIFO],
+            reward_allocation=RewardAllocation.MERGED,
+        )
+        assert response.calculation_metadata.reward_allocation is RewardAllocation.MERGED
+
+    def test_the_default_is_own_lot(self):
+        response = _svc()._empty_response(
+            asset_id=7,
+            target_currency="EUR",
+            requested_analyses=[LotAnalysisType.LOT_SUMMARY],
+            broker_ids=[],
+            selected_lot_ids=None,
+            requested_date_from=None,
+            requested_date_to=_MAR_20,
+            computed_date_from=None,
+            computed_date_to=_MAR_20,
+            status="COMPLETE",
+        )
+        assert response.calculation_metadata.reward_allocation is RewardAllocation.OWN_LOT
+
+    @pytest.mark.asyncio
+    async def test_the_lots_grow_at_their_cost_and_the_reward_opens_none(self, monkeypatch):
+        _, block = await _stk3_analysis(monkeypatch, _stk3_golden(), RewardAllocation.MERGED)
+        assert block.calculation_status == "COMPLETE", block.data_quality
+        lots = {lot.lot_id: lot for lot in block.lots}
+        assert set(lots) == {1, 2}, "the reward opened a lot of its own"
+        assert (lots[1].original_quantity, lots[1].open_quantity, lots[1].original_cost) == (D("510"), D("510"), D("150"))
+        assert (lots[2].original_quantity, lots[2].open_quantity, lots[2].original_cost) == (D("510"), D("510"), D("300"))
+        assert abs(lots[1].opening_unit_price - D("150") / D("510")) < D("1e-18")
+        assert abs(lots[2].opening_unit_price - D("300") / D("510")) < D("1e-18")
+
+    @pytest.mark.asyncio
+    async def test_one_reward_merge_row_per_lot_and_no_reward_opening_row(self, monkeypatch):
+        _, block = await _stk3_analysis(monkeypatch, _stk3_golden(), RewardAllocation.MERGED)
+        rows = [(row.lot_id, row.kind, row.date, row.quantity, row.unit_price, row.ratio, row.broker_id) for row in block.lot_events if row.transaction_id == 3]
+        assert sorted(rows) == [
+            (1, LotTimelineEventKind.REWARD_MERGE, _STK3_REWARD_DAY, D("10"), None, D("1.02"), 1),
+            (2, LotTimelineEventKind.REWARD_MERGE, _STK3_REWARD_DAY, D("10"), None, D("1.02"), 1),
+        ]
+
+    @pytest.mark.asyncio
+    async def test_no_reward_income_in_merged_where_own_lot_books_it(self, monkeypatch):
+        _, merged = await _stk3_analysis(monkeypatch, _stk3_golden(), RewardAllocation.MERGED)
+        _, own = await _stk3_analysis(monkeypatch, _stk3_golden(), RewardAllocation.OWN_LOT)
+        # Presence barrier: the same rows in OWN_LOT book the 10 EUR, 5 on each lot held the day before
+        assert [(event.type, event.transaction_id, event.amount) for event in own.income_events] == [("REWARD", 3, D("10.00"))]
+        assert {lot.lot_id: lot.asset_income for lot in own.lots if lot.lot_id in (1, 2)} == {1: D("5.00"), 2: D("5.00")}
+        assert [event for event in merged.income_events if event.type == "REWARD"] == []
+        assert {lot.lot_id: lot.asset_income for lot in merged.lots} == {1: D("0"), 2: D("0")}
+        assert not [group for group in merged.economic_allocation_groups or [] if 3 in group.source_transaction_ids]
+
+    @pytest.mark.asyncio
+    async def test_the_average_cost_lines_count_the_reward_at_no_cost(self, monkeypatch):
+        """MERGED: 450 EUR over 1 020 units; OWN_LOT: 460 over 1 020 (the reward's 10 EUR is a cost there)."""
+        merged, _ = await _stk3_analysis(monkeypatch, _stk3_golden(), RewardAllocation.MERGED)
+        own, _ = await _stk3_analysis(monkeypatch, _stk3_golden(), RewardAllocation.OWN_LOT)
+        for name in ("broker_wac_history", "cumulative_wac_history"):
+            merged_wac, merged_qty = _stk3_last_wac(getattr(merged, name))
+            own_wac, own_qty = _stk3_last_wac(getattr(own, name))
+            assert merged_qty == own_qty == D("1020"), name
+            assert abs(merged_wac - D("450") / D("1020")) < D("1e-18"), (name, merged_wac)
+            assert abs(own_wac - D("460") / D("1020")) < D("1e-18"), (name, own_wac)
+
+    @pytest.mark.asyncio
+    async def test_the_performance_history_counts_no_capital_for_a_merged_reward(self, monkeypatch):
+        """No price: the lots are marked at the last trade, 0.60. On 1 Mar 1 020 units are worth 612. MERGED keeps 450 of
+        capital, ROI 162 / 450 = 0.36; OWN_LOT adds the reward's 10, ROI 152 / 460 = 0.330435."""
+        _, merged = await _stk3_analysis(monkeypatch, _stk3_golden(), RewardAllocation.MERGED)
+        _, own = await _stk3_analysis(monkeypatch, _stk3_golden(), RewardAllocation.OWN_LOT)
+
+        def roi_on_reading_day(block) -> Decimal:
+            [point] = [point for point in block.performance_history if point.date <= _MAR_20 <= point.through]
+            return point.roi
+
+        assert roi_on_reading_day(own) == (D("152") / D("460")).quantize(D("0.000001"))
+        assert roi_on_reading_day(merged) == D("0.36")
+
+    @pytest.mark.asyncio
+    async def test_an_airdrop_keeps_a_lot_of_its_own_at_no_cost_with_an_info_issue(self, monkeypatch):
+        _, block = await _stk3_analysis(monkeypatch, [_stk3_reward()], RewardAllocation.MERGED)
+        [lot] = block.lots
+        assert (lot.lot_id, lot.original_quantity, lot.original_cost, lot.opening_unit_price, lot.asset_income) == (3, D("20"), D("0"), D("0"), D("0"))
+        [opening] = [row for row in block.lot_events if row.lot_id == 3]
+        assert (opening.kind, opening.transaction_id, opening.quantity, opening.unit_price) == (LotTimelineEventKind.REWARD, 3, D("20"), D("0"))
+        [issue] = [issue for issue in block.data_quality.issues if issue.code == IssueCode.REWARD_NOT_MERGED_NO_OPEN_LOT]
+        assert (issue.severity, issue.message_i18n_key, issue.message_params["transaction_id"]) == (IssueSeverity.INFO, "dataQuality.rewardNotMergedNoOpenLot", 3)
+        assert block.calculation_status == "COMPLETE"
+        assert block.income_events == []
+
+    @pytest.mark.asyncio
+    async def test_guard_the_own_lot_airdrop_raises_no_such_issue(self, monkeypatch):
+        _, block = await _stk3_analysis(monkeypatch, [_stk3_reward()], RewardAllocation.OWN_LOT)
+        assert IssueCode.REWARD_NOT_MERGED_NO_OPEN_LOT not in {issue.code for issue in block.data_quality.issues}
+        [lot] = block.lots
+        assert lot.original_cost == D("10.00")
+
+
+class TestTheTimelineRowsOfAMergedReward:
+    """``_build_lot_event_rows`` on a hand-built MERGED result: reward 3 merged into lots 1 and 2 (lot 2 not selected),
+    reward 4 found no lot and opened lot 4 — its REWARD_MERGE event reads as the opening row of kind REWARD."""
+
+    def _result(self) -> tuple[FifoEngineResult, dict[int, FifoLot]]:
+        day, airdrop_day = date(2024, 3, 1), date(2024, 3, 5)
+        lots = [
+            _lot(1, original_quantity=D("110"), opening_unit_price=D("1000") / D("110"), original_cost=D("1000"), open_quantity=D("110")),
+            _lot(2, original_quantity=D("110"), opening_unit_price=D("1000") / D("110"), original_cost=D("1000"), open_quantity=D("110")),
+            _lot(4, opening_date=airdrop_day, original_quantity=D("7"), opening_unit_price=D("0"), original_cost=D("0"), open_quantity=D("7")),
+        ]
+        events = [
+            FifoEvent(kind="REWARD_MERGE", date=day, transaction_id=3, broker_id=1, quantity=D("20"), unit_price=D("0")),
+            FifoEvent(kind="REWARD_MERGE", date=airdrop_day, transaction_id=4, broker_id=1, quantity=D("7"), unit_price=D("0")),
+        ]
+        merges = [
+            RewardMerge(transaction_id=3, date=day, broker_id=1, lot_id=1, added_quantity=D("10"), ratio=D("1.1")),
+            RewardMerge(transaction_id=3, date=day, broker_id=1, lot_id=2, added_quantity=D("10"), ratio=D("1.1")),
+        ]
+        result = replace(_engine_result(lots=lots, events=events), reward_allocation=RewardAllocation.MERGED, reward_merges=merges)
+        return result, {lot.lot_id: lot for lot in lots}
+
+    def test_merge_rows_for_the_selected_lots_and_the_fallback_opening_row(self):
+        result, lots_by_id = self._result()
+        rows = _svc()._build_lot_event_rows(engine_result=result, selected_ids=[1, 4], fx_resolver=_resolver("EUR"), lots_by_id=lots_by_id)
+        got = sorted((row.lot_id, row.kind, row.transaction_id, row.quantity, row.unit_price, row.ratio) for row in rows)
+        assert got == [
+            (1, LotTimelineEventKind.REWARD_MERGE, 3, D("10"), None, D("1.1")),
+            (4, LotTimelineEventKind.REWARD, 4, D("7"), D("0"), None),
+        ]
+
+    def test_a_merged_reward_opens_no_row_of_its_own(self):
+        """Reward 3's event is not a lot: no opening row under its id, only the merge rows on the lots it joined."""
+        result, lots_by_id = self._result()
+        rows = _svc()._build_lot_event_rows(engine_result=result, selected_ids=[1, 2, 4], fx_resolver=_resolver("EUR"), lots_by_id=lots_by_id)
+        assert {row.lot_id for row in rows if row.transaction_id == 3} == {1, 2}
+        assert all(row.kind is LotTimelineEventKind.REWARD_MERGE for row in rows if row.transaction_id == 3)
+
+
+class TestRewardsAtNoCost:
+    """``_rewards_at_no_cost``: the MERGED view's average-cost lines read every REWARD at no cost; the other rows go on as
+    they are, and the rows handed in are not changed."""
+
+    def test_only_the_rewards_are_zeroed(self):
+        buy = _tx(1, tx_date=date(2024, 1, 10), quantity=D("500"), amount=D("-150"))
+        adjustment = _tx(2, tx_type=TransactionType.ADJUSTMENT, quantity=D("5"), amount=D("0"), currency=None, cost_basis_override=D("90"), cost_basis_currency="EUR")
+        reward = _stk3_reward()
+        out = _rewards_at_no_cost([buy, adjustment, reward])
+        assert out[0] is buy and out[1] is adjustment
+        assert isinstance(out[2], FifoInputTransaction)
+        assert (out[2].id, out[2].type, out[2].quantity, out[2].cost_basis_override, out[2].cost_basis_currency) == (3, "REWARD", D("20"), D("0"), "EUR")
+        assert reward.cost_basis_override == D("0.50"), "the stored row was changed"
+
+    def test_a_reward_already_an_engine_input_is_zeroed_too(self):
+        engine_input = FifoInputTransaction.from_transaction(_stk3_reward())
+        [out] = _rewards_at_no_cost([engine_input])
+        assert (out.cost_basis_override, engine_input.cost_basis_override) == (D("0"), D("0.50"))
+
+
+class TestTheRewardNotMergedIssueIsInfo:
+    def test_info_severity_and_its_key(self):
+        issue = FifoDataQualityIssue(code="REWARD_NOT_MERGED_NO_OPEN_LOT", transaction_id=4, lot_id=4, broker_id=1)
+        withheld = withheld_economics([], unconvertible_event_ids=set(), unconvertible_trade_ids=set(), trade_currency_by_id={})
+        [report_issue] = _svc()._build_data_quality_report([issue], [], withheld).issues
+        assert (report_issue.code, report_issue.severity, report_issue.message_i18n_key) == (IssueCode.REWARD_NOT_MERGED_NO_OPEN_LOT, IssueSeverity.INFO, "dataQuality.rewardNotMergedNoOpenLot")
+        assert (report_issue.message_params["transaction_id"], report_issue.message_params["broker_id"]) == (4, 1)
+
+    def test_the_engine_status_ignores_it(self):
+        info = FifoDataQualityIssue(code="REWARD_NOT_MERGED_NO_OPEN_LOT", transaction_id=4)
+        degrading = FifoDataQualityIssue(code="ASSET_INCOME_NO_ELIGIBLE_LOTS", transaction_id=5)
+        assert replace(_engine_result(), issues=[info]).analysis_status == "COMPLETE"
+        assert replace(_engine_result(), issues=[info, degrading]).analysis_status == "DEGRADED"
+
+
+class TestTheFallbackLotOfAMergedRewardAsksItsRate:
+    """``collect_fx_needs`` (EVENT_HISTORY): the opening row of the lot a REWARD_MERGE opened is in that lot's currency, so
+    its rate is asked; a REWARD_MERGE that joined other lots opened none, and asks none."""
+
+    def test_the_fallback_lot_in_usd_asks_the_usd_rate_of_its_day(self):
+        day = date(2024, 3, 5)
+        resolver = _resolver("EUR")
+        TestCollectFxNeeds()._call(
+            resolver,
+            analyses=[LotAnalysisType.EVENT_HISTORY],
+            lots_by_id={4: _lot(4, opening_date=day, currency="USD", original_cost=D("0"), opening_unit_price=D("0"))},
+            selected_ids=[4],
+            events=[FifoEvent(kind="REWARD_MERGE", date=day, transaction_id=4, broker_id=1, quantity=D("7"), unit_price=D("0"))],
+        )
+        assert ("USD", day) in resolver._needs
+
+    def test_guard_a_merged_reward_asks_no_lot_rate(self):
+        day = date(2024, 3, 5)
+        resolver = _resolver("EUR")
+        TestCollectFxNeeds()._call(
+            resolver,
+            analyses=[LotAnalysisType.EVENT_HISTORY],
+            lots_by_id={1: _lot(1, currency="USD")},
+            selected_ids=[1],
+            events=[FifoEvent(kind="REWARD_MERGE", date=day, transaction_id=3, broker_id=1, quantity=D("7"), unit_price=D("0"))],
+        )
+        assert ("USD", day) not in resolver._needs
+
+
+# --------------------------------------------------------------------------- #
+# Project 79, STK-2c — the kind of the event that opened each lot (LotSummarySchema.opening_kind)
+# --------------------------------------------------------------------------- #
+
+
+async def _stk2c_lots(monkeypatch, rows: list[Transaction], allocation: RewardAllocation = RewardAllocation.OWN_LOT, *, shorting: bool = False) -> dict[int, object]:
+    """The FIFO block's lot summaries, by lot id, of the whole service on in-memory rows (LOT_SUMMARY only, up to 20 Mar)."""
+    response = await _service_on_rows(monkeypatch, rows, shorting=shorting).get_lots_analysis_methods(
+        user_id=1,
+        asset_id=7,
+        broker_ids=[1],
+        date_from=None,
+        date_to=_MAR_20,
+        target_currency="EUR",
+        selected_lot_ids=None,
+        requested_analyses=[LotAnalysisType.LOT_SUMMARY],
+        matching_methods=[LotMatchingMethod.FIFO],
+        reward_allocation=allocation,
+    )
+    block = response.methods[LotMatchingMethod.FIFO]
+    return {lot.lot_id: lot for lot in block.lots}
+
+
+class TestTheOpeningKindOfALot:
+    """STK-2c (project 79): every lot summary carries the kind of the event that opened it, ``opening_kind``.
+
+    The Lots table groups the lots a REWARD opened at one broker (``opening_kind == REWARD``), so the field must name the
+    reward and nothing else: a BUY lot reads BUY, an ADJUSTMENT +qty ADJUSTMENT_IN, a short lot SELL. In the MERGED view a
+    reward that found a lot opened none; one that found no lot held the day before opened a lot of its own, which reads
+    REWARD although its engine event is a REWARD_MERGE. Source: ``_lot_opening_kinds``, the first classified event of the
+    lot's opening transaction — the same source as the timeline's opening row (``TestTheOpeningRowOfARewardInKind``).
+    """
+
+    @pytest.mark.asyncio
+    async def test_a_buy_an_adjustment_in_and_a_reward_each_open_their_lot_under_their_own_kind(self, monkeypatch):
+        """OWN_LOT: BUY 1 on 10 Jan, ADJUSTMENT +5 (2) on 15 Mar, REWARD 3 on 1 Mar — three lots, three kinds."""
+        lots = await _stk2c_lots(monkeypatch, [_tx(1), _adjustment_in_at_90(), _stk3_reward()])
+        assert {lot_id: lot.opening_kind for lot_id, lot in lots.items()} == {
+            1: LotTimelineEventKind.BUY,
+            2: LotTimelineEventKind.ADJUSTMENT_IN,
+            3: LotTimelineEventKind.REWARD,
+        }
+
+    @pytest.mark.asyncio
+    async def test_a_short_lot_reads_sell(self, monkeypatch):
+        """Broker 1 allows shorting: 10 sold short on 10 Jan open a SHORT lot, whose opening event is the SELL."""
+        short = _tx(1, tx_type=TransactionType.SELL, quantity=D("-10"), amount=D("1000"))
+        lots = await _stk2c_lots(monkeypatch, [short], shorting=True)
+        [lot] = lots.values()
+        # Precondition: the engine opened a short lot, not a refused sale
+        assert lot.direction == "SHORT"
+        assert lot.opening_kind is LotTimelineEventKind.SELL
+
+    @pytest.mark.asyncio
+    async def test_merged_the_lots_the_reward_joined_stay_buy_and_it_opens_none(self, monkeypatch):
+        """MERGED on the STK-3 golden book: the reward joined lots 1 and 2, which keep their BUY; there is no lot 3."""
+        lots = await _stk2c_lots(monkeypatch, _stk3_golden(), RewardAllocation.MERGED)
+        assert {lot_id: lot.opening_kind for lot_id, lot in lots.items()} == {1: LotTimelineEventKind.BUY, 2: LotTimelineEventKind.BUY}
+
+    @pytest.mark.asyncio
+    async def test_guard_own_lot_on_the_same_book_the_reward_is_a_lot_of_kind_reward(self, monkeypatch):
+        """GUARD for the test above: the same rows in OWN_LOT give the reward its lot, of kind REWARD."""
+        lots = await _stk2c_lots(monkeypatch, _stk3_golden(), RewardAllocation.OWN_LOT)
+        assert {lot_id: lot.opening_kind for lot_id, lot in lots.items()} == {
+            1: LotTimelineEventKind.BUY,
+            2: LotTimelineEventKind.BUY,
+            3: LotTimelineEventKind.REWARD,
+        }
+
+    @pytest.mark.asyncio
+    async def test_merged_a_reward_with_no_lot_held_the_day_before_opens_a_lot_of_kind_reward(self, monkeypatch):
+        """MERGED, an airdrop alone: its event is a REWARD_MERGE, its fallback lot reads REWARD, never REWARD_MERGE."""
+        lots = await _stk2c_lots(monkeypatch, [_stk3_reward()], RewardAllocation.MERGED)
+        [lot] = lots.values()
+        assert (lot.lot_id, lot.opening_kind) == (3, LotTimelineEventKind.REWARD)
+
+    def test_the_hand_built_merged_fallback_through_the_lot_summaries(self):
+        """``_build_lot_summaries`` on a hand-built MERGED result: lot 4 opened by REWARD_MERGE 4 reads REWARD, lot 1 opened
+        by BUY 1 reads BUY; the merge of reward 3 into lot 1 does not change lot 1's kind."""
+        day, airdrop_day = date(2024, 3, 1), date(2024, 3, 5)
+        lots = [
+            _lot(1, opening_transaction_id=1),
+            _lot(4, opening_transaction_id=4, opening_date=airdrop_day, original_quantity=D("7"), opening_unit_price=D("0"), original_cost=D("0"), open_quantity=D("7")),
+        ]
+        events = [
+            FifoEvent(kind="BUY", date=date(2024, 1, 10), transaction_id=1, broker_id=1, quantity=D("100"), unit_price=D("10")),
+            FifoEvent(kind="REWARD_MERGE", date=day, transaction_id=3, broker_id=1, quantity=D("20"), unit_price=D("0")),
+            FifoEvent(kind="REWARD_MERGE", date=airdrop_day, transaction_id=4, broker_id=1, quantity=D("7"), unit_price=D("0")),
+        ]
+        result = replace(_engine_result(lots=lots, fragments=[_fragment(1), _fragment(4, fragment_id="frag-4", start_date=airdrop_day, quantity=D("7"))], events=events), reward_allocation=RewardAllocation.MERGED)
+        summaries = _svc()._build_lot_summaries(
+            engine_result=result,
+            lots_by_id={lot.lot_id: lot for lot in lots},
+            selected_ids=[1, 4],
+            fx_resolver=_resolver("EUR"),
+            market_prices={date(2024, 3, 10): D("12")},
+            price_series=_series(_quote(date(2024, 1, 10), D("10"))),
+            closures_by_lot={},
+            income_by_lot={},
+            fees_by_lot={},
+            taxes_by_lot={},
+            estimated_mode=False,
+            quote_base_quantity=1,
+            analysis_end=_MAR_20,
+        )
+        assert {row.lot_id: row.opening_kind for row in summaries} == {1: LotTimelineEventKind.BUY, 4: LotTimelineEventKind.REWARD}
+
+    def test_a_lot_whose_opening_transaction_has_no_event_reads_none(self):
+        """No classified event for the lot's opening transaction (the hand-built default): unknown, not a guess."""
+        row = TestBuildLotSummaries()._call()
+        assert row.opening_kind is None
+
+
+class TestLotOpeningKinds:
+    """``_lot_opening_kinds`` alone: the first classified event of each transaction, REWARD_MERGE read as REWARD."""
+
+    def _event(self, kind: str, transaction_id: int) -> FifoEvent:
+        return FifoEvent(kind=kind, date=date(2024, 3, 1), transaction_id=transaction_id, broker_id=1, quantity=D("1"), unit_price=D("1"))
+
+    def test_the_first_event_of_a_transaction_wins(self):
+        result = _engine_result(events=[self._event("SELL", 5), self._event("BUY", 5)])
+        assert _lot_opening_kinds(result) == {5: LotTimelineEventKind.SELL}
+
+    def test_reward_merge_reads_as_reward(self):
+        result = _engine_result(events=[self._event("REWARD_MERGE", 4), self._event("REWARD", 6), self._event("ADJUSTMENT_IN", 7)])
+        assert _lot_opening_kinds(result) == {4: LotTimelineEventKind.REWARD, 6: LotTimelineEventKind.REWARD, 7: LotTimelineEventKind.ADJUSTMENT_IN}
+
+    def test_no_events_no_kinds(self):
+        assert _lot_opening_kinds(_engine_result()) == {}

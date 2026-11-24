@@ -41,6 +41,7 @@ from backend.app.schemas.common import Currency
 from backend.app.schemas.transactions.transactions import TXCreateItem
 from backend.app.services.brim.brim_provider import BRIMParseError, BRIMProvider
 from backend.app.services.brim.registry import BRIMProviderRegistry
+from backend.app.services.brim_providers._brim_io import reward_value_todo
 from backend.app.services.platform.provider_registry import register_provider
 from backend.app.services.plugin_settings.fields import PluginSettingField, SettingOption, SettingScope, SettingType
 
@@ -189,6 +190,14 @@ TYPE_MAPPINGS: Dict[str, TransactionType] = {
     "rettifica": TransactionType.ADJUSTMENT,
     "aggiustamento": TransactionType.ADJUSTMENT,
     "correction": TransactionType.ADJUSTMENT,
+    # REWARD (project 79, STK-4a): units received in kind, its per-unit value on receipt typed in the editor (blocking todo)
+    "reward": TransactionType.REWARD,
+    "rewards": TransactionType.REWARD,
+    "staking": TransactionType.REWARD,
+    "staking reward": TransactionType.REWARD,
+    "staking_reward": TransactionType.REWARD,
+    "airdrop": TransactionType.REWARD,
+    "premio": TransactionType.REWARD,
 }
 
 # =============================================================================
@@ -361,11 +370,21 @@ def needs_cost_basis_todo(transaction: TXCreateItem) -> bool:
     """Whether a parsed row gets the blocking «inherited cost» todo: an incoming ADJUSTMENT with no cost.
 
     A cost of 0 written by the user is a cost (a gift is received at 0): only a missing one asks for it (W6-5, J-64; the
-    decision Q-J57-3, «0 is a true cost»). An outgoing ADJUSTMENT takes no cost (N78-1), so it never asks.
+    decision Q-J57-3, «0 is a true cost»). An outgoing ADJUSTMENT takes no cost (N78-1), so it never asks. A REWARD has
+    its own todo, ``needs_reward_value_todo``.
     """
     if transaction.type != TransactionType.ADJUSTMENT or transaction.quantity <= 0:
         return False
     return transaction.cost_basis_override is None
+
+
+def needs_reward_value_todo(transaction: TXCreateItem) -> bool:
+    """Whether a parsed row gets the blocking «value on receipt» todo: a REWARD with no value (project 79, STK-4a).
+
+    The generic CSV reads no value column, so every REWARD asks for it: the user types the value of one unit on the day it
+    was received (decision S4-Q4 (a)).
+    """
+    return transaction.type == TransactionType.REWARD and transaction.cost_basis_override is None
 
 
 # =============================================================================
@@ -467,6 +486,11 @@ class GenericCSVBrokerProvider(BRIMProvider):
     def detection_priority(self) -> int:
         """Lowest priority - used as fallback when no specific plugin matches."""
         return 0
+
+    @property
+    def plugin_version(self) -> str:
+        # 1.1.0 — REWARD rows (reward, staking, airdrop…), each with a blocking «value on receipt» todo (project 79, STK-4a).
+        return "1.1.0"
 
     def can_parse(self, file_path: Path) -> bool:
         """
@@ -592,7 +616,9 @@ class GenericCSVBrokerProvider(BRIMProvider):
                     # value, N78-1)
                     if len(transactions) > tx_count_before:
                         added_tx = transactions[-1]
-                        if needs_cost_basis_todo(added_tx):
+                        if needs_reward_value_todo(added_tx):
+                            field_todos.append(reward_value_todo(len(transactions) - 1, row_num))
+                        elif needs_cost_basis_todo(added_tx):
                             field_todos.append(
                                 BRIMFieldTodo(
                                     tx_index=len(transactions) - 1,
@@ -738,6 +764,7 @@ class GenericCSVBrokerProvider(BRIMProvider):
             TransactionType.DIVIDEND,
             TransactionType.TRANSFER,
             TransactionType.ADJUSTMENT,
+            TransactionType.REWARD,
         }
 
         # Assign fake asset ID if asset info is present OR if type requires asset

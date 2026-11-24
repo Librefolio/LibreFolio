@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date as date_type
 from datetime import timedelta
 from decimal import Decimal
@@ -34,6 +34,7 @@ from backend.app.services.financial_math.fifo.models import (
     LotMatchingMethod,
     ReferencePriceLookup,
     ReferencePriceResolution,
+    RewardAllocation,
     fails_the_replay,
 )
 from backend.app.services.financial_math.income import income_value, is_in_kind_income
@@ -77,6 +78,9 @@ _WARNING_ISSUE_CODES = {
 # The analyses a FAILED replay still answers (J-12): the average-cost lines come from the transactions, and the market
 # price line from the asset's prices (Y-30), not from the lots.
 _REPLAY_FREE_ANALYSES = frozenset({LotAnalysisType.BROKER_WAC_HISTORY, LotAnalysisType.CUMULATIVE_WAC_HISTORY, LotAnalysisType.MARKET_PRICE_HISTORY})
+
+# Issues that only inform: a consequence of a view the user chose (STK-3), not a data error
+_INFO_ISSUE_CODES = {IssueCode.REWARD_NOT_MERGED_NO_OPEN_LOT}
 
 _ORPHAN_ISSUE_CODES = {
     IssueCode.ASSET_INCOME_NO_ELIGIBLE_LOTS,
@@ -148,6 +152,8 @@ class LotsAnalysisInputs:
     unconvertible_trade_ids: set[int]
     average_cost_lines: dict[int | str, AverageCost]
     performance_scope: PerformanceScopeInputs | None
+    #: STK-3: where the REWARD units go in every replay of this answer
+    reward_allocation: RewardAllocation = RewardAllocation.OWN_LOT
 
 
 @dataclass(frozen=True, slots=True)
@@ -187,6 +193,23 @@ class _ConfiguredFxPairs:
         if self._pairs is None:
             self._pairs = await load_configured_fx_pair_sets(self._db)
         return self._pairs
+
+
+def _lot_opening_kinds(engine_result: FifoEngineResult) -> dict[int, LotTimelineEventKind]:
+    """The kind of the event that opened each lot (STK-2c): its opening transaction's first classified event.
+
+    The same source as the timeline's opening row: a BUY, a REWARD, an ADJUSTMENT_IN (a SELL for a short lot); a
+    REWARD_MERGE that found no lot held the day before opened a lot of its own, a REWARD. A transaction that opened no lot
+    is never asked for.
+    """
+    kinds: dict[int, LotTimelineEventKind] = {}
+    for event in engine_result.classified_events:
+        if event.transaction_id in kinds:
+            continue
+        kind = "REWARD" if event.kind == "REWARD_MERGE" else event.kind
+        if kind in LotTimelineEventKind.__members__:
+            kinds[event.transaction_id] = LotTimelineEventKind(kind)
+    return kinds
 
 
 class LotsAnalysisService:
@@ -232,6 +255,7 @@ class LotsAnalysisService:
         selected_lot_ids: list[int] | None,
         requested_analyses: list[str | LotAnalysisType],
         matching_methods: Sequence[LotMatchingMethod] = (LotMatchingMethod.FIFO,),
+        reward_allocation: RewardAllocation = RewardAllocation.OWN_LOT,
     ) -> LotsAnalysisMethodsResponse:
         """The analysis of one asset's lots in a broker scope, in every matching method asked (project 69, D1b, D11).
 
@@ -257,6 +281,7 @@ class LotsAnalysisService:
             selected_lot_ids=selected_lot_ids,
             normalized_analyses=normalized_analyses,
             matching_methods=methods,
+            reward_allocation=RewardAllocation(reward_allocation),
         )
         if isinstance(inputs, LotsAnalysisMethodsResponse):
             return inputs
@@ -274,6 +299,7 @@ class LotsAnalysisService:
         selected_lot_ids: list[int] | None,
         normalized_analyses: list[LotAnalysisType],
         matching_methods: Sequence[LotMatchingMethod] = (LotMatchingMethod.FIFO,),
+        reward_allocation: RewardAllocation = RewardAllocation.OWN_LOT,
     ) -> LotsAnalysisInputs | LotsAnalysisMethodsResponse:
         """Step 1, «load once»: every input of the analysis that the replay's matching method does not change.
 
@@ -303,6 +329,7 @@ class LotsAnalysisService:
                 computed_date_to=actual_to,
                 status="COMPLETE",
                 matching_methods=matching_methods,
+                reward_allocation=reward_allocation,
             )
 
         transactions = await self._load_transactions(asset_id=asset_id, scope_broker_ids=scope_broker_ids, date_to=actual_to)
@@ -319,6 +346,7 @@ class LotsAnalysisService:
                 computed_date_to=actual_to,
                 status="COMPLETE",
                 matching_methods=matching_methods,
+                reward_allocation=reward_allocation,
             )
 
         # The window starts on the scope's first transaction, whatever its year (D-P4, L2): the histories are steps and
@@ -357,8 +385,9 @@ class LotsAnalysisService:
         late_legs = await self._load_late_transfer_legs(transactions, asset_id=asset_id, scope_broker_ids=scope_broker_ids, date_to=actual_to)
         income_transactions = await self._load_income_transactions(asset_id=asset_id, scope_broker_ids=scope_broker_ids, date_to=actual_to)
         # Project 79: a REWARD is income in kind as well as the lot it opens. It is already among the scope's rows (it
-        # moves quantity): its income event comes from there, not from a second query.
-        rewards = [tx for tx in transactions if isinstance(tx, Transaction) and is_in_kind_income(tx)]
+        # moves quantity): its income event comes from there, not from a second query. In the MERGED view (STK-3) its units
+        # join the lots at no cost, so it books no income.
+        rewards = [tx for tx in transactions if isinstance(tx, Transaction) and is_in_kind_income(tx)] if reward_allocation is RewardAllocation.OWN_LOT else []
         if rewards:
             income_transactions = sorted([*income_transactions, *rewards], key=lambda tx: (tx.date, tx.id or 0))
         cost_transactions = await self._load_cost_transactions(asset_id=asset_id, scope_broker_ids=scope_broker_ids, date_to=actual_to)
@@ -424,7 +453,8 @@ class LotsAnalysisService:
         average_cost_lines: dict[int | str, AverageCost] = {}
         if LotAnalysisType.BROKER_WAC_HISTORY in normalized_analyses or LotAnalysisType.CUMULATIVE_WAC_HISTORY in normalized_analyses:
             average_cost_lines = await self._compute_average_cost_lines(
-                transactions=transactions,
+                # STK-3: in the MERGED view a reward's units come at no cost, as the lots they join count them
+                transactions=_rewards_at_no_cost(transactions) if reward_allocation is RewardAllocation.MERGED else transactions,
                 split_ratios_by_tx_id=split_ratios_by_tx_id,
                 asset_currency=asset.currency,
                 target_currency=target_currency,
@@ -480,6 +510,7 @@ class LotsAnalysisService:
             unconvertible_trade_ids=unconvertible_trade_ids,
             average_cost_lines=average_cost_lines,
             performance_scope=performance_scope,
+            reward_allocation=reward_allocation,
         )
 
     def _replay(self, inputs: LotsAnalysisInputs, matching_method: LotMatchingMethod) -> _MethodReplay:
@@ -496,6 +527,7 @@ class LotsAnalysisService:
             target_currency=inputs.target_currency,
             replay_until=inputs.actual_to,
             matching_method=matching_method,
+            reward_allocation=inputs.reward_allocation,
         )
         # J-12 (N81): a FAILED replay is unreliable as a whole, so no lot figure leaves the analysis: only the failure, the
         # row to fix, the average-cost lines and the market price line (Y-30), which do not come from the replay. From here
@@ -536,6 +568,7 @@ class LotsAnalysisService:
                 target_currency=inputs.target_currency,
                 replay_until=inputs.actual_to,
                 matching_method=matching_method,
+                reward_allocation=inputs.reward_allocation,
             )
             performance_lots_by_id = {lot.lot_id: lot for lot in performance_engine_result.lots}
             performance_context = PerformanceSourceContext(
@@ -767,6 +800,7 @@ class LotsAnalysisService:
                 selected_lot_ids=selected_ids if inputs.selected_lot_ids is not None else None,
                 requested_analyses=normalized_analyses,
                 matching_methods=list(matching_methods),
+                reward_allocation=inputs.reward_allocation,
                 requested_date_from=inputs.date_from,
                 requested_date_to=actual_to,
                 computed_date_from=computed_from,
@@ -1153,6 +1187,7 @@ class LotsAnalysisService:
         computed_date_to: date_type | None,
         status: LotAnalysisStatus,
         matching_methods: Sequence[LotMatchingMethod] = (LotMatchingMethod.FIFO,),
+        reward_allocation: RewardAllocation = RewardAllocation.OWN_LOT,
     ) -> LotsAnalysisMethodsResponse:
         return LotsAnalysisMethodsResponse(
             asset_id=asset_id,
@@ -1162,6 +1197,7 @@ class LotsAnalysisService:
                 selected_lot_ids=selected_lot_ids,
                 requested_analyses=requested_analyses,
                 matching_methods=list(matching_methods),
+                reward_allocation=reward_allocation,
                 requested_date_from=requested_date_from,
                 requested_date_to=requested_date_to,
                 computed_date_from=computed_date_from,
@@ -1266,6 +1302,7 @@ class LotsAnalysisService:
     ) -> list[LotSummarySchema]:
         latest_market_price = market_prices.get(max(market_prices)) if market_prices else None
         out: list[LotSummarySchema] = []
+        opening_kinds = _lot_opening_kinds(engine_result)
         for lot_id in selected_ids:
             lot = lots_by_id[lot_id]
             current_custody = [
@@ -1315,6 +1352,7 @@ class LotsAnalysisService:
                 LotSummarySchema(
                     lot_id=lot.lot_id,
                     opening_transaction_id=lot.opening_transaction_id,
+                    opening_kind=opening_kinds.get(lot.opening_transaction_id),
                     asset_id=lot.asset_id,
                     direction=lot.direction,
                     opening_broker_id=lot.opening_broker_id,
@@ -1413,7 +1451,8 @@ class LotsAnalysisService:
     ) -> list[LotTimelineEventSchema]:
         rows: list[LotTimelineEventSchema] = []
         for event in engine_result.classified_events:
-            if event.kind in {"BUY", "REWARD", "ADJUSTMENT_IN"}:
+            # A REWARD_MERGE that found no lot held the day before opened a lot of its own (STK-3): its opening row
+            if event.kind in {"BUY", "REWARD", "ADJUSTMENT_IN"} or (event.kind == "REWARD_MERGE" and event.transaction_id in lots_by_id):
                 lot_id = event.transaction_id
                 if lot_id not in selected:
                     continue
@@ -1426,7 +1465,7 @@ class LotsAnalysisService:
                     LotTimelineEventSchema(
                         lot_id=lot_id,
                         date=event.date,
-                        kind=LotTimelineEventKind(event.kind),
+                        kind=LotTimelineEventKind.REWARD if event.kind == "REWARD_MERGE" else LotTimelineEventKind(event.kind),
                         transaction_id=event.transaction_id,
                         related_transaction_id=event.pair_id,
                         broker_id=event.broker_id,
@@ -1467,6 +1506,30 @@ class LotsAnalysisService:
                             ratio=event.ratio,
                         )
                     )
+        # STK-3: in the MERGED view each lot a reward joined gets a row, like a split's: quantity × ratio, cost unchanged
+        for merge in engine_result.reward_merges:
+            if merge.lot_id not in selected:
+                continue
+            rows.append(
+                LotTimelineEventSchema(
+                    lot_id=merge.lot_id,
+                    date=merge.date,
+                    kind=LotTimelineEventKind.REWARD_MERGE,
+                    transaction_id=merge.transaction_id,
+                    related_transaction_id=None,
+                    broker_id=merge.broker_id,
+                    source_broker_id=None,
+                    destination_broker_id=None,
+                    fragment_id=None,
+                    quantity=merge.added_quantity,
+                    unit_price=None,
+                    open_unit_price=None,
+                    close_unit_price=None,
+                    realized_pnl=None,
+                    proceeds=None,
+                    ratio=merge.ratio,
+                )
+            )
         return rows
 
     def _build_transfer_rows(
@@ -1656,7 +1719,7 @@ class LotsAnalysisService:
                 DataQualityIssue(
                     domain=IssueDomain.PORTFOLIO,
                     code=code,
-                    severity=IssueSeverity.WARNING if code in _WARNING_ISSUE_CODES else IssueSeverity.ERROR,
+                    severity=IssueSeverity.INFO if code in _INFO_ISSUE_CODES else IssueSeverity.WARNING if code in _WARNING_ISSUE_CODES else IssueSeverity.ERROR,
                     message_i18n_key=_message_key_for_issue(code),
                     message_params={
                         "transaction_id": issue.transaction_id,
@@ -1737,8 +1800,15 @@ def _message_key_for_issue(code: IssueCode) -> str:
         IssueCode.ASSET_COST_NO_ELIGIBLE_LOTS: "dataQuality.assetCostNoEligibleLots",
         IssueCode.ASSET_COST_LINKED_PARENT_AFTER_RANGE: "dataQuality.assetCostLinkedParentAfterRange",
         IssueCode.ASSET_COST_LINKED_INCOME_NO_ELIGIBLE_LOTS: "dataQuality.assetCostLinkedIncomeNoEligibleLots",
+        IssueCode.REWARD_NOT_MERGED_NO_OPEN_LOT: "dataQuality.rewardNotMergedNoOpenLot",
     }
     return mapping[code]
+
+
+def _rewards_at_no_cost(transactions: Sequence[Transaction | FifoInputTransaction]) -> list[Transaction | FifoInputTransaction]:
+    """The rows with every REWARD at no cost: the MERGED view's average-cost lines (STK-3), where a reward's units join
+    the lots at no cost. The other rows are handed on as they are."""
+    return [replace(FifoInputTransaction.from_transaction(tx), cost_basis_override=Decimal("0")) if is_in_kind_income(tx) else tx for tx in transactions]
 
 
 def _boundary_direction(legs: Mapping[int, BoundaryLeg], transaction_id: int) -> BoundaryDirection | None:

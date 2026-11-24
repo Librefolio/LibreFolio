@@ -15,7 +15,8 @@ def front_broker_unit(verbose: bool = False, ui: bool = False, headed: bool = Fa
     tabUrl (tab query-param sync, shared with dashboard), LotCustodyModal (the opening value read
     from the backend's original_cost, not computed as quantity × price, jsdom), LotAnalysisFailedNotice
     (a FAILED lots analysis: one row per blocking issue with the broker's name, the date and a link to
-    the transaction to fix, jsdom)."""
+    the transaction to fix, jsdom), UnifiedLotsTable's reward lots group (79 STK-2c: one closed row
+    for a broker's reward lots, its selection and mixed state, sort and totals, jsdom)."""
     print_section("Frontend Broker Unit Tests (Vitest)")
     cmd = [
         "npx",
@@ -29,6 +30,8 @@ def front_broker_unit(verbose: bool = False, ui: bool = False, headed: bool = Fa
         "src/lib/features/brokers/lots/LotCustodyModal.test.ts",
         "src/lib/features/brokers/lots/LotAnalysisFailedNotice.test.ts",
         "src/lib/features/brokers/lots/LotDataQualityBanner.test.ts",
+        "src/lib/features/brokers/lots/LotsAnalysisPanel.rewardAllocation.test.ts",
+        "src/lib/features/brokers/lots/UnifiedLotsTable.rewardGroup.test.ts",
     ]
     print(f"\n{Colors.BLUE}Running: Broker Vitest unit tests{Colors.NC}")
     print(f"Command:\n└─▶ $ cd frontend && {' '.join(cmd)}")
@@ -198,7 +201,7 @@ def populate_registry(registry: dict) -> None:
         front_broker_unit,
         test_names=False,
         name="Broker Unit Tests (Vitest)",
-        desc="Unit tests: getBrokerIconUrl fallback chain, reactive broker icon chain (jsdom), BrokerIcon <img> events (jsdom), assetPanelUrl deep-link parsing, tabUrl tab-state sync, LotCustodyModal's opening value read from the backend's original_cost, not computed as quantity × price (jsdom), LotAnalysisFailedNotice's rows for a FAILED lots analysis (jsdom)",
+        desc="Unit tests: getBrokerIconUrl fallback chain, reactive broker icon chain (jsdom), BrokerIcon <img> events (jsdom), assetPanelUrl deep-link parsing, tabUrl tab-state sync, LotCustodyModal's opening value read from the backend's original_cost, not computed as quantity × price (jsdom), LotAnalysisFailedNotice's rows for a FAILED lots analysis (jsdom), UnifiedLotsTable's reward lots group: closed by default, selection and mixed state, sort, totals (jsdom)",
         tests="vitest",
     )
     add_test(cat, "list", front_broker_list, name="Broker List & CRUD Tests", desc="Broker list page, create/edit/delete", prereq="Login working", tests="brokers/brokers.spec.ts")

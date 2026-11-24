@@ -105,7 +105,7 @@ In the form, you change the links in the [bulk workspace](index.md#bulk-workspac
 The form of a Buy, a Sell, a Dividend, an Interest, a Deposit or a Withdrawal lists its charges in **Linked charges**:
 
 - **+ Fee** and **+ Tax** add a new charge: type its amount (in the transaction's currency unless you pick another) and, if you like, a note. It takes the transaction's broker, asset and date. A new charge without an amount shows *Enter the amount of this charge*, and **Apply** waits.
-- **Link an existing charge…** picks Fees and Taxes of the same broker and asset that are not linked to anything yet.
+- **Link an existing charge…** picks Fees and Taxes of the same broker and asset that are not linked to anything yet. In the bulk editor it also offers the rows of the batch you have not saved yet, named by their row number, and the charges you unlinked there; a row you marked for deletion, or linked to another transaction there, is not offered. Picking a row of the batch moves that row under this transaction: it is never copied.
 - **Unlink** takes a saved charge out of the list: when you save, it stays as a transaction of its own. **Delete** deletes it.
 
 Under the list, a read-only line adds it up: **Total charged** on a Buy or a Withdrawal (the amount plus its charges), **Net received** on a Sell, a Dividend, an Interest or a Deposit (the amount minus its charges). There is one figure per currency: a charge in another currency is never converted.
@@ -146,6 +146,7 @@ The [Financial Theory guide](../../financial-theory/instruments/transaction-type
 | ![](../../static/icons/transactions/fee.png){: width="24" style="vertical-align: middle;" } **Fee** | A commission or another cost, optionally tied to an asset | [📖 Read](../../financial-theory/instruments/transaction-types/fee.md) |
 | ![](../../static/icons/transactions/tax.png){: width="24" style="vertical-align: middle;" } **Tax** | A tax paid, optionally tied to an asset | [📖 Read](../../financial-theory/instruments/transaction-types/fee.md) |
 | ![](../../static/icons/transactions/adjustment.png){: width="24" style="vertical-align: middle;" } **Adjustment** | Units added or removed without cash: a split, a gift, a position opened elsewhere | [📖 Read](../../financial-theory/instruments/transaction-types/adjustment.md) |
+| ![](../../static/icons/transactions/reward.png){: width="24" style="vertical-align: middle;" } **Reward** | Units received in kind — staking, an airdrop, a free share — with their value on the day they arrived, which counts as income. The form suggests that value from the asset's price history (the close of that day, per unit); change it if the platform shows another | [📖 Read](../../financial-theory/instruments/transaction-types/reward.md) |
 
 ### 🔗 Paired transactions {: #composite-transactions }
 

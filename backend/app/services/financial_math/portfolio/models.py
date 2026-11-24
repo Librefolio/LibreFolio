@@ -291,7 +291,7 @@ class DailyPortfolioState:
     # Cash decomposition (Capital Baseline narrative: P&L = NAV - capital_baseline)
     # capital_baseline = cumulative_external_cash_flow (alias, same value)
     book_asset_like: Decimal  # open_cost_basis + in_transit_asset_cost_basis
-    cash_from_contributed_capital: Decimal  # min(cash_like, max(capital_baseline - book_asset_like, 0))
+    cash_from_contributed_capital: Decimal  # the capital pools, sum(K_b), within cash_like (three-pool model, daily_state 4g)
     cash_from_generated_returns: Decimal  # cash_like - cash_from_contributed_capital
     total_pnl: Decimal  # nav_value - capital_baseline
     # Allocation

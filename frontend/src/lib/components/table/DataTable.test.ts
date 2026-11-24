@@ -411,6 +411,54 @@ describe('DataTable — multi selection', () => {
         expect(row('r2')).toHaveAttribute('data-selected', 'true');
         expect(row('r1')).toHaveAttribute('data-selected', 'false');
     });
+
+    /**
+     * `getRowSelectionState` (79 STK-2c): a row that stands for others (the Lots table's reward group) draws its
+     * checkbox in the mixed state while part of what it stands for is selected. Drawing only: a click still selects the
+     * row and nothing else, a selected row is `checked` whatever the prop says, and the header's state counts selected
+     * rows only.
+     */
+    it('draws an unselected row the caller calls partial in the mixed state, and selects it as any other row', async () => {
+        await setupI18n();
+        const getRowSelectionState = vi.fn((r: Row) => (r.id === 'r2' ? ('partial' as const) : null));
+        const {onSelectionChange} = mount('multi-row-partial', {getRowSelectionState});
+
+        expect(screen.getByTestId('dt-row-checkbox-r2')).toHaveAttribute('data-state', 'partial');
+        expect(screen.getByTestId('dt-row-checkbox-r1')).toHaveAttribute('data-state', 'unchecked');
+        expect(screen.getByTestId('dt-row-checkbox-r3')).toHaveAttribute('data-state', 'unchecked');
+        // A partial row is not a selected one: the header and the row element say so
+        expect(screen.getByTestId('dt-select-all')).toHaveAttribute('data-state', 'unchecked');
+        expect(row('r2')).toHaveAttribute('data-selected', 'false');
+
+        await fireEvent.click(screen.getByTestId('dt-row-checkbox-r2'));
+        expect(lastSelection(onSelectionChange)).toEqual(['r2']);
+        // Selected wins over the caller's 'partial'
+        expect(screen.getByTestId('dt-row-checkbox-r2')).toHaveAttribute('data-state', 'checked');
+        expect(screen.getByTestId('dt-select-all')).toHaveAttribute('data-state', 'partial');
+
+        await fireEvent.click(screen.getByTestId('dt-row-checkbox-r2'));
+        expect(lastSelection(onSelectionChange)).toEqual([]);
+        expect(screen.getByTestId('dt-row-checkbox-r2')).toHaveAttribute('data-state', 'partial');
+
+        await fireEvent.click(screen.getByTestId('dt-row-checkbox-r1'));
+        expect(lastSelection(onSelectionChange)).toEqual(['r1']);
+        expect(screen.getByTestId('dt-row-checkbox-r1')).toHaveAttribute('data-state', 'checked');
+        expect(screen.getByTestId('dt-row-checkbox-r2')).toHaveAttribute('data-state', 'partial');
+    });
+
+    it('without getRowSelectionState draws only checked and unchecked', async () => {
+        await setupI18n();
+        const {onSelectionChange} = mount('multi-row-no-partial');
+        const states = () => ['r1', 'r2', 'r3'].map((id) => screen.getByTestId(`dt-row-checkbox-${id}`).getAttribute('data-state'));
+
+        expect(states()).toEqual(['unchecked', 'unchecked', 'unchecked']);
+        await fireEvent.click(screen.getByTestId('dt-row-checkbox-r2'));
+        expect(lastSelection(onSelectionChange)).toEqual(['r2']);
+        expect(states()).toEqual(['unchecked', 'checked', 'unchecked']);
+        await fireEvent.click(screen.getByTestId('dt-row-checkbox-r2'));
+        expect(lastSelection(onSelectionChange)).toEqual([]);
+        expect(states()).toEqual(['unchecked', 'unchecked', 'unchecked']);
+    });
 });
 
 describe('DataTable — non-selectable rows', () => {

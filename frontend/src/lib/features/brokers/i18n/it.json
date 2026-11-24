@@ -151,7 +151,8 @@
           "SPLIT": "Split",
           "TRANSFER_IN": "Trasferimento in entrata",
           "TRANSFER_OUT": "Trasferimento in uscita",
-          "REWARD": "Premio"
+          "REWARD": "Premio",
+          "REWARD_MERGE": "Premio distribuito"
         },
         "unitPrice": "Prezzo unitario",
         "transitInterval": "Intervallo transito",
@@ -232,7 +233,8 @@
           "SPLIT": "SPLIT",
           "TRANSFER_IN": "TRASFERIMENTO+",
           "TRANSFER_OUT": "TRASFERIMENTO-",
-          "REWARD": "PREMIO"
+          "REWARD": "PREMIO",
+          "REWARD_MERGE": "PREMIO+"
         },
         "historyDetail": {
           "openPrice": "Prezzo apertura",
@@ -297,7 +299,18 @@
       "matchingMethod": "Metodo di abbinamento",
       "methodFifoHint": "FIFO: una vendita chiude per primo il lotto più vecchio",
       "methodLifoHint": "LIFO: una vendita chiude per primo il lotto più recente",
-      "incomeMarkerReward": "Premio"
+      "incomeMarkerReward": "Premio",
+      "rewardAllocation": {
+        "label": "Dove vanno i premi",
+        "hint": "Premi a parte: ogni premio è un lotto suo, al valore alla ricezione. Premi nei lotti: ogni premio entra nei lotti tenuti presso il suo broker il giorno prima, senza costo. È solo una vista: non si salva nulla.",
+        "ownLot": "Premi a parte",
+        "merged": "Premi nei lotti"
+      },
+      "rewardGroup": {
+        "title": "{n, plural, one {# premio} other {# premi}}",
+        "open": "Mostra i lotti dei premi",
+        "close": "Nascondi i lotti dei premi"
+      }
     },
     "createdInSystem": "Creato nel Sistema",
     "deleteBlockedTitle": "Impossibile eliminare il broker",

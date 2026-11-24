@@ -385,7 +385,7 @@ def _build_tx_type_metadata() -> dict[TransactionType, TXTypeMetadata]:
             "name": "Reward (in kind)",
             "description": "Reward received in units of an asset (staking, airdrop): income at its value on receipt",
             "icon_slug": "reward",
-            "doc_slug": None,  # its page comes with STK-6 (project 79): "reward"
+            "doc_slug": "reward",
             "asset_mode": "required",
             "cash_mode": "forbidden",
             "quantity_mode": "required",

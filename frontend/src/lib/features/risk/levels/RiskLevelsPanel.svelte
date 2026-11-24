@@ -72,11 +72,11 @@
          * What the scope is worth, so L1 can put money beside every percentage.
          *
          * Must be the value of **this scope**, not of whatever the page happens to
-         * be showing elsewhere. Dashboard's own summary follows its broker filter
-         * while this panel is deliberately unfiltered, so the two disagree exactly
-         * when a filter is on — pass `null` rather than a number from a different
-         * question. A missing amount is a blank; a mismatched one is a wrong
-         * answer that reads as a right one.
+         * be showing elsewhere. The Dashboard asks over the brokers of the summary
+         * on screen (RSK-F), so the summary's net worth is this scope's; a host
+         * whose figures answer another scope passes `null` instead. A missing
+         * amount is a blank; a mismatched one is a wrong answer that reads as a
+         * right one.
          */
         scopeValue?: number | null;
         /** Asset ids in scope, seeding the names and the scenario editors. */

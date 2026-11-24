@@ -28,6 +28,7 @@ AI_EXPORT_SERVICE_TEST_PATHS = (
     "backend/test_scripts/test_services/test_ai_export_components_asset_fx_integration.py",
     "backend/test_scripts/test_services/test_ai_export_components_broker_adequacy.py",
     "backend/test_scripts/test_services/test_ai_export_components_drawdown_context.py",
+    "backend/test_scripts/test_services/test_ai_export_components_risk_evidence.py",
     "backend/test_scripts/test_services/test_ai_export_components_fx.py",
     "backend/test_scripts/test_services/test_ai_export_components_portfolio_broker_financial.py",
     "backend/test_scripts/test_services/test_ai_export_components_portfolio_broker_integration.py",
@@ -39,6 +40,7 @@ AI_EXPORT_SERVICE_TEST_PATHS = (
     "backend/test_scripts/test_services/test_ai_export_linked_charges.py",
     "backend/test_scripts/test_services/test_ai_export_portfolio_fifo_summary_in_transit.py",
     "backend/test_scripts/test_services/test_ai_export_price_day_budget.py",
+    "backend/test_scripts/test_services/test_ai_export_risk_evidence_cash_share.py",
     "backend/test_scripts/test_services/test_ai_export_runtime_service.py",
     "backend/test_scripts/test_services/test_ai_export_structural_invariants.py",
     "backend/test_scripts/test_services/test_ai_export_telemetry.py",
@@ -1727,6 +1729,15 @@ def services_current_prices_bulk(verbose: bool = False, test_names: list = None)
     )
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_current_prices_bulk.py", test_names)
     return run_command(cmd, "Current prices bulk tests", verbose=verbose)
+
+
+def services_reward_values(verbose: bool = False, test_names: list = None) -> bool:
+    """79 STK-4b: the value on receipt of a reward from the stored price history (no lane DB, no server, no network)."""
+    print_section("Services: Reward Values on Receipt (79 STK-4b)")
+    print_info("Testing: services/assets/reward_values.py (reward_unit_value_from_close, reward_values_on_receipt), api/v1/assets/prices.py (query_reward_values)")
+    print_info("Tests: close ÷ quote base rounded to the cost-basis column, no value without a positive close; the close of that very day only, NO_PRICE_THAT_DAY / NO_HISTORY, the price row's currency, request order; 1 001 items 422")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_reward_values.py", test_names)
+    return run_command(cmd, "Reward values tests", verbose=verbose)
 
 
 def services_current_price_fetched_at(verbose: bool = False, test_names: list = None) -> bool:
@@ -4198,6 +4209,16 @@ Note: No backend server required.
     )
     add_test(
         cat,
+        "reward-values",
+        services_reward_values,
+        name="Reward Values on Receipt (79 STK-4b)",
+        desc="POST /assets/prices/reward-values and its reader: the close of that very day (never the day before or after) ÷ the quote base, rounded to the cost-basis column, in the price row's own currency; NO_PRICE_THAT_DAY for a gap or an unusable close, NO_HISTORY for an asset with no stored price or no such asset; request order, a repeated item answered twice; 1 001 items 422 bulk_too_many_items, 1 000 pass",
+        # PURE: the reader on a private in-memory SQLite (create_all), the route through a fresh in-process app
+        # (httpx.ASGITransport) whose session is that database; no lane DB, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
         "current-prices-bulk",
         services_current_prices_bulk,
         name="Current Prices Bulk (R13-SEC9)",
@@ -4889,7 +4910,7 @@ Note: No backend server required.
         "static-cache-policy",
         services_static_cache_policy,
         name="Static Cache Policy",
-        desc="F28: a file under /_app/immutable/ (named after its content) is sent with Cache-Control: public, max-age=31536000, immutable, and so is the 304 of its revalidation; any other file under /_app (env.js, version.json, immutable.json named like the folder) has one Cache-Control with no-cache and neither immutable nor max-age=31536000, its 304 too; the HTML documents (/, /index.html, the SPA fallback) keep no-cache, must-revalidate; with the build folder itself and behind a symlink",
+        desc="F28: a file under /_app/immutable/ (named after its content) is sent with Cache-Control: public, max-age=31536000, immutable, and so is the 304 of its revalidation; any other file under /_app (env.js, version.json, immutable.json named like the folder) has one Cache-Control with no-cache and neither immutable nor max-age=31536000, its 304 too; the HTML documents (/, /index.html, the SPA fallback) keep no-cache, must-revalidate; with the build folder itself and behind a symlink; 84-D: the documentation's shared menu /mkdocs/javascripts/nav/nav.<lang>.<hash>.js is immutable, any other documentation file (enhancer, unhashed or misplaced names) never, its pages keep no-cache, must-revalidate",
         # A fresh FastAPI() holding the static site of a fake build under tmp_path (FRONTEND_BUILD_DIR swapped in by
         # monkeypatch), called through httpx's in-process ASGI transport. No DB, no server, no network.
         isolation="pure",

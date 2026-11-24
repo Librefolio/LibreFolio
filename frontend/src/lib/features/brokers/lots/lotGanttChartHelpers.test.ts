@@ -648,6 +648,12 @@ describe('eventMarkerKind', () => {
         expect(eventMarkerKind('REWARD', 'IN')).toBe('TRANSFER');
         expect(eventMarkerKind('REWARD', 'OUT')).toBe('TRANSFER');
     });
+
+    it('marks a reward merged into a lot (REWARD_MERGE, STK-3) as a reward, a scope-edge leg as a transfer', () => {
+        expect(eventMarkerKind('REWARD_MERGE')).toBe('REWARD');
+        expect(eventMarkerKind('REWARD_MERGE', null)).toBe('REWARD');
+        expect(eventMarkerKind('REWARD_MERGE', 'IN')).toBe('TRANSFER');
+    });
 });
 
 describe('eventMarkerSymbol', () => {

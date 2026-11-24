@@ -64,7 +64,8 @@ Single-image runtime: Python 3.13-slim with pre-built frontend and docs copied i
 ```text
 Dockerfile flow:
   python:3.13-slim → pip install requirements.txt
-  → COPY backend/, scripts/, dev.py
+  → avatars-webp (default avatars PNG → WebP q85) + backend-src (backend/ without the PNGs)
+  → COPY backend/ (from backend-src), the WebP avatars, scripts/, dev.py
   → COPY frontend/build/, mkdocs_src/site/
   → uvicorn backend.app.main:app
 ```

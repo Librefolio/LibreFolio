@@ -44,7 +44,6 @@
     "dashboardTitle": "Riesgo de la cartera",
     "brokerTitle": "Riesgo del bróker",
     "internalSubset": "Riesgo interno de este subconjunto del bróker",
-    "dashboardFullPortfolio": "El riesgo usa toda la cartera; no se aplica el filtro de bróker del panel.",
     "states": {
       "partial": "Parcial",
       "empty": "Sin resultados",

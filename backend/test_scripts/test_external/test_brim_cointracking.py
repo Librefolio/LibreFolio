@@ -8,13 +8,19 @@ plugin», «Regole che valgono per ogni plugin»):
 - the fiat ``Fee`` of a row names the operation of that same row as its parent (``parent_ref`` = its ``ref``), with its
   asset and its broker: a fiat-backed Trade (BUY or SELL), a fiat Deposit or Withdrawal, a fiat Staking reward (an
   INTEREST); the currency of the fee is never judged (rule 4);
-- a row whose operation is an ADJUSTMENT (a crypto deposit, a crypto withdrawal, a crypto staking reward) gives no
-  parent: its fiat fee stays free (an ADJUSTMENT is not a parent type; ``_create_linked_charge`` decides it);
+- a row whose operation is an ADJUSTMENT (a crypto deposit, a crypto withdrawal) gives no parent: its fiat fee stays
+  free (an ADJUSTMENT is not a parent type; ``_create_linked_charge`` decides it); nor does a crypto staking reward,
+  a REWARD since 1.2.0 (project 79, STK-4b, decision S4-Q3 (a)): its fiat fee is a free FEE too;
 - a crypto-denominated fee is itself an ADJUSTMENT, not a charge: it names nothing;
 - a Trade the validation refuses leaves its fee free;
 - the link adds names only: every row equals the previous version's (snapshot at HEAD a2e85db13, plugin 1.0.0) except
-  ``ref``/``parent_ref``, and reimporting the sample over the previous version's rows adds nothing;
+  ``ref``/``parent_ref`` — and, since 1.2.0, the type of the sample's one crypto staking reward, ADJUSTMENT → REWARD
+  (STK-4b), declared and checked field by field — and reimporting the sample over the previous version's rows adds
+  nothing (the duplicate match does not read the type: the retyped reward is still recognised);
 - the plugin version goes up.
+
+What 1.2.0 adds beyond the snapshot (the REWARD, its ``reward_value`` todo, its free fee, on invented rows) is pinned by
+``test_brim_rewards.py`` (``external brim-rewards``).
 
 The sample has no fiat deposit, withdrawal or staking with a fee, no crypto fee and no fee in another currency: those
 cases are INVENTED rows written in ``tmp_path``, never in the repository's sample.
@@ -27,12 +33,15 @@ The reimport opens a private in-memory SQLite per test and disposes it: no serve
 
 from __future__ import annotations
 
+import csv
 from pathlib import Path
 from typing import Dict, List, Sequence, Tuple
 
 import pytest
 
 from backend.app.db.models import TransactionType
+from backend.app.schemas.common import is_fiat_currency
+from backend.app.schemas.transactions.transactions import TXCreateItem
 from backend.app.services.brim.brim_provider import BRIMProvider
 from backend.app.services.brim.registry import BRIMProviderRegistry
 from backend.test_scripts.brim_charge_links import (
@@ -65,7 +74,7 @@ EXPECTED: Dict[str, Tuple[List[Tuple[RowKey, RowKey]], List[RowKey]]] = {
             (_row("FEE", "2024-12-06", "-1", "EUR", "BTC"), _row("BUY", "2024-12-06", "-100", "EUR", "BTC")),
             (_row("FEE", "2025-01-11", "-2", "EUR", "BTC"), _row("SELL", "2025-01-11", "200", "EUR", "BTC")),
         ],
-        # The EUR fee of a crypto staking reward: its operation is an ADJUSTMENT, not a parent.
+        # The EUR fee of a crypto staking reward: its operation is a REWARD (1.2.0; an ADJUSTMENT before), not a parent.
         [_row("FEE", "2025-01-18", "-2", "EUR", "BTC")],
     ),
 }
@@ -97,6 +106,38 @@ _INVENTED_FREE: List[RowKey] = [
     _row("FEE", "2025-02-05", "-2.50", "EUR", "ETH"),
 ]
 _INVENTED_TYPES = ["DEPOSIT", "FEE", "WITHDRAWAL", "FEE", "INTEREST", "FEE", "ADJUSTMENT", "FEE", "ADJUSTMENT", "FEE", "BUY", "ADJUSTMENT", "BUY", "FEE"]
+
+
+def _sample_crypto_staking_days(sample: str) -> List[str]:
+    """The ISO days of the sample's crypto ``Staking`` rows (a crypto in «Buy»'s currency), read from the file itself."""
+    days: List[str] = []
+    with (SAMPLE_DIR / sample).open(encoding="utf-8", newline="") as handle:
+        reader = csv.reader(handle)
+        next(reader)  # the header: two columns are named «Cur.», so the rows are read by position
+        for row in reader:
+            if row and row[0].strip().lower() == "staking" and row[2].strip() and not is_fiat_currency(row[2].strip()):
+                day = row[10].strip().split(" ")[0]
+                days.append("-".join(reversed(day.split("."))) if "." in day else day)
+    return days
+
+
+def _staking_rewards_retyped(previous_rows: Sequence[TXCreateItem], current_rows: Sequence[TXCreateItem]) -> Tuple[List[TXCreateItem], List[str], List[str]]:
+    """The declared change of 1.2.0 (STK-4b), taken off again: every row the previous version emitted as an ADJUSTMENT that is
+    now a REWARD must be a crypto staking reward — its description says so — and goes back to ADJUSTMENT, so that
+    ``changes_besides_links`` compares everything else. Returns the rows so restored, the ISO days of the rows retyped, and
+    the problems (a retype that is not a staking reward)."""
+    restored: List[TXCreateItem] = []
+    days: List[str] = []
+    problems: List[str] = []
+    for index, after in enumerate(current_rows):
+        before = previous_rows[index] if index < len(previous_rows) else None
+        if before is not None and before.type == TransactionType.ADJUSTMENT and after.type == TransactionType.REWARD:
+            if not (after.description or "").startswith("CoinTracking staking reward"):
+                problems.append(f"#{index} {after.date}: ADJUSTMENT → REWARD on a row that is not a staking reward ({after.description!r})")
+            days.append(after.date.isoformat())
+            after = after.model_copy(update={"type": TransactionType.ADJUSTMENT})
+        restored.append(after)
+    return restored, days, problems
 
 
 def _plugin() -> BRIMProvider:
@@ -178,14 +219,20 @@ class TestCoinTrackingLinkedCharges:
         assert_charge_link_structure(_parse_invented(tmp_path), "invented rows")
 
     @pytest.mark.parametrize("sample", SAMPLES)
-    def test_only_the_names_change_from_the_previous_version(self, sample: str):
+    def test_only_the_names_change_from_the_previous_version_besides_the_staking_rewards(self, sample: str):
         """Guard: the link adds ``ref``/``parent_ref`` and nothing else — every row equals the snapshot's, in order (type,
-        date, quantity, cash, asset, broker, description, tags)."""
+        date, quantity, cash, asset, broker, description, tags) — but for the declared change of 1.2.0 (STK-4b): each crypto
+        staking reward of the sample, an ADJUSTMENT in the snapshot, is now a REWARD. Exactly those rows are retyped (their
+        days read from the file), and with their type put back nothing else differs."""
         previous = load_previous_snapshot(PLUGIN_CODE, sample, BROKER_ID)
         out = _plugin().parse(SAMPLE_DIR / sample, BROKER_ID)
+        expected_days = _sample_crypto_staking_days(sample)
+        assert expected_days, f"presence barrier: {sample} has a crypto staking reward"
 
-        problems = changes_besides_links(previous.transactions, out.transactions)
-        assert not problems, f"{sample}: the output changed besides its links (snapshot HEAD {previous.source_head}):\n  " + "\n  ".join(problems)
+        restored, retyped_days, problems = _staking_rewards_retyped(previous.transactions, out.transactions)
+        assert sorted(retyped_days) == sorted(expected_days), f"{sample}: the rows retyped ADJUSTMENT → REWARD are {retyped_days}, the file's crypto staking rewards {expected_days}"
+        problems += changes_besides_links(previous.transactions, restored)
+        assert not problems, f"{sample}: the output changed besides its links and the staking rewards (snapshot HEAD {previous.source_head}):\n  " + "\n  ".join(problems)
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("sample", SAMPLES)

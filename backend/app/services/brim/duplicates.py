@@ -25,6 +25,11 @@ logger = structlog.get_logger(__name__)
 
 _WHITESPACE_RE = re.compile(r"\s+")
 
+# The value an older import appended to a reward's description, « (Value: 0.12649 EUR)», before its plugin stored it as the
+# REWARD's value on receipt (project 79, STK-4a). Between equivalent types it is no part of the text: a Crypto.com row wrote
+# it before the transaction hash, so the old text would otherwise never contain the new one.
+_REWARD_VALUE_NOTE_RE = re.compile(r"\s*\(Value:[^)]*\)")
+
 
 def _description_key(description: Optional[str]) -> str:
     """
@@ -45,6 +50,16 @@ def _description_key(description: Optional[str]) -> str:
 # export "since the last one" starts on the last day it covered — the same movement comes back
 # as a plain DEPOSIT or WITHDRAWAL and must still be recognised.
 _MERGED_LEG_TYPES = (TransactionType.CASH_TRANSFER, TransactionType.FX_CONVERSION)
+
+# A reward in kind was imported as an ADJUSTMENT (crypto staking) or as a BUY (a free share) before its plugin learned the
+# REWARD type (project 79, STK-4a). Exported again, the same reward comes back as a REWARD and must still be recognised,
+# and the other way round. The level follows the usual rule: the old description holds the new one (the old rows added
+# « (Value: …)»), so a re-imported reward is a likely duplicate and starts deselected; the user decides.
+_EQUIVALENT_TYPES: Dict[TransactionType, tuple[TransactionType, ...]] = {
+    TransactionType.REWARD: (TransactionType.ADJUSTMENT, TransactionType.BUY),
+    TransactionType.ADJUSTMENT: (TransactionType.REWARD,),
+    TransactionType.BUY: (TransactionType.REWARD,),
+}
 
 
 # The widest gap two quantities of one holding may have (the fixed tolerance before W-B51): the rule below is never looser.
@@ -85,7 +100,8 @@ async def detect_tx_duplicates(  # noqa: C901 — TODO(P2-refactor): extract per
     For each parsed transaction, queries the DB for existing transactions with:
     - Same broker_id (scoped to broker)
     - Same type; a DEPOSIT or WITHDRAWAL also looks at the legs of CASH_TRANSFER and
-      FX_CONVERSION pairs, where a promote stored the same movement
+      FX_CONVERSION pairs, where a promote stored the same movement; a REWARD also looks at
+      ADJUSTMENT and BUY rows, where an older plugin stored the same reward, and the other way round
     - Same date
     - Same quantity, at the precision of the less precise of the two (``_same_quantity``, W-B51)
     - Same cash amount and currency (if present)
@@ -98,7 +114,8 @@ async def detect_tx_duplicates(  # noqa: C901 — TODO(P2-refactor): extract per
     - LIKELY_WITH_ASSET: key fields + description match, asset auto-resolved
 
     On a merged leg the description matches when it contains the incoming one: merging a pair
-    joins the descriptions of its two sides.
+    joins the descriptions of its two sides. The same holds for an equivalent type: an older import
+    wrote the reward's value after its description.
 
     Args:
         transactions: List of parsed TXCreateItem
@@ -142,9 +159,10 @@ async def detect_tx_duplicates(  # noqa: C901 — TODO(P2-refactor): extract per
 
         # Build query conditions
         merged_leg_types = _MERGED_LEG_TYPES if tx.type in (TransactionType.DEPOSIT, TransactionType.WITHDRAWAL) else ()
+        equivalent_types = _EQUIVALENT_TYPES.get(tx.type, ())
         conditions = [
             Transaction.broker_id == broker_id,
-            Transaction.type.in_([tx.type, *merged_leg_types]),
+            Transaction.type.in_([tx.type, *merged_leg_types, *equivalent_types]),
             Transaction.date == tx.date,
         ]
 
@@ -180,8 +198,10 @@ async def detect_tx_duplicates(  # noqa: C901 — TODO(P2-refactor): extract per
             # Determine match level based on:
             # 1. Whether asset is resolved (more confident)
             # 2. Whether description matches (even more confident)
-            tx_desc = _description_key(tx.description)
-            existing_desc = _description_key(existing.description)
+            equivalent_type = existing.type in equivalent_types
+            tx_desc = _description_key(_REWARD_VALUE_NOTE_RE.sub("", tx.description or "") if equivalent_type else tx.description)
+            existing_desc = _description_key(_REWARD_VALUE_NOTE_RE.sub("", existing.description or "") if equivalent_type else existing.description)
+            # A merged leg or an equivalent type (a reward stored with its older type): the old description holds the new one
             merged_leg = existing.type != tx.type
             desc_matches = bool(tx_desc) and (tx_desc == existing_desc or (merged_leg and tx_desc in existing_desc))
 

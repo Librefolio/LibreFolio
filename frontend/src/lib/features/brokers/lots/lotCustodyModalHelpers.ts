@@ -75,7 +75,8 @@ export function eventMarkerKind(event: {kind: string; scope_boundary?: unknown})
     if (scopeBoundaryOf(event) != null) return 'transfer';
     if (event.kind === 'BUY' || event.kind === 'REWARD' || event.kind === 'ADJUSTMENT_IN') return 'open';
     if (event.kind === 'TRANSFER_DEPART' || event.kind === 'TRANSFER_ARRIVE') return 'transfer';
-    if (event.kind === 'SPLIT') return 'split';
+    // A reward merged into the lot (STK-3) rescales it as a split does: quantity up, cost unchanged
+    if (event.kind === 'SPLIT' || event.kind === 'REWARD_MERGE') return 'split';
     return 'close';
 }
 

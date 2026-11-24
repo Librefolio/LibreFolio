@@ -41,7 +41,7 @@ When you apply a broker filter, the cash balances automatically update to reflec
 
 ## 🛡️ Risk Tab {: #risk-tab }
 
-The Risk tab holds the **Portfolio risk** panel, which answers four questions about your portfolio's risk: **How much can it hurt?**, **Am I as diversified as I think?**, **Am I being paid for this risk?** and **What if…?** It always covers your whole portfolio — every broker you own with a share above 0% — and follows the dashboard date range and target currency, but not the broker filter: when a filter is on, a subtitle says so. See [Risk Tab](risk.md) for the blocks and the tools they show.
+The Risk tab holds the **Portfolio risk** panel, which answers four questions about your portfolio's risk: **How much can it hurt?**, **Am I as diversified as I think?**, **Am I being paid for this risk?** and **What if…?** It covers every broker you own with a share above 0%, or only the brokers the broker filter keeps, and follows the dashboard date range and target currency: when a filter is on, a subtitle says the risk is the one of that subset of brokers. See [Risk Tab](risk.md) for the blocks and the tools they show.
 
 ---
 
@@ -50,7 +50,7 @@ The Risk tab holds the **Portfolio risk** panel, which answers four questions ab
 At the top right of the dashboard, you have several controls to customize your view:
 
 - **Time range** — presets from **1W** to **All**, or a custom range via the date picker.
-- **Broker filter** — filters the metrics to one or more specific brokers; the Risk tab always covers every broker you own, and a subtitle says so when a filter is on.
+- **Broker filter** — filters the metrics to one or more specific brokers, on every tab, Risk included.
 - **Target currency** — converts all assets and cash balances dynamically into a single selected currency for aggregate viewing. The list offers your default currency and the currencies of your configured FX pairs — both ends of each pair. A currency that a [chain route](../fx/add-pair.md) only passes through is not offered: syncing a chain stores only the rate of its own pair, so LibreFolio has no rates to convert into that currency. To make a currency available, give it a pair of its own: pick **Create forex…** at the bottom of the list, or tick **Also create intermediate pairs** when you add a pair through a chain route.
 - **AI Export** (:material-brain:) — opens a clipboard export. Choose **Data
   Snapshot** for factual data only, or an **analysis task** that automatically

@@ -5283,7 +5283,7 @@
     }
   },
   "user/transactions/index.en.md": {
-    "md5": "b012d19e1052b6ca5c64a96059547311",
+    "md5": "305e3c3130dbb0b49f08004b02cc15c7",
     "langs_done": [
       "es",
       "fr",
@@ -5303,7 +5303,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 623.5,
-        "stamped_at": "2026-11-21T06:06:51.676393+00:00",
+        "stamped_at": "2026-11-24T04:09:47.971607+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -5318,7 +5318,7 @@
         "elapsed_s": 850.6,
         "final_structural_diff": "## STRUCTURAL DIFF REPORT (source vs translation)\n\nIssues found: 2\n\n1. LINK_URLS: URL set differs.\n  Missing in translation: ['../assets/create-edit.md#changing-the-currency']\n2. LINK_COUNT: source=14, translated=13 (Δ-1)\n  L59: src=1 trn=0\n    EN: A dividend, an interest payment or an adjustment can be linked to the asset's **event** (the dividend the provider annou\n    TR: Un dividende, un paiement d'intérêts ou un ajustement peut être lié à l'**événement** de l'actif (le dividende annoncé p\n\nSOURCE_OUTLINE (for reference):\n  # 💸 Transactions\n    ## 🔎 Find and open a transaction\n    ## ➕ Add or import transactions\n    ## ✏️ Edit, clone or delete transactions\n    ## 🔗 Link or unlink a pair {: #link-pairs }\n    ## 🔁 Relink events {: #relink-events }\n    ## 🧰 The bulk workspace {: #bulk-workspace }\n    ## 🧭 Contextual guides\n    ## 🔗 Related",
         "final_structural_issues": 2,
-        "stamped_at": "2026-11-21T06:06:51.676393+00:00",
+        "stamped_at": "2026-11-24T04:09:47.971607+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -5333,7 +5333,7 @@
         "elapsed_s": 224.4,
         "final_structural_diff": "## STRUCTURAL DIFF REPORT (source vs translation)\n\nIssues found: 1\n\n1. BOLD_MARKERS: source=94, translated=93 (Δ-1)\n  L73: src=1 trn=0\n    EN: A candidate is proposed only if it is **on the same day** as the transaction. It must be the same asset too, and of the \n    TR: Un candidato solo se propone si es del mismo día que la transacción. También debe ser el mismo activo y del tipo corresp\n\nSOURCE_OUTLINE (for reference):\n  # 💸 Transactions\n    ## 🔎 Find and open a transaction\n    ## ➕ Add or import transactions\n    ## ✏️ Edit, clone or delete transactions\n    ## 🔗 Link or unlink a pair {: #link-pairs }\n    ## 🔁 Relink events {: #relink-events }\n    ## 🧰 The bulk workspace {: #bulk-workspace }\n    ## 🧭 Contextual guides\n    ## 🔗 Related",
         "final_structural_issues": 1,
-        "stamped_at": "2026-11-21T06:06:51.676393+00:00",
+        "stamped_at": "2026-11-24T04:09:47.971607+00:00",
         "stamped_by": "translate-stamp"
       }
     }
@@ -5431,7 +5431,7 @@
     }
   },
   "user/transactions/import/index.en.md": {
-    "md5": "e7ca1c78a979d214dd601ebfee5a4c7b",
+    "md5": "e8fa7fd0c64f6777b742158c5d618886",
     "langs_done": [
       "es",
       "fr",
@@ -5451,7 +5451,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 184.8,
-        "stamped_at": "2026-11-05T10:41:18.031300+00:00",
+        "stamped_at": "2026-11-24T09:47:47.574287+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -5464,7 +5464,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 142.0,
-        "stamped_at": "2026-11-05T10:41:18.031300+00:00",
+        "stamped_at": "2026-11-24T09:47:47.574287+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -5477,7 +5477,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 126.6,
-        "stamped_at": "2026-11-05T10:41:18.031300+00:00",
+        "stamped_at": "2026-11-24T09:47:47.574287+00:00",
         "stamped_by": "translate-stamp"
       }
     }
@@ -7466,7 +7466,7 @@
     }
   },
   "user/transactions/import/investimental.en.md": {
-    "md5": "c866c00f5df9b943631b37960b629f59",
+    "md5": "19ffe4a83e02b3c38af67129a0c3bc59",
     "langs_done": [
       "es",
       "fr",
@@ -7475,15 +7475,15 @@
     "last_translated": "2026-07-22T10:06:25.975277+00:00",
     "langs": {
       "it": {
-        "stamped_at": "2026-07-22T10:06:25.975277+00:00",
+        "stamped_at": "2026-11-24T02:30:16.727162+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
-        "stamped_at": "2026-07-22T10:06:25.975277+00:00",
+        "stamped_at": "2026-11-24T02:30:16.727162+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
-        "stamped_at": "2026-07-22T10:06:25.975277+00:00",
+        "stamped_at": "2026-11-24T02:30:16.727162+00:00",
         "stamped_by": "translate-stamp"
       }
     }

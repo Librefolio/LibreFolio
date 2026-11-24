@@ -145,6 +145,8 @@ Which purchases make up a position, where are they held, and how has each one do
 
 Switching is instant and is not saved: the panel opens in FIFO the next time. The lots are the same in both methods, so the lots you picked stay picked; what changes is which lot each sale closed, and the figures that follow — open quantity, realized P&L, value and return. Within one day, purchases count before sales, in both methods.
 
+When the position has [**Rewards**](../../financial-theory/instruments/transaction-types/reward.md) (staking, airdrops), each one opens a lot of its own at its value on receipt, and the panel's header shows a selector, **Rewards apart** / **Rewards in lots**: it appears only when the panel's scope holds at least one Reward. **Rewards in lots** reads the same transactions another way: the units of each reward join, in proportion, the lots held the day before, at no cost and with no income booked, so each lot shows what its units really cost you counting the rewards they produced. A reward with no lot to join keeps its own, at a cost of zero, with an information note. The selector works with FIFO and LIFO alike, is not saved, and goes back to **Rewards apart** when you open another asset or change the brokers.
+
 Choose **Analyze Lots** on a position and the panel opens, for the brokers of the page: your broker filter on the Dashboard, the broker itself on its own page. On the Dashboard, as on a broker's page, it opens **below the positions**: the positions table and the return chart stay on screen. **View Asset** (↗) opens the asset; **✕** closes the panel, and so does the browser's back button.
 
 <div class="lf-screenshot-carousel" data-carousel="carousel-fifo-lots-analysis" data-carousel-interval="6000" data-show-titles="true" style="margin: 1.5rem 0 2.5rem 0;">
@@ -211,6 +213,7 @@ Every lot with its figures, following the panel's filter and selection.
 - **Click** a row to select it, **double-click** to find it in the timeline; the row colour is the opening broker.
 - **The ⋮ menu** offers **View lot detail**, **Go to lot in Gantt**, **Go to opening transaction** and **Copy lot identifier** — a stable reference, handy for support.
 - **More columns**, such as **Opening Value**, wait behind the eye icon.
+- **Rewards** gathered in one row: when two or more lots at a broker were opened by [Rewards](../../financial-theory/instruments/transaction-types/reward.md), they show as one row, **N rewards**, with the first and last date and the sums of their figures; its return is the sum of their P&L over the sum of their cost. Click it to open or close it: open, its lots follow one by one, right under it, whatever the sort. Its checkbox selects all its lots for the charts, and shows a mixed state when only some are selected. With **Rewards in lots** only the rewards that kept a lot of their own are gathered.
 
 ### 💰 4. Value / Return Comparison
 

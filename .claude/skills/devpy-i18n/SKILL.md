@@ -215,6 +215,12 @@ dotted f-string head: then the audit sees it with no tool change.
 
 ## Rules for New Keys
 
+**When (developer decision, 24/11/2026):** a new UI key is added **translated in all four languages (EN/IT/FR/ES) in
+the same lot** that needs it — a missing FR/ES key is a defect of that lot, not end-of-release debt (`./dev.py i18n
+check` and `catalogIcuLocale.test.ts` must stay green on the integration branch). What waits for the end of the release
+is only the **i18n audit** (unused keys, duplicates, clean-up) and the **documentation** translation (MkDocs pages, Aphra
+pipeline). Do not confuse the two.
+
 0. **Let the tool place it**: `./dev.py i18n where <key>` names the source a new key goes to, and `./dev.py i18n add`
    writes it there. A plugin's own texts go in its fragment (`--into <family>/<plugin>`): under a branch only plugins
    hold (`brimPlugins.<new>`, `risk.analytics.<new>`, `assets.providerParams.<new>`) `add` refuses to guess and asks

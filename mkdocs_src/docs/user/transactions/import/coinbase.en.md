@@ -31,6 +31,11 @@ To export your transaction statement from Coinbase:
 ## 📝 Notes
 
 - Supports buys, sells, conversions, sends, receives, staking rewards, and fee assessments.
+- **Staking income, rewards income and learning rewards** are imported as **Reward** transactions: the units you received,
+  with no cash, at the value Coinbase gives them in the `Subtotal` column (the value of one unit is `Subtotal` ÷ quantity).
+  That value is both their purchase cost and your income.
+- A file you imported before this change had these rows as **Adjustment** transactions. Importing it again marks each
+  reward as a likely duplicate of the old row, and leaves it unselected: nothing is counted twice.
 - Supports major fiat base currencies (USD, EUR, GBP).
 
 ## 🔗 Developer Reference

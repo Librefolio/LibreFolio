@@ -169,7 +169,7 @@ Los importadores sin etiqueta están bien probados y son fiables para los format
     <img src="https://www.xtb.com/favicon.ico" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="favicon de XTB">
     <span class="card-title" style="margin: 0;">XTB</span>
     </div>
-    <span class="card-desc">🧪 Beta · Historial de transacciones CSV</span>
+    <span class="card-desc">🧪 Beta · Informe de historial (Excel)</span>
     </a>
     <a href="parqet/" class="card-link" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
     <div style="display: flex; align-items: center; gap: 0.75rem;">

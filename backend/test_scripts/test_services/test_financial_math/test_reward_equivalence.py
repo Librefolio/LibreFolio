@@ -4,11 +4,15 @@ Ledger A holds DEPOSIT, BUY, REWARD (q units at V/q, no cash) and a later SELL; 
 DIVIDEND of V plus a BUY of q at V/q on the REWARD's day instead. The portfolio replay (``DailyStateBuilder``, with the
 average costs and native cash ``calculate()`` would hand it) must read every day the same NAV, cash, capital, total
 P&L and open cost — the whole daily state and the end positions — the same realized sales, the same income and the
-same period identity. The K/R pool split (acquisition funding, cash from contributed capital vs generated returns) is
-left out of A-vs-B: the DIVIDEND+BUY pair replays its position rows before its cash rows on the same day, so its BUY
-draws on K before the dividend reaches R (existing behaviour, backlog item STK1-1). The REWARD follows the rule instead
-(Q-C: "R += V, then the BUY draws V from R" leaves K and R unchanged): A has no funding on the reward day, and its
-cash split equals that of ledger C, the same ledger with neither the reward nor the pair, up to the day before the SELL.
+same period identity — and the same K/R pool split (cash from contributed capital vs generated returns): since STK1-1
+the day's cash income replays before its position rows, so the pair's dividend reaches R before its BUY draws on it, as
+the REWARD's rule says (Q-C: "R += V, then the BUY draws V from R" leaves K and R unchanged). Only the acquisition
+funding differs, by construction: the pair's BUY is a purchase reinvesting V, the REWARD buys nothing. A has no
+funding on the reward day, and its cash split equals that of ledger C, the same ledger with neither the reward nor the
+pair, up to the day before the SELL.
+
+``TestDividendReinvestedSameDay`` is the developer's example of STK1-1 (P-21, 24/11/2026): deposit 1 000 €, an ETF
+bought for 900 €, then a 30 € DIVIDEND (or INTEREST) reinvested the same day in a 30 € BUY.
 
 Three variants: EUR at share 1, EUR at an owner share of 0.4, and the asset, cash and reward in USD with a USD→EUR
 rate map. Also: the average cost of a REWARD of explicit value 0 (Q-A) is known, one without a value is not.
@@ -140,11 +144,16 @@ class Run:
 
 
 def _run(kind: str, variant: Variant) -> Run:
-    """The replay of ledger ``kind``, built as ``test_portfolio_engine_vnext._build`` builds it."""
-    classification = ScopeAwareTransactionClassifier(scope_broker_ids={BROKER}, all_transactions=_ledger(kind, variant.currency), broker_shares={BROKER: variant.share}).classify()
+    """The replay of ledger ``kind``."""
+    return _replay(_ledger(kind, variant.currency), variant, PRICES)
+
+
+def _replay(ledger: list[Transaction], variant: Variant, prices: dict[date, Decimal]) -> Run:
+    """The replay of ``ledger``, built as ``test_portfolio_engine_vnext._build`` builds it."""
+    classification = ScopeAwareTransactionClassifier(scope_broker_ids={BROKER}, all_transactions=ledger, broker_shares={BROKER: variant.share}).classify()
     txs = classification.classified
     currencies = {ASSET: variant.currency}
-    price_map = {ASSET: [(day, price, variant.currency) for day, price in sorted(PRICES.items())]}
+    price_map = {ASSET: [(day, price, variant.currency) for day, price in sorted(prices.items())]}
     series = build_asset_price_series(
         price_rows=price_map[ASSET],
         transactions=[ctxn.tx for ctxn in txs if ctxn.tx.asset_id == ASSET],
@@ -181,11 +190,9 @@ def _v(variant: Variant) -> Decimal:
 
 
 #: The daily-state fields read off the K/R pool split: checked for the REWARD against the rule (``TestRewardPoolSplit``).
-_POOL_SPLIT_FIELDS = {"acquisition_funding": None, "cash_from_contributed_capital": D("0"), "cash_from_generated_returns": D("0")}
-
-
-def _without_pool_split(state: DailyPortfolioState) -> DailyPortfolioState:
-    return dataclasses.replace(state, **_POOL_SPLIT_FIELDS)
+def _without_funding(state: DailyPortfolioState) -> DailyPortfolioState:
+    """The state without its acquisition funding: the pair's BUY reinvests V, the REWARD buys nothing."""
+    return dataclasses.replace(state, acquisition_funding=None)
 
 
 def _income(cash: NativeCash, date_from: date | None, date_to: date) -> Decimal:
@@ -206,7 +213,7 @@ def pair(request) -> tuple[Variant, Run, Run]:
 
 class TestRewardEqualsDividendPlusBuy:
     def test_every_day_reads_the_same(self, pair):
-        """The whole daily state is equal, but for the fields read off the K/R pool split (``TestRewardPoolSplit``)."""
+        """The whole daily state is equal, the K/R cash split included, but for the acquisition funding (STK1-1)."""
         variant, a, b = pair
         states_a = {state.date: state for state in a.result.daily_states}
         states_b = {state.date: state for state in b.result.daily_states}
@@ -216,9 +223,15 @@ class TestRewardEqualsDividendPlusBuy:
             got_a = (sa.nav_value, sa.cash_value, sa.market_value, sa.cumulative_external_cash_flow, sa.total_pnl, sa.open_cost_basis, sa.unrealized_gain_loss)
             got_b = (sb.nav_value, sb.cash_value, sb.market_value, sb.cumulative_external_cash_flow, sb.total_pnl, sb.open_cost_basis, sb.unrealized_gain_loss)
             assert got_a == got_b, f"{variant.name} {day}: A {got_a} != B {got_b}"
-            # The DIVIDEND+BUY pair replays its position rows before its cash rows on the same day, so its BUY draws on K
-            # before the dividend reaches R (existing behaviour, reported as backlog item STK1-1); the REWARD follows the rule.
-            assert _without_pool_split(sa) == _without_pool_split(sb), f"{variant.name} {day}"
+            # STK1-1: the pair's dividend reaches R before its BUY draws on it, so the cash split is the REWARD's.
+            assert _without_funding(sa) == _without_funding(sb), f"{variant.name} {day}"
+
+    def test_the_pair_reinvests_the_dividend(self, pair):
+        """STK1-1: on the reward day the pair's BUY is paid with the dividend it follows — V reinvested, no new capital."""
+        variant, _a, b = pair
+        funding = b.result.daily_states.state_on(REWARD_DAY).acquisition_funding
+        assert funding is not None, variant.name
+        assert (funding.from_new_capital, funding.from_reinvested) == (D("0"), _v(variant)), variant.name
 
     def test_positions_equal(self, pair):
         _variant, a, b = pair
@@ -347,3 +360,67 @@ class TestRewardAverageCost:
         quantity, cost, unknown = self._cost(None)
         assert quantity == D("20")
         assert unknown == (3,)
+
+
+# =============================================================================
+# STK1-1: a cash income reinvested the same day (the developer's example, P-21)
+# =============================================================================
+
+#: The ETF at 1 € a unit every day: the example's figures read straight off the cash.
+FLAT_PRICES = {day: D("1") for day in _days()}
+
+
+def _drip_ledger(income_type: TransactionType) -> list[Transaction]:
+    """Deposit 1 000 €, an ETF bought for 900 €, then 30 € of income reinvested the same day in a 30 € BUY.
+
+    The BUY is listed first and carries the lower id: the day's own order, not the ledger's, must put the income first.
+    """
+    income_asset = ASSET if income_type == TransactionType.DIVIDEND else None
+    return [
+        _tx(1, TransactionType.DEPOSIT, DEPOSIT_DAY, amount="1000", currency="EUR", asset_id=None),
+        _tx(2, TransactionType.BUY, BUY_DAY, quantity="900", amount="-900", currency="EUR"),
+        _tx(3, TransactionType.BUY, REWARD_DAY, quantity="30", amount="-30", currency="EUR"),
+        _tx(4, income_type, REWARD_DAY, amount="30", currency="EUR", asset_id=income_asset),
+    ]
+
+
+@pytest.fixture(params=[TransactionType.DIVIDEND, TransactionType.INTEREST], ids=["dividend", "interest"])
+def drip(request) -> Run:
+    return _replay(_drip_ledger(request.param), VARIANTS[0], FLAT_PRICES)
+
+
+class TestDividendReinvestedSameDay:
+    """The income reaches R before the BUY of its day draws on R: K keeps the 100 € deposited, the 30 € are reinvested."""
+
+    def test_the_cash_left_is_all_contributed(self, drip):
+        state = drip.result.daily_states.state_on(REWARD_DAY)
+        assert (state.cash_from_contributed_capital, state.cash_from_generated_returns) == (D("100"), D("0"))
+
+    def test_the_buy_is_reinvested_income(self, drip):
+        funding = drip.result.daily_states.state_on(REWARD_DAY).acquisition_funding
+        assert funding is not None
+        assert (funding.from_new_capital, funding.from_reinvested) == (D("0"), D("30"))
+
+    def test_nav_pnl_and_income_are_unchanged(self, drip):
+        """What the order never moved: NAV 1 030 € (ETF 930 € + cash 100 €), P&L 30 €, income 30 €."""
+        state = drip.result.daily_states.state_on(REWARD_DAY)
+        assert (state.nav_value, state.market_value, state.cash_value, state.total_pnl) == (D("1030"), D("930"), D("100"), D("30"))
+        assert _income(drip.native_cash, None, DATE_TO) == D("30")
+
+    def test_a_withheld_tax_is_paid_from_the_dividend(self):
+        """A DRIP with withholding: 30 € dividend, 4.50 € tax, 25.50 € reinvested, the tax and the BUY listed first.
+
+        The dividend reaches R first, the BUY reinvests 25.50 € of it and the tax takes the rest: the 100 € left are all
+        contributed. Before STK1-1 the BUY and the tax came out of K (70 € contributed, 30 € generated).
+        """
+        ledger = [
+            _tx(1, TransactionType.DEPOSIT, DEPOSIT_DAY, amount="1000", currency="EUR", asset_id=None),
+            _tx(2, TransactionType.BUY, BUY_DAY, quantity="900", amount="-900", currency="EUR"),
+            _tx(3, TransactionType.TAX, REWARD_DAY, amount="-4.50", currency="EUR"),
+            _tx(4, TransactionType.BUY, REWARD_DAY, quantity="25.50", amount="-25.50", currency="EUR"),
+            _tx(5, TransactionType.DIVIDEND, REWARD_DAY, amount="30", currency="EUR"),
+        ]
+        state = _replay(ledger, VARIANTS[0], FLAT_PRICES).result.daily_states.state_on(REWARD_DAY)
+        assert (state.cash_value, state.cash_from_contributed_capital, state.cash_from_generated_returns) == (D("100.00"), D("100.00"), D("0"))
+        assert state.acquisition_funding is not None
+        assert (state.acquisition_funding.from_new_capital, state.acquisition_funding.from_reinvested) == (D("0"), D("25.50"))

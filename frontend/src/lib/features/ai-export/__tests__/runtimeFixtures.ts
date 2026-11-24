@@ -54,7 +54,7 @@ function analysisDatasetIds(id: AiExportAnalysisId): {required: readonly string[
         'portfolio.rebalancing': {required: ['portfolio.overview_and_history'], optional: []},
         'portfolio.performance_market_drivers': {required: ['portfolio.overview_and_history'], optional: []},
         'portfolio.fiscal_lots': {required: ['portfolio.overview_and_history', 'portfolio.fifo'], optional: []},
-        'portfolio.protection_strategies': {required: ['portfolio.overview_and_history'], optional: []},
+        'portfolio.protection_strategies': {required: ['portfolio.overview_and_history', 'portfolio.risk_evidence'], optional: []},
         'broker.review': {required: ['broker.overview_and_history'], optional: []},
         'broker.performance_market_drivers': {required: ['broker.overview_and_history'], optional: []},
         'broker.fiscal_lots': {required: ['broker.overview_and_history', 'broker.fifo'], optional: []},

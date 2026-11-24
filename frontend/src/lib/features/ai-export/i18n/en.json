@@ -187,6 +187,10 @@
         "all_data": {
           "display": "All Portfolio Data",
           "description": "Deduplicated union of every applicable portfolio dataset."
+        },
+        "risk_evidence": {
+          "display": "Portfolio Risk Evidence",
+          "description": "Deterministic risk measures on today's holdings, over a window of up to 12 months that does not depend on the AI period: where risk is concentrated, the loss of a bad month, and the pairs of holdings that move together, with the measured window, coverage and exclusions."
         }
       },
       "broker": {

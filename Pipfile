@@ -60,6 +60,7 @@ uvicorn = {extras = ["standard"], version = "==0.52.4"}
 cryptography = "*"
 pyrage = "==1.4.0"
 coingecko-sdk = "==5.1.0"
+lxml = "*"
 
 [dev-packages]
 pytest = "*"

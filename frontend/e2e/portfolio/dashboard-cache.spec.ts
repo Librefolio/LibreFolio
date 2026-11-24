@@ -61,7 +61,7 @@ type ReportBody = {
     target_currency?: string;
     date_range?: {start?: string; end?: string};
 };
-type RiskBody = {mode?: string; scope?: {kind?: string; broker_ids?: number[]}};
+type RiskBody = {mode?: string; scope?: {kind?: string; broker_ids?: number[]; apply_ownership_share?: boolean}};
 type LotsBody = {asset_id?: number; broker_ids?: number[]; target_currency?: string; requested_analyses?: string[]; selected_lot_ids?: number[]};
 type BrokerListItem = {id: number; name: string; user_role?: string | null; user_share_percentage?: string | number | null};
 
@@ -360,6 +360,15 @@ function ownedScopeViolations(bodies: readonly RiskBody[], readings: readonly (r
         .map((body) => JSON.stringify(body.scope ?? null));
 }
 
+/**
+ * Every risk body that is not a portfolio question over exactly `brokerIds` at the owner's share (RSK-F): the Dashboard
+ * filtered to one broker still counts the user's share of it, as its report does — only a broker's own page counts it whole.
+ */
+function filteredScopeViolations(bodies: readonly RiskBody[], brokerIds: readonly number[]): string[] {
+    const wanted = canonical({broker_ids: [...brokerIds]});
+    return bodies.filter((body) => body.scope?.kind !== 'portfolio' || !Array.isArray(body.scope.broker_ids) || canonical({broker_ids: body.scope.broker_ids}) !== wanted || body.scope.apply_ownership_share === false).map((body) => JSON.stringify(body.scope ?? null));
+}
+
 test.describe('Dashboard page cache (R2 / N, phase 1)', () => {
     test('a return with nothing changed asks nothing again, and the KPI shows its value at once', async ({page}) => {
         test.setTimeout(120_000);
@@ -571,13 +580,14 @@ test.describe('Dashboard page cache (R2 / N, phase 1)', () => {
     /**
      * The risk scope, decided on 07/10 («Solo i broker posseduti, come il resto della Dashboard»): the Risk tab asks over
      * every broker the user owns, as the rest of the Dashboard does, and never with no `broker_ids`, which the backend
-     * widens to every broker the user can see, viewer and editor ones included. All of them whatever the broker filter:
-     * the filter narrows the report, while the risk stays the whole portfolio, as the panel's subtitle says.
+     * widens to every broker the user can see, viewer and editor ones included. A broker filter narrows it as it narrows
+     * every other tab (RSK-F, the developer, 24/11/2026: «i filtri se ci sono vanno rispettati»): the risk is then asked
+     * over the filtered brokers alone, once the report of that filter is on screen, and the panel says it reads a subset.
      *
      * A document load starts with every store empty, so the panel may ask only once the owned brokers are known. The
      * owned set is read before that load and again once the page has asked (`ownedScopeViolations` says why both).
      */
-    test('the Risk tab asks for exactly the brokers the user owns: on a cold load, and still all of them with a broker filter on', async ({page}) => {
+    test('the Risk tab asks for exactly the brokers the user owns on a cold load, and for the filtered broker alone with a broker filter on', async ({page}) => {
         test.setTimeout(120_000);
         const traffic = recordTraffic(page);
         await stubLivePrice(page);
@@ -595,7 +605,7 @@ test.describe('Dashboard page cache (R2 / N, phase 1)', () => {
             const panel = await riskSettled(page);
             expect(ownedScopeViolations(traffic.riskQueries, readings), `on a cold load, a risk question is not over exactly the brokers the user owns (owned: ${ownedText()})`).toEqual([]);
 
-            // A broker filter on one owned broker: the report follows it…
+            // A broker filter on one owned broker: the report follows it, and the risk with it.
             await expect(panel.getByTestId('risk-levels-title')).toBeVisible();
             await expect(panel.getByTestId('risk-scope-label'), 'precondition: no broker filter is on yet').toHaveCount(0);
             const beforeFilter = mark(traffic);
@@ -610,19 +620,25 @@ test.describe('Dashboard page cache (R2 / N, phase 1)', () => {
                     timeout: PAGE_TIMEOUT,
                 })
                 .toBe(true);
+            await expect
+                .poll(() => traffic.riskQueries.slice(beforeFilter.riskQueries).some((body) => canonical({broker_ids: body.scope?.broker_ids ?? []}) === canonical({broker_ids: [brokerId]})), {
+                    message: 'the broker filter never asked its risk (one broker)',
+                    timeout: PAGE_TIMEOUT,
+                })
+                .toBe(true);
             await waitForSettled(dashboard(page), PAGE_TIMEOUT);
-            await expect(panel.getByTestId('risk-scope-label'), 'with the filter on, the risk panel does not say it still reads the whole portfolio').toBeVisible();
+            await riskSettled(page);
+            await expect(panel.getByTestId('risk-scope-label'), 'with the filter on, the risk panel does not say it reads a subset of the brokers').toBeVisible();
 
-            // …and «Aggiorna» asks the risk again, still over every broker the user owns. The page's Refresh waits for
-            // that question too: idle again, it has landed — the panel's own `data-busy` covers only its first load.
+            // «Aggiorna» asks the risk again, still over the filtered broker alone. The page's Refresh waits for that
+            // question too: idle again, it has landed — the panel's own `data-busy` covers only its first load.
             const before = await pressRefresh(page, traffic);
             await expect.poll(() => traffic.riskQueries.length - before.riskQueries, {message: '«Aggiorna» on the Risk tab asked no risk', timeout: PAGE_TIMEOUT}).toBeGreaterThan(0);
             await expect(pageRefresh(page), 'the risk asked again by «Aggiorna» never landed').toHaveAttribute('data-busy', 'false', {timeout: PAGE_TIMEOUT});
             await riskSettled(page);
             await waitForSettled(dashboard(page), PAGE_TIMEOUT);
-            readings.push(await ownedBrokerIds(page));
-            // Every question since the filter went on, the refresh's among them: the filter must not narrow the risk either.
-            expect(ownedScopeViolations(traffic.riskQueries.slice(beforeFilter.riskQueries), readings), `with a broker filter on, a risk question is not over every broker the user owns (owned: ${ownedText()})`).toEqual([]);
+            // Every question since the filter went on, the refresh's among them: none over the brokers the filter left out.
+            expect(filteredScopeViolations(traffic.riskQueries.slice(beforeFilter.riskQueries), [brokerId]), `with a broker filter on broker ${brokerId}, a risk question is not over that broker alone at the owner's share`).toEqual([]);
         } finally {
             await page.unrouteAll({behavior: 'ignoreErrors'});
         }

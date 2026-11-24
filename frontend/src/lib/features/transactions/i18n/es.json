@@ -195,7 +195,16 @@
       "chargesReadFailed": "No se pudieron leer los gastos vinculados de {ids}. «Restablecer fila» los vuelve a leer.",
       "deleteSkippedUnread": "{n, plural, one {# transacción no se eliminó: no se pudieron leer sus gastos vinculados. «Restablecer fila» los vuelve a leer.} other {# transacciones no se eliminaron: no se pudieron leer sus gastos vinculados. «Restablecer fila» los vuelve a leer.}}",
       "rowRef": "fila {n}",
-      "editPartnerInaccessible": "La transacción vinculada está en un bróker que no puedes ver, así que esta fila no se puede editar."
+      "editPartnerInaccessible": "La transacción vinculada está en un bróker que no puedes ver, así que esta fila no se puede editar.",
+      "rewardFill": {
+        "pending": "{n, plural, one {# recompensa no tiene valor: se puede rellenar desde el historial de precios del activo} other {# recompensas no tienen valor: se pueden rellenar desde el historial de precios de los activos}}",
+        "button": "Rellenar desde el historial de precios",
+        "running": "Leyendo precios…",
+        "result": "{filled, plural, one {# rellenada} other {# rellenadas}} con el cierre de su día, {noPrice, plural, one {# sin precio ese día} other {# sin precio ese día}}, {noHistory, plural, one {# activo sin historial de precios} other {# activos sin historial de precios}}. Los valores se pueden cambiar; las filas no rellenadas siguen esperando un valor.",
+        "failed": "No se pudieron leer los precios: no se rellenó ningún valor. Inténtalo de nuevo."
+      },
+      "cloneChargesReadFailed": "No se pudieron leer los gastos vinculados de {ids}: la copia se hizo sin ellos.",
+      "cloneChargeFree": "{reason, select, deleted {La copia del gasto no está vinculada: la transacción a la que estaba vinculado está marcada para eliminar.} paired {La copia del gasto no está vinculada: la transacción a la que estaba vinculado es parte de un par.} other {La copia del gasto no está vinculada: no se puede vincular a la misma transacción.}}"
     },
     "commit": {
       "serverError": "Guardado imposible — error del servidor"
