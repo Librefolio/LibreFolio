@@ -47,7 +47,7 @@ The fastest way to import data from an unsupported source is to **paste this ent
 | Column | Required | Description |
 |--------|----------|-------------|
 | **`date`** | ✅ Always | Transaction date. Accepts `2023-12-31`, `31/12/2023`, etc. |
-| **`type`** | ✅ Always | One of: `BUY`, `SELL`, `DIVIDEND`, `INTEREST`, `DEPOSIT`, `WITHDRAWAL`, `FEE`, `TAX`, `ADJUSTMENT` |
+| **`type`** | ✅ Always | One of: `BUY`, `SELL`, `DIVIDEND`, `INTEREST`, `DEPOSIT`, `WITHDRAWAL`, `FEE`, `TAX`, `ADJUSTMENT`, `REWARD` |
 | **`quantity`** | Depends on type | Number of units. See [Sign Conventions](#sign-conventions). |
 | **`amount`** | Depends on type | Net cash impact. See [Sign Conventions](#sign-conventions). |
 | **`currency`** | Optional | ISO 4217 code (`EUR`, `USD`). Defaults to `EUR`. |
@@ -85,6 +85,7 @@ The fastest way to import data from an unsupported source is to **paste this ent
 | `FEE` | none | `−` | Commission or fee paid |
 | `TAX` | none | `−` | Tax or withholding paid |
 | `ADJUSTMENT` | `+` or `−` | **must be empty** | Quantity-only correction (splits, gifts, inheritance seeding). **No cash movement.** |
+| `REWARD` | `+` | **must be empty** | Units received as a reward in kind (staking, airdrop), income at their value on receipt. Also read as `reward`, `rewards`, `staking`, `staking reward`, `staking_reward`, `airdrop`, `premio`. **No cash movement.** The file has no value column, so every row gets a blocking todo (`reward_value`): the user types the value of one unit on the day it was received. |
 
 ---
 
