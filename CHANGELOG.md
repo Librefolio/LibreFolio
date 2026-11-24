@@ -155,6 +155,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Asset profile**: a value that was there before the profile existed now reads «System» in the latest changes, and an asset's free identifiers appear as one row of chips under «Other identifiers».
 - **The Docker image is about 22 MB lighter**: the 30 default avatars are WebP in the image (2.6 MB instead of 24.7 MB), and so are the copies a new instance seeds into its data folder. Instances already started keep the avatars they have.
 - **The documentation site is much lighter**: its pages no longer carry the theme's indentation; the developer manual, English only, is no longer copied into Italian, French and Spanish (the old addresses lead to the English page, and the language selector says the manual is in English); each page no longer carries the whole menu, which it reads once per language from one file. The site's HTML goes from 387 MB to about 55 MB; the pages look and work the same, and the menu file is downloaded once per release.
+- **Dashboard › Risk follows the broker filter**, like the other tabs: with a filter on, the risk is the one of the brokers it keeps, at your share, and the panel says it reads a subset. Before, it always covered every broker you own.
 
 #### 🎯 PAC allocator and Tools
 
@@ -216,6 +217,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Assets table: the last-price and Δ columns are wide enough for their figures, so a long price or a French «+423,30 %» no longer runs into the next column.
 - FX › «Add Pair»: the «Providers» legend now shows each provider's icon, as the routes below it do.
 - **Image previews keep the format of the file**: the thumbnails of uploaded JPEG, WebP and GIF files were always sent as PNG, several times heavier for a photo; they now come in their own format.
+- A dividend or interest paid and spent on a purchase the same day (for example a broker's automatic reinvestment) now counts as reinvested returns, not as new capital, in the Growth chart's purchases and in the split of your cash between money you deposited and money the portfolio generated. Net worth, P&L and income do not change.
 
 ### ⚠️ Breaking changes
 

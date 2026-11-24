@@ -155,6 +155,7 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 - **Profil de l'actif** : une valeur présente avant le profil s'affiche maintenant « Système » dans les dernières modifications, et les identifiants libres d'un actif forment une ligne d'étiquettes sous « Autres identifiants ».
 - **L'image Docker est plus légère d'environ 22 Mo** : les 30 avatars par défaut sont en WebP dans l'image (2,6 Mo au lieu de 24,7 Mo), tout comme les copies qu'une nouvelle instance place dans son dossier de données. Les instances déjà démarrées gardent leurs avatars.
 - **Le site de la documentation est bien plus léger** : les pages ne portent plus l'indentation du thème ; le manuel développeur, en anglais seulement, n'est plus copié en italien, en français et en espagnol (les anciennes adresses mènent à la page anglaise, et le sélecteur de langue indique que le manuel est en anglais) ; chaque page ne porte plus le menu entier, qu'elle lit une fois par langue dans un seul fichier. Le HTML du site passe de 387 Mo à environ 55 Mo ; les pages s'affichent et fonctionnent comme avant, et le fichier du menu se télécharge une fois par version.
+- **Tableau de bord › Risque suit le filtre des courtiers**, comme les autres onglets : avec un filtre actif, le risque est celui des courtiers conservés, pour votre part, et le panneau indique qu'il lit une partie. Avant, il couvrait toujours tous vos courtiers.
 
 #### 🎯 Allocateur PAC et Outils
 
@@ -216,6 +217,7 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 - Tableau des actifs : les colonnes du dernier prix et des Δ sont assez larges pour leurs chiffres ; un prix long ou un « +423,30 % » ne déborde plus sur la colonne voisine.
 - FX › « Ajouter Paire » : la légende « Fournisseurs » affiche maintenant l'icône de chaque fournisseur, comme les routes en dessous.
 - **Les aperçus d'images gardent le format du fichier** : les miniatures des fichiers JPEG, WebP et GIF envoyés partaient toujours en PNG, bien plus lourdes pour une photo ; elles arrivent maintenant dans leur propre format.
+- Un dividende ou un intérêt versé et dépensé dans un achat le même jour (par exemple le réinvestissement automatique d'un courtier) compte maintenant comme rendement réinvesti, et non comme capital nouveau, dans les achats du graphique de Croissance et dans la répartition de la trésorerie entre l'argent versé et l'argent généré par le portefeuille. Le patrimoine, le P&L et le revenu ne changent pas.
 
 ### ⚠️ Changements incompatibles
 

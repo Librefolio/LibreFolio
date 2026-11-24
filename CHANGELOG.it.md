@@ -155,6 +155,7 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 - **Profilo dell'asset**: un valore che c'era già prima del profilo ora compare come «Sistema» nelle ultime modifiche, e gli identificatori liberi di un asset sono una riga di etichette sotto «Altri identificatori».
 - **L'immagine Docker è più leggera di circa 22 MB**: i 30 avatar predefiniti nell'immagine sono in WebP (2,6 MB invece di 24,7 MB), e lo sono anche le copie che una nuova istanza mette nella sua cartella dati. Le istanze già avviate tengono gli avatar che hanno.
 - **Il sito della documentazione è molto più leggero**: le pagine non portano più l'indentazione del tema; il manuale per sviluppatori, solo in inglese, non viene più copiato in italiano, francese e spagnolo (i vecchi indirizzi portano alla pagina inglese, e il selettore della lingua dice che il manuale è in inglese); ogni pagina non porta più il menu intero, che legge una volta per lingua da un solo file. L'HTML del sito passa da 387 MB a circa 55 MB; le pagine si vedono e funzionano come prima, e il file del menu si scarica una volta per release.
+- **Dashboard › Rischio segue il filtro dei broker**, come le altre schede: con un filtro attivo il rischio è quello dei broker che restano, per la tua quota, e il pannello dice che legge una parte. Prima copriva sempre tutti i broker che possiedi.
 
 #### 🎯 Allocatore PAC e Strumenti
 
@@ -216,6 +217,7 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 - Tabella degli asset: le colonne dell'ultimo prezzo e delle Δ sono larghe abbastanza per le loro cifre, quindi un prezzo lungo o un «+423,30 %» in francese non finisce più nella colonna accanto.
 - FX › «Aggiungi Coppia»: la legenda «Provider» ora mostra l'icona di ogni provider, come le route sotto.
 - **Le anteprime delle immagini tengono il formato del file**: le miniature dei file JPEG, WebP e GIF caricati arrivavano sempre in PNG, molto più pesanti per una foto; ora arrivano nel loro formato.
+- Un dividendo o un interesse pagato e speso in un acquisto lo stesso giorno (per esempio il reinvestimento automatico di un broker) ora conta come rendimento reinvestito, non come capitale nuovo, negli acquisti del grafico della Crescita e nella divisione della liquidità fra soldi versati e soldi generati dal portafoglio. Patrimonio, P&L e reddito non cambiano.
 
 ### ⚠️ Modifiche incompatibili
 
