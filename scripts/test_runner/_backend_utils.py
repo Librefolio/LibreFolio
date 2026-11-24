@@ -258,6 +258,15 @@ def utils_gallery_webp(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "Gallery WebP tests", verbose=verbose)
 
 
+def utils_png_to_webp(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the Docker stage that turns the default avatars into WebP (lane 84)."""
+    print_section("Utils: PNG to WebP (Docker avatars stage)")
+    print_info("Testing: scripts/docker/png_to_webp.py")
+    print_info("Tests: PNG become WebP under the same names and are deleted, a broken PNG / empty or missing folder fails the build, alpha kept, run as a script")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_png_to_webp.py", test_names)
+    return run_command(cmd, "PNG to WebP tests", verbose=verbose)
+
+
 def utils_docs_mermaid_colours(verbose: bool = False, test_names: list = None) -> bool:
     """Test that a Mermaid node with its own fill also sets its text colour (E9C)."""
     print_section("Utils: Docs Mermaid Colours")
@@ -770,6 +779,15 @@ Tests for utility modules and helper functions:
         name="Gallery WebP",
         desc="scripts/gallery_webp.py: the gallery's PNGs get a WebP beside them (quality 85, alpha kept); only a PNG with no WebP or newer than it is converted, a second run does nothing, a broken PNG is reported and stops nothing and leaves no WebP; dev.py counts it as a failure of the gallery",
         # Throwaway PNG trees in tmp_path, Pillow only: no DB, no server, no network, no repo writes.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "png-to-webp",
+        utils_png_to_webp,
+        name="PNG to WebP (Docker avatars)",
+        desc="scripts/docker/png_to_webp.py, run by the avatars-webp stage of the Dockerfile: the default avatars become WebP (quality 85) under the same names and the PNG are deleted so none reaches the image; a broken PNG, an empty folder or a missing folder fails the build; the repository keeps the full-size PNG",
+        # Throwaway PNG folders in tmp_path, Pillow only: no DB, no server, no network, no repo writes.
         isolation="pure",
     )
     add_test(

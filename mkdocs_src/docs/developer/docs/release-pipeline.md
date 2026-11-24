@@ -295,7 +295,7 @@ A set is therefore regenerated only when one of its outputs is missing, or when 
 `pipenv requirements > requirements.txt` generates the requirements the `Dockerfile` installs. The job then sets up QEMU and Buildx, and logs in to GHCR with the workflow's `GITHUB_TOKEN`. Two `docker/metadata-action` steps compute the tags, and two `docker/build-push-action` steps build `ghcr.io/librefolio/librefolio` from the repository root and push it, sharing the GitHub Actions layer cache (`type=gha`, `mode=max`). The light variant is built and pushed first:
 
 1. **Light variant** — the build with `DOCS_VARIANT=light`: the `Dockerfile`'s `docs-light` stage deletes the documentation images before they reach the final image.
-2. **Full variant** — the default `Dockerfile` build, with the documentation screenshots as WebP (the `docs-full` stage deletes the PNGs).
+2. **Full variant** — the default `Dockerfile` build, with the documentation screenshots as WebP (the `docs-full` stage deletes the PNGs). Both variants carry the 30 default avatars as WebP too (the `avatars-webp` and `backend-src` stages: no PNG of `backend/staticResources/Avatars/` reaches the image).
 
 The order serves the in-app update prompt, which checks the plain `X.Y.Z` tag, the full variant's (see [Release Tag Convention](#release-tag-convention)). Pushed last, that tag appears only once `X.Y.Z-light` and `latest` exist. If the light build fails, the full build does not run (an `if:` without a status function implies `success()`), so `X.Y.Z` is never pushed and no one is prompted.
 
