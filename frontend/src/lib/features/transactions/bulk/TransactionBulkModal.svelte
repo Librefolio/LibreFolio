@@ -114,6 +114,8 @@
         cloneChargeLink,
         cloneChargesUnder,
         wireClonedRows,
+        bulkChargeCandidates,
+        type BulkChargeProbe,
     } from './bulkCharges';
     import {SPLIT_TYPE_MAP, splitHalfType, postSplitType, splitTypeToSend} from './splitTypes';
     import {txRowRef} from '../chargeLinkRules';
@@ -1084,6 +1086,24 @@
     function bulkRowRef(op: PendingOp): string {
         const id = opTxId(op) ?? null;
         return txRowRef(id, id === null ? (visualRowLabels.get(op.tempId) ?? null) : null, $t);
+    }
+
+    /**
+     * 66 TL-2: the Bulk's rows the charges picker of the open Form may offer, read on the Bulk's state by the selection's
+     * «Link» rule (`bulkChargeCandidates`; the parent is the row the Form edits, or none while it creates it). Each is a
+     * mirror as the panels show it, free: a saved one keeps its id, a new one gets a negative one and its key
+     * (`_bulkKey`), and both their name (`_rowRef`). The parent picker reads the database only, as before.
+     */
+    function formBulkCandidates(mode: 'charges' | 'parent', probe: BulkChargeProbe): {rows: TXReadItem[]; exclude: number[]} | null {
+        if (mode !== 'charges') return null;
+        const parent = formEditingTempId !== null ? (ops.find((d) => d.tempId === formEditingTempId) ?? null) : null;
+        const {candidates, excluded} = bulkChargeCandidates(parent, probe, ops, txStoreGet, {roleOf: (type) => getTypeRule(type).chargeRole, canEdit: (brokerId) => canEditBroker(brokerId)}, (op) => postSplitType(op, pendingSplits));
+        let synthetic = 0;
+        const rows = candidates.map((op): TXReadItem => {
+            const id = op.op === 'edit' ? op.txId : -++synthetic;
+            return {...panelItem(op), id, parent_transaction_id: null, related_transaction_id: null, _rowRef: bulkRowRef(op), ...(op.op === 'create' ? {_bulkKey: `op-${op.tempId}`} : {})} as TXReadItem;
+        });
+        return {rows, exclude: excluded};
     }
 
     /** A row as the panel shows it: the editor's values, signed as the ledger holds them. */
@@ -4593,6 +4613,7 @@
     openKey={formKey}
     getBulkContext={() => getBulkContextExcluding(formEditingTempId)}
     allowChargeEdits={formChargeEdits}
+    bulkCandidates={formBulkCandidates}
     getWacResult={(tempId) => {
         // Direct lookup (standalone ADJUSTMENT)
         const direct = wacResults.get(tempId);
