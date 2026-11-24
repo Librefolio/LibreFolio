@@ -7,6 +7,7 @@ import {
     AI_EXPORT_ANSWER_FOCUS_INSTRUCTIONS,
     AI_EXPORT_DATA_RECEIVED_KEY,
     AI_EXPORT_DOMAIN_NOTES,
+    AI_EXPORT_EXPORT_SCOPE_INSTRUCTIONS,
     AI_EXPORT_GROUND_RULES,
     AI_EXPORT_HOW_TO_ANSWER,
     AI_EXPORT_SHARED_VERIFICATION_INSTRUCTIONS,
@@ -60,6 +61,7 @@ export interface RenderedAiExportPrompt {
 }
 
 export type AiExportPromptSectionId =
+    | 'export_scope'
     | 'analysis_objective'
     | 'shared_verification_instructions'
     | 'response_contract'
@@ -386,6 +388,30 @@ function renderUserQuestion(question: string): string {
     return `${heading}${AI_EXPORT_USER_QUESTION_INTRO}\n\n${fenced.slice(heading.length)}`;
 }
 
+/**
+ * «Export Scope» (78 L10): a filtered Portfolio export that leaves out a broker the user owns says so at the top of the
+ * prompt. The fixed sentence is local; the included and the excluded brokers' names (the user's own text, D12 (b)) come
+ * from the snapshot and are serialized safely under it. Null when the snapshot carries no scope fact: the prompt is then exactly
+ * what it was before L10.
+ */
+function renderExportScope(snapshot: AiExportSnapshotResponse): string | null {
+    const scope = snapshot.export_scope;
+    if (scope === null || scope === undefined) return null;
+    const includedBrokers = scope.included_broker_ids.map((brokerId) => {
+        const entry = snapshot.entity_directory.brokers.find((broker) => broker.broker_id === brokerId);
+        if (!entry) throw new AiExportPromptRenderError('incompatible_snapshot', `Entity directory does not resolve broker ${brokerId}`);
+        return entry.display_name;
+    });
+    const heading = '## Export Scope\n\n';
+    const fenced = renderFencedSection({
+        heading: 'Export Scope',
+        language: 'yaml',
+        // Two safe serializations, included first as the sentence reads them: one serializeYaml sorts its keys
+        content: serializeYaml({included_brokers: includedBrokers}) + serializeYaml({excluded_brokers: scope.excluded_brokers.map((broker) => broker.display_name)}),
+    });
+    return `${heading}${AI_EXPORT_EXPORT_SCOPE_INSTRUCTIONS}\n\n${fenced.slice(heading.length)}`;
+}
+
 function renderUserNotes(notes: string): string {
     return renderFencedSection({
         heading: 'User Notes',
@@ -434,6 +460,9 @@ function buildAiExportPrompt(input: RenderAiExportPromptInput, diagnostics: bool
     }
 
     const sections: PromptSectionSource[] = [];
+    // 78 L10: a filtered Portfolio export opens every prompt, analysis or Export Data, with the brokers it covers
+    const exportScope = renderExportScope(input.snapshot);
+    if (exportScope !== null) sections.push({id: 'export_scope', content: exportScope});
     const snapshotMetadata = renderSnapshotMetadata(input.snapshot, diagnostics);
     const snapshotData = renderSnapshotData(input.snapshot, diagnostics);
     if (input.selection.kind === 'analysis') {
