@@ -13,6 +13,7 @@ These operate independently on a single broker account.
 | ![](../../../static/icons/transactions/dividend.png){: width="32" } ![](../../../static/icons/transactions/interest.png){: width="32" } | **Dividend / Interest** | `DIVIDEND` / `INTEREST` | Yield received from equity or fixed-income assets. | ⬆️ | — | [📖](dividend-interest.md) |
 | ![](../../../static/icons/transactions/fee.png){: width="32" } ![](../../../static/icons/transactions/tax.png){: width="32" } | **Fee / Tax** | `FEE` / `TAX` | Costs associated with trades, account maintenance, or taxes. | ⬇️ | — | [📖](fee.md) |
 | ![](../../../static/icons/transactions/adjustment.png){: width="32" } | **Adjustment** | `ADJUSTMENT` | Manual correction to balances. | ± | ± | [📖](adjustment.md) |
+| ![](../../../static/icons/transactions/reward.png){: width="32" } | **Reward** | `REWARD` | Units received in kind (staking, airdrop, free share): income at their value on receipt. | — | ⬆️ | [📖](reward.md) |
 
 ## 🔀 Composite Transactions
 
