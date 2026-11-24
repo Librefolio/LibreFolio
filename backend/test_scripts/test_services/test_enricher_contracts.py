@@ -61,6 +61,7 @@ from backend.app.services.enrichers.base import (
     RATE_LIMITED,
     EnricherBinding,
     EnricherPlugin,
+    EnricherRateLimited,
     EnricherReadItem,
     EnricherReadStatus,
     EnricherRecognition,
@@ -68,6 +69,7 @@ from backend.app.services.enrichers.base import (
 )
 from backend.app.services.enrichers.registry import EnricherDeclarationError, EnricherRegistry
 from backend.app.services.plugin_settings.fields import release_env_variables
+from backend.app.utils.runtime.cooldown import RateLimitedError
 from backend.test_scripts.test_utils import print_section, print_success
 
 TEST_MODE_VARIABLE = "LIBREFOLIO_TEST_MODE"
@@ -429,6 +431,13 @@ def test_mockenrich_reads_one_item_per_binding_in_order_with_its_outcome(monkeyp
     assert (items[3].error_code, items[3].retry_after) == (RATE_LIMITED, module.RATE_LIMITED_RETRY_AFTER)
     assert list(mock.read([])) == []
     print_success("OK, NOT_FOUND, ERROR, RATE_LIMITED with its retry_after, in order")
+
+
+def test_enricher_rate_limited_is_the_cores_refusal_marker():
+    """ENR-3b: a search that is refused raises ``EnricherRateLimited``, a ``RateLimitedError`` the route turns into a 429."""
+    assert issubclass(EnricherRateLimited, RateLimitedError)
+    assert EnricherRateLimited("refused", retry_after=7.5).retry_after == 7.5
+    assert EnricherRateLimited("refused").retry_after is None, "the source named no wait"
 
 
 def test_mockenrich_has_a_page_and_does_not_search(monkeypatch):
