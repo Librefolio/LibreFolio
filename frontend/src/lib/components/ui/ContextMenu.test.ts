@@ -10,9 +10,10 @@
  *
  * Registered in `front_component_unit` (`scripts/test_runner/_frontend_utility.py`, action `component-unit`).
  */
-import {afterEach, describe, expect, it, vi} from 'vitest';
+import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import {cleanup, fireEvent, render, screen, waitFor} from '$test/component';
 import ContextMenu, {type ContextMenuItem} from './ContextMenu.svelte';
+import {fingerMenuPosition} from './contextMenuPlacement';
 
 afterEach(() => {
     cleanup();
@@ -136,5 +137,65 @@ describe('ContextMenu — the keyboard of a WAI-ARIA menu (77 SEL-M)', () => {
         await fireEvent.keyDown(screen.getByTestId('context-menu'), {key: 'Tab'});
         expect(onClose).toHaveBeenCalled();
         expect(button).toHaveFocus();
+    });
+});
+
+/**
+ * Where the menu opens (85 BTN-0): `origin="pointer"` (the default, a mouse) keeps the classic placement and publishes
+ * no `data-placement`; `origin="finger"` (a long press) goes to the left of the finger and above it, placed by
+ * `fingerMenuPosition`, and publishes where it went. jsdom has no layout: the menu's box and the viewport are given.
+ */
+describe('ContextMenu — the origin of the menu (85 BTN-0)', () => {
+    const VIEWPORT = {width: 430, height: 932};
+    const MENU_BOX = {width: 200, height: 150};
+    let saved: {width: number; height: number};
+
+    beforeEach(() => {
+        saved = {width: window.innerWidth, height: window.innerHeight};
+        Object.defineProperty(window, 'innerWidth', {value: VIEWPORT.width, configurable: true, writable: true});
+        Object.defineProperty(window, 'innerHeight', {value: VIEWPORT.height, configurable: true, writable: true});
+        vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+            const box = this.dataset.testid === 'context-menu' ? MENU_BOX : {width: 0, height: 0};
+            return {x: 0, y: 0, left: 0, top: 0, right: box.width, bottom: box.height, width: box.width, height: box.height, toJSON: () => ({})} as DOMRect;
+        });
+    });
+
+    afterEach(() => {
+        vi.restoreAllMocks();
+        Object.defineProperty(window, 'innerWidth', {value: saved.width, configurable: true, writable: true});
+        Object.defineProperty(window, 'innerHeight', {value: saved.height, configurable: true, writable: true});
+    });
+
+    function openAt(x: number, y: number, origin?: 'pointer' | 'finger') {
+        render(ContextMenu, {props: {x, y, items: ITEMS, onAction: vi.fn(), onClose: vi.fn(), ...(origin ? {origin} : {})}});
+        return screen.getByTestId('context-menu');
+    }
+
+    it('by default it is a pointer’s: data-origin="pointer", no data-placement, its top-left at the point', () => {
+        const menu = openAt(100, 200);
+        expect(menu).toHaveAttribute('data-origin', 'pointer');
+        expect(menu.hasAttribute('data-placement')).toBe(false);
+        expect(menu.style.left).toBe('100px');
+        expect(menu.style.top).toBe('200px');
+    });
+
+    it('origin="finger": data-origin="finger", data-placement, and the left/top of fingerMenuPosition', () => {
+        const menu = openAt(400, 600, 'finger');
+        const expected = fingerMenuPosition({x: 400, y: 600}, MENU_BOX, VIEWPORT);
+        // Barrier: the case is the left-above one, so a menu drawn at the point would fail below.
+        expect(expected).toEqual({left: 188, top: 438, horizontal: 'left', vertical: 'above'});
+        expect(menu).toHaveAttribute('data-origin', 'finger');
+        expect(menu).toHaveAttribute('data-placement', 'left-above');
+        expect(menu.style.left).toBe(`${expected.left}px`);
+        expect(menu.style.top).toBe(`${expected.top}px`);
+    });
+
+    it('origin="finger" near the top-left corner: centred and below', () => {
+        const menu = openAt(60, 40, 'finger');
+        const expected = fingerMenuPosition({x: 60, y: 40}, MENU_BOX, VIEWPORT);
+        expect(menu).toHaveAttribute('data-placement', `${expected.horizontal}-${expected.vertical}`);
+        expect(menu).toHaveAttribute('data-placement', 'centre-below');
+        expect(menu.style.left).toBe(`${expected.left}px`);
+        expect(menu.style.top).toBe(`${expected.top}px`);
     });
 });
