@@ -26,7 +26,7 @@ Use these transactions when cash arrives in your broker account as yield from an
 - **Dividend**: Income from equity (stocks, distributing ETFs).
 - **Interest**: Income from fixed-income instruments (bonds, savings accounts, P2P loans, crowdfunding).
 
-*Do not use these for return of principal (e.g., bond maturity settlement).*
+*Do not use these for return of principal (e.g., bond maturity settlement).* A yield paid in **units of an asset** instead of cash (staking, an airdrop) is a [Reward](reward.md).
 
 ---
 

@@ -1219,6 +1219,7 @@ nav:
                   - Dividend & Interest: financial-theory/instruments/transaction-types/dividend-interest.md
                   - Fee & Tax: financial-theory/instruments/transaction-types/fee.md
                   - Adjustment: financial-theory/instruments/transaction-types/adjustment.md
+                  - Reward: financial-theory/instruments/transaction-types/reward.md
               - 🔢 Composite:
                   - Asset Transfer: financial-theory/instruments/transaction-types/transfer.md
                   - Cash Transfer: financial-theory/instruments/transaction-types/cash-transfer.md
