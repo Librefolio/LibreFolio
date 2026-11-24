@@ -12,7 +12,11 @@ What it gives:
   the issuer's country for a state, minimum lot, outstanding amount (in the denomination currency), reference price
   date, payout description, its country and sector, and the legal form. Not the first day of trading: a venue's first
   trading day is not a launch date (a BTP listed years after it was issued);
-- **a share**: its sector and the legal form.
+- **a share**: its sector and the legal form from the sheet; with a library that has ``ottieni_profilo_societa``, also
+  the company's description (in the binding's language) and its country (the registered office's) from the «Profilo
+  Società» page, both dated by the page's last update (lot BI-PROF). That page is read only when one of its voices is
+  asked, with the MIC of the binding or of the sheet's canonical URL (one request more per share); a share without it
+  keeps the sheet's voices.
 
 The page comes in the binding's language (``language``, ``en`` or ``it``, as the price provider's): the texts
 (frequency, structure, issuer type) are translated from either. A text the plugin does not know leaves its voice empty,
@@ -50,6 +54,7 @@ from backend.app.services.enrichers.base import (
 from backend.app.services.enrichers.registry import EnricherRegistry
 from backend.app.services.financial_math.interest import annual_coupon_rate
 from backend.app.services.platform.provider_registry import register_provider
+from backend.app.utils.asset.geo import normalize_country_to_iso3
 from backend.app.utils.asset.sector import validate_sector
 from backend.app.utils.runtime.pacing import Pacer
 
@@ -70,6 +75,12 @@ except ImportError:  # pragma: no cover — the library is in the lock; without 
 
     class StrumentoNonTrovato(Exception):  # type: ignore[no-redef]
         """Stand-in when the library is missing."""
+
+
+try:
+    from borsa_italiana_scraping import ottieni_profilo_societa
+except ImportError:  # a library older than the company profile (lot BI-PROF): a share keeps the sheet's voices only
+    ottieni_profilo_societa = None
 
 
 logger = get_logger(__name__)
@@ -111,7 +122,9 @@ _BOND_VOICES = frozenset(
         "legal_form",
     }
 )
-_STOCK_VOICES = frozenset({"sector", "legal_form"})
+#: The voices of the company profile page (lot BI-PROF), declared only with a library that reads it.
+_PROFILE_VOICES = frozenset({"description", "issuer_country"})
+_STOCK_VOICES = frozenset({"sector", "legal_form"}) | (_PROFILE_VOICES if ottieni_profilo_societa is not None else frozenset())
 #: A fund page gives little that is the profile's: its currency, its launch date and its management fee («Gestione», C2e:
 #: only a part of the TER, so ``management_fee`` and never ``ter``). Not written: the fund's assets (no unit), the
 #: management company (not on the recorded page).
@@ -184,6 +197,8 @@ _STATE_ISSUERS = {
     "united kingdom": "GBR",
 }
 _SHEET_ASSET_TYPES = {"obbligazione": AssetType.BOND, "azione": AssetType.STOCK}
+#: The MIC in a sheet's canonical URL: ``…/borsa/azioni/scheda/IT0003128367-MTAA.html``.
+_MIC_IN_URL = re.compile(r"/([A-Z0-9]{12})-([A-Z0-9]{4})\.html(?:$|[?#])", re.IGNORECASE)
 
 # The composed description of a bond (plan I19; wording approved by the consultant): stable facts only, never a price,
 # a yield or the annual coupon, which change and would write a new description at every read.
@@ -349,6 +364,38 @@ def _share_sector(sheet: Any) -> str | None:
     return sector if sector is None or validate_sector(sector) else None
 
 
+def profile_voices(profile: Any) -> dict[str, Any]:
+    """The voices of a company profile page: its description, and its country (the registered office's, as an ISO 3166
+    alpha-3 code through the generic helper; a name the helper does not know leaves it out with one log line)."""
+    voices: dict[str, Any] = {}
+    description = _text(profile.descrizione)
+    if description is not None:
+        voices["description"] = description
+    address = profile.indirizzo
+    country = _text(address.paese) if address is not None else None
+    if country is not None:
+        try:
+            voices["issuer_country"] = normalize_country_to_iso3(country)
+        except ValueError:  # parsing probe: a country name the helper does not know
+            logger.warning("Borsa Italiana country not translated, voice left out", field="issuer_country", value=country, isin=str(profile.isin))
+    return voices
+
+
+def profile_source_dates(profile: Any, voices: Mapping[str, Any]) -> dict[str, date]:
+    """The page's last update on the voices it gave."""
+    day = profile.ultimo_aggiornamento
+    return dict.fromkeys(voices, day) if day is not None else {}
+
+
+def _sheet_mic(binding: EnricherBinding, sheet: Any) -> str | None:
+    """The market of a share: the binding's ``mic``, else the one in the sheet's canonical URL."""
+    mic = _text(binding.params.get("mic"))
+    if mic is not None:
+        return mic.upper()
+    match = _MIC_IN_URL.search(_text(sheet.url_pagina) or "")
+    return match.group(2).upper() if match is not None else None
+
+
 def _launch_date(value: Any) -> date | None:
     """«14/03/22» → 2022-03-14 (a two-digit year in this century up to this year, else the last), «14/03/2022» too."""
     match = _SHORT_DATE.fullmatch(_text(value) or "")
@@ -480,6 +527,11 @@ class BorsaItalianaEnricher(EnricherPlugin):
         _PACER.wait()
         return ottieni_dati_fondo(code, sessione=session)
 
+    @staticmethod
+    def _profile(binding: EnricherBinding, sheet: Any, session: Any = None) -> Any:
+        _PACER.wait()
+        return ottieni_profilo_societa(str(sheet.isin or binding.identifier), _sheet_mic(binding, sheet), _language(binding), sessione=session)
+
     def recognize(self, binding: EnricherBinding) -> EnricherRecognition:
         code = _fund_code(binding)
         if code is not None:
@@ -510,12 +562,12 @@ class BorsaItalianaEnricher(EnricherPlugin):
         # whatever ends the read (a failure, or the consumer stopping it early)
         session = Sessione() if Sessione is not None else None
         try:
-            yield from self._read_with(session, bindings)
+            yield from self._read_with(session, bindings, None if keys is None else frozenset(keys))
         finally:
             if session is not None:
                 session.chiudi()
 
-    def _read_with(self, session: Any, bindings: list[EnricherBinding]) -> Iterator[EnricherReadItem]:
+    def _read_with(self, session: Any, bindings: list[EnricherBinding], keys: frozenset[str] | None) -> Iterator[EnricherReadItem]:  # noqa: C901 — one flat loop: the outcome of each binding
         refused = False
         for index, binding in enumerate(bindings):
             code = _fund_code(binding)
@@ -548,7 +600,25 @@ class BorsaItalianaEnricher(EnricherPlugin):
                 yield EnricherReadItem(index=index, status=EnricherReadStatus.ERROR, error_code=SOURCE_ERROR, error_message=type(error).__name__)
                 continue
             values = sheet_voices(sheet, _language(binding))
-            yield EnricherReadItem(index=index, status=EnricherReadStatus.OK, values=values, source_dates=sheet_source_dates(sheet, values))
+            dates = sheet_source_dates(sheet, values)
+            if _text(sheet.tipo) == "azione" and ottieni_profilo_societa is not None and (keys is None or keys & _PROFILE_VOICES):
+                try:
+                    profile = self._profile(binding, sheet, session)
+                except StrumentoNonTrovato:  # «not resolved» too: no profile page for this share, the sheet's voices stay
+                    profile = None
+                except RateLimitRaggiunto as error:
+                    refused = True
+                    logger.warning("Borsa Italiana refused for too many requests", isin=binding.identifier, error=str(error))
+                    yield EnricherReadItem(index=index, status=EnricherReadStatus.ERROR, error_code=RATE_LIMITED)
+                    continue
+                except Exception as error:  # noqa: BLE001 — isolation boundary: a failing profile leaves the sheet's voices
+                    logger.warning("Borsa Italiana company profile failed", isin=binding.identifier, exc_info=error)
+                    profile = None
+                if profile is not None:
+                    extra = profile_voices(profile)
+                    values = {**values, **extra}
+                    dates = {**dates, **profile_source_dates(profile, extra)}
+            yield EnricherReadItem(index=index, status=EnricherReadStatus.OK, values=values, source_dates=dates)
 
     def search(self, query: str) -> list[EnricherSearchResult]:
         if cerca is None:
