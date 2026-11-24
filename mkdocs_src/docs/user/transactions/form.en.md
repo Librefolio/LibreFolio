@@ -146,6 +146,7 @@ The [Financial Theory guide](../../financial-theory/instruments/transaction-type
 | ![](../../static/icons/transactions/fee.png){: width="24" style="vertical-align: middle;" } **Fee** | A commission or another cost, optionally tied to an asset | [📖 Read](../../financial-theory/instruments/transaction-types/fee.md) |
 | ![](../../static/icons/transactions/tax.png){: width="24" style="vertical-align: middle;" } **Tax** | A tax paid, optionally tied to an asset | [📖 Read](../../financial-theory/instruments/transaction-types/fee.md) |
 | ![](../../static/icons/transactions/adjustment.png){: width="24" style="vertical-align: middle;" } **Adjustment** | Units added or removed without cash: a split, a gift, a position opened elsewhere | [📖 Read](../../financial-theory/instruments/transaction-types/adjustment.md) |
+| ![](../../static/icons/transactions/reward.png){: width="24" style="vertical-align: middle;" } **Reward** | Units received in kind — staking, an airdrop, a free share — with their value on the day they arrived, which counts as income. The form suggests that value from the asset's price history (the close of that day, per unit); change it if the platform shows another | [📖 Read](../../financial-theory/instruments/transaction-types/reward.md) |
 
 ### 🔗 Paired transactions {: #composite-transactions }
 
