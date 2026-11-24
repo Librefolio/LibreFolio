@@ -44,7 +44,7 @@ An **enricher** is a source that reads an asset's profile from a website or a pu
 |---|---|
 | [justETF](../providers/justetf.md) | ETFs and ETCs: description, annual cost, fund size, countries, sectors, the fund's structure (index, management company, replication, income treatment, domicile, currency) |
 | [Yahoo Finance](../providers/yahoo-finance.md) | Shares: description, sector, industry, country, market capitalisation. Funds: description, annual cost, management company, inception date, sectors |
-| [Borsa Italiana](../providers/borsa-italiana.md) | Bonds: coupons, maturity, yields, modified duration, issuer, description, countries, sectors. Shares: sector. Funds: currency, inception date, management fee |
+| [Borsa Italiana](../providers/borsa-italiana.md) | Bonds: coupons, maturity, yields, modified duration, issuer, description, countries, sectors. Shares: sector, and the company's description and country from its profile page. Funds: currency, inception date, management fee |
 | ESMA (FIRDS) | Any instrument traded on a European market, from the official register of the European Securities and Markets Authority: the issuer's LEI and the legal form; for a bond its maturity, the type of coupon, a fixed coupon and whether a State guarantees it; for a fund whether it accumulates or distributes. It comes after the other sources, filling what they leave empty |
 
 An asset can have several enrichers, **in order**: the order is their priority. For each item, the first enricher in
