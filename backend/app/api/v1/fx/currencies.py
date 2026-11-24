@@ -45,6 +45,7 @@ from backend.app.services.fx.sampling import plan_conversion_samples
 from backend.app.services.fx.storage import FXRateNotStorableError, delete_rates_bulk, fx_rate_refusal, normalize_storable_rate, upsert_rates_bulk
 from backend.app.services.fx.stretch_conversion import convert_by_stretch
 from backend.app.services.fx.sync import sync_pairs_bulk
+from backend.app.services.fx.sync_claims import FxSyncBusy, claim_pairs
 from backend.app.services.signals.planning import SignalExecutionPlan, SignalRequestValidationError
 from backend.app.services.signals.sampling import sample_signal_result
 from backend.app.services.signals.service import SignalService
@@ -56,7 +57,11 @@ logger = get_logger(__name__)
 router_currencies = APIRouter(prefix="/currencies", tags=["FX Currencies"])
 
 
-@router_currencies.post("/sync", response_model=FXSyncBulkResponse)
+@router_currencies.post(
+    "/sync",
+    response_model=FXSyncBulkResponse,
+    responses={409: {"description": "A pair of the request is already being synced (``detail.code`` ``fx_sync_in_progress``, ``detail.pairs`` the busy pairs with ``started_at``)."}},
+)
 async def sync_rates(
     body: FXSyncPairRequest,
     session: AsyncSession = Depends(get_session_generator),
@@ -77,6 +82,10 @@ async def sync_rates(
     - `failed` — all providers for this pair failed
     - `skipped` — pair is MANUAL-only, nothing to sync
 
+    **One sync per pair at a time** (81 U35): a request for a pair that is already being synced is refused whole with
+    409, ``detail`` ``{"code": "fx_sync_in_progress", "pairs": [{"pair", "started_at"}]}`` naming the busy pairs and when
+    their sync began; none of its pairs is synced. The wait is the caller's: nothing is queued.
+
     Args:
         body: FXSyncPairRequest with pairs list and date range
 
@@ -90,13 +99,19 @@ async def sync_rates(
         raise HTTPException(status_code=400, detail="End date cannot be in the future")
 
     try:
-        result = await sync_pairs_bulk(
-            session,
-            pairs=body.pairs,
-            date_range=(body.start, body.end),
-        )
+        with claim_pairs(body.pairs):
+            result = await sync_pairs_bulk(
+                session,
+                pairs=body.pairs,
+                date_range=(body.start, body.end),
+            )
         return result
 
+    except FxSyncBusy as busy:
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "fx_sync_in_progress", "pairs": [{"pair": pair, "started_at": started.isoformat()} for pair, started in busy.busy.items()]},
+        ) from busy
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except FXServiceError as e:
