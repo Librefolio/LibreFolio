@@ -215,15 +215,20 @@ def _reprice_rebalancer(
     loss = sum(lost.values(), Fraction())
     accounts["final_wealth"] = _wire_money(wealth - loss)
     uninvested = {side: wealth - sum((_money_wire_fraction(row[f"{side}_value"]) for row in items), Fraction()) for side in ("before", "final")}
+    left = uninvested["final"] - loss
     solution["uninvested_row"] = {
         "before_value": _wire_money(uninvested["before"]),
         "before_weight": _wire_number(uninvested["before"] / wealth),
         "final_value": _wire_money(uninvested["final"]),
         "final_weight": _wire_number(uninvested["final"] / wealth),
+        # TL-5 of project 67: the cash with no target (``N`` less the money lost after the plan) and the money lost.
+        "untargeted_cash": {"before_value": _wire_money(uninvested["before"]), "before_weight": _wire_number(uninvested["before"] / wealth), "final_value": _wire_money(left), "final_weight": _wire_number(left / wealth)},
+        "costs": {"before_value": _wire_money(Fraction()), "before_weight": _wire_number(Fraction()), "final_value": _wire_money(loss), "final_weight": _wire_number(loss / wealth)},
     }
     accounts["uninvested"] = _wire_money(uninvested["final"])
     solution["accounting"]["current_invested"] = _wire_money(sum((_money_wire_fraction(row["before_value"]) for row in solution["asset_rows"]), Fraction()))
     solution["accounting"]["final_invested"] = _wire_money(sum((_money_wire_fraction(row["final_value"]) for row in solution["asset_rows"]), Fraction()))
+    accounts["final_cash"] = _wire_money(wealth - loss - _money_wire_fraction(solution["accounting"]["final_invested"]))
     _reprice_score(solution, items, wealth, uninvested["final"], loss)
 
 
@@ -372,7 +377,23 @@ def _restate_pac_plan_accounts(solution: JsonObject) -> None:
         "final_wealth": _wire_money(wealth - sum(lost.values(), Fraction())),
         "money_lost": {name: _wire_money(lost[name]) for name in _MONEY_LOST_FIELDS},
         "uninvested": _wire_money(wealth - _money_wire_fraction(accounting["final_invested"])),
+        "final_cash": _wire_money(wealth - sum(lost.values(), Fraction()) - _money_wire_fraction(accounting["final_invested"])),
+        "cash_by_currency": _restated_cash_by_currency(solution, accounting["current_invested"]["currency"]),
     }
+
+
+def _restated_cash_by_currency(solution: JsonObject, valuation: str) -> list[JsonObject]:
+    """TL-5 of project 67: the cash by currency of a variant, read off its own ledger — at the start the cash chosen plus the
+    contributions deposited (``funding_in`` less ``funding_out``: a contribution comes from outside, a cash from another
+    Broker), at the end the spendable balances; the variants carry no contribution left undeposited."""
+    initial: dict[str, Fraction] = {}
+    final: dict[str, Fraction] = {}
+    for row in solution["ledger_rows"]:
+        code = row["currency"]
+        initial[code] = initial.get(code, Fraction()) + Fraction(row["initial_selected"]) + Fraction(row["funding_in"]) - Fraction(row["funding_out"])
+        final[code] = final.get(code, Fraction()) + Fraction(row["final_spendable"])
+    codes = sorted((code for code in initial if initial[code] != 0 or final[code] != 0), key=lambda code: (code != valuation, code))
+    return [{"currency": code, "initial": _wire_money(initial[code], code), "final": _wire_money(final[code], code), "unused_contributions": _wire_money(Fraction(), code)} for code in codes]
 
 
 def _pac_incumbent_result() -> JsonObject:
@@ -490,6 +511,18 @@ _LEDGER_FLOW_FIELDS = (
 )
 
 
+def _restate_rebalancer_cash(solution: JsonObject, *, unused: dict[str, Fraction]) -> None:
+    """TL-5 of project 67: a Rebalancer variant's cash at the end, currency by currency, read off its own ledger plus the
+    contributions it leaves undeposited; the cash at the start does not move with the plan."""
+    final: dict[str, Fraction] = dict(unused)
+    for row in solution["ledger_rows"]:
+        final[row["currency"]] = final.get(row["currency"], Fraction()) + Fraction(row["final_spendable"])
+    for row in solution["plan_accounts"]["cash_by_currency"]:
+        code = row["currency"]
+        row["final"] = _wire_money(final.get(code, Fraction()), code)
+        row["unused_contributions"] = _wire_money(unused.get(code, Fraction()), code)
+
+
 def _rebalancer_no_op_result() -> JsonObject:
     """The medium scenario with nothing done: the contribution stays where it is, so ``N`` is its 50 EUR."""
     payload = _rebalancer_incumbent_result()
@@ -519,6 +552,8 @@ def _rebalancer_no_op_result() -> JsonObject:
         ledger["rounding_delta"] = _finite("0")
         ledger["final_spendable"] = ledger["initial_selected"]
         ledger["final_physical"] = ledger["initial_selected"]
+    # The 50 EUR contribution is not deposited: it stays at the end, not deposited (TL-5 of project 67).
+    _restate_rebalancer_cash(solution, unused={"EUR": Fraction(50)})
 
     for objective_code in ("operation_count", "route_priority"):
         _find(solution["objectives"]["stages"], "objective_code", objective_code)["value"] = _finite("0")
@@ -3458,6 +3493,7 @@ def test_rebalancer_ledger_publishes_its_rounding_top_up() -> None:
     ledger = next(row for row in payload["primary_solution"]["ledger_rows"] if (row["broker_id"], row["currency"]) == ("broker-beta", "EUR"))
     assert (Fraction(ledger["buy_debit"]), Fraction(ledger["final_spendable"]), Fraction(ledger["final_physical"])) == (30, 0, 0)
     ledger.update({"buy_debit": "30.01", "final_spendable": "-0.01", "final_physical": "-0.01"})
+    _restate_rebalancer_cash(payload["primary_solution"], unused={})
     _reject_because(REBALANCER_PLAN_OUTPUT_ADAPTER, payload, "Rebalancer rounding top-ups must cover exactly the negative ledger balances")
 
     payload["primary_solution"]["rounding_top_ups"] = [{"broker_id": "broker-beta", "currency": "EUR", "amount": "0.01", "rounded_postings": 1, "valuation_amount": _money("0.01")}]
@@ -4073,17 +4109,19 @@ def test_distinct_deployment_rejects_identity_count_coverage_and_arithmetic_erro
 # R1-A (project 67, contract §6.8) moves the PAC's alone: a plan needs a step, not an order (``order_rows`` loses its minimum).
 # R1-F (b) (project 67, developer decision of 21/11) moves the Rebalancer's alone: its request loses the preview's euros
 # (``custom_reference_amount``), since the page turns them into λ itself.
+# TL-5 (project 67, the developer's answers of 24/11) moves both: the plan accounts gain the cash at the end and the cash
+# by currency, and the Rebalancer's uninvested row its two parts, the cash with no target and the costs.
 PLANNER_FULL_SCHEMA_FINGERPRINT_CASES = (
     pytest.param(
         PAC_PLAN_INPUT_ADAPTER,
         PAC_PLAN_OUTPUT_ADAPTER,
-        "eb63086212b8199ddbed3c9d7e40d891bb45ddb8777d0425980271b2faf16e83",
+        "96aefec9524787fa1d001b313bb818abf7174c1c5caa1fba0fd218422a2bfab4",
         id="pac",
     ),
     pytest.param(
         REBALANCER_PLAN_INPUT_ADAPTER,
         REBALANCER_PLAN_OUTPUT_ADAPTER,
-        "0635fe76bfd96a2df8a2d146ffeef8c3b2aaa84f4073b7c8f40d85b7ac197666",
+        "6f652b2f34bb77f23c222b35046272287bf76f3c9104d825b725a27f5d5592f1",
         id="rebalancer",
     ),
 )
@@ -4490,6 +4528,19 @@ def _strip_steps(payload: JsonObject) -> None:
         payload["primary_solution"][section] = []
 
 
+def _costs_before_the_plan(payload: JsonObject) -> None:
+    """A cent of costs before the plan, moved from the cash with no target so the parts still sum to the row."""
+    row = payload["primary_solution"]["uninvested_row"]
+    row["costs"]["before_value"] = _money("0.01")
+    row["untargeted_cash"]["before_value"] = _money("49.99")
+
+
+def _cash_in_a_currency_before_the_valuation(payload: JsonObject) -> None:
+    """A USD row with nothing at either end, listed before EUR, the valuation currency."""
+    rows = payload["primary_solution"]["plan_accounts"]["cash_by_currency"]
+    rows.insert(0, {"currency": "USD", "initial": _money("0", "USD"), "final": _money("0", "USD"), "unused_contributions": _money("0", "USD")})
+
+
 REBALANCER_RESULT_REJECTION_CASES = (
     pytest.param(_medium_mutated(_set(("primary_solution", "plan_accounts", "money_lost", "broker_withheld_tax"), _money("1.42"))), "The money lost, by entry, must sum to the initial less the final wealth", id="money-lost-off-by-a-cent"),
     pytest.param(_medium_mutated(_set(("primary_solution", "score", "plan_score"), _money("2.27"))), "The plan score must equal λ·D/F plus the money lost", id="plan-score"),
@@ -4514,6 +4565,14 @@ REBALANCER_RESULT_REJECTION_CASES = (
     pytest.param(_medium_mutated(_set(("primary_solution", "score", "distance_weight"), None)), "both present (a weighted fidelity) or both absent", id="score-without-lambda"),
     pytest.param(_medium_mutated(_set(("primary_solution", "cash_rows", ("broker_id", "broker-alpha"), "target_weight"), _finite("0.06"))), "An item's target value must be its target weight of the initial wealth", id="cash-item-target"),
     pytest.param(_medium_mutated(_strip_steps), "A Rebalancer plan with no step is a no-op solution", id="incumbent-without-a-step"),
+    # TL-5 of project 67: the uninvested row's two parts and the cash by currency.
+    pytest.param(_medium_mutated(_set(("primary_solution", "uninvested_row", "untargeted_cash", "final_value"), _money("0.01"))), "The uninvested row's parts must sum to its final_value", id="uninvested-parts-value"),
+    pytest.param(_medium_mutated(_set(("primary_solution", "uninvested_row", "costs", "final_weight"), _finite("0.0072"))), "The uninvested row's parts must sum to its final_weight", id="uninvested-parts-weight"),
+    pytest.param(_medium_mutated(_costs_before_the_plan), "Nothing is lost before the plan", id="costs-before-the-plan"),
+    pytest.param(_medium_mutated(_set(("primary_solution", "plan_accounts", "cash_by_currency", ("currency", "EUR"), "final"), _money("3.56"))), "Rebalancer cash at the end of a currency must be its ledger's spendable balance plus the contributions not deposited", id="cash-end-off-the-ledger"),
+    pytest.param(_medium_mutated(_cash_in_a_currency_before_the_valuation), "the valuation currency first, then by code", id="cash-currencies-order"),
+    pytest.param(_medium_mutated(_set(("primary_solution", "plan_accounts", "final_cash"), _money("3.58"))), "Rebalancer cash at the end must be the final wealth less the Assets after the plan", id="final-cash"),
+    pytest.param(_medium_mutated(_set(("primary_solution", "plan_accounts", "cash_by_currency", ("currency", "EUR"), "initial"), _money("-1"))), "The cash at the start and the unused contributions cannot be negative", id="cash-start-negative"),
 )
 
 
@@ -4687,9 +4746,10 @@ def test_open_canonical_vector_keeps_the_proof_and_reads_as_a_limit() -> None:
 # R1-F (b) (project 67, developer decision of 21/11) moves the Rebalancer's alone: the page computes the table «maximum
 # acceptable cost», so the request loses ``custom_reference_amount`` and the preview its ``table`` and ``custom`` for the
 # levels' λ (``fidelity_level_weights``).
+# TL-5 (project 67) moves both: the plan accounts' cash at the end and by currency, the uninvested row's two parts.
 TOOL_SCHEMA_FINGERPRINT_CASES = (
-    pytest.param("pac_allocator", PAC_TOOL_INPUT_ADAPTER, PAC_TOOL_OUTPUT_ADAPTER, "87437b7ed0926abfc074f79884bac1a85b8044eab723e7ef6b9556219c2da290", id="pac"),
-    pytest.param("portfolio_rebalancer", REBALANCER_TOOL_INPUT_ADAPTER, REBALANCER_TOOL_OUTPUT_ADAPTER, "a2111f11fe96bee2e25c365b12a6052b13582b18b2260b405a46ec8321e22729", id="rebalancer"),
+    pytest.param("pac_allocator", PAC_TOOL_INPUT_ADAPTER, PAC_TOOL_OUTPUT_ADAPTER, "dd1709317f7aa5306b7a1421b1072087dd738aa30d76dabd28b2b9bf736f0235", id="pac"),
+    pytest.param("portfolio_rebalancer", REBALANCER_TOOL_INPUT_ADAPTER, REBALANCER_TOOL_OUTPUT_ADAPTER, "bc392e62c112e61131381e7558092445c4b955268326912c4cf421f467a36c15", id="rebalancer"),
 )
 
 

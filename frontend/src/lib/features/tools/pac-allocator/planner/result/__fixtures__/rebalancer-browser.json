@@ -2060,6 +2060,70 @@
           "display_decimal": "0.005417476698119073",
           "display_scale": 18,
           "display_authority": "non_authoritative"
+        },
+        "untargeted_cash": {
+          "before_value": {
+            "value": {
+              "kind": "finite_decimal",
+              "value": "8200"
+            },
+            "currency": "EUR"
+          },
+          "before_weight": {
+            "kind": "exact_ratio",
+            "numerator": "229625442140000000000000",
+            "denominator": "1663145363006813570812429",
+            "display_decimal": "0.138066970721584046",
+            "display_scale": 18,
+            "display_authority": "non_authoritative"
+          },
+          "final_value": {
+            "value": {
+              "kind": "finite_decimal",
+              "value": "321.73"
+            },
+            "currency": "EUR"
+          },
+          "final_weight": {
+            "kind": "exact_ratio",
+            "numerator": "9009438231671000000000",
+            "denominator": "1663145363006813570812429",
+            "display_decimal": "0.005417108108567712",
+            "display_scale": 18,
+            "display_authority": "non_authoritative"
+          }
+        },
+        "costs": {
+          "before_value": {
+            "value": {
+              "kind": "finite_decimal",
+              "value": "0"
+            },
+            "currency": "EUR"
+          },
+          "before_weight": {
+            "kind": "finite_decimal",
+            "value": "0"
+          },
+          "final_value": {
+            "value": {
+              "kind": "exact_ratio",
+              "numerator": "766272504",
+              "denominator": "35003878375",
+              "display_decimal": "0.021891074348700653",
+              "display_scale": 18,
+              "display_authority": "non_authoritative"
+            },
+            "currency": "EUR"
+          },
+          "final_weight": {
+            "kind": "exact_ratio",
+            "numerator": "613018003200000000",
+            "denominator": "1663145363006813570812429",
+            "display_decimal": "0.000000368589551362",
+            "display_scale": 18,
+            "display_authority": "non_authoritative"
+          }
         }
       },
       "funding_actions": [],
@@ -3339,7 +3403,68 @@
             "display_authority": "non_authoritative"
           },
           "currency": "EUR"
-        }
+        },
+        "final_cash": {
+          "value": {
+            "kind": "exact_ratio",
+            "numerator": "359655114236371",
+            "denominator": "28003102700",
+            "display_decimal": "12843.402321856677688791",
+            "display_scale": 18,
+            "display_authority": "non_authoritative"
+          },
+          "currency": "EUR"
+        },
+        "cash_by_currency": [
+          {
+            "currency": "EUR",
+            "initial": {
+              "value": {
+                "kind": "finite_decimal",
+                "value": "25550"
+              },
+              "currency": "EUR"
+            },
+            "final": {
+              "value": {
+                "kind": "finite_decimal",
+                "value": "6582.73"
+              },
+              "currency": "EUR"
+            },
+            "unused_contributions": {
+              "value": {
+                "kind": "finite_decimal",
+                "value": "0"
+              },
+              "currency": "EUR"
+            }
+          },
+          {
+            "currency": "USD",
+            "initial": {
+              "value": {
+                "kind": "finite_decimal",
+                "value": "5344.53"
+              },
+              "currency": "USD"
+            },
+            "final": {
+              "value": {
+                "kind": "finite_decimal",
+                "value": "7012.73"
+              },
+              "currency": "USD"
+            },
+            "unused_contributions": {
+              "value": {
+                "kind": "finite_decimal",
+                "value": "0"
+              },
+              "currency": "USD"
+            }
+          }
+        ]
       },
       "score": {
         "distance_weight": {
