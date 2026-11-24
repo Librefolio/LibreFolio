@@ -35,7 +35,7 @@ Senza filtri né ordinamento, le due righe di una coppia collegata (un trasferim
 
 Ognuna di queste apre il workspace bulk, e nulla cambia prima di **Salva tutto**. Modificare o eliminare un lato di una coppia collegata porta con sé il suo partner.
 
-**Clona** mantiene la data originale: è così che registri di nuovo una riga storica, per esempio con un altro tipo. Clonare una transazione con spese collegate copia anche le spese, collegate alla copia; clonare una spesa dà una copia collegata alla stessa transazione. Se togli dal lotto la copia di una transazione, se ne vanno con lei le copie delle sue spese che non hai cambiato.
+**Clona** mantiene la data originale: è così che registri di nuovo una riga storica, per esempio con un altro tipo. Clonare una transazione con spese collegate copia anche le spese, collegate alla copia; clonare una spesa dà una copia collegata alla stessa transazione. Se togli dal lotto la copia di una transazione, se ne vanno con lei le copie delle sue spese che non hai cambiato. Finché la copia e le sue spese sono tutte nuove, hanno lo stesso broker e lo stesso asset: correggi l'asset della copia, o di una sua spesa, e le altre la seguono, ognuna con la sua data.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
     <img class="gallery-img" data-category="transactions" data-name="clone-flow" alt="Workspace bulk con una riga di transazione clonata">

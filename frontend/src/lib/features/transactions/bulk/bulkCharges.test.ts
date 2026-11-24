@@ -32,7 +32,7 @@ import {describe, expect, it, vi} from 'vitest';
 import type {TXReadItem} from '../types';
 import type {DraftFields, PendingOp} from './txBulkTypes';
 import {chargeFromPicked, chargesFromRows, type ChargeDraft} from '../form/txCharges';
-import {magnitudeForRule} from '../txPayloadHelpers';
+import {magnitudeForRule, type ImportTodo} from '../txPayloadHelpers';
 import {adoptCharges, applyChargeDrafts, chargeDraftsFor, chargeParentFields, isUnderParent, parentNeedsRef, remapChargeOf} from './bulkCharges';
 // F7-c1: the two functions it adds, read through the namespace so that while they do not exist only their own cases fail.
 import * as bulkChargesModule from './bulkCharges';
@@ -2475,5 +2475,367 @@ describe('TL-2 applyChargeDrafts — a Bulk row picked, then taken back out of t
         expect(tempIds(out)).toEqual(tempIds(ops));
         expectStillFreeAndOffered(out, parent, fee);
         expect(ops).toEqual(before);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// TL-3b — an all-new group keeps broker and asset in step (project 66, lot TL-3b)
+// ---------------------------------------------------------------------------
+
+/**
+ * TL-3b (developer's rule): in the Bulk a group is a parent row and the linked charges under it. When every row of the
+ * group is new (op `create`), a broker or an asset changed in the form of ANY of its rows is written on all of them;
+ * a group holding a saved row keeps today's behaviour (no sync: the Bulk flags the charge that differs).
+ *
+ *   - `newGroupOf(ops, tempId)`  the rows of the group of `tempId` (its parent first, then the charges still linked under
+ *                                it) when every one is new; else `null`. Not counted: a charge «scollega»
+ *                                (`parentUnlink`) and a saved charge marked «del». A pair leg is never a parent.
+ *   - `syncNewGroup(ops, tempId, before, opts)`  after the row `tempId` changed in its form, the broker and the asset
+ *                                that changed against `before` (its effective values before; «after» read through
+ *                                `opts.effective`) are written on every row of its all-new group. Only the changed field
+ *                                propagates (a divergent group is not straightened); an asset only when non-null and the
+ *                                parent's type allows one, and only onto members whose type allows one. The date never.
+ *                                Unchanged rows keep their reference; nothing changes outside an all-new group.
+ *   - `isUntouchedClone`         leaves broker and asset out: a clone copy that only followed a sync is still untouched.
+ *
+ * The operations are given in the state the Bulk holds them right after the form's patch: the edited row already
+ * carries its new values, `before` is passed apart. RED until `bulkCharges.ts` exports `newGroupOf` and `syncNewGroup`
+ * (read through the namespace, `c2`, so only these cases fail) and `isUntouchedClone` drops broker and asset.
+ */
+type BrokerAsset = {broker_id: number; asset_id: number | null};
+type SyncOpts = {effective: (op: PendingOp) => DraftFields; assetAllowed: (type: string) => boolean};
+type NewGroupOfFn = (ops: readonly PendingOp[], tempId: string) => PendingOp[] | null;
+type SyncNewGroupFn = (ops: readonly PendingOp[], tempId: string, before: BrokerAsset, opts: SyncOpts) => PendingOp[];
+
+const newGroupOf: NewGroupOfFn = (ops, tempId) => c2<NewGroupOfFn>('newGroupOf')(ops, tempId);
+const syncNewGroup: SyncNewGroupFn = (ops, tempId, before, opts) => c2<SyncNewGroupFn>('syncNewGroup')(ops, tempId, before, opts);
+
+/** The broker and the asset of BUY_D's family (`row()`), and the ones a form moves them to. */
+const OLD: BrokerAsset = {broker_id: 77, asset_id: 101};
+const NEW_BROKER = 88;
+const NEW_ASSET = 202;
+/** The types whose rule forbids an asset (`getTypeRule(type).assetField === 'forbidden'`), as the Bulk reads them. */
+const ASSET_FORBIDDEN = new Set(['DEPOSIT', 'WITHDRAWAL']);
+const assetAllowed = (type: string): boolean => !ASSET_FORBIDDEN.has(type);
+
+/** A local copy of the Bulk's `followedFields`: a create born in its parent's form shows the parent's broker, asset and
+ *  date until it is opened on its own. */
+function effectiveIn(ops: readonly PendingOp[]): (op: PendingOp) => DraftFields {
+    return (op) => {
+        if (op.op !== 'create' || !op.followsParent || op.chargeOf === undefined) return op.fields;
+        const owner = ops.find((other) => other.tempId === op.chargeOf);
+        if (!owner) return op.fields;
+        return {...op.fields, broker_id: owner.fields.broker_id, asset_id: owner.fields.asset_id, date: owner.fields.date};
+    };
+}
+
+function syncOpts(ops: readonly PendingOp[], allowed: (type: string) => boolean = assetAllowed): SyncOpts {
+    return {effective: effectiveIn(ops), assetAllowed: allowed};
+}
+
+/** An all-new group: a new BUY and two new charges under it, each charge on a day of its own; plus a new free FEE outside
+ *  any group, on the same broker and asset. */
+function newGroup(): PendingOp[] {
+    return [createOp('n-buy', fieldsOf(BUY_D)), createOp('n-fee', fieldsOf(FEE_D), {chargeOf: 'n-buy'}), createOp('n-tax', fieldsOf(TAX_D), {chargeOf: 'n-buy'}), createOp('n-free', {...fieldsOf(FEE_FREE), description: 'outside'})];
+}
+
+/** The operations as the Bulk holds them right after the form of `tempId` was applied: that row with these fields. */
+function patched(ops: readonly PendingOp[], tempId: string, change: Partial<DraftFields>): PendingOp[] {
+    return ops.map((op) => (op.tempId === tempId ? ({...op, fields: {...op.fields, ...change}} as PendingOp) : op));
+}
+
+const brokerAsset = (op: PendingOp): BrokerAsset => ({broker_id: op.fields.broker_id, asset_id: op.fields.asset_id ?? null});
+
+describe('TL-3b newGroupOf — the rows of an all-new group, or null', () => {
+    it('from the parent: the parent first, then its two charges', () => {
+        const group = newGroupOf(newGroup(), 'n-buy');
+        expect(group, 'an all-new group').not.toBeNull();
+        expect(group![0].tempId, 'the parent first').toBe('n-buy');
+        expect(tempIds(group!).sort()).toEqual(['n-buy', 'n-fee', 'n-tax']);
+    });
+
+    it('from a charge: the same group, its parent first', () => {
+        const group = newGroupOf(newGroup(), 'n-tax');
+        expect(group).not.toBeNull();
+        expect(group![0].tempId).toBe('n-buy');
+        expect(tempIds(group!).sort()).toEqual(['n-buy', 'n-fee', 'n-tax']);
+    });
+
+    it('a row alone (a free charge, a new parent with no charges): null', () => {
+        expect(newGroupOf(newGroup(), 'n-free'), 'a free charge').toBeNull();
+        expect(newGroupOf([createOp('lonely', fieldsOf(BUY_D))], 'lonely'), 'a parent without charges').toBeNull();
+    });
+
+    it('a saved charge under the new parent: null, from the parent and from a new sibling', () => {
+        const ops = [...newGroup(), editOp(FEE_A, {chargeOf: 'n-buy'})];
+        expect(newGroupOf(ops, 'n-buy')).toBeNull();
+        expect(newGroupOf(ops, 'n-fee')).toBeNull();
+    });
+
+    it('a saved parent with new charges: null', () => {
+        const ops = [editOp(BUY_D, {tempId: 's-buy'}), createOp('n-fee', fieldsOf(FEE_D), {chargeOf: 's-buy'}), createOp('n-tax', fieldsOf(TAX_D), {chargeOf: 's-buy'})];
+        expect(newGroupOf(ops, 's-buy')).toBeNull();
+        expect(newGroupOf(ops, 'n-tax')).toBeNull();
+    });
+
+    it('a saved charge marked «del» under the new parent does not count: still an all-new group, without it', () => {
+        const ops = [...newGroup(), editOp(FEE_A, {chargeOf: 'n-buy', markedDelete: true})];
+        const group = newGroupOf(ops, 'n-buy');
+        expect(group, 'the «del» charge leaves with the save: the rest is all new').not.toBeNull();
+        expect(tempIds(group!).sort()).toEqual(['n-buy', 'n-fee', 'n-tax']);
+    });
+
+    it('a charge «scollega» does not count: still an all-new group, without it', () => {
+        const ops = [...newGroup(), editOp(FEE_A, {chargeOf: 'n-buy', parentUnlink: true})];
+        const group = newGroupOf(ops, 'n-fee');
+        expect(group).not.toBeNull();
+        expect(tempIds(group!).sort()).toEqual(['n-buy', 'n-fee', 'n-tax']);
+    });
+
+    it('a follower (born in the parent’s form) is a member like any new charge', () => {
+        const ops = [...newGroup(), createOp('n-follow', fieldsOf(FEE_D), {chargeOf: 'n-buy', followsParent: true})];
+        expect(tempIds(newGroupOf(ops, 'n-follow') ?? []).sort()).toEqual(['n-buy', 'n-fee', 'n-follow', 'n-tax']);
+    });
+
+    it('a leg of a pair is never a parent: null', () => {
+        const legFields: DraftFields = {...fieldsOf(BUY_D), type: 'TRANSFER' as DraftFields['type'], cash: null};
+        const ops = [createOp('leg-a', legFields), createOp('leg-b', {...legFields, broker_id: NEW_BROKER}, {pairedWith: 'leg-a'}), createOp('n-fee', fieldsOf(FEE_D), {chargeOf: 'leg-a'})];
+        expect(newGroupOf(ops, 'leg-a')).toBeNull();
+        expect(newGroupOf(ops, 'n-fee')).toBeNull();
+    });
+
+    it('reads its input as given', () => {
+        const ops = newGroup();
+        const before = snapshot(ops);
+        newGroupOf(ops, 'n-fee');
+        expect(ops).toEqual(before);
+    });
+});
+
+describe('TL-3b syncNewGroup — a changed broker or asset written on every row of an all-new group', () => {
+    it('the broker changed on the parent: both charges take it; assets and dates unchanged; the row outside untouched', () => {
+        const ops = patched(newGroup(), 'n-buy', {broker_id: NEW_BROKER});
+        const out = syncNewGroup(ops, 'n-buy', OLD, syncOpts(ops));
+        for (const id of ['n-buy', 'n-fee', 'n-tax']) expect(brokerAsset(byTempId(out, id)), id).toEqual({broker_id: NEW_BROKER, asset_id: OLD.asset_id});
+        expect(byTempId(out, 'n-fee').fields.date, 'a charge keeps its own date').toBe(FEE_D.date);
+        expect(byTempId(out, 'n-tax').fields.date).toBe(TAX_D.date);
+        expect(byTempId(out, 'n-free'), 'outside the group: the same reference').toBe(byTempId(ops, 'n-free'));
+    });
+
+    it('the asset changed on the parent: both charges take it', () => {
+        const ops = patched(newGroup(), 'n-buy', {asset_id: NEW_ASSET});
+        const out = syncNewGroup(ops, 'n-buy', OLD, syncOpts(ops));
+        for (const id of ['n-buy', 'n-fee', 'n-tax']) expect(brokerAsset(byTempId(out, id)), id).toEqual({broker_id: OLD.broker_id, asset_id: NEW_ASSET});
+        expect(byTempId(out, 'n-free').fields.asset_id, 'outside the group').toBe(OLD.asset_id);
+    });
+
+    it('the asset changed on a charge: the parent and the sibling take it, the charge keeps it', () => {
+        const ops = patched(newGroup(), 'n-fee', {asset_id: NEW_ASSET});
+        const out = syncNewGroup(ops, 'n-fee', OLD, syncOpts(ops));
+        for (const id of ['n-buy', 'n-fee', 'n-tax']) expect(byTempId(out, id).fields.asset_id, id).toBe(NEW_ASSET);
+        expect(byTempId(out, 'n-buy').fields.date, 'the parent keeps its date').toBe(BUY_D.date);
+        expect(byTempId(out, 'n-tax').fields.date, 'the sibling keeps its date').toBe(TAX_D.date);
+    });
+
+    it('the broker changed on a charge: the parent and the sibling take it, the assets stay', () => {
+        const ops = patched(newGroup(), 'n-tax', {broker_id: NEW_BROKER});
+        const out = syncNewGroup(ops, 'n-tax', OLD, syncOpts(ops));
+        for (const id of ['n-buy', 'n-fee', 'n-tax']) expect(brokerAsset(byTempId(out, id)), id).toEqual({broker_id: NEW_BROKER, asset_id: OLD.asset_id});
+    });
+
+    it('broker and asset changed together on a charge: both written on every member', () => {
+        const ops = patched(newGroup(), 'n-fee', {broker_id: NEW_BROKER, asset_id: NEW_ASSET});
+        const out = syncNewGroup(ops, 'n-fee', OLD, syncOpts(ops));
+        for (const id of ['n-buy', 'n-fee', 'n-tax']) expect(brokerAsset(byTempId(out, id)), id).toEqual({broker_id: NEW_BROKER, asset_id: NEW_ASSET});
+    });
+
+    it('the date never syncs: a parent’s new date stays its own', () => {
+        const ops = patched(newGroup(), 'n-buy', {date: '2026-10-15', broker_id: NEW_BROKER});
+        const out = syncNewGroup(ops, 'n-buy', OLD, syncOpts(ops));
+        expect(byTempId(out, 'n-fee').fields.broker_id, 'premise: the group was synced').toBe(NEW_BROKER);
+        expect([byTempId(out, 'n-fee').fields.date, byTempId(out, 'n-tax').fields.date]).toEqual([FEE_D.date, TAX_D.date]);
+    });
+
+    it('an asset cleared on a charge (to none) is not propagated: the parent and the sibling keep theirs, same references', () => {
+        const ops = patched(newGroup(), 'n-fee', {asset_id: null});
+        const out = syncNewGroup(ops, 'n-fee', OLD, syncOpts(ops));
+        expect(byTempId(out, 'n-fee').fields.asset_id, 'the charge keeps what its form set').toBeNull();
+        expect(byTempId(out, 'n-buy'), 'the parent untouched').toBe(byTempId(ops, 'n-buy'));
+        expect(byTempId(out, 'n-tax'), 'the sibling untouched').toBe(byTempId(ops, 'n-tax'));
+    });
+
+    it('a DEPOSIT parent (no asset allowed): an asset set on a charge is not propagated, the broker is', () => {
+        const deposit: DraftFields = {...fieldsOf(BUY_D), type: 'DEPOSIT' as DraftFields['type'], asset_id: null, quantity: '0', cash: {code: 'EUR', amount: '100'}};
+        const charge = (id: string, r: TXReadItem): PendingOp => createOp(id, {...fieldsOf(r), asset_id: null}, {chargeOf: 'n-dep'});
+        const base = [createOp('n-dep', deposit), charge('n-fee', FEE_D), charge('n-tax', TAX_D)];
+        const ops = patched(base, 'n-fee', {asset_id: NEW_ASSET, broker_id: NEW_BROKER});
+        const out = syncNewGroup(ops, 'n-fee', {broker_id: OLD.broker_id, asset_id: null}, syncOpts(ops));
+        expect(brokerAsset(byTempId(out, 'n-dep')), 'the DEPOSIT takes the broker, never an asset').toEqual({broker_id: NEW_BROKER, asset_id: null});
+        expect(brokerAsset(byTempId(out, 'n-tax')), 'the sibling takes the broker only').toEqual({broker_id: NEW_BROKER, asset_id: null});
+    });
+
+    it('the asset is written only on members whose type allows one', () => {
+        const ops = patched(newGroup(), 'n-buy', {asset_id: NEW_ASSET});
+        const out = syncNewGroup(
+            ops,
+            'n-buy',
+            OLD,
+            syncOpts(ops, (type) => type !== 'TAX'),
+        );
+        expect(byTempId(out, 'n-fee').fields.asset_id).toBe(NEW_ASSET);
+        expect(byTempId(out, 'n-tax'), 'a type that forbids an asset: untouched').toBe(byTempId(ops, 'n-tax'));
+    });
+
+    it('a group holding a saved charge: no sync — every other row keeps its reference and its values', () => {
+        const ops = patched([...newGroup(), editOp(FEE_A, {chargeOf: 'n-buy'})], 'n-buy', {asset_id: NEW_ASSET, broker_id: NEW_BROKER});
+        const out = syncNewGroup(ops, 'n-buy', OLD, syncOpts(ops));
+        expect(out).toHaveLength(ops.length);
+        ops.forEach((op, at) => expect(out[at], op.tempId).toBe(op));
+    });
+
+    it('a saved charge marked «del» does not stop the sync, and is not written', () => {
+        const ops = patched([...newGroup(), editOp(FEE_A, {chargeOf: 'n-buy', markedDelete: true})], 'n-buy', {asset_id: NEW_ASSET});
+        const out = syncNewGroup(ops, 'n-buy', OLD, syncOpts(ops));
+        expect([byTempId(out, 'n-fee').fields.asset_id, byTempId(out, 'n-tax').fields.asset_id], 'the new charges follow').toEqual([NEW_ASSET, NEW_ASSET]);
+        expect(byTempId(out, 't-502'), 'the «del» charge untouched').toBe(byTempId(ops, 't-502'));
+    });
+
+    it('a charge «scollega» does not stop the sync, and keeps its values', () => {
+        const ops = patched([...newGroup(), editOp(FEE_A, {chargeOf: 'n-buy', parentUnlink: true})], 'n-buy', {asset_id: NEW_ASSET});
+        const out = syncNewGroup(ops, 'n-buy', OLD, syncOpts(ops));
+        expect([byTempId(out, 'n-fee').fields.asset_id, byTempId(out, 'n-tax').fields.asset_id]).toEqual([NEW_ASSET, NEW_ASSET]);
+        expect(byTempId(out, 't-502'), 'the unlinked charge untouched').toBe(byTempId(ops, 't-502'));
+    });
+
+    it('a follower member: its stored fields get the new values too', () => {
+        const base = [...newGroup(), createOp('n-follow', {...fieldsOf(FEE_D), description: 'follow'}, {chargeOf: 'n-buy', followsParent: true})];
+        const ops = patched(base, 'n-tax', {asset_id: NEW_ASSET});
+        const out = syncNewGroup(ops, 'n-tax', OLD, syncOpts(ops));
+        expect(byTempId(out, 'n-buy').fields.asset_id, 'the parent').toBe(NEW_ASSET);
+        expect(byTempId(out, 'n-follow').fields.asset_id, 'the follower').toBe(NEW_ASSET);
+    });
+
+    it('«after» is read through `effective`: a follower whose stored fields are stale but shows `before` propagates nothing', () => {
+        const stale: DraftFields = {...fieldsOf(FEE_D), broker_id: 55, asset_id: 999};
+        const ops = [...newGroup(), createOp('n-follow', stale, {chargeOf: 'n-buy', followsParent: true})];
+        const out = syncNewGroup(ops, 'n-follow', OLD, syncOpts(ops));
+        for (const id of ['n-buy', 'n-fee', 'n-tax']) expect(byTempId(out, id), `${id}: nothing changed`).toBe(byTempId(ops, id));
+    });
+
+    it('a divergent group is not straightened: only the changed field propagates', () => {
+        const ops = patched(patched(newGroup(), 'n-tax', {asset_id: 303}), 'n-buy', {broker_id: NEW_BROKER});
+        const out = syncNewGroup(ops, 'n-buy', OLD, syncOpts(ops));
+        expect(brokerAsset(byTempId(out, 'n-tax')), 'the broker follows; the asset it differed on stays').toEqual({broker_id: NEW_BROKER, asset_id: 303});
+        expect(brokerAsset(byTempId(out, 'n-fee'))).toEqual({broker_id: NEW_BROKER, asset_id: OLD.asset_id});
+    });
+
+    it('nothing changed (after equals before): every row keeps its reference', () => {
+        const ops = newGroup();
+        const out = syncNewGroup(ops, 'n-fee', OLD, syncOpts(ops));
+        ops.forEach((op, at) => expect(out[at], op.tempId).toBe(op));
+    });
+
+    it('a row alone: nothing else changes', () => {
+        const ops = patched(newGroup(), 'n-free', {asset_id: NEW_ASSET, broker_id: NEW_BROKER});
+        const out = syncNewGroup(ops, 'n-free', OLD, syncOpts(ops));
+        ops.forEach((op, at) => expect(out[at], op.tempId).toBe(op));
+    });
+
+    it('a leg of a pair: its charge is not written', () => {
+        const legFields: DraftFields = {...fieldsOf(BUY_D), type: 'TRANSFER' as DraftFields['type'], cash: null};
+        const base = [createOp('leg-a', legFields), createOp('leg-b', {...legFields, broker_id: 99}, {pairedWith: 'leg-a'}), createOp('n-fee', fieldsOf(FEE_D), {chargeOf: 'leg-a'})];
+        const ops = patched(base, 'leg-a', {asset_id: NEW_ASSET});
+        const out = syncNewGroup(ops, 'leg-a', OLD, syncOpts(ops));
+        expect(byTempId(out, 'n-fee')).toBe(byTempId(ops, 'n-fee'));
+        expect(byTempId(out, 'leg-b')).toBe(byTempId(ops, 'leg-b'));
+    });
+
+    it('reads its input as given', () => {
+        const ops = patched(newGroup(), 'n-fee', {asset_id: NEW_ASSET});
+        const before = snapshot(ops);
+        syncNewGroup(ops, 'n-fee', OLD, syncOpts(ops));
+        expect(ops).toEqual(before);
+    });
+
+    // An imported all-new group: the rows arrived without an asset, the charges with an import todo on it. The asset
+    // written by the sync answers that todo, as an asset typed in the row's own Form does (`patchRowFromForm` →
+    // `remainingTodos`): gone, and the `todos` key deleted once empty. A todo on a field still empty stays.
+    const assetTodo = (): ImportTodo => ({field: 'asset_id', severity: 'blocker', reasonCode: 'x', message: 'x'});
+    const quantityTodo = (): ImportTodo => ({field: 'quantity', severity: 'blocker', reasonCode: 'x', message: 'x'});
+
+    /** An imported group: a BUY and a FEE and a TAX with no asset; the charges hold an `asset_id` todo. */
+    function importedGroup(feeExtra: ImportTodo[] = [], feeQuantity = '0'): PendingOp[] {
+        const bare = (r: TXReadItem): DraftFields => ({...fieldsOf(r), asset_id: null});
+        return [createOp('i-buy', bare(BUY_D)), {...createOp('i-fee', {...bare(FEE_D), quantity: feeQuantity}, {chargeOf: 'i-buy'}), todos: [assetTodo(), ...feeExtra]}, {...createOp('i-tax', bare(TAX_D), {chargeOf: 'i-buy'}), todos: [assetTodo()]}];
+    }
+
+    it('an imported group: the asset set on the parent reaches the charges and answers their asset todo (the key gone once empty)', () => {
+        const ops = patched(importedGroup(), 'i-buy', {asset_id: NEW_ASSET});
+        const out = syncNewGroup(ops, 'i-buy', {broker_id: OLD.broker_id, asset_id: null}, syncOpts(ops));
+        for (const id of ['i-fee', 'i-tax']) {
+            const charge = byTempId(out, id);
+            expect(charge.fields.asset_id, `premise: ${id} took the asset`).toBe(NEW_ASSET);
+            expect('todos' in charge, `${id}: its asset todo is answered, the key deleted`).toBe(false);
+        }
+    });
+
+    it('guard: a todo on another field still empty stays; a member the sync did not change keeps its todos and its reference', () => {
+        const ops = patched(importedGroup([quantityTodo()], ''), 'i-buy', {asset_id: NEW_ASSET});
+        const out = syncNewGroup(
+            ops,
+            'i-buy',
+            {broker_id: OLD.broker_id, asset_id: null},
+            syncOpts(ops, (type) => type !== 'TAX'),
+        );
+        const fee = byTempId(out, 'i-fee');
+        expect(fee.fields.asset_id, 'premise: the FEE took the asset').toBe(NEW_ASSET);
+        expect(
+            fee.todos?.map((todo) => todo.field),
+            'only the quantity todo is left',
+        ).toEqual(['quantity']);
+        expect(byTempId(out, 'i-tax'), 'the TAX (no asset allowed here) is not written: same reference, its todo kept').toBe(byTempId(ops, 'i-tax'));
+    });
+
+    it('guard: the sync answers only the todos of the fields it wrote — a todo on another field stays, even one whose field holds a value', () => {
+        const ops = patched(importedGroup([quantityTodo()], '0'), 'i-buy', {asset_id: NEW_ASSET});
+        expect(byTempId(ops, 'i-fee').fields.quantity, 'premise: the FEE’s quantity is filled').toBe('0');
+        const out = syncNewGroup(ops, 'i-buy', {broker_id: OLD.broker_id, asset_id: null}, syncOpts(ops));
+        const fee = byTempId(out, 'i-fee');
+        expect(fee.fields.asset_id, 'premise: the FEE took the asset').toBe(NEW_ASSET);
+        expect(
+            fee.todos?.map((todo) => todo.field),
+            'the asset todo answered, the quantity todo untouched by the sync',
+        ).toEqual(['quantity']);
+    });
+});
+
+describe('TL-3b isUntouchedClone — broker and asset are left out; sameDraftFields unchanged', () => {
+    it('a brought copy whose broker or asset only changed is still untouched', () => {
+        const op = broughtCopy('c-fee', FEE_D, 'c-buy');
+        expect(isUntouchedClone({...op, fields: {...op.fields, broker_id: NEW_BROKER}} as WithClone), 'broker').toBe(true);
+        expect(isUntouchedClone({...op, fields: {...op.fields, asset_id: NEW_ASSET}} as WithClone), 'asset').toBe(true);
+    });
+
+    it('another field changed with them: touched', () => {
+        const op = broughtCopy('c-fee', FEE_D, 'c-buy');
+        expect(isUntouchedClone({...op, fields: {...op.fields, asset_id: NEW_ASSET, cash: {code: 'EUR', amount: '7'}}} as WithClone)).toBe(false);
+        expect(isUntouchedClone({...op, fields: {...op.fields, broker_id: NEW_BROKER, date: '2026-10-09'}} as WithClone)).toBe(false);
+    });
+
+    it('the charge copies of a parent copy synced by its form stay untouched', () => {
+        const base: PendingOp[] = [copyOf('c-buy', BUY_D), broughtCopy('c-fee', FEE_D, 'c-buy'), broughtCopy('c-tax', TAX_D, 'c-buy')];
+        const ops = patched(base, 'c-buy', {asset_id: NEW_ASSET, broker_id: NEW_BROKER});
+        const out = syncNewGroup(ops, 'c-buy', OLD, syncOpts(ops));
+        for (const id of ['c-fee', 'c-tax']) {
+            expect(byTempId(out, id).fields.asset_id, `premise: ${id} followed the sync`).toBe(NEW_ASSET);
+            expect(isUntouchedClone(byTempId(out, id)), `${id}: still untouched`).toBe(true);
+        }
+    });
+
+    it('guard: sameDraftFields still tells broker and asset apart', () => {
+        const a = fieldsOf(FEE_D);
+        expect(sameDraftFields(a, {...a, broker_id: NEW_BROKER}), 'broker').toBe(false);
+        expect(sameDraftFields(a, {...a, asset_id: NEW_ASSET}), 'asset').toBe(false);
+        expect(sameDraftFields(a, {...a, asset_id: null}), 'asset cleared').toBe(false);
     });
 });

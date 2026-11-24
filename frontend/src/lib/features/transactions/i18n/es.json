@@ -137,7 +137,8 @@
         "undo": "Deshacer"
       },
       "openFailed": "No se pudo abrir la transacción",
-      "candidatesFailed": "No se pudieron cargar las transacciones para enlazar"
+      "candidatesFailed": "No se pudieron cargar las transacciones para enlazar",
+      "groupSyncHint": "Mientras las filas de este grupo (la transacción y sus gastos vinculados) son todas nuevas, comparten bróker y activo: cambiarlos aquí los cambia en cada fila del grupo."
     },
     "bulk": {
       "resetRow": "Restablecer fila",

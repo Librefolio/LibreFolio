@@ -500,11 +500,28 @@ The title counts the top-level rows, as a pair already counts as one. The grid d
   which drops `followsParent` (`applyChargePayload`), or one joined with «Link», which never followed (`linkInBulk`
   leaves the flag as it is, and a charge under its parent has no checkbox to be selected).
 
+**An all-new group moves together (66 TL-3b, P-30).** A group is a parent and the charges still linked under it
+(`newGroupOf`, `bulk/bulkCharges.ts`: neither «unlink» nor a saved «del»). While every row of it is a create, its broker
+and asset are shared, both ways: `handleFormPushed` reads the edited row's broker and asset as shown (`followedFields`)
+before the patch, and after `applyChargePayload` `syncNewGroup` writes the one that changed on every row of the group.
+
+- Only a changed field moves, so a group already divergent stays flagged until one of its rows is rewritten; the date
+  never moves (a create that follows its parent takes it one way, as before).
+- The asset moves only when it is not empty and the parent's type takes one (not a Deposit or a Withdrawal), and only
+  onto rows whose type takes one.
+- A row the sync writes loses the import todos on the fields it wrote that its new values answer (`remainingTodos`), as the row of the Form does (a todo on another field stays): an
+  imported group whose rows came without an asset is unblocked by the asset set on any one of them.
+- A group holding a saved row does not move: the batch's `chargeBrokerMismatch` / `chargeAssetMismatch` stay the guard,
+  and nothing changes in the payload.
+- A create that follows its parent (`followsParent`), applied in its own Form, loses the flag before the patch, so the
+  broker, asset and date that Form gives it are kept (`syncFollowers` used to write the parent's back over them).
+- The Form of a row of such a group gets `groupSync`: a line under the broker says the group moves together.
+
 **«Clone» carries the structure (66 TL-3).** A copy keeps its original's date, as «Clone» always did.
 
 - **A parent** brings a copy of each charge still linked under it (`cloneChargesUnder`: neither «del» nor «unlink»), owned
   by the parent's copy, whose group opens. Each charge copy holds the values it was born with (`clonedFields`); while its
-  values still equal them (`isUntouchedClone`, `sameDraftFields`) it leaves with the parent's copy (`withoutRows`).
+  values still equal them, broker and asset aside (`isUntouchedClone`), it leaves with the parent's copy (`withoutRows`).
   `clonedFields` goes with the link (`unlinkCharge`, `linkInBulk`, «unlink» in the parent's Form) and is never sent.
 - **From the pages** (the `clone` intent): a cloned parent with `charges_count` reads its charges first
   (`GET ?parent_ids`, in batches), then `wireClonedRows` builds the rows: a charge selected with its parent sits under the

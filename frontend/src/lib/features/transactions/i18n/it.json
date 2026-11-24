@@ -137,7 +137,8 @@
         "undo": "Annulla"
       },
       "openFailed": "Non è stato possibile aprire la transazione",
-      "candidatesFailed": "Non è stato possibile caricare le transazioni da collegare"
+      "candidatesFailed": "Non è stato possibile caricare le transazioni da collegare",
+      "groupSyncHint": "Finché le righe di questo gruppo (la transazione e le sue spese collegate) sono tutte nuove, hanno lo stesso broker e lo stesso asset: cambiarli qui li cambia su ogni riga del gruppo."
     },
     "bulk": {
       "resetRow": "Reimposta riga",

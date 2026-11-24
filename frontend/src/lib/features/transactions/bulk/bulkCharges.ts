@@ -16,6 +16,7 @@ import type {TXReadItem} from '../types';
 import type {DraftFields, PendingOp} from './txBulkTypes';
 import {chargesFromRows, type ChargeDraft, type ChargeType} from '../form/txCharges';
 import {exactDecimalEqual} from '../txPayloadHelpers';
+import {remainingTodos} from './bulkTodos';
 import {linkSelection, type LinkOptions, type LinkReason} from '../chargeLinkRules';
 
 type StoreGet = (id: number) => TXReadItem | undefined;
@@ -602,7 +603,71 @@ export function sameDraftFields(a: DraftFields, b: DraftFields): boolean {
 
 /** A charge copy brought by «Clona» that nobody changed: a create whose fields still equal the ones it was born with. */
 export function isUntouchedClone(op: PendingOp): boolean {
-    return op.op === 'create' && op.clonedFields !== undefined && sameDraftFields(op.fields, op.clonedFields);
+    if (op.op !== 'create' || op.clonedFields === undefined) return false;
+    // 66 TL-3b: broker and asset are out of the comparison — a copy that only followed its all-new group (`syncNewGroup`)
+    // is still untouched.
+    return sameDraftFields({...op.fields, broker_id: op.clonedFields.broker_id, asset_id: op.clonedFields.asset_id}, op.clonedFields);
+}
+
+// ---------------------------------------------------------------------------
+// TL-3b — in an all-new group, broker and asset move together (the developer, P-30)
+// ---------------------------------------------------------------------------
+
+/**
+ * The rows of the group of `tempId` — its parent first, then the charges still linked under it — when every one is new;
+ * otherwise `null` (66 TL-3b). The parent is the owner of `tempId` when that row sits under it (`isUnderParent`), else
+ * the row itself. A charge unlinked (`parentUnlink`) or a saved one marked for deletion does not count. `null` when fewer
+ * than two rows remain, when one of them is saved, or when the parent is a leg of a pair (rule 8: no parent).
+ */
+export function newGroupOf(ops: readonly PendingOp[], tempId: string): PendingOp[] | null {
+    const row = ops.find((op) => op.tempId === tempId);
+    if (!row) return null;
+    const owner = row.chargeOf !== undefined && !row.parentUnlink && isUnderParent(row, ops) ? ownerOf(row, ops) : undefined;
+    const parent = owner ?? row;
+    if (isPairLeg(parent, ops)) return null;
+    const charges = ops.filter((op) => op.chargeOf === parent.tempId && op !== parent && !op.parentUnlink && !(op.op === 'edit' && op.markedDelete) && isUnderParent(op, ops));
+    const group = [parent, ...charges];
+    if (group.length < 2 || group.some((op) => op.op !== 'create')) return null;
+    return group;
+}
+
+/**
+ * After the row `tempId` changed in its form, the broker and the asset that changed — against `before`, its effective
+ * values before the change — are written on every row of its all-new group (`newGroupOf`), both ways (66 TL-3b). Only
+ * a changed field moves: a group already divergent is not straightened. The asset moves only when it is not empty and
+ * the parent's type takes one, and only onto the rows whose type takes one. The date never moves. Rows that do not
+ * change keep their reference; outside an all-new group nothing changes. A row it writes loses the import todos on the fields it
+ * wrote that its new values answer (`remainingTodos`); every other todo stays. `effective` reads a row as it is shown (a charge that follows its parent shows the
+ * parent's values).
+ */
+export function syncNewGroup(ops: readonly PendingOp[], tempId: string, before: {broker_id: number; asset_id: number | null}, opts: {effective: (op: PendingOp) => DraftFields; assetAllowed: (type: string) => boolean}): PendingOp[] {
+    const group = newGroupOf(ops, tempId);
+    const row = ops.find((op) => op.tempId === tempId);
+    if (!group || !row) return [...ops];
+    const after = opts.effective(row);
+    const broker = after.broker_id !== before.broker_id ? after.broker_id : undefined;
+    const assetChanged = (after.asset_id ?? null) !== (before.asset_id ?? null) && after.asset_id != null && opts.assetAllowed(group[0].fields.type);
+    const asset = assetChanged ? after.asset_id : undefined;
+    if (broker === undefined && asset === undefined) return [...ops];
+    const members = new Set(group.map((op) => op.tempId));
+    return ops.map((op) => {
+        if (!members.has(op.tempId)) return op;
+        const nextBroker = broker ?? op.fields.broker_id;
+        const nextAsset = asset !== undefined && asset !== null && opts.assetAllowed(op.fields.type) ? asset : op.fields.asset_id;
+        if (nextBroker === op.fields.broker_id && nextAsset === op.fields.asset_id) return op;
+        const next: PendingOp = {...op, fields: {...op.fields, broker_id: nextBroker, asset_id: nextAsset}};
+        // An imported row's todo on a field the sync wrote is answered, as `patchRowFromForm` does for the row of the form;
+        // a todo on any other field stays — the user never opened this row.
+        const written = new Set<string>();
+        if (nextBroker !== op.fields.broker_id) written.add('broker_id');
+        if (nextAsset !== op.fields.asset_id) written.add('asset_id');
+        if (next.todos?.length) {
+            const todos = next.todos.filter((todo) => !written.has(todo.field) || remainingTodos([todo], next.fields).length > 0);
+            if (todos.length) next.todos = todos;
+            else delete next.todos;
+        }
+        return next;
+    });
 }
 
 /** Where the copy of a charge cloned alone is born: under an owner of the Bulk, linked to a saved parent absent from it,

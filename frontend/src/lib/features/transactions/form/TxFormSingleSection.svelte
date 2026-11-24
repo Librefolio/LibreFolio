@@ -40,6 +40,8 @@
         autocompleteNonce: string;
         brokerIdValue: number | null;
         rowSaved: boolean;
+        /** Project 66 (TL-3b): the row is in an all-new group of the Bulk — broker and asset change on every row of it. */
+        groupSync?: boolean;
         brokerImmutable: boolean;
         brokers: BrokerInfo[];
         brokersForSelect: Array<{id: number; name: string; icon_url?: string | null}>;
@@ -99,6 +101,7 @@
         autocompleteNonce,
         brokerIdValue,
         rowSaved,
+        groupSync = false,
         brokerImmutable,
         brokers,
         brokersForSelect,
@@ -357,6 +360,9 @@
             </div>
         {:else}
             <TxCellMark cell="broker" marks={markedCells}><BrokerSearchSelect brokers={brokersForSelect} value={brokerIdValue} onchange={(id) => setBroker(id ?? 0)} createLabel={$t('common.createNew') || 'Create new'} onCreateNew={() => (createBrokerOpen = true)} /></TxCellMark>
+        {/if}
+        {#if groupSync}
+            <span class="text-[11px] text-lf-muted italic" data-testid="tx-form-group-sync-hint">💡 {$t('transactions.form.groupSyncHint')}</span>
         {/if}
     </div>
 
