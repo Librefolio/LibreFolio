@@ -291,6 +291,15 @@
     let touchActive = false;
     let touchActiveResetTimer: ReturnType<typeof setTimeout> | null = null;
 
+    /** The controls inside a row whose own long press wins over the row's (85 D6): the standard buttons (`lf-btn`,
+     *  `<button>` or `<a>`), whose long press shows their name. A hand-written button has no long press of its own yet,
+     *  so a long press on it still selects the row, as before; it joins when its area migrates to `Button`. */
+    const ROW_TOUCH_CONTROLS = '.lf-btn';
+
+    function isOnRowControl(e: Event): boolean {
+        return e.target instanceof Element && e.target.closest(ROW_TOUCH_CONTROLS) !== null;
+    }
+
     function handleTouchStart(row: T, e: TouchEvent) {
         touchActive = true;
         if (touchActiveResetTimer != null) {
@@ -298,6 +307,8 @@
             touchActiveResetTimer = null;
         }
         if (isRowSelectable && !isRowSelectable(row)) return;
+        // A finger on a standard button of the row: its long press is the button's (its name), not the row's.
+        if (isOnRowControl(e)) return;
         touchTimerId = setTimeout(() => {
             touchTimerId = null;
             if (enableTouchSelection) {
@@ -1199,6 +1210,12 @@
                                     }
                                 }}
                                 oncontextmenu={(e) => {
+                                    // The menu of a finger's long press on a standard button of the row (Android): neither
+                                    // the row's menu nor the browser's opens over the button's name (85 D6).
+                                    if (touchActive && isOnRowControl(e)) {
+                                        e.preventDefault();
+                                        return;
+                                    }
                                     if (enableContextMenu && visibleRowActions.length > 0) {
                                         const target = e.target instanceof Element ? e.target : null;
                                         // A field inside the row keeps the browser's own menu, so «Paste» still works there (81 U15).
