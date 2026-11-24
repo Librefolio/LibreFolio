@@ -14,7 +14,7 @@
  * a tree it never measured.
  */
 import {describe, expect, it} from 'vitest';
-import {compareWithBaseline, measureSource, readBaseline, scanTree, tightenBaseline} from '../scripts/button/button-ratchet.mjs';
+import {allowanceOf, compareWithBaseline, EXCEPTIONS, measureSource, OTHER_ROLES, readBaseline, scanTree, tightenBaseline} from '../scripts/button/button-ratchet.mjs';
 
 type Measure = ReturnType<typeof measureSource>;
 
@@ -45,6 +45,44 @@ describe('measureSource — what counts as a hand-written button', () => {
     it('does not count a standard <Button> component as a hand-written button', () => {
         const measure = measureSource('lib/x/Probe.svelte', svelte('<Button label="Go" />', "    import {Button} from '$lib/components/ui/button';"));
         expect(measure.count).toBe(0);
+    });
+});
+
+describe('measureSource — a <button> with another role is not a button (C11)', () => {
+    const count = (markup: string, script = '') => measureSource('lib/x/Probe.svelte', svelte(markup, script)).count;
+
+    it('OTHER_ROLES is the list of the roles that make a <button> something else', () => {
+        expect([...OTHER_ROLES].sort()).toEqual(['checkbox', 'combobox', 'menuitem', 'menuitemcheckbox', 'menuitemradio', 'option', 'radio', 'switch', 'tab', 'treeitem'].sort());
+    });
+
+    it('a <button> whose role is one literal of the list is not counted, on one line or on several', () => {
+        expect(count('<button type="button" role="option">Euro</button>')).toBe(0);
+        expect(count('<button\n    type="button"\n    role="option"\n    aria-selected={selected}\n>\n    Euro\n</button>')).toBe(0);
+        for (const role of OTHER_ROLES) expect(count(`<button role="${role}">x</button>`), role).toBe(0);
+    });
+
+    it('a computed role, role="button" and a role outside the list are counted', () => {
+        expect(count('<button role={kind}>x</button>')).toBe(1);
+        expect(count('<button role="button">x</button>')).toBe(1);
+        expect(count('<button role="presentation">x</button>')).toBe(1);
+        expect(count('<button role="option {extra}">x</button>'), 'a role that is not one literal').toBe(1);
+    });
+
+    it('a <button role="option"> written as HTML in a script string still counts', () => {
+        expect(count('<div></div>', '    const cell = \'<button role="option">x</button>\';')).toBe(1);
+    });
+
+    it('a <button role="option"> in a comment changes nothing', () => {
+        expect(count('<!-- <button role="option">x</button> -->\n<button type="button">Go</button>')).toBe(1);
+        expect(count('<!-- <button role="option">x</button> -->\n<div></div>')).toBe(0);
+    });
+});
+
+describe('EXCEPTIONS — the hand-written buttons that stay', () => {
+    it('the day of CalendarMonth is one, with its reason', () => {
+        expect(allowanceOf('lib/components/ui/date/CalendarMonth.svelte')).toBe(1);
+        expect(EXCEPTIONS.find((entry) => entry.file === 'lib/components/ui/date/CalendarMonth.svelte')?.reason.trim()).not.toBe('');
+        expect(allowanceOf('lib/x/Unknown.svelte')).toBe(0);
     });
 });
 

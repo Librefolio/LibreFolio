@@ -9,8 +9,8 @@ lib/components/charts/PriceChartFull.svelte	4
 lib/components/layout/ChangelogModal.svelte	8
 lib/components/layout/ConnectionSecurityIndicator.svelte	2
 lib/components/layout/Header.svelte	1
-lib/components/layout/HelpMenu.svelte	2
-lib/components/layout/LanguageSelector.svelte	2
+lib/components/layout/HelpMenu.svelte	1
+lib/components/layout/LanguageSelector.svelte	1
 lib/components/layout/PageBackButton.svelte	1
 lib/components/layout/ServerUnreachable.svelte	1
 lib/components/layout/Sidebar.svelte	4
@@ -21,7 +21,6 @@ lib/components/table/DataTableColumnFilter.svelte	12
 lib/components/table/DataTableColumnHeader.svelte	3
 lib/components/table/DataTablePagination.svelte	5
 lib/components/table/DataTableToolbar.svelte	3
-lib/components/ui/ContextMenu.svelte	3
 lib/components/ui/DocsLink.svelte	1
 lib/components/ui/OrderableList.svelte	2
 lib/components/ui/PrivacyToggle.svelte	1
@@ -31,7 +30,7 @@ lib/components/ui/data-editor/DataEditor.svelte	3
 lib/components/ui/data-editor/DataExportModal.svelte	3
 lib/components/ui/data-editor/DataImportModal.svelte	4
 lib/components/ui/data-editor/ErasableNumberCell.svelte	2
-lib/components/ui/date/CalendarMonth.svelte	4
+lib/components/ui/date/CalendarMonth.svelte	3
 lib/components/ui/date/CompactDurationBadge.svelte	1
 lib/components/ui/date/DateRangePicker.svelte	6
 lib/components/ui/date/SingleDatePicker.svelte	2
@@ -42,7 +41,7 @@ lib/components/ui/feedback/ToastContainer.svelte	1
 lib/components/ui/input/DistributionEditor.svelte	3
 lib/components/ui/input/PasswordInput.svelte	1
 lib/components/ui/input/Switch.svelte	1
-lib/components/ui/input/TagInput.svelte	3
+lib/components/ui/input/TagInput.svelte	2
 lib/components/ui/media/AssetPickerModal.svelte	10
 lib/components/ui/media/FileEditModal.svelte	6
 lib/components/ui/media/FileUploader.svelte	6
@@ -51,14 +50,12 @@ lib/components/ui/media/ImageEditModal.svelte	11
 lib/components/ui/modals/ConfirmModal.svelte	5
 lib/components/ui/modals/SyncModalBase.svelte	4
 lib/components/ui/modals/SyncResultRow.svelte	2
-lib/components/ui/select/AssetPickerPanel.svelte	8
+lib/components/ui/select/AssetPickerPanel.svelte	5
 lib/components/ui/select/CheckMenu.svelte	2
 lib/components/ui/select/FilterButton.svelte	1
 lib/components/ui/select/FxProviderSelect.svelte	8
 lib/components/ui/select/SearchSelect.svelte	3
-lib/components/ui/select/SimpleSelect.svelte	2
-lib/components/ui/select/TreeSelect.svelte	3
-lib/components/ui/tabs/TabBar.svelte	1
+lib/components/ui/select/TreeSelect.svelte	2
 lib/features/ai-export/AiExportMenu.svelte	1
 lib/features/ai-export/AiExportOptionsPanel.svelte	9
 lib/features/allocation/AllocationChips.svelte	1
@@ -82,12 +79,11 @@ lib/features/assets/BoundaryDateModal.svelte	2
 lib/features/assets/CellDateRange.svelte	1
 lib/features/assets/DistributionDataImportModal.svelte	1
 lib/features/assets/EventDataImportModal.svelte	1
-lib/features/assets/IdentifierPrimaryChooser.svelte	1
 lib/features/assets/PriceDataImportModal.svelte	1
 lib/features/assets/ProviderAssignmentSection.svelte	3
 lib/features/assets/ProviderComparisonModal.svelte	5
 lib/features/assets/ScheduledInvestmentEditor.svelte	4
-lib/features/assets/bulk/AssetBulkEditModal.svelte	16
+lib/features/assets/bulk/AssetBulkEditModal.svelte	15
 lib/features/assets/detail/AssetCalendarWindowControls.svelte	1
 lib/features/assets/detail/AssetChartModeToggle.svelte	2
 lib/features/assets/detail/AssetDetailHeader.svelte	1
@@ -112,7 +108,7 @@ lib/features/backup/BackupCleanupPanel.svelte	1
 lib/features/backup/BackupDownloadCard.svelte	4
 lib/features/backup/BackupList.svelte	1
 lib/features/backup/BackupsSection.svelte	2
-lib/features/backup/OwnerChoiceModal.svelte	3
+lib/features/backup/OwnerChoiceModal.svelte	2
 lib/features/backup/RestartOverlay.svelte	2
 lib/features/backup/RestoreCard.svelte	6
 lib/features/backup/RestoreFlowSteps.svelte	4
@@ -121,7 +117,7 @@ lib/features/backup/RestoreReportModal.svelte	5
 lib/features/backup/RestoreStepsModal.svelte	1
 lib/features/brokers/BrokerCard.svelte	4
 lib/features/brokers/BrokerDiscoveryCard.svelte	1
-lib/features/brokers/BrokerForm.svelte	5
+lib/features/brokers/BrokerForm.svelte	4
 lib/features/brokers/BrokerImportFilesModal.svelte	4
 lib/features/brokers/BrokerModal.svelte	3
 lib/features/brokers/BrokerSharingModal.svelte	1
@@ -275,7 +271,7 @@ lib/features/transactions/bulk/TransactionResultBanner.svelte	1
 lib/features/transactions/bulk/TxBulkBanners.svelte	17
 lib/features/transactions/bulk/TxBulkToolbar.svelte	5
 lib/features/transactions/cells/TxTypeIconCell.svelte	1
-lib/features/transactions/events/AssetEventPicker.svelte	5
+lib/features/transactions/events/AssetEventPicker.svelte	1
 lib/features/transactions/events/EventCreateMiniModal.svelte	3
 lib/features/transactions/events/EventExistsPanel.svelte	3
 lib/features/transactions/form/TransactionFormModal.svelte	5

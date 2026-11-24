@@ -10,7 +10,10 @@
  * Measured in every production source of frontend/src (the same files the colour gates read: `isProductionSource` of
  * theme-roles.mjs — not the tests, the mocks, the generated API, the Designer Lab), never inside a comment:
  *   - a `.svelte` file: its `<button>` elements, read from the Svelte compiler's own AST, plus the `<button` written
- *     inside the string literals of its `<script>` blocks (buttons built as HTML for a table cell);
+ *     inside the string literals of its `<script>` blocks (buttons built as HTML for a table cell). A `<button>` whose
+ *     `role` is written as one of OTHER_ROLES does not count (BTN-2·0, C11): a control of another kind — an option, a
+ *     tab, a menu item, a switch — keeps its own markup and keyboard by contract. The AST reads the whole opening tag,
+ *     on as many lines as it takes; a computed `role={…}`, `role="button"` or a role outside the list still counts;
  *   - a `.ts` / `.js` file: the `<button` inside its string literals.
  *
  * The ratchet, against BASELINE (one line per file, `<path under src> TAB <count>[ TAB <reason>]`):
@@ -49,7 +52,30 @@ export const EXCEPTIONS = [
     {file: 'lib/components/ui/button/Button.svelte', count: 1, reason: 'the standard button itself'},
     {file: 'lib/components/table/DataTableColumnHeader.svelte', count: 1, reason: 'the ⓘ of a table header: an information icon, tap = explanation, long press = guide (Q-BTN-3)'},
     {file: 'lib/features/tools/pac-allocator/planner/shared/HelpTip.svelte', count: 1, reason: 'an information icon: no action, tap = explanation (Q-BTN-3)'},
+    {
+        file: 'lib/components/ui/date/CalendarMonth.svelte',
+        count: 1,
+        reason: 'the day of a month: a cell of the calendar, a control of its own; no ARIA grid around it, so no gridcell (BTN-2·0, C11)',
+    },
 ];
+
+/**
+ * The roles of a control that is not a button (BTN-2·0, C11): written literally on a `<button>`, they take it out of the
+ * count. A closed list: anything else, `button` included, counts.
+ */
+export const OTHER_ROLES = new Set(['option', 'tab', 'menuitem', 'menuitemcheckbox', 'menuitemradio', 'treeitem', 'radio', 'checkbox', 'switch', 'combobox']);
+
+/** The literal `role` of an element of the AST, or null when it has none or it is computed. */
+function literalRole(/** @type {AstNode} */ node) {
+    for (const attribute of /** @type {AstNode[]} */ (node.attributes ?? [])) {
+        if (attribute.type !== 'Attribute' || attribute.name !== 'role') continue;
+        const value = /** @type {unknown} */ (attribute.value);
+        if (!Array.isArray(value) || value.length !== 1) return null;
+        const [part] = value;
+        return isNode(part) && part.type === 'Text' ? String(part.data ?? '').trim() : null;
+    }
+    return null;
+}
 
 const HTML_BUTTON_RE = /<button\b/g;
 
@@ -104,6 +130,7 @@ export function measureSource(rel, text) {
         for (const node of nodes(ast)) {
             if (node.start === undefined) continue;
             if (node.type === 'RegularElement' && node.name === 'button') {
+                if (OTHER_ROLES.has(literalRole(node) ?? '')) continue;
                 count += 1;
                 lines.push(text.slice(0, node.start).split('\n').length);
             }
