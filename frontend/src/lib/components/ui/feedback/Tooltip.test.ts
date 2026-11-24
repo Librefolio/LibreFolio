@@ -320,3 +320,72 @@ describe('Tooltip — an anchor other than the trigger (77 SEL-M)', () => {
         expect(tip.style.left).toBe('435px');
     });
 });
+
+/**
+ * External-target mode (85 BTN-0, the standard button): `trigger` names an element owned by someone else (`pressable`),
+ * and `open` decides. No wrapper is rendered and no gesture is read here: a click or a touch elsewhere does not close
+ * it, since the owner does that. The pointer over the body is reported to the owner (`onbodypointer`). The wrapper mode
+ * is the positive control: the same click outside closes a pinned tooltip there.
+ */
+describe('Tooltip — external-target mode (85 BTN-0)', () => {
+    function externalTrigger(): HTMLElement {
+        const trigger = document.createElement('span');
+        trigger.dataset.testid = 'probe-external-trigger';
+        trigger.textContent = 'trigger';
+        document.body.appendChild(trigger);
+        return trigger;
+    }
+
+    afterEach(() => {
+        document.querySelector('[data-testid="probe-external-trigger"]')?.remove();
+    });
+
+    it('renders no wrapper, and shows the content exactly while open', async () => {
+        const trigger = externalTrigger();
+        const view = render(Tooltip, {props: {trigger, open: false, html: '<strong>Edit</strong>'}});
+        expect(view.container.querySelector('[role="button"]'), 'no wrapper: the trigger lives elsewhere').toBeNull();
+        expect(view.container.children).toHaveLength(0);
+        expect(screen.queryByTestId('tooltip-content')).toBeNull();
+
+        await view.rerender({trigger, open: true, html: '<strong>Edit</strong>'});
+        const content = await screen.findByTestId('tooltip-content');
+        expect(content).toHaveAttribute('role', 'tooltip');
+        expect(content.querySelector('strong')).toHaveTextContent('Edit');
+
+        await view.rerender({trigger, open: false, html: '<strong>Edit</strong>'});
+        await waitFor(() => expect(screen.queryByTestId('tooltip-content')).toBeNull());
+    });
+
+    it('open with a null trigger shows nothing', () => {
+        render(Tooltip, {props: {trigger: null, open: true, text: 'Edit'}});
+        expect(screen.queryByTestId('tooltip-content')).toBeNull();
+    });
+
+    it('a click or a touch elsewhere does not close it: the owner does', async () => {
+        const trigger = externalTrigger();
+        render(Tooltip, {props: {trigger, open: true, text: 'Edit'}});
+        expect(await screen.findByTestId('tooltip-content')).toBeInTheDocument();
+        await fireEvent.click(document.body);
+        await fireEvent.touchStart(document.body);
+        await fireEvent.click(trigger);
+        expect(screen.getByTestId('tooltip-content')).toBeInTheDocument();
+    });
+
+    it('positive control: in the wrapper mode the same click elsewhere closes a pinned tooltip', async () => {
+        render(Tooltip, {props: {text: 'Pinned'}});
+        await fireEvent.click(screen.getByRole('button'));
+        expect(await screen.findByTestId('tooltip-content')).toBeInTheDocument();
+        await fireEvent.click(document.body);
+        await waitFor(() => expect(screen.queryByTestId('tooltip-content')).toBeNull());
+    });
+
+    it('reports the pointer entering and leaving its body to the owner', async () => {
+        const trigger = externalTrigger();
+        const onbodypointer = vi.fn();
+        render(Tooltip, {props: {trigger, open: true, text: 'Edit', onbodypointer}});
+        const content = await screen.findByTestId('tooltip-content');
+        await fireEvent.mouseEnter(content);
+        await fireEvent.mouseLeave(content);
+        expect(onbodypointer.mock.calls).toEqual([[true], [false]]);
+    });
+});

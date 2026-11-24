@@ -65,14 +65,38 @@
          *  row menu goes against the whole menu). Beside it, right then left, level with the trigger; with no room on
          *  either side, above it, else below it: never over it. Absent: the trigger, as always. */
         anchor?: HTMLElement | null;
+        /** External-target mode (85 BTN-0, the standard button): the element the tooltip belongs to, owned by someone
+         *  else. No wrapper is rendered and no gesture is read here: `open` decides, the owner (`pressable`) reads the
+         *  gestures and closes it. Drawing, placement, portal and scroll-following stay the ones of the wrapper mode. */
+        trigger?: HTMLElement | null;
+        /** External-target mode: whether the tooltip shows. */
+        open?: boolean;
+        /** External-target mode: the pointer entered or left the tooltip body (the owner keeps it open meanwhile). */
+        onbodypointer?: (inside: boolean) => void;
         children?: Snippet;
     }
 
-    let {text = '', html = '', math = false, position = 'top', maxWidth = '400px', wrapperClass = '', interactiveChild = false, showDelayMs = 500, testId = '', openOnFocus = false, showIf, anchor = null, children}: Props = $props();
+    let {text = '', html = '', math = false, position = 'top', maxWidth = '400px', wrapperClass = '', interactiveChild = false, showDelayMs = 500, testId = '', openOnFocus = false, showIf, anchor = null, trigger, open = false, onbodypointer, children}: Props = $props();
 
     let visible = $state(false);
     let tooltipElement: HTMLDivElement | undefined = $state(undefined);
-    let triggerElement: HTMLDivElement | undefined = $state(undefined);
+    let triggerElement: HTMLElement | undefined = $state(undefined);
+    /** The tooltip of an element owned by someone else (`trigger` given): no wrapper, `open` decides. */
+    let external = $derived(trigger !== undefined);
+
+    $effect(() => {
+        if (!external) return;
+        triggerElement = trigger ?? undefined;
+        visible = open && !!trigger;
+    });
+
+    // External mode: the content or the side can change while open (a reason replaced, the finger's side): place again.
+    $effect(() => {
+        if (!external || !visible) return;
+        void renderedContent;
+        void position;
+        schedulePositionUpdate();
+    });
 
     // Fixed position coordinates (viewport-relative)
     let fixedTop = $state(0);
@@ -421,15 +445,22 @@
     // Keep fixed coordinates aligned while nested panels or the page scroll.
     $effect(() => {
         if (visible) {
-            document.addEventListener('click', handleClickOutside);
-            document.addEventListener('touchstart', handleTouchOutside);
+            // External mode: the owner dismisses it; only the placement is followed here. `data-dismissable` stays true:
+            // the owner (`pressable`) attaches its outside and Escape listeners in the same call that sets `open`.
+            const dismissable = !external;
+            if (dismissable) {
+                document.addEventListener('click', handleClickOutside);
+                document.addEventListener('touchstart', handleTouchOutside);
+            }
             document.addEventListener('scroll', schedulePositionUpdate, {capture: true, passive: true});
             window.addEventListener('resize', schedulePositionUpdate);
             listenersAttached = true;
             return () => {
                 listenersAttached = false;
-                document.removeEventListener('click', handleClickOutside);
-                document.removeEventListener('touchstart', handleTouchOutside);
+                if (dismissable) {
+                    document.removeEventListener('click', handleClickOutside);
+                    document.removeEventListener('touchstart', handleTouchOutside);
+                }
                 document.removeEventListener('scroll', schedulePositionUpdate, true);
                 window.removeEventListener('resize', schedulePositionUpdate);
                 if (pendingPositionFrame !== null) {
@@ -447,7 +478,9 @@
     }
 </script>
 
-{#if interactiveChild}
+{#if external}
+    <!-- External-target mode: the trigger lives elsewhere (pressable); nothing to wrap. -->
+{:else if interactiveChild}
     <!-- svelte-ignore a11y_click_events_have_key_events -->
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div
@@ -507,8 +540,8 @@
         role="tooltip"
         data-testid="tooltip-content"
         data-dismissable={listenersAttached ? 'true' : 'false'}
-        onmouseenter={handlePointerEnter}
-        onmouseleave={handlePointerLeave}
+        onmouseenter={() => (external ? onbodypointer?.(true) : handlePointerEnter())}
+        onmouseleave={() => (external ? onbodypointer?.(false) : handlePointerLeave())}
     >
         {#if math || html}
             {@html sanitizeHtml(renderedContent)}
