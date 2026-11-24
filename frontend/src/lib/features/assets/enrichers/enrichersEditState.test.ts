@@ -468,3 +468,187 @@ describe("the price assignment's symbol is trusted (ENR-2, R6)", () => {
         expect(row(['SWDA.MI'])?.canAdd).toBe(true);
     });
 });
+
+describe('«Cerca online» (ENR-3)', () => {
+    const ISIN = 'IE00BK5BQT80';
+    const OTHER_ISIN = 'US0378331005';
+    const hit = (type: string, identifier: string, name = 'A result'): state.SearchHit => ({name, binding: {identifier_type: type, identifier}});
+    const answer = (code: string, results: state.SearchHit[], extra: Partial<state.SearchAnswer> = {}): state.SearchAnswer => ({code, status: 'ok', via: 'search', results, accepted_identifier_types: ['ISIN'], ...extra});
+    const codesOf = (pills: state.SearchPill[]) => pills.map((pill) => pill.code);
+
+    describe('pills', () => {
+        it('are the enrichers that cover the type, minus the chosen, minus the ones not configured', () => {
+            const draft = state.draftFrom({justetf: {identifier_type: 'ISIN', identifier: ISIN}});
+            const pills = state.searchPills(draft, CATALOGUE, 'ETF', new Set());
+            expect(codesOf(pills)).toEqual(['yahoo', 'borsa_italiana', 'esma', 'gleif']);
+            expect(pills.every((pill) => pill.on)).toBe(true);
+        });
+
+        it('follow the type: a bond has its own', () => {
+            expect(codesOf(state.searchPills(state.draftFrom({}), CATALOGUE, 'BOND', new Set()))).toEqual(['borsa_italiana', 'esma', 'bonds_only']);
+        });
+
+        it('say off for the ones turned off, and keep them in place', () => {
+            const pills = state.searchPills(state.draftFrom({}), CATALOGUE, 'ETF', new Set(['yahoo']));
+            expect(pills.find((pill) => pill.code === 'yahoo')?.on).toBe(false);
+            expect(pills.find((pill) => pill.code === 'esma')?.on).toBe(true);
+        });
+
+        it('mark the ones without a search as identifier only', () => {
+            const pills = state.searchPills(state.draftFrom({}), CATALOGUE, 'ETF', new Set());
+            expect(pills.find((pill) => pill.code === 'yahoo')?.identifierOnly).toBe(false);
+            expect(pills.find((pill) => pill.code === 'esma')?.identifierOnly).toBe(true);
+        });
+
+        it('lose a code chosen, and get it back when it is removed', () => {
+            const draft = state.addFromSearch(state.draftFrom({}), 'yahoo', {identifier_type: 'TICKER', identifier: 'VWRA'});
+            expect(codesOf(state.searchPills(draft, CATALOGUE, 'ETF', new Set()))).not.toContain('yahoo');
+            expect(codesOf(state.searchPills(state.removeEnricher(draft, 'yahoo'), CATALOGUE, 'ETF', new Set()))).toContain('yahoo');
+        });
+    });
+
+    describe('the excluded line', () => {
+        it('names the chosen ones that cover the type, never one not configured or not covering', () => {
+            const draft = state.draftFrom({justetf: {identifier_type: 'ISIN', identifier: ISIN}, keyed: {identifier_type: 'ISIN', identifier: ISIN}, bonds_only: {identifier_type: 'ISIN', identifier: ISIN}, switched_off: {identifier_type: 'ISIN', identifier: ISIN}});
+            expect(state.searchExcluded(draft, CATALOGUE, 'ETF').map((entry) => entry.code)).toEqual(['justetf']);
+        });
+    });
+
+    describe('addFromSearch', () => {
+        const binding = {identifier_type: 'TICKER', identifier: 'VWRA'};
+
+        it('puts the code at the end with a copy of the binding', () => {
+            const draft = state.addFromSearch(state.draftFrom(CONFIG), 'yahoo', binding);
+            expect(draft.order).toEqual([...Object.keys(CONFIG), 'yahoo']);
+            expect(draft.bindings.yahoo).toEqual(binding);
+            expect(draft.bindings.yahoo).not.toBe(binding);
+        });
+
+        it('leaves a code already chosen as it is', () => {
+            const draft = state.draftFrom(CONFIG);
+            expect(state.addFromSearch(draft, 'justetf', binding)).toBe(draft);
+        });
+
+        it('takes the code out of the pills, the rows and «Non in elenco»', () => {
+            const before = state.draftFrom({});
+            const after = state.addFromSearch(before, 'yahoo', binding);
+            const answers = [answer('yahoo', [hit('TICKER', 'VWRA')]), answer('esma', [hit('ISIN', ISIN)])];
+
+            expect(codesOf(state.searchPills(before, CATALOGUE, 'ETF', new Set()))).toContain('yahoo');
+            expect(state.searchRows(answers, before, {}).map((row) => row.code)).toEqual(['yahoo', 'esma']);
+            expect(state.otherRows(before, context()).map((row) => row.code)).toContain('yahoo');
+
+            expect(codesOf(state.searchPills(after, CATALOGUE, 'ETF', new Set()))).not.toContain('yahoo');
+            expect(state.searchRows(answers, after, {}).map((row) => row.code)).toEqual(['esma']);
+            expect(state.otherRows(after, context()).map((row) => row.code)).not.toContain('yahoo');
+        });
+    });
+
+    describe('searchRows', () => {
+        it('keeps the order of the answers and skips the ones that are not ok', () => {
+            const answers = [answer('yahoo', [hit('TICKER', 'A'), hit('TICKER', 'B')]), answer('esma', [], {status: 'identifier_only'}), answer('borsa_italiana', [hit('ISIN', ISIN)], {status: 'error'}), answer('gleif', [hit('LEI', 'X')])];
+            expect(state.searchRows(answers, state.draftFrom({}), {}).map((row) => [row.code, row.hit.binding.identifier])).toEqual([
+                ['yahoo', 'A'],
+                ['yahoo', 'B'],
+                ['gleif', 'X'],
+            ]);
+        });
+
+        it('flags an ISIN result against the asset ISIN (R13)', () => {
+            const rows = state.searchRows([answer('yahoo', [hit('ISIN', OTHER_ISIN), hit('ISIN', ISIN), hit('TICKER', 'VWRA')])], state.draftFrom({}), {ISIN});
+            expect(rows.map((row) => row.conflict)).toEqual([{isin: ISIN, against: 'asset'}, null, null]);
+        });
+
+        it('compares without regard to case or blanks', () => {
+            const rows = state.searchRows([answer('yahoo', [hit('ISIN', ` ${ISIN.toLowerCase()} `)])], state.draftFrom({}), {ISIN});
+            expect(rows[0].conflict).toBeNull();
+        });
+
+        it('flags an ISIN result against a chosen ISIN binding, naming whose it is (R13)', () => {
+            const draft = state.draftFrom({justetf: {identifier_type: 'ISIN', identifier: ISIN}});
+            const rows = state.searchRows([answer('esma', [hit('ISIN', OTHER_ISIN)])], draft, {});
+            expect(rows[0].conflict).toEqual({isin: ISIN, against: 'justetf'});
+        });
+
+        it('never flags a ticker binding or an asset with no ISIN', () => {
+            const rows = state.searchRows([answer('yahoo', [hit('TICKER', 'VWRA'), hit('ISIN', ISIN)])], state.draftFrom({yahoo2: {identifier_type: 'TICKER', identifier: 'X'}}), {});
+            expect(rows.map((row) => row.conflict)).toEqual([null, null]);
+        });
+    });
+
+    describe('isinFollowUp (R12)', () => {
+        const isinBinding = {identifier_type: 'ISIN', identifier: ISIN};
+        const ask = (binding: state.EnricherBinding, draft = state.draftFrom({}), asked: ReadonlySet<string> = new Set()) => state.isinFollowUp(binding, draft, CATALOGUE, 'ETF', asked);
+
+        it('asks the enrichers without a search that accept an ISIN, cover the type and are not chosen', () => {
+            // yahoo has a search; gleif takes LEI; keyed is not configured; bonds_only does not cover ETF
+            expect(ask(isinBinding)).toEqual({isin: ISIN, codes: ['justetf', 'borsa_italiana', 'esma']});
+        });
+
+        it('leaves out the chosen ones', () => {
+            const draft = state.draftFrom({justetf: isinBinding});
+            expect(ask(isinBinding, draft)?.codes).toEqual(['borsa_italiana', 'esma']);
+        });
+
+        it('asks one ISIN once', () => {
+            const asked = new Set<string>();
+            const first = ask(isinBinding, state.draftFrom({}), asked);
+            asked.add(first!.isin);
+            expect(ask(isinBinding, state.draftFrom({}), asked)).toBeNull();
+            expect(ask({identifier_type: 'ISIN', identifier: OTHER_ISIN}, state.draftFrom({}), asked)?.isin).toBe(OTHER_ISIN);
+        });
+
+        it('upper-cases the ISIN asked', () => {
+            expect(ask({identifier_type: 'ISIN', identifier: ISIN.toLowerCase()})?.isin).toBe(ISIN);
+        });
+
+        it('is null for a ticker binding, an empty identifier, or nobody left to ask', () => {
+            expect(ask({identifier_type: 'TICKER', identifier: 'VWRA'})).toBeNull();
+            expect(ask({identifier_type: 'ISIN', identifier: ''})).toBeNull();
+            expect(ask(isinBinding, state.draftFrom({justetf: isinBinding, borsa_italiana: isinBinding, esma: isinBinding}))).toBeNull();
+        });
+    });
+
+    describe('suggestedIdentifiers (R7)', () => {
+        const COLUMNS = ['ISIN', 'TICKER', 'CUSIP', 'OTHER'];
+        const draft = state.draftFrom({justetf: {identifier_type: 'ISIN', identifier: ISIN}, yahoo: {identifier_type: 'TICKER', identifier: 'VWRA'}, esma: {identifier_type: 'OTHER', identifier: 'free text'}});
+
+        it('proposes the ISIN of an enricher added from the search, for an empty column', () => {
+            expect(state.suggestedIdentifiers(draft, ['justetf', 'yahoo'], {}, COLUMNS)).toEqual({ISIN: ISIN});
+        });
+
+        it('never proposes a ticker, even for an empty TICKER column: that column is the bare ticker (R2, R6)', () => {
+            expect(state.suggestedIdentifiers(draft, ['yahoo'], {}, COLUMNS)).toEqual({});
+            expect(state.suggestedIdentifiers(draft, ['yahoo'], {TICKER: '  '}, COLUMNS)).toEqual({});
+        });
+
+        it('never overwrites a column the asset has, blanks count as empty', () => {
+            expect(state.suggestedIdentifiers(draft, ['justetf', 'yahoo'], {ISIN: OTHER_ISIN}, COLUMNS)).toEqual({});
+            expect(state.suggestedIdentifiers(draft, ['justetf'], {ISIN: '  '}, COLUMNS)).toEqual({ISIN: ISIN});
+        });
+
+        it('ignores a code not added from the search', () => {
+            expect(state.suggestedIdentifiers(draft, [], {}, COLUMNS)).toEqual({});
+        });
+
+        it('forgets a code removed after it was added', () => {
+            expect(state.suggestedIdentifiers(state.removeEnricher(draft, 'justetf'), ['justetf', 'yahoo'], {}, COLUMNS)).toEqual({});
+        });
+
+        it('proposes a LEI too, when the asset has such a column', () => {
+            const lei = state.draftFrom({gleif: {identifier_type: 'LEI', identifier: '5493001KJTIIGC8Y1R12'}});
+            expect(state.suggestedIdentifiers(lei, ['gleif'], {}, ['ISIN', 'LEI'])).toEqual({LEI: '5493001KJTIIGC8Y1R12'});
+        });
+
+        it('never proposes OTHER, nor a type with no column', () => {
+            expect(state.suggestedIdentifiers(draft, ['esma'], {}, COLUMNS)).toEqual({});
+            expect(state.suggestedIdentifiers(draft, ['justetf'], {}, ['TICKER'])).toEqual({});
+            expect(state.suggestedIdentifiers(draft, ['justetf'], {}, [])).toEqual({});
+        });
+
+        it('proposes one value per type: the first code wins', () => {
+            const two = state.draftFrom({justetf: {identifier_type: 'ISIN', identifier: ISIN}, esma: {identifier_type: 'ISIN', identifier: OTHER_ISIN}});
+            expect(state.suggestedIdentifiers(two, ['justetf', 'esma'], {}, COLUMNS)).toEqual({ISIN: ISIN});
+        });
+    });
+});
