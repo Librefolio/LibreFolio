@@ -536,6 +536,7 @@
     <div
         bind:this={tooltipElement}
         class="tooltip-fixed"
+        class:compact={external}
         style="max-width: min({maxWidth}, calc(100vw - 20px)); top: {fixedTop}px; left: {fixedLeft}px;"
         role="tooltip"
         data-testid="tooltip-content"
@@ -592,6 +593,14 @@
             font-size: 0.875rem;
             line-height: 1.35rem;
         }
+    }
+
+    /* External mode (85, the name of a standard button): a name is a word or two, so the box fits it. The minimum
+       width above serves the long help texts of the information tooltips on a phone; on a button's name it drew a
+       288 px box around «Edit». Two classes win over the phone rule whatever the order. */
+    .tooltip-fixed.compact {
+        min-width: 0;
+        padding: 0.375rem 0.625rem;
     }
 
     /* The inverted surface (Q10): dark in the light theme, light in the dark theme — the role follows the theme by
