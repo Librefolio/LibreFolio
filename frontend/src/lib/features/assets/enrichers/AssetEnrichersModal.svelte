@@ -11,12 +11,15 @@
     `enricher`); once saved the row is usable.
 
   `search` and `test` default to the API; a caller (a test, the screenshots) may pass its own. «Riconosci» is the asset
-  window's: it hands over what it found (`recognitions`) and the codes it is still asking (`searching`).
+  window's: it hands over what it found (`recognitions`), the codes it is still asking (`searching`), its line (`line`,
+  on top of the window) and its proposal. A window opened «to adopt» (`adopt`: an asset with no enrichers, or a new one
+  whose list the user has not applied yet) takes the proposal into its draft while the user has not touched the list
+  (ENR-1, R2); after a touch, what is found later waits in «Non in elenco».
 -->
 <script lang="ts">
     import {_ as t} from '$lib/i18n';
     import {untrack} from 'svelte';
-    import {ChevronDown, ChevronUp, Plus} from 'lucide-svelte';
+    import {ChevronDown, ChevronUp, LoaderCircle, Plus} from 'lucide-svelte';
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
     import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
     import OrderableList from '$lib/components/ui/OrderableList.svelte';
@@ -29,6 +32,7 @@
     import {searchEnricher, testEnricher, type SearchCall, type TestCall} from './enricherCalls';
     import {
         addEnricher,
+        adoptProposal,
         chosenRows,
         draftFrom,
         draftIssues,
@@ -46,6 +50,7 @@
         type EnrichersContext,
         type EnrichersDraft,
         type OtherRow,
+        type RecognitionLine,
     } from './enrichersEditState';
 
     interface Props {
@@ -63,6 +68,12 @@
         profileCatalogue: Pick<ProfileVoice, 'key' | 'topic'>[];
         recognitions?: Record<string, EnricherRecognition>;
         searching?: string[];
+        /** «Riconosci»'s proposal: the found ones that enter by themselves, in the default order. */
+        proposal?: Record<string, EnricherBinding>;
+        /** Read at each opening: the window takes the proposal into its draft until the user touches the list (R2). */
+        adopt?: boolean;
+        /** The line of «Riconosci» on top of the window; null: nothing to say yet. */
+        line?: RecognitionLine | null;
         zIndex?: number;
         onapply: (config: Record<string, EnricherBinding>) => void;
         oncancel?: () => void;
@@ -73,7 +84,25 @@
         loadSettings?: (code: string) => Promise<PluginSettingsEntry | null>;
     }
 
-    let {open = $bindable(false), asset, config, readState = {}, catalogue, profileCatalogue, recognitions = {}, searching = [], zIndex = 70, onapply, oncancel, search = searchEnricher, test = testEnricher, loadSettings = (code) => fetchPluginEntry('enricher', code)}: Props = $props();
+    let {
+        open = $bindable(false),
+        asset,
+        config,
+        readState = {},
+        catalogue,
+        profileCatalogue,
+        recognitions = {},
+        searching = [],
+        proposal = {},
+        adopt = false,
+        line = null,
+        zIndex = 70,
+        onapply,
+        oncancel,
+        search = searchEnricher,
+        test = testEnricher,
+        loadSettings = (code) => fetchPluginEntry('enricher', code),
+    }: Props = $props();
 
     // A not configured enricher becomes usable once its settings are saved here
     let configuredNow = $state<Set<string>>(new Set());
@@ -98,6 +127,9 @@
     let liveCatalogue = $derived(catalogue.map((info) => (configuredNow.has(info.code) ? {...info, configured: true, missing_settings: []} : info)));
 
     let draft = $state<EnrichersDraft>(untrack(() => draftFrom(config)));
+    /** The user changed the list (an order, a removal, an addition, a binding): the proposal no longer enters it. */
+    let touched = $state(false);
+    let adopting = $state(untrack(() => adopt));
     let expanded = $state<string | null>(null);
     let othersOpen = $state(true);
     let configuring = $state<EnricherInfo | null>(null);
@@ -108,11 +140,28 @@
         untrack(() => {
             if (isOpen && !wasOpen) {
                 draft = draftFrom(config);
+                touched = false;
+                adopting = adopt;
                 expanded = null;
             }
             wasOpen = isOpen;
         });
     });
+
+    // «Riconosci»'s proposal enters the list while the user has not touched it (R2)
+    $effect(() => {
+        const next = proposal;
+        if (!open) return;
+        untrack(() => {
+            if (adopting && !touched) draft = adoptProposal(draft, next);
+        });
+    });
+
+    /** A change of the user's: from now on the list is theirs. */
+    function change(next: EnrichersDraft): void {
+        draft = next;
+        touched = true;
+    }
 
     let context = $derived<EnrichersContext>({catalogue: liveCatalogue, assetType: asset.assetType, state: readState, recognitions, searching});
     let chosen = $derived(chosenRows(draft, context));
@@ -127,7 +176,8 @@
 
     function otherReason(row: OtherRow): string {
         if (row.reason === 'new') return '';
-        if (row.reason === 'found') return row.recognition?.name ?? $t('assets.enrichers.reasons.found');
+        if (row.reason === 'found' && row.tickerOnly) return $t('assets.enrichers.reasons.foundByTicker', {values: {ticker: row.recognition?.identifier ?? ''}});
+        if (row.reason === 'found') return $t('assets.enrichers.reasons.found');
         if (row.reason === 'removed') return $t('assets.enrichers.reasons.removed');
         if (row.reason === 'not_found') {
             const identifier = row.recognition?.identifier ?? '';
@@ -148,8 +198,22 @@
     }
 
     function add(row: OtherRow): void {
-        draft = addEnricher(draft, row.code, row.recognition, row.info.accepted_identifier_types[0] ?? '');
-        if (!draft.bindings[row.code]?.identifier) expanded = row.code;
+        change(addEnricher(draft, row.code, row.recognition, {accepted: row.info.accepted_identifier_types, identifiers: asset.identifiers}));
+        // The row opens only when it still needs a hand: no identifier, or one «Riconosci» found nothing with (R3)
+        if (!draft.bindings[row.code]?.identifier || row.recognition?.status === 'not_found') expanded = row.code;
+    }
+
+    let lineNames = $derived(line ? line.found.map((code) => liveCatalogue.find((info) => info.code === code)?.name ?? code).join(', ') : '');
+    /** The found ones not in the list: they wait in «Non in elenco», with «+». */
+    let foundOutside = $derived(line ? line.found.filter((code) => !draft.order.includes(code)).length : 0);
+
+    function lineText(current: RecognitionLine): string {
+        if (current.state === 'running') return $t('assets.enrichers.line.running', {values: {answered: current.answered, asked: current.asked}});
+        if (current.state === 'found') {
+            const hint = foundOutside ? $t('assets.enrichers.line.foundOutside') : adopting ? $t('assets.enrichers.line.foundAdopted') : '';
+            return [$t('assets.enrichers.line.found', {values: {count: current.found.length, names: lineNames}}), hint].filter(Boolean).join(' ');
+        }
+        return $t(`assets.enrichers.line.${current.state}`);
     }
 </script>
 
@@ -176,6 +240,17 @@
                 {/if}
             </div>
 
+            {#if line}
+                <div data-testid="enrichers-recognition" data-state={line.state} data-answered={line.answered} data-asked={line.asked}>
+                    <InfoBanner variant={line.state === 'refused' || line.state === 'error' ? 'warning' : line.state === 'found' ? 'success' : 'info'}>
+                        <span class="inline-flex items-center gap-1.5">
+                            {#if line.state === 'running'}<LoaderCircle size={12} class="animate-spin shrink-0" aria-hidden="true" />{/if}
+                            <span>{lineText(line)}</span>
+                        </span>
+                    </InfoBanner>
+                </div>
+            {/if}
+
             <InfoBanner variant="info" message={$t('assets.enrichers.intro')} />
 
             <section>
@@ -185,10 +260,12 @@
                         items={chosen}
                         keyFn={(row: ChosenRow) => row.code}
                         onReorder={(rows: ChosenRow[]) =>
-                            (draft = reorder(
-                                draft,
-                                rows.map((row) => row.code),
-                            ))}
+                            change(
+                                reorder(
+                                    draft,
+                                    rows.map((row) => row.code),
+                                ),
+                            )}
                         itemTone={(row: ChosenRow) => (row.issue ? 'error' : expanded === row.code ? 'selected' : row.availability === 'not_configured' ? 'warning' : 'default')}
                     >
                         {#snippet children({item})}
@@ -201,10 +278,10 @@
                                 canConfigure={settingsVisible.has(item.code)}
                                 ontoggle={() => (expanded = expanded === item.code ? null : item.code)}
                                 onremove={() => {
-                                    draft = removeEnricher(draft, item.code);
+                                    change(removeEnricher(draft, item.code));
                                     if (expanded === item.code) expanded = null;
                                 }}
-                                onbinding={(binding) => (draft = setBinding(draft, item.code, binding))}
+                                onbinding={(binding) => change(setBinding(draft, item.code, binding))}
                                 onconfigure={() => (configuring = item.info)}
                             />
                         {/snippet}
@@ -231,7 +308,7 @@
                             <h3 class="text-[11px] font-semibold tracking-wide uppercase text-lf-muted">{$t('assets.enrichers.others')}</h3>
                             {#each others as row (row.code)}
                                 {@const found = topics(row.fills)}
-                                <div class="flex items-start gap-2 rounded-md border border-lf-subtle bg-lf-card px-2.5 py-2" data-testid="enricher-other-{row.code}" data-reason={row.reason}>
+                                <div class="flex items-start gap-2 rounded-md border border-lf-subtle bg-lf-card px-2.5 py-2" data-testid="enricher-other-{row.code}" data-reason={row.reason} data-ticker-only={row.tickerOnly ? 'true' : undefined}>
                                     <EnricherTile code={row.code} name={row.info.name} icon={row.info.icon ?? null} muted={!row.canAdd} />
                                     <div class="flex-1 min-w-0">
                                         <div class="flex items-center gap-1.5 flex-wrap">
@@ -240,10 +317,12 @@
                                                 <span class="px-1.5 py-0.5 rounded bg-lf-neutral text-[10px] font-mono text-lf-secondary">{row.binding?.identifier_type ?? row.info.accepted_identifier_types[0]}</span>
                                             {/if}
                                         </div>
-                                        {#if row.binding?.identifier && row.reason !== 'found'}
+                                        {#if row.reason === 'found' && row.recognition?.name}
+                                            <p class="text-xs text-lf-secondary truncate" data-testid="enricher-other-name-{row.code}">{row.recognition.name}</p>
+                                        {:else if row.binding?.identifier && row.reason !== 'found'}
                                             <p class="text-xs text-lf-secondary truncate">{row.binding.identifier}</p>
                                         {/if}
-                                        <p class="text-[11px] text-lf-muted">
+                                        <p class="text-[11px] {row.tickerOnly ? 'text-lf-warning' : 'text-lf-muted'}">
                                             {[otherReason(row), found.labels.join(', ')].filter(Boolean).join(' · ')}
                                         </p>
                                     </div>

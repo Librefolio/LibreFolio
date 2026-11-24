@@ -23,7 +23,7 @@
     import AssetModalDetails from './AssetModalDetails.svelte';
     import AssetEnrichersModal from './enrichers/AssetEnrichersModal.svelte';
     import {createEnricherRecognitionState} from './enrichers/enricherRecognition.svelte';
-    import type {EnricherBinding, EnricherInfo, EnricherReadState, EnrichersBanner} from './enrichers/enrichersEditState';
+    import {entersAlone, recognitionLine, type EnricherBinding, type EnricherInfo, type EnricherReadState, type EnrichersBanner} from './enrichers/enrichersEditState';
     import {invalidateAssetProfile, loadProfileCatalogue, readAssetProfile, type ProfileVoice} from './profile/profileStore';
     import AssetModalProfileRow from './profile/AssetModalProfileRow.svelte';
     import ProfileEditModal from './profile/ProfileEditModal.svelte';
@@ -511,14 +511,30 @@
     /** The identifiers of the form, type → value, as «Riconosci» and the enrichers' window read them. */
     let formIdentifiers = $derived(Object.fromEntries(identifierRows.filter((row) => row.type !== 'OTHER' && row.value.trim() !== '').map((row) => [row.type, row.value.trim()])));
 
-    // At creation «Riconosci» starts by itself with a whole ISIN (PROF, rounds 18 and 21); never in edit mode or in the
-    // tour's preview. A question already asked is not asked again (enricherRecognition).
+    /** The enrichers that cover the asset's type, and the identifier types they accept between them. */
+    let coveringEnrichers = $derived(enricherCatalogue.filter((info) => info.default_priority?.[assetType as keyof typeof info.default_priority] != null));
+    let coveringTypes = $derived([...new Set(coveringEnrichers.flatMap((info) => info.accepted_identifier_types))]);
+
+    /** What «Riconosci» asks with: at creation a whole ISIN is needed; for an asset that exists any identifier a covering
+     *  enricher accepts (ENR-1, R1). */
+    let recognitionInput = $derived({assetType, identifiers: formIdentifiers, priceProviderCode: hasProvider ? providerCode : null, ...(editMode ? {acceptedTypes: coveringTypes} : {})});
+
+    // At creation «Riconosci» starts by itself with a whole ISIN (PROF, rounds 18 and 21); never in the tour's preview.
+    // A question already asked is not asked again (enricherRecognition).
     $effect(() => {
         if (!open || editMode || tourPreview) return;
-        const input = {assetType, identifiers: formIdentifiers, priceProviderCode: hasProvider ? providerCode : null};
+        const input = recognitionInput;
         untrack(() => {
             if (recognition.start(input)) loadEnricherCatalogues();
         });
+    });
+
+    // For an asset that exists it starts when its enrichers' window opens, once the catalogue says what the enrichers
+    // accept (ENR-1, R1): the same question once per opening of the asset window, not at every opening of the window
+    $effect(() => {
+        if (!open || !editMode || tourPreview || !enrichersModalOpen || !coveringEnrichers.length) return;
+        const input = recognitionInput;
+        untrack(() => recognition.start(input));
     });
 
     // What «Riconosci» proposes is the list until the user applies one of their own
@@ -551,8 +567,27 @@
         enrichersModalOpen = true;
     }
 
-    /** The codes «Riconosci» is still asking: the covering ones not answered yet. */
-    let enrichersSearching = $derived(recognition.status === 'running' ? enricherCatalogue.filter((info) => info.default_priority?.[assetType as keyof typeof info.default_priority] != null && !recognition.recognitions[info.code]).map((info) => info.code) : []);
+    /** The covering enrichers «Riconosci» asks: configured, accepting an identifier the form holds (the cascade never
+     *  answers for the others). */
+    let askableEnrichers = $derived(coveringEnrichers.filter((info) => info.configured !== false && info.accepted_identifier_types.some((type) => type in formIdentifiers)).map((info) => info.code));
+
+    /** The codes «Riconosci» is still asking: the askable ones not answered yet. */
+    let enrichersSearching = $derived(recognition.status === 'running' ? askableEnrichers.filter((code) => !recognition.recognitions[code]) : []);
+
+    /** The line of «Riconosci» on top of the enrichers' window (ENR-1), once the catalogue is known: in edit mode always
+     *  (it says when there is nothing to recognise with), at creation once «Riconosci» has started (the asset window's
+     *  own line says the rest). */
+    let enrichersLine = $derived(
+        coveringEnrichers.length && (editMode || recognition.status !== 'idle')
+            ? recognitionLine(
+                  recognition.status,
+                  recognition.recognitions,
+                  coveringEnrichers.map((info) => info.code),
+                  recognition.canRecognize(recognitionInput),
+                  askableEnrichers,
+              )
+            : null,
+    );
 
     /** The line under the header: what «Riconosci» found. Only at creation, once it has run. */
     let enrichersBanner = $derived.by((): EnrichersBanner | null => {
@@ -562,12 +597,17 @@
         if (recognition.status === 'error') return {state: 'error', text: $t('assets.modal.enrichersError'), reading: 'none', readingText: null};
         if (recognition.status !== 'done') return null;
         const codes = Object.keys(enrichersConfig);
-        if (!codes.length) return {state: 'none', text: $t('assets.modal.enrichersNone'), reading: 'none', readingText: null};
+        // Found by a ticker alone: not in the list by itself (ENR-1, R2), named so the user checks and adds them
+        const byTicker = Object.values(recognition.recognitions)
+            .filter((answer) => answer.status === 'found' && !(answer.code in enrichersConfig) && !entersAlone(answer))
+            .map((answer) => enricherCatalogue.find((info) => info.code === answer.code)?.name ?? answer.name ?? answer.code);
+        const tickerText = byTicker.length ? ` ${$t('assets.modal.enrichersTickerOnly', {values: {names: byTicker.join(', ')}})}` : '';
+        if (!codes.length) return {state: 'none', text: $t('assets.modal.enrichersNone') + tickerText, reading: 'none', readingText: null};
         const names = codes.map((code) => enricherCatalogue.find((info) => info.code === code)?.name ?? recognition.recognitions[code]?.name ?? code).join(', ');
         // What the automatic «Chiedi» is doing with them (E9b2, the mock's «I loro dati si stanno leggendo adesso»)
         const reading = autoAsk.status === 'running' ? 'running' : autoAsk.status === 'refused' ? 'waiting' : 'none';
         const readingText = reading === 'running' ? $t('assets.modal.enrichersReading') : reading === 'waiting' ? $t('assets.modal.enrichersReadingWaiting') : null;
-        return {state: 'found', text: $t('assets.modal.enrichersFound', {values: {count: codes.length, names}}), reading, readingText};
+        return {state: 'found', text: $t('assets.modal.enrichersFound', {values: {count: codes.length, names}}) + tickerText, reading, readingText};
     });
 
     // =========================================================================
@@ -1937,6 +1977,9 @@
         profileCatalogue={profileTopics}
         recognitions={recognition.recognitions}
         searching={enrichersSearching}
+        proposal={recognition.proposal}
+        adopt={editMode ? Object.keys(enrichersConfig).length === 0 : !enrichersChosen}
+        line={enrichersLine}
         zIndex={zIndex + 30}
         onapply={(config) => {
             enrichersConfig = config;
