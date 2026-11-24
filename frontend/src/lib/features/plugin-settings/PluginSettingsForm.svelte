@@ -284,8 +284,9 @@
                             {:else}
                                 <div class="flex flex-wrap items-center gap-2">
                                     <div class="min-w-0 flex-1">
+                                        <!-- An API key is not an account's password (81 U39): a masked text field, which the browser never offers to save -->
                                         <PasswordInput
-                                            autocomplete="new-password"
+                                            neverSaved
                                             bind:value={() => own(form.texts, field.key) ?? '', (text) => update(field.key, typed(form, field.key, text))}
                                             disabled={saving}
                                             hasError={!!problem || !!refusal}
