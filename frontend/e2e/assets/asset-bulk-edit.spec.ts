@@ -335,6 +335,85 @@ test.describe('Asset bulk edit', () => {
         }
     });
 
+    // 81 U44 (testlist of 23/11, the developer's photo): the icon block — the label, the round «pick» button, «Remove icon» and its
+    // «Now» line — is centred: on a wide window vertically against the two fields beside it (User URL and Type), on every width
+    // on one vertical axis, which on a phone, where the block sits above the fields, is the middle of the window.
+    test('the icon block is centred: against User URL and Type on a wide window, on one axis (the window’s middle on a phone)', async ({page}) => {
+        const owned: Owned = {assetIds: [], brokerIds: []};
+        const token = uniqueToken(6);
+        try {
+            const assets = await createAssets(page, owned, token, ['A', 'B', 'C']);
+            const patched = await page.request.patch(`${API_BASE}/assets`, {
+                data: [
+                    {asset_id: assets[0].id, icon_url: 'https://example.test/a.png'},
+                    {asset_id: assets[2].id, icon_url: 'https://example.test/c.png'},
+                ],
+            });
+            expect(patched.ok(), 'give A and C an icon, so «Remove icon» is offered').toBe(true);
+            await openBulkEdit(page, token, 3);
+            await expect(page.getByTestId('asset-bulk-icon-remove'), 'premise: «Remove icon» is offered').toBeVisible();
+
+            // One evaluate: the boxes are read in the same frame, whatever reflows between two awaited reads.
+            const measure = () =>
+                page.evaluate(() => {
+                    const rect = (selector: string) => {
+                        const element = document.querySelector<HTMLElement>(selector);
+                        if (!element) throw new Error(`${selector} is not on the page`);
+                        const box = element.getBoundingClientRect();
+                        return {top: box.top, bottom: box.bottom, centreX: box.left + box.width / 2};
+                    };
+                    const label = rect('#asset-bulk-icon-label');
+                    const pick = rect('[data-testid="asset-bulk-icon-pick"]');
+                    const remove = rect('[data-testid="asset-bulk-icon-remove"]');
+                    const now = rect('[data-testid="asset-bulk-icon_url-now"]');
+                    const cell = rect('[data-testid="asset-bulk-field-icon_url"]');
+                    const urlHead = rect('label[for="asset-bulk-user-url"]');
+                    const typeNow = rect('[data-testid="asset-bulk-asset_type-now"]');
+                    return {
+                        axis: [label.centreX, pick.centreX, remove.centreX, now.centreX],
+                        cellCentreX: cell.centreX,
+                        blockCentreY: (label.top + now.bottom) / 2,
+                        fieldsCentreY: (urlHead.top + typeNow.bottom) / 2,
+                    };
+                });
+
+            await page.setViewportSize({width: 1280, height: 1000});
+            await page.getByTestId('asset-bulk-icon-pick').scrollIntoViewIfNeeded();
+            await expect
+                .poll(
+                    async () => {
+                        const m = await measure();
+                        return Math.abs(m.blockCentreY - m.fieldsCentreY);
+                    },
+                    {message: 'wide: the icon block is not centred against User URL and Type', timeout: 5_000},
+                )
+                .toBeLessThanOrEqual(3);
+            await expect
+                .poll(
+                    async () => {
+                        const {axis} = await measure();
+                        return Math.max(...axis) - Math.min(...axis);
+                    },
+                    {message: 'wide: the label, the pick button, «Remove icon» and «Now» are not on one axis', timeout: 5_000},
+                )
+                .toBeLessThanOrEqual(2);
+
+            await page.setViewportSize({width: 375, height: 812});
+            await page.getByTestId('asset-bulk-icon-pick').scrollIntoViewIfNeeded();
+            await expect
+                .poll(
+                    async () => {
+                        const {axis, cellCentreX} = await measure();
+                        return Math.max(...axis.map((x) => Math.abs(x - cellCentreX)));
+                    },
+                    {message: 'phone: the icon block is not centred in the window', timeout: 5_000},
+                )
+                .toBeLessThanOrEqual(2);
+        } finally {
+            await deleteOwned(page, owned);
+        }
+    });
+
     // U5: the body of the window has no scrollbar of its own while the window fits; below that, the body scrolls and the
     // header and the footer stay in view.
     test('the window grows with its content: no inner scrollbar when it fits, the body scrolls at 600 px with header and footer in view', async ({page}) => {
