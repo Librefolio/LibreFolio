@@ -95,3 +95,10 @@ export function sliceLabel(deps: RowLabelDeps, dimension: AllocationDimension, k
 export function assetLabel(deps: RowLabelDeps, assetId: number): RowLabel {
     return {text: deps.assetNames.get(assetId) ?? `#${assetId}`};
 }
+
+/**
+ * Tailwind classes for a block that writes amounts through the money formatter (`1,234.00 € 🇪🇺 EUR`): hide, after an amount, its flag and
+ * its code when the currency has a symbol. Every amount of the tab is in the one currency of the answer, so the flag and the code only
+ * repeat themselves in a box or a table cell. A country flag in a label is not an amount's sibling and stays.
+ */
+export const COMPACT_MONEY = '[&_.currency-amount~.emoji-flag]:hidden [&:has(.currency-symbol)_.currency-amount~.currency-code]:hidden';

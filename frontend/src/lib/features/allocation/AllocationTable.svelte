@@ -24,7 +24,7 @@
     import {ensureSectorsLoaded, getSectorEmoji, sectorEmojiVersion} from '$lib/stores/reference/sectorStore';
     import type {AllocationResponse} from './allocationQuery';
     import {assetNamesOf, tableRows, type AllocationRow} from './allocationView';
-    import {assetLabel, sliceLabel, type RowLabel, type Translate} from './allocationLabels';
+    import {assetLabel, COMPACT_MONEY, sliceLabel, type RowLabel, type Translate} from './allocationLabels';
 
     interface Props {
         view: AllocationResponse;
@@ -87,8 +87,8 @@
         void sectorVersion;
         const base = {sortable: false, filterable: false, resizable: false} as const;
         return [
-            {...base, id: 'label', header: () => $_(`allocation.dimension.${view.dimension}`), type: 'text', cell: (row) => html(`<span class="${strike(row)}">${labelHtml(row)}</span>`)},
-            {...base, id: 'amount', header: () => $_('allocation.table.amount'), type: 'text', cell: (row) => html(`<span class="block text-right ${strike(row)}">${amountHtml(row)}</span>`)},
+            {...base, id: 'label', minWidth: 170, header: () => $_(`allocation.dimension.${view.dimension}`), type: 'text', cell: (row) => html(`<span class="${strike(row)}">${labelHtml(row)}</span>`)},
+            {...base, id: 'amount', header: () => $_('allocation.table.amount'), type: 'text', cell: (row) => html(`<span class="block whitespace-nowrap text-right ${COMPACT_MONEY} ${strike(row)}">${amountHtml(row)}</span>`)},
             {
                 ...base,
                 id: 'shareOfSelection',

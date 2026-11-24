@@ -468,6 +468,27 @@ test.describe('«Allocazione» tab (lane 80, #89)', () => {
         }
     });
 
+    test('«Analyze →» on the Overview’s Allocation card opens the Allocation tab', async ({page}) => {
+        test.setTimeout(120_000);
+        const calls = recordAllocations(page);
+        await login(page, TEST_USER);
+        const keys = await userStorageKeys(page);
+        await forgetStored(page, [keys.dashboard]);
+        try {
+            await navigateTo(page, '/dashboard');
+            await waitForSettled(dashboard(page), PAGE_TIMEOUT);
+            await expect(page.getByTestId('dashboard-overview-tab'), 'the Dashboard opens on its Overview').toBeVisible({timeout: PAGE_TIMEOUT});
+            expect(calls.length, 'the Overview asks nothing of the allocation endpoint').toBe(0);
+
+            await page.getByTestId('allocation-analyze').click();
+            await tabReady(page, DASH);
+            await expect(page, 'the tab is in the address, as a click on the tab bar leaves it').toHaveURL(/[?&]tab=allocazione\b/);
+            await answeredAfter(calls, 0, isFirstOpening, 'the tab never asked the first-opening question after the link');
+        } finally {
+            await cleanUp(page, [keys.dashboard]);
+        }
+    });
+
     test('a class switched off narrows the question, is remembered, survives a reload, and «Rimuovi filtri» takes it away', async ({page}) => {
         test.setTimeout(120_000);
         const calls = recordAllocations(page);
@@ -760,7 +781,8 @@ test.describe('«Allocazione» tab (lane 80, #89)', () => {
             await flipPrivacy(page, false);
             flipped = false;
             await expect(amount).not.toContainText(PRIVACY_PLACEHOLDER);
-            await expect(amount, 'the base amount did not come back as it was').toHaveText(amountOpen);
+            // Read as the user sees it (`innerText`: the flag and the code after an amount are hidden by CSS, not removed), as `amountOpen` was.
+            await expect.poll(async () => (await amount.innerText()).trim(), {message: 'the base amount did not come back as it was', timeout: PAGE_TIMEOUT}).toBe(amountOpen);
             await expect.poll(shareLead).toBe(leadOpen);
         } finally {
             if (flipped) await flipPrivacy(page, false).catch(() => undefined);

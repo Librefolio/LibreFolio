@@ -21,7 +21,7 @@
     import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
     import {hasFilters, isClassOn, setAssetExcluded, setBucketExcluded, setClass, type AllocationFilters, type ExcludableBucket} from './allocationFilters';
     import type {AllocationResponse} from './allocationQuery';
-    import {bucketHint, bucketLabel, classHint, classLabel, type Translate} from './allocationLabels';
+    import {bucketHint, bucketLabel, classHint, classLabel, COMPACT_MONEY, type Translate} from './allocationLabels';
 
     interface Props {
         view: AllocationResponse;
@@ -60,7 +60,7 @@
     const row = 'flex items-center justify-between gap-3 py-1.5';
 </script>
 
-<div class="space-y-3" data-testid={testId}>
+<div class="space-y-3 {COMPACT_MONEY}" data-testid={testId}>
     <FoldPanel title={$_('allocation.filters.classes')} count={$_('allocation.filters.countOf', {values: {on: classesOn, total: presentClasses.length}})} testId="{testId}-classes" open={true}>
         <ul class="divide-y divide-lf-subtle">
             {#each view.classes as item (item.asset_class)}
@@ -71,7 +71,7 @@
                         <img src={getAssetTypeIconUrl(item.asset_class)} alt="" class="h-4 w-4 shrink-0 object-contain" />
                         <span class="min-w-0">
                             <span class="block text-sm text-lf-primary"
-                                >{classLabel(t, item.asset_class)}{#if hint}<span class="text-lf-muted"> ({hint})</span>{/if}</span
+                                >{classLabel(t, item.asset_class)}{#if hint}<span class="ml-1 text-lf-muted">({hint})</span>{/if}</span
                             >
                             <span class="block text-xs text-lf-muted"><CurrencyAmount amount={parseFloat(item.amount)} code={view.currency} options={PERSONAL} /></span>
                         </span>

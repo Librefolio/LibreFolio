@@ -31,6 +31,7 @@
     import type {AllocationFilters} from './allocationFilters';
     import type {AllocationDimension, AllocationResponse} from './allocationQuery';
     import {colorRanksOf, geoData, pieEntries} from './allocationView';
+    import {COMPACT_MONEY} from './allocationLabels';
 
     interface Props {
         view: AllocationResponse;
@@ -117,7 +118,7 @@
     {:else if view.dimension === 'geography'}
         <div data-testid="{testId}-chart">
             <GeographyMap data={geo.data} amounts={geo.amounts} currency={view.currency} height="320px" language={$currentLanguage} />
-            <p class="mt-1 text-center text-sm text-lf-secondary" data-testid="{testId}-map-caption">
+            <p class="mt-1 text-center text-sm text-lf-secondary {COMPACT_MONEY}" data-testid="{testId}-map-caption">
                 {$_('allocation.map.captionBefore')}
                 <CurrencyAmount amount={parseFloat(view.base)} code={view.currency} options={PERSONAL} />{#if share}, {share} {$_('allocation.map.captionAfter')}{/if}
             </p>

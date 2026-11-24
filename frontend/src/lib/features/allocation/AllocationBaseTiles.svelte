@@ -16,7 +16,7 @@
     import CurrencyAmount from '$lib/components/ui/display/CurrencyAmount.svelte';
     import {formatPercent} from '$lib/utils/core/formatPercent';
     import type {AllocationResponse} from './allocationQuery';
-    import {bucketLabel, classLabel, type Translate} from './allocationLabels';
+    import {bucketLabel, classLabel, COMPACT_MONEY, type Translate} from './allocationLabels';
 
     interface Props {
         view: AllocationResponse;
@@ -40,7 +40,7 @@
     const label = 'text-xs font-medium uppercase tracking-wide text-lf-muted';
 </script>
 
-<div class="grid grid-cols-1 gap-3 md:grid-cols-3" data-testid={testId}>
+<div class="grid grid-cols-1 gap-3 md:grid-cols-3 {COMPACT_MONEY}" data-testid={testId}>
     <div class={card} data-testid="{testId}-base">
         <div class={label}>{$_('allocation.tiles.base')}</div>
         <div class="mt-1 text-2xl font-semibold text-lf-primary" data-testid="{testId}-base-amount"><CurrencyAmount amount={parseFloat(view.base)} code={view.currency} options={PERSONAL} /></div>
