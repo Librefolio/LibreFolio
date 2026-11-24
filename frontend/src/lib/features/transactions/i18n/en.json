@@ -137,7 +137,8 @@
         "undo": "Undo"
       },
       "openFailed": "The transaction could not be opened",
-      "candidatesFailed": "The transactions to link could not be loaded"
+      "candidatesFailed": "The transactions to link could not be loaded",
+      "groupSyncHint": "While the rows of this group (the transaction and its linked charges) are all new, they share broker and asset: changing them here changes every row of the group."
     },
     "bulk": {
       "resetRow": "Reset row",
