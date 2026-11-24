@@ -36,6 +36,7 @@ from backend.app.schemas.common import Currency, DateRangeModel, OpenDateRangeMo
 from backend.app.schemas.portfolio.lots import LotAnalysisType, LotsAnalysisResponse
 from backend.app.schemas.portfolio.report import PortfolioReportQuery, PortfolioReportResponse
 from backend.app.schemas.prices import FAPriceQueryItem, FAPriceQueryResult
+from backend.app.services.ai_export.components.broker_scope import scope_broker_ids
 from backend.app.services.ai_export.components.resources import PriceResultsResource
 from backend.app.services.ai_export.components.types import BuildScope, ResourceKey
 from backend.app.services.assets.manager import AssetSourceManager
@@ -233,18 +234,19 @@ def load_asset_report(scope: BuildScope):
 
     Runs `PortfolioService.get_report` exactly once per request (memoized by
     `BuildContext.db_resource`), scoped to `scope.broker_scope` (empty =
-    every accessible broker) and the AI Export period, with
+    no broker, 78 L10b) and the AI Export period, with
     `include_positions_contribution=True` so per-asset period P&L
     attribution is available without a second engine run. Holdings/
     contributions are filtered down to `scope.asset_id` by each consuming
     builder in `asset_core.py`, not here - this resource is intentionally
     scope-wide (shared by `position_scope`, `positions_by_broker`,
-    `cost_value_pl` and `performance`) so it is loaded at most once.
+    `cost_value_pl` and `performance`) so it is loaded at most once. An empty
+    scope holds no broker (78 L10b): `scope_broker_ids` refuses it.
     """
 
     async def _load(session: AsyncSession) -> PortfolioReportResponse:
         query = PortfolioReportQuery(
-            broker_ids=list(scope.broker_scope) if scope.broker_scope else None,
+            broker_ids=scope_broker_ids(scope, reader="asset report"),
             date_range=OpenDateRangeModel(start=scope.period_start, end=scope.period_end),
             target_currency=scope.target_currency,
             include_summary=True,
@@ -296,7 +298,7 @@ def load_asset_lots(scope: BuildScope):
         return await LotsAnalysisService(session).get_lots_analysis(
             user_id=scope.user_id,
             asset_id=scope.asset_id,  # type: ignore[arg-type]  # ASSET scope guarantees asset_id is set
-            broker_ids=list(scope.broker_scope) if scope.broker_scope else None,
+            broker_ids=scope_broker_ids(scope, reader="asset lots"),
             date_from=None,
             date_to=scope.period_end,
             target_currency=scope.target_currency,

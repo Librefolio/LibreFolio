@@ -525,6 +525,10 @@ class AiExportSnapshotResponse(AiExportModel):
     target: AiExportTargetReference
     entity_directory: AiExportEntityDirectory = Field(default_factory=AiExportEntityDirectory)
     export_scope: AiExportExportScope | None = None
+    unavailable_dataset_ids: tuple[SelectionId, ...] = Field(
+        default=(),
+        description="78 L10b: datasets this user cannot select now (they read brokers, and the user owns none). The prompt leaves them out of its suggestions.",
+    )
     meta: AiExportSnapshotMeta
     dataset_manifest: tuple[AiExportDatasetManifestEntry, ...] = Field(..., min_length=1)
     analysis_contract: AiExportAnalysisContract | None = None

@@ -59,6 +59,7 @@ from backend.app.schemas.risk.results import RiskAnalyticResult
 from backend.app.schemas.risk.scope import AssetRiskScope, PortfolioRiskScope, RiskAnalyticRequest, RiskQueryRequest
 from backend.app.schemas.risk.vocabulary import RiskDrawdownRecoveryStatus, RiskMode, RiskResultStatus, RiskScopeKind
 from backend.app.services.ai_export.components.asset_payloads import AssetMarketSnapshotPayload
+from backend.app.services.ai_export.components.broker_scope import scope_broker_ids
 from backend.app.services.ai_export.components.envelope import SectionEnvelope
 from backend.app.services.ai_export.components.payloads.portfolio_broker import export_risk_scope
 from backend.app.services.ai_export.components.spec import ComponentSpec
@@ -333,7 +334,7 @@ async def _execute_drawdown(
                 OpenDateRangeModel(start="min", end=scope.period_end),
                 scope.user_id,
                 session,
-                broker_ids=list(scope.broker_scope) or None,
+                broker_ids=scope_broker_ids(scope, reader="drawdown history start"),
             )
             inception = resolved.start if resolved is not None and isinstance(resolved.start, Date) else None
             start = min(inception, scope.period_start) if inception is not None else scope.period_start

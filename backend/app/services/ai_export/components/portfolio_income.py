@@ -70,6 +70,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import BrokerUserAccess, Transaction, TransactionType
 from backend.app.schemas.common import Currency, CurrencyCode, StrictModel
+from backend.app.services.ai_export.components.broker_scope import scope_broker_ids
 from backend.app.services.ai_export.components.envelope import SectionEnvelope
 from backend.app.services.ai_export.components.payloads.portfolio_broker import (
     counts_ownership_share,
@@ -356,10 +357,7 @@ async def _load_income_records(context: BuildContext, scope: BuildScope) -> _Inc
 
     async def _loader(session: AsyncSession) -> _IncomeTimelineData:
         accessible = set(await resolve_accessible_broker_ids(session, scope.user_id))
-        if scope.broker_scope:
-            effective = sorted(b for b in scope.broker_scope if b in accessible)
-        else:
-            effective = sorted(accessible)
+        effective = sorted(b for b in scope_broker_ids(scope, reader="income timeline") if b in accessible)
         if not effective:
             return _IncomeTimelineData()
 
