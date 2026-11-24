@@ -199,3 +199,27 @@ describe('ContextMenu — the origin of the menu (85 BTN-0)', () => {
         expect(menu.style.top).toBe(`${expected.top}px`);
     });
 });
+
+/**
+ * D13 (85 BTN-2·0): an item with a hint (`title`) carries it once, in the design system's Tooltip, and the reader gets
+ * it as the item's description. No native `title` beside it: the browser's own tooltip would show the same text twice,
+ * late and unstyled.
+ */
+describe('ContextMenu — an item’s hint is one, not a native title (85 BTN-2·0, D13)', () => {
+    const HINTED: ContextMenuItem[] = [
+        {id: 'plain', label: 'Plain'},
+        {id: 'hinted', label: 'Hinted', title: 'probe: what this item does'},
+    ];
+
+    it('has no title attribute; aria-describedby points at the hint’s text', () => {
+        render(ContextMenu, {props: {x: 10, y: 10, items: HINTED, onAction: vi.fn(), onClose: vi.fn()}});
+        const hinted = item('hinted');
+        expect(hinted.hasAttribute('title')).toBe(false);
+        const describedBy = hinted.getAttribute('aria-describedby');
+        expect(describedBy, 'the hint is the item’s description').toBeTruthy();
+        expect(document.getElementById(describedBy!)?.textContent?.trim()).toBe('probe: what this item does');
+        // The control: an item with no hint has neither.
+        expect(item('plain').hasAttribute('title')).toBe(false);
+        expect(item('plain').hasAttribute('aria-describedby')).toBe(false);
+    });
+});

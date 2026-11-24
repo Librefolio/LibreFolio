@@ -259,7 +259,7 @@
                     tabindex="-1"
                     class="context-item {item.variant === 'danger' ? 'danger' : ''}"
                     data-testid={item.testid ?? `context-menu-action-${item.id}`}
-                    title={item.title}
+                    aria-describedby="{menuId}-hint-{index}"
                     onclick={(e) => {
                         e.stopPropagation();
                         if (item.id) {
@@ -275,6 +275,8 @@
                         <Icon size={16} class={item.iconClass ?? ''} />
                     {/if}
                     <span class={item.labelClass ?? ''}>{item.label ?? ''}</span>
+                    <!-- D13 (85 BTN-2·0): one hint, in the Tooltip; no `title` beside it. The reader gets it as the description. -->
+                    <span id="{menuId}-hint-{index}" class="sr-only">{item.title}</span>
                 </button>
             </Tooltip>
         {:else}
