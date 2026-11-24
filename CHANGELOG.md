@@ -151,6 +151,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### 🐛 Fixed
 
 - Investimental (beta): an order filled in several parts is imported with its whole executed quantity and amount; before, only its last part came in (an order selling 210 shares was imported as 64). If you imported such an order before, delete that trade once and import the file again: the corrected trade arrives as a new one. A file that starts with an order already under way cannot give its whole quantity: that order is left out, and a warning shows what the file has, for you to enter it by hand.
+- Investimental (beta): each executed order now brings its commission, as a fee linked to its trade; before, the commission was lost. It is read from the order log, so it may differ slightly from your statement, and a warning asks you to check it. Orders you imported before keep their trade: importing the file again brings their fees as free rows, which you link to their trade from the selection.
 - On a phone, the transaction window no longer scrolls sideways when the asset has a long name: the fields shrink to the screen again, in view and in edit. The defect was already in 1.3.0.
 - A transaction opened read-only from a broker's Transactions tab now offers the edit pencil, as on the Transactions page, to who can edit that broker.
 - The page numbers of the Files list stay at the bottom of the window while you scroll, as on the other pages, and the selection bar at the bottom of a page no longer covers a table's page numbers.
