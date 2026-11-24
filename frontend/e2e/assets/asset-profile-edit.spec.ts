@@ -87,6 +87,19 @@ test.describe('Profile data from the asset window (plan 68, E8b2)', () => {
             const window = page.getByTestId('profile-edit-modal');
             await expect(window).toBeVisible({timeout: 10_000});
 
+            // The window lets its content overflow, so ModalBase rounds the footer's bottom corners as the frame (82
+            // ENR-4c): computed radii compared to each other, no pixel of the layout
+            const radii = await window.evaluate((root) => {
+                const frame = root.querySelector('[data-tone]');
+                const footer = root.querySelector('[data-testid="profile-edit-footer"]');
+                if (!frame || !footer) return null;
+                return {frame: getComputedStyle(frame).borderBottomLeftRadius, left: getComputedStyle(footer).borderBottomLeftRadius, right: getComputedStyle(footer).borderBottomRightRadius};
+            });
+            expect(radii, 'the dialog frame and its footer').not.toBeNull();
+            expect(radii?.frame, 'the dialog has rounded corners').not.toBe('0px');
+            expect(radii?.left, 'the footer rounds its bottom-left corner as the dialog').toBe(radii?.frame);
+            expect(radii?.right, 'the footer rounds its bottom-right corner as the dialog').toBe(radii?.frame);
+
             // A row for the TER, typed in percent: 0.19 % is the fraction 0.0019
             await window.getByTestId('profile-edit-add-row').click();
             await window.getByTestId('profile-row-voice-row-1-button').click();

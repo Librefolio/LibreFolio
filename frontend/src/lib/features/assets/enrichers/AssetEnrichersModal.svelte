@@ -380,10 +380,8 @@
             {/if}
         </div>
 
-        <!-- The dialog lets its content overflow (allowOverflow: the dropdowns of a row), so it does not clip its corners:
-             the footer, the only part with its own background, rounds its bottom ones as the dialog does (ENR-4b): the
-             radius of `.modal-content` in ModalBase, 0.75rem (the theme's `rounded-xl` is 1rem) -->
-        <footer class="px-4 sm:px-6 py-3 border-t border-lf-subtle bg-lf-panel rounded-b-[0.75rem] flex justify-end gap-2" data-testid="enrichers-footer">
+        <!-- Its bottom corners are rounded by ModalBase (allowOverflow: a footer at the bottom, 82 ENR-4c) -->
+        <footer class="px-4 sm:px-6 py-3 border-t border-lf-subtle bg-lf-panel flex justify-end gap-2" data-testid="enrichers-footer">
             <button type="button" class="px-4 py-2 text-sm font-medium rounded-lg border border-lf-subtle bg-lf-card text-lf-secondary hover:bg-lf-hover" onclick={close} data-testid="enrichers-cancel">
                 {$t('common.cancel')}
             </button>
