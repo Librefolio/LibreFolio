@@ -373,6 +373,16 @@ def external_brim_scalable(verbose: bool = False, test_names: list = None) -> bo
     return run_command(cmd, "BRIM Scalable Capital tests", verbose=verbose)
 
 
+def external_brim_xtb(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the XTB plugin: the History report workbook, the only format it reads since 2.0.0 (lane 83)."""
+    print_section("External: BRIM XTB Tests")
+    print_info("Testing: broker_xtb — the History report workbook (.xlsx)")
+    print_info("Tests: samples, account currency, sub-account transfers, partial fills, rows left out, positions outside the period")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_external/test_brim_xtb.py", test_names or None)
+    return run_command(cmd, "BRIM XTB tests", verbose=verbose)
+
+
 def external_brim_row_skips(verbose: bool = False, test_names: list = None) -> bool:
     """Test the rows BRIM plugins leave out: known quietly, unknown loudly (W-B86)."""
     print_section("External: BRIM Row Skips Tests")
@@ -411,6 +421,16 @@ def external_brim_date_order(verbose: bool = False, test_names: list = None) -> 
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_external/test_brim_date_order.py", test_names or None)
     return run_command(cmd, "BRIM date order tests", verbose=verbose)
+
+
+def external_brim_rewards(verbose: bool = False, test_names: list = None) -> bool:
+    """Test rewards in kind imported as REWARD by Coinbase, Crypto.com, Freetrade and the generic CSV (project 79, STK-4a), Bitvavo and CoinTracking (STK-4b)."""
+    print_section("External: BRIM Rewards Tests")
+    print_info("Testing: reward_unit_value and reward_value_todo, the REWARD rows of four plugins (1.1.0), their value on receipt; Bitvavo 1.1.0 and CoinTracking 1.2.0 staking rewards (STK-4b)")
+    print_info("Tests: type, units, no cash, per-unit value and currency, the reward_value todo, rows not imported with a warning, samples")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_external/test_brim_rewards.py", test_names or None)
+    return run_command(cmd, "BRIM rewards tests", verbose=verbose)
 
 
 def external_all(verbose: bool = False, providers: list = None, exclude_providers: list = None) -> bool:
@@ -599,6 +619,17 @@ These tests verify external API integrations:
     )
     add_test(
         cat,
+        "brim-xtb",
+        external_brim_xtb,
+        name="BRIM XTB",
+        desc="Test the XTB plugin: the History report workbook (.xlsx only)",
+        prereq="Sample files in test fixtures",
+        tests="Samples, account currency from Open Positions, sub-account transfer pairs, partial fills, RowSkips, positions outside the period, the old CSV refused",
+        # PURE: the samples and workbooks/CSVs written in tmp_path; no server, no database.
+        isolation="pure",
+    )
+    add_test(
+        cat,
         "brim-row-skips",
         external_brim_row_skips,
         name="BRIM Row Skips",
@@ -632,6 +663,17 @@ These tests verify external API integrations:
         desc="Test the generic CSV plugin's date_order field (CP12, W5-8): day_first parity with the old behaviour, month_first, the declaration",
         prereq="Sample files in test fixtures",
         tests="parse_date parity with a frozen reference, generic samples with and without day_first bound, month_first on slash/dash/dot, field declared as the contract says",
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "brim-rewards",
+        external_brim_rewards,
+        name="BRIM Rewards",
+        desc="Test rewards in kind imported as REWARD (project 79, STK-4a): Coinbase, Crypto.com, Freetrade, generic CSV; STK-4b: Bitvavo and CoinTracking staking rewards",
+        prereq="Sample files in test fixtures",
+        tests="reward_unit_value, reward_value_todo, REWARD type/units/no cash/value per plugin, the todo, rows not imported, samples, version 1.1.0; Bitvavo 1.1.0 (staking → REWARD + todo, Distributed settled for staking only, negative → ADJUSTMENT, the sample's 9 rewards), CoinTracking 1.2.0 (crypto staking → REWARD + todo, its fee a free FEE, fiat staking still a linked INTEREST)",
+        # PURE: untouched samples and files of tmp_path; no server, no database, no network.
         isolation="pure",
     )
     add_test(cat, "all", external_all, test_names=False, name="All External Tests", desc="Run all external tests")

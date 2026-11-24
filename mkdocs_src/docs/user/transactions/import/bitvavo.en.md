@@ -11,4 +11,8 @@ Export your transaction history as **CSV** from Bitvavo and upload it in LibreFo
 ## 📝 Notes
 
 - Built from sample exports — some edge cases may not be covered yet.
+- **Staking rewards** (status `Distributed`) are imported as **Reward** transactions: the units you received, with no cash.
+  The file gives no value for them: in the bulk workspace, **Fill from price history** writes the close of the asset on
+  that very day, per unit, in the price's currency. A day with no stored price is left for you to fill in; the values
+  can always be changed.
 - Found an issue or want to document the export steps? [Open a report](../../../community/contribute.md) — contributions welcome!

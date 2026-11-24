@@ -599,6 +599,18 @@
     {/if}
 {/snippet}
 
+<!-- One provider's mark: its icon when it carries one, else its initials. The legend and every route draw it through this
+     piece (81 U34: the legend drew only the initials). `md` = 20 px (a route's own step), `sm` = 16 px (a chain's step and the legend). -->
+{#snippet providerMark(code: string, size: 'sm' | 'md')}
+    {@const iconUrl = getFxProviderIconUrl(code)}
+    {@const box = size === 'md' ? 'w-5 h-5' : 'w-4 h-4'}
+    {#if iconUrl}
+        <img src={iconUrl} alt={code} class="{box} rounded object-contain p-0.5 flex-shrink-0" />
+    {:else}
+        <span class="{box} flex items-center justify-center rounded {size === 'md' ? 'text-[8px]' : 'text-[7px]'} font-bold flex-shrink-0">{getProviderInitials(code)}</span>
+    {/if}
+{/snippet}
+
 {#if loading}
     <div class="flex items-center justify-center gap-2 py-4 text-xs text-lf-muted" data-testid="fx-route-loading">
         <Loader2 size={14} class="animate-spin" />
@@ -620,18 +632,13 @@
                             {@const step = route.chainSteps[0]}
                             {@const fromInfo = getCurrencyInfo(step.from)}
                             {@const toInfo = getCurrencyInfo(step.to)}
-                            {@const iconUrl = getFxProviderIconUrl(step.provider)}
                             {@const provColor = getProviderColor(step.provider)}
                             <span class="text-sm flex-shrink-0 emoji-flag">{fromInfo.flag_emoji}</span>
                             <span class="font-medium text-[11px] text-lf-secondary">{step.from}</span>
                             <Tooltip html={providerTooltipHtml(step.provider)} position="top">
                                 <span class="inline-flex items-center gap-0.5 px-1 py-0.5 rounded border flex-shrink-0" style="background: var(--prov-bg); border-color: var(--prov-border); --prov-bg: {provColor.bg}; --prov-border: {provColor.border}">
                                     <ArrowLeftRight size={10} class="text-lf-muted flex-shrink-0" />
-                                    {#if iconUrl}
-                                        <img src={iconUrl} alt={step.provider} class="w-5 h-5 rounded object-contain p-0.5 flex-shrink-0" />
-                                    {:else}
-                                        <span class="w-5 h-5 flex items-center justify-center rounded text-[8px] font-bold flex-shrink-0">{getProviderInitials(step.provider)}</span>
-                                    {/if}
+                                    {@render providerMark(step.provider, 'md')}
                                     <ArrowLeftRight size={10} class="text-lf-muted flex-shrink-0" />
                                 </span>
                             </Tooltip>
@@ -643,7 +650,6 @@
                                 {#each route.chainSteps as step, i}
                                     {@const fromInfo = getCurrencyInfo(step.from)}
                                     {@const toInfo = getCurrencyInfo(step.to)}
-                                    {@const iconUrl = getFxProviderIconUrl(step.provider)}
                                     {@const provColor = getProviderColor(step.provider)}
                                     {#if i === 0}
                                         <span class="text-sm emoji-flag">{fromInfo.flag_emoji}</span>
@@ -652,11 +658,7 @@
                                     <Tooltip html={providerTooltipHtml(step.provider)} position="top">
                                         <span class="inline-flex items-center gap-0.5 px-1 py-0.5 rounded border flex-shrink-0" style="background: var(--prov-bg); border-color: var(--prov-border); --prov-bg: {provColor.bg}; --prov-border: {provColor.border}">
                                             <ArrowLeftRight size={8} class="text-lf-muted flex-shrink-0" />
-                                            {#if iconUrl}
-                                                <img src={iconUrl} alt={step.provider} class="w-4 h-4 rounded object-contain p-0.5 flex-shrink-0" />
-                                            {:else}
-                                                <span class="w-4 h-4 flex items-center justify-center rounded text-[7px] font-bold flex-shrink-0">{getProviderInitials(step.provider)}</span>
-                                            {/if}
+                                            {@render providerMark(step.provider, 'sm')}
                                             <ArrowLeftRight size={8} class="text-lf-muted flex-shrink-0" />
                                         </span>
                                     </Tooltip>
@@ -744,7 +746,7 @@
                                         class="inline-flex items-center gap-1 px-1.5 py-1 rounded border transition-all cursor-pointer hover:shadow-sm"
                                         style="background: {provColor.bg}; border-color: {provColor.border}"
                                     >
-                                        <span class="w-4 h-4 flex items-center justify-center rounded text-[7px] font-bold flex-shrink-0">{getProviderInitials(prov.code)}</span>
+                                        {@render providerMark(prov.code, 'sm')}
                                         <span class="text-[10px] font-semibold text-lf-secondary">{prov.code}</span>
                                         {#if provWarning}
                                             {@render noteIcon(getProviderWarningLevel(prov.code), 10)}
@@ -786,7 +788,6 @@
                             {@const step = route.chainSteps[0]}
                             {@const fromInfo = getCurrencyInfo(step.from)}
                             {@const toInfo = getCurrencyInfo(step.to)}
-                            {@const iconUrl = getFxProviderIconUrl(step.provider)}
                             {@const provColor = getProviderColor(step.provider)}
                             {@const warnings = getRouteWarnings(route)}
                             {@const off = blockedBy(route)}
@@ -813,11 +814,7 @@
                                     <Tooltip html={providerTooltipHtml(step.provider)} position="top">
                                         <span class="inline-flex items-center gap-0.5 px-1 py-0.5 rounded border flex-shrink-0" style="background: {provColor.bg}; border-color: {provColor.border}">
                                             <ArrowLeftRight size={10} class="text-lf-muted flex-shrink-0" />
-                                            {#if iconUrl}
-                                                <img src={iconUrl} alt={step.provider} class="w-5 h-5 rounded object-contain p-0.5 flex-shrink-0" />
-                                            {:else}
-                                                <span class="w-5 h-5 flex items-center justify-center rounded text-[8px] font-bold flex-shrink-0">{getProviderInitials(step.provider)}</span>
-                                            {/if}
+                                            {@render providerMark(step.provider, 'md')}
                                             <ArrowLeftRight size={10} class="text-lf-muted flex-shrink-0" />
                                         </span>
                                     </Tooltip>
@@ -890,7 +887,6 @@
                                             {#each route.chainSteps as step, i}
                                                 {@const fromInfo = getCurrencyInfo(step.from)}
                                                 {@const toInfo = getCurrencyInfo(step.to)}
-                                                {@const iconUrl = getFxProviderIconUrl(step.provider)}
                                                 {@const provColor = getProviderColor(step.provider)}
                                                 {#if i === 0}
                                                     <span class="text-sm emoji-flag">{fromInfo.flag_emoji}</span>
@@ -899,11 +895,7 @@
                                                 <Tooltip html={providerTooltipHtml(step.provider)} position="top">
                                                     <span class="inline-flex items-center gap-0.5 px-0.5 py-0.5 rounded border flex-shrink-0" style="background: {provColor.bg}; border-color: {provColor.border}">
                                                         <ArrowLeftRight size={8} class="text-lf-muted flex-shrink-0" />
-                                                        {#if iconUrl}
-                                                            <img src={iconUrl} alt={step.provider} class="w-4 h-4 rounded object-contain p-0.5 flex-shrink-0" />
-                                                        {:else}
-                                                            <span class="w-4 h-4 flex items-center justify-center rounded text-[7px] font-bold flex-shrink-0">{getProviderInitials(step.provider)}</span>
-                                                        {/if}
+                                                        {@render providerMark(step.provider, 'sm')}
                                                         <ArrowLeftRight size={8} class="text-lf-muted flex-shrink-0" />
                                                     </span>
                                                 </Tooltip>

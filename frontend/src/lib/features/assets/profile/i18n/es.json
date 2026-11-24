@@ -214,7 +214,8 @@
         "loadFailed": "No se pudieron leer los cambios.",
         "empty": "Todavía ningún cambio.",
         "who": {
-          "deletedUser": "un usuario eliminado"
+          "deletedUser": "un usuario eliminado",
+          "system": "Sistema"
         },
         "what": {
           "first": "Primer valor leído: {to}.",

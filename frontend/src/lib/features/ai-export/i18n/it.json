@@ -187,6 +187,10 @@
         "all_data": {
           "display": "Tutti i dati portafoglio",
           "description": "Unione deduplicata di tutti i dataset applicabili al portafoglio."
+        },
+        "risk_evidence": {
+          "display": "Evidenze di Rischio del Portafoglio",
+          "description": "Misure di rischio deterministiche sulle posizioni di oggi, su una finestra fino a 12 mesi che non dipende dal periodo AI: dove si concentra il rischio, la perdita di un mese brutto e le coppie di posizioni che si muovono insieme, con finestra misurata, copertura ed esclusioni."
         }
       },
       "broker": {

@@ -44,7 +44,6 @@
     "dashboardTitle": "Riesgo de la cartera",
     "brokerTitle": "Riesgo del bróker",
     "internalSubset": "Riesgo interno de este subconjunto del bróker",
-    "dashboardFullPortfolio": "El riesgo usa toda la cartera; no se aplica el filtro de bróker del panel.",
     "states": {
       "partial": "Parcial",
       "empty": "Sin resultados",
@@ -505,7 +504,6 @@
             "benchmark": "Índice de referencia",
             "heldBenchmark": "Índice de referencia · en cartera, peso {share}"
           },
-          "titleOneAsset": "Riesgo frente a rentabilidad",
           "portfolioName": "Cartera"
         },
         "rows": {
@@ -517,9 +515,7 @@
           "notHeld": "No está en la cartera: el índice de referencia está aquí para la comparación.",
           "expectedReturnShort": "Rent. anual",
           "namedHelp": "{name}\n{help}"
-        },
-        "titleAsset": "Respecto a una referencia",
-        "benchmarkIsSubject": "La referencia es este mismo activo: elige otra para comparar."
+        }
       },
       "l4": {
         "title": "¿Qué pasa si…?",

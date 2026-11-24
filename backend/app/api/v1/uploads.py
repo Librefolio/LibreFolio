@@ -398,11 +398,16 @@ async def update_file(
     return _for_user(updated, current_user)
 
 
+#: The formats a preview is written in: the format of the file, so the bytes agree with the type the answer carries. A
+#: multi-picture JPEG (``MPO``, what phones write) is previewed as the JPEG it is. Any other format falls back to PNG.
+_PREVIEW_FORMATS = {"PNG": "PNG", "JPEG": "JPEG", "MPO": "JPEG", "WEBP": "WEBP", "GIF": "GIF", "BMP": "BMP", "TIFF": "TIFF"}
+
+
 def _resize_image(file_path: Path, max_width: int, max_height: int) -> bytes | None:
     """Sync Pillow resize (CPU+IO bound) — call via ``asyncio.to_thread``.
 
-    Returns the resized image bytes, or ``None`` when the source is already
-    smaller than requested (the caller then serves the file directly).
+    Returns the resized image bytes, in the format of the file (PNG when Pillow cannot write that one), or ``None`` when
+    the source is already smaller than requested (the caller then serves the file directly).
     """
     import io  # noqa: PLC0415 — local to keep the module import light
 
@@ -416,10 +421,11 @@ def _resize_image(file_path: Path, max_width: int, max_height: int) -> bytes | N
 
     new_width = int(orig_width * ratio)
     new_height = int(orig_height * ratio)
+    # The format is read BEFORE the resize: the resized image is a new object, whose ``format`` is ``None``.
+    img_format = _PREVIEW_FORMATS.get(img.format or "", "PNG")
     img = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
 
     output = io.BytesIO()
-    img_format = img.format or "PNG"
     img.save(output, format=img_format, quality=85, optimize=True)
     return output.getvalue()
 

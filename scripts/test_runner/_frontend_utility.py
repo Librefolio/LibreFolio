@@ -103,6 +103,7 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/utils/docs/searchLanguage.dom.test.ts",
             "src/lib/utils/docs/movedAnchors.test.ts",
             "src/lib/utils/docs/movedAnchors.dom.test.ts",
+            "src/lib/utils/docs/navEnhance.dom.test.ts",
             "src/hooks.client.test.ts",
             "src/lib/utils/__tests__/text.test.ts",
             "src/lib/types/__tests__/safeAccessors.test.ts",
@@ -1337,6 +1338,18 @@ def front_datatable_mobile(verbose: bool = False, ui: bool = False, headed: bool
     return _run_playwright("layout/datatable-mobile.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_phone_no_hscroll(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the 375 px control: no page and no window scrolls sideways (81 U22)."""
+    print_section("Frontend Phone No-Sideways-Scroll Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("layout/phone-no-hscroll.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_datatable_resize(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run the DataTable column resize: a mouse drag on an auto-layout column edge moves it by the drag, with a fixed-layout control, and a finger drag on a phone (Y7, C-62, D-Y18)."""
     print_section("Frontend DataTable Resize Tests")
@@ -1908,6 +1921,15 @@ def populate_registry(registry: dict) -> None:
         desc="At 390 px, read-only on seeded data, on Transactions (stickyActions false) and the Files static list (sticky actions): scrolled half an actions cell short of the far right, the actions header sits over its row's actions cell and both end with the table; the selection header and cell have scrolled out past the scroll area's left edge; and, the scroll area bounded to the header and two rows and scrolled down, every header cell stays on its top while the body passes under (Y7, D-Y17; needs the dt-scroll / dt-select-* / dt-actions-* test ids)",
         prereq="Populated DB + test users",
         tests="layout/datatable-mobile.spec.ts",
+    )
+    add_test(
+        cat,
+        "phone-no-hscroll",
+        front_phone_no_hscroll,
+        name="Phone No Sideways Scroll",
+        desc="At 375 px, read-only on seeded data: the Dashboard, Brokers, a broker, Assets, an asset, FX, an FX pair, Transactions, Files and Settings do not scroll sideways, and neither do the transaction window (view and new), the import window, the relink-events window and the new asset, broker and FX-pair windows; a box that ends past the edge is named in the failure, containers that scroll or clip on purpose and fixed popups are out of the measure, and a box hung past the edge on purpose must come back by name (81 U22)",
+        prereq="Populated DB + test users",
+        tests="layout/phone-no-hscroll.spec.ts",
     )
     add_test(
         cat,

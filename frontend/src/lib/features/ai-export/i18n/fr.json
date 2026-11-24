@@ -187,6 +187,10 @@
         "all_data": {
           "display": "Toutes les données du portefeuille",
           "description": "Union dédupliquée de tous les jeux de données applicables au portefeuille."
+        },
+        "risk_evidence": {
+          "display": "Éléments de Risque du Portefeuille",
+          "description": "Mesures de risque déterministes sur les positions actuelles, sur une fenêtre allant jusqu'à 12 mois qui ne dépend pas de la période IA : où le risque se concentre, la perte d'un mauvais mois et les paires de positions qui évoluent ensemble, avec fenêtre mesurée, couverture et exclusions."
         }
       },
       "broker": {

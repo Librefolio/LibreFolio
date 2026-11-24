@@ -14,6 +14,8 @@
  *     of the dock under the actions when they come down (the designer's (b), 20/11).
  */
 import {afterEach, beforeAll, describe, expect, it, vi} from 'vitest';
+import {get} from 'svelte/store';
+import {_} from '$lib/i18n';
 // The countries' names are not the table's to test: no network for them.
 vi.mock('$lib/stores/reference/countryStore', () => ({ensureCountriesLoaded: vi.fn(async () => undefined), getCountryInfo: (iso3: string) => ({name: iso3})}));
 
@@ -93,6 +95,20 @@ describe('ProfileChangesTable', () => {
         const bySource = screen.getByTestId('profile-change-who-11');
         expect(bySource).toHaveAttribute('data-source', 'justetf');
         expect(bySource).toHaveTextContent('justETF');
+    });
+
+    // 81 U26a: a value from before the profile existed is the system's: the avatar «S» and «System», as the Files page
+    // names what the installation itself uploaded. Every other source keeps its two-letter box.
+    it('names the value from before the profile «System», with an «S» avatar, and keeps the box for a source', () => {
+        const t = get(_);
+        mount({rows: [change(21, {source: 'legacy', previous: null, has_previous: false, previous_source: null}), change(22, {source: 'justetf'})], total: 2});
+        const system = screen.getByTestId('profile-change-who-21');
+        expect(system).toHaveAttribute('data-source', 'legacy');
+        expect(system).toHaveTextContent(t('assets.profile.changes.who.system'));
+        const avatar = system.querySelector('[data-avatar="initial"]');
+        expect(avatar, 'no initial avatar for the system').not.toBeNull();
+        expect(avatar?.textContent?.trim()).toBe(t('assets.profile.changes.who.system').charAt(0).toUpperCase());
+        expect(screen.getByTestId('profile-change-who-22').querySelector('[data-avatar]'), 'a source drew an avatar').toBeNull();
     });
 
     it('forgets one row only after the confirmation, and nothing on cancel', async () => {

@@ -25,6 +25,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from PIL import Image
 
 from backend.app.config import PROJECT_ROOT
 
@@ -427,6 +428,99 @@ class TestListUploadsOrder:
         assert seeded == len(DEFAULT_AVATARS), f"seed_default_avatars() seeded {seeded} avatars, expected {len(DEFAULT_AVATARS)}"
         _assert_listed_in_order(DEFAULT_AVATARS, _name)
         print_success(f"{seeded} seeded avatars → men_01 … woman_15 for both directory orders")
+
+
+# ============================================================================
+# seed_default_avatars — PNG in the repository, WebP in the Docker image (lane 84)
+# ============================================================================
+
+
+def _avatar_folder(monkeypatch, tmp_path: Path, files: dict[str, bytes]) -> Path:
+    """A ``backend/staticResources/Avatars`` folder of this test's own, made the project root of the seed."""
+    root = tmp_path / "project"
+    folder = root / "backend" / "staticResources" / "Avatars"
+    folder.mkdir(parents=True)
+    for name, content in files.items():
+        (folder / name).write_bytes(content)
+    monkeypatch.setattr("backend.app.config.PROJECT_ROOT", root)
+    return folder
+
+
+def _image_bytes(fmt: str) -> bytes:
+    buffer = BytesIO()
+    Image.new("RGB", (16, 16), (30, 120, 200)).save(buffer, format=fmt)
+    return buffer.getvalue()
+
+
+class TestSeedDefaultAvatarFormats:
+    """The folder holds PNG in the repository and WebP in the image: the seed reads both, a name with both is seeded once."""
+
+    def test_webp_folder_is_seeded_as_webp(self, tmp_path, monkeypatch):
+        """The image's folder (WebP only): every avatar is stored as WebP, under its own name and type."""
+        print_section("seed_default_avatars: WebP folder")
+        webp = _image_bytes("WEBP")
+        _avatar_folder(monkeypatch, tmp_path, {"men_01.webp": webp, "woman_01.webp": webp})
+
+        assert seed_default_avatars() == 2
+
+        files, _ = list_uploads()
+        assert sorted(f.original_name for f in files) == ["men_01.webp", "woman_01.webp"]
+        for info in files:
+            assert info.mime_type == "image/webp"
+            assert get_upload_mime_type(info.id) == "image/webp"
+            assert get_upload_path(info.id).suffix == ".webp"
+            assert get_upload_path(info.id).read_bytes() == webp
+            assert info.size_bytes == len(webp)
+            assert info.uploaded_by_user_id == 0
+        print_success("2 WebP avatars seeded as image/webp")
+
+    def test_png_folder_is_still_seeded_as_png(self, tmp_path, monkeypatch):
+        """The repository's folder (PNG only, what the tests and a development server run on) behaves as before."""
+        print_section("seed_default_avatars: PNG folder")
+        png = _image_bytes("PNG")
+        _avatar_folder(monkeypatch, tmp_path, {"men_01.png": png, "men_02.png": png})
+
+        assert seed_default_avatars() == 2
+
+        files, _ = list_uploads()
+        assert sorted(f.original_name for f in files) == ["men_01.png", "men_02.png"]
+        assert {f.mime_type for f in files} == {"image/png"}
+        print_success("2 PNG avatars seeded as image/png")
+
+    def test_a_name_with_both_formats_is_seeded_once_as_webp(self, tmp_path, monkeypatch):
+        """A folder with both formats (a build that converted beside the PNG) gives one avatar per name, the WebP."""
+        print_section("seed_default_avatars: both formats of a name")
+        _avatar_folder(monkeypatch, tmp_path, {"men_01.png": _image_bytes("PNG"), "men_01.webp": _image_bytes("WEBP"), "men_02.png": _image_bytes("PNG")})
+
+        assert seed_default_avatars() == 2
+
+        by_name = {f.original_name: f.mime_type for f in list_uploads()[0]}
+        assert by_name == {"men_01.webp": "image/webp", "men_02.png": "image/png"}
+        print_success("men_01 once as WebP, men_02 as PNG")
+
+    def test_other_files_are_not_avatars(self, tmp_path, monkeypatch):
+        """A note, a leftover temporary file and a subfolder in the folder are not seeded."""
+        print_section("seed_default_avatars: other files ignored")
+        folder = _avatar_folder(monkeypatch, tmp_path, {"men_01.webp": _image_bytes("WEBP"), "README.txt": b"x", "men_02.webp.tmp": b"x", "men_03.jpg": b"x"})
+        (folder / "sub.png").mkdir()
+
+        assert seed_default_avatars() == 1
+
+        assert [f.original_name for f in list_uploads()[0]] == ["men_01.webp"]
+        print_success("Only men_01.webp seeded")
+
+    def test_a_seeded_volume_is_not_seeded_again(self, tmp_path, monkeypatch):
+        """The marker holds whatever the volume was seeded with: a later image with WebP files adds nothing."""
+        print_section("seed_default_avatars: the marker wins")
+        folder = _avatar_folder(monkeypatch, tmp_path, {"men_01.png": _image_bytes("PNG")})
+        assert seed_default_avatars() == 1
+        (folder / "men_01.png").unlink()
+        (folder / "men_01.webp").write_bytes(_image_bytes("WEBP"))
+
+        assert seed_default_avatars() == 0
+
+        assert [(f.original_name, f.mime_type) for f in list_uploads()[0]] == [("men_01.png", "image/png")]
+        print_success("An existing volume keeps its PNG avatars")
 
 
 # ============================================================================

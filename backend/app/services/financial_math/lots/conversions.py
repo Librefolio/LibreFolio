@@ -289,7 +289,7 @@ def collect_fx_needs(  # noqa: C901 — independent per-analysis fx-need collect
             if tx is not None:
                 fx_resolver.need(tx.currency, event.date)
             # An opening row's price is in its lot's currency (for a priced ADJUSTMENT or a REWARD, its cost basis's).
-            if event.kind in ("BUY", "REWARD", "ADJUSTMENT_IN") and event.transaction_id in lots_by_id:
+            if event.kind in ("BUY", "REWARD", "REWARD_MERGE", "ADJUSTMENT_IN") and event.transaction_id in lots_by_id:
                 fx_resolver.need(lots_by_id[event.transaction_id].currency, event.date)
         for closure in closures:
             if closure.lot_id in selected_ids:

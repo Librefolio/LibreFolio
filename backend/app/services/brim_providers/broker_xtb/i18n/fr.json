@@ -1,7 +1,7 @@
 {
   "brimPlugins": {
     "broker_xtb": {
-      "description": "Importe les transactions de l’export CSV de XTB. Prend en charge les actions, les ETF, les dividendes, les mouvements de liquidités, les impôts, les frais et les intérêts.",
+      "description": "Importe le rapport d’historique de XTB (Excel) : achats, ventes, dépôts, retraits, dividendes, retenues à la source, frais et intérêts.",
       "name": "XTB"
     }
   }

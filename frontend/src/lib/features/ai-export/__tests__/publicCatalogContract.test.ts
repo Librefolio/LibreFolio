@@ -53,7 +53,7 @@ describe('AI Export V1 public catalog', () => {
         const analysisById = new Map(catalog.analyses.map((entry) => [entry.id, entry]));
 
         expect(analysisById.get('portfolio.pac_planning')?.required_dataset_ids).toEqual(['portfolio.overview_and_history']);
-        expect(analysisById.get('portfolio.protection_strategies')?.required_dataset_ids).toEqual(['portfolio.overview_and_history']);
+        expect(analysisById.get('portfolio.protection_strategies')?.required_dataset_ids).toEqual(['portfolio.overview_and_history', 'portfolio.risk_evidence']);
         expect(analysisById.get('portfolio.fiscal_lots')?.required_dataset_ids).toEqual(['portfolio.overview_and_history', 'portfolio.fifo']);
         expect(analysisById.get('broker.fiscal_lots')?.required_dataset_ids).toEqual(['broker.overview_and_history', 'broker.fifo']);
         expect(analysisById.get('asset.market_analysis')?.required_dataset_ids).toEqual(['asset.market_history']);

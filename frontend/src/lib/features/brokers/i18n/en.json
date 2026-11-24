@@ -151,7 +151,8 @@
           "SPLIT": "Split",
           "TRANSFER_IN": "Transfer In",
           "TRANSFER_OUT": "Transfer Out",
-          "REWARD": "Reward"
+          "REWARD": "Reward",
+          "REWARD_MERGE": "Reward spread"
         },
         "unitPrice": "Unit Price",
         "transitInterval": "Transit Interval",
@@ -232,7 +233,8 @@
           "SPLIT": "SPLIT",
           "TRANSFER_IN": "TRANSFER+",
           "TRANSFER_OUT": "TRANSFER-",
-          "REWARD": "REWARD"
+          "REWARD": "REWARD",
+          "REWARD_MERGE": "REWARD+"
         },
         "historyDetail": {
           "openPrice": "Open price",
@@ -297,7 +299,11 @@
       "matchingMethod": "Matching method",
       "methodFifoHint": "FIFO: a sale closes the oldest lot first",
       "methodLifoHint": "LIFO: a sale closes the most recent lot first",
-      "incomeMarkerReward": "Reward"
+      "incomeMarkerReward": "Reward",
+      "rewardAllocation": {
+        "label": "Spread rewards across lots",
+        "hint": "Each reward joins the lots held at its broker the day before, at no cost, instead of opening a lot of its own. A view only: nothing is saved."
+      }
     },
     "createdInSystem": "Created in System",
     "deleteBlockedTitle": "Cannot delete broker",

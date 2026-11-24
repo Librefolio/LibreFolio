@@ -21,6 +21,7 @@ from backend.app.services.financial_math.average_cost import (
 )
 from backend.app.services.financial_math.change_days import change_days, reading_change_days
 from backend.app.services.financial_math.fx_rates import AskedDayRates
+from backend.app.services.financial_math.income import CASH_INCOME_TYPES, transaction_type_code
 from backend.app.services.financial_math.native_cash import NativeCash
 from backend.app.services.financial_math.portfolio.classifier import _CASH_LINKED_TYPES, _LINKED_TYPES
 from backend.app.services.financial_math.portfolio.models import (
@@ -568,17 +569,21 @@ class DailyStateBuilder:
                 cumulative_ecf_by_broker[bid] += ecf_by_date_by_broker.get((current, bid), zero)
 
             day_all_txs = all_txs_by_date.get(current, [])
-            # Sort: additions (qty > 0) first, then reductions (qty < 0), then non-position txs
+            # Sort: cash income (DIVIDEND, INTEREST) first, then additions (qty > 0), then reductions (qty < 0), then the
+            # other non-position txs. STK1-1 (P-21, the developer, 24/11/2026): an income reinvested the same day reaches R
+            # before the BUY that spends it, so the BUY draws on the income, not on the capital (a broker's DRIP).
             day_additions = [c for c in day_all_txs if c.tx.quantity and c.tx.quantity > 0 and c.tx.asset_id]
             day_reductions = [c for c in day_all_txs if c.tx.quantity and c.tx.quantity < 0 and c.tx.asset_id]
             day_non_position = [c for c in day_all_txs if not (c.tx.quantity and c.tx.quantity != 0 and c.tx.asset_id)]
+            day_cash_income = [c for c in day_non_position if transaction_type_code(c.tx) in CASH_INCOME_TYPES]
+            day_non_position = [c for c in day_non_position if transaction_type_code(c.tx) not in CASH_INCOME_TYPES]
             # J2: a linked cash arrival takes up its departure's K/R split, so it comes after a departure of the same day.
             day_ids = {c.tx.id for c in day_non_position}
             same_day_arrivals = [c for c in day_non_position if _is_linked_cash_arrival(c) and c.paired_tx is not None and c.paired_tx.id in day_ids]
             if same_day_arrivals:
                 day_non_position = [c for c in day_non_position if c not in same_day_arrivals] + same_day_arrivals
 
-            for ctxn in day_additions + day_reductions + day_non_position:
+            for ctxn in day_cash_income + day_additions + day_reductions + day_non_position:
                 tx = ctxn.tx
                 bid = tx.broker_id
                 key = (tx.asset_id, tx.broker_id) if tx.asset_id else None

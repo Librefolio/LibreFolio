@@ -44,9 +44,9 @@ function followUps(analysisId: AiExportAnalysisId, line: string): AiExportFollow
 const PERFORMANCE_MARKET_DRIVER_FOLLOW_UPS =
     "Usual follow-ups for this analysis: the secondary causes with their evidence; the earlier episodes of the same move; what remains unexplained, holding by holding; the detail of one holding; the sources one by one with their quality; how the period's result splits into realised and unrealised, income and new money.";
 
-/** Protection Strategies' usual follow-ups (78 L3): version 5 of `78_aiExportPrompts/bozze-AIX.md`, copied as written. */
+/** Protection Strategies' usual follow-ups (78 L8a): version 6 of `78_aiExportPrompts/bozze-AIX.md`, copied as written. */
 const PROTECTION_STRATEGIES_FOLLOW_UPS =
-    "Usual follow-ups for this analysis: the hedging instruments the user's brokers offer, with the capital each needs and its costs; what a hedge of a given size would cost and avoid here; what funding a hedge by selling holdings really amounts to; the tax side of each option under the user's regime; the signals to watch so as to decide earlier next time; the detail of one holding.";
+    "Usual follow-ups for this analysis: the risk measures holding by holding; the hedging instruments the user's brokers offer, with the capital each needs and its costs; what a hedge of a given size would cost and avoid here; what funding a hedge by selling holdings really amounts to; the tax side of each option under the user's regime; the signals to watch so as to decide earlier next time; the detail of one holding.";
 
 const facts = section('Key Facts', 'Cite only the supplied facts your conclusions rely on, briefly, with their units, currencies, signs, dates, periods, scope, coverage, and data-quality limits where they matter. Do not restate or summarize the rest of the Snapshot Data.');
 const evidence = section('Evidence and Interpretation', 'Connect conclusions to supplied evidence. Separate observation, calculation, interpretation, assumption, and uncertainty; never invent missing evidence.');

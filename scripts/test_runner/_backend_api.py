@@ -49,6 +49,13 @@ def api_preview_cache(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "Preview cache tests", verbose=verbose)
 
 
+def api_uploads_resize_image(verbose: bool = False, test_names: list = None) -> bool:
+    """Run tests for the image preview of the uploads API (_resize_image)."""
+    print_section("Uploads Resize Image Tests")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_uploads_resize_image.py", test_names)
+    return run_command(cmd, "Uploads resize image tests", verbose=verbose)
+
+
 def api_fx_unit(verbose: bool = False, test_names: list = None) -> bool:
     """Run direct unit tests for FX API handlers (no live server/network)."""
     print_section("FX API Unit Tests")
@@ -98,6 +105,15 @@ def api_period_changes(verbose: bool = False, test_names: list = None) -> bool:
     print_info("Tests: 401 without a session, 422 for base == quote, answer shape, the pages' numbers")
     cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_period_changes_api.py", test_names)
     return run_command(cmd, "Period changes API tests", verbose=verbose)
+
+
+def api_reward_values(verbose: bool = False, test_names: list = None) -> bool:
+    """Run the 79 STK-4b reward-value route tests."""
+    print_section("Reward Values API Tests (79 STK-4b)")
+    print_info("Tests: POST /assets/prices/reward-values — the close of that very day ÷ quote base, NO_PRICE_THAT_DAY on a gap, NO_HISTORY, request order")
+    print_info("Tests: 1 001 items 422 bulk_too_many_items, 401 without a session")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_reward_values_api.py", test_names)
+    return run_command(cmd, "Reward values API tests", verbose=verbose)
 
 
 def api_signal_catalogs(verbose: bool = False, test_names: list = None) -> bool:
@@ -1365,6 +1381,15 @@ Tests for REST API endpoints (server auto-started):
     )
     add_test(api, "fx-compress-errors", api_fx_compress_errors, name="FX Compress Errors", desc="split_fx_issues, group_fx_issues, issue detail text")
     add_test(api, "preview-cache", api_preview_cache, name="Preview Cache", desc="PreviewCache in uploads API")
+    # PURE: images in tmp_path, Pillow only; no database, no server, no network.
+    add_test(
+        api,
+        "uploads-resize-image",
+        api_uploads_resize_image,
+        name="Uploads Resize Image",
+        desc="_resize_image of ?img_preview=WxH: the preview is written in the format of the file (PNG, JPEG, MPO as JPEG, WebP, GIF, BMP, TIFF), the box and the aspect kept, a source already inside the box is not resized, a format Pillow cannot write falls back to PNG",
+        isolation="pure",
+    )
     add_test(api, "fx-unit", api_fx_unit, name="FX API Unit", desc="Direct handler unit tests, no live server")
     add_test(api, "fx-sync", api_fx_sync, name="FX Sync API", desc="FX rate synchronization endpoints")
     # PURE: the handler runs in process with convert_bulk replaced by a double; no database, no server.
@@ -1379,6 +1404,14 @@ Tests for REST API endpoints (server auto-started):
     add_test(api, "assets-price", api_assets_price, name="Assets Price API", desc="Bulk upsert, delete, query, sync; X-R65 422 date_out_of_range; X-R71 422 price_currency_mismatch; X-R29 POST /assets/prices/stored-count (stored and manual rows of a range, 1 001 items 422, 401 without a session)")
     # Write-scoped (the category default): own user, own asset (deleted), rates only on AWG/TMT, a pair no other test uses.
     add_test(api, "period-changes", api_period_changes, name="Period Changes API", desc="MF-P2: login, base == quote 422, answer shape, and the Assets/FX pages' numbers from the price query and the conversions; MF-P2b: list caps, ≤ 5 distinct as_of; X5-6: no 1900 floor")
+    # Write-scoped (the category default): own user, own assets and their prices (deleted); the unknown asset is an id no lane holds.
+    add_test(
+        api,
+        "reward-values",
+        api_reward_values,
+        name="Reward Values API (79 STK-4b)",
+        desc="POST /assets/prices/reward-values: the close of that very day (a gap between two closes is NO_PRICE_THAT_DAY), ÷ the quote base, in the price's currency; NO_HISTORY for no stored price or no such asset; request order; 1 001 items 422; 401 without a session",
+    )
     add_test(api, "signal-catalogs", api_signal_catalogs, name="Signal Catalogs", desc="Static authenticated Asset/FX signal definitions")
     add_test(api, "asset-signals", api_asset_signals, name="Asset Signals", desc="Price-query legacy, signal-only, annotations and isolation")
     add_test(api, "fx-signals", api_fx_signals, name="FX Signals", desc="Combined conversion, grouped signals, identity/rates and legacy output")

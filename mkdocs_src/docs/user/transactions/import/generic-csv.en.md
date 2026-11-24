@@ -48,6 +48,8 @@ them by their names: there is nothing to map by hand.
 - **The bulk workspace asks for a cost on an `ADJUSTMENT` row**: enter the cost of **one** unit,
   not the total value of the position. Only a row that adds units asks for it: one that removes
   units (a negative quantity) has no value.
+- **The bulk workspace asks for a value on a `REWARD` row**: enter the value of **one** unit on the day you received
+  it, not the total. The file has no column for it, so every reward asks.
 
 ### 📅 Date format {: #day-month-order }
 
@@ -105,12 +107,15 @@ These are the columns LibreFolio recognises in a Generic CSV file. Column names 
 | **`quantity`** | Required for BUY/SELL/ADJUSTMENT | `quantità`, `qty`, `shares`, `azioni`, `units`, `unità`, `amount_shares`, `num_shares` | Number of units. **Negative for SELL, positive for BUY.** |
 | **`amount`** | Required for most types | `importo`, `value`, `cash`, `cash_amount`, `total`, `totale`, `net_amount`, `gross_amount`, `price` | Cash impact. **Negative when cash leaves, positive when cash enters.** Empty for ADJUSTMENT. |
 | **`currency`** | Optional (defaults to EUR) | `valuta`, `ccy`, `curr`, `currency_code`, `divisa`, `währung` | ISO 4217 currency code. EUR applies only when the file has no currency column: if it has one, fill it on every row with an `amount`, or that row is skipped. |
-| **`asset`** | Required for BUY/SELL/DIVIDEND/ADJUSTMENT | `symbol`, `ticker`, `isin`, `asset_id`, `instrument`, `strumento`, `security`, `titolo`, `name`, `nome` | Ticker, ISIN, or a consistent name string for unlisted assets |
+| **`asset`** | Required for BUY/SELL/DIVIDEND/ADJUSTMENT/REWARD | `symbol`, `ticker`, `isin`, `asset_id`, `instrument`, `strumento`, `security`, `titolo`, `name`, `nome` | Ticker, ISIN, or a consistent name string for unlisted assets |
 | **`description`** | Optional | `descrizione`, `notes`, `memo`, `note`, `details`, `dettagli`, `comment`, `commento` | Free text notes |
 
 ### 🏷️ Valid `type` values
 
-`BUY` · `SELL` · `DIVIDEND` · `INTEREST` · `DEPOSIT` · `WITHDRAWAL` · `FEE` · `TAX` · `ADJUSTMENT`
+`BUY` · `SELL` · `DIVIDEND` · `INTEREST` · `DEPOSIT` · `WITHDRAWAL` · `FEE` · `TAX` · `ADJUSTMENT` · `REWARD`
+
+A `REWARD` is a reward received in units of an asset (staking, an airdrop): a positive `quantity`, no `amount`. It is also
+read as `reward`, `rewards`, `staking`, `staking reward`, `airdrop` or `premio`.
 
 !!! warning "Not supported: TRANSFER, FX_CONVERSION, CASH_TRANSFER"
 

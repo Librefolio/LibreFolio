@@ -13,7 +13,7 @@
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import TransactionResultBanner from './TransactionResultBanner.svelte';
     import PossibleSplitRow from './PossibleSplitRow.svelte';
-    import type {PossibleSplitEntry} from './bulkTodos';
+    import type {PossibleSplitEntry, RewardFillCounts} from './bulkTodos';
     import type {PreFloorEntry} from '$lib/features/transactions/preFloorDate';
     import {getTransactionTypeIconUrl, getTypeRule} from '$lib/features/transactions/transactionTypeStore';
     import {resolveIssueMessage, type ResolverContext} from '$lib/features/transactions/resolveValidationMessage';
@@ -71,6 +71,11 @@
         preFloorEntries?: PreFloorEntry[];
         onSplitCreate: (entry: PossibleSplitEntry) => void;
         onSplitLink: (tempId: string, eventId: number) => void;
+        /** «Fill from price history» (project 79, STK-4b): rows with an open `reward_value` todo, whether a fill runs, its last outcome. */
+        rewardFillPending?: number;
+        rewardFillRunning?: boolean;
+        rewardFillResult?: (RewardFillCounts & {failed: boolean}) | null;
+        onRewardFill?: () => void;
     }
 
     let {
@@ -114,7 +119,12 @@
         preFloorEntries = [],
         onSplitCreate,
         onSplitLink,
+        rewardFillPending = 0,
+        rewardFillRunning = false,
+        rewardFillResult = null,
+        onRewardFill,
     }: Props = $props();
+    const rewardFillButtonClass = 'px-2 py-0.5 rounded border border-lf-input bg-lf-field text-lf-primary hover:bg-lf-hover text-xs disabled:opacity-60';
 </script>
 
 <div class="px-5 pt-3 space-y-2 shrink-0">
@@ -239,6 +249,23 @@
                 </ul>
             {/if}
         </div>
+    {/if}
+    {#if rewardFillPending > 0 || rewardFillResult}
+        <InfoBanner variant="info">
+            <div class="flex flex-wrap items-center gap-2" data-testid="tx-bulk-reward-fill" data-pending={rewardFillPending} data-state={rewardFillRunning ? 'running' : 'idle'}>
+                {#if rewardFillPending > 0}
+                    <span class="min-w-0 flex-1">{$t('transactions.bulk.rewardFill.pending', {values: {n: rewardFillPending}})}</span>
+                    <button type="button" class={rewardFillButtonClass} disabled={rewardFillRunning} onclick={() => onRewardFill?.()} data-testid="tx-bulk-reward-fill-button">
+                        {rewardFillRunning ? $t('transactions.bulk.rewardFill.running') : $t('transactions.bulk.rewardFill.button')}
+                    </button>
+                {/if}
+                {#if rewardFillResult}
+                    <p class="w-full" data-testid="tx-bulk-reward-fill-result" data-filled={rewardFillResult.filled} data-no-price={rewardFillResult.noPrice} data-no-history={rewardFillResult.noHistory} data-failed={rewardFillResult.failed}>
+                        {rewardFillResult.failed ? $t('transactions.bulk.rewardFill.failed') : $t('transactions.bulk.rewardFill.result', {values: {filled: rewardFillResult.filled, noPrice: rewardFillResult.noPrice, noHistory: rewardFillResult.noHistory}})}
+                    </p>
+                {/if}
+            </div>
+        </InfoBanner>
     {/if}
     {#if possibleSplitEntries.length > 0}
         <InfoBanner variant="warning">

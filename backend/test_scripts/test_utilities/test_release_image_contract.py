@@ -31,6 +31,10 @@ their names:
 * no other stage copies ``frontend/build/`` (or a directory containing it) straight from
   the build context, which would bypass the guard.
 
+**The default avatars** (lane 84): the image carries them as WebP, converted by an ``avatars-webp`` stage from a copy of the
+folder; a ``backend-src`` stage is ``backend/`` without their PNGs; the final stage takes only those two, and ``.dockerignore``
+does not hide the PNGs from the conversion (``avatar_webp_violations``).
+
 **R12** pins more promises of the workflow:
 
 * **cache keys carry the runner image**: a step exports ``RUNNER_IMAGE_OS`` from the
@@ -867,6 +871,60 @@ def full_image_png_violations(dockerfile_text: str) -> list[str]:
     if deletes:
         return []
     return ["the docs-full stage does not delete the gallery's PNGs (`find /site/gallery -iname '*.png' -delete`): the full image would carry both formats of every screenshot"]
+
+
+AVATARS_SOURCE = "backend/staticResources/Avatars"
+
+
+def avatar_webp_violations(dockerfile_text: str, dockerignore_text: str) -> list[str]:  # noqa: C901 — a flat list of independent checks, one problem line each
+    """The image carries the default avatars as WebP only (lane 84): 24.7 MB of PNG become about 2.6 MB.
+
+    Two intermediate stages do the work, because a PNG that reached the final stage would stay in its layer whatever a
+    later ``RUN rm`` did: ``avatars-webp`` converts a copy of the folder, ``backend-src`` is ``backend/`` without the PNGs,
+    and the final stage takes ``backend/`` and the WebP only from them. ``.dockerignore`` must not hide the PNGs from the
+    conversion, which reads them from the build context.
+    """
+    stages = {stage.name: stage for stage in dockerfile_stages(dockerfile_text) if stage.name}
+    stages_in_order = dockerfile_stages(dockerfile_text)
+    problems: list[str] = []
+
+    converter = stages.get("avatars-webp")
+    if converter is None:
+        problems.append("the Dockerfile has no `FROM … AS avatars-webp` stage: the default avatars would reach the image as PNG")
+    else:
+        copied = [(flags, sources, dest) for _, flags, sources, dest in _copies(converter)]
+        if not any("from" not in flags and AVATARS_SOURCE in [posixpath.normpath(s) for s in sources] for flags, sources, _ in copied):
+            problems.append(f"the avatars-webp stage does not copy {AVATARS_SOURCE}/ from the build context")
+        runs = [args for keyword, args in converter.instructions if keyword == "RUN"]
+        if not any("png_to_webp.py" in run for run in runs):
+            problems.append("the avatars-webp stage never runs scripts/docker/png_to_webp.py: its copy of the avatars stays PNG")
+
+    sanitiser = stages.get("backend-src")
+    if sanitiser is None:
+        problems.append("the Dockerfile has no `FROM … AS backend-src` stage: backend/ would reach the final stage with the PNG avatars")
+    else:
+        copied = [(flags, sources, dest) for _, flags, sources, dest in _copies(sanitiser)]
+        if not any("from" not in flags and posixpath.normpath(dest) == "/backend" and "backend" in [posixpath.normpath(s) for s in sources] for flags, sources, dest in copied):
+            problems.append("the backend-src stage does not copy backend/ from the build context to /backend/")
+        runs = [args for keyword, args in sanitiser.instructions if keyword == "RUN"]
+        if not any(re.search(r"\bfind\s+/backend/staticResources/Avatars\b", run) and re.search(r"-i?name\s+'?\*\.png'?", run) and "-delete" in run for run in runs):
+            problems.append("the backend-src stage does not delete the avatars' PNGs (`find /backend/staticResources/Avatars -iname '*.png' -delete`): they would stay in the image")
+
+    final = stages_in_order[-1]
+    final_copies = [(flags, sources, dest) for _, flags, sources, dest in _copies(final)]
+    for flags, sources, _ in final_copies:
+        if "from" not in flags and any(posixpath.normpath(s) in ("backend", ".") for s in sources):
+            problems.append(f"the final stage copies {sources} from the build context: the avatars' PNGs would reach the image (take backend/ from the backend-src stage)")
+    if not any(flags.get("from") == "backend-src" and posixpath.normpath(dest) == "backend" for flags, _, dest in final_copies):
+        problems.append("the final stage does not take backend/ from the backend-src stage")
+    if not any(flags.get("from") == "avatars-webp" and posixpath.normpath(dest) == AVATARS_SOURCE for flags, _, dest in final_copies):
+        problems.append(f"the final stage does not take the WebP avatars from the avatars-webp stage into {AVATARS_SOURCE}/")
+
+    for line in dockerignore_text.splitlines():
+        pattern = line.strip()
+        if pattern and not pattern.startswith("#") and not pattern.startswith("!") and ("Avatars" in pattern or "staticResources" in pattern or pattern in ("*.png", "**/*.png")):
+            problems.append(f".dockerignore excludes `{pattern}`: the avatars-webp stage reads the avatars' PNGs from the build context, so the image would have no avatars")
+    return problems
 
 
 # ---------------------------------------------------------------------------
@@ -2070,6 +2128,11 @@ def dockerfile_text() -> str:
 
 
 @pytest.fixture(scope="module")
+def dockerignore_text() -> str:
+    return (DOCKERFILE.parent / ".dockerignore").read_text(encoding="utf-8")
+
+
+@pytest.fixture(scope="module")
 def dev_text() -> str:
     return DEV_PY.read_text(encoding="utf-8")
 
@@ -2268,6 +2331,38 @@ class TestImageTags:
         problems = full_image_png_violations(mutate_dockerfile(dockerfile_text, r"^RUN find /site/gallery -iname '\*\.png' -delete[ \t]*$", "RUN find /site/other -iname '*.png' -delete"))
 
         assert_rejected(problems, "the docs-full stage does not delete the gallery's PNGs")
+
+    def test_the_image_carries_the_default_avatars_as_webp(self, dockerfile_text, dockerignore_text):
+        assert avatar_webp_violations(dockerfile_text, dockerignore_text) == []
+
+    @pytest.mark.parametrize(
+        ("pattern", "replacement", "expected"),
+        [
+            # The converter never runs: the stage copies the PNG and hands them on.
+            (r"^RUN python /tools/scripts/docker/png_to_webp\.py /avatars[ \t]*$", "RUN true", "never runs scripts/docker/png_to_webp.py"),
+            # backend/ keeps its PNG avatars.
+            (r"^RUN find /backend/staticResources/Avatars -iname '\*\.png' -delete[ \t]*$", "RUN true", "does not delete the avatars' PNGs"),
+            # The final stage copies backend/ from the context again, as before the lane.
+            (r"^COPY --chown=\$\{UID\}:\$\{GID\} --from=backend-src /backend/ \./backend/[ \t]*$", "COPY --chown=${UID}:${GID} backend/ ./backend/", "copies ['backend/'] from the build context"),
+            # The WebP avatars never reach the final stage.
+            (r"^COPY --chown=\$\{UID\}:\$\{GID\} --from=avatars-webp /avatars/ \./backend/staticResources/Avatars/[ \t]*$", "RUN true", "does not take the WebP avatars"),
+            # The conversion stage disappears.
+            (r"^FROM python:3\.13-slim AS avatars-webp[ \t]*$", "FROM python:3.13-slim AS avatars-converted", "no `FROM … AS avatars-webp` stage"),
+            # The converter reads another folder.
+            (r"^COPY backend/staticResources/Avatars/ /avatars/[ \t]*$", "COPY backend/staticResources/ /avatars/", "does not copy backend/staticResources/Avatars/ from the build context"),
+        ],
+        ids=["converter-never-runs", "pngs-kept-in-backend-src", "final-copies-backend-from-context", "webp-never-reaches-final", "no-converter-stage", "converter-reads-another-folder"],
+    )
+    def test_avatar_check_fails_on_a_broken_stage(self, dockerfile_text, dockerignore_text, pattern, replacement, expected):
+        problems = avatar_webp_violations(mutate_dockerfile(dockerfile_text, pattern, replacement), dockerignore_text)
+
+        assert_rejected(problems, expected)
+
+    @pytest.mark.parametrize("line", ["backend/staticResources/Avatars/*.png", "backend/staticResources/", "**/*.png"])
+    def test_avatar_check_fails_when_dockerignore_hides_the_pngs(self, dockerfile_text, dockerignore_text, line):
+        problems = avatar_webp_violations(dockerfile_text, dockerignore_text + f"\n{line}\n")
+
+        assert_rejected(problems, f"excludes `{line}`")
 
     def test_default_variant_check_fails_on_a_broken_copy(self, dockerfile_text):
         problems = default_variant_violations(mutate_dockerfile(dockerfile_text, r"^ARG[ \t]+DOCS_VARIANT=full[ \t]*$", "ARG DOCS_VARIANT=light"))

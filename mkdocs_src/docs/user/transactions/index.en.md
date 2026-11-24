@@ -77,10 +77,10 @@ The window lists your **dividends, interest and adjustments** that have an asset
 | Group | Meaning | What you can do |
 |-------|---------|-----------------|
 | **With one event** | Exactly one event of the same asset, on the same day, of the matching type: the row shows its value | **Link** the row, or **Link all** the rows of the group |
-| **Without an event** | The asset has no such event on that day | **Create event** (or **Create all**): enter its value, then link the row; or, when the event is on another day, link it in the transaction (below) |
+| **Without an event** | The asset has no such event on that day | **Create event** (or **Create all**): enter its value, and the event is created and the row linked to it in one step; or, when the event is on another day, link it in the transaction (below) |
 | **Several events** | More than one candidate | **Choose event**: a small window lists them, each with its value and whether it is automatic or entered by hand; nothing is chosen until you pick one, then **Link** |
 
-Each row's action is also in the menu you open with a right-click on the row. **Link all** and **Create all** act on the rows the group's filters leave, and say how many; **Link all** links them in a single save: if any is refused, none is linked. Nothing is linked unless you click.
+Each row's action is also in the menu you open with a right-click on the row. **Link all** and **Create all** act on the rows the group's filters leave, and say how many; **Link all** links them in a single save: if any is refused, none is linked. Nothing is linked unless you click. After **Create event**, only the rows you asked to create are linked, and only when the day now has exactly one event for them; a row that ends up with several events waits for **Choose event**. If the link is refused, the events stay created and the rows appear under **With one event**, ready for **Link**.
 
 To act on some rows only, tick them in the first two groups: the bar above the tables shows **Link** and **Create event**, each with the number of rows it takes, and each acts only on the rows it fits. An action none of the selected rows can take is not shown. The linked rows leave the list and the selection; the other ticked rows stay ticked, so after **Link** the bar still offers **Create event** for the rest. When you scroll the window down, the bar moves into the bar at the bottom; **Esc** there clears the selection and leaves the window open.
 

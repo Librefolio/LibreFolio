@@ -50,15 +50,15 @@ An x-ray of this one asset, drawn with the same blocks as the Dashboard's [Risk 
 
 - 📉 **[How Much Can It Hurt?](../../dashboard/risk.md#how-much-can-it-hurt)** — the losses this asset actually went through: a bad day, thirty bad days, the worst fall, how far below its peak it is today.
 - 📈 **[How Does It Move?](../../dashboard/risk.md#how-does-it-move)** — the green twins: the best day, thirty good days, the largest rally, and what its days were like.
-- ⚖️ **Compared with a Reference** — the asset's volatility, annual return, Sortino and Sharpe, and the same against a benchmark you choose, as in [Am I Being Paid for This Risk?](../../dashboard/risk.md#being-paid). The asset's own row is there even with no benchmark chosen; the benchmark is the one shared with the Dashboard, and the asset itself cannot be its own reference.
 - 🔮 **[What If…?](../../dashboard/risk.md#what-if)** — a past crisis replayed on the asset, said in one sentence; a shock by sector or region; on a bond, rates rising or falling; a simulation.
 
-The **risk-free rate** under the period line is the one of the Dashboard and of every risk page: changing it here changes it there → [Risk tab](../../dashboard/risk.md#good-to-know).
+The **risk-free rate** under the period line (on the other risk pages it sits beside **Compare with**) is the one of the Dashboard and of every risk page: changing it here changes it there → [Risk tab](../../dashboard/risk.md#good-to-know).
 
 What differs from the Dashboard:
 
 - **Your position**: when you own the asset, the amounts are on the value of your position today, across all your brokers, and a line above the blocks says which value. When you do not own it, the blocks show percentages only.
 - **No diversification block**: one asset has nothing to diversify.
+- **No comparison with a reference**: [Am I Being Paid for This Risk?](../../dashboard/risk.md#being-paid) is not drawn here, because one asset beside one reference is not worth a table; it stays on the Dashboard, on a broker's page and in the [asset-set laboratory](../correlation.md).
 - **Rates rising or falling**: when the asset's profile holds a modified duration (on a bond, Borsa Italiana publishes it), *What If…?* offers a **Rates** tool. Choose rates up or down, by half a point, one point or two: it says by about how much the price would move — the duration times the move, with the opposite sign — and, when you own the asset, how much that is on your position. It names the duration it used, its source and the day it was read; when that duration has not been confirmed for more than 30 days, it also says it is not up to date and when it was last confirmed, as the **Profile** tab does. It is a first-order estimate: it ignores convexity and the coupons you receive, so it is closer for small moves. On a bond whose profile has no duration, one line says so and leads to the **Profile** tab.
 - **Prices from a plan**: on a scheduled investment and on an asset of type *Crowdfund*, *Real estate crowdfunding* or *Held asset*, a note says that the prices come from the plan, not from the market — volatility and VaR then say how regular the plan is, not how risky the asset is.
 - **The toolbar's buttons**: the tab has no **Sync** of its own — the toolbar's **Sync** and **Reload** update it too, and its **Date range** and **Convert to** set its period and currency. A notice about missing data may still offer its own **Sync**.

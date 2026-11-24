@@ -151,7 +151,8 @@
           "SPLIT": "Split",
           "TRANSFER_IN": "Transfert entrant",
           "TRANSFER_OUT": "Transfert sortant",
-          "REWARD": "Récompense"
+          "REWARD": "Récompense",
+          "REWARD_MERGE": "Récompense répartie"
         },
         "unitPrice": "Prix unitaire",
         "transitInterval": "Intervalle de transit",
@@ -232,7 +233,8 @@
           "SPLIT": "SPLIT",
           "TRANSFER_IN": "TRANSFERT+",
           "TRANSFER_OUT": "TRANSFERT-",
-          "REWARD": "RÉCOMPENSE"
+          "REWARD": "RÉCOMPENSE",
+          "REWARD_MERGE": "RÉCOMPENSE+"
         },
         "historyDetail": {
           "openPrice": "Prix d'ouverture",
@@ -297,7 +299,11 @@
       "matchingMethod": "Méthode d'appariement",
       "methodFifoHint": "FIFO : une vente clôt d'abord le lot le plus ancien",
       "methodLifoHint": "LIFO : une vente clôt d'abord le lot le plus récent",
-      "incomeMarkerReward": "Récompense"
+      "incomeMarkerReward": "Récompense",
+      "rewardAllocation": {
+        "label": "Répartir les récompenses sur les lots",
+        "hint": "Chaque récompense rejoint les lots détenus chez son courtier la veille, sans coût, au lieu d'ouvrir son propre lot. Une simple vue : rien n'est enregistré."
+      }
     },
     "createdInSystem": "Créé dans le Système",
     "deleteBlockedTitle": "Impossible de supprimer le courtier",

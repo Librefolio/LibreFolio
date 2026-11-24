@@ -39,6 +39,8 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Union
 
+from backend.app.db.models import Transaction
+from backend.app.db.precision import round_computed_value
 from backend.app.schemas.brim import BRIMEvidence, BRIMFieldTodo, BRIMNotice
 from backend.app.services.brim.brim_provider import BRIMProvider
 
@@ -504,6 +506,35 @@ def possible_split_todo(
         message=f"Line {row_number}: {ticker} may be a stock split of {format(added_quantity.normalize(), 'f')} new shares — link a SPLIT event.",
         context=context,
         evidence=[evidence],
+    )
+
+
+# The blocking todo of a REWARD whose file gives no value on receipt (project 79, STK-4a; decision S4-Q4 (a)): the row
+# waits for the per-unit value the user writes. The wizard words it from ``importWizard.brimNotice.reward_value``.
+REWARD_VALUE = "reward_value"
+
+
+def reward_unit_value(total: Optional[Decimal], quantity: Decimal) -> Optional[Decimal]:
+    """The per-unit value on receipt of a reward from the total the file states (decision S4-Q1), or None.
+
+    ``cost_basis_override`` is per unit (rule 7): the total is divided by the units received and the quotient rounded to
+    what the column keeps (``round_computed_value``, C-97 D6). A missing total or no units received → None, and the row
+    gets ``reward_value_todo``; a total of 0 written in the file is a value (an airdrop of no worth), never a missing one.
+    """
+    if total is None or not total.is_finite() or quantity <= 0:
+        return None
+    return round_computed_value(abs(total) / quantity, Transaction, "cost_basis_override")
+
+
+def reward_value_todo(tx_index: int, row_number: int, symbol: Optional[str] = None) -> BRIMFieldTodo:
+    """The blocking todo of a REWARD with no value in the file: the user writes its per-unit value on receipt."""
+    what = f"this {symbol} reward" if symbol else "this reward"
+    return BRIMFieldTodo(
+        tx_index=tx_index,
+        field="cost_basis_override",
+        severity="blocker",
+        reason_code=REWARD_VALUE,
+        message=f"Line {row_number}: the file gives no value for {what}. Enter the value of a single unit on the day it was received, not the total, to import it.",
     )
 
 

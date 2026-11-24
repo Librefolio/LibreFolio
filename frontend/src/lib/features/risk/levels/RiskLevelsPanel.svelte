@@ -1,4 +1,5 @@
 <script lang="ts">
+    import {untrack} from 'svelte';
     import {_ as t} from '$lib/i18n';
     import type {RiskAnalyticResult, RiskScope} from '$lib/features/risk/riskStore.svelte';
     import {createRiskPanelController, discardedErrorCodes, LEVEL_ON_DEMAND_ANALYSES, type RiskSyncCompletion} from '$lib/features/risk/riskPanelController.svelte';
@@ -71,11 +72,11 @@
          * What the scope is worth, so L1 can put money beside every percentage.
          *
          * Must be the value of **this scope**, not of whatever the page happens to
-         * be showing elsewhere. Dashboard's own summary follows its broker filter
-         * while this panel is deliberately unfiltered, so the two disagree exactly
-         * when a filter is on — pass `null` rather than a number from a different
-         * question. A missing amount is a blank; a mismatched one is a wrong
-         * answer that reads as a right one.
+         * be showing elsewhere. The Dashboard asks over the brokers of the summary
+         * on screen (RSK-F), so the summary's net worth is this scope's; a host
+         * whose figures answer another scope passes `null` instead. A missing
+         * amount is a blank; a mismatched one is a wrong answer that reads as a
+         * right one.
          */
         scopeValue?: number | null;
         /** Asset ids in scope, seeding the names and the scenario editors. */
@@ -116,7 +117,9 @@
         // The two perimeters can disagree by more than half their own value —
         // which is exactly why the card reads the perimeter from the payload and
         // prints it, instead of anyone assuming which one is on screen.
-        includeCurrentCompositionRiskReturn: true,
+        // One asset draws no L3 (81 U29), so it does not ask for what only L3 reads. The kind of scope never changes while
+        // the panel is mounted (the page remounts it), so reading it once is the intent.
+        includeCurrentCompositionRiskReturn: untrack(() => scope.kind !== 'asset'),
         // RN-25: the asset's rates scenario rides in the same wave; the catalogue offers it on one asset only.
         includeRateShock: true,
     });
@@ -161,7 +164,8 @@
     // It used to declare the *historical* KPI while drawing the other one, so the
     // notice missed two measurements that had lost the same holdings.
     let l3Kpi = $derived(resultByCode(selectKpiWave(currentResults, historicalResults).results, 'historical_kpi'));
-    let l3Results = $derived([controller.comparisonResult, l3Kpi, resultByCode(currentResults, 'asset_risk_return')]);
+    // One asset draws no L3 (81 U29): nothing of it is declared there.
+    let l3Results = $derived(oneAsset ? [] : [controller.comparisonResult, l3Kpi, resultByCode(currentResults, 'asset_risk_return')]);
     // L3's own KPI is named for what L3 shows from it: in L3, "historical risk
     // metrics" — its catalogue name — would be false. Not when it is L1's
     // historical one, drawn by L3 only as a fallback: that keeps L1's name.
@@ -349,7 +353,7 @@
 <div class="space-y-4 text-lf-primary" data-testid="risk-levels-panel" data-scope={scope.kind} data-catalog={controller.catalogState} data-busy={initialLoading ? 'true' : 'false'}>
     <!-- One asset: the Asset Detail toolbar holds the page's one Refresh (Y11, decision 48), so the header draws no sync of its own;
          its docs icon opens the Asset Detail's own page, in the asset's words (RN-17 c). -->
-    <RiskPanelHeader {controller} {title} {subtitle} {internalSubset} {assetIds} {dateStart} {dateEnd} {targetCurrency} showActions={!oneAsset} {oneAsset} />
+    <RiskPanelHeader {controller} {title} {subtitle} {internalSubset} {assetIds} {dateStart} {dateEnd} {targetCurrency} showActions={!oneAsset} {oneAsset} riskFreeRate={oneAsset} />
 
     {#if backtest}
         <p class="rounded-lg border border-lf-warning-line bg-lf-warning-soft px-3 py-2 text-xs text-lf-warning-on-soft" data-testid="risk-backtest-notice">
@@ -380,23 +384,17 @@
             </RiskLevelSection>
         {/if}
 
-        {#snippet l3Actions()}
-            <ColumnVisibilityToggle tableRef={l3Table} />
-        {/snippet}
+        <!-- One asset: no benchmark level (81 U29, developer): one asset beside one reference is not a table worth drawing. The rate field then sits under the period line, where L1's semi-deviation still reads it. -->
+        {#if !oneAsset}
+            {#snippet l3Actions()}
+                <ColumnVisibilityToggle tableRef={l3Table} />
+            {/snippet}
 
-        <RiskLevelSection
-            level={3}
-            title={$t(oneAsset ? 'risk.levels.l3.titleAsset' : 'risk.levels.l3.title')}
-            testId="risk-level-3"
-            docsPath="financial-theory/technical-analysis/risk-metrics/"
-            health={levelErrorHealth(l3Health)}
-            errorCodes={l3Errors}
-            metadata={l3Metadata}
-            actions={l3Table ? l3Actions : undefined}
-        >
-            <L3Benchmark {controller} subjectAssetId={scope.kind === 'asset' ? scope.asset_id : null} riskFreePercent={appliedRiskFreePercent} period={{start: dateStart, end: dateEnd}} currency={targetCurrency} />
-            <L3RiskAdjusted bind:tableRef={l3Table} subjectLabel={scope.kind === 'asset' ? assetNames[scope.asset_id] : undefined} {oneAsset} {historicalResults} {currentResults} {assetNames} {assetIcons} comparisonResult={controller.comparisonResult} {benchmarkName} loading={initialLoading} />
-        </RiskLevelSection>
+            <RiskLevelSection level={3} title={$t('risk.levels.l3.title')} testId="risk-level-3" docsPath="financial-theory/technical-analysis/risk-metrics/" health={levelErrorHealth(l3Health)} errorCodes={l3Errors} metadata={l3Metadata} actions={l3Table ? l3Actions : undefined}>
+                <L3Benchmark {controller} riskFreePercent={appliedRiskFreePercent} period={{start: dateStart, end: dateEnd}} currency={targetCurrency} />
+                <L3RiskAdjusted bind:tableRef={l3Table} {historicalResults} {currentResults} {assetNames} {assetIcons} comparisonResult={controller.comparisonResult} {benchmarkName} loading={initialLoading} />
+            </RiskLevelSection>
+        {/if}
 
         <!-- Closed until asked for, and the scenario catalogue is fetched on that
              first open only: reopening a drawer is not a change of question, so

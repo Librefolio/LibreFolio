@@ -187,6 +187,10 @@
         "all_data": {
           "display": "Todos los datos de la cartera",
           "description": "Unión deduplicada de todos los conjuntos de datos aplicables a la cartera."
+        },
+        "risk_evidence": {
+          "display": "Evidencias de Riesgo de la Cartera",
+          "description": "Medidas de riesgo deterministas sobre las posiciones actuales, en una ventana de hasta 12 meses que no depende del período IA: dónde se concentra el riesgo, la pérdida de un mes malo y los pares de posiciones que se mueven juntos, con ventana medida, cobertura y exclusiones."
         }
       },
       "broker": {

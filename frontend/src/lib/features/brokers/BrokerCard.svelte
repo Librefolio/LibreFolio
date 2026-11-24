@@ -79,7 +79,7 @@
 
 <a
     href="/brokers/{broker.id}"
-    class="block w-full text-left bg-lf-card text-lf-primary rounded-xl shadow-sm shadow-lf-shadow-card border border-lf-subtle overflow-hidden cursor-pointer
+    class="flex flex-col h-full w-full text-left bg-lf-card text-lf-primary rounded-xl shadow-sm shadow-lf-shadow-card border border-lf-subtle overflow-hidden cursor-pointer
            transition-all duration-200 hover:shadow-lg hover:border-lf-link/30 hover:bg-lf-selected/50
            focus:outline-none focus:ring-2 focus:ring-lf-focus focus:ring-offset-2"
     class:opacity-60={broker.is_active === false}
@@ -135,8 +135,8 @@
         </div>
     </div>
 
-    <!-- Cash Balances -->
-    <div class="p-4">
+    <!-- Cash Balances: the body takes the room the grid cell gives, so the footer ends on the card's bottom edge (81 U24) -->
+    <div class="p-4 flex-1" data-testid="broker-card-body-{broker.id}">
         <div class="space-y-1.5 mb-4 text-sm">
             <div class="flex items-center justify-between gap-3">
                 <span class="text-lf-muted">{$_('brokers.nav')}</span>
@@ -180,7 +180,7 @@
     </div>
 
     <!-- Footer Stats -->
-    <div class="px-4 py-3 bg-lf-panel border-t border-lf-subtle flex items-center justify-between text-xs text-lf-muted">
+    <div class="px-4 py-3 bg-lf-panel border-t border-lf-subtle flex items-center justify-between text-xs text-lf-muted" data-testid="broker-card-footer-{broker.id}">
         <span>
             {$_('brokers.assets', {values: {n: assetCount}})}
         </span>

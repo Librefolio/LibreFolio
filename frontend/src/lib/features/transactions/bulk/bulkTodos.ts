@@ -136,3 +136,74 @@ export function possibleSplitEntries(
     }
     return entries;
 }
+
+/**
+ * The blocking todo of a REWARD whose file gave no value on receipt (project 79, STK-4a): answered by a value written in
+ * the row, by hand or by «fill from price history» (STK-4b).
+ */
+export const REWARD_VALUE_REASON = 'reward_value';
+export function isRewardValueTodo(todo: {field: string; severity?: string; reasonCode?: string}): boolean {
+    return todo.field === COST_BASIS_FIELD && todo.severity === 'blocker' && todo.reasonCode === REWARD_VALUE_REASON;
+}
+
+/** The shape of a bulk row «fill from price history» reads and writes. */
+export interface RewardFillOp {
+    tempId: string;
+    fields: {asset_id: number | null; date: string; cost_basis_mode?: 'auto' | 'manual' | null; cost_basis_override?: {code: string; amount: string} | null};
+    todos?: Array<FieldTodoLike & {reasonCode?: string}>;
+}
+
+/** A row waiting for its value on receipt: an open `reward_value` todo and no value written yet. */
+export interface RewardFillCandidate {
+    tempId: string;
+    assetId: number | null;
+    date: string;
+}
+
+/** The rows «fill from price history» may fill, in the grid's order: only those with an open `reward_value` todo and an
+ *  empty value; a value already in the row (from the file or typed) is never touched. */
+export function rewardFillCandidates(ops: ReadonlyArray<RewardFillOp>): RewardFillCandidate[] {
+    return ops.filter((op) => (op.todos ?? []).some(isRewardValueTodo) && !hasManualCost(op.fields as TodoAnswerFields)).map((op) => ({tempId: op.tempId, assetId: op.fields.asset_id, date: op.fields.date}));
+}
+
+/** What the history gave for one candidate, as the bulk applies it. */
+export interface RewardFillAnswer {
+    tempId: string;
+    status: 'FILLED' | 'NO_PRICE_THAT_DAY' | 'NO_HISTORY';
+    value: {code: string; amount: string} | null;
+}
+
+/** The outcome of one «fill from price history»: rows filled, rows with no close that day, rows whose asset has no stored price. */
+export interface RewardFillCounts {
+    filled: number;
+    noPrice: number;
+    noHistory: number;
+}
+
+/**
+ * The rows with the values the history gave: each FILLED row gets its value in Manual, the price's currency as it is, and
+ * its `reward_value` todo retires (`remainingTodos`). Every other row stays as it was, its todo open. The input is not changed.
+ */
+export function applyRewardFill<T extends RewardFillOp>(ops: ReadonlyArray<T>, answers: ReadonlyArray<RewardFillAnswer>): {ops: T[]; counts: RewardFillCounts} {
+    const byRow = new Map(answers.map((answer) => [answer.tempId, answer]));
+    const counts: RewardFillCounts = {filled: 0, noPrice: 0, noHistory: 0};
+    const next = ops.map((op) => {
+        const answer = byRow.get(op.tempId);
+        if (!answer) return op;
+        if (answer.status !== 'FILLED' || !answer.value || hasManualCost(op.fields as TodoAnswerFields)) {
+            if (answer.status === 'NO_PRICE_THAT_DAY') counts.noPrice += 1;
+            else if (answer.status === 'NO_HISTORY') counts.noHistory += 1;
+            return op;
+        }
+        counts.filled += 1;
+        const fields = {...op.fields, cost_basis_mode: 'manual' as const, cost_basis_override: {code: answer.value.code, amount: answer.value.amount}};
+        const merged = {...op, fields} as T;
+        if (merged.todos?.length) {
+            const left = remainingTodos(merged.todos, fields);
+            if (left.length > 0) merged.todos = left as T['todos'];
+            else delete merged.todos;
+        }
+        return merged;
+    });
+    return {ops: next, counts};
+}

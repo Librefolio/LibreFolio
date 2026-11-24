@@ -42,19 +42,19 @@ class _GuardSite:
 # A01-A17 are the approved inventory, not source line numbers. Length is itself
 # the contract under test; these are immutable definitions, never shared DB rows.
 _IMPORT_LENGTH_SITES = (
-    _GuardSite("A01-foundation", "components.catalog", "ALL_FOUNDATION_COMPONENTS", "components.registry.ComponentRegistryError", expected_size=68),
-    _GuardSite("A02-real", "components.catalog", "ALL_REAL_COMPONENTS", "components.registry.ComponentRegistryError", expected_size=68),
-    _GuardSite("A03-integrated", "components.catalog", "ALL_COMPONENTS", "components.registry.ComponentRegistryError", expected_size=68),
+    _GuardSite("A01-foundation", "components.catalog", "ALL_FOUNDATION_COMPONENTS", "components.registry.ComponentRegistryError", expected_size=71),
+    _GuardSite("A02-real", "components.catalog", "ALL_REAL_COMPONENTS", "components.registry.ComponentRegistryError", expected_size=71),
+    _GuardSite("A03-integrated", "components.catalog", "ALL_COMPONENTS", "components.registry.ComponentRegistryError", expected_size=71),
     _GuardSite("A04-asset-fx-fragment", "components.asset_fx_registry", "ASSET_FX_COMPONENTS", "components.asset_fx_registry.AssetFxRegistryError", expected_size=27),
     _GuardSite("A05-asset-ids", "components.asset_fx_registry", "ASSET_REAL_COMPONENT_IDS", "components.asset_fx_registry.AssetFxRegistryError", expected_size=15),
     _GuardSite("A06-fx-ids", "components.asset_fx_registry", "FX_REAL_COMPONENT_IDS", "components.asset_fx_registry.AssetFxRegistryError", expected_size=12),
-    _GuardSite("A08-portfolio-broker-fragment", "components.portfolio_broker_registry", "PORTFOLIO_BROKER_COMPONENTS", "components.portfolio_broker_registry.PortfolioBrokerRegistryError", expected_size=41),
-    _GuardSite("A09-portfolio-ids", "components.portfolio_broker_registry", "PORTFOLIO_REAL_COMPONENT_IDS", "components.portfolio_broker_registry.PortfolioBrokerRegistryError", expected_size=21),
+    _GuardSite("A08-portfolio-broker-fragment", "components.portfolio_broker_registry", "PORTFOLIO_BROKER_COMPONENTS", "components.portfolio_broker_registry.PortfolioBrokerRegistryError", expected_size=44),
+    _GuardSite("A09-portfolio-ids", "components.portfolio_broker_registry", "PORTFOLIO_REAL_COMPONENT_IDS", "components.portfolio_broker_registry.PortfolioBrokerRegistryError", expected_size=24),
     _GuardSite("A10-broker-ids", "components.portfolio_broker_registry", "BROKER_REAL_COMPONENT_IDS", "components.portfolio_broker_registry.PortfolioBrokerRegistryError", expected_size=20),
     _GuardSite("A11-public-datasets", "datasets.catalog", "PUBLIC_DATASETS", "datasets.spec.DatasetRegistryError", expected_size=8),
     _GuardSite("A13-public-analyses", "analyses.catalog", "PUBLIC_ANALYSES", "analyses.spec.AnalysisRegistryError", expected_size=12),
 )
-_BUILD_SITE = _GuardSite("A12-all-datasets", "datasets.catalog", "specs", "datasets.spec.DatasetRegistryError", expected_size=40, scope="build_dataset_registry")
+_BUILD_SITE = _GuardSite("A12-all-datasets", "datasets.catalog", "specs", "datasets.spec.DatasetRegistryError", expected_size=41, scope="build_dataset_registry")
 _UNION_SITE = _GuardSite(
     "A07-asset-fx-union",
     "components.asset_fx_registry",
@@ -349,7 +349,7 @@ def run_fault():
 
 def require_registry_counts(components, datasets, analyses):
     counts = (len(components), len(datasets), len(analyses))
-    require(counts == (68, 40, 12), "healthy registry counts changed: " + repr(counts))
+    require(counts == (71, 41, 12), "healthy registry counts changed: " + repr(counts))
 
 
 def run_healthy():
@@ -377,7 +377,7 @@ def run_healthy():
     # longer imports them, so a blanket optimization ban cannot evade controls.
     importlib.import_module(PREFIX + "temporal.policy")
     importlib.import_module(PREFIX + "dependencies")
-    return {"fragment": fragment_name, "counts": [68, 40, 12]}
+    return {"fragment": fragment_name, "counts": [70, 41, 12]}
 
 
 try:
@@ -443,4 +443,4 @@ class TestFreshImportCompatibility:
     def test_healthy_fragment_and_integrated_registries(self, fragment: str, optimize: int):
         result = _run_child({"kind": "healthy", "fragment": fragment}, optimize)
         assert result["fragment"] == fragment
-        assert result["counts"] == [68, 40, 12]
+        assert result["counts"] == [70, 41, 12]

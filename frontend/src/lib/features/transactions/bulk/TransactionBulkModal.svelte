@@ -33,7 +33,8 @@
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
     import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
     import BrimEvidenceTable from '$lib/features/transactions/import/BrimEvidenceTable.svelte';
-    import {initialCostBasisMode, remainingTodos, withoutPossibleSplit, possibleSplitEntries as buildSplitEntries, type PossibleSplitEntry} from './bulkTodos';
+    import {initialCostBasisMode, remainingTodos, withoutPossibleSplit, possibleSplitEntries as buildSplitEntries, rewardFillCandidates, applyRewardFill, type PossibleSplitEntry, type RewardFillAnswer, type RewardFillCounts} from './bulkTodos';
+    import {fetchRewardValues} from '$lib/features/transactions/form/rewardValue';
     import {isPreFloorDateTodo, preFloorEntries as buildPreFloorEntries} from '$lib/features/transactions/preFloorDate';
     import EventCreateMiniModal from '../events/EventCreateMiniModal.svelte';
     import {resolveBrimTodoMessage} from '$lib/features/transactions/resolveBrimNotice';
@@ -2831,6 +2832,35 @@
             return merged;
         });
     }
+    // «Fill from price history» (project 79, STK-4b): the rows with an open `reward_value` todo get the asset's close of
+    // that very day, per unit, from the backend's one reader; the outcome is a count shown in the blockers banner.
+    let rewardFillPending = $derived(rewardFillCandidates(ops).length);
+    let rewardFillRunning = $state(false);
+    let rewardFillResult = $state<(RewardFillCounts & {failed: boolean}) | null>(null);
+    async function fillRewardsFromHistory() {
+        const candidates = rewardFillCandidates(ops);
+        if (candidates.length === 0 || rewardFillRunning) return;
+        rewardFillRunning = true;
+        try {
+            const asked = candidates.filter((candidate) => candidate.assetId != null);
+            const answers = asked.length > 0 ? await fetchRewardValues(asked.map((candidate) => ({assetId: candidate.assetId as number, date: candidate.date}))) : [];
+            if (answers === null) {
+                rewardFillResult = {filled: 0, noPrice: 0, noHistory: 0, failed: true};
+                return;
+            }
+            const fill: RewardFillAnswer[] = candidates.map((candidate) => {
+                if (candidate.assetId == null) return {tempId: candidate.tempId, status: 'NO_HISTORY', value: null};
+                const answer = answers[asked.indexOf(candidate)];
+                return {tempId: candidate.tempId, status: answer?.status ?? 'NO_PRICE_THAT_DAY', value: answer?.suggestion ? {code: answer.suggestion.code, amount: answer.suggestion.amount} : null};
+            });
+            const result = applyRewardFill(ops, fill);
+            ops = result.ops;
+            rewardFillResult = {...result.counts, failed: false};
+            notify({name: 'tx.bulk.rewards.filled', detail: {...result.counts}});
+        } finally {
+            rewardFillRunning = false;
+        }
+    }
     let splitCreateAsset = $derived(splitCreateEntry?.assetId != null ? getAssetInfo(splitCreateEntry.assetId) : null);
     /** Human-readable list of the auto-derived fields still awaiting verification (for the Save-gate dialog). */
     let todoWarningItems = $derived(ops.flatMap((op) => warningTodos(op.todos).map((todo) => resolveBrimTodoMessage(todo, $t) || todo.field)));
@@ -4431,6 +4461,10 @@
             {preFloorEntries}
             onSplitCreate={(entry) => (splitCreateEntry = entry)}
             onSplitLink={linkSplitEvent}
+            {rewardFillPending}
+            {rewardFillRunning}
+            {rewardFillResult}
+            onRewardFill={fillRewardsFromHistory}
         />
 
         <!-- Toolbar (Bugfix-2 §U9: action buttons right-aligned, most important first

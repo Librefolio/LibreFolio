@@ -147,6 +147,7 @@ import {extendScreenToBlock, fitScreenToDialog, PAGE_BLOCK, restoreTallScreen} f
 import {boxStill, bringIntoViewFromTop, CAPTURE_TIMEOUT_MS, captureShot, COLUMN_FILTER_GAP, DROPDOWN_GAP, expectDropdownAt, frameTarget, logApiOnFailure, scrollStill, settledToOpen, settleShot, type ShotOptions, trackApiRequests} from './fixtures/galleryShot';
 import {brimFileId, chooseTheme, closePreview, FILES_SAMPLES, filesTableReady, fontsLoaded, gridPreviewReady, imagePreviewReady, imagesInViewLoaded, languageMenuClosed, markdownPreviewReady, openPreview, pdfPreviewReady, staticFileId, textPreviewReady} from './fixtures/galleryFiles';
 import {expectDrawnUnder, setBrowserLocale, stampDocumentLocale} from './fixtures/galleryLocale';
+import {collectPhoneOverflow} from './fixtures/phone-overflow';
 import {completeWelcome, prepareOnboardingAccount} from './fixtures/onboarding-accounts';
 import {openSettingsTab} from './fixtures/settings-tabs';
 import {type Language, SUPPORTED_LANGUAGES, TEST_ADMIN, TEST_EMPTY, TEST_USER} from './fixtures/test-users';
@@ -410,6 +411,12 @@ async function waitForSplashGone(page: Page) {
 }
 
 /**
+ * Where the phone shots that scroll sideways are listed, one JSON line each, whichever worker took them (81 U22). Append-only,
+ * a defect that was already there never stops the gallery: delete the file before a run, read it after.
+ */
+const PHONE_OVERFLOW_REPORT = path.resolve('test-results', 'gallery-phone-overflow.jsonl');
+
+/**
  * Take the shot `category/name` of this combination, once the page has settled for it (galleryShot.ts, `settleShot`): the
  * pointer parked, every `/api/` request answered, no loader on screen, the animations that end ended, the images in, the
  * charts, the text and the frame still, no toast, the looping animations pinned. `options` opts a shot out of a step — a
@@ -422,6 +429,8 @@ async function screenshot(page: Page, viewport: 'desktop' | 'mobile', lang: Lang
     // The page began under this language's browser locale: a forgotten switch point fails here, not as an en-US number in
     // another language's shot (galleryLocale.ts).
     await expectDrawnUnder(page, lang);
+    // 81 U22: a phone shot that scrolls sideways is collected into one report, never stops the run (fixtures/phone-overflow.ts).
+    if (viewport === 'mobile') await collectPhoneOverflow(page, shot, PHONE_OVERFLOW_REPORT);
     const dir = getGalleryPath(viewport, lang, theme, category);
     ensureDir(dir);
     await captureShot(page, path.join(dir, `${name}.png`), shot);

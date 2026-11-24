@@ -67,6 +67,7 @@ from backend.app.services.ai_export.components.portfolio_broker_technical import
 from backend.app.services.ai_export.components.portfolio_financial import PORTFOLIO_FINANCIAL_COMPONENTS
 from backend.app.services.ai_export.components.portfolio_income import PORTFOLIO_INCOME_TIMELINE_COMPONENTS
 from backend.app.services.ai_export.components.registry import ComponentRegistry
+from backend.app.services.ai_export.components.risk_evidence import PORTFOLIO_RISK_EVIDENCE_COMPONENTS
 from backend.app.services.ai_export.components.spec import ComponentSpec
 from backend.app.services.ai_export.components.technical_context import BROKER_TECHNICAL_CONTEXT_COMPONENTS, PORTFOLIO_TECHNICAL_CONTEXT_COMPONENTS
 from backend.app.services.ai_export.components.types import Domain
@@ -131,16 +132,17 @@ PORTFOLIO_BROKER_COMPONENTS: tuple[ComponentSpec, ...] = (
     *PORTFOLIO_INCOME_TIMELINE_COMPONENTS,
     *BROKER_CONCENTRATION_COMPONENTS,
     *BROKER_COST_EFFICIENCY_COMPONENTS,
+    *PORTFOLIO_RISK_EVIDENCE_COMPONENTS,
 )
 
 # 10 Portfolio financial + 4 full technical + 4 context + 2 drawdown + 1 income
-# timeline = 21; 9 Broker financial + 4 full technical + 3 context + 1 drawdown +
-# 2 concentration + 1 cost efficiency = 20; combined = 41. Asserted at import time
+# timeline + 3 risk evidence (78 L8a, L8b) = 24; 9 Broker financial + 4 full technical + 3 context + 1 drawdown +
+# 2 concentration + 1 cost efficiency = 20; combined = 44. Asserted at import time
 # so any future drift in the source waves' tuples fails immediately, not deep
 # inside a test.
 PORTFOLIO_REAL_COMPONENT_IDS: tuple[str, ...] = tuple(spec.component_id for spec in PORTFOLIO_BROKER_COMPONENTS if Domain.PORTFOLIO in spec.domains)
 BROKER_REAL_COMPONENT_IDS: tuple[str, ...] = tuple(spec.component_id for spec in PORTFOLIO_BROKER_COMPONENTS if Domain.BROKER in spec.domains)
-PORTFOLIO_REAL_COMPONENT_COUNT = 21
+PORTFOLIO_REAL_COMPONENT_COUNT = 24
 BROKER_REAL_COMPONENT_COUNT = 20
 
 if len(PORTFOLIO_BROKER_COMPONENTS) != PORTFOLIO_REAL_COMPONENT_COUNT + BROKER_REAL_COMPONENT_COUNT:
