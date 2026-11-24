@@ -4902,7 +4902,7 @@ Note: No backend server required.
         "static-cache-policy",
         services_static_cache_policy,
         name="Static Cache Policy",
-        desc="F28: a file under /_app/immutable/ (named after its content) is sent with Cache-Control: public, max-age=31536000, immutable, and so is the 304 of its revalidation; any other file under /_app (env.js, version.json, immutable.json named like the folder) has one Cache-Control with no-cache and neither immutable nor max-age=31536000, its 304 too; the HTML documents (/, /index.html, the SPA fallback) keep no-cache, must-revalidate; with the build folder itself and behind a symlink",
+        desc="F28: a file under /_app/immutable/ (named after its content) is sent with Cache-Control: public, max-age=31536000, immutable, and so is the 304 of its revalidation; any other file under /_app (env.js, version.json, immutable.json named like the folder) has one Cache-Control with no-cache and neither immutable nor max-age=31536000, its 304 too; the HTML documents (/, /index.html, the SPA fallback) keep no-cache, must-revalidate; with the build folder itself and behind a symlink; 84-D: the documentation's shared menu /mkdocs/javascripts/nav/nav.<lang>.<hash>.js is immutable, any other documentation file (enhancer, unhashed or misplaced names) never, its pages keep no-cache, must-revalidate",
         # A fresh FastAPI() holding the static site of a fake build under tmp_path (FRONTEND_BUILD_DIR swapped in by
         # monkeypatch), called through httpx's in-process ASGI transport. No DB, no server, no network.
         isolation="pure",

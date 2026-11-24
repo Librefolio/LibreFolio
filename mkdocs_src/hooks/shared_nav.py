@@ -6,7 +6,8 @@ links 1566 times. After the build this hook keeps in each page only what Materia
 (``navigation.prune``): the top-level tabs and the groups of the branch the page is in, every other group as one link to its
 first page. The full tree of each language goes to one file, ``javascripts/nav/nav.<language>.<hash>.js``, which a small
 script reads while the page is parsed, before Material's bundle starts: it puts back, in place of each link left by the
-pruning, the group it stands for. The DOM that Material finds is the one it always found, and the browser caches the file.
+pruning, the group it stands for. The DOM that Material finds is the one it always found. The file is named after the hash of its content, so the backend
+sends it cached for a year (``backend/app/services/platform/static_site.py``) and a visitor downloads it once per release.
 
 Why this shape and not a menu drawn from scratch by a script: Material writes the state of the page into the menu (which
 group is open, which item is current, the table of contents of the page inside it). Here Material still writes it, in the
@@ -215,10 +216,13 @@ def home_of(site_dir: Path, language: str) -> Path:
 
 
 def script_for(language: str, master: str, enhancer: str) -> tuple[str, str]:
-    """``(file name, content)`` of the script of a language: the menu and the enhancer, named after the menu's hash."""
-    digest = hashlib.sha1(master.encode("utf-8")).hexdigest()[:10]
+    """``(file name, content)`` of the script of a language: the menu and the enhancer, named after the hash of the whole file.
+
+    The backend caches the file for a year under its name (``static_site.is_content_hashed_doc_file``): the hash covers the
+    code as well as the menu, so a change of either is another name and no browser keeps a stale copy."""
     # The menu first, then the code that reads it: the code runs as soon as the file is parsed.
     content = f"(window.LF_NAV = window.LF_NAV || {{}})[{json.dumps(language)}] = {json.dumps(master, ensure_ascii=False)};\n{enhancer.rstrip()}\n"
+    digest = hashlib.sha1(content.encode("utf-8")).hexdigest()[:10]
     return f"{NAV_FOLDER}/nav.{language}.{digest}.js", content
 
 

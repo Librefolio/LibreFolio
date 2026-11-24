@@ -12,7 +12,7 @@ first page) and writes the whole menu of the language once, ``javascripts/nav/na
 * ``build_master``: every link of the shared menu is a path from the site's root, the pages at the top level are not in it;
 * ``shrink_page``: the menu is pruned, the marks the script reads (``data-lf-nav``, ``data-lf-root``) and the script tag are in,
   a page with no menu or nothing to prune is returned as it was;
-* ``script_for``: the menu first, then the code that reads it; the name carries the menu's hash;
+* ``script_for``: the menu first, then the code that reads it; the name carries the hash of the whole file (the file is cached immutable);
 * ROUND TRIP, the property that matters: putting the groups back (what the script does, here done in Python with the same keys)
   gives, for every page, the DOM the page had before, links compared as paths from the root, whitespace collapsed; on a
   synthetic site and on a copy of real pages;
@@ -36,6 +36,8 @@ from types import ModuleType
 
 import pytest
 from lxml import html as lxml_html
+
+from backend.app.services.platform.static_site import is_content_hashed_doc_file
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 MKDOCS_SRC = PROJECT_ROOT / "mkdocs_src"
@@ -273,14 +275,22 @@ class TestShrink:
 
 
 class TestScript:
-    def test_the_menu_comes_first_and_the_name_carries_its_hash(self, hook):
+    def test_the_menu_comes_first_and_the_name_carries_the_hash_of_the_whole_file(self, hook):
         name, content = hook.script_for("it", "<ul>menu è</ul>", "(function(){/* code */})();\n")
         other, _ = hook.script_for("it", "<ul>other</ul>", "x")
 
         assert re.fullmatch(r"javascripts/nav/nav\.it\.[0-9a-f]{10}\.js", name) and name != other
         assert content.index("window.LF_NAV") < content.index("/* code */")
         assert json.dumps("<ul>menu è</ul>", ensure_ascii=False) in content  # accents are kept, not escaped
-        assert hook.script_for("it", "<ul>menu è</ul>", "y")[0] == name  # the name follows the menu, not the code
+        # The file is cached for a year under its name (static_site.py): the name follows the menu AND the code, so a change
+        # of the enhancer alone, with the same menu, is a new name and never a stale copy
+        assert hook.script_for("it", "<ul>menu è</ul>", "y")[0] != name
+        assert hook.script_for("it", "<ul>menu è</ul>", "(function(){/* code */})();\n")[0] == name  # same content, same name
+        assert hook.script_for("fr", "<ul>menu è</ul>", "(function(){/* code */})();\n")[0] != name
+
+    def test_the_name_is_one_the_backend_sends_cached_for_a_year(self, hook):
+        for language in hook.LANGUAGES:
+            assert is_content_hashed_doc_file(hook.script_for(language, "<ul>menu</ul>", "code")[0])
 
 
 # ---------------------------------------------------------------------------
