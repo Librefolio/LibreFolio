@@ -48,6 +48,7 @@
     "staleFx": "{count} exchange rate(s) are out of date, the oldest by {days} days — sync the rates to update the totals",
     "staleFxAfterSync": "The provider has no newer rates for {pairs} yet: try again later.",
     "assetCostLinkedParentAfterRange": "{economic_type} of {target_amount} {target_currency} on {as_of_date} is linked to a transaction of {parent_date}, after the end of the analysis — left unallocated until the analysis reaches that date",
-    "assetCostLinkedIncomeNoEligibleLots": "{economic_type} of {target_amount} {target_currency} on {as_of_date} is linked to an income of {parent_date} that no lot earned — left unallocated"
+    "assetCostLinkedIncomeNoEligibleLots": "{economic_type} of {target_amount} {target_currency} on {as_of_date} is linked to an income of {parent_date} that no lot earned — left unallocated",
+    "rewardNotMergedNoOpenLot": "A reward kept a lot of its own, at no cost: no lot was held at its broker the day before."
   }
 }
