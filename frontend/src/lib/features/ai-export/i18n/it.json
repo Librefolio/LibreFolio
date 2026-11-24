@@ -190,7 +190,7 @@
         },
         "risk_evidence": {
           "display": "Evidenze di Rischio del Portafoglio",
-          "description": "Misure di rischio deterministiche sulle posizioni di oggi, su una finestra fino a 12 mesi che non dipende dal periodo AI: dove si concentra il rischio e la perdita di un mese brutto, con finestra misurata, copertura ed esclusioni."
+          "description": "Misure di rischio deterministiche sulle posizioni di oggi, su una finestra fino a 12 mesi che non dipende dal periodo AI: dove si concentra il rischio, la perdita di un mese brutto e le coppie di posizioni che si muovono insieme, con finestra misurata, copertura ed esclusioni."
         }
       },
       "broker": {

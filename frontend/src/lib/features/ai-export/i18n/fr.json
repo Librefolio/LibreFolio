@@ -190,7 +190,7 @@
         },
         "risk_evidence": {
           "display": "Éléments de Risque du Portefeuille",
-          "description": "Mesures de risque déterministes sur les positions actuelles, sur une fenêtre allant jusqu'à 12 mois qui ne dépend pas de la période IA : où le risque se concentre et la perte d'un mauvais mois, avec fenêtre mesurée, couverture et exclusions."
+          "description": "Mesures de risque déterministes sur les positions actuelles, sur une fenêtre allant jusqu'à 12 mois qui ne dépend pas de la période IA : où le risque se concentre, la perte d'un mauvais mois et les paires de positions qui évoluent ensemble, avec fenêtre mesurée, couverture et exclusions."
         }
       },
       "broker": {
