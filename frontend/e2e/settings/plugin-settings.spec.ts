@@ -473,13 +473,19 @@ test.describe('Settings › Plugins — the search (76 S2b)', () => {
         await expect(forms).toHaveCount(Number(await all.getAttribute('data-count')));
 
         // Every word in the same card: the reader «CoinGecko» has no limit of its own, its account (the group) has
+        // 81 U37: «All» lists the plugins only, so a search that finds the account alone has no card there and offers «Shared».
         await search.fill('gecko daily limit');
+        await expect(tab.getByTestId('plugin-settings-no-matches'), '«All» has no card for the account').toBeVisible();
+        await expect(tab.getByTestId('plugin-settings-family'), '«All» draws no section for it').toHaveCount(0);
+        await expect(all, '«All» counts plugins, not groups').toHaveAttribute('data-count', '0');
+        await expect(tab.getByTestId('plugin-settings-category-group'), 'the account is the one result, under «Shared»').toHaveAttribute('data-count', '1');
+        await expect(tab.getByTestId('plugin-settings-category-asset'), 'the family stays in the menu, with 0').toHaveAttribute('data-count', '0');
+        await tab.getByTestId('plugin-settings-search-shared').click();
         await expect(tab.locator('[data-testid="plugin-settings-family"][data-family="group"]').getByTestId('plugin-settings-form-coingecko')).toBeVisible();
         await expect(tab.locator('[data-testid="plugin-settings-family"]:not([data-family="group"])'), 'the reader is not shown').toHaveCount(0);
-        await expect(all).toHaveAttribute('data-count', '1');
-        await expect(tab.getByTestId('plugin-settings-category-asset'), 'the family stays in the menu, with 0').toHaveAttribute('data-count', '0');
 
-        // A typo finds nothing (no tolerance, the developer's rule)
+        // Back to «All»; a typo finds nothing (no tolerance, the developer's rule)
+        await all.click();
         await search.fill('geko');
         await expect(tab.getByTestId('plugin-settings-no-matches')).toBeVisible();
         await expect(forms).toHaveCount(0);
@@ -750,7 +756,8 @@ test.describe('«Configure» on mockprov — its shared settings group', () => {
         await login(page, TEST_USER);
         const tab = await openPluginsTab(page);
 
-        // A shipped group is listed (project 76, P1: `coingecko`): the barrier that the groups' section is drawn
+        // A shipped group is listed (project 76, P1: `coingecko`): the barrier that the groups' section is drawn — under «Shared» (81 U37)
+        await tab.getByTestId('plugin-settings-category-group').click();
         const groups = tab.locator('[data-testid="plugin-settings-family"][data-family="group"]');
         await expect(groups.getByTestId('plugin-settings-form-coingecko'), 'barrier: a shipped group is listed').toBeVisible({timeout: 10_000});
         await expect(tab.getByTestId(`plugin-settings-form-${MOCKPROV}`)).toHaveCount(0);

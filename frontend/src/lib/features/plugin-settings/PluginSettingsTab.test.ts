@@ -495,19 +495,22 @@ describe('PluginSettingsTab — shared settings groups (G3)', () => {
 
     /** The group's form, and the element the tab anchors it at. */
     const anchor = (name: string) => document.getElementById(groupFormId(name));
+    /** A menu entry. 81 U37: «All» lists the plugins only, so a shared group is read under «Shared». */
+    const category = (key: string) => screen.getByTestId(`plugin-settings-category-${key}`);
 
-    it('PST-19: the groups are a section of their own, the last: family group, titled by its key, one form per group in the answer’s order, whatever the order of the answer', async () => {
+    it('PST-19: the groups are not in «All»: they stand alone under «Shared» (81 U37), family group, titled by its key, one form per group in the answer’s order, whatever the order of the answer', async () => {
         fake.fetchAll.mockResolvedValueOnce([BETA, TOOL, ALPHA, JUSTETF, ECB]);
 
         render(PluginSettingsTab);
 
         await loaded();
-        expect(groups()).toEqual([
+        expect(groups(), '«All» lists the plugins, each in its family, and no shared group (81 U37)').toEqual([
             {family: 'asset', plugins: ['justetf']},
             {family: 'fx', plugins: ['ecb']},
             {family: 'tool', plugins: ['fx_converter']},
-            {family: 'group', plugins: ['beta', 'alpha']},
         ]);
+        await fireEvent.click(category('group'));
+        expect(groups(), 'under «Shared» the groups stand alone, one form per group in the answer’s order').toEqual([{family: 'group', plugins: ['beta', 'alpha']}]);
         expect(familySection('group').querySelector('h3'), 'its title is the family’s key').toHaveTextContent(FAMILY_TITLE_KEYS.group);
         expect(form('alpha')).toHaveAttribute('data-family', 'group');
         expect(within(familySection('group')).getAllByTestId('plugin-settings-family-icon')).toHaveLength(1);
@@ -524,6 +527,8 @@ describe('PluginSettingsTab — shared settings groups (G3)', () => {
         fake.fetchAll.mockResolvedValueOnce([ALPHA]);
         render(PluginSettingsTab);
         await loaded();
+        expect(groups(), '«All» is the plugins: with groups only it lists nothing (81 U37)').toEqual([]);
+        await fireEvent.click(category('group'));
         expect(groups()).toEqual([{family: 'group', plugins: ['alpha']}]);
         expect(screen.queryByTestId('plugin-settings-empty')).toBeNull();
     });
@@ -534,6 +539,7 @@ describe('PluginSettingsTab — shared settings groups (G3)', () => {
         render(PluginSettingsTab);
 
         await loaded();
+        await fireEvent.click(category('group'));
         for (const [name, other] of [
             ['alpha', 'beta'],
             ['beta', 'alpha'],
@@ -618,10 +624,13 @@ describe('PluginSettingsTab — shared settings groups (G3)', () => {
         await loaded();
         expect(form('justetf'), 'barrier: the reader waits for the group').toHaveAttribute('data-configured', 'false');
 
+        // The group's form is under «Shared» (81 U37); the reader's, under «All»: the reader is read again without a reload.
+        await fireEvent.click(category('group'));
         await fireEvent.input(within(form('alpha')).getByTestId('plugin-setting-input'), {target: {value: 'someone'}});
         await fireEvent.click(within(form('alpha')).getByTestId('plugin-settings-save'));
 
         await waitFor(() => expect(fake.fetchEntry).toHaveBeenCalledWith('asset', 'justetf'));
+        await fireEvent.click(category('all'));
         await waitFor(() => expect(form('justetf')).toHaveAttribute('data-configured', 'true'));
         expect(fake.fetchAll, 'no reload of the whole catalogue').toHaveBeenCalledTimes(1);
         fake.fetchEntry.mockReset();
@@ -635,6 +644,7 @@ describe('PluginSettingsTab — shared settings groups (G3)', () => {
         render(PluginSettingsTab);
         await loaded();
 
+        await fireEvent.click(category('group'));
         const alpha = form('alpha');
         await fireEvent.input(within(alpha).getByTestId('plugin-setting-input'), {target: {value: 'someone'}});
         await fireEvent.click(within(alpha).getByTestId('plugin-settings-save'));
@@ -642,10 +652,9 @@ describe('PluginSettingsTab — shared settings groups (G3)', () => {
         await waitFor(() => expect(fake.fetchEntry).toHaveBeenCalledWith('group', 'alpha'));
         expect(fake.save.mock.calls).toStrictEqual([[[{family: 'group', plugin_code: 'alpha', field_key: 'account_token', scope: 'system', value: 'someone'}]]]);
         await waitFor(() => expect(form('alpha')).toHaveAttribute('data-configured', 'true'));
-        expect(groups(), 'the plugin untouched').toEqual([
-            {family: 'asset', plugins: ['justetf']},
-            {family: 'group', plugins: ['alpha']},
-        ]);
+        expect(groups()).toEqual([{family: 'group', plugins: ['alpha']}]);
+        await fireEvent.click(category('all'));
+        expect(groups(), 'the plugin untouched').toEqual([{family: 'asset', plugins: ['justetf']}]);
     });
 });
 
@@ -667,7 +676,7 @@ describe('PluginSettingsTab — the menu (76 S1b)', () => {
         delete (Element.prototype as {scrollIntoView?: unknown}).scrollIntoView;
     });
 
-    it('PST-28: lists «All», «To configure» and each family present, with their counts and a dot where something is to configure; «All» selected', async () => {
+    it('PST-28: lists «All» (the plugins, not the groups), «To configure» and each family present, with their counts and a dot where something is to configure; «All» selected', async () => {
         fake.fetchAll.mockResolvedValueOnce(ANSWER());
         render(PluginSettingsTab);
         await loaded();
@@ -678,7 +687,7 @@ describe('PluginSettingsTab — the menu (76 S1b)', () => {
                 .getAllByRole('button')
                 .map((button) => [button.getAttribute('data-testid'), button.getAttribute('data-count'), button.getAttribute('aria-pressed')]),
         ).toEqual([
-            ['plugin-settings-category-all', '5', 'true'],
+            ['plugin-settings-category-all', '4', 'true'],
             ['plugin-settings-category-unconfigured', '3', 'false'],
             ['plugin-settings-category-asset', '2', 'false'],
             ['plugin-settings-category-fx', '2', 'false'],
@@ -687,14 +696,13 @@ describe('PluginSettingsTab — the menu (76 S1b)', () => {
         expect(within(sidebarItem('asset')).getByTestId('plugin-settings-category-dot')).toBeInTheDocument();
         expect(within(sidebarItem('all')).queryByTestId('plugin-settings-category-dot')).toBeNull();
         expect(sidebarItem('asset')).toHaveTextContent('pluginSettings.menu.asset');
-        expect(groups(), '«All»: every family, as before').toEqual([
+        expect(groups(), '«All»: every plugin once, in its family; the shared group is under «Shared» (81 U37)').toEqual([
             {family: 'asset', plugins: ['justetf', 'borsa_italiana']},
             {family: 'fx', plugins: ['ecb', 'mockfx']},
-            {family: 'group', plugins: ['coingecko']},
         ]);
     });
 
-    it('PST-29: a family shows its section alone; «All» brings every section back', async () => {
+    it('PST-29: a family shows its section alone; «All» brings every plugin’s section back (not the shared groups)', async () => {
         fake.fetchAll.mockResolvedValueOnce(ANSWER());
         render(PluginSettingsTab);
         await loaded();
@@ -704,7 +712,7 @@ describe('PluginSettingsTab — the menu (76 S1b)', () => {
         expect(sidebarItem('fx')).toHaveAttribute('aria-pressed', 'true');
 
         await fireEvent.click(sidebarItem('all'));
-        expect(groups().map((group) => group.family)).toEqual(['asset', 'fx', 'group']);
+        expect(groups().map((group) => group.family)).toEqual(['asset', 'fx']);
     });
 
     it('PST-30: «To configure» shows the entries not configured, under their families', async () => {
@@ -733,6 +741,50 @@ describe('PluginSettingsTab — the menu (76 S1b)', () => {
         expect(sidebarItem('group')).toHaveAttribute('aria-pressed', 'true');
         expect(document.getElementById(groupFormId('coingecko'))).not.toBeNull();
         await waitFor(() => expect(document.activeElement).toBe(within(form('coingecko')).getByRole('heading', {level: 4})));
+    });
+
+    it('U37-1: «All» lists each plugin once, in its family, and not the shared group the plugins read: the group is under «Shared» and reached from the reader’s row', async () => {
+        fake.fetchAll.mockResolvedValueOnce(ANSWER());
+        render(PluginSettingsTab);
+        await loaded();
+
+        expect(
+            screen.queryAllByTestId('plugin-settings-family').map((section) => section.getAttribute('data-family')),
+            'no «Shared» section in «All»',
+        ).not.toContain('group');
+        expect(document.getElementById(groupFormId('coingecko')), 'the group’s form is not in «All»').toBeNull();
+        // The plugin that reads it still says so, and takes the reader there.
+        expect(within(form('justetf')).getByTestId('plugin-settings-in-group')).toHaveAttribute('data-group', 'coingecko');
+        await fireEvent.click(within(form('justetf')).getByTestId('plugin-settings-open-group'));
+        await waitFor(() => expect(sidebarItem('group')).toHaveAttribute('aria-pressed', 'true'));
+        expect(document.getElementById(groupFormId('coingecko'))).not.toBeNull();
+    });
+
+    it('U37-2: a search that finds only a shared group offers «Shared»; taking it shows the group and keeps the search', async () => {
+        const onlyGroup = plugin('group', 'alpha', {plugin_name: 'Zebrakey settings', fields: [{...nickname(), key: 'account_token', scope: 'system'}], used_by: [], groups: [], name_key: null} as Partial<PluginSettingsEntry>);
+        fake.fetchAll.mockResolvedValueOnce([READER, ECB, onlyGroup]);
+        render(PluginSettingsTab);
+        await loaded();
+
+        await fireEvent.input(screen.getByTestId('plugin-settings-search'), {target: {value: 'zebrakey'}});
+
+        expect(screen.getByTestId('plugin-settings-no-matches'), '«All» has no card for it').toBeInTheDocument();
+        const shared = screen.getByTestId('plugin-settings-search-shared');
+        await fireEvent.click(shared);
+        await waitFor(() => expect(sidebarItem('group')).toHaveAttribute('aria-pressed', 'true'));
+        expect(groups()).toEqual([{family: 'group', plugins: ['alpha']}]);
+        expect(screen.getByTestId('plugin-settings-search')).toHaveValue('zebrakey');
+    });
+
+    it('U37-3: a search that finds plugins as well as a group lists the plugins and offers no «Shared» link', async () => {
+        fake.fetchAll.mockResolvedValueOnce(ANSWER());
+        render(PluginSettingsTab);
+        await loaded();
+
+        await fireEvent.input(screen.getByTestId('plugin-settings-search'), {target: {value: 'justetf'}});
+
+        expect(groups().flatMap((group) => group.plugins)).toContain('justetf');
+        expect(screen.queryByTestId('plugin-settings-search-shared')).toBeNull();
     });
 
     it('PST-32: «To configure» stays chosen when its last entry is configured, with 0 and a line that says so', async () => {
