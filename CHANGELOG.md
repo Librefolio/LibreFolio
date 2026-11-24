@@ -71,6 +71,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Risk › Simulation, the period the days are drawn from**: «Days drawn from» offers «All the common history» (the default) or «A period I choose», inside the holdings' common history, for a calmer or rougher stretch. A start before the common history moves to its first day, with a warning.
 - **Fill reward values from price history**: in the Bulk workspace, rewards imported without a value (Bitvavo and CoinTracking staking, the Generic CSV) can be filled in one click with «Fill from price history»: the asset's close of that very day, per unit, in the price's currency. Days with no stored price are left for you, and a count says how many were filled.
 - **XTB: History report import (Excel).** The XTB plugin reads the `.xlsx` report XTB generates today on desktop and in the app (History → Export → New report), as it is: purchases, sales, deposits and the other cash operations of the *Cash Operations* sheet, booked in the account currency named in *Open Positions*. The transfers between the *My Trades* and *Investment Plans* sub-accounts are left out, and a note tells you when the report starts too late to hold your open positions. The guide shows how to export it, on desktop and on mobile. (#86)
+- **AI Export: a filtered export says which brokers it covers**: when the Dashboard is filtered, the prompt opens by listing the included brokers and the ones left out.
 
 #### 🎯 Portfolio rebalancer and PAC allocator
 
@@ -218,6 +219,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - FX › «Add Pair»: the «Providers» legend now shows each provider's icon, as the routes below it do.
 - **Image previews keep the format of the file**: the thumbnails of uploaded JPEG, WebP and GIF files were always sent as PNG, several times heavier for a photo; they now come in their own format.
 - A dividend or interest paid and spent on a purchase the same day (for example a broker's automatic reinvestment) now counts as reinvested returns, not as new capital, in the Growth chart's purchases and in the split of your cash between money you deposited and money the portfolio generated. Net worth, P&L and income do not change.
+- **AI Export: the portfolio drawdown follows the brokers of the export**: it counted every broker you can see, including brokers only shared with you and those left out by the Dashboard's filter.
 
 ### ⚠️ Breaking changes
 

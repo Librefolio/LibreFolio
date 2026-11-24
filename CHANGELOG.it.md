@@ -71,6 +71,7 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 - **Rischio › Simulazione, il periodo da cui pescare i giorni**: «Giorni pescati da» offre «Tutta la storia comune» (il predefinito) o «Un periodo scelto», dentro la storia comune delle posizioni, per un tratto più calmo o più agitato. Un inizio prima della storia comune si sposta al suo primo giorno, con un avviso.
 - **Valore dei premi dallo storico prezzi**: nel Bulk, i premi importati senza valore (lo staking di Bitvavo e CoinTracking, il CSV generico) si riempiono con un clic su «Riempi dallo storico prezzi»: la chiusura dell'asset di quel giorno, per unità, nella valuta del prezzo. I giorni senza prezzo salvato restano a te, e un conteggio dice quanti ne sono stati riempiti.
 - **XTB: import del report «History» (Excel).** Il plugin XTB legge così com'è il report `.xlsx` che XTB genera oggi da computer e da app (History → Export → New report): acquisti, vendite, versamenti e gli altri movimenti di cassa del foglio *Cash Operations*, registrati nella valuta del conto indicata in *Open Positions*. I trasferimenti fra i sottoconti *My Trades* e *Investment Plans* restano fuori, e una nota ti avvisa quando il report comincia troppo tardi per contenere le tue posizioni aperte. La guida mostra come esportarlo, da computer e da telefono. (#86)
+- **AI Export: un export filtrato dice quali broker copre**: quando la Dashboard è filtrata, il prompt si apre con l'elenco dei broker inclusi e di quelli lasciati fuori.
 
 #### 🎯 Ribilanciatore e Allocatore PAC
 
@@ -218,6 +219,7 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 - FX › «Aggiungi Coppia»: la legenda «Provider» ora mostra l'icona di ogni provider, come le route sotto.
 - **Le anteprime delle immagini tengono il formato del file**: le miniature dei file JPEG, WebP e GIF caricati arrivavano sempre in PNG, molto più pesanti per una foto; ora arrivano nel loro formato.
 - Un dividendo o un interesse pagato e speso in un acquisto lo stesso giorno (per esempio il reinvestimento automatico di un broker) ora conta come rendimento reinvestito, non come capitale nuovo, negli acquisti del grafico della Crescita e nella divisione della liquidità fra soldi versati e soldi generati dal portafoglio. Patrimonio, P&L e reddito non cambiano.
+- **AI Export: il calo massimo del portafoglio segue i broker dell'export**: contava tutti i broker che puoi vedere, anche quelli solo condivisi con te e quelli tolti dal filtro della Dashboard.
 
 ### ⚠️ Modifiche incompatibili
 

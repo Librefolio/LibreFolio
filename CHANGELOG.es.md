@@ -71,6 +71,7 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 - **Riesgo › Simulación, el periodo del que se toman los días**: «Días tomados de» ofrece «Toda la historia común» (por defecto) o «Un periodo elegido», dentro de la historia común de las posiciones, para un tramo más tranquilo o más agitado. Un inicio anterior a la historia común pasa a su primer día, con un aviso.
 - **Valor de las recompensas desde el historial de precios**: en el Bulk, las recompensas importadas sin valor (el staking de Bitvavo y CoinTracking, el CSV genérico) se rellenan con un clic en «Rellenar desde el historial de precios»: el cierre del activo de ese mismo día, por unidad, en la moneda del precio. Los días sin precio guardado quedan para ti, y un contador dice cuántas se rellenaron.
 - **XTB: importación del informe «History» (Excel).** El plugin de XTB lee tal cual el informe `.xlsx` que XTB genera hoy en ordenador y en la app (History → Export → New report): compras, ventas, depósitos y las demás operaciones de caja de la hoja *Cash Operations*, registradas en la divisa de la cuenta indicada en *Open Positions*. Las transferencias entre las subcuentas *My Trades* e *Investment Plans* quedan fuera, y una nota te avisa cuando el informe empieza demasiado tarde para contener tus posiciones abiertas. La guía muestra cómo exportarlo, en ordenador y en móvil. (#86)
+- **AI Export: un export filtrado dice qué brókeres cubre**: cuando el Panel está filtrado, el prompt empieza con la lista de los brókeres incluidos y de los que quedan fuera.
 
 #### 🎯 Reequilibrador de cartera y Asignador PAC
 
@@ -218,6 +219,7 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 - FX › «Añadir Par»: la leyenda «Proveedores» ahora muestra el icono de cada proveedor, como las rutas de debajo.
 - **Las vistas previas de imágenes conservan el formato del archivo**: las miniaturas de los archivos JPEG, WebP y GIF subidos llegaban siempre en PNG, mucho más pesadas para una foto; ahora llegan en su propio formato.
 - Un dividendo o un interés cobrado y gastado en una compra el mismo día (por ejemplo la reinversión automática de un bróker) ahora cuenta como rendimiento reinvertido, no como capital nuevo, en las compras del gráfico de Crecimiento y en la división de la liquidez entre el dinero aportado y el dinero generado por la cartera. El patrimonio, el P&L y los ingresos no cambian.
+- **AI Export: la caída máxima de la cartera sigue los brókeres del export**: contaba todos los brókeres que puedes ver, incluidos los solo compartidos contigo y los quitados por el filtro del Panel.
 
 ### ⚠️ Cambios incompatibles
 

@@ -71,6 +71,7 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 - **Risque › Simulation, la période d'où les jours sont tirés** : « Jours tirés de » propose « Tout l'historique commun » (par défaut) ou « Une période choisie », dans l'historique commun des positions, pour une période plus calme ou plus agitée. Un début avant l'historique commun passe à son premier jour, avec un avertissement.
 - **Valeur des récompenses depuis l'historique des prix** : dans le Bulk, les récompenses importées sans valeur (le staking de Bitvavo et CoinTracking, le CSV générique) se remplissent d'un clic sur « Remplir depuis l’historique des prix » : la clôture de l'actif ce jour-là, par unité, dans la devise du prix. Les jours sans prix enregistré vous restent, et un compteur dit combien ont été remplis.
 - **XTB : import du rapport « History » (Excel).** Le plugin XTB lit tel quel le rapport `.xlsx` que XTB génère aujourd'hui sur ordinateur et dans l'application (History → Export → New report) : achats, ventes, dépôts et les autres opérations de trésorerie de la feuille *Cash Operations*, enregistrés dans la devise du compte indiquée dans *Open Positions*. Les transferts entre les sous-comptes *My Trades* et *Investment Plans* sont laissés de côté, et une note vous prévient quand le rapport commence trop tard pour contenir vos positions ouvertes. Le guide montre comment l'exporter, sur ordinateur et sur mobile. (#86)
+- **AI Export : un export filtré dit quels courtiers il couvre** : quand le Tableau de bord est filtré, le prompt s'ouvre sur la liste des courtiers inclus et de ceux laissés de côté.
 
 #### 🎯 Rééquilibreur de portefeuille et Allocateur PAC
 
@@ -218,6 +219,7 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 - FX › « Ajouter Paire » : la légende « Fournisseurs » affiche maintenant l'icône de chaque fournisseur, comme les routes en dessous.
 - **Les aperçus d'images gardent le format du fichier** : les miniatures des fichiers JPEG, WebP et GIF envoyés partaient toujours en PNG, bien plus lourdes pour une photo ; elles arrivent maintenant dans leur propre format.
 - Un dividende ou un intérêt versé et dépensé dans un achat le même jour (par exemple le réinvestissement automatique d'un courtier) compte maintenant comme rendement réinvesti, et non comme capital nouveau, dans les achats du graphique de Croissance et dans la répartition de la trésorerie entre l'argent versé et l'argent généré par le portefeuille. Le patrimoine, le P&L et le revenu ne changent pas.
+- **AI Export : la baisse maximale du portefeuille suit les courtiers de l'export** : elle comptait tous les courtiers que vous pouvez voir, y compris ceux seulement partagés avec vous et ceux retirés par le filtre du Tableau de bord.
 
 ### ⚠️ Changements incompatibles
 
