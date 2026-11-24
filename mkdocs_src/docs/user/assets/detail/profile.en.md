@@ -74,19 +74,55 @@ number of enrichers chosen. It opens the **Asset enrichers** window:
   asked. Each row shows the identifier the enricher reads, what it fills (costs, countries, sectors, coupons…) and, for
   an asset that already exists, its last read and how it went (*read on …*, *…: not found*, *…: no answer*).
 - Open a row (✏️, **Change the binding**) to **Search on** that source, set the **Identifier type** and the
-  **Identifier** by hand, and **Test the binding**: the test says what it found and what it would fill.
+  **Identifier** by hand, and **Test the binding**: the test says what it found and what it would fill. An enricher
+  that reads one identifier type only shows it as fixed (*ISIN · the only one ESMA (FIRDS) reads*): no choice to make.
 - **Show the other enrichers** lists the ones not in the list, with the reason (*removed by you*, *does not cover this
   asset type*…); **+** adds one back.
 - **Use these enrichers** hands the list back to the asset form. Nothing is saved until you save the asset.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
-    <img class="gallery-img" loading="lazy" data-category="assets" data-name="enrichers-window" alt="The Asset enrichers window: justETF first, Borsa Italiana second, each with its last read, and Yahoo Finance not in the list" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+    <img class="gallery-img" loading="lazy" data-category="assets" data-name="enrichers-window" alt="The Asset enrichers window of an asset with no enrichers: justETF and ESMA recognized and chosen, Yahoo Finance found only by its ticker and left out, and Search online open with three Yahoo Finance listings, each ready to add with +" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
+
+#### 🔎 Recognized on opening {: #enrichers-recognize }
+
+For an asset that exists, opening the window starts the recognition by itself. A full ISIN is not needed: any
+identifier an enricher reads is enough, and so is the asset's price source (the box on top shows it, for example
+*Prices · Yahoo Finance · SWDA.MI*). A line on top says where it stands (*Looking for the enrichers that know this
+asset… 2 of 4 answered*, then *2 enrichers know the asset: …*). Opening the window again does not ask again.
+
+- **An asset with no enrichers**: the ones found enter **Enrichers chosen** already bound, in the default order, until
+  you change the list. Nothing is saved until **Use these enrichers** and then the asset's **Save**.
+- **An asset that already has enrichers** keeps its list: the others found wait in **Not in the list**, with their name
+  and **+**.
+- **A ticker alone** never enters by itself, as it may be another listing: the enricher waits in **Not in the list**
+  (*found only with the ticker …: check it is this one*). The symbol of the asset's price source does enter.
+- **+** fills the binding from what the asset already has (ESMA takes the asset's ISIN). The row opens only if the
+  identifier is still missing, or if nothing was found with it (*Nothing found with …: correct it or search*).
+
+#### 🌐 Search online {: #enrichers-search-online }
+
+**Search online**, at the top of the window, looks for the asset on the sources themselves.
+
+- **Suggestions** — the asset's name, ISIN and ticker: one touch searches. Or type a name, an ISIN or a ticker in the
+  field: it searches after a short pause, from 2 characters.
+- **Enrichers** pills — the enrichers not in your list that cover the asset's type, each with an on/off switch. One
+  without a search of its own (ESMA) says *ISIN only* and answers only when you type or pick an ISIN.
+- A line names the enrichers already in your list, which are not searched (*A wrong one? Remove it with 🗑 and it can
+  be searched again*).
+- Each result is ready to add with **+**: it goes at the end of **Enrichers chosen** and the search stays open. That
+  source's rows and pill go away: one enricher per source.
+- A result with an ISIN different from the asset's, or from one already chosen, says so and asks you to confirm
+  (**Add anyway**).
+- Adding a result that carries an ISIN also asks ESMA once, with that ISIN (*with the ISIN of …*). That ISIN is
+  proposed for the asset's empty ISIN column as a suggested row: it never overwrites one, and a ticker is never
+  proposed.
 
 **At creation**, as soon as the form holds a complete **ISIN**, LibreFolio **recognizes** by itself which enrichers
 know the asset: a line under the form's header says what it found (for example *2 enrichers found: justETF, Borsa Italiana.
 They will be saved with the asset.*) with **Check or change**. It then asks them for their data and fills the empty profile items of the form
-(*Their data are being read now.*). In edit mode nothing starts by itself: open the window to change the list.
+(*Their data are being read now.*). Without a complete ISIN (a symbol picked from a price search, for example), opening
+the **Enrichers** window asks once, as for an asset that exists.
 
 !!! info "🔒 Turned off or not configured"
 

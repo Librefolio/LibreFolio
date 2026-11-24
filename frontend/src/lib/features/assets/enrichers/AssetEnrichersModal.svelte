@@ -380,7 +380,8 @@
             {/if}
         </div>
 
-        <footer class="px-4 sm:px-6 py-3 border-t border-lf-subtle bg-lf-panel flex justify-end gap-2">
+        <!-- Its bottom corners are rounded by ModalBase (allowOverflow: a footer at the bottom, 82 ENR-4c) -->
+        <footer class="px-4 sm:px-6 py-3 border-t border-lf-subtle bg-lf-panel flex justify-end gap-2" data-testid="enrichers-footer">
             <button type="button" class="px-4 py-2 text-sm font-medium rounded-lg border border-lf-subtle bg-lf-card text-lf-secondary hover:bg-lf-hover" onclick={close} data-testid="enrichers-cancel">
                 {$t('common.cancel')}
             </button>

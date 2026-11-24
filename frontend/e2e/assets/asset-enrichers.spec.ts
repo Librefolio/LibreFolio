@@ -194,6 +194,19 @@ test.describe('Asset enrichers from the asset window (plan 68, E8a)', () => {
             };
             await expect.poll(inside, {message: 'the «+» is inside the viewport'}).toBe(true);
             await expect.poll(() => page.evaluate(() => (document.scrollingElement?.scrollWidth ?? 0) <= (document.scrollingElement?.clientWidth ?? 0)), {message: 'no horizontal scroll'}).toBe(true);
+
+            // The footer keeps the dialog's rounded bottom corners (ENR-4b): the dialog does not clip its content, so the
+            // footer's own radius must be the frame's. Computed radii compared to each other, no pixel of the layout.
+            const radii = await window.evaluate((root) => {
+                const frame = root.querySelector('[data-tone]');
+                const footer = root.querySelector('[data-testid="enrichers-footer"]');
+                if (!frame || !footer) return null;
+                return {frame: getComputedStyle(frame).borderBottomLeftRadius, left: getComputedStyle(footer).borderBottomLeftRadius, right: getComputedStyle(footer).borderBottomRightRadius};
+            });
+            expect(radii, 'the dialog frame and its footer').not.toBeNull();
+            expect(radii?.frame, 'the dialog has rounded corners').not.toBe('0px');
+            expect(radii?.left, 'the footer rounds its bottom-left corner as the dialog').toBe(radii?.frame);
+            expect(radii?.right, 'the footer rounds its bottom-right corner as the dialog').toBe(radii?.frame);
         } finally {
             await page.request.delete(`${API_BASE}/assets?asset_ids=${assetId}`);
         }
