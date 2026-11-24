@@ -302,7 +302,9 @@
       "incomeMarkerReward": "Récompense",
       "rewardAllocation": {
         "label": "Répartir les récompenses sur les lots",
-        "hint": "Chaque récompense rejoint les lots détenus chez son courtier la veille, sans coût, au lieu d'ouvrir son propre lot. Une simple vue : rien n'est enregistré."
+        "hint": "Chaque récompense rejoint les lots détenus chez son courtier la veille, sans coût, au lieu d'ouvrir son propre lot. Une simple vue : rien n'est enregistré.",
+        "ownLot": "Lots propres",
+        "merged": "Répartis"
       }
     },
     "createdInSystem": "Créé dans le Système",

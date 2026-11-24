@@ -302,7 +302,9 @@
       "incomeMarkerReward": "Recompensa",
       "rewardAllocation": {
         "label": "Repartir las recompensas entre los lotes",
-        "hint": "Cada recompensa se une a los lotes mantenidos en su bróker el día anterior, sin coste, en lugar de abrir un lote propio. Solo una vista: no se guarda nada."
+        "hint": "Cada recompensa se une a los lotes mantenidos en su bróker el día anterior, sin coste, en lugar de abrir un lote propio. Solo una vista: no se guarda nada.",
+        "ownLot": "Lotes propios",
+        "merged": "Repartidos"
       }
     },
     "createdInSystem": "Creado en el Sistema",
