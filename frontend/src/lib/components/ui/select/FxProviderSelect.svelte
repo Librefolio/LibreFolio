@@ -811,7 +811,7 @@
                                     {/if}
                                     <span class="text-sm emoji-flag">{fromInfo.flag_emoji}</span>
                                     <span class="font-medium text-lf-secondary text-[11px]">{step.from}</span>
-                                    <Tooltip html={providerTooltipHtml(step.provider)} position="top">
+                                    <Tooltip html={providerTooltipHtml(step.provider)} position="top" insideControl>
                                         <span class="inline-flex items-center gap-0.5 px-1 py-0.5 rounded border flex-shrink-0" style="background: {provColor.bg}; border-color: {provColor.border}">
                                             <ArrowLeftRight size={10} class="text-lf-muted flex-shrink-0" />
                                             {@render providerMark(step.provider, 'md')}
@@ -821,7 +821,7 @@
                                     <span class="text-sm emoji-flag">{toInfo.flag_emoji}</span>
                                     <span class="font-medium text-lf-secondary text-[11px]">{step.to}</span>
                                     {#if warnings.length > 0}
-                                        <Tooltip html={warningsTooltipHtml(warnings)} position="top">
+                                        <Tooltip html={warningsTooltipHtml(warnings)} position="top" insideControl>
                                             {@render noteIcon(getRouteWarningLevel(route), 11)}
                                         </Tooltip>
                                     {/if}
@@ -854,7 +854,7 @@
                             {$_('fx.route.steps')}
                             <span class="ml-1 text-[9px] font-mono px-1 py-0.5 rounded bg-lf-info-soft text-lf-info-on-soft">{group.routes.length}</span>
                             <!-- Chain risk info icon -->
-                            <Tooltip text={$_('fx.route.chainWarning')} position="top">
+                            <Tooltip text={$_('fx.route.chainWarning')} position="top" insideControl>
                                 <Info size={10} class="text-lf-info" />
                             </Tooltip>
                         </button>
@@ -892,7 +892,7 @@
                                                     <span class="text-sm emoji-flag">{fromInfo.flag_emoji}</span>
                                                     <span class="font-medium text-[11px] text-lf-secondary">{step.from}</span>
                                                 {/if}
-                                                <Tooltip html={providerTooltipHtml(step.provider)} position="top">
+                                                <Tooltip html={providerTooltipHtml(step.provider)} position="top" insideControl>
                                                     <span class="inline-flex items-center gap-0.5 px-0.5 py-0.5 rounded border flex-shrink-0" style="background: {provColor.bg}; border-color: {provColor.border}">
                                                         <ArrowLeftRight size={8} class="text-lf-muted flex-shrink-0" />
                                                         {@render providerMark(step.provider, 'sm')}
@@ -904,7 +904,7 @@
                                             {/each}
                                         </span>
                                         {#if warnings.length > 0}
-                                            <Tooltip html={warningsTooltipHtml(warnings)} position="top">
+                                            <Tooltip html={warningsTooltipHtml(warnings)} position="top" insideControl>
                                                 {@render noteIcon(getRouteWarningLevel(route), 11)}
                                             </Tooltip>
                                         {/if}

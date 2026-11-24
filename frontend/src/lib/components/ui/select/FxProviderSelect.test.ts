@@ -663,3 +663,98 @@ describe('FxProviderSelect — a route through a provider to configure (76 N3c)'
         expect(within(picker).queryByTestId('fx-route-direct-ECB'), 'the stale pair EUR→GBP must not be drawn').toBeNull();
     });
 });
+
+// =========================================================================
+// 85 BTN-0c, D16 — a click on a part of a route row is the row's click
+// =========================================================================
+
+/**
+ * The provider badges and the ⚠ of a route row, and the ⓘ of a chain group's header, carry a tooltip that is only a
+ * hover (`Tooltip insideControl`). Before, their wrapper stopped the click: a click on the badge did not add the
+ * route, a click on the ⓘ did not open the group. Each case clicks the part and reads the row's own effect. The badge
+ * is found by its provider mark, an `<img alt="{code}">` (the providers carry an icon here).
+ */
+describe('FxProviderSelect — a click on a part of a row acts as the row (85 BTN-0c, D16)', () => {
+    const WITH_ICONS = (overrides: Partial<ProviderInfo> = {}): ProviderInfo[] => [{...ECB, icon_url: 'https://cdn.test/ecb.png', warning_i18n: {en: 'Published once a day'}, ...overrides}, {...FED, icon_url: 'https://cdn.test/fed.png'}, BOE, MANUAL];
+
+    function badge(row: HTMLElement, code: string): HTMLElement {
+        const mark = row.querySelector<HTMLElement>(`img[alt="${code}"]`);
+        if (!mark) throw new Error(`no ${code} badge in the row ${row.getAttribute('data-testid')}`);
+        return mark;
+    }
+
+    beforeEach(() => {
+        vi.clearAllMocks();
+        graphReturns([DIRECT, CHAIN], WITH_ICONS());
+    });
+
+    it('a click on the provider badge of a direct route adds the route', async () => {
+        await setupI18n();
+        const {onSelectionChange} = mount();
+        await settled();
+        const picker = await openPicker();
+        await fireEvent.click(badge(within(picker).getByTestId('fx-route-direct-ECB'), 'ECB'));
+        expect(onSelectionChange).toHaveBeenCalledWith([DIRECT]);
+        expect(selectedRow(DIRECT_KEY)).toBeInTheDocument();
+    });
+
+    it('a click on the ⚠ of a direct route adds the route', async () => {
+        await setupI18n();
+        const {onSelectionChange} = mount();
+        await settled();
+        const picker = await openPicker();
+        const row = within(picker).getByTestId('fx-route-direct-ECB');
+        expect(row, 'barrier: the route carries a note').toHaveAttribute('data-warnings', '1');
+        await fireEvent.click(within(row).getByTestId('fx-route-note-icon'));
+        expect(onSelectionChange).toHaveBeenCalledWith([DIRECT]);
+    });
+
+    it('a click on a provider badge of a chain route adds the chain', async () => {
+        await setupI18n();
+        const {onSelectionChange} = mount();
+        await settled();
+        const picker = await openPicker();
+        await fireEvent.click(within(picker).getByTestId('fx-route-chain-toggle-2'));
+        const chain = within(picker).getByTestId('fx-route-chain-2step-ECB-FED');
+        await fireEvent.click(badge(chain, 'FED'));
+        expect(onSelectionChange).toHaveBeenCalledWith([CHAIN]);
+        expect(selectedRow(CHAIN_KEY)).toBeInTheDocument();
+    });
+
+    it('a click on the ⓘ of a chain group’s header opens and closes the group', async () => {
+        await setupI18n();
+        mount();
+        await settled();
+        const picker = await openPicker();
+        const toggle = within(picker).getByTestId('fx-route-chain-toggle-2');
+        expect(toggle, 'shut while a direct route exists').toHaveAttribute('data-expanded', 'false');
+        // The ⓘ is the header's last part: the hover-only tooltip around the icon, after the count.
+        const info = toggle.lastElementChild as HTMLElement;
+        expect(info.querySelector('svg'), 'barrier: the last part is the ⓘ icon').not.toBeNull();
+        expect(info.textContent?.trim(), 'barrier: not the count badge').toBe('');
+        await fireEvent.click(info.querySelector('svg')!);
+        expect(toggle).toHaveAttribute('data-expanded', 'true');
+        await fireEvent.click(info.querySelector('svg')!);
+        expect(toggle).toHaveAttribute('data-expanded', 'false');
+    });
+
+    it('a click on the badge of a route that needs setup asks the parent to explain (76 N3c), and adds nothing', async () => {
+        await setupI18n();
+        graphReturns([DIRECT, CHAIN], [{...ECB, icon_url: 'https://cdn.test/ecb.png'}, {...FED, icon_url: 'https://cdn.test/fed.png', configured: false, missing_settings: ['api_key'], missing_reason: 'missing_fields', invalid_variables: []}, BOE, MANUAL]);
+        const onneedssetup = vi.fn();
+        const {onSelectionChange} = mount({onneedssetup});
+        await settled();
+        const picker = await openPicker();
+        await fireEvent.click(within(picker).getByTestId('fx-route-chain-toggle-2'));
+        const chain = await waitFor(() => {
+            const row = picker.querySelector<HTMLElement>(`[data-route-key="${CHAIN_KEY}"]`);
+            if (!row) throw new Error('the chain is not drawn yet');
+            return row;
+        });
+        expect(chain).toHaveAttribute('data-needs-setup', 'true');
+        await fireEvent.click(badge(chain, 'FED'));
+        expect(onneedssetup).toHaveBeenCalledTimes(1);
+        expect(onneedssetup.mock.calls[0][0]).toMatchObject({code: 'FED'});
+        expect(onSelectionChange).not.toHaveBeenCalled();
+    });
+});
