@@ -90,3 +90,6 @@ Always the same rules, written plainly (#86, #87, #90):
   not as the first bullet of a list of things to send: in #90 the question «which wallet or exchange?» was missed.
 - 24/11/2026 — The masking rules are always the full ones of §3 (same offset, same factor, words untouched, a synthetic
   sample in the repository): «anonymised» alone makes users change labels and amounts at random.
+- 24/11/2026 — Closing an issue after a PR (`borsaItaliana-scraping` #5): say what the merged PR covers, leave each idea
+  still open to its own new issue, and renew the invitation to contributors who are still working on it. The developer
+  approved this style («ora va bene»).
