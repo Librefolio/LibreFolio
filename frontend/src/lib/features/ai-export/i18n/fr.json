@@ -21,8 +21,8 @@
     "period": "Période IA",
     "periodHelp": "Période d’export indépendante se terminant à la date de l’instantané.",
     "periodCustom": "Personnalisé",
-    "userNotes": "Notes pour l’IA",
-    "userNotesPlaceholder": "Ajoutez un contexte ou des questions facultatives…",
+    "userNotes": "Votre question",
+    "userNotesPlaceholder": "Facultative. Posez votre question, ou ajoutez le contexte que l’IA doit connaître…",
     "payloadStats": "Taille du prompt final",
     "payloadStatsHelp": "Estimation du texte qui sera effectivement copié dans le presse-papiers.",
     "tokenSeverity": {

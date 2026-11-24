@@ -21,8 +21,8 @@
     "period": "AI period",
     "periodHelp": "Independent export period ending on the snapshot date.",
     "periodCustom": "Custom",
-    "userNotes": "Notes for the AI",
-    "userNotesPlaceholder": "Add optional context or questions…",
+    "userNotes": "Your question",
+    "userNotesPlaceholder": "Optional. Ask your own question, or add context the AI should know…",
     "payloadStats": "Final prompt size",
     "payloadStatsHelp": "Estimated size of the text that will actually be copied to the clipboard.",
     "tokenSeverity": {
