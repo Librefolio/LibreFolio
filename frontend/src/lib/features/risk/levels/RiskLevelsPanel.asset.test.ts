@@ -61,22 +61,50 @@ function mountPanel(scope: RiskScope) {
 }
 
 describe('RiskLevelsPanel — on one asset, the levels that have meaning on one asset', () => {
-    it('draws «How much can it hurt?», the benchmark level and «What if…?», and no «Am I diversified?»', async () => {
+    it('draws «How much can it hurt?», «How does it move?» and «What if…?» on one asset: no «Am I diversified?», no benchmark level', async () => {
         mountPanel({kind: 'asset', asset_id: 7} as RiskScope);
 
         await waitFor(() => expect(screen.getByTestId('risk-levels-panel')).toHaveAttribute('data-catalog', 'ready'));
         expect(screen.getByTestId('risk-levels-panel')).toHaveAttribute('data-scope', 'asset');
-        for (const level of [1, 3, 4]) expect(screen.getByTestId(`risk-level-${level}`), `level ${level} is missing on one asset`).toBeInTheDocument();
+        for (const level of [1, 4]) expect(screen.getByTestId(`risk-level-${level}`), `level ${level} is missing on one asset`).toBeInTheDocument();
         expect(screen.queryByTestId('risk-level-2'), 'diversification drawn on one asset: there is nothing to diversify').toBeNull();
+        // 81 U29 (developer, P-12): «Compared with a reference» — the picker and the table of one asset beside one reference — is gone.
+        expect(screen.queryByTestId('risk-level-3'), 'the benchmark level is drawn on one asset').toBeNull();
+        expect(screen.queryByTestId('risk-l3-benchmark'), 'the benchmark picker is drawn on one asset').toBeNull();
+        expect(screen.queryByTestId('risk-l3'), 'the risk-adjusted table is drawn on one asset').toBeNull();
     });
 
-    it('titles the benchmark level «Compared with a reference» on one asset, and keeps «Am I being paid?» on a portfolio', async () => {
-        const t = get(_);
+    it('asks nothing for the benchmark level on one asset, and keeps asking it on a portfolio', async () => {
+        const asked = () => JSON.stringify(queryRisk.mock.calls);
         const view = mountPanel({kind: 'asset', asset_id: 7} as RiskScope);
-        await waitFor(() => expect(screen.getByTestId('risk-levels-panel')).toHaveAttribute('data-catalog', 'ready'));
-        expect(screen.getByTestId('risk-level-3-title').textContent?.trim()).toBe(t('risk.levels.l3.titleAsset'));
+        await waitFor(() => expect(queryRisk).toHaveBeenCalled());
+        expect(asked(), 'the asset asked for the risk/return scatter of a level it no longer draws').not.toContain('asset_risk_return');
         view.unmount();
 
+        queryRisk.mockClear();
+        mountPanel({kind: 'portfolio'} as RiskScope);
+        await waitFor(() => expect(queryRisk).toHaveBeenCalled());
+        expect(asked(), 'control: the portfolio still asks for the scatter, so the absence above is the asset rule').toContain('asset_risk_return');
+    });
+
+    // 81 U25: the rate is a condition of L1's semi-deviation too, so it stays on the asset, under the period line; on a
+    // portfolio it sits in L3's row, beside «Compare with», and nowhere else on the page.
+    it('puts the risk-free rate under the period line on one asset, and beside «Compare with» on a portfolio', async () => {
+        const view = mountPanel({kind: 'asset', asset_id: 7} as RiskScope);
+        await waitFor(() => expect(screen.getByTestId('risk-levels-panel')).toHaveAttribute('data-catalog', 'ready'));
+        expect(screen.getAllByTestId('risk-free-rate'), 'one field on the asset').toHaveLength(1);
+        expect(screen.getByTestId('risk-period').parentElement?.contains(screen.getByTestId('risk-free-rate')), 'the asset’s field is not under the period line').toBe(true);
+        view.unmount();
+
+        mountPanel({kind: 'portfolio'} as RiskScope);
+        await waitFor(() => expect(screen.getByTestId('risk-levels-panel')).toHaveAttribute('data-catalog', 'ready'));
+        expect(screen.getAllByTestId('risk-free-rate'), 'one field on the portfolio').toHaveLength(1);
+        expect(screen.getByTestId('risk-l3-benchmark').contains(screen.getByTestId('risk-free-rate')), 'the portfolio’s field is not beside «Compare with»').toBe(true);
+        expect(screen.getByTestId('risk-period').parentElement?.contains(screen.getByTestId('risk-free-rate')), 'the portfolio’s field is also under the period line').toBe(false);
+    });
+
+    it('keeps «Am I being paid?» on a portfolio, titled for a portfolio', async () => {
+        const t = get(_);
         mountPanel({kind: 'portfolio'} as RiskScope);
         await waitFor(() => expect(screen.getByTestId('risk-levels-panel')).toHaveAttribute('data-catalog', 'ready'));
         expect(screen.getByTestId('risk-level-3-title').textContent?.trim()).toBe(t('risk.levels.l3.title'));

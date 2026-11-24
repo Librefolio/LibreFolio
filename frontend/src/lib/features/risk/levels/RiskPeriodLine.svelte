@@ -10,17 +10,20 @@
      * the one asked for, the page's; when the analysis starts later, the level's box says so (the warning
      * `analysis_starts_late`). An open end reads «from {start}».
      *
-     * Under it, the reader's risk-free rate (RN-21): one more condition of the figures below, so it sits where the
-     * others are said, on every surface that says them (the consultant, 17/11/2026).
+     * Under it, on a page with no «Compare with» to sit beside — the single asset — the reader's risk-free rate (RN-21):
+     * the rate still conditions L1's semi-deviation there. Elsewhere it sits beside «Compare with» (81 U25, developer,
+     * 24/11/2026), once on the page.
      */
     interface Props {
         dateStart: string;
         dateEnd: string;
         currency: string;
         testId?: string;
+        /** Draw the risk-free rate field under the line: only where no benchmark row carries it. */
+        riskFreeRate?: boolean;
     }
 
-    let {dateStart, dateEnd, currency, testId = 'risk-period'}: Props = $props();
+    let {dateStart, dateEnd, currency, testId = 'risk-period', riskFreeRate = false}: Props = $props();
 
     // The formatter is taken inside, so a language switch — which re-runs `$t` — formats the days anew.
     let text = $derived.by(() => {
@@ -32,4 +35,6 @@
 {#if dateStart}
     <p class="text-xs text-lf-muted" data-testid={testId} data-start={dateStart} data-end={dateEnd} data-currency={currency}>{text}</p>
 {/if}
-<RiskFreeRateField />
+{#if riskFreeRate}
+    <RiskFreeRateField />
+{/if}

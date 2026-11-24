@@ -302,8 +302,9 @@
                     return price != null ? {code: row.currency, amount: price} : null;
                 },
                 getValue: (row) => livePriceMap.get(row.id)?.value ?? row.lastPrice ?? 0,
-                width: 150,
-                minWidth: 100,
+                // 81 U33: measured at 1440 and 1024 px in the four languages — «60,631.70$🇺🇸USD» needs 160 px; narrower, it ran into Δ 1D.
+                width: 170,
+                minWidth: 160,
             },
             {
                 id: 'delta_1D',
@@ -317,8 +318,9 @@
                 },
                 type: 'number',
                 getValue: (row) => row.deltas?.['1D'] ?? 0,
-                width: 80,
-                minWidth: 60,
+                // 81 U33: «+423,30 %» (French, with its space) needs 92 px; at 80 it ran into the next column.
+                width: 100,
+                minWidth: 92,
             },
             // Dynamic Δ multi-period columns
             ...visiblePeriods.map((period) => ({
@@ -333,8 +335,8 @@
                 },
                 type: 'number' as const,
                 getValue: (row: AssetRow) => row.deltas?.[period.key] ?? 0,
-                width: 80,
-                minWidth: 60,
+                width: 100,
+                minWidth: 92,
             })),
             ...riskColumns(),
             {

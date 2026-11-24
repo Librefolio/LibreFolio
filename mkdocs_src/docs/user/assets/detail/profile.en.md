@@ -23,7 +23,7 @@ The profile is the asset's descriptive data, as opposed to its prices:
     - **The fund** — management company, tracked index, replication, income treatment (accumulating or
       distributing), domicile, fund currency, inception date, management fee;
     - **The company** — sector, industry, issuer's country;
-    - **Identity** — legal form and issuer type, beside the asset's ISIN, ticker and other identifiers;
+    - **Identity** — legal form and issuer type, beside the asset's ISIN, ticker and other identifiers (the free ones, with no kind, are one row of chips);
     - **The bond** — coupon per period, coupon frequency and type, day count, net yield, accrued interest, issuer,
       minimum lot, interest start date, loyalty bonus, coupon schedule, payout terms.
 
@@ -173,7 +173,7 @@ asset's latest changes, newest first, twenty per page (the pages are in the bar 
 - **Data** — the item;
 - **What changed** — a sentence, such as *Written by hand: …*, *Corrected by hand: from … to …*, *First value read:
   …*, *Up from … to …*, *Left empty on purpose*;
-- **Who** — the person who wrote it by hand, or the source that gave it.
+- **Who** — the person who wrote it by hand, or the source that gave it; a value that was already there before the profile existed reads **System**.
 
 The values that change at every read (fund size, market capitalisation, gross and net yield, modified duration,
 accrued interest) appear here only when written by hand, and with the read that replaced them: their other steps are in

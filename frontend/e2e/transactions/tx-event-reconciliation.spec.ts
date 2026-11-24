@@ -39,8 +39,8 @@
  *     list, and «Link all» links only the unique rows still shown; a group its filter empties stays;
  *   - «Create event» (one row) and «Create events» (the selected rows) open the creation dialog: ONE line per event (rows of the
  *     same asset, day and type share it), the value suggested from the transaction's cash, ONE `POST /assets/events` (mode
- *     `create`), then the rows are `unique` and nothing is linked until the user links them; a refusal (here: an event that
- *     appeared behind the dialog's back, 409) keeps the dialog open and creates nothing;
+ *     `create`), then — 81 U23 — ONE commit links the rows that were asked for to the events just created and they leave the
+ *     list; a refusal (here: an event that appeared behind the dialog's back, 409) keeps the dialog open and creates nothing;
  *   - «Link selected» links the selected unique rows only; an action no selected row can take is not offered (SEL-0).
  * 77 SEL-C (the A4 window): one table per status under its header; one selection over the two selectable tables, whose bar
  * sits at the top of the window and comes down into the dock when the window's body scrolls; «Choose event» links the
@@ -625,7 +625,7 @@ test.describe('Event reconciliation — selection (FB-19)', () => {
 });
 
 test.describe('Event reconciliation — create the missing events (FB-19)', () => {
-    test('create event from a row: the value is suggested from its cash, ONE request creates it, the row becomes unique and can be linked', async ({page, request}) => {
+    test('create event from a row: the value is suggested from its cash, ONE request creates it and ONE commit links the row (81 U23)', async ({page, request}) => {
         const {brokerIds, assets} = await seedAccount(page, request, {brokers: 1, assets: 1});
         const [asset] = assets;
         const day = daysAgoIso(15);
@@ -651,10 +651,9 @@ test.describe('Event reconciliation — create the missing events (FB-19)', () =
         const commits = recordPosts<CommitBody>(page, COMMIT_PATH);
         await page.getByTestId('event-reconciliation-create-confirm').click();
 
-        // The dialog closes and the window reads its list again: the row now has an event.
+        // 81 U23: «Create» creates the event and links the row to it: the dialog closes, and the row leaves the list.
         await expect(createModal(page)).toBeHidden({timeout: UI_TIMEOUT});
-        await expect(row(page, tx)).toHaveAttribute('data-status', 'unique', {timeout: UI_TIMEOUT});
-        await expect(row(page, tx)).toHaveAttribute('data-candidate-count', '1');
+        await expect(row(page, tx)).toHaveCount(0, {timeout: UI_TIMEOUT});
         expect(creates, 'ONE request creates the events').toHaveLength(1);
         expect(creates[0], 'one item, for the asset, in mode create').toHaveLength(1);
         expect(creates[0][0].asset_id).toBe(asset.id);
@@ -662,23 +661,17 @@ test.describe('Event reconciliation — create the missing events (FB-19)', () =
         expect(creates[0][0].events, 'one event: the transaction’s day and type, its currency and value').toHaveLength(1);
         expect(creates[0][0].events[0]).toMatchObject({date: day, type: 'DIVIDEND', value: {code: 'USD'}});
         expect(Number(creates[0][0].events[0].value.amount)).toBe(7.5);
-        // Read back: the event exists with that value, and creating it linked nothing.
+        // Read back: the event exists with that value, and the row is linked to it, by ONE commit.
         const stored = await eventsOn(page, asset.id, day, 'DIVIDEND');
         expect(stored, 'the event was created').toHaveLength(1);
         expect(Number(stored[0].value.amount)).toBe(7.5);
         expect(stored[0].value.code).toBe('USD');
-        expect(await linkedEventOf(page, tx), 'creating the event links nothing').toBeNull();
-        expect(commits, 'no commit yet').toEqual([]);
-
-        // Now it is a row like the others: link it.
-        await linkButton(page, tx).click();
-        await expect(row(page, tx)).toHaveCount(0, {timeout: UI_TIMEOUT});
-        expect(commits).toHaveLength(1);
+        expect(commits, 'ONE commit links the row').toHaveLength(1);
         expect(commits[0].updates).toEqual([{id: tx, asset_event_id: stored[0].id}]);
         expect(await linkedEventOf(page, tx)).toBe(stored[0].id);
     });
 
-    test('create events for two selected rows of different assets: one dialog with two lines, ONE request with two items, both rows become unique', async ({page, request}) => {
+    test('create events for two selected rows of different assets: one dialog with two lines, ONE request with two items, ONE commit links both rows (81 U23)', async ({page, request}) => {
         const {brokerIds, assets} = await seedAccount(page, request, {brokers: 1, assets: 2});
         const [assetA, assetB] = assets;
         const day = daysAgoIso(15);
@@ -702,11 +695,13 @@ test.describe('Event reconciliation — create the missing events (FB-19)', () =
         await expect(page.getByTestId(`event-reconciliation-create-amount-${txA}`)).toHaveValue('3.25');
 
         const creates = recordPosts<NewEventBody>(page, EVENTS_PATH);
+        const commits = recordPosts<CommitBody>(page, COMMIT_PATH);
         await page.getByTestId('event-reconciliation-create-confirm').click();
 
+        // 81 U23: both rows are linked to the events just created, and leave the list.
         await expect(createModal(page)).toBeHidden({timeout: UI_TIMEOUT});
-        await expect(row(page, txA)).toHaveAttribute('data-status', 'unique', {timeout: UI_TIMEOUT});
-        await expect(row(page, txB)).toHaveAttribute('data-status', 'unique', {timeout: UI_TIMEOUT});
+        await expect(row(page, txA)).toHaveCount(0, {timeout: UI_TIMEOUT});
+        await expect(row(page, txB)).toHaveCount(0, {timeout: UI_TIMEOUT});
         expect(creates, 'ONE request for both events').toHaveLength(1);
         expect(creates[0], 'one item per asset').toHaveLength(2);
         const itemA = creates[0].find((item) => item.asset_id === assetA.id);
@@ -722,11 +717,18 @@ test.describe('Event reconciliation — create the missing events (FB-19)', () =
         const storedB = await eventsOn(page, assetB.id, day, 'DIVIDEND');
         expect(storedA.map((event) => Number(event.value.amount))).toEqual([3.25]);
         expect(storedB.map((event) => Number(event.value.amount))).toEqual([6]);
-        expect(await linkedEventOf(page, txA), 'creating links nothing').toBeNull();
-        expect(await linkedEventOf(page, txB)).toBeNull();
+        expect(commits, 'ONE commit links both rows').toHaveLength(1);
+        expect([...(commits[0].updates ?? [])].sort(byId)).toEqual(
+            [
+                {id: txA, asset_event_id: storedA[0].id},
+                {id: txB, asset_event_id: storedB[0].id},
+            ].sort(byId),
+        );
+        expect(await linkedEventOf(page, txA)).toBe(storedA[0].id);
+        expect(await linkedEventOf(page, txB)).toBe(storedB[0].id);
     });
 
-    test('two rows of the same asset, day and type share ONE line and one event', async ({page, request}) => {
+    test('two rows of the same asset, day and type share ONE line and one event, and one commit links both (81 U23)', async ({page, request}) => {
         const {brokerIds, assets} = await seedAccount(page, request, {brokers: 1, assets: 1});
         const [asset] = assets;
         const day = daysAgoIso(15);
@@ -751,13 +753,13 @@ test.describe('Event reconciliation — create the missing events (FB-19)', () =
         await expect(page.getByTestId(`event-reconciliation-create-amount-${lineId}`)).toHaveValue('2.5');
 
         const creates = recordPosts<NewEventBody>(page, EVENTS_PATH);
+        const commits = recordPosts<CommitBody>(page, COMMIT_PATH);
         await page.getByTestId('event-reconciliation-create-confirm').click();
 
+        // 81 U23: creating the event also links both rows to it, in one commit; they leave the list.
         await expect(createModal(page)).toBeHidden({timeout: UI_TIMEOUT});
-        await expect(row(page, tx1)).toHaveAttribute('data-status', 'unique', {timeout: UI_TIMEOUT});
-        await expect(row(page, tx2)).toHaveAttribute('data-status', 'unique', {timeout: UI_TIMEOUT});
-        await expect(row(page, tx1)).toHaveAttribute('data-candidate-count', '1');
-        await expect(row(page, tx2)).toHaveAttribute('data-candidate-count', '1');
+        await expect(row(page, tx1)).toHaveCount(0, {timeout: UI_TIMEOUT});
+        await expect(row(page, tx2)).toHaveCount(0, {timeout: UI_TIMEOUT});
         expect(creates, 'ONE request').toHaveLength(1);
         expect(creates[0]).toHaveLength(1);
         expect(creates[0][0].events, 'one event for both transactions').toHaveLength(1);
@@ -766,10 +768,6 @@ test.describe('Event reconciliation — create the missing events (FB-19)', () =
         expect(Number(stored[0].value.amount)).toBe(2.5);
 
         // Both link to that one event, in one commit.
-        const commits = recordPosts<CommitBody>(page, COMMIT_PATH);
-        await page.getByTestId('event-reconciliation-group-unique-all').click();
-        await expect(row(page, tx1)).toHaveCount(0, {timeout: UI_TIMEOUT});
-        await expect(row(page, tx2)).toHaveCount(0);
         expect(commits).toHaveLength(1);
         expect([...(commits[0].updates ?? [])].sort(byId)).toEqual(
             [

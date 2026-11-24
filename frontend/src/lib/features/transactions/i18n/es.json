@@ -439,7 +439,7 @@
       "colAction": "Acción",
       "createOne": "Crear evento",
       "createTitle": "Crear los eventos que faltan",
-      "createIntro": "Revisa el tipo e introduce el valor de cada evento, en la moneda del activo. Los eventos se crean el día de la transacción; luego vincúlalos.",
+      "createIntro": "Revisa el tipo e introduce el valor de cada evento, en la moneda del activo. Los eventos se crean el día de la transacción y las transacciones se vinculan a ellos de inmediato.",
       "createValue": "Valor",
       "createServes": "{n} transacciones",
       "createHint": "Introduce para cada evento un valor mayor que 0, con 6 decimales como máximo.",

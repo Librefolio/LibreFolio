@@ -505,7 +505,6 @@
             "benchmark": "Benchmark",
             "heldBenchmark": "Benchmark · in portafoglio, peso {share}"
           },
-          "titleOneAsset": "Rischio contro rendimento",
           "portfolioName": "Portafoglio"
         },
         "rows": {
@@ -517,9 +516,7 @@
           "notHeld": "Non è in portafoglio: il benchmark è qui per il confronto.",
           "expectedReturnShort": "Rend. annuo",
           "namedHelp": "{name}\n{help}"
-        },
-        "titleAsset": "Rispetto a un riferimento",
-        "benchmarkIsSubject": "Il riferimento è questo stesso asset: scegline un altro per il confronto."
+        }
       },
       "l4": {
         "title": "Cosa succede se…?",

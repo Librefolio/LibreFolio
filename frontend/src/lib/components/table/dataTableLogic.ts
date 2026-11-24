@@ -418,3 +418,20 @@ export function paginateFlat<R>(rows: readonly R[], pageSize: number, opensPage:
     if (page.length > 0 || pages.length === 0) pages.push(page);
     return pages;
 }
+
+/**
+ * Keeps `rows` in the order they had when `order` was taken (81 U48).
+ *
+ * A table sorted on an editable column re-sorts at every keystroke, and the row under the cursor runs away from it.
+ * While a field is being edited the table holds the order it had when the field was entered; this puts `rows` (just
+ * sorted by the table's rule) back in that order. A row that was not there when the order was taken (added since) goes
+ * after the others, in the sorted order it came in; a row that is gone is simply missing.
+ */
+export function holdRowOrder<R>(rows: readonly R[], order: readonly string[], getRowId: (row: R) => string): R[] {
+    const position = new Map(order.map((id, index) => [id, index] as const));
+    const known: R[] = [];
+    const added: R[] = [];
+    for (const row of rows) (position.has(getRowId(row)) ? known : added).push(row);
+    known.sort((a, b) => (position.get(getRowId(a)) as number) - (position.get(getRowId(b)) as number));
+    return [...known, ...added];
+}

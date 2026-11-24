@@ -97,21 +97,25 @@
     let creating = $state<ReconciliationRow[] | null>(null);
     let choosing = $state<ReconciliationRow | null>(null);
 
-    async function load() {
+    /** Read the list. `quiet` keeps the tables on screen (and their selection) while it is read again; it answers the rows read, `null` when the
+     * read failed or a close or a newer read overtook it. */
+    async function load(quiet = false): Promise<ReconciliationRow[] | null> {
         const mine = ++generation;
-        loading = true;
+        if (!quiet) loading = true;
         loadFailed = false;
         linkFailed = false;
         try {
             const loaded = await loadEventReconciliation(filters);
-            if (mine !== generation) return;
+            if (mine !== generation) return null;
             rows = loaded;
             optionRows = loaded;
+            return loaded;
         } catch (error) {
-            if (mine !== generation) return;
+            if (mine !== generation) return null;
             console.error('[event-reconciliation] could not read the transactions without an event', error);
             rows = [];
             loadFailed = true;
+            return null;
         } finally {
             if (mine === generation) loading = false;
         }
@@ -295,11 +299,21 @@
         if (missing.length > 0) creating = missing;
     }
 
-    /** The events were created: read the list again, where those rows now have an event; the selection starts over. */
+    /** The events were created (81 U23): read the list again, where the rows asked for now have their event, and link — in one commit — the
+     *  ones that came back with exactly one. A row that came back with several is never guessed (it stays, to be chosen), and the rows
+     *  nobody asked to create keep their own «Link». If the link is refused the events stay, the banner tells it, and the rows are
+     *  «With one event» now. The created rows leave the selection; the other selected rows stay (77 SEL-C (b)). */
     async function created() {
+        const asked = creating ?? [];
         creating = null;
-        clearSelection();
-        await load();
+        for (const row of asked) {
+            const id = String(row.transactionId);
+            if (selectedIds.none.includes(id)) tables.none?.toggleRowSelectionById(id);
+        }
+        const loaded = await load(true);
+        if (loaded === null) return;
+        const askedIds = new Set(asked.map((row) => row.transactionId));
+        await link(loaded.filter((row) => askedIds.has(row.transactionId)));
     }
 
     /** The chosen event was linked: the row leaves the list. */

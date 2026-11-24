@@ -439,7 +439,7 @@
       "colAction": "Action",
       "createOne": "Create event",
       "createTitle": "Create the missing events",
-      "createIntro": "Check the type and enter the value of each event, in the asset’s currency. The events are created on the day of the transaction; then link them.",
+      "createIntro": "Check the type and enter the value of each event, in the asset’s currency. The events are created on the day of the transaction, and the transactions are linked to them right away.",
       "createValue": "Value",
       "createServes": "{n} transactions",
       "createHint": "Enter a value above 0, with at most 6 decimals, for every event.",

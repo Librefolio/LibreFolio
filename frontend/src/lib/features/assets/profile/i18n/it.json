@@ -214,7 +214,8 @@
         "loadFailed": "Non è stato possibile leggere le variazioni.",
         "empty": "Ancora nessuna variazione.",
         "who": {
-          "deletedUser": "un utente cancellato"
+          "deletedUser": "un utente cancellato",
+          "system": "Sistema"
         },
         "what": {
           "first": "Primo valore letto: {to}.",

@@ -401,9 +401,9 @@ describe('EventReconciliationModal — the event and the creation of the missing
         expect(screen.queryByTestId('event-reconciliation-link-13')).toBeNull();
     });
 
-    it('«Create event» on a row opens the dialog with the value suggested from the cash; Create sends ONE request and the row becomes linkable', async () => {
+    it('«Create event» on a row opens the dialog with the value suggested from the cash; Create sends ONE request, then links the row in ONE commit (81 U23)', async () => {
         serve([item(12, 'none')]);
-        mount();
+        const {onlinked} = mount();
         await listed();
 
         await fireEvent.click(screen.getByTestId('event-reconciliation-create-12'));
@@ -415,8 +415,80 @@ describe('EventReconciliationModal — the event and the creation of the missing
         await waitFor(() => expect(createEventsCall).toHaveBeenCalledTimes(1));
         expect(createEventsCall).toHaveBeenCalledWith([{asset_id: 7, mode: 'create', events: [{date: '2025-03-04', type: 'DIVIDEND', value: {code: 'USD', amount: '5.00'}}]}]);
         await waitFor(() => expect(screen.queryByTestId('event-reconciliation-create-modal')).toBeNull());
-        await waitFor(() => expect(row(12)).toHaveAttribute('data-status', 'unique'));
-        expect(commitCall, 'nothing is linked by the creation').not.toHaveBeenCalled();
+        await waitFor(() => expect(commitCall).toHaveBeenCalledTimes(1));
+        expect(commitCall).toHaveBeenCalledWith({updates: [{id: 12, asset_event_id: 1012}]});
+        await waitFor(() => expect(row(12)).toBeNull());
+        expect(onlinked).toHaveBeenCalledTimes(1);
+    });
+
+    it('«Create all» links, in ONE commit, the rows it created and not the unique rows that were already listed (81 U23)', async () => {
+        serve([item(11, 'unique'), item(12, 'none'), item(14, 'none')]);
+        mount();
+        await listed();
+
+        await fireEvent.click(screen.getByTestId('event-reconciliation-group-none-all'));
+        await fireEvent.click(await screen.findByTestId('event-reconciliation-create-confirm'));
+
+        await waitFor(() => expect(commitCall).toHaveBeenCalledTimes(1));
+        expect(commitCall).toHaveBeenCalledWith({
+            updates: [
+                {id: 12, asset_event_id: 1012},
+                {id: 14, asset_event_id: 1014},
+            ],
+        });
+        await waitFor(() => expect(row(12)).toBeNull());
+        expect(row(14)).toBeNull();
+        expect(row(11), 'a unique row nobody asked to create stays, with its own «Link»').toHaveAttribute('data-status', 'unique');
+    });
+
+    it('a created row that now has several events is not linked by guess: it stays, to be chosen (81 U23)', async () => {
+        serve([item(12, 'none'), item(14, 'none')]);
+        createEventsCall.mockImplementation(async () => {
+            pending = pending.map((entry) => (entry.transaction_id === 12 ? {...entry, status: 'several' as const, candidates: [candidate(1012), candidate(2012)]} : {...entry, status: 'unique' as const, candidates: [candidate(entry.transaction_id + 1000)]}));
+            return {results: []};
+        });
+        mount();
+        await listed();
+
+        await fireEvent.click(screen.getByTestId('event-reconciliation-group-none-all'));
+        await fireEvent.click(await screen.findByTestId('event-reconciliation-create-confirm'));
+
+        await waitFor(() => expect(commitCall).toHaveBeenCalledTimes(1));
+        expect(commitCall).toHaveBeenCalledWith({updates: [{id: 14, asset_event_id: 1014}]});
+        await waitFor(() => expect(row(14)).toBeNull());
+        expect(row(12)).toHaveAttribute('data-status', 'several');
+    });
+
+    it('a refused link keeps the created events and the banner; the rows are now «With one event», to link from there (81 U23)', async () => {
+        serve([item(12, 'none')]);
+        commitCall.mockReset();
+        commitCall.mockResolvedValue({committed: false, issues: [{code: 'X'}], results: []});
+        mount();
+        await listed();
+
+        await fireEvent.click(screen.getByTestId('event-reconciliation-create-12'));
+        await fireEvent.click(await screen.findByTestId('event-reconciliation-create-confirm'));
+
+        await waitFor(() => expect(screen.getByTestId('event-reconciliation-error')).toBeInTheDocument());
+        expect(createEventsCall).toHaveBeenCalledTimes(1);
+        expect(row(12)).toHaveAttribute('data-status', 'unique');
+        expect(linkButton(12), 'the «Link» is there again').not.toBeNull();
+    });
+
+    it('the rows that were linked leave the selection, the others stay selected (81 U23, 77 SEL-C (b))', async () => {
+        serve([item(11, 'unique'), item(12, 'none')]);
+        mount();
+        await listed();
+
+        await fireEvent.click(screen.getByTestId('dt-row-checkbox-11'));
+        await fireEvent.click(screen.getByTestId('dt-row-checkbox-12'));
+        await fireEvent.click(await screen.findByTestId('toolbar-action-create'));
+        await fireEvent.click(await screen.findByTestId('event-reconciliation-create-confirm'));
+
+        await waitFor(() => expect(row(12)).toBeNull());
+        expect(commitCall).toHaveBeenCalledWith({updates: [{id: 12, asset_event_id: 1012}]});
+        expect(await screen.findByTestId('toolbar-action-link'), 'row 11 is still selected').toBeInTheDocument();
+        expect(screen.queryByTestId('toolbar-action-create')).toBeNull();
     });
 
     it('the value can be typed over; one that is no plain amount keeps Create disabled', async () => {
