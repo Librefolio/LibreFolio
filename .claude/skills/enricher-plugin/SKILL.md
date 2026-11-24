@@ -68,7 +68,10 @@ the merge of several sources, **not** the scheduler and **not** the cache: those
    extending `EnricherPlugin`, decorated with `@register_provider(EnricherRegistry)`.
 2. Declare `code`, `name`, `icon`, `help_url`, `terms` (the class of the source's terms of use), `accepted_identifier_types`,
    `voices`, `default_priority`, and, when needed, `params_schema` and `settings_fields`.
-3. Implement `recognize`, `read` and `page_url`; `search` only when the source has its own search engine.
+3. Implement `recognize`, `read` and `page_url`; `search` only when the source has its own search engine. A `search`
+   feeds «Search online» at the top of the enrichers' window: each result must be a binding `recognize` and `read`
+   take as it is (set `market` when the source names the listing). An enricher without `search` is still reached
+   there, by `recognize`, when the user types an identifier of a type it accepts.
 4. Add `test_cases` (real bindings per asset type) for the external suite, and offline tests with recorded answers under
    `backend/test_scripts/`.
 5. A voice the catalogue does not have is a change to the catalogue (`services/assets/profile/catalogue.py`, with its

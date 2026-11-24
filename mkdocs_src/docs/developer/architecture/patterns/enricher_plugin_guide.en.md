@@ -190,7 +190,7 @@ default order ask only the enrichers that cover the asset's type.
 
 | Method | Default | Description |
 |---|---|---|
-| `search(query)` | raises `NotImplementedError` | The assets the source finds for a word, as `EnricherSearchResult` (`name`, `binding`, `asset_type`, `page_url`). `supports_search` turns `True` by itself when you override it. A refusal for too many requests raises `EnricherRateLimited` (with the source's `retry_after`), never an empty list |
+| `search(query)` | raises `NotImplementedError` | The assets the source finds for a word, as `EnricherSearchResult` (`name`, `binding`, `asset_type`, `page_url`, and `market` when the source names the listing's market). `supports_search` turns `True` by itself when you override it. It feeds «Search online» at the top of the enrichers' window, where each result is a binding the user adds with «+»: return bindings `recognize` and `read` take as they are. A refusal for too many requests raises `EnricherRateLimited` (with the source's `retry_after`), never an empty list |
 | `params_schema` | `[]` | A property: the extra parameters of a binding, which the enrichers window draws as a form ([Binding Parameters](#params)) |
 | `shutdown()` | no-op | Release what the plugin holds, at the server's shutdown |
 
@@ -441,6 +441,7 @@ window with `enrichersOnOpen`: the enrichers' window on top, for that opening on
 |---|---|---|
 | `GET /enrichers` | The catalogue: every served enricher with what it declares, `configured` and `missing_settings`, and the default order per asset type | Class attributes only, no call |
 | `POST /enrichers/recognize` | The cascade as Server-Sent Events: `enricher_result`, `identifier_learned`, then `done` (`found_order`, `default_order`, `identifiers`) | `recognize` |
+| `GET /enrichers/search?q=…&codes=…&asset_type=…` | «Search online» (ENR-3): one text on several enrichers at once, as Server-Sent Events, one `enricher_results` per enricher (`status`: `ok`, `identifier_only`, `rate_limited`, `not_configured`, `off`, `not_covering`, `error`) then `done`; one probe for the whole search | `search`; for an enricher without one, `recognize` when the text has the form of an identifier it accepts (an ISIN or a LEI, check digits included), else `identifier_only` |
 | `GET /enrichers/{code}/search?q=…` | One enricher's search; 400 for an enricher that does not search; 429 `RATE_LIMITED` with `Retry-After` when the source refused (`EnricherRateLimited`) | `search` |
 | `POST /enrichers/{code}/test` | `recognize` one binding; writes nothing | `recognize` |
 
@@ -448,8 +449,12 @@ window with `enrichersOnOpen`: the enrichers' window on top, for that opening on
   mode, turned off by `LIBREFOLIO_ENRICHERS_ENABLED`), and **422** with `error_code: "NOT_CONFIGURED"` when a required
   setting is empty (`not_configured_error()` in `backend/app/api/plugin_errors.py`).
 - `recognize` skips an enricher that is not configured, with no error.
-- `recognize`, `search`, `test` and `POST /assets/profile/ask` count on the per-user probe limit
-  (`enforce_probe_limit()`): past it, 429 `PROBE_RATE_LIMITED` before any call. «Refresh» is not counted.
+- `recognize`, `search` (one enricher or several: one count per search), `test` and `POST /assets/profile/ask` count on
+  the per-user probe limit (`enforce_probe_limit()`): past it, 429 `PROBE_RATE_LIMITED` before any call. «Refresh» is
+  not counted.
+- In `GET /enrichers/search`, a source's refusal is `rate_limited` with the same wait as the 429 of
+  `{code}/search` (`refusal_wait()` in `backend/app/services/enrichers/search.py`); any other failure is `error` with
+  the code `SOURCE_ERROR`, its cause in the server log; a client that closes the stream stops the waiting.
 - The bindings are written and read with the asset (`POST`/`PATCH /assets`, field `enrichers`; `GET /assets`).
 
 ---
