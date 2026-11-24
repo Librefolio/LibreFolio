@@ -20,6 +20,19 @@ class LotMatchingMethod(StrEnum):
     LIFO = "LIFO"
 
 
+class RewardAllocation(StrEnum):
+    """Where a REWARD's units go in the lots analysis (project 79, STK-3)."""
+
+    # One-line docstring: OpenAPI copies it into the generated client, which cannot carry line breaks (lot E2b).
+    # OWN_LOT (the default, and the only one outside the lots panel): a dated lot at the value on receipt, the income
+    # to the lots held the day before. MERGED («rewards spread over the lots», a view the user switches on): the units
+    # join, pro rata, the lots the broker held at the close of the day before, at no cost and with no date of their
+    # own, and no income is booked for them.
+
+    OWN_LOT = "OWN_LOT"
+    MERGED = "MERGED"
+
+
 Direction = Literal["LONG", "SHORT"]
 CustodyType = Literal["BROKER", "IN_TRANSIT"]
 ReferencePriceSource = Literal["exact", "fallback", "unavailable"]
@@ -34,6 +47,7 @@ IssueCode = Literal[
     "ASSET_COST_NO_ELIGIBLE_LOTS",
     "ASSET_COST_LINKED_PARENT_AFTER_RANGE",
     "ASSET_COST_LINKED_INCOME_NO_ELIGIBLE_LOTS",
+    "REWARD_NOT_MERGED_NO_OPEN_LOT",
 ]
 # Issue codes that indicate a non-isolable quantitative replay failure (incoherent
 # quantities, invalid fragment topology, or unreconstructable transfers). Their
@@ -50,6 +64,10 @@ _QUANTITATIVE_FAILURE_CODES: frozenset[str] = frozenset(
 )
 
 
+# Issue codes that only inform: a consequence of a view the user chose, not a data error. They leave the analysis COMPLETE.
+_INFORMATIONAL_CODES: frozenset[str] = frozenset({"REWARD_NOT_MERGED_NO_OPEN_LOT"})
+
+
 def fails_the_replay(code: str) -> bool:
     """Whether an issue of this code makes the whole replay unreliable: the analysis is FAILED (J-12 withholds its lots)."""
     return code in _QUANTITATIVE_FAILURE_CODES
@@ -59,6 +77,7 @@ EventKind = Literal[
     "BUY",
     "SELL",
     "REWARD",
+    "REWARD_MERGE",
     "ADJUSTMENT_IN",
     "ADJUSTMENT_OUT",
     "SPLIT",
@@ -97,6 +116,19 @@ class TransactionLike(Protocol):
     cost_basis_override: Decimal | None
     cost_basis_currency: str | None
     related_transaction_id: int | None
+
+
+@dataclass(frozen=True, slots=True)
+class RewardMerge:
+    """The part of a REWARD one lot took in the MERGED view (STK-3): ``added_quantity`` units at no cost, so the lot's
+    quantity grew by ``ratio`` (after / before) and its unit cost fell by it."""
+
+    transaction_id: int
+    date: date
+    broker_id: int
+    lot_id: int
+    added_quantity: Decimal
+    ratio: Decimal
 
 
 @dataclass(frozen=True, slots=True)
@@ -361,12 +393,16 @@ class FifoEngineResult:
     asset_orphan_income: Decimal = Decimal("0")
     asset_orphan_fees: Decimal = Decimal("0")
     asset_orphan_taxes: Decimal = Decimal("0")
+    reward_allocation: RewardAllocation = RewardAllocation.OWN_LOT
+    #: The lots each REWARD joined in the MERGED view, one row per lot (STK-3); empty in OWN_LOT.
+    reward_merges: list[RewardMerge] = field(default_factory=list)
 
     @property
     def analysis_status(self) -> Literal["COMPLETE", "DEGRADED", "FAILED"]:
-        if not self.issues:
+        issues = [issue for issue in self.issues if issue.code not in _INFORMATIONAL_CODES]
+        if not issues:
             return "COMPLETE"
-        if any(issue.code in _QUANTITATIVE_FAILURE_CODES for issue in self.issues):
+        if any(issue.code in _QUANTITATIVE_FAILURE_CODES for issue in issues):
             return "FAILED"
         return "DEGRADED"
 
