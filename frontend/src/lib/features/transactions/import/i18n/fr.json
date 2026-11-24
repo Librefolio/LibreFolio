@@ -210,7 +210,8 @@
       "traderepublic_tax_refund": "{count, plural, one {# remboursement d’impôt a été importé comme intérêt} other {# remboursements d’impôt ont été importés comme intérêts}} (« Tax refund ») : c’est de l’argent rendu sur le gain de l’investissement, il compte donc dans le P&L.",
       "traderepublic_not_yet_settled": "{count, plural, one {# ligne est datée après aujourd’hui : elle n’est pas encore réglée et a été laissée de côté} other {# lignes sont datées après aujourd’hui : elles ne sont pas encore réglées et ont été laissées de côté}}. Elles viendront avec le prochain export.",
       "investimental_order_start_missing": "Ordre {order} ({symbol}, dernière exécution le {date} à {price}) : le fichier commence avec cet ordre déjà en cours, donc sa quantité totale ne se déduit pas du fichier {visible, select, yes {(le fichier montre {quantity} pour {amount} {currency})} other {(aucune des exécutions qu'il montre ne peut être comptée)}}. L'ordre n'a pas été importé : saisissez-le à la main à partir de votre relevé.",
-      "reward_value": "Le fichier ne donne pas la valeur de cette récompense : saisissez la valeur d’une seule unité le jour où vous l’avez reçue, pas le total, pour importer cette ligne."
+      "reward_value": "Le fichier ne donne pas la valeur de cette récompense : saisissez la valeur d’une seule unité le jour où vous l’avez reçue, pas le total, pour importer cette ligne.",
+      "investimental_fee_from_order_log": "{count, plural, one {# commission a été lue dans le registre des ordres : elle peut différer légèrement de votre relevé, vérifiez-la.} other {# commissions ont été lues dans le registre des ordres : elles peuvent différer légèrement de votre relevé, vérifiez-les.}}"
     },
     "evidenceRowsTitle": "Lignes du fichier",
     "evidenceRowCount": "{n} lignes",
@@ -568,7 +569,8 @@
       "traderepublic_other_account": "Sur ces lignes, la colonne account_type n’est pas DEFAULT.",
       "traderepublic_tax_refund": "Un impôt positif est de l’argent rendu.",
       "traderepublic_not_yet_settled": "La date (ou la value_date) de ces lignes est postérieure à aujourd’hui.",
-      "investimental_order_start_missing": "Chaque ligne donne le volume encore ouvert. Les premières lignes de l'ordre, avec les premières exécutions, ne sont pas dans le fichier."
+      "investimental_order_start_missing": "Chaque ligne donne le volume encore ouvert. Les premières lignes de l'ordre, avec les premières exécutions, ne sont pas dans le fichier.",
+      "investimental_fee_from_order_log": "Chaque commission est la baisse, à chaque exécution, de la commission encore due sur la partie ouverte de l'ordre."
     },
     "notesCount": "{n, plural, one {# note} many {# notes} other {# notes}}",
     "noNotices": "Ni avertissement ni note",

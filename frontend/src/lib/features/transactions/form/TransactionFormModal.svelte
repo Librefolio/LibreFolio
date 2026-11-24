@@ -165,6 +165,10 @@
         onOpenTransaction?: (id: number) => void;
         /** Project 66 (F3): the charge the user came from, highlighted among the parent's charges. */
         highlightTxId?: number | null;
+        /** Project 66 (TL-2): the host's own rows a picker may offer, read on the host's state (the Bulk). `rows` join the
+         *  database's (a row in both is the host's), `exclude` drops database rows the host already marked or linked; `null`
+         *  for a mode the host does not answer. A new row carries `_bulkKey` (`op-<tempId>`) and its name in `_rowRef`. */
+        bulkCandidates?: (mode: 'charges' | 'parent', probe: {broker_id: number; asset_id: number | null; type: string}) => {rows: TXReadItem[]; exclude: number[]} | null;
     }
 
     let {
@@ -191,6 +195,7 @@
         allowChargeEdits = false,
         onOpenTransaction,
         highlightTxId = null,
+        bulkCandidates,
     }: Props = $props();
 
     let guideObservedOpen = false;
@@ -746,7 +751,14 @@
         try {
             const rows = (await zodiosApi.query_transactions_api_v1_transactions_get({queries: {without_parent: true, broker_id: draft.broker_id}} as never)) as TXReadItem[];
             const inSection = new Set(charges.map((charge) => charge.id));
-            pickerRows = (rows ?? []).filter((row) => sameAsset(row) && !inSection.has(row.id));
+            const sectionKeys = new Set(charges.map((charge) => charge.key));
+            // 66 TL-2: inside the Bulk its own rows join, read on its state: a row in both sources is the Bulk's, a row the
+            // Bulk marked «del» or linked elsewhere is dropped.
+            const host = bulkCandidates?.('charges', {broker_id: draft.broker_id, asset_id: draft.asset_id ?? null, type: draft.type}) ?? null;
+            const hostIds = new Set((host?.rows ?? []).map((row) => row.id));
+            const dropped = new Set(host?.exclude ?? []);
+            const merged = [...(rows ?? []).filter((row) => !dropped.has(row.id) && !hostIds.has(row.id)), ...(host?.rows ?? [])];
+            pickerRows = merged.filter((row) => sameAsset(row) && !inSection.has(row.id) && !sectionKeys.has((row as TXReadItem & {_bulkKey?: string})._bulkKey ?? ''));
             pickerMode = 'charges';
         } catch {
             notify({name: 'tx.form.charges.candidates.failed', detail: {brokerId: draft.broker_id}, toast: {variant: 'error', message: $t('transactions.form.candidatesFailed')}});

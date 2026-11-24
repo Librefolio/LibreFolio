@@ -202,7 +202,9 @@
         "running": "Reading prices…",
         "result": "{filled, plural, one {# filled} other {# filled}} with the close of their day, {noPrice, plural, one {# without a price on that day} other {# without a price on that day}}, {noHistory, plural, one {# asset without price history} other {# assets without price history}}. The values can be changed; the rows not filled still wait for a value.",
         "failed": "The prices could not be read: no value was filled. Try again."
-      }
+      },
+      "cloneChargesReadFailed": "Could not read the linked charges of {ids}: the copy was made without them.",
+      "cloneChargeFree": "{reason, select, deleted {The copy of the charge is not linked: its parent is marked for deletion.} paired {The copy of the charge is not linked: its parent is half of a pair.} other {The copy of the charge is not linked: it cannot be linked to the same transaction.}}"
     },
     "commit": {
       "serverError": "Save failed — server error"

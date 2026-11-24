@@ -888,7 +888,8 @@
             hiddenByDefault: false,
             getValue: (d) => (d.followTx ?? d.tx).id,
             // TODO: filtro composito multi-range per ID (come currency-stack con range multipli)
-            cell: (d) => ({type: 'html', html: `<span class="font-mono text-xs text-lf-muted" data-testid="tx-id-${d.tx.id}">#${d.tx.id}</span>`}),
+            // 66 TL-2: a row of the Bulk offered by a picker names itself (`_rowRef`, «row N» for a new one).
+            cell: (d) => ({type: 'html', html: `<span class="font-mono text-xs text-lf-muted" data-testid="tx-id-${d.tx.id}">${escapeHtml((d.tx as TXReadItem & {_rowRef?: string})._rowRef ?? `#${d.tx.id}`)}</span>`}),
         },
         {
             id: 'description',
@@ -1085,7 +1086,7 @@
         onShowSelectedOnlyChange={(v) => (showSelectedOnlyActive = v)}
         {initialFilters}
         onSelectionChange={handleSelectionChange}
-        getRowDisplayName={(d) => `#${d.tx.id} ${d.tx.type}`}
+        getRowDisplayName={(d) => `${(d.tx as TXReadItem & {_rowRef?: string})._rowRef ?? `#${d.tx.id}`} ${d.tx.type}`}
         onRowDoubleClick={(d) => (onRowDoubleClickOverride ? onRowDoubleClickOverride(d.tx) : onViewRow?.(d.tx))}
         pager={!compact && chargesFolded && externalPaginatorTotal > 0 ? groupedPager : undefined}
     />

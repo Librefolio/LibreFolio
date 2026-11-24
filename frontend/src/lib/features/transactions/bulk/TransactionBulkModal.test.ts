@@ -2378,7 +2378,7 @@ describe('TransactionBulkModal — 66 F7-c1: the charges grouped under their par
 
     // Re-targeted (consultant's decision, 19/11): the menu of an indented row is «Edit row» + «Delete»/«Restore» — «Edit row»
     // is the double-click's twin on touch and from the keyboard. Nothing else: no clone, split, remove or reset.
-    it('the menu of an indented row offers exactly «Edit row» and «Delete» / «Restore»; Delete → del, Restore → linked', async () => {
+    it('the menu of an indented row offers exactly «Edit row», «Clone row» (66 TL-3) and «Delete» / «Restore»; Delete → del, Restore → linked', async () => {
         await openLoaded();
         await fireEvent.click(theChip());
         await settle();
@@ -2388,10 +2388,11 @@ describe('TransactionBulkModal — 66 F7-c1: the charges grouped under their par
         expect(screen.getByTestId('context-menu-action-edit-single'), 'and «Edit row»').toBeInTheDocument();
         expect(
             [...screen.getByTestId('context-menu').querySelectorAll('[data-testid^="context-menu-action-"]')].map((item) => item.getAttribute('data-testid')),
-            'exactly those two',
-        ).toEqual(expect.arrayContaining(['context-menu-action-edit-single', 'context-menu-action-mark-delete']));
-        expect(screen.getByTestId('context-menu').querySelectorAll('[data-testid^="context-menu-action-"]'), 'exactly those two').toHaveLength(2);
-        for (const hidden of ['clone', 'split', 'remove-from-batch', 'reset']) {
+            'exactly those three',
+        ).toEqual(expect.arrayContaining(['context-menu-action-edit-single', 'context-menu-action-clone', 'context-menu-action-mark-delete']));
+        // 66 TL-3 (FEE consultant): «Clone row» is back on a charge under its parent; its copy sits under the same parent.
+        expect(screen.getByTestId('context-menu').querySelectorAll('[data-testid^="context-menu-action-"]'), 'exactly those three').toHaveLength(3);
+        for (const hidden of ['split', 'remove-from-batch', 'reset']) {
             expect(screen.queryByTestId(`context-menu-action-${hidden}`), `no «${hidden}» on a charge`).toBeNull();
         }
         await clickCollectingErrors(screen.getByTestId('context-menu-action-mark-delete'));
@@ -2400,11 +2401,12 @@ describe('TransactionBulkModal — 66 F7-c1: the charges grouped under their par
         expect(theChip(), 'a charge marked: the chip says its group changed').toHaveAttribute('data-charges-modified', 'true');
         expect(rowStatus(gridRow(BUY.id)), 'the parent’s own status does not change').toBe('original');
 
-        // A charge marked «del» is a changed row: its menu still offers «Restore» only (no «reset», no «remove»).
+        // A charge marked «del» is a changed row: its menu still offers «Restore» (no «reset», no «remove»); «Clone row»
+        // too (66 TL-3: its copy is born free when the «Link» rule refuses the parent).
         await openMenu(gridRow(FEE.id));
         expect(screen.getByTestId('context-menu-action-mark-delete'), 'barrier: the menu offers «Restore»').toBeInTheDocument();
         expect(screen.getByTestId('context-menu-action-edit-single'), 'and «Edit row»').toBeInTheDocument();
-        for (const hidden of ['clone', 'remove-from-batch', 'reset']) {
+        for (const hidden of ['remove-from-batch', 'reset']) {
             expect(screen.queryByTestId(`context-menu-action-${hidden}`), `no «${hidden}» on a charge marked «del»`).toBeNull();
         }
         await clickCollectingErrors(screen.getByTestId('context-menu-action-mark-delete'));

@@ -493,3 +493,178 @@ describe('TransactionFormModal — the two pickers (66 F4)', () => {
         }
     });
 });
+
+// ---------------------------------------------------------------------------------------------------------------
+//  TL-2 — inside the Bulk the charges picker sees the Bulk's rows. The Bulk passes `bulkCandidates(mode, probe)`:
+//  `{rows, exclude}` (rows: mirrors of its candidates, signed as the ledger, a saved one by its txId, a new one by a
+//  synthetic negative id with `_bulkKey: 'op-<tempId>'` and `_rowRef`), or null for nothing from the Bulk. The picker
+//  shows the DB rows minus `exclude` minus the ids the Bulk's rows carry, plus the Bulk's rows, then today's filters
+//  (same asset, not in the section by id or by `_bulkKey`). The ID cell shows `_rowRef` when present, `#id` otherwise.
+//  RED until the prop exists.
+// ---------------------------------------------------------------------------------------------------------------
+
+/** A mirror of a Bulk row as `bulkCandidates` hands it: a charge row, with the Bulk's own key and reference. */
+const bulkCharge = (id: number, assetId: number | null, bulk: {_bulkKey?: string; _rowRef?: string}, extra: Record<string, unknown> = {}) => ({...charge(id, assetId, extra), ...bulk});
+
+/** The ID cell of the picker's row for transaction `id` (the table's row ids are `tx-<id>`). */
+function pickerIdCell(id: number): HTMLElement | null {
+    return screen.getByTestId('tx-picker-modal').querySelector<HTMLElement>(`tr[data-row-id="tx-${id}"] td[data-column-id="id"]`);
+}
+
+describe('TransactionFormModal — the charges picker inside the Bulk (66 TL-2)', () => {
+    beforeAll(async () => {
+        vi.mocked(zodiosApi.get_transaction_types_api_v1_transactions_types_get).mockResolvedValue(TYPES_WITH_CHARGE_ROLES);
+        await setupI18n();
+        await ensureTypesLoaded();
+    });
+
+    beforeEach(() => {
+        queryApi().mockReset();
+        queryApi().mockImplementation(async () => []);
+        vi.mocked(notify).mockClear();
+        guideAnchors.clear();
+    });
+
+    afterEach(() => {
+        cleanup();
+        guideAnchors.clear();
+    });
+
+    it('the picker merges the Bulk’s rows: DB minus exclude minus the Bulk’s ids, plus the Bulk’s rows, same asset, not in the section', async () => {
+        answerPickers({
+            linked: [charge(11, 5, {parent_transaction_id: 10})],
+            withoutParent: () => [charge(21, 5), charge(22, 5), charge(23, 5), charge(24, 9)],
+        });
+        const bulkCandidates = vi.fn(() => ({
+            rows: [bulkCharge(-7, 5, {_bulkKey: 'op-n-fee', _rowRef: 'row 4'}), bulkCharge(23, 5, {_rowRef: '#23'}, {description: 'the Bulk’s values of 23'}), bulkCharge(-8, 9, {_bulkKey: 'op-n-other', _rowRef: 'row 5'}), bulkCharge(11, 5, {_rowRef: '#11'})],
+            exclude: [22],
+        }));
+        bulkHosted(vi.fn(), txRow({id: 10, broker_id: 1, asset_id: 5, type: 'BUY', charges_count: 1}), {bulkCandidates});
+        await waitForSavedRows([11]);
+
+        await fireEvent.click(await screen.findByTestId('tx-form-charges-link-existing'));
+
+        await waitForPickerIds([-7, 21, 23]);
+        expect(bulkCandidates).toHaveBeenCalledWith('charges', expect.objectContaining({broker_id: 1, asset_id: 5, type: 'BUY'}));
+        expect(callsWith('without_parent'), 'the DB is still read').toHaveLength(1);
+    });
+
+    it('the ID cell names a new Bulk row by its row reference, a saved one by #id', async () => {
+        answerPickers({withoutParent: () => [charge(21, 5)]});
+        const bulkCandidates = vi.fn(() => ({rows: [bulkCharge(-7, 5, {_bulkKey: 'op-n-fee', _rowRef: 'row 4'})], exclude: []}));
+        bulkHosted(vi.fn(), txRow({id: 10, broker_id: 1, asset_id: 5, type: 'BUY', charges_count: 0}), {bulkCandidates});
+
+        await fireEvent.click(await screen.findByTestId('tx-form-charges-link-existing'));
+
+        await waitForPickerIds([-7, 21]);
+        expect(pickerIdCell(-7)?.textContent?.trim()).toBe('row 4');
+        expect(pickerIdCell(21)?.textContent?.trim()).toBe('#21');
+    });
+
+    it('a new Bulk row picked joins the section as that row (op-<tempId>); Apply carries it without linkNew', async () => {
+        answerPickers({withoutParent: () => []});
+        const bulkCandidates = vi.fn(() => ({rows: [bulkCharge(-7, 5, {_bulkKey: 'op-n-fee', _rowRef: 'row 4'}, {description: 'bulk fee'})], exclude: []}));
+        const onPushDraft = vi.fn();
+        bulkHosted(onPushDraft, txRow({id: 10, broker_id: 1, asset_id: 5, type: 'BUY', charges_count: 0}), {bulkCandidates});
+
+        await fireEvent.click(await screen.findByTestId('tx-form-charges-link-existing'));
+        await waitForPickerIds([-7]);
+        await pickRow(-7);
+        await fireEvent.click(screen.getByTestId('tx-picker-add'));
+        await waitFor(() => expect(screen.queryByTestId('tx-picker-modal')).toBeNull());
+
+        await waitFor(() => expect(rows().map((r) => r.getAttribute('data-charge-key'))).toEqual(['op-n-fee']));
+        expect(rows()[0]).toHaveAttribute('data-charge-id', '');
+
+        await waitFor(() => expect(screen.getByTestId('tx-form-save')).toBeEnabled());
+        await fireEvent.click(screen.getByTestId('tx-form-save'));
+        expect(onPushDraft).toHaveBeenCalledTimes(1);
+        const drafts = (onPushDraft.mock.calls[0][0] as {_charges: Array<Record<string, unknown>>})._charges;
+        expect(drafts).toHaveLength(1);
+        expect(drafts[0]).toMatchObject({key: 'op-n-fee', id: null, state: 'linked', type: 'FEE', original: null});
+        expect(drafts[0].linkNew).toBeFalsy();
+    });
+
+    it('a Bulk row already in the section (by its _bulkKey) is not offered again', async () => {
+        answerPickers({withoutParent: () => [charge(21, 5)]});
+        const handed = [{key: 'op-n-fee', id: null, type: 'FEE', cash: {amount: '2', code: 'EUR'}, description: '', original: null, state: 'linked'}];
+        const bulkCandidates = vi.fn(() => ({rows: [bulkCharge(-7, 5, {_bulkKey: 'op-n-fee', _rowRef: 'row 4'}), bulkCharge(-8, 5, {_bulkKey: 'op-n-fee2', _rowRef: 'row 5'})], exclude: []}));
+        bulkHosted(vi.fn(), {...txRow({id: 10, broker_id: 1, asset_id: 5, type: 'BUY', charges_count: 0}), _charges: handed}, {bulkCandidates});
+        await waitFor(() => expect(rows().map((r) => r.getAttribute('data-charge-key'))).toEqual(['op-n-fee']));
+
+        await fireEvent.click(await screen.findByTestId('tx-form-charges-link-existing'));
+
+        await waitForPickerIds([-8, 21]);
+    });
+
+    it('guard: bulkCandidates answering null leaves the DB rows exactly as today', async () => {
+        answerPickers({withoutParent: () => [charge(21, 5), charge(22, 5), charge(23, 9)]});
+        const bulkCandidates = vi.fn(() => null);
+        bulkHosted(vi.fn(), txRow({id: 10, broker_id: 1, asset_id: 5, type: 'BUY', charges_count: 0}), {bulkCandidates});
+
+        await fireEvent.click(await screen.findByTestId('tx-form-charges-link-existing'));
+
+        await waitForPickerIds([21, 22]);
+        expect(pickerIdCell(21)?.textContent?.trim(), 'the picker’s ID cell names a saved row #id').toBe('#21');
+    });
+
+    it('a new Bulk row picked, then trashed before Apply: offered again, and Apply does not carry it', async () => {
+        answerPickers({withoutParent: () => [charge(21, 5)]});
+        const bulkCandidates = vi.fn(() => ({rows: [bulkCharge(-7, 5, {_bulkKey: 'op-n-fee', _rowRef: 'row 4'})], exclude: []}));
+        const onPushDraft = vi.fn();
+        bulkHosted(onPushDraft, txRow({id: 10, broker_id: 1, asset_id: 5, type: 'BUY', charges_count: 0}), {bulkCandidates});
+
+        // A saved FEE picked and kept: the form has a change to apply, whatever the trash leaves behind.
+        await fireEvent.click(await screen.findByTestId('tx-form-charges-link-existing'));
+        await waitForPickerIds([-7, 21]);
+        await pickRow(21);
+        await pickRow(-7);
+        await fireEvent.click(screen.getByTestId('tx-picker-add'));
+        await waitFor(() => expect(screen.queryByTestId('tx-picker-modal')).toBeNull());
+        await waitFor(() =>
+            expect(
+                rows()
+                    .map((r) => r.getAttribute('data-charge-key'))
+                    .sort(),
+            ).toEqual(['op-n-fee', 'saved-21']),
+        );
+
+        await fireEvent.click(screen.getByTestId('tx-form-charge-remove-op-n-fee'));
+        await waitFor(() => expect(rows().map((r) => r.getAttribute('data-charge-key'))).toEqual(['saved-21']));
+
+        // Out of the section, the Bulk's row is a candidate again.
+        await fireEvent.click(screen.getByTestId('tx-form-charges-link-existing'));
+        await waitForPickerIds([-7]);
+        await fireEvent.click(screen.getByTestId('tx-picker-cancel'));
+        await waitFor(() => expect(screen.queryByTestId('tx-picker-modal')).toBeNull());
+
+        await waitFor(() => expect(screen.getByTestId('tx-form-save')).toBeEnabled());
+        await fireEvent.click(screen.getByTestId('tx-form-save'));
+        expect(onPushDraft).toHaveBeenCalledTimes(1);
+        const drafts = (onPushDraft.mock.calls[0][0] as {_charges: Array<Record<string, unknown>>})._charges;
+        expect(
+            drafts.map((d) => d.key),
+            'the trashed Bulk row is not in the answer: applyChargeDrafts leaves it where it is',
+        ).toEqual(['saved-21']);
+    });
+
+    it('a row in both sources is the Bulk’s: picked, its draft carries the Bulk’s values, not the database’s', async () => {
+        answerPickers({withoutParent: () => [charge(23, 5, {description: 'saved note of 23', cash: {code: 'EUR', amount: '-2'}})]});
+        const bulkCandidates = vi.fn(() => ({rows: [bulkCharge(23, 5, {_rowRef: '#23'}, {description: 'Bulk note of 23', cash: {code: 'EUR', amount: '-7'}})], exclude: []}));
+        const onPushDraft = vi.fn();
+        bulkHosted(onPushDraft, txRow({id: 10, broker_id: 1, asset_id: 5, type: 'BUY', charges_count: 0}), {bulkCandidates});
+
+        await fireEvent.click(await screen.findByTestId('tx-form-charges-link-existing'));
+        await waitForPickerIds([23]);
+        await pickRow(23);
+        await fireEvent.click(screen.getByTestId('tx-picker-add'));
+        await waitFor(() => expect(rowById(23)).toBeDefined());
+        await waitFor(() => expect(screen.queryByTestId('tx-picker-modal')).toBeNull());
+
+        await waitFor(() => expect(screen.getByTestId('tx-form-save')).toBeEnabled());
+        await fireEvent.click(screen.getByTestId('tx-form-save'));
+        expect(onPushDraft).toHaveBeenCalledTimes(1);
+        const drafts = (onPushDraft.mock.calls[0][0] as {_charges: Array<Record<string, unknown>>})._charges;
+        expect(drafts.find((d) => d.id === 23)).toMatchObject({id: 23, linkNew: true, state: 'linked', description: 'Bulk note of 23', cash: {amount: '7', code: 'EUR'}});
+    });
+});
