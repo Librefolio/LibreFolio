@@ -122,17 +122,19 @@
             "beforeValueHelp": "What the entry is worth today: the units you hold at the quote price, or the cash.",
             "targetShareHelp": "The share you chose for this entry in the Targets step, of the whole portfolio.",
             "targetValueHelp": "What the entry would be worth with exactly its target share of the whole portfolio today.",
-            "finalShareHelp": "Its value after the plan, as a share of the whole portfolio today, cash included. The money lost to fees and taxes counts in the uninvested row.",
+            "finalShareHelp": "Its value after the plan, as a share of the whole portfolio today, cash included. What the plan spends on fees and taxes is in the «Costs and fees» row.",
             "finalValueHelp": "What the entry is worth after the plan: the units you hold plus the ones bought, or the cash left.",
             "boughtHelp": "The value of what the plan buys of this Asset, at the quote price: without fees or price margin.",
             "residualHelp": "Value after the plan minus ideal value: positive if the entry ends above its share, negative if below.",
-            "uninvested": "Uninvested",
-            "uninvestedHelp": "Everything that is neither in an Asset nor in a cash with a target of its own: today, and after the plan, when it also counts the money lost to fees and taxes.",
             "minimum": "Minimum",
             "minimumHelp": "The minimum you set for this entry in the Targets step: its value after the plan does not go below it.",
             "maximum": "Maximum",
             "maximumHelp": "The maximum you set for this entry in the Targets step: its value after the plan does not go above it.",
-            "title": "Allocation per entry"
+            "title": "Allocation per entry",
+            "untargetedCash": "Cash with no target",
+            "untargetedCashHelp": "The cash with no target of its own and the contributions the plan does not deposit. Before the plan it is everything that is neither in an Asset nor in a cash entry with a target; after it, the same without the money the plan spends on costs.",
+            "costs": "Costs and fees",
+            "costsHelp": "What the plan spends: fees, exchange spreads, price margins, taxes and rounding. Nothing before the plan. With the cash with no target it makes up what is not invested."
           },
           "kpi": {
             "valueToday": "Worth today",
@@ -142,7 +144,7 @@
             "valueAfter": "Worth after",
             "valueAfterHelp": "The whole portfolio after the plan: the Assets and the cash left. It is today’s value less the money lost.",
             "valueAfterHeld": "in {assets, plural, one {# Asset} other {# Assets}} and {cash, plural, one {# cash} other {# cash entries}}",
-            "moneyLost": "Money lost",
+            "moneyLost": "Costs and fees",
             "moneyLostHelp": "What the plan costs you: fees, currency exchange spreads, price margins, taxes and rounding. Today’s value less this is the value after.",
             "noLoss": "Nothing lost",
             "foreignWithholding": "Foreign withholding tax",
@@ -150,11 +152,12 @@
             "largestDeviationHelp": "How far the entry furthest from its target is, after and before the plan, in percentage points: the gap between its share and its target share. Assets and cash with a target count; the uninvested does not.",
             "points": "{value} points",
             "beforePoints": "before: {value} points",
-            "uninvestedShare": "{value} of the total",
             "transfers": "{count, plural, one {# transfer} other {# transfers}}",
             "deviationItem": "{item}: {weight} against {target}",
             "beforePointsItem": "before: {value} points, {item} at {weight} against {target}",
-            "cashItem": "Cash {broker} {currency}"
+            "cashItem": "Cash {broker} {currency}",
+            "finalCash": "Left in cash",
+            "finalCashHelp": "All the cash at the end of the plan, in the valuation currency: the cash entries with and without a target and the contributions not used. Under it, currency by currency and each in its own: how much there was at the start and how much is left."
           },
           "header": {
             "score": "Score {value}",
@@ -210,7 +213,10 @@
             "showAll": "Show all ({count})",
             "showFewer": "Show fewer",
             "title": "Exposures – today, after the plan, target",
-            "help": "How the whole portfolio, cash included, spreads by Asset type, sector and country: today, after the plan, and your target. The cash is the last row of each chart. The charts do not change the plan."
+            "help": "How the whole portfolio, cash included, spreads by Asset type, sector and country: today, after the plan, and your target. The cash is the last row of each chart. The charts do not change the plan.",
+            "mapAbove": "Above the target",
+            "mapBelow": "Below the target",
+            "mapEqual": "In line with the target"
           }
         },
         "objectives": {

@@ -1,9 +1,11 @@
 <!--
   The Rebalancer's allocation (F4a of project 67, step 3; contract §6.2): before, target and after for every Asset, every
-  cash entry with a target and the «uninvested» row, last. The weights are shares of the whole portfolio, cash included:
-  before and after, both as shares of the total today (the money lost counts in the uninvested row). Every figure is a published field; a cell the row has no
-  field for stays empty: the uninvested row publishes no target field (the specification gives it a target of 0). The minimum and maximum columns exist only when an entry carries a
-  limit. The PAC keeps its own table (`AssetTable`); `ResultView` picks one by the Tool's profile.
+  cash entry with a target and, last, the uninvested row in its two parts (TL-5 of project 67): «Cassa senza obiettivo»
+  and «Costi e commissioni», the money the plan lost. The weights are shares of the whole portfolio, cash included: before
+  and after, both as shares of the total today. Every figure is a published field; a cell the row has no field for stays
+  empty: the two parts publish no target (the specification gives the uninvested row a target of 0). The minimum and
+  maximum columns exist only when an entry carries a limit. The PAC keeps its own table (`AssetTable`); `ResultView` picks
+  one by the Tool's profile.
 -->
 <script lang="ts">
     import {MediaQuery} from 'svelte/reactivity';
@@ -15,7 +17,7 @@
     import type {PlannerExactMoney, PlannerExactNumber, PlannerNumberAvailability, RebalancerSolution} from '../types';
     import {HINT} from '../ui';
     import ResultCell, {type ResultCellContent} from './ResultCell.svelte';
-    import {allocationRows, weightScale, type AllocationRow, type ResultNames} from './model';
+    import {allocationRows, isUninvestedPart, UNINVESTED_PARTS, weightScale, type AllocationRow, type ResultNames} from './model';
     import {withHelpCues} from '../shared/columnHelp';
     import TableColumns from '../shared/TableColumns.svelte';
     import {getPlannerProfile, storageKey, testId} from '../profile';
@@ -38,8 +40,10 @@
     const A = 'tools.pacAllocator.planner.result.assets';
     const R = 'tools.portfolioRebalancer.planner.result.allocation';
     const rows = $derived(allocationRows(solution));
-    const limited = $derived(rows.some((entry) => entry.kind !== 'uninvested' && (entry.row.minimum != null || entry.row.maximum != null)));
-    const scale = $derived(weightScale(rows.flatMap((entry) => (entry.kind === 'uninvested' ? [entry.row.final_weight] : [entry.row.target_weight, entry.row.final_weight]))));
+    const limited = $derived(rows.some((entry) => !isUninvestedPart(entry) && (entry.row.minimum != null || entry.row.maximum != null)));
+    const scale = $derived(weightScale(rows.flatMap((entry) => (isUninvestedPart(entry) ? [entry.row.final_weight] : [entry.row.target_weight, entry.row.final_weight]))));
+    /** The two parts' names and helps (TL-5 of project 67). */
+    const PART_KEYS = {untargeted_cash: 'untargetedCash', costs: 'costs'} as const;
     const assetLabel = (id: string) => [names.ticker(id), names.asset(id)].filter((part) => part).join(' ');
     const cell = (content: ResultCellContent) => ({type: 'custom' as const, component: ResultCell, props: {cell: content}});
     const EMPTY = {type: 'html' as const, html: ''};
@@ -49,10 +53,10 @@
     function item(entry: AllocationRow): ResultCellContent {
         if (entry.kind === 'asset') return {type: 'asset', assetId: entry.row.asset_id, label: assetLabel(entry.row.asset_id), asset: draft.asset(entry.row.asset_id) ?? null, testid: testId('allocation-item', profile)};
         if (entry.kind === 'cash') return {type: 'broker', brokerId: entry.row.broker_id, label: names.broker(entry.row.broker_id), broker: draft.broker(entry.row.broker_id) ?? null, currency: entry.row.currency, testid: testId('allocation-item', profile)};
-        return {type: 'label', text: $t(`${R}.uninvested`), testid: testId('allocation-item', profile), attrs: {'data-kind': 'uninvested'}};
+        return {type: 'label', text: $t(`${R}.${PART_KEYS[entry.kind]}`), testid: testId('allocation-item', profile), attrs: {'data-kind': entry.kind}};
     }
 
-    const target = (entry: AllocationRow) => (entry.kind === 'uninvested' ? undefined : entry.row.target_weight);
+    const target = (entry: AllocationRow) => (isUninvestedPart(entry) ? undefined : entry.row.target_weight);
 
     function numberColumn(id: string, header: () => string, help: () => string, content: (entry: AllocationRow) => ReturnType<typeof cell> | typeof EMPTY, minWidth = 120): ColumnDef<AllocationRow> {
         return {id, header, headerTooltip: help, type: 'number', sortable: false, filterable: false, align: 'right', minWidth, cell: content};
@@ -101,7 +105,7 @@
                 sortable: false,
                 filterable: false,
                 minWidth: 120,
-                cell: (entry) => (entry.kind === 'uninvested' ? EMPTY : cell({type: 'bars', target: entry.row.target_weight, final: entry.row.final_weight, scale})),
+                cell: (entry) => (isUninvestedPart(entry) ? EMPTY : cell({type: 'bars', target: entry.row.target_weight, final: entry.row.final_weight, scale})),
             },
             numberColumn(
                 'beforeValue',
@@ -114,7 +118,7 @@
                 'targetValue',
                 () => $t(`${A}.targetValue`, {default: 'Ideal value'}),
                 () => $t(`${R}.targetValueHelp`),
-                (entry) => money(entry.kind === 'uninvested' ? null : entry.row.target_value),
+                (entry) => money(isUninvestedPart(entry) ? null : entry.row.target_value),
                 150,
             ),
             numberColumn(
@@ -128,7 +132,7 @@
                 'residual',
                 () => $t(`${A}.residual`, {default: 'Gap from ideal'}),
                 () => $t(`${R}.residualHelp`),
-                (entry) => money(entry.kind === 'uninvested' ? null : entry.row.residual, true),
+                (entry) => money(isUninvestedPart(entry) ? null : entry.row.residual, true),
                 150,
             ),
             numberColumn(
@@ -144,14 +148,14 @@
                           'minimum',
                           () => $t(`${R}.minimum`),
                           () => $t(`${R}.minimumHelp`),
-                          (entry) => money(entry.kind === 'uninvested' ? null : entry.row.minimum),
+                          (entry) => money(isUninvestedPart(entry) ? null : entry.row.minimum),
                           130,
                       ),
                       numberColumn(
                           'maximum',
                           () => $t(`${R}.maximum`),
                           () => $t(`${R}.maximumHelp`),
-                          (entry) => money(entry.kind === 'uninvested' ? null : entry.row.maximum),
+                          (entry) => money(isUninvestedPart(entry) ? null : entry.row.maximum),
                           130,
                       ),
                   ]
@@ -185,8 +189,10 @@
         enableContextMenu={false}
         tableLayout="auto"
     />
-    <p class={HINT} data-testid={testId('allocation-uninvested-note', profile)}>
-        <span class="font-medium">{$t(`${R}.uninvested`)}:</span>
-        {$t(`${R}.uninvestedHelp`)}
-    </p>
+    {#each UNINVESTED_PARTS as part (part)}
+        <p class={HINT} data-testid={testId('allocation-uninvested-note', profile)} data-kind={part}>
+            <span class="font-medium">{$t(`${R}.${PART_KEYS[part]}`)}:</span>
+            {$t(`${R}.${PART_KEYS[part]}Help`)}
+        </p>
+    {/each}
 </div>

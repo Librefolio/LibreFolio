@@ -579,7 +579,7 @@
             "notesHelp": "I messaggi che il calcolo ha lasciato su questo piano, avvisi o informazioni. Quando ce ne sono, sono elencati subito sotto."
           },
           "kpi": {
-            "explicitCost": "Costi",
+            "explicitCost": "Costi e commissioni",
             "finalInvested": "Investito dopo",
             "fixedReference": "Base degli obiettivi",
             "funding": "Liquidità scelta: {selected}, di cui {reachable} raggiungibile dal piano e {trapped} no.",
@@ -590,7 +590,7 @@
             "help": {
               "fixedReference": "L’importo a cui si applicano le percentuali obiettivo: quanto già possiedi degli Asset scelti, più la liquidità che il piano può raggiungere.",
               "finalInvested": "Il valore degli Asset scelti a fine piano.",
-              "shortfall": "La parte della base che non finisce negli Asset: liquidità rimasta libera, costi e arrotondamenti.",
+              "shortfall": "La parte della base che non finisce negli Asset: liquidità rimasta libera, costi e arrotondamenti. Sotto, la liquidità valuta per valuta, ognuna nella sua: all’inizio e alla fine, versamenti compresi.",
               "explicitCost": "Commissioni dei Broker, spread dei cambi valuta e margini sul prezzo che hai impostato, su tutto il piano.",
               "orders": "Quanti ordini il piano ti chiede di inserire.",
               "selectedFunding": "La liquidità che hai scelto per il piano, esistente e nuova, ai tassi del passo FX. Una parte che non può raggiungere un Broker dove puoi comprare è segnata come non raggiungibile e resta fuori dalla base degli obiettivi."
@@ -622,7 +622,10 @@
               "nodeLimit": "Limite di nodi",
               "engine": "Motore"
             },
-            "autoConversions": "{count, plural, one {# conversione automatica} other {# conversioni automatiche}}"
+            "autoConversions": "{count, plural, one {# conversione automatica} other {# conversioni automatiche}}",
+            "cashTitle": "Liquidità all’inizio → alla fine",
+            "cashTo": "alla fine",
+            "cashUnused": "di cui versamenti non usati: {value}"
           },
           "ledger": {
             "fields": {

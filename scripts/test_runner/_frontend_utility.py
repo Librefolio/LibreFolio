@@ -706,6 +706,7 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/features/tools/pac-allocator/planner/result/StateNotice.test.ts",
             "src/lib/features/tools/pac-allocator/planner/result/ResultCell.test.ts",
             "src/lib/features/tools/pac-allocator/planner/result/ExposureBars.test.ts",
+            "src/lib/features/tools/pac-allocator/planner/result/ExposureSection.test.ts",
             "src/lib/features/tools/pac-allocator/planner/result/model.test.ts",
             "src/lib/features/tools/pac-allocator/planner/result/text.test.ts",
             "src/lib/features/tools/pac-allocator/planner/result/RefreshNotice.test.ts",

@@ -9,6 +9,10 @@
   from target» after and before (points) with the item each one names (X14: the score's references, and the share and target
   of the row they point to), «Uninvested», «Orders». Every one is a published field: none is a sum, a difference or a
   maximum of others.
+  TL-5 of project 67 (the developer's answers of 24/11): «Uninvested» becomes «Rimasto in cassa», all the cash at the end
+  (`plan_accounts.final_cash`), and «Money lost» «Costi e commissioni». Under the cash, currency by currency and each in
+  its own (`plan_accounts.cash_by_currency`), the cash at the start and at the end, and the contributions not used: in the
+  Rebalancer's tile and under the parts of the PAC's «Not invested», which keeps its figure (the shortfall, an objective).
 -->
 <script lang="ts">
     import {t} from '$lib/i18n';
@@ -39,8 +43,10 @@
 
     type Tone = keyof typeof BADGE;
     type Chip = {id: string; label: string; value?: string; tone: Tone};
-    type Kpi = 'fixed_reference' | 'final_invested' | 'shortfall' | 'selected_funding' | 'explicit_cost' | 'orders' | 'value_today' | 'value_after' | 'money_lost' | 'largest_deviation' | 'uninvested';
-    type Tile = {kpi: Kpi; label: string; help: string; value: string; chips: Chip[]};
+    type Kpi = 'fixed_reference' | 'final_invested' | 'shortfall' | 'selected_funding' | 'explicit_cost' | 'orders' | 'value_today' | 'value_after' | 'money_lost' | 'largest_deviation' | 'final_cash';
+    /** The cash of one currency, in that currency (TL-5): at the start, at the end, the contributions not used (null when 0). */
+    type CashLine = {currency: string; initial: string; final: string; unused: string | null};
+    type Tile = {kpi: Kpi; label: string; help: string; value: string; chips: Chip[]; cash?: CashLine[]};
 
     const COST_PARTS = [
         {field: 'buy_fees', key: `${RESULT_KEY}.ledger.fields.buy_fees`, fallback: 'Purchase fees'},
@@ -58,6 +64,11 @@
     const part = (id: string, label: string, value: PlannerExactMoney, tone: Tone = 'neutral'): Chip => ({id, label, value: money(value), tone});
 
     const trapped = $derived(solution !== null && shown(solution.accounting.trapped_funding));
+
+    /** The plan's cash currency by currency, as published (TL-5): nothing is summed or converted here. */
+    function cashLines(accounts: PlannerSolution['plan_accounts']): CashLine[] {
+        return accounts.cash_by_currency.map((row) => ({currency: row.currency, initial: money(row.initial), final: money(row.final), unused: shown(row.unused_contributions) ? money(row.unused_contributions) : null}));
+    }
 
     const R = 'tools.portfolioRebalancer.planner.result.kpi';
     /** The money lost, entry by entry (contract §6.1): each published part, never grouped. */
@@ -120,13 +131,7 @@
             tile('value_after', 'valueAfter', money(accounts.final_wealth), [{id: 'held', label: $t(`${R}.valueAfterHeld`, {values: held}), tone: 'neutral'}]),
             tile('money_lost', 'moneyLost', money(score.wealth_loss), losses.length > 0 ? losses : [{id: 'none', label: $t(`${R}.noLoss`), tone: 'success'}]),
             tile('largest_deviation', 'largestDeviation', $t(`${R}.points`, {values: {value: formatExactPoints(score.largest_deviation_after)}}), deviationChips(rebalancer)),
-            {
-                kpi: 'uninvested',
-                label: $t('tools.portfolioRebalancer.planner.result.allocation.uninvested'),
-                help: $t('tools.portfolioRebalancer.planner.result.allocation.uninvestedHelp'),
-                value: money(accounts.uninvested),
-                chips: [{id: 'share', label: $t(`${R}.uninvestedShare`, {values: {value: formatExactPercent(rebalancer.uninvested_row.final_weight)}}), tone: 'neutral'}],
-            },
+            {...tile('final_cash', 'finalCash', money(accounts.final_cash), []), cash: cashLines(accounts)},
             {
                 kpi: 'orders',
                 label: text('orders', 'Orders'),
@@ -182,7 +187,17 @@
         return [
             tile('fixed_reference', 'fixedReference', 'Base of the targets', 'The amount the target percentages apply to: what you already hold of the chosen Assets, plus the cash the plan can reach.', money(accounting.fixed_reference), base),
             tile('final_invested', 'finalInvested', 'Invested after', 'The value of the chosen Assets at the end of the plan.', money(accounting.final_invested), invested),
-            tile('shortfall', 'shortfall', 'Not invested', 'The part of the base that does not end up in the Assets: cash left free, costs and rounding.', money(accounting.shortfall), shortfall),
+            {
+                ...tile(
+                    'shortfall',
+                    'shortfall',
+                    'Not invested',
+                    'The part of the base that does not end up in the Assets: cash left free, costs and rounding. Under it, the cash currency by currency, each in its own: at the start and at the end, contributions included.',
+                    money(accounting.shortfall),
+                    shortfall,
+                ),
+                cash: cashLines(solution.plan_accounts),
+            },
             tile(
                 'selected_funding',
                 'selectedFunding',
@@ -257,6 +272,23 @@
                                         <li class={BADGE[chip.tone]} data-testid={testId('kpi-chip', profile)} data-chip={chip.id} data-tone={chip.tone}>
                                             <span>{chip.label}</span>
                                             {#if chip.value !== undefined}<span class="font-semibold tabular-nums">{chip.value}</span>{/if}
+                                        </li>
+                                    {/each}
+                                </ul>
+                            </dd>
+                        {/if}
+                        {#if tile.cash && tile.cash.length > 0}
+                            <dd class="mt-2 text-xs text-lf-secondary" data-testid={testId('kpi-cash', profile)}>
+                                <p class="text-lf-muted">{text('cashTitle', 'Cash at the start → at the end')}</p>
+                                <ul class="mt-0.5 space-y-0.5">
+                                    {#each tile.cash as line (line.currency)}
+                                        <li class="tabular-nums [overflow-wrap:anywhere]" data-testid={testId('kpi-cash-row', profile)} data-currency={line.currency}>
+                                            <span>{line.initial}</span>
+                                            <span aria-hidden="true">→</span><span class="sr-only">{text('cashTo', 'at the end')}</span>
+                                            <span class="font-semibold text-lf-primary">{line.final}</span>
+                                            {#if line.unused !== null}
+                                                <span class="block text-lf-muted" data-testid={testId('kpi-cash-unused', profile)}>{$t(`${KEY}.cashUnused`, {default: 'of which contributions not used: {value}', values: {value: line.unused}})}</span>
+                                            {/if}
                                         </li>
                                     {/each}
                                 </ul>

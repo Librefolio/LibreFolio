@@ -579,7 +579,7 @@
             "notesHelp": "The messages the calculation left about this plan, warnings or information. When there are any, they are listed just below."
           },
           "kpi": {
-            "explicitCost": "Costs",
+            "explicitCost": "Costs and fees",
             "finalInvested": "Invested after",
             "fixedReference": "Base of the targets",
             "funding": "Cash chosen: {selected}, of which {reachable} reachable by the plan and {trapped} not.",
@@ -590,7 +590,7 @@
             "help": {
               "fixedReference": "The amount the target percentages apply to: what you already hold of the chosen Assets, plus the cash the plan can reach.",
               "finalInvested": "The value of the chosen Assets at the end of the plan.",
-              "shortfall": "The part of the base that does not end up in the Assets: cash left free, costs and rounding.",
+              "shortfall": "The part of the base that does not end up in the Assets: cash left free, costs and rounding. Under it, the cash currency by currency, each in its own: at the start and at the end, contributions included.",
               "explicitCost": "Broker fees, currency exchange spreads and the price margins you set, over the whole plan.",
               "orders": "How many orders the plan asks you to place.",
               "selectedFunding": "The cash you chose for the plan, existing and new, at the rates of the FX step. A part that cannot reach a Broker where you can buy is marked not reachable and stays out of the base of the targets."
@@ -622,7 +622,10 @@
               "nodeLimit": "Node limit",
               "engine": "Engine"
             },
-            "autoConversions": "{count, plural, one {# automatic conversion} other {# automatic conversions}}"
+            "autoConversions": "{count, plural, one {# automatic conversion} other {# automatic conversions}}",
+            "cashTitle": "Cash at the start → at the end",
+            "cashTo": "at the end",
+            "cashUnused": "of which contributions not used: {value}"
           },
           "ledger": {
             "fields": {

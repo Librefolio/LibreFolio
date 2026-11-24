@@ -579,7 +579,7 @@
             "notesHelp": "Los mensajes que el cálculo dejó sobre este plan, avisos o información. Cuando los hay, se listan justo debajo."
           },
           "kpi": {
-            "explicitCost": "Costes",
+            "explicitCost": "Costes y comisiones",
             "finalInvested": "Invertido después",
             "fixedReference": "Base de los objetivos",
             "funding": "Efectivo elegido: {selected}, del que {reachable} es alcanzable por el plan y {trapped} no.",
@@ -590,7 +590,7 @@
             "help": {
               "fixedReference": "El importe al que se aplican los porcentajes objetivo: lo que ya tienes de los activos elegidos, más el efectivo que el plan puede alcanzar.",
               "finalInvested": "El valor de los activos elegidos al final del plan.",
-              "shortfall": "La parte de la base que no acaba en los activos: efectivo que queda libre, costes y redondeos.",
+              "shortfall": "La parte de la base que no acaba en los Activos: liquidez que queda libre, costes y redondeos. Debajo, la liquidez divisa por divisa, cada una en la suya: al inicio y al final, aportaciones incluidas.",
               "explicitCost": "Comisiones de los brókeres, spreads de cambio de divisa y márgenes de precio que fijaste, en todo el plan.",
               "orders": "Cuántas órdenes te pide el plan que coloques.",
               "selectedFunding": "El efectivo que elegiste para el plan, existente y nuevo, a los tipos de cambio del paso Cambio. Una parte que no puede llegar a un bróker donde puedes comprar se marca como no alcanzable y queda fuera de la base de los objetivos."
@@ -622,7 +622,10 @@
               "nodeLimit": "Límite de nodos",
               "engine": "Motor"
             },
-            "autoConversions": "{count, plural, one {# conversión automática} other {# conversiones automáticas}}"
+            "autoConversions": "{count, plural, one {# conversión automática} other {# conversiones automáticas}}",
+            "cashTitle": "Liquidez al inicio → al final",
+            "cashTo": "al final",
+            "cashUnused": "de los cuales aportaciones no usadas: {value}"
           },
           "ledger": {
             "fields": {

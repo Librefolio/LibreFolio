@@ -122,17 +122,19 @@
             "beforeValueHelp": "Lo que vale hoy la partida: las participaciones que tienes al precio de cotización, o el efectivo.",
             "targetShareHelp": "La parte que elegiste para esta partida en el paso Objetivos, sobre toda la cartera.",
             "targetValueHelp": "Lo que valdría la partida con exactamente su parte objetivo de toda la cartera de hoy.",
-            "finalShareHelp": "Su valor después del plan, como parte de toda la cartera de hoy, efectivo incluido. El dinero perdido en comisiones e impuestos cuenta en la fila de lo no invertido.",
+            "finalShareHelp": "Su valor después del plan, como parte de toda la cartera de hoy, efectivo incluido. Lo que el plan gasta en comisiones e impuestos está en la fila «Costes y comisiones».",
             "finalValueHelp": "Lo que vale la partida después del plan: las participaciones que tienes más las compradas, o el efectivo restante.",
             "boughtHelp": "El valor de lo que el plan compra de este Activo, al precio de cotización: sin comisiones ni margen sobre el precio.",
             "residualHelp": "Valor después del plan menos valor ideal: positivo si la partida acaba por encima de su parte, negativo si por debajo.",
-            "uninvested": "No invertido",
-            "uninvestedHelp": "Todo lo que no está ni en un Activo ni en un efectivo con su propio objetivo: hoy, y después del plan, cuando también cuenta el dinero perdido en comisiones e impuestos.",
             "minimum": "Mínimo",
             "minimumHelp": "El mínimo que pusiste para esta partida en el paso Objetivos: su valor después del plan no baja de él.",
             "maximum": "Máximo",
             "maximumHelp": "El máximo que pusiste para esta partida en el paso Objetivos: su valor después del plan no lo supera.",
-            "title": "Asignación por partida"
+            "title": "Asignación por partida",
+            "untargetedCash": "Liquidez sin objetivo",
+            "untargetedCashHelp": "La liquidez sin objetivo propio y las aportaciones que el plan no usa. Antes del plan es todo lo que no está en un Activo ni en una liquidez con objetivo; después, lo mismo sin el dinero que el plan gasta en costes.",
+            "costs": "Costes y comisiones",
+            "costsHelp": "Lo que el plan gasta: comisiones, diferenciales de cambio, márgenes de precio, impuestos y redondeos. Nada antes del plan. Junto con la liquidez sin objetivo forma lo que no se invierte."
           },
           "kpi": {
             "valueToday": "Vale hoy",
@@ -142,7 +144,7 @@
             "valueAfter": "Valdrá después",
             "valueAfterHelp": "Toda la cartera después del plan: los Activos y el efectivo que queda. Es el valor de hoy menos el dinero perdido.",
             "valueAfterHeld": "en {assets, plural, one {# Activo} other {# Activos}} y {cash, plural, one {# efectivo} other {# efectivos}}",
-            "moneyLost": "Dinero perdido",
+            "moneyLost": "Costes y comisiones",
             "moneyLostHelp": "Lo que te cuesta el plan: comisiones, diferenciales de cambio, márgenes sobre el precio, impuestos y redondeos. El valor de hoy menos esto es el valor después.",
             "noLoss": "Nada perdido",
             "foreignWithholding": "Retención extranjera",
@@ -150,11 +152,12 @@
             "largestDeviationHelp": "Lo lejos que está de su objetivo la partida más alejada, después y antes del plan, en puntos porcentuales: la diferencia entre su parte y su parte objetivo. Cuentan los Activos y el efectivo con un objetivo; lo no invertido no.",
             "points": "{value} puntos",
             "beforePoints": "antes: {value} puntos",
-            "uninvestedShare": "{value} del total",
             "transfers": "{count, plural, one {# transferencia} other {# transferencias}}",
             "deviationItem": "{item}: {weight} frente a {target}",
             "beforePointsItem": "antes: {value} puntos, {item} al {weight} frente a {target}",
-            "cashItem": "Efectivo {broker} {currency}"
+            "cashItem": "Efectivo {broker} {currency}",
+            "finalCash": "Queda en liquidez",
+            "finalCashHelp": "Toda la liquidez al final del plan, en la divisa de valoración: las liquideces con y sin objetivo y las aportaciones no usadas. Debajo, divisa por divisa y cada una en la suya: cuánta había al inicio y cuánta queda."
           },
           "header": {
             "score": "Puntuación {value}",
@@ -210,7 +213,10 @@
             "showAll": "Show all ({count})",
             "showFewer": "Show fewer",
             "title": "Exposures – today, after the plan, target",
-            "help": "How the whole portfolio, cash included, spreads by Asset type, sector and country: today, after the plan, and your target. The cash is the last row of each chart. The charts do not change the plan."
+            "help": "How the whole portfolio, cash included, spreads by Asset type, sector and country: today, after the plan, and your target. The cash is the last row of each chart. The charts do not change the plan.",
+            "mapAbove": "Por encima del objetivo",
+            "mapBelow": "Por debajo del objetivo",
+            "mapEqual": "En línea con el objetivo"
           }
         },
         "objectives": {

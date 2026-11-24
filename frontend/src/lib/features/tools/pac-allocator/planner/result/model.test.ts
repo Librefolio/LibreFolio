@@ -297,11 +297,12 @@ describe('planSteps — the backend counter, transfers included (F4a step 1)', (
 describe('allocationRows — before, target and after (F4a step 3)', () => {
     const solution = browser.result.primary_solution as unknown as RebalancerSolution;
 
-    it('before, target and after rows include cash entries and the uninvested row', () => {
+    it('before, target and after rows include cash entries and the uninvested row’s two parts, last (TL-5)', () => {
         const rows = allocationRows(solution);
-        expect(rows.map((row) => row.kind)).toEqual([...solution.asset_rows.map(() => 'asset'), ...solution.cash_rows.map(() => 'cash'), 'uninvested']);
-        expect(rows.map((row) => row.id)).toEqual([...solution.asset_rows.map((row) => row.asset_id), ...solution.cash_rows.map((row) => `cash:${row.broker_id}:${row.currency}`), 'uninvested']);
-        expect(rows.at(-1)?.row).toBe(solution.uninvested_row);
+        expect(rows.map((row) => row.kind)).toEqual([...solution.asset_rows.map(() => 'asset'), ...solution.cash_rows.map(() => 'cash'), 'untargeted_cash', 'costs']);
+        expect(rows.map((row) => row.id)).toEqual([...solution.asset_rows.map((row) => row.asset_id), ...solution.cash_rows.map((row) => `cash:${row.broker_id}:${row.currency}`), 'untargeted_cash', 'costs']);
+        expect(rows.at(-2)?.row).toBe(solution.uninvested_row.untargeted_cash);
+        expect(rows.at(-1)?.row).toBe(solution.uninvested_row.costs);
     });
 
     it('the PAC has its Assets only', () => {

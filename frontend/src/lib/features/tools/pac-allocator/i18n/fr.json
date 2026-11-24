@@ -579,7 +579,7 @@
             "notesHelp": "Les messages que le calcul a laissés sur ce plan, avertissements ou informations. Quand il y en a, ils sont listés juste en dessous."
           },
           "kpi": {
-            "explicitCost": "Coûts",
+            "explicitCost": "Frais et commissions",
             "finalInvested": "Investi après",
             "fixedReference": "Base des cibles",
             "funding": "Liquidités choisies : {selected}, dont {reachable} atteignables par le plan et {trapped} non.",
@@ -590,7 +590,7 @@
             "help": {
               "fixedReference": "Le montant auquel s’appliquent les pourcentages cibles : ce que vous détenez déjà des actifs choisis, plus les liquidités que le plan peut atteindre.",
               "finalInvested": "La valeur des actifs choisis à la fin du plan.",
-              "shortfall": "La part de la base qui ne finit pas dans les actifs : liquidités restées libres, coûts et arrondis.",
+              "shortfall": "La part de la base qui ne finit pas dans les Actifs : liquidités restées libres, frais et arrondis. En dessous, les liquidités devise par devise, chacune dans la sienne : au début et à la fin, versements compris.",
               "explicitCost": "Frais des courtiers, spreads de change et marges de prix que vous avez définies, sur tout le plan.",
               "orders": "Le nombre d’ordres que le plan vous demande de passer.",
               "selectedFunding": "Les liquidités que vous avez choisies pour le plan, existantes et nouvelles, aux taux de l’étape Change. Une partie qui ne peut atteindre aucun courtier où vous pouvez acheter est marquée non atteignable et reste hors de la base des cibles."
@@ -622,7 +622,10 @@
               "nodeLimit": "Limite de nœuds",
               "engine": "Moteur"
             },
-            "autoConversions": "{count, plural, one {# conversion automatique} other {# conversions automatiques}}"
+            "autoConversions": "{count, plural, one {# conversion automatique} other {# conversions automatiques}}",
+            "cashTitle": "Liquidités au début → à la fin",
+            "cashTo": "à la fin",
+            "cashUnused": "dont versements non utilisés : {value}"
           },
           "ledger": {
             "fields": {
