@@ -402,18 +402,29 @@ test.describe('Broker CRUD on a disposable account', () => {
         await waitForSettled(page.getByTestId('brokers-page'));
         for (const id of ids) await expect(page.getByTestId(`broker-card-${id}`)).toBeVisible({timeout: ROUND_TRIP_MS});
 
+        // Both edges are read in ONE evaluate: two awaited reads straddle a reflow (at 390 px the toolbar wraps and the page moves under
+        // the second read), and the gap then measures the reflow, not the card. The poll waits for the layout to settle after a resize.
+        const edges = (brokerIds: number[]) =>
+            page.evaluate((entries) => {
+                const bottom = (testId: string) => document.querySelector<HTMLElement>(`[data-testid="${testId}"]`)?.getBoundingClientRect().bottom ?? Number.NaN;
+                return entries.map((id) => ({id, card: bottom(`broker-card-${id}`), footer: bottom(`broker-card-footer-${id}`)}));
+            }, brokerIds);
+
         for (const width of [1280, 768, 390]) {
             await page.setViewportSize({width, height: 900});
-            const boxes: Array<{card: {y: number; height: number}; footer: {y: number; height: number}}> = [];
-            for (const id of ids) {
-                const card = await page.getByTestId(`broker-card-${id}`).boundingBox();
-                const footer = await page.getByTestId(`broker-card-footer-${id}`).boundingBox();
-                if (!card || !footer) throw new Error(`broker ${id} has no card or no footer at ${width}px`);
-                boxes.push({card, footer});
-                // The card's own 1 px border sits under the footer.
-                expect(Math.abs(card.y + card.height - (footer.y + footer.height)), `broker ${id} at ${width}px: the footer ends on the card's bottom edge`).toBeLessThanOrEqual(2);
+            // The card's own 1 px border sits under the footer.
+            await expect.poll(async () => Math.max(...(await edges(ids)).map((edge) => Math.abs(edge.card - edge.footer))), {message: `at ${width}px a footer does not end on its card's bottom edge`, timeout: 5_000}).toBeLessThanOrEqual(2);
+            if (width >= 768) {
+                await expect
+                    .poll(
+                        async () => {
+                            const [tall, short] = await edges(ids);
+                            return Math.abs(tall.card - short.card);
+                        },
+                        {message: `at ${width}px the two cards share a row, so they end together`, timeout: 5_000},
+                    )
+                    .toBeLessThanOrEqual(1);
             }
-            if (width >= 768) expect(Math.abs(boxes[0].card.y + boxes[0].card.height - (boxes[1].card.y + boxes[1].card.height)), `at ${width}px the two cards share a row, so they end together`).toBeLessThanOrEqual(1);
         }
     });
 });
