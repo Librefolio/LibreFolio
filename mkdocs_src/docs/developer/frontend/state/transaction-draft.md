@@ -586,9 +586,11 @@ Every `hidden` outcome of `linkSelection` wins; then a selected row marked for d
 reason `deleted` (restore the row first); then the page's reasons. A disabled «Link» is the selection bar's pattern
 (`aria-disabled`, the reason in a `Tooltip` reachable by tap and keyboard, `data-reason`). The confirmation is the same
 `TxChargesActionModal`, in `link` mode; `confirmLinkPanel` applies `linkInBulk`, which sets each charge's `chargeOf` to
-the parent and drops `parentUnlink`, `parentLinkId` and `byParentChoice` (keeping `followsParent` as it is), then opens
+the parent and drops `parentUnlink`, `parentLinkId`, `byParentChoice` and `clonedFields` (keeping `followsParent` as it is), then opens
 the group and empties the selection. Nothing else is needed for the save: `chargeParentFields` already turns `chargeOf`
-into `parent_ref` (a new parent) or `parent_transaction_id` (a saved one).
+into `parent_ref` (a new parent) or `parent_transaction_id` (a saved one). A row of the Bulk picked in a parent's
+Form (66 TL-2, «Link an existing charge…», candidates from `bulkChargeCandidates`) comes back through
+`applyChargeDrafts`, which gives it the same operation.
 
 **Naming a row: `txRowRef`.** One helper in `chargeLinkRules.ts` names a row in the texts of the charges:
 `#123` for a saved row, `row N` (`transactions.bulk.rowRef`, no `#`, which in the workspace's banners already means a

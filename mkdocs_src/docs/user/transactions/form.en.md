@@ -105,7 +105,7 @@ In the form, you change the links in the [bulk workspace](index.md#bulk-workspac
 The form of a Buy, a Sell, a Dividend, an Interest, a Deposit or a Withdrawal lists its charges in **Linked charges**:
 
 - **+ Fee** and **+ Tax** add a new charge: type its amount (in the transaction's currency unless you pick another) and, if you like, a note. It takes the transaction's broker, asset and date. A new charge without an amount shows *Enter the amount of this charge*, and **Apply** waits.
-- **Link an existing charge…** picks Fees and Taxes of the same broker and asset that are not linked to anything yet.
+- **Link an existing charge…** picks Fees and Taxes of the same broker and asset that are not linked to anything yet. In the bulk editor it also offers the rows of the batch you have not saved yet, named by their row number, and the charges you unlinked there; a row you marked for deletion, or linked to another transaction there, is not offered. Picking a row of the batch moves that row under this transaction: it is never copied.
 - **Unlink** takes a saved charge out of the list: when you save, it stays as a transaction of its own. **Delete** deletes it.
 
 Under the list, a read-only line adds it up: **Total charged** on a Buy or a Withdrawal (the amount plus its charges), **Net received** on a Sell, a Dividend, an Interest or a Deposit (the amount minus its charges). There is one figure per currency: a charge in another currency is never converted.
