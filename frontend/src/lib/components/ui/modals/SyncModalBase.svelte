@@ -43,9 +43,11 @@
         zIndex?: number;
         /** Max width token passed to ModalBase (default max-w-md) */
         maxWidth?: string;
+        /** Why starting is off right now (a pair of the sync is already syncing, 81 U35): the Start button is off and says it. */
+        startBlockedReason?: string | null;
     }
 
-    let {open = $bindable(), dateStart, dateEnd, title, description, testId, headerIcon: HeaderIcon = RefreshCw, headerIconBg = 'bg-lf-warning-soft', headerIconColor = 'text-lf-warning', sections, onsynced, onclose, zIndex = 50, maxWidth = 'max-w-md'}: Props = $props();
+    let {open = $bindable(), dateStart, dateEnd, title, description, testId, headerIcon: HeaderIcon = RefreshCw, headerIconBg = 'bg-lf-warning-soft', headerIconColor = 'text-lf-warning', sections, onsynced, onclose, zIndex = 50, maxWidth = 'max-w-md', startBlockedReason = null}: Props = $props();
 
     // =========================================================================
     // State
@@ -505,6 +507,9 @@
     </div>
 
     <!-- Footer -->
+    {#if startBlockedReason}
+        <p class="px-6 pb-2 text-xs text-lf-warning" data-testid="sync-modal-blocked">{startBlockedReason}</p>
+    {/if}
     <div class="flex justify-end gap-2 px-6 py-4 border-t border-lf-subtle">
         <button class="px-4 py-2 text-sm font-medium bg-lf-panel text-lf-secondary rounded-lg hover:bg-lf-neutral transition-colors" data-testid="sync-modal-close" onclick={onclose}>
             {hasResults || isTimeout ? ($t('common.close') ?? 'Close') : ($t('common.cancel') ?? 'Cancel')}
@@ -515,7 +520,7 @@
                 data-busy={syncing}
                 data-testid="sync-modal-start"
                 onclick={hasResults && failedItems.length > 0 ? handleRetryFailed : handleSyncAll}
-                disabled={syncing || itemCount === 0}
+                disabled={syncing || itemCount === 0 || !!startBlockedReason}
             >
                 <RefreshCw size={15} class={syncing ? 'animate-spin' : ''} />
                 {#if failedItems.length > 0 && hasResults}
