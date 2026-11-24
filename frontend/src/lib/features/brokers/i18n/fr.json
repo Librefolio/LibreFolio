@@ -301,8 +301,15 @@
       "methodLifoHint": "LIFO : une vente clôt d'abord le lot le plus récent",
       "incomeMarkerReward": "Récompense",
       "rewardAllocation": {
-        "label": "Répartir les récompenses sur les lots",
-        "hint": "Chaque récompense rejoint les lots détenus chez son courtier la veille, sans coût, au lieu d'ouvrir son propre lot. Une simple vue : rien n'est enregistré."
+        "label": "Où vont les récompenses",
+        "hint": "Récompenses à part : chaque récompense est un lot à part, à sa valeur à la réception. Récompenses dans les lots : chaque récompense rejoint les lots détenus chez son courtier la veille, sans coût. Une simple vue : rien n'est enregistré.",
+        "ownLot": "Récompenses à part",
+        "merged": "Récompenses dans les lots"
+      },
+      "rewardGroup": {
+        "title": "{n, plural, one {# récompense} other {# récompenses}}",
+        "open": "Afficher les lots des récompenses",
+        "close": "Masquer les lots des récompenses"
       }
     },
     "createdInSystem": "Créé dans le Système",

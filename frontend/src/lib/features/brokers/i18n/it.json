@@ -301,8 +301,15 @@
       "methodLifoHint": "LIFO: una vendita chiude per primo il lotto più recente",
       "incomeMarkerReward": "Premio",
       "rewardAllocation": {
-        "label": "Distribuisci i premi sui lotti",
-        "hint": "Ogni premio entra nei lotti tenuti presso il suo broker il giorno prima, senza costo, invece di aprire un lotto suo. È solo una vista: non si salva nulla."
+        "label": "Dove vanno i premi",
+        "hint": "Premi a parte: ogni premio è un lotto suo, al valore alla ricezione. Premi nei lotti: ogni premio entra nei lotti tenuti presso il suo broker il giorno prima, senza costo. È solo una vista: non si salva nulla.",
+        "ownLot": "Premi a parte",
+        "merged": "Premi nei lotti"
+      },
+      "rewardGroup": {
+        "title": "{n, plural, one {# premio} other {# premi}}",
+        "open": "Mostra i lotti dei premi",
+        "close": "Nascondi i lotti dei premi"
       }
     },
     "createdInSystem": "Creato nel Sistema",

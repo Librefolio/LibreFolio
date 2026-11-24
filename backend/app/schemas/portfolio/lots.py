@@ -108,6 +108,7 @@ class LotSummarySchema(StrictModel):
 
     lot_id: int = Field(..., description="Stable lot identifier. Equals opening_transaction_id.")
     opening_transaction_id: int = Field(..., description="Transaction that opened the lot. Equals lot_id.")
+    opening_kind: Optional[LotTimelineEventKind] = Field(None, description="The kind of the event that opened the lot: BUY, REWARD, ADJUSTMENT_IN (SELL for a short lot); None when unknown.")
     asset_id: int
     direction: LotDirection
     opening_broker_id: int

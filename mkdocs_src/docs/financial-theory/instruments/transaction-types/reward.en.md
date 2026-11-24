@@ -80,7 +80,7 @@ A value of `0` is a value: an airdrop with no market yet is received at zero, an
 By default each reward opens **its own lot**, dated on the day of the reward, at its value on receipt. The income is
 attributed to the lots you already held the day before, like a dividend's.
 
-The lots panel also offers a second view, **Spread rewards across lots**. It answers a different question: «how much did
+The lots panel also offers a second view, **Rewards in lots** (in the selector **Rewards apart** / **Rewards in lots**, shown when the scope holds a Reward). It answers a different question: «how much did
 the units I bought really cost me, counting the rewards they produced?»
 
 - The units of each reward **join the lots the broker held at the close of the day before**, in proportion to their size,
@@ -89,8 +89,8 @@ the units I bought really cost me, counting the rewards they produced?»
 - When the broker held no lot of that asset the day before (an airdrop of a new token), the reward keeps a lot of its own
   at a cost of zero, and an information note says so.
 
-The two views never change your transactions: the switch only changes how the panel reads them, and it goes back to the
-first view when you open another asset.
+The two views never change your transactions: the selector only changes how the panel reads them, and it goes back to
+the first view when you open another asset or change the brokers.
 
 ---
 

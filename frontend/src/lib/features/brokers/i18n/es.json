@@ -301,8 +301,15 @@
       "methodLifoHint": "LIFO: una venta cierra primero el lote más reciente",
       "incomeMarkerReward": "Recompensa",
       "rewardAllocation": {
-        "label": "Repartir las recompensas entre los lotes",
-        "hint": "Cada recompensa se une a los lotes mantenidos en su bróker el día anterior, sin coste, en lugar de abrir un lote propio. Solo una vista: no se guarda nada."
+        "label": "Dónde van las recompensas",
+        "hint": "Recompensas aparte: cada recompensa es un lote propio, a su valor al recibirla. Recompensas en los lotes: cada recompensa se une a los lotes mantenidos en su bróker el día anterior, sin coste. Solo una vista: no se guarda nada.",
+        "ownLot": "Recompensas aparte",
+        "merged": "Recompensas en los lotes"
+      },
+      "rewardGroup": {
+        "title": "{n, plural, one {# recompensa} other {# recompensas}}",
+        "open": "Mostrar los lotes de las recompensas",
+        "close": "Ocultar los lotes de las recompensas"
       }
     },
     "createdInSystem": "Creado en el Sistema",

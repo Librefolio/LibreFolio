@@ -195,6 +195,23 @@ class _ConfiguredFxPairs:
         return self._pairs
 
 
+def _lot_opening_kinds(engine_result: FifoEngineResult) -> dict[int, LotTimelineEventKind]:
+    """The kind of the event that opened each lot (STK-2c): its opening transaction's first classified event.
+
+    The same source as the timeline's opening row: a BUY, a REWARD, an ADJUSTMENT_IN (a SELL for a short lot); a
+    REWARD_MERGE that found no lot held the day before opened a lot of its own, a REWARD. A transaction that opened no lot
+    is never asked for.
+    """
+    kinds: dict[int, LotTimelineEventKind] = {}
+    for event in engine_result.classified_events:
+        if event.transaction_id in kinds:
+            continue
+        kind = "REWARD" if event.kind == "REWARD_MERGE" else event.kind
+        if kind in LotTimelineEventKind.__members__:
+            kinds[event.transaction_id] = LotTimelineEventKind(kind)
+    return kinds
+
+
 class LotsAnalysisService:
     def __init__(self, db: AsyncSession) -> None:
         self.db = db
@@ -1285,6 +1302,7 @@ class LotsAnalysisService:
     ) -> list[LotSummarySchema]:
         latest_market_price = market_prices.get(max(market_prices)) if market_prices else None
         out: list[LotSummarySchema] = []
+        opening_kinds = _lot_opening_kinds(engine_result)
         for lot_id in selected_ids:
             lot = lots_by_id[lot_id]
             current_custody = [
@@ -1334,6 +1352,7 @@ class LotsAnalysisService:
                 LotSummarySchema(
                     lot_id=lot.lot_id,
                     opening_transaction_id=lot.opening_transaction_id,
+                    opening_kind=opening_kinds.get(lot.opening_transaction_id),
                     asset_id=lot.asset_id,
                     direction=lot.direction,
                     opening_broker_id=lot.opening_broker_id,

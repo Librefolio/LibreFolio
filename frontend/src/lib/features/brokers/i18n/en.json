@@ -301,8 +301,15 @@
       "methodLifoHint": "LIFO: a sale closes the most recent lot first",
       "incomeMarkerReward": "Reward",
       "rewardAllocation": {
-        "label": "Spread rewards across lots",
-        "hint": "Each reward joins the lots held at its broker the day before, at no cost, instead of opening a lot of its own. A view only: nothing is saved."
+        "label": "Where the rewards go",
+        "hint": "Rewards apart: each reward is a lot of its own, at its value on receipt. Rewards in lots: each reward joins the lots held at its broker the day before, at no cost. A view only: nothing is saved.",
+        "ownLot": "Rewards apart",
+        "merged": "Rewards in lots"
+      },
+      "rewardGroup": {
+        "title": "{n, plural, one {# reward} other {# rewards}}",
+        "open": "Show the reward lots",
+        "close": "Hide the reward lots"
       }
     },
     "createdInSystem": "Created in System",

@@ -204,7 +204,10 @@
     let rewardAllocation = $state<'OWN_LOT' | 'MERGED'>('OWN_LOT');
     /** Whether the scope has a reward (its opening or merge rows, or its income): the switch shows only then, or while on. */
     const scopeHasRewards = $derived(lotEvents.some((event) => event.kind === 'REWARD' || event.kind === 'REWARD_MERGE') || incomeEvents.some((event) => event.type === 'REWARD'));
+    // P-27: the selector shows only when the panel's scope holds a REWARD. While MERGED is on it stays, so the user can always
+    // go back; MERGED is reachable only from a scope with rewards and starts over at OWN_LOT when the scope changes.
     const showRewardAllocation = $derived(scopeHasRewards || rewardAllocation === 'MERGED');
+    const REWARD_ALLOCATIONS = ['OWN_LOT', 'MERGED'] as const;
     /** The method whose block is on screen, published on the panel (`data-matching-method`): it follows `activeMethod` once the block is applied. */
     let shownMethod = $state<LotMatchingMethod | null>(null);
     /** The answers last put on screen: a reload that finds the same cached answer leaves the charts alone. */
@@ -397,11 +400,12 @@
         panelEl.scrollIntoView({behavior: 'smooth', block: 'start'});
     }
 
-    // Another asset, or the panel opened again: the rewards in lots of their own (STK-3). Declared before the loads, so the
-    // first request for the new asset is already OWN_LOT, never a MERGED one thrown away.
-    let allocationScope: number | null = null;
+    // Another asset, other brokers, or the panel opened again: the rewards in lots of their own (STK-3, P-27). Declared before
+    // the loads, so the first request for the new scope is already OWN_LOT, never a MERGED one thrown away; a scope with no
+    // reward never keeps MERGED, so the selector never shows there.
+    let allocationScope: string | null = null;
     $effect(() => {
-        const scope = open && assetId != null ? assetId : null;
+        const scope = open && assetId != null ? `${assetId}|${[...brokerIds].sort((a, b) => a - b).join(',')}` : null;
         if (scope === allocationScope) return;
         allocationScope = scope;
         untrack(() => (rewardAllocation = 'OWN_LOT'));
@@ -593,18 +597,28 @@
                     {/each}
                 </div>
                 {#if showRewardAllocation}
-                    <!-- Project 79, STK-3: the rewards' units spread over the lots held the day before, a view of its own (a request of its own) -->
-                    <button
-                        type="button"
-                        class="mr-1 rounded-lg border border-lf-subtle px-2.5 py-1 text-xs font-medium transition-colors focus-visible:outline-lf-focus {rewardAllocation === 'MERGED' ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}"
-                        onclick={() => (rewardAllocation = rewardAllocation === 'MERGED' ? 'OWN_LOT' : 'MERGED')}
-                        aria-pressed={rewardAllocation === 'MERGED'}
+                    <!-- Project 79, STK-3 / P-27: where the rewards' units go — lots of their own, or spread over the lots held
+                         the day before (a request of its own). Shown only when the scope holds a REWARD. -->
+                    <div
+                        class="mr-1 flex overflow-hidden rounded-lg border border-lf-subtle text-xs font-medium"
+                        role="group"
+                        aria-label={$_('brokers.lots.rewardAllocation.label')}
                         title={$_('brokers.lots.rewardAllocation.hint')}
-                        data-testid="lots-reward-allocation-toggle"
+                        data-testid="lots-reward-allocation-selector"
                         data-state={rewardAllocation}
                     >
-                        {$_('brokers.lots.rewardAllocation.label')}
-                    </button>
+                        {#each REWARD_ALLOCATIONS as allocation, index (allocation)}
+                            <button
+                                type="button"
+                                class="px-2.5 py-1 transition-colors focus-visible:outline-lf-focus {index > 0 ? 'border-l border-lf-subtle' : ''} {rewardAllocation === allocation ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}"
+                                onclick={() => (rewardAllocation = allocation)}
+                                aria-pressed={rewardAllocation === allocation}
+                                data-testid="lots-reward-allocation-{allocation}"
+                            >
+                                {$_(allocation === 'OWN_LOT' ? 'brokers.lots.rewardAllocation.ownLot' : 'brokers.lots.rewardAllocation.merged')}
+                            </button>
+                        {/each}
+                    </div>
                 {/if}
                 <button aria-label={$_('brokers.lots.viewAsset')} class="p-1.5 rounded-lg text-lf-muted hover:text-lf-link hover:bg-lf-hover transition-colors" onclick={() => goto(`/assets/${assetId}`)} data-testid="lots-analysis-panel-asset-link" title={$_('brokers.lots.viewAsset')}>
                     <ExternalLink size={16} />
