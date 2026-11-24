@@ -147,6 +147,9 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 - **AI Export: los análisis «Rendimiento y factores de mercado» responden primero**: el prompt pide una respuesta directa de una página aproximadamente, que termina con las preguntas útiles para hacer después, en lugar de un largo informe en secciones fijas.
 - **Tablas**: un clic derecho en una fila abre el mismo menú que su ⋮ (dentro de un campo de texto sigue el menú del navegador, para Pegar), y la barra de selección se sitúa en el borde derecho de la tabla. En Archivos, eliminar o descargar varios archivos a la vez ahora pide confirmación antes.
 - **Recompensas en especie desde las importaciones**: Coinbase (staking, recompensas, ingresos de cursos), Crypto.com (recompensas en cripto, intereses Earn, cashback de la tarjeta), Freetrade (acciones gratuitas), Bitvavo y CoinTracking (staking) las importan como Recompensas: las unidades recibidas sin efectivo. Una acción gratuita de Freetrade ya no resta efectivo de la cuenta, y una recompensa de Crypto.com sin cantidad en cripto ya no es un interés en efectivo: un aviso la nombra. El CSV genérico lee las filas `REWARD` (también `staking`, `airdrop`…) y pide su valor. Un archivo ya importado marca cada recompensa como probable duplicado de la fila antigua. La ventana de la Recompensa propone solo el cierre del día de la recompensa.
+- **Reenlazar eventos**: «Crear evento» ahora crea el evento que falta y enlaza la transacción con él en un solo paso.
+- **Riesgo**: la «Tasa libre de riesgo» ahora está junto a «Comparado con», en el bloque «¿Me están pagando por este riesgo?» del Panel, de la página de un bróker y del laboratorio. En un solo activo el bloque «Respecto a una referencia» desaparece, con su tabla: la comparación sigue en el Panel, en la página de un bróker y en el laboratorio.
+- **Perfil del activo**: un valor que ya existía antes del perfil ahora aparece como «Sistema» en los últimos cambios, y los identificadores libres de un activo forman una fila de etiquetas bajo «Otros identificadores».
 
 #### 🎯 Asignador PAC y Herramientas
 
@@ -201,6 +204,11 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 - Editor de transacciones: tras «Separar par» en una transferencia guardada, editar dos veces la mitad de retirada ya no la convierte en un depósito con importe positivo, lo que hacía fallar «Guardar todo».
 - Editor de transacciones: tras «Separar par» en una transferencia guardada, una mitad cuyo tipo cambias en su formulario (un depósito convertido en retirada, o al revés) ahora se guarda con ese tipo: hasta ahora «Guardar todo» fallaba.
 - Asignador PAC: en un servidor con carga, un cálculo ya terminado podía aparecer como fallido, «El proceso de cálculo se detuvo inesperadamente.». Ahora su resultado se lee.
+- Tablas: en una tabla ordenada por una columna, escribir en una celda editable (por ejemplo el peso de los países y sectores de un activo) ya no aleja la fila del cursor; el orden se actualiza al salir del campo o pulsar Intro.
+- Brókeres: el pie de la tarjeta de un bróker ahora queda al fondo de la tarjeta, sin una franja vacía debajo, cuando la tarjeta vecina es más alta.
+- Riesgo › «¿Qué pasa si…?» en el móvil: los campos de los parámetros de la «Simulación» ahora tienen todos el mismo ancho.
+- Tabla de activos: las columnas del último precio y de las Δ son lo bastante anchas para sus cifras; un precio largo o un «+423,30 %» en francés ya no invade la columna vecina.
+- FX › «Añadir Par»: la leyenda «Proveedores» ahora muestra el icono de cada proveedor, como las rutas de debajo.
 
 ### ⚠️ Cambios incompatibles
 

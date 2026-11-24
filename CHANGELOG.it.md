@@ -147,6 +147,9 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 - **AI Export: le analisi «Performance e cause di mercato» rispondono subito**: il prompt chiede una risposta diretta di circa una pagina, che finisce con le domande utili da fare dopo, invece di un lungo rapporto a sezioni fisse.
 - **Tabelle**: il clic destro su una riga apre lo stesso menu del suo ⋮ (dentro un campo di testo resta il menu del browser, per Incolla), e la barra della selezione sta sul bordo destro della tabella. In File, eliminare o scaricare più file insieme ora chiede prima una conferma.
 - **Premi in natura dagli import**: Coinbase (staking, premi, guadagni dei corsi), Crypto.com (premi in cripto, interessi Earn, cashback della carta), Freetrade (azioni gratuite), Bitvavo e CoinTracking (staking) li importano come Premi: le unità ricevute senza contante. Un'azione gratuita di Freetrade non toglie più contante dal conto, e un premio Crypto.com senza quantità in cripto non è più un interesse in contanti: un avviso lo nomina. Il CSV generico legge le righe `REWARD` (anche `staking`, `airdrop`…) e ne chiede il valore. Un file già importato segna ogni premio come probabile doppione della vecchia riga. La finestra del Premio propone solo la chiusura del giorno del premio.
+- **Ricollega eventi**: «Crea evento» ora crea l'evento mancante e ci collega la transazione in un solo passo.
+- **Rischio**: il «Tasso privo di rischio» ora sta accanto a «Confrontato con», nel blocco «Sto venendo pagato per questo rischio?» della Dashboard, della pagina di un broker e del laboratorio. Sul singolo asset il blocco «Rispetto a un riferimento» non c'è più, con la sua tabella: il confronto resta nella Dashboard, nella pagina di un broker e nel laboratorio.
+- **Profilo dell'asset**: un valore che c'era già prima del profilo ora compare come «Sistema» nelle ultime modifiche, e gli identificatori liberi di un asset sono una riga di etichette sotto «Altri identificatori».
 
 #### 🎯 Allocatore PAC e Strumenti
 
@@ -201,6 +204,11 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 - Editor delle transazioni: dopo «Scollega coppia» su un trasferimento salvato, modificare due volte la metà del prelievo non la trasforma più in un deposito con importo positivo, che faceva fallire «Salva tutto».
 - Editor delle transazioni: dopo «Scollega coppia» su un trasferimento salvato, una metà di cui scambi il tipo nel suo modulo (un deposito reso prelievo, o il contrario) ora si salva con quel tipo: finora «Salva tutto» falliva.
 - Allocatore PAC: su un server sotto carico, un calcolo già finito poteva risultare fallito, «Il processo di calcolo si è fermato inaspettatamente.». Ora il suo risultato viene letto.
+- Tabelle: in una tabella ordinata per una colonna, scrivere in una cella modificabile (per esempio il peso dei paesi e dei settori di un asset) non sposta più la riga via dal cursore; l'ordine si aggiorna quando esci dal campo o premi Invio.
+- Broker: il piede della scheda di un broker ora sta in fondo alla scheda, senza una fascia vuota sotto, quando la scheda vicina è più alta.
+- Rischio › «Cosa succede se…?» sul telefono: i campi dei parametri della «Simulazione» ora hanno tutti la stessa larghezza.
+- Tabella degli asset: le colonne dell'ultimo prezzo e delle Δ sono larghe abbastanza per le loro cifre, quindi un prezzo lungo o un «+423,30 %» in francese non finisce più nella colonna accanto.
+- FX › «Aggiungi Coppia»: la legenda «Provider» ora mostra l'icona di ogni provider, come le route sotto.
 
 ### ⚠️ Modifiche incompatibili
 

@@ -147,6 +147,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **AI Export: the «Portfolio Performance & Market Drivers» and «Broker Performance & Market Drivers» analyses answer first**: the prompt now asks for a direct answer of about a page, ending with the follow-up questions worth asking, instead of a long report in fixed sections.
 - **Tables**: a right click on a row opens the same menu as its ⋮ (inside a text field the browser's own menu stays, for Paste), and the selection bar sits on the table's right edge. In Files, deleting or downloading several files at once now asks for confirmation first.
 - **Rewards in kind from imports**: Coinbase (staking, rewards, learning income), Crypto.com (crypto rewards, earn interest, card cashback), Freetrade (free shares), Bitvavo and CoinTracking (staking) now import them as Rewards: the units received with no cash. A Freetrade free share no longer takes cash from the account, and a Crypto.com reward with no crypto amount is no longer cash interest: a warning names it. The Generic CSV reads `REWARD` rows (also `staking`, `airdrop`…) and asks for their value. A file imported before marks each reward as a likely duplicate of the old row. The Reward form suggests only the close of the reward's own day.
+- **Relink events**: «Create event» now creates the missing event and links the transaction to it in one step.
+- **Risk**: the «Risk-free rate» now sits beside «Compared with», in the block «Am I being paid for this risk?» on the Dashboard, on a broker's page and in the asset-set laboratory. On a single asset the block «Compared with a reference» is gone, with its table: the comparison stays on the Dashboard, on a broker's page and in the laboratory.
+- **Asset profile**: a value that was there before the profile existed now reads «System» in the latest changes, and an asset's free identifiers appear as one row of chips under «Other identifiers».
 
 #### 🎯 PAC allocator and Tools
 
@@ -201,6 +204,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Transactions editor: after «Split pair» on a saved transfer, editing the withdrawal half twice no longer turns it into a deposit with a positive amount, which made «Save All» fail.
 - Transactions editor: after «Split pair» on a saved transfer, a half whose type you swap in its form (a deposit made a withdrawal, or the other way) is now saved with that type: until now «Save All» failed.
 - PAC allocator: on a busy server, a calculation that had finished could be shown as failed, «The calculation process stopped unexpectedly.». Its result is now read.
+- Tables: in a table sorted on a column, typing in an editable cell (for example the weight of an asset's countries and sectors) no longer moves the row away from the cursor; the order updates when you leave the field or press Enter.
+- Brokers: the footer of a broker card now sits at the bottom of the card, with no empty band under it, when a neighbouring card is taller.
+- Risk › «What if…?» on a phone: the «Simulation» parameter fields now all have the same width.
+- Assets table: the last-price and Δ columns are wide enough for their figures, so a long price or a French «+423,30 %» no longer runs into the next column.
+- FX › «Add Pair»: the «Providers» legend now shows each provider's icon, as the routes below it do.
 
 ### ⚠️ Breaking changes
 
