@@ -254,14 +254,12 @@ class TestRiskRequest:
         assert request.scope.apply_ownership_share is True
 
     @pytest.mark.asyncio
-    async def test_the_broker_filter_follows_its_switch(self, session, monkeypatch):
+    async def test_the_measures_follow_the_broker_filter(self, session):
+        # D10, decided (78 L10): the export's brokers, with the owner's share, always; the switch is gone.
         _FakeRiskService.response_factory = lambda request: _both_ok()
         await _build_risk_concentration(_context(session, _scope(broker_scope=(7, 3))), {})
-        assert _FakeRiskService.captured[-1]["request"].scope.broker_ids == [3, 7]
-
-        monkeypatch.setattr(risk_evidence_module, "RISK_EVIDENCE_FOLLOWS_BROKER_FILTER", False)
-        await _build_risk_concentration(_context(session, _scope(broker_scope=(7, 3))), {})
-        assert _FakeRiskService.captured[-1]["request"].scope.broker_ids is None
+        scope = _FakeRiskService.captured[-1]["request"].scope
+        assert (scope.broker_ids, scope.apply_ownership_share) == ([3, 7], True)
 
 
 # =============================================================================
@@ -340,17 +338,6 @@ class TestTrueCash:
         await _build_risk_concentration(_context(session, scope), {})
 
         assert [(call["resource_key"], call["scope"]) for call in _FakeReport.calls] == [(PORTFOLIO_REPORT_RESOURCE, scope)]
-
-    @pytest.mark.asyncio
-    async def test_with_d10_off_and_a_filter_it_reads_the_whole_portfolio(self, session, monkeypatch):
-        monkeypatch.setattr(risk_evidence_module, "RISK_EVIDENCE_FOLLOWS_BROKER_FILTER", False)
-        _FakeRiskService.response_factory = lambda request: _both_ok()
-
-        await _build_risk_concentration(_context(session, _scope(broker_scope=(7, 3))), {})
-
-        (call,) = _FakeReport.calls
-        assert call["resource_key"] is not PORTFOLIO_REPORT_RESOURCE, "the filtered summary is not the scope Risk measured"
-        assert call["scope"].broker_scope == ()
 
     @pytest.mark.asyncio
     async def test_an_overdraft_is_a_negative_share(self, session):

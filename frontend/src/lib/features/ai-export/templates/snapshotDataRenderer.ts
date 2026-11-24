@@ -1677,7 +1677,7 @@ const COMPACT_COMPONENT_VERSIONS: ReadonlyMap<string, ReadonlySet<number>> = new
     ['broker.reconciliation', new Set([1, 2])],
     ['portfolio.income_timeline', new Set([1, 2, 3])],
     ['broker.cost_efficiency', new Set([1, 2])],
-    ['portfolio.drawdown_summary', new Set([1, 2])],
+    ['portfolio.drawdown_summary', new Set([1, 2, 3])],
     ['broker.drawdown_summary', new Set([1, 2])],
     ['asset.drawdown_summary', new Set([1, 2])],
     ['portfolio.asset_drawdown_snapshot', new Set([1, 2])],

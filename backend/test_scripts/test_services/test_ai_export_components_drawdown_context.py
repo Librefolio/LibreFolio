@@ -19,6 +19,7 @@ import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession
 
 import backend.app.services.ai_export.components.drawdown_context as drawdown_module
+import backend.app.services.ai_export.components.risk_evidence as risk_evidence_module
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.common import Currency, OpenDateRangeModel
 from backend.app.schemas.portfolio.data_quality import DataQualityReport
@@ -39,6 +40,7 @@ from backend.app.services.ai_export.components.drawdown_context import (
     _build_portfolio_drawdown,
 )
 from backend.app.services.ai_export.components.envelope import SectionEnvelope
+from backend.app.services.ai_export.components.payloads.portfolio_broker import export_risk_scope
 from backend.app.services.ai_export.components.types import BuildScope, DetailLevel, Domain
 from backend.app.services.ai_export.datasets.catalog import build_dataset_registry
 from backend.app.services.ai_export.dependencies import BuildContext, build_bucket_plan_for_scope
@@ -249,6 +251,24 @@ class TestPortfolioDrawdown:
         assert payload.return_basis == "twrr"
         assert payload.calculation_basis == "historical_twrr"
         assert payload.calculation_currency == "EUR"
+
+    @pytest.mark.asyncio
+    async def test_portfolio_drawdown_measures_the_exports_brokers_with_the_owners_share(self, session):
+        # 78 L10: the brokers of the positions, never every accessible broker (`broker_ids=None` until version 2).
+        _FakeDateSentinels.inception = date(2019, 6, 15)
+        _FakeRiskService.response_factory = lambda request: RiskQueryResponse.model_construct(items=[_ok_result(_drawdown_output(return_basis=RiskReturnBasis.TWRR, calculation_basis="historical_twrr"))])
+
+        await _build_portfolio_drawdown(_context(session, _portfolio_scope(broker_scope=(7, 3))), {})
+
+        request = _FakeRiskService.captured[0]["request"]
+        assert request.scope.broker_ids == [3, 7]
+        assert request.scope.apply_ownership_share is True, "the portfolio counts an owner's share of each broker"
+        assert _FakeDateSentinels.captured[0]["broker_ids"] == [3, 7], "the history starts on the same brokers"
+
+    def test_drawdown_and_risk_evidence_read_one_scope_function(self):
+        # 78 L10: one function builds the Risk scope of both, so they can never measure different brokers.
+        assert drawdown_module.export_risk_scope is export_risk_scope
+        assert risk_evidence_module.export_risk_scope is export_risk_scope
 
     @pytest.mark.asyncio
     async def test_portfolio_without_any_transaction_keeps_the_period_start(self, session):
@@ -470,8 +490,9 @@ class TestDrawdownCatalogWiring:
         ):
             spec = registry.get(component_id)
             assert spec.output_model is output_model
-            # MF-D2: a total loss keeps its section with remaining_to_peak_ratio null. Before MF-D2: 1.
-            assert spec.version == 2
+            # MF-D2: a total loss keeps its section with remaining_to_peak_ratio null. Before MF-D2: 1. 78 L10: the
+            # portfolio drawdown measures the export's brokers, not every accessible one: 3.
+            assert spec.version == (3 if component_id == "portfolio.drawdown_summary" else 2)
             assert spec.dependencies == deps
 
     def test_drawdown_datasets_excluded_from_all_data(self):

@@ -32,7 +32,6 @@ Rules, decided with the AI Export consultant on 23/11/2026 (journal, 78 `L8-anal
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import replace
 from datetime import date as Date
 from enum import StrEnum
 
@@ -41,13 +40,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.logging_config import get_logger
 from backend.app.schemas.common import DateRangeModel, StrictModel
-from backend.app.schemas.portfolio.report import PortfolioReportResponse
 from backend.app.schemas.risk.outputs import RiskContributionOutput, RiskCorrelationOutput, RiskVarCvarOutput
 from backend.app.schemas.risk.results import RiskAnalyticResult, RiskQueryResponse
-from backend.app.schemas.risk.scope import PortfolioRiskScope, RiskAnalyticRequest, RiskQueryRequest
-from backend.app.schemas.risk.vocabulary import RiskCompositionPolicy, RiskMode, RiskResultStatus, RiskScopeKind, RiskValueStatus
+from backend.app.schemas.risk.scope import RiskAnalyticRequest, RiskQueryRequest
+from backend.app.schemas.risk.vocabulary import RiskCompositionPolicy, RiskMode, RiskResultStatus, RiskValueStatus
 from backend.app.services.ai_export.components.envelope import SectionEnvelope
-from backend.app.services.ai_export.components.payloads.portfolio_broker import counts_ownership_share, load_portfolio_report
+from backend.app.services.ai_export.components.payloads.portfolio_broker import export_risk_scope, load_portfolio_report
 from backend.app.services.ai_export.components.resources import PORTFOLIO_REPORT_RESOURCE
 from backend.app.services.ai_export.components.spec import ComponentSpec
 from backend.app.services.ai_export.components.types import BuildScope, Domain, PeriodBehavior, ResourceKey
@@ -74,17 +72,10 @@ PAIRS_MAX_HIGH = 8
 PAIRS_LOW_COUNT = 3
 """The least correlated pairs among the same holdings: where diversification works."""
 
-RISK_EVIDENCE_FOLLOWS_BROKER_FILTER = True
-"""D10, the developer's to decide: True measures the export's broker filter, the scope of the positions printed beside
-these measures; False measures the whole portfolio, as the Dashboard's Risk tab and `portfolio.drawdown_summary` do.
-Without a filter both give the same brokers. The one switch of that choice."""
-
 _CONTRIBUTION_INSTANCE_ID = "ai_export_risk_concentration"
 _BAD_MONTH_INSTANCE_ID = "ai_export_bad_month"
 _CORRELATION_INSTANCE_ID = "ai_export_correlated_pairs"
 _RISK_EVIDENCE_RESOURCE: ResourceKey[RiskQueryResponse] = ResourceKey("portfolio.risk_evidence_result", RiskQueryResponse)
-# The whole portfolio's report, read for the cash share only when D10 is off and the export has a broker filter.
-_WHOLE_PORTFOLIO_REPORT_RESOURCE: ResourceKey[PortfolioReportResponse] = ResourceKey("portfolio.risk_evidence_whole_report", PortfolioReportResponse)
 
 WEIGHT_BASIS = "Weights and losses are shares of the net worth of the exported scope (cash included) on composition_as_of. " "Cash, value in transit and the holdings left out of the measures count as zero risk."
 WINDOW_SEMANTICS = "Measured on today's holdings over the analyzed window, not on the AI period. A holding quoted only recently " "moves the start of the window for every holding (window_shortened_by)."
@@ -291,17 +282,12 @@ def risk_evidence_window(scope: BuildScope) -> DateRangeModel:
     return DateRangeModel(start=months_before(scope.period_end, RISK_EVIDENCE_WINDOW_MONTHS), end=scope.period_end)
 
 
-def _risk_scope(scope: BuildScope) -> PortfolioRiskScope:
-    broker_ids = (list(scope.broker_scope) or None) if RISK_EVIDENCE_FOLLOWS_BROKER_FILTER else None
-    return PortfolioRiskScope(kind=RiskScopeKind.PORTFOLIO, broker_ids=broker_ids, apply_ownership_share=counts_ownership_share(scope))
-
-
 async def _load_risk_evidence(context: BuildContext, scope: BuildScope) -> RiskQueryResponse | None:
     """The one Risk request of the three sections, memoized; None (logged) when it could not be completed."""
 
     async def _loader(session: AsyncSession) -> RiskQueryResponse:
         request = RiskQueryRequest(
-            scope=_risk_scope(scope),
+            scope=export_risk_scope(scope),
             date_range=risk_evidence_window(scope),
             target_currency=scope.target_currency,
             mode=RiskMode.CURRENT_COMPOSITION,
@@ -384,16 +370,12 @@ def _concentration_rows(output: RiskContributionOutput) -> tuple[RiskConcentrati
 async def _true_cash_weight(context: BuildContext, scope: BuildScope) -> float | None:
     """The cash of the scope Risk measured over its net worth, from the report the summary reads (78 L8c).
 
-    With D10 on, or without a broker filter, Risk measures the export's own scope: the summary's report, memoized, so the
-    share is the summary's to the digit. With D10 off and a filter, Risk measures the whole portfolio, so the whole
-    portfolio's report. None, logged, when the report cannot be read or the net worth is not positive.
+    Risk measures the export's own brokers (`export_risk_scope`, 78 L10), the scope of the summary's report: that report,
+    memoized, so the share is the summary's to the digit. None, logged, when the report cannot be read or the net worth
+    is not positive.
     """
-    if RISK_EVIDENCE_FOLLOWS_BROKER_FILTER or not scope.broker_scope:
-        report_scope, resource_key = scope, PORTFOLIO_REPORT_RESOURCE
-    else:
-        report_scope, resource_key = replace(scope, broker_scope=()), _WHOLE_PORTFOLIO_REPORT_RESOURCE
     try:
-        report = await load_portfolio_report(context, report_scope, resource_key)
+        report = await load_portfolio_report(context, scope, PORTFOLIO_REPORT_RESOURCE)
     except ResourceLoadError as error:
         # Isolation boundary: an unreadable report fails this section only, never the snapshot.
         if traceback_reported(error):
@@ -571,7 +553,6 @@ __all__ = [
     "REASON_RISK_ERROR",
     "REASON_RISK_MISSING",
     "REASON_RISK_SHARES_UNAVAILABLE",
-    "RISK_EVIDENCE_FOLLOWS_BROKER_FILTER",
     "RISK_EVIDENCE_WINDOW_MONTHS",
     "CorrelatedPairRow",
     "PortfolioCorrelatedPairsPayload",

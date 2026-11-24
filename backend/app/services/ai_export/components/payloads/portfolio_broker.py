@@ -45,6 +45,8 @@ from backend.app.schemas.portfolio.history import PortfolioHistoryPoint
 from backend.app.schemas.portfolio.lots import LotAnalysisType, LotsAnalysisResponse, LotSummarySchema
 from backend.app.schemas.portfolio.report import PortfolioReportQuery, PortfolioReportResponse
 from backend.app.schemas.portfolio.summary import AllocationItem, AssetPeriodContribution, OtherPeriodEffect, OtherPeriodEffectCode, PortfolioHolding, UnallocatedContribution
+from backend.app.schemas.risk.scope import PortfolioRiskScope
+from backend.app.schemas.risk.vocabulary import RiskScopeKind
 from backend.app.services.ai_export.components.resources import LotsResultsResource
 from backend.app.services.ai_export.components.types import BuildScope, DetailLevel, Domain, ResourceKey
 from backend.app.services.ai_export.temporal.plan import Bucket, BucketPlan
@@ -905,6 +907,18 @@ async def resolve_accessible_broker_ids(session: AsyncSession, user_id: int) -> 
     """
     result = await session.execute(select(BrokerUserAccess.broker_id).where(BrokerUserAccess.user_id == user_id))
     return sorted({int(broker_id) for broker_id in result.scalars().all()})
+
+
+def export_risk_scope(scope: BuildScope) -> PortfolioRiskScope:
+    """The Risk scope of a Portfolio or Broker export: the export's own brokers, counted as the export counts them (78 L10).
+
+    The one place that builds it, for the drawdown (`drawdown_context.py`) and the risk evidence (`risk_evidence.py`),
+    so the two can never measure different brokers. It is the scope the positions and the cash read. `broker_ids=None`
+    reads in Risk as every accessible broker, so it would count the brokers the export left out: a scope with brokers
+    always passes them. An empty one (never from `prepare_request`, which resolves an unfiltered request to the
+    accessible brokers) passes None, the same set, since Risk refuses an empty list.
+    """
+    return PortfolioRiskScope(kind=RiskScopeKind.PORTFOLIO, broker_ids=list(scope.broker_scope) or None, apply_ownership_share=counts_ownership_share(scope))
 
 
 def counts_ownership_share(scope: BuildScope) -> bool:
