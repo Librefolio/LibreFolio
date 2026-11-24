@@ -152,6 +152,23 @@ describe('the main report', () => {
         expect(get(data).summary).toMatchObject({net_worth: 20});
     });
 
+    it('the brokers of the summary on screen move with the report, not with the filter (RSK-F)', async () => {
+        const {data, state, answers} = setup();
+        expect(get(data).appliedBrokerIds).toBeNull();
+        await data.loadAll();
+        expect(get(data).appliedBrokerIds).toEqual([1, 2]);
+        // The filter narrows to broker 2: until its report lands, the summary on screen is still the one of brokers 1 and 2.
+        state.scope = {...state.scope, brokerIds: [2]};
+        const pending = deferred<PortfolioReport | null>();
+        answers.push(() => pending.promise);
+        const load = data.loadAll();
+        expect(get(data).appliedBrokerIds).toEqual([1, 2]);
+        pending.resolve(report({summary: {net_worth: 7}}));
+        await load;
+        expect(get(data).summary).toMatchObject({net_worth: 7});
+        expect(get(data).appliedBrokerIds).toEqual([2]);
+    });
+
     it('a fresh cache is not asked again, unless forced', async () => {
         const {data, cache, calls} = setup();
         cache.set('main', {report: report(), stale: false});
@@ -664,6 +681,24 @@ describe('the live poll (FB-28)', () => {
         expect(kindOf(light.call)).toBe('light');
         expect(light.force).toBe(true);
         expect(light.call).toMatchObject({brokerIds: [1, 2], start: '2026-01-01', end: '2026-10-28', currency: 'EUR', includeHistory: false, includeAllocationHistory: false});
+    });
+
+    it('a poll that writes the summary of a newer filter writes its brokers too (RSK-F)', async () => {
+        // The report of brokers 1 and 2 lands after the filter moved to broker 2, whose own report is not asked yet: the poll
+        // then follows broker 2, and the summary it writes is broker 2's.
+        const kit = setup();
+        const pending = deferred<PortfolioReport | null>();
+        kit.answers.push(() => pending.promise);
+        const load = kit.data.loadAll();
+        kit.state.scope = {...kit.state.scope, brokerIds: [2]};
+        pending.resolve(report(live()));
+        await load;
+        expect(get(kit.data).appliedBrokerIds).toEqual([1, 2]);
+        kit.answers.push(() => Promise.resolve(lightReport('40')));
+        await kit.pollers[0].options.run();
+        expect(kit.calls[kit.calls.length - 1].call).toMatchObject({brokerIds: [2]});
+        expect(get(kit.data).summary?.net_worth).toEqual(money('40'));
+        expect(get(kit.data).appliedBrokerIds).toEqual([2]);
     });
 
     it('shows the new summary and moves the last step of the history, in the background', async () => {

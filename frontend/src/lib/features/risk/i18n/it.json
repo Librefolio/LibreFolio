@@ -44,7 +44,6 @@
     "dashboardTitle": "Rischio portafoglio",
     "brokerTitle": "Rischio broker",
     "internalSubset": "Rischio interno del sottoinsieme broker",
-    "dashboardFullPortfolio": "Il rischio usa l'intero portafoglio; il filtro broker della dashboard non viene applicato.",
     "states": {
       "partial": "Parziale",
       "empty": "Nessun risultato",

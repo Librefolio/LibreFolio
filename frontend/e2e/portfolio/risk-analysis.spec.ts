@@ -1558,9 +1558,9 @@ function comparisonAssetIds(requests: RiskRequest[], brokerSets: BrokerSets): nu
 
 /**
  * The brokers this user owns, ascending: OWNER, with a share unset or above zero, as
- * `getOwnedBrokers()` keeps them. Since R2/N the Dashboard asks its risk over every one of
- * them, whatever its broker filter — the scope that tells its requests apart from Broker
- * Detail's — and `heldBenchmarkCandidate` walks them.
+ * `getOwnedBrokers()` keeps them. Since R2/N the Dashboard with no broker filter asks its
+ * risk over every one of them — the scope that tells its requests apart from Broker
+ * Detail's; a filter narrows it (RSK-F) — and `heldBenchmarkCandidate` walks them.
  *
  * Read from the backend through `page.request`, which no route of `installRiskMocks`
  * intercepts, and never hard-coded. The Dashboard's tests read it twice, just before the
@@ -1977,8 +1977,8 @@ test.describe('Risk analysis functional integration', () => {
         // absent node from a hidden one.
         await expect(page.getByTestId('risk-beta-banner')).toHaveCount(0);
 
-        // Dashboard's scope is the whole portfolio, so it must carry no subset
-        // label. Broker Detail asserts the mirror image; the pair is what makes
+        // The unfiltered Dashboard's scope is every owned broker, so it must carry
+        // no subset label (a broker filter adds it, RSK-F: dashboard-cache). Broker Detail asserts the mirror image; the pair is what makes
         // the label mean something, since its text is translated and unassertable.
         await expect(panel.getByTestId('risk-scope-label')).toHaveCount(0);
 

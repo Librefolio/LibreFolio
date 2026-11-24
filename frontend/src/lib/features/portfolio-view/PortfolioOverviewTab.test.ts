@@ -39,6 +39,7 @@ function snapshot(cashBalances: {code: string; amount: string}[] | undefined): P
         groupedSummary: null,
         pnlCandles: null,
         appliedCurrency: 'EUR',
+        appliedBrokerIds: null,
         reportLoading: false,
         contributionLoading: false,
         contributionRefreshing: false,
