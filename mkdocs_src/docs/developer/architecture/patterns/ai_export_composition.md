@@ -255,11 +255,17 @@ Export NAV buckets.
 
 Scope and basis are honestly typed per domain:
 
-| Component                    | Risk scope                          | Basis                    | Currency                             |
-| ---------------------------- | ----------------------------------- | ------------------------ | ------------------------------------ |
-| `portfolio.drawdown_summary` | whole portfolio (`broker_ids=None`) | TWRR / `historical_twrr` | build target currency                |
-| `broker.drawdown_summary`    | selected broker ID(s)               | TWRR / `historical_twrr` | build target currency                |
-| `asset.drawdown_summary`     | single Asset                        | native `price_only`      | asset observed native price currency |
+| Component                    | Risk scope                                                           | Basis                    | Currency                             |
+| ---------------------------- | -------------------------------------------------------------------- | ------------------------ | ------------------------------------ |
+| `portfolio.drawdown_summary` | the export's brokers, an owner's share of each (`export_risk_scope`) | TWRR / `historical_twrr` | build target currency                |
+| `broker.drawdown_summary`    | the selected broker, whole (`export_risk_scope`)                     | TWRR / `historical_twrr` | build target currency                |
+| `asset.drawdown_summary`     | single Asset                                                         | native `price_only`      | asset observed native price currency |
+
+`export_risk_scope` (`components/payloads/portfolio_broker.py`) is the one function that builds the Risk scope of a
+Portfolio or Broker export, for the drawdown and for the [Risk Evidence](#risk-evidence), so the two can never measure
+different brokers. Until 78 L10 the portfolio drawdown asked Risk for `broker_ids=None`, which Risk reads as every
+broker the user can access: a broker filter was ignored, and a broker only shared with the user was counted whole even
+without one (`portfolio.drawdown_summary` version 3).
 
 The Asset basis is the asset's native observed price currency (declared
 dependency on `asset.market_snapshot` → `observed.native_price.code`) so it
@@ -349,9 +355,9 @@ window. They compute nothing; the pairs are a selection of the correlation matri
   also holds the excluded holdings and the value in transit. It can be negative, an overdraft: then Risk refuses the
   measures for the composition, unless value in transit covers it. A report that cannot be read fails this section
   alone (`cash_share_unavailable`).
-- **The scope** is the export's broker filter, the scope of the positions printed beside it, with the ownership share
-  of every Portfolio section. It sits behind one switch, `RISK_EVIDENCE_FOLLOWS_BROKER_FILTER`, pending the developer's
-  decision (D10): `portfolio.drawdown_summary` and the Risk tab use the whole portfolio.
+- **The scope** is the export's brokers, the scope of the positions printed beside it, with the ownership share of
+  every Portfolio section: `export_risk_scope`, the same function as the drawdown's (developer decision D10, 78 L10).
+  The Dashboard's Risk tab measures the whole portfolio.
 - **Never a failed snapshot.** A required component that raised would fail the whole snapshot, so a Risk refusal
   (`insufficient_history`, a composition outside the contract) is an `unavailable` section and a Risk error a `failed`
   one, with its `reason_code` and no figures. The validators forbid figures on those statuses and require them on `ok`
