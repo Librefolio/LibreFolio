@@ -13,7 +13,7 @@
 <script lang="ts">
     import {_ as t} from '$lib/i18n';
     import {getStringBadgeStyle} from '$lib/utils/colors';
-    import type {DetailGroup} from './profileTabState';
+    import {isWebAddress, type DetailGroup} from './profileTabState';
 
     interface Props {
         groups: DetailGroup[];
@@ -60,6 +60,9 @@
                             <dd class="min-w-0 break-words text-lf-primary">
                                 {#if text === ''}
                                     {@render missing()}
+                                {:else if cell.key === 'website' && isWebAddress(text)}
+                                    <!-- The company's site (BI-PROF): a link, opened apart -->
+                                    <a href={text} target="_blank" rel="noopener noreferrer" class="break-all text-lf-link hover:underline focus-visible:outline-2 focus-visible:outline-lf-focus rounded" title={$t('assets.profile.tab.openWebsite')} data-testid="profile-detail-website-link">{text}</a>
                                 {:else if onhistory}
                                     <button type="button" class="text-left hover:underline focus-visible:outline-2 focus-visible:outline-lf-focus rounded" data-testid="profile-detail-{cell.key}-history" onclick={() => onhistory?.(cell.key)}>{text}</button>
                                 {:else}
