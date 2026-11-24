@@ -44,14 +44,28 @@
       "issueTypeNotAccepted": "Cet enrichisseur ne lit pas ce type d'identifiant",
       "reasons": {
         "removed": "retiré par vous",
-        "found": "trouvé",
+        "found": "connaît l'actif",
         "searching": "en attente : recherche en cours…",
         "not_found": "avec {type} {identifier}, il ne trouve rien",
         "conflict": "il désigne un autre actif",
         "error": "la source n'a pas répondu",
         "not_configured": "à configurer sur cette instance",
-        "not_covering": "ne couvre pas ce type d'actif"
-      }
+        "not_covering": "ne couvre pas ce type d'actif",
+        "foundByTicker": "trouvé seulement avec le ticker {ticker} : vérifiez que c’est bien celui-ci"
+      },
+      "notFoundWith": "Rien trouvé avec {type} {identifier} : corrigez ou cherchez",
+      "onlyType": "le seul que {name} lit",
+      "line": {
+        "running": "Recherche des enrichisseurs qui connaissent l'actif avec ses identifiants… {answered} sur {asked} ont répondu",
+        "found": "{count, plural, one {# enrichisseur connaît} other {# enrichisseurs connaissent}} l'actif : {names}.",
+        "foundAdopted": "Vérifiez l'ordre et appuyez sur « Utiliser ces enrichisseurs » : ils sont enregistrés avec l'actif.",
+        "foundOutside": "Ceux qui ne sont pas dans votre liste sont sous « Pas dans la liste », avec « + ».",
+        "none": "Aucun enrichisseur ne connaît l'actif avec ses identifiants : vous pouvez en ajouter un ci-dessous.",
+        "refused": "Trop de requêtes vers les sources : en attente, la recherche repart d’elle-même dans un instant.",
+        "error": "Impossible de rechercher les enrichisseurs : ajoutez-les à la main.",
+        "no_identifiers": "L'actif n'a pas d'identifiants à reconnaître : ajoutez les enrichisseurs depuis « Pas dans la liste » ci-dessous."
+      },
+      "conflictWith": "Identifiant différent : la source indique {named}"
     }
   }
 }
