@@ -109,6 +109,8 @@ describe('historyKey', () => {
 describe('eventMarkerKind', () => {
     it.each([
         ['BUY', 'open'],
+        // A reward in kind opens its lot (project 79): the reason the lot exists, as a BUY.
+        ['REWARD', 'open'],
         ['ADJUSTMENT_IN', 'open'],
         ['TRANSFER_DEPART', 'transfer'],
         ['TRANSFER_ARRIVE', 'transfer'],

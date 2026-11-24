@@ -630,7 +630,23 @@
 
     function eventMarkerLabel(kind: EventMarkerKind, labelKind: string | null = null): string {
         const fallback =
-            labelKind === 'TRANSFER_IN' ? 'Transfer In' : labelKind === 'TRANSFER_OUT' ? 'Transfer Out' : kind === 'ADJUSTMENT_IN' ? 'Adjustment In' : kind === 'ADJUSTMENT_OUT' ? 'Adjustment Out' : kind === 'TRANSFER' ? 'Transfer' : kind === 'SELL' ? 'Sale' : kind === 'SPLIT' ? 'Split' : 'Buy';
+            labelKind === 'TRANSFER_IN'
+                ? 'Transfer In'
+                : labelKind === 'TRANSFER_OUT'
+                  ? 'Transfer Out'
+                  : kind === 'REWARD'
+                    ? 'Reward'
+                    : kind === 'ADJUSTMENT_IN'
+                      ? 'Adjustment In'
+                      : kind === 'ADJUSTMENT_OUT'
+                        ? 'Adjustment Out'
+                        : kind === 'TRANSFER'
+                          ? 'Transfer'
+                          : kind === 'SELL'
+                            ? 'Sale'
+                            : kind === 'SPLIT'
+                              ? 'Split'
+                              : 'Buy';
         return translateOr($t, eventMarkerLabelKey(kind, labelKind), fallback);
     }
 
@@ -1070,7 +1086,9 @@
                           ? themed(LOT_GANTT_COLORS.events.transfer, themeDark)
                           : meta.kind === 'SPLIT'
                             ? themed(LOT_GANTT_COLORS.events.split, themeDark)
-                            : themed(LOT_GANTT_COLORS.events.buy, themeDark);
+                            : meta.kind === 'REWARD'
+                              ? themed(LOT_GANTT_COLORS.events.reward, themeDark)
+                              : themed(LOT_GANTT_COLORS.events.buy, themeDark);
                 return {
                     type: 'text',
                     info: {lotId: meta.lotId},

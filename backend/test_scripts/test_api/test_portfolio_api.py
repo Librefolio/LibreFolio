@@ -2723,7 +2723,7 @@ class TestRewardIncomeInKind:
         (group,) = [group for group in lots_a["economic_allocation_groups"] if ids["a_reward"] in group["source_transaction_ids"]]
         assert (group["economic_type"], group["rule"]) == ("REWARD", "ASSET_INCOME_HOLDINGS"), group
         (opening,) = [row for row in lots_a["lot_events"] if row["lot_id"] == ids["a_reward"] and row["transaction_id"] == ids["a_reward"] and row["date"] == day_d]
-        assert opening["kind"] == "BUY", opening  # STK-1: a REWARD opens its lot as the BUY it stands for
+        assert opening["kind"] == "REWARD", opening  # STK-2b: the reward opens its lot under its own kind
 
         # --- Lots analysis of B, the twin: the same lot cost, the same income on the held lot, the same performance ---
         assert lots_b["calculation_status"] == "COMPLETE", (lots_b["calculation_status"], lots_b.get("data_quality"))
@@ -2774,7 +2774,7 @@ class TestRewardIncomeInKind:
         reward_lot = next(lot for lot in lots["lots"] if lot["lot_id"] == reward_id)
         assert (Decimal(reward_lot["original_cost"]), Decimal(reward_lot["asset_income"])) == (Decimal("30"), Decimal("30")), reward_lot
         (opening,) = [row for row in lots["lot_events"] if row["lot_id"] == reward_id and row["transaction_id"] == reward_id and row["date"] == day_d]
-        assert opening["kind"] == "BUY", opening
+        assert opening["kind"] == "REWARD", opening
         print_success("REWARD airdrop: income on its own lot, nothing orphaned")
 
     async def test_reward_in_a_foreign_currency_matches_its_twin(self):

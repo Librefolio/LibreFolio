@@ -138,7 +138,8 @@
           "transfer": "Transferts",
           "adjustment": "Ajustements",
           "split": "Split",
-          "income": "Dividende / intérêt"
+          "income": "Dividende / intérêt",
+          "reward": "Récompenses"
         },
         "eventType": {
           "BUY": "Achat",
@@ -149,7 +150,8 @@
           "TRANSFER_ARRIVE": "Transfert",
           "SPLIT": "Split",
           "TRANSFER_IN": "Transfert entrant",
-          "TRANSFER_OUT": "Transfert sortant"
+          "TRANSFER_OUT": "Transfert sortant",
+          "REWARD": "Récompense"
         },
         "unitPrice": "Prix unitaire",
         "transitInterval": "Intervalle de transit",
@@ -229,7 +231,8 @@
           "TRANSFER_ARRIVE": "TRANSFERT",
           "SPLIT": "SPLIT",
           "TRANSFER_IN": "TRANSFERT+",
-          "TRANSFER_OUT": "TRANSFERT-"
+          "TRANSFER_OUT": "TRANSFERT-",
+          "REWARD": "RÉCOMPENSE"
         },
         "historyDetail": {
           "openPrice": "Prix d'ouverture",
@@ -293,7 +296,8 @@
       "analysisFailedFix": "Corrigez ces transactions et les lots reviennent :",
       "matchingMethod": "Méthode d'appariement",
       "methodFifoHint": "FIFO : une vente clôt d'abord le lot le plus ancien",
-      "methodLifoHint": "LIFO : une vente clôt d'abord le lot le plus récent"
+      "methodLifoHint": "LIFO : une vente clôt d'abord le lot le plus récent",
+      "incomeMarkerReward": "Récompense"
     },
     "createdInSystem": "Créé dans le Système",
     "deleteBlockedTitle": "Impossible de supprimer le courtier",

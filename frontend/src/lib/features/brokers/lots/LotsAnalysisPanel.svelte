@@ -57,6 +57,7 @@
     import LotCustodyModal from './LotCustodyModal.svelte';
     import LotComparisonChart from './LotComparisonChart.svelte';
     import type {LotIncomeEvent} from './LotComparisonChart.svelte';
+    import type {LotIncomeKind} from './lotComparisonChartHelpers';
     import {type DataQualityIssue} from '$lib/components/ui/feedback/DataQualityBanner.svelte';
     import {type StaleFxPairLike, staleFxIssue} from '$lib/features/dashboard/staleFxIssue';
     import {todayIso} from '$lib/utils/dateOnly';
@@ -244,7 +245,7 @@
         // _build_lot_event_rows/_CUSTODY_KINDS) — fetching it once here feeds both the WAC
         // chart's transaction markers and the Custody modal's full chronology, no double fetch.
         lotEvents = lotSection<LotTimelineEventSchema>(block?.lot_events);
-        incomeEvents = lotSection<{type: 'DIVIDEND' | 'INTEREST'; date: string; broker_id?: number | null; amount: string | null; lot_ids?: number[]}>(block?.income_events).map((event) => ({
+        incomeEvents = lotSection<{type: LotIncomeKind; date: string; broker_id?: number | null; amount: string | null; lot_ids?: number[]}>(block?.income_events).map((event) => ({
             type: event.type,
             date: event.date,
             broker_id: event.broker_id ?? null,

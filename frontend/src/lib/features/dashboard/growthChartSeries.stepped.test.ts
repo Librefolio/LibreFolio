@@ -48,7 +48,7 @@ describe('splitBySign on a step line', () => {
 
 describe('buildGrowthFullSeries with a stepped entry', () => {
     const labels = {bookAssetLike: 'Assets', bookAssetLikeTooltip: 'Assets', cashContributed: 'Cash', cashGenerated: 'Gen', nav: 'NAV', capitalBaseline: 'Baseline', capitalBaselineTooltip: 'Baseline'};
-    const pnlLabels = {total: 'P&L', dividend: 'Div', interest: 'Int', costs: 'Costs', deposit: 'Dep', acqNewCapital: 'New', acqReinvested: 'Re', bookValue: 'Book'};
+    const pnlLabels = {total: 'P&L', dividend: 'Div', interest: 'Int', reward: 'Rew', costs: 'Costs', deposit: 'Dep', acqNewCapital: 'New', acqReinvested: 'Re', bookValue: 'Book'};
     const pct: PctSeriesSpec[] = [
         {key: 'mwrrCum', name: 'MWRR', values: [], lineStyle: 'solid', colorKey: 'nav'},
         {key: 'twrr', name: 'TWRR', values: [], lineStyle: 'dashed', colorKey: 'invested'},
