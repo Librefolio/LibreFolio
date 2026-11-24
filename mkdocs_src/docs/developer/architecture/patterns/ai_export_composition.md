@@ -340,7 +340,15 @@ window. They compute nothing; the pairs are a selection of the correlation matri
 - **A holding quoted only recently shortens the window for every holding**: the joint calendar starts on the first day
   all of them have a price. Each section carries the requested and the measured window and the holdings that shortened
   it (`window_shortened_by`, from Risk's `short_history` warning). A holding with no usable price leaves the measures,
-  is listed in `excluded_assets` with its reason, and weighs as cash.
+  is listed in `excluded_assets` with its reason, and weighs as cash would: at zero risk. It is counted in
+  `excluded_weight_ratio`, never in `cash_weight_ratio`.
+- **The cash share is the true cash** (78 L8c): the scope's cash over its net worth, read from the same report as
+  the summary (`PORTFOLIO_REPORT_RESOURCE`): the summary's `cash_total`, and the Liquidity slice of the allocations
+  to the digit whenever no cash is in transit (the slice adds it).
+  It is not Risk's `cash_weight`, the residual at zero risk (1 − Σ weights of the holdings with a series), which
+  also holds the excluded holdings and the value in transit. It can be negative, an overdraft: then Risk refuses the
+  measures for the composition, unless value in transit covers it. A report that cannot be read fails this section
+  alone (`cash_share_unavailable`).
 - **The scope** is the export's broker filter, the scope of the positions printed beside it, with the ownership share
   of every Portfolio section. It sits behind one switch, `RISK_EVIDENCE_FOLLOWS_BROKER_FILTER`, pending the developer's
   decision (D10): `portfolio.drawdown_summary` and the Risk tab use the whole portfolio.
@@ -357,9 +365,9 @@ window. They compute nothing; the pairs are a selection of the correlation matri
   without them the section is `unavailable` (`risk_shares_unavailable`), with no fall-back to the weight. A correlation
   is printed as a number between −1 and 1, never as a percentage.
 - **Percentages only**, with their base written in the payload (`weight_basis`): shares of the net worth of the scope,
-  cash included, with cash and the excluded holdings at zero risk. The renderer prints them under names that say what
-  they are: `value_at_risk_loss_percent`, `expected_shortfall_loss_percent`, `worst_window_return_percent`,
-  `risk_share_percent` ([Snapshot Data Tables](#snapshot-data-tables)).
+  cash included, with cash, value in transit and the excluded holdings at zero risk. The renderer prints them under
+  names that say what they are: `value_at_risk_loss_percent`, `expected_shortfall_loss_percent`,
+  `worst_window_return_percent`, `risk_share_percent` ([Snapshot Data Tables](#snapshot-data-tables)).
 
 ## 🧾 Task-specific Evidence Datasets
 

@@ -32,6 +32,7 @@ Rules, decided with the AI Export consultant on 23/11/2026 (journal, 78 `L8-anal
 from __future__ import annotations
 
 from collections.abc import Mapping
+from dataclasses import replace
 from datetime import date as Date
 from enum import StrEnum
 
@@ -40,15 +41,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.logging_config import get_logger
 from backend.app.schemas.common import DateRangeModel, StrictModel
+from backend.app.schemas.portfolio.report import PortfolioReportResponse
 from backend.app.schemas.risk.outputs import RiskContributionOutput, RiskCorrelationOutput, RiskVarCvarOutput
 from backend.app.schemas.risk.results import RiskAnalyticResult, RiskQueryResponse
 from backend.app.schemas.risk.scope import PortfolioRiskScope, RiskAnalyticRequest, RiskQueryRequest
 from backend.app.schemas.risk.vocabulary import RiskCompositionPolicy, RiskMode, RiskResultStatus, RiskScopeKind, RiskValueStatus
 from backend.app.services.ai_export.components.envelope import SectionEnvelope
-from backend.app.services.ai_export.components.payloads.portfolio_broker import counts_ownership_share
+from backend.app.services.ai_export.components.payloads.portfolio_broker import counts_ownership_share, load_portfolio_report
+from backend.app.services.ai_export.components.resources import PORTFOLIO_REPORT_RESOURCE
 from backend.app.services.ai_export.components.spec import ComponentSpec
 from backend.app.services.ai_export.components.types import BuildScope, Domain, PeriodBehavior, ResourceKey
 from backend.app.services.ai_export.dependencies import BuildContext, ResourceLoadError
+from backend.app.services.financial_math.weights import share_of
 from backend.app.services.risk.service import RiskService
 from backend.app.utils.datetime_utils import months_before
 from backend.app.utils.runtime.errors import traceback_reported, traceback_reporting_request
@@ -79,8 +83,10 @@ _CONTRIBUTION_INSTANCE_ID = "ai_export_risk_concentration"
 _BAD_MONTH_INSTANCE_ID = "ai_export_bad_month"
 _CORRELATION_INSTANCE_ID = "ai_export_correlated_pairs"
 _RISK_EVIDENCE_RESOURCE: ResourceKey[RiskQueryResponse] = ResourceKey("portfolio.risk_evidence_result", RiskQueryResponse)
+# The whole portfolio's report, read for the cash share only when D10 is off and the export has a broker filter.
+_WHOLE_PORTFOLIO_REPORT_RESOURCE: ResourceKey[PortfolioReportResponse] = ResourceKey("portfolio.risk_evidence_whole_report", PortfolioReportResponse)
 
-WEIGHT_BASIS = "Weights and losses are shares of the net worth of the exported scope (cash included) on composition_as_of. " "Cash and the holdings left out of the measures count as zero risk."
+WEIGHT_BASIS = "Weights and losses are shares of the net worth of the exported scope (cash included) on composition_as_of. " "Cash, value in transit and the holdings left out of the measures count as zero risk."
 WINDOW_SEMANTICS = "Measured on today's holdings over the analyzed window, not on the AI period. A holding quoted only recently " "moves the start of the window for every holding (window_shortened_by)."
 BAD_MONTH_SEMANTICS = (
     "Historical simulation on overlapping 30-day windows of today's holdings: consecutive windows share all but one " "observation, so the windows in the tail are a few independent episodes, not as many separate months. " "Losses are positive numbers; the worst window's return keeps its sign."
@@ -98,6 +104,8 @@ PAIRS_SEMANTICS = (
 REASON_RISK_ERROR = "risk_execution_error"
 REASON_RISK_SHARES_UNAVAILABLE = "risk_shares_unavailable"
 REASON_RISK_MISSING = "risk_result_missing"
+REASON_CASH_UNAVAILABLE = "cash_share_unavailable"
+"""The section's cash share could not be read from the scope's report (78 L8c)."""
 
 
 class RiskEvidenceStatus(StrEnum):
@@ -178,12 +186,18 @@ class PortfolioRiskConcentrationPayload(_RiskEvidenceWindow):
     1, or be negative for a holding that moves against the others. `effective_number_of_assets` is measured on the
     priced holdings alone, and `diversification_multiple` is the diversification ratio (≥ 1: the weighted volatilities
     over the portfolio's), a multiple, not a percentage.
+
+    `cash_weight_ratio` is the true cash of the measured scope over its net worth, read from the same report as the
+    export's summary, so it is the cash share the summary prints (78 L8c). It is not Risk's `cash_weight`, the residual
+    at zero risk, which also holds the holdings left out of the measures and the value in transit. It can be negative
+    (an overdraft): then Risk refuses the measures, unless value in transit covers it. The holdings left out are
+    `excluded_weight_ratio`.
     """
 
     portfolio_volatility_ratio: float | None = Field(default=None, ge=0)
     effective_number_of_assets: float | None = Field(default=None, ge=0)
     diversification_multiple: float | None = Field(default=None, ge=0)
-    cash_weight_ratio: float | None = Field(default=None, ge=0)
+    cash_weight_ratio: float | None = None
     excluded_weight_ratio: float | None = Field(default=None, ge=0)
     rows: tuple[RiskConcentrationRow, ...] = ()
 
@@ -367,6 +381,34 @@ def _concentration_rows(output: RiskContributionOutput) -> tuple[RiskConcentrati
     return tuple(rows)
 
 
+async def _true_cash_weight(context: BuildContext, scope: BuildScope) -> float | None:
+    """The cash of the scope Risk measured over its net worth, from the report the summary reads (78 L8c).
+
+    With D10 on, or without a broker filter, Risk measures the export's own scope: the summary's report, memoized, so the
+    share is the summary's to the digit. With D10 off and a filter, Risk measures the whole portfolio, so the whole
+    portfolio's report. None, logged, when the report cannot be read or the net worth is not positive.
+    """
+    if RISK_EVIDENCE_FOLLOWS_BROKER_FILTER or not scope.broker_scope:
+        report_scope, resource_key = scope, PORTFOLIO_REPORT_RESOURCE
+    else:
+        report_scope, resource_key = replace(scope, broker_scope=()), _WHOLE_PORTFOLIO_REPORT_RESOURCE
+    try:
+        report = await load_portfolio_report(context, report_scope, resource_key)
+    except ResourceLoadError as error:
+        # Isolation boundary: an unreadable report fails this section only, never the snapshot.
+        if traceback_reported(error):
+            logger.warning("AI Export risk evidence: cash share not read", logged_with_request_id=traceback_reporting_request(error))
+        else:
+            logger.warning("AI Export risk evidence: cash share not read", exc_info=error)
+        return None
+    summary = report.summary
+    share = share_of(summary.cash_total.amount, summary.net_worth.amount) if summary is not None else None
+    if share is None:
+        logger.warning("AI Export risk evidence: no positive net worth for the cash share", user_id=scope.user_id)
+        return None
+    return float(share)
+
+
 async def _build_risk_concentration(context: BuildContext, dependencies: Mapping[str, SectionEnvelope]) -> PortfolioRiskConcentrationPayload:
     del dependencies
     scope = _require_portfolio_scope(context)
@@ -375,13 +417,17 @@ async def _build_risk_concentration(context: BuildContext, dependencies: Mapping
     if result is None or result.status not in {RiskResultStatus.OK, RiskResultStatus.PARTIAL} or not isinstance(result.output, RiskContributionOutput):
         return PortfolioRiskConcentrationPayload(**fields, **_unavailable_fields(result, subject="risk concentration"))
     output = result.output
+    cash_weight = await _true_cash_weight(context, scope)
+    if cash_weight is None:
+        # A failed section carries the requested window only, never the measured one.
+        return PortfolioRiskConcentrationPayload(**_window_fields(None, scope), status=RiskEvidenceStatus.FAILED, reason_code=REASON_CASH_UNAVAILABLE, message="The cash share of the measured scope could not be read.")
     return PortfolioRiskConcentrationPayload(
         **fields,
         status=RiskEvidenceStatus(result.status.value),
         portfolio_volatility_ratio=output.portfolio_volatility,
         effective_number_of_assets=output.effective_number_of_assets,
         diversification_multiple=output.diversification_ratio,
-        cash_weight_ratio=output.cash_weight,
+        cash_weight_ratio=cash_weight,
         excluded_weight_ratio=output.excluded_weight,
         rows=_concentration_rows(output),
     )
@@ -521,6 +567,7 @@ __all__ = [
     "PORTFOLIO_RISK_CONCENTRATION_COMPONENT",
     "PORTFOLIO_RISK_EVIDENCE_COMPONENTS",
     "PORTFOLIO_TAIL_RISK_COMPONENT",
+    "REASON_CASH_UNAVAILABLE",
     "REASON_RISK_ERROR",
     "REASON_RISK_MISSING",
     "REASON_RISK_SHARES_UNAVAILABLE",

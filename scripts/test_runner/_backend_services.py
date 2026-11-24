@@ -40,6 +40,7 @@ AI_EXPORT_SERVICE_TEST_PATHS = (
     "backend/test_scripts/test_services/test_ai_export_linked_charges.py",
     "backend/test_scripts/test_services/test_ai_export_portfolio_fifo_summary_in_transit.py",
     "backend/test_scripts/test_services/test_ai_export_price_day_budget.py",
+    "backend/test_scripts/test_services/test_ai_export_risk_evidence_cash_share.py",
     "backend/test_scripts/test_services/test_ai_export_runtime_service.py",
     "backend/test_scripts/test_services/test_ai_export_structural_invariants.py",
     "backend/test_scripts/test_services/test_ai_export_telemetry.py",

@@ -6,12 +6,16 @@ month, the correlation matrix, the broker filter behind its one switch), the cop
 (figures, measured window, the holdings that shortened it, the holdings left out), the selection of the pairs (weight
 and correlation thresholds, caps, order, undefined cells), the honest statuses (a Risk refusal is `unavailable`, a
 Risk error is `failed`, never an exception), one Risk call for the three sections, the payload invariants, and the
-catalog wiring. `RiskService` is stubbed: the risk engine is reviewed and tested on its own.
+catalog wiring. `RiskService` is stubbed: the risk engine is reviewed and tested on its own. So is the scope's report
+the cash share is read from (78 L8c): which report, and what happens when it cannot be read. That the share equals the
+summary's to the digit, on a real book, is `test_ai_export_risk_evidence_cash_share.py`.
 """
 
 from __future__ import annotations
 
 from datetime import UTC, date, datetime
+from decimal import Decimal
+from types import SimpleNamespace
 
 import pytest
 import pytest_asyncio
@@ -26,9 +30,11 @@ from backend.app.schemas.risk.results import RiskAnalyticResult, RiskError, Risk
 from backend.app.schemas.risk.vocabulary import RiskCompositionPolicy, RiskErrorCode, RiskMode, RiskResultStatus, RiskReturnBasis, RiskValueStatus
 from backend.app.services.ai_export.analyses.catalog import build_analysis_registry
 from backend.app.services.ai_export.components.catalog import build_component_registry
+from backend.app.services.ai_export.components.resources import PORTFOLIO_REPORT_RESOURCE
 from backend.app.services.ai_export.components.risk_evidence import (
     BAD_MONTH_SEMANTICS,
     PAIRS_MAX_HIGH,
+    REASON_CASH_UNAVAILABLE,
     REASON_RISK_ERROR,
     REASON_RISK_SHARES_UNAVAILABLE,
     WEIGHT_BASIS,
@@ -44,7 +50,7 @@ from backend.app.services.ai_export.components.risk_evidence import (
 )
 from backend.app.services.ai_export.components.types import BuildScope, DetailLevel, Domain, PeriodBehavior
 from backend.app.services.ai_export.datasets.catalog import build_dataset_registry
-from backend.app.services.ai_export.dependencies import BuildContext, build_bucket_plan_for_scope
+from backend.app.services.ai_export.dependencies import BuildContext, ResourceLoadError, build_bucket_plan_for_scope
 
 PERIOD_START = date(2026, 8, 23)
 PERIOD_END = date(2026, 11, 23)
@@ -79,6 +85,31 @@ def _stub_risk_service(monkeypatch):
     _FakeRiskService.captured = []
     _FakeRiskService.response_factory = None
     monkeypatch.setattr(risk_evidence_module, "RiskService", _FakeRiskService)
+    yield
+
+
+class _FakeReport:
+    """Stands in for `load_portfolio_report`: records each call and answers a summary with the cash and the net worth set."""
+
+    calls: list[dict] = []
+    cash = Decimal("400")
+    net_worth = Decimal("1000")
+    error: BaseException | None = None
+
+    @staticmethod
+    async def load(context, scope, resource_key, *, apply_ownership_share=None):
+        _FakeReport.calls.append({"scope": scope, "resource_key": resource_key})
+        if _FakeReport.error is not None:
+            raise _FakeReport.error
+        summary = SimpleNamespace(cash_total=SimpleNamespace(amount=_FakeReport.cash), net_worth=SimpleNamespace(amount=_FakeReport.net_worth))
+        return SimpleNamespace(summary=summary)
+
+
+@pytest.fixture(autouse=True)
+def _stub_report(monkeypatch):
+    _FakeReport.calls = []
+    _FakeReport.cash, _FakeReport.net_worth, _FakeReport.error = Decimal("400"), Decimal("1000"), None
+    monkeypatch.setattr(risk_evidence_module, "load_portfolio_report", _FakeReport.load)
     yield
 
 
@@ -272,6 +303,81 @@ class TestRiskConcentration:
         assert payload.message
         assert (payload.requested_start, payload.requested_end) == (WINDOW_START, PERIOD_END)
         assert payload.rows == () and payload.portfolio_volatility_ratio is None and payload.analyzed_start is None
+
+
+class TestTrueCash:
+    """78 L8c: the cash share is the scope's cash over its net worth, not Risk's residual at zero risk."""
+
+    @pytest.mark.asyncio
+    async def test_the_share_is_the_reports_cash_not_the_residual_at_zero_risk(self, session):
+        # Risk's residual (0.40 in `_contribution`) holds the holdings left out too; the report says 0.25.
+        _FakeRiskService.response_factory = lambda request: _both_ok()
+        _FakeReport.cash = Decimal("250")
+
+        payload = await _build_risk_concentration(_context(session, _scope()), {})
+
+        assert payload.cash_weight_ratio == 0.25
+        assert payload.excluded_weight_ratio == 0.05, "the holdings left out keep their own field"
+
+    @pytest.mark.asyncio
+    async def test_with_value_in_transit_the_share_stays_the_cash_and_the_warning_stays(self, session):
+        # Risk's residual holds the value in transit (0.40); the cash is 0.25; the warning is the model's only trace of it.
+        in_transit = RiskWarning(code="zero_risk_residual_includes_in_transit", message="in transit", details={}, degrades_result=False)
+        _FakeRiskService.response_factory = lambda request: _both_ok(warnings=[in_transit])
+        _FakeReport.cash = Decimal("250")
+
+        payload = await _build_risk_concentration(_context(session, _scope()), {})
+
+        assert payload.cash_weight_ratio == 0.25
+        assert "zero_risk_residual_includes_in_transit" in payload.warning_codes
+        assert "value in transit" in payload.weight_basis, "the base says the value in transit counts at zero risk"
+
+    @pytest.mark.asyncio
+    async def test_it_reads_the_summarys_report_on_the_measured_scope(self, session):
+        _FakeRiskService.response_factory = lambda request: _both_ok()
+        scope = _scope(broker_scope=(7, 3))
+
+        await _build_risk_concentration(_context(session, scope), {})
+
+        assert [(call["resource_key"], call["scope"]) for call in _FakeReport.calls] == [(PORTFOLIO_REPORT_RESOURCE, scope)]
+
+    @pytest.mark.asyncio
+    async def test_with_d10_off_and_a_filter_it_reads_the_whole_portfolio(self, session, monkeypatch):
+        monkeypatch.setattr(risk_evidence_module, "RISK_EVIDENCE_FOLLOWS_BROKER_FILTER", False)
+        _FakeRiskService.response_factory = lambda request: _both_ok()
+
+        await _build_risk_concentration(_context(session, _scope(broker_scope=(7, 3))), {})
+
+        (call,) = _FakeReport.calls
+        assert call["resource_key"] is not PORTFOLIO_REPORT_RESOURCE, "the filtered summary is not the scope Risk measured"
+        assert call["scope"].broker_scope == ()
+
+    @pytest.mark.asyncio
+    async def test_an_overdraft_is_a_negative_share(self, session):
+        _FakeRiskService.response_factory = lambda request: _both_ok()
+        _FakeReport.cash = Decimal("-50")
+
+        payload = await _build_risk_concentration(_context(session, _scope()), {})
+
+        assert payload.status is RiskEvidenceStatus.OK
+        assert payload.cash_weight_ratio == -0.05
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("case", ["unreadable", "no_net_worth"])
+    async def test_without_the_cash_share_the_section_fails_alone(self, session, case):
+        _FakeRiskService.response_factory = lambda request: _both_ok()
+        if case == "unreadable":
+            _FakeReport.error = ResourceLoadError("portfolio.report", RuntimeError("report down"))
+        else:
+            _FakeReport.net_worth = Decimal("0")
+        context = _context(session, _scope())
+
+        concentration = await _build_risk_concentration(context, {})
+        tail = await _build_tail_risk(context, {})
+
+        assert (concentration.status, concentration.reason_code) == (RiskEvidenceStatus.FAILED, REASON_CASH_UNAVAILABLE)
+        assert concentration.rows == () and concentration.cash_weight_ratio is None
+        assert tail.status is RiskEvidenceStatus.OK, "the other sections do not read the report"
 
 
 class TestTailRisk:
