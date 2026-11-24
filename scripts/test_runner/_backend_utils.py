@@ -267,6 +267,15 @@ def utils_png_to_webp(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "PNG to WebP tests", verbose=verbose)
 
 
+def utils_docs_minify_html(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the hook that removes Material's indentation from the built pages (lane 84-C)."""
+    print_section("Utils: Docs minify HTML")
+    print_info("Testing: mkdocs_src/hooks/minify_html.py, and a sample of the built site (when there is one)")
+    print_info("Tests: the same DOM before and after, pre/code/kbd/textarea/script/style and the inside of a tag untouched, idempotent, not run for serve or in the nested language build")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_docs_minify_html.py", test_names)
+    return run_command(cmd, "Docs minify HTML tests", verbose=verbose)
+
+
 def utils_docs_mermaid_colours(verbose: bool = False, test_names: list = None) -> bool:
     """Test that a Mermaid node with its own fill also sets its text colour (E9C)."""
     print_section("Utils: Docs Mermaid Colours")
@@ -788,6 +797,15 @@ Tests for utility modules and helper functions:
         name="PNG to WebP (Docker avatars)",
         desc="scripts/docker/png_to_webp.py, run by the avatars-webp stage of the Dockerfile: the default avatars become WebP (quality 85) under the same names and the PNG are deleted so none reaches the image; a broken PNG, an empty folder or a missing folder fails the build; the repository keeps the full-size PNG",
         # Throwaway PNG folders in tmp_path, Pillow only: no DB, no server, no network, no repo writes.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "docs-minify-html",
+        utils_docs_minify_html,
+        name="Docs minify HTML",
+        desc="mkdocs_src/hooks/minify_html.py: after the build every page loses Material's indentation and blank lines (387 → 242 MB of HTML) and keeps the same DOM; whitespace stays inside pre, code, kbd, textarea, script, style and inside a tag; idempotent; skipped for serve and for the nested per-language build; a sample of the built site (when there is one) is the same DOM",
+        # Strings and files in tmp_path, the built site read only: no DB, no server, no network, no repo writes.
         isolation="pure",
     )
     add_test(
