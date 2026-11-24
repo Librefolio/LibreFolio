@@ -16,13 +16,13 @@ without touching shared catalog/registry wiring:
   unpriced position degrades honestly instead of being silently dropped or
   coerced.
 
-- ``broker.concentration_comparison``: an optional broker-vs-whole-portfolio
-  comparator. It loads the *unfiltered* whole-portfolio ``PortfolioReportResponse``
-  through ``PortfolioService`` (memoized under a distinct broker-owned resource
-  key, so it is loaded at most once and never duplicates the broker-filtered
-  report load), enforcing user access exactly like every other report load
-  (``PortfolioService.get_report(user_id, ...)`` resolves ``broker_ids=None`` to
-  the caller's accessible brokers only). It emits broker/portfolio HHI points,
+- ``broker.concentration_comparison``: an optional broker-vs-portfolio
+  comparator. The portfolio is the brokers the user owns, each whole (R11),
+  resolved once by ``prepare_request`` (78 L10b, D13 (c1); until version 2 it
+  was every broker the user could access). A broker the user does not own has
+  no comparison (``broker_not_owned``). The portfolio report is memoized under
+  a distinct broker-owned resource key, so it is loaded at most once and never
+  duplicates the broker-filtered report load. It emits broker/portfolio HHI points,
   largest position weight, position counts and market-value totals with deltas
   only when both sides are comparable, and an explicit typed ``unavailable``
   reason otherwise. It never exposes asset/lot/transaction row identifiers.
@@ -53,7 +53,7 @@ from backend.app.services.ai_export.components.payloads.portfolio_broker import 
 )
 from backend.app.services.ai_export.components.resources import BROKER_REPORT_RESOURCE
 from backend.app.services.ai_export.components.spec import ComponentSpec
-from backend.app.services.ai_export.components.types import BuildScope, Domain, PeriodBehavior, ResourceKey
+from backend.app.services.ai_export.components.types import BrokerScopeSource, BuildScope, Domain, PeriodBehavior, ResourceKey
 from backend.app.services.ai_export.dependencies import BuildContext, ResourceLoadError
 from backend.app.services.financial_math.weights import concentration, percent_of, slice_percents
 
@@ -68,6 +68,8 @@ REASON_BROKER_NO_POSITIONS = "broker_has_no_positions"
 REASON_PORTFOLIO_EMPTY = "portfolio_summary_unavailable"
 REASON_PORTFOLIO_NO_POSITIONS = "portfolio_has_no_positions"
 REASON_PORTFOLIO_LOAD_FAILED = "portfolio_report_load_failed"
+REASON_BROKER_NOT_OWNED = "broker_not_owned"
+"""78 L10b (D13 (c1)): the user does not own this broker, so it is no part of the user's portfolio to compare with."""
 
 
 class BrokerConcentrationContextScopeError(RuntimeError):
@@ -302,9 +304,9 @@ class BrokerConcentrationComparisonPayload(StrictModel):
 
     broker_id: int
     target_currency: CurrencyCode
-    amounts_basis: Literal["all_brokers_whole"] = Field(
-        "all_brokers_whole",
-        description="Both sides count every broker whole, as the broker page does (R11): the portfolio side is not the Dashboard's portfolio, where an owner's share reduces each broker.",
+    amounts_basis: Literal["owned_brokers_whole"] = Field(
+        "owned_brokers_whole",
+        description="Both sides count each broker whole, as the broker page does (R11). The portfolio side is the brokers the user owns (78 L10b), each whole: not the Dashboard's portfolio, where an owner's share reduces each broker.",
     )
 
     broker_position_count: int | None = Field(None, ge=0)
@@ -358,7 +360,11 @@ class BrokerConcentrationComparisonPayload(StrictModel):
 
 
 def _whole_portfolio_scope(scope: BuildScope) -> BuildScope:
-    """Derives the unfiltered whole-portfolio scope (all accessible brokers) from a broker scope."""
+    """The user's portfolio the broker is compared with: the brokers the user owns (78 L10b, D13 (c1)).
+
+    Until version 2 it was an empty scope, which the services read as every broker the user can access, the ones only
+    shared with the user included. `owned_broker_ids` are resolved once by `prepare_request`.
+    """
     return BuildScope(
         request_id=scope.request_id,
         user_id=scope.user_id,
@@ -367,7 +373,9 @@ def _whole_portfolio_scope(scope: BuildScope) -> BuildScope:
         period_start=scope.period_start,
         period_end=scope.period_end,
         target_currency=scope.target_currency,
-        broker_scope=(),
+        broker_scope=scope.owned_broker_ids,
+        broker_scope_source=BrokerScopeSource.OWNED,
+        owned_broker_ids=scope.owned_broker_ids,
     )
 
 
@@ -396,6 +404,8 @@ async def _build_broker_concentration_comparison(context: BuildContext, dependen
     if not broker_summary.holdings:
         return _unavailable_comparison(scope, reason_code=REASON_BROKER_NO_POSITIONS, message="This broker has no valued positions in the selected period, so there is nothing to compare against the whole portfolio.")
 
+    if scope.broker_id not in scope.owned_broker_ids:
+        return _unavailable_comparison(scope, reason_code=REASON_BROKER_NOT_OWNED, message="The user does not own this broker, so it is no part of the user's portfolio and there is nothing to compare it with.")
     portfolio_scope = _whole_portfolio_scope(scope)
     try:
         # R11: the broker is whole, so the portfolio it is compared with counts every broker whole too (one basis for the share).
@@ -452,7 +462,7 @@ BROKER_CONCENTRATION_CONTEXT_COMPONENT = ComponentSpec(
 
 BROKER_CONCENTRATION_COMPARISON_COMPONENT = ComponentSpec(
     component_id="broker.concentration_comparison",
-    version=2,  # v2 (T-U9): the share through percent_of; distinct reason_code for a summary without positions
+    version=3,  # v2 (T-U9): the share through percent_of; distinct reason_code for a summary without positions. v3 (78 L10b): the portfolio is the owned brokers, whole; a broker the user does not own has no comparison
     domains=frozenset({Domain.BROKER}),
     output_model=BrokerConcentrationComparisonPayload,
     builder=_build_broker_concentration_comparison,

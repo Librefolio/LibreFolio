@@ -64,11 +64,12 @@ from backend.app.services.ai_export.analyses.spec import (
 )
 from backend.app.services.ai_export.catalog_visibility import CatalogVisibility
 from backend.app.services.ai_export.components.asset_resources import AssetNotFoundError
+from backend.app.services.ai_export.components.broker_scope import ASSET_FX_BROKER_COMPONENT_IDS, REASON_NO_OWNED_BROKERS
 from backend.app.services.ai_export.components.catalog import build_component_registry
 from backend.app.services.ai_export.components.envelope import SectionEnvelope
 from backend.app.services.ai_export.components.registry import ComponentRegistry
 from backend.app.services.ai_export.components.technical_shared import load_fx_rate_series
-from backend.app.services.ai_export.components.types import BuildScope, DetailLevel, Domain
+from backend.app.services.ai_export.components.types import BrokerScopeSource, BuildScope, DetailLevel, Domain
 from backend.app.services.ai_export.composer import (
     AnalysisVersionMismatchError,
     Composer,
@@ -471,18 +472,54 @@ class AiExportSnapshotService:
         result = await self.db.execute(select(BrokerUserAccess.broker_id, BrokerUserAccess.share_percentage).where(BrokerUserAccess.user_id == user_id, BrokerUserAccess.role == UserRole.OWNER))
         return frozenset(broker_id for broker_id, share in result.all() if share is None or share > 0)
 
-    async def _export_scope(self, request: AiExportSnapshotRequest, broker_scope: tuple[int, ...], *, user_id: int) -> AiExportExportScope | None:
+    async def _export_scope(self, request: AiExportSnapshotRequest, scope: BuildScope) -> AiExportExportScope | None:
         """The scope fact of a Portfolio export that leaves out an owned broker, the left-out ones by name (D12 (b)); None otherwise (78 L10)."""
         if not isinstance(request, AiExportPortfolioSnapshotRequest):
             return None
-        owned = await self._owned_broker_ids(user_id)
-        excluded = owned.difference(broker_scope)
+        broker_scope = scope.broker_scope
+        excluded = set(scope.owned_broker_ids).difference(broker_scope)
         if not excluded:
             return None
         rows = (await self.db.execute(select(Broker).where(Broker.id.in_(sorted(excluded))))).scalars()
         names = {broker.id: broker.name for broker in rows if broker.id is not None}
         excluded_brokers = tuple(AiExportBrokerDirectoryEntry(broker_id=broker_id, display_name=names[broker_id]) for broker_id in sorted(excluded) if broker_id in names)
         return AiExportExportScope(included_broker_ids=tuple(sorted(broker_scope)), excluded_brokers=excluded_brokers)
+
+    def _unavailable_dataset_ids(self, prepared: AiExportPreparedRequest) -> tuple[str, ...]:
+        """The suggested datasets this user cannot select: they read brokers and the scope holds none (78 L10b)."""
+        if prepared.analysis is None or prepared.scope.broker_scope:
+            return ()
+        return tuple(sorted(suggestion.dataset_id for suggestion in prepared.analysis.additional_export_suggestions if self._dataset_reads_brokers(suggestion.dataset_id)))
+
+    def _dataset_reads_brokers(self, dataset_id: str) -> bool:
+        """Whether a dataset's components (with their dependencies) read the scope's brokers (78 L10b)."""
+        dataset = self.dataset_registry.get(dataset_id)
+        if dataset.domain is Domain.PORTFOLIO:
+            return True
+        pending = [*dataset.required_component_ids, *dataset.optional_component_ids]
+        seen: set[str] = set()
+        while pending:
+            component_id = pending.pop()
+            if component_id in seen:
+                continue
+            seen.add(component_id)
+            if component_id in ASSET_FX_BROKER_COMPONENT_IDS:
+                return True
+            pending.extend(self.component_registry.get(component_id).dependencies)
+        return False
+
+    def _selection_reads_brokers(self, domain: Domain, dataset: DatasetSpec | None, analysis: AnalysisSpec | None) -> bool:
+        """Whether the selection needs brokers: every Portfolio one; an Asset or FX one through its components (78 L10b).
+
+        A Broker selection always has its broker. An Asset or FX selection of market data only stays available to a user
+        who owns no broker.
+        """
+        if domain is Domain.BROKER:
+            return False
+        if domain is Domain.PORTFOLIO:
+            return True
+        dataset_ids = [dataset.dataset_id] if dataset is not None else [*analysis.required_dataset_ids, *analysis.optional_dataset_ids]  # type: ignore[union-attr]
+        return any(self._dataset_reads_brokers(dataset_id) for dataset_id in dataset_ids)
 
     def _resolve_selection(
         self,
@@ -551,16 +588,22 @@ class AiExportSnapshotService:
             )
         dataset, analysis = self._resolve_selection(request)
         accessible = await self._accessible_broker_ids(user_id)
+        owned = tuple(sorted(await self._owned_broker_ids(user_id)))
 
+        # 78 L10b (D13): a request that names no broker means the brokers the user owns, the Dashboard's rule; never every
+        # accessible broker, which would bring in the brokers only shared with the user
         if isinstance(request, AiExportBrokerSnapshotRequest):
-            requested = (request.broker_id,)
+            requested, source = (request.broker_id,), BrokerScopeSource.REQUESTED
         elif not request.broker_ids:
-            requested = accessible
+            requested, source = owned, BrokerScopeSource.OWNED
         else:
-            requested = tuple(request.broker_ids)
+            requested, source = tuple(request.broker_ids), BrokerScopeSource.REQUESTED
         denied = tuple(sorted(set(requested).difference(accessible)))
         if denied:
             raise AiExportBrokerAccessDeniedError(denied)
+        if not requested and self._selection_reads_brokers(Domain(request.domain), dataset, analysis):
+            # No broker owned and none named: a selection that reads positions, exposure or a portfolio has nothing to read
+            raise AiExportSelectionNotApplicableError((analysis or dataset).applicability_code, REASON_NO_OWNED_BROKERS)  # type: ignore[union-attr]
 
         scope = BuildScope(
             request_id=uuid4().hex,
@@ -571,6 +614,8 @@ class AiExportSnapshotService:
             period_end=request.period.end,
             target_currency=request.target_currency,
             broker_scope=tuple(sorted(requested)),
+            broker_scope_source=source,
+            owned_broker_ids=owned,
             asset_id=(request.asset_id if isinstance(request, AiExportAssetSnapshotRequest) else None),
             broker_id=(request.broker_id if isinstance(request, AiExportBrokerSnapshotRequest) else None),
             base_currency=(request.base_currency if isinstance(request, AiExportFxSnapshotRequest) else None),
@@ -696,6 +741,7 @@ class AiExportSnapshotService:
         meta: AiExportSnapshotMeta,
         dataset_manifest: tuple[AiExportDatasetManifestEntry, ...],
         export_scope: AiExportExportScope | None = None,
+        unavailable_dataset_ids: tuple[str, ...] = (),
         analysis_contract: AiExportAnalysisContract | None,
         technical_sampling: AiExportTechnicalSamplingManifest | None,
         event_selection: AiExportEventSelectionManifest | None,
@@ -715,6 +761,7 @@ class AiExportSnapshotService:
             target=target,
             entity_directory=entity_directory,
             export_scope=export_scope,
+            unavailable_dataset_ids=unavailable_dataset_ids,
             meta=meta,
             dataset_manifest=dataset_manifest,
             analysis_contract=analysis_contract,
@@ -871,7 +918,8 @@ class AiExportSnapshotService:
             broker_scope=prepared.broker_scope,
         )
 
-        export_scope = await self._export_scope(request, prepared.broker_scope, user_id=prepared.scope.user_id)
+        export_scope = await self._export_scope(request, prepared.scope)
+        unavailable_dataset_ids = self._unavailable_dataset_ids(prepared)
 
         generated_at = datetime.now(UTC)
         history_coverage = await _fx_history_coverage(context) if isinstance(request, AiExportFxSnapshotRequest) and _requires_fx_history_coverage(dataset_manifest) else None
@@ -892,6 +940,7 @@ class AiExportSnapshotService:
             target=_target_reference(request),
             entity_directory=entity_directory,
             export_scope=export_scope,
+            unavailable_dataset_ids=unavailable_dataset_ids,
             meta=meta,
             dataset_manifest=dataset_manifest,
             analysis_contract=analysis_contract,

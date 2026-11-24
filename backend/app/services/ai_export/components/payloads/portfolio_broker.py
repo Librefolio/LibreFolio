@@ -47,6 +47,7 @@ from backend.app.schemas.portfolio.report import PortfolioReportQuery, Portfolio
 from backend.app.schemas.portfolio.summary import AllocationItem, AssetPeriodContribution, OtherPeriodEffect, OtherPeriodEffectCode, PortfolioHolding, UnallocatedContribution
 from backend.app.schemas.risk.scope import PortfolioRiskScope
 from backend.app.schemas.risk.vocabulary import RiskScopeKind
+from backend.app.services.ai_export.components.broker_scope import scope_broker_ids
 from backend.app.services.ai_export.components.resources import LotsResultsResource
 from backend.app.services.ai_export.components.types import BuildScope, DetailLevel, Domain, ResourceKey
 from backend.app.services.ai_export.temporal.plan import Bucket, BucketPlan
@@ -900,10 +901,8 @@ def sort_fifo_lots(rows: Sequence[tuple[int, FifoLotRow]]) -> list[FifoLotRow]:
 async def resolve_accessible_broker_ids(session: AsyncSession, user_id: int) -> list[int]:
     """Every broker_id `user_id` has any access role on, sorted ascending.
 
-    Used only when `BuildScope.broker_scope` is empty (whole-portfolio scope):
-    FIFO asset discovery needs a concrete broker_id list, unlike
-    `PortfolioService`/`LotsAnalysisService`, which already resolve `None` to
-    "every accessible broker" internally.
+    The permission check of `portfolio.income_timeline`, which intersects the scope with it. Never a stand-in for an
+    empty scope: since 78 L10b an empty scope holds no broker (`broker_scope.scope_broker_ids`).
     """
     result = await session.execute(select(BrokerUserAccess.broker_id).where(BrokerUserAccess.user_id == user_id))
     return sorted({int(broker_id) for broker_id in result.scalars().all()})
@@ -914,11 +913,10 @@ def export_risk_scope(scope: BuildScope) -> PortfolioRiskScope:
 
     The one place that builds it, for the drawdown (`drawdown_context.py`) and the risk evidence (`risk_evidence.py`),
     so the two can never measure different brokers. It is the scope the positions and the cash read. `broker_ids=None`
-    reads in Risk as every accessible broker, so it would count the brokers the export left out: a scope with brokers
-    always passes them. An empty one (never from `prepare_request`, which resolves an unfiltered request to the
-    accessible brokers) passes None, the same set, since Risk refuses an empty list.
+    reads in Risk as every accessible broker, so it would count the brokers the export left out: the scope always
+    passes its brokers, and an empty scope (no broker, 78 L10b) is refused by `scope_broker_ids`.
     """
-    return PortfolioRiskScope(kind=RiskScopeKind.PORTFOLIO, broker_ids=list(scope.broker_scope) or None, apply_ownership_share=counts_ownership_share(scope))
+    return PortfolioRiskScope(kind=RiskScopeKind.PORTFOLIO, broker_ids=scope_broker_ids(scope, reader="risk scope"), apply_ownership_share=counts_ownership_share(scope))
 
 
 def counts_ownership_share(scope: BuildScope) -> bool:
@@ -956,7 +954,7 @@ async def load_portfolio_report(
 
     async def _loader(session: AsyncSession) -> PortfolioReportResponse:
         query = PortfolioReportQuery(
-            broker_ids=list(scope.broker_scope) if scope.broker_scope else None,
+            broker_ids=scope_broker_ids(scope, reader="portfolio report"),
             date_range=OpenDateRangeModel(start=scope.period_start, end=scope.period_end),
             target_currency=scope.target_currency,
             include_summary=True,
@@ -973,11 +971,7 @@ async def load_portfolio_report(
 
 async def discover_transacted_asset_ids(session: AsyncSession, scope: BuildScope) -> set[int]:
     """Every distinct asset_id ever transacted within `scope`'s broker access, through `snapshot_as_of`."""
-    if scope.broker_scope:
-        broker_ids = list(scope.broker_scope)
-    else:
-        broker_ids = await resolve_accessible_broker_ids(session, scope.user_id)
-    return await default_transaction_asset_ids_loader(session, broker_ids, scope.snapshot_as_of)
+    return await default_transaction_asset_ids_loader(session, scope_broker_ids(scope, reader="transacted assets"), scope.snapshot_as_of)
 
 
 async def load_lots_results(
@@ -993,7 +987,7 @@ async def load_lots_results(
     """
 
     async def _loader(session: AsyncSession) -> LotsResultsResource:
-        broker_ids = list(scope.broker_scope) if scope.broker_scope else await resolve_accessible_broker_ids(session, scope.user_id)
+        broker_ids = scope_broker_ids(scope, reader="portfolio lots")
         asset_ids = await discover_transacted_asset_ids(session, scope)
         service = LotsAnalysisService(session)
         results: dict[int, LotsAnalysisResponse] = {}
@@ -1001,7 +995,7 @@ async def load_lots_results(
             results[asset_id] = await service.get_lots_analysis(
                 user_id=scope.user_id,
                 asset_id=asset_id,
-                broker_ids=broker_ids or None,
+                broker_ids=broker_ids,
                 date_from=None,
                 date_to=scope.snapshot_as_of,
                 target_currency=scope.target_currency,

@@ -40,6 +40,7 @@ AI_EXPORT_SERVICE_TEST_PATHS = (
     "backend/test_scripts/test_services/test_ai_export_export_scope.py",
     "backend/test_scripts/test_services/test_ai_export_fifo_failed_reconstruction.py",
     "backend/test_scripts/test_services/test_ai_export_linked_charges.py",
+    "backend/test_scripts/test_services/test_ai_export_owned_broker_scope.py",
     "backend/test_scripts/test_services/test_ai_export_portfolio_fifo_summary_in_transit.py",
     "backend/test_scripts/test_services/test_ai_export_price_day_budget.py",
     "backend/test_scripts/test_services/test_ai_export_risk_evidence_cash_share.py",
@@ -54,6 +55,7 @@ AI_EXPORT_SERVICE_TEST_PATHS = (
 # the shared DB) so the unit can honestly declare PURE isolation and run beside
 # anything.
 AI_EXPORT_PURE_TEST_PATHS = (
+    "backend/test_scripts/test_services/test_ai_export_broker_scope_contract.py",
     "backend/test_scripts/test_services/test_ai_export_build_failure_log.py",
     "backend/test_scripts/test_services/test_ai_export_components_drawdown_total_loss.py",
     "backend/test_scripts/test_services/test_ai_export_fx_payload_invariants.py",

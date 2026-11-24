@@ -48,7 +48,7 @@ from backend.app.services.ai_export.components.risk_evidence import (
     _build_tail_risk,
     select_correlated_pairs,
 )
-from backend.app.services.ai_export.components.types import BuildScope, DetailLevel, Domain, PeriodBehavior
+from backend.app.services.ai_export.components.types import BrokerScopeSource, BuildScope, DetailLevel, Domain, PeriodBehavior
 from backend.app.services.ai_export.datasets.catalog import build_dataset_registry
 from backend.app.services.ai_export.dependencies import BuildContext, ResourceLoadError, build_bucket_plan_for_scope
 
@@ -119,7 +119,12 @@ async def session():
         yield s
 
 
-def _scope(*, broker_scope: tuple[int, ...] = ()) -> BuildScope:
+_OWNED_BROKERS: tuple[int, ...] = (1, 2)
+"""78 L10b: the whole portfolio is the owned brokers, named (an empty scope means no broker)."""
+
+
+def _scope(*, broker_scope: tuple[int, ...] | None = None) -> BuildScope:
+    """The whole portfolio (the owned brokers) without `broker_scope`; a filter with it."""
     return BuildScope(
         request_id="req-portfolio-risk-evidence",
         user_id=42,
@@ -128,7 +133,9 @@ def _scope(*, broker_scope: tuple[int, ...] = ()) -> BuildScope:
         period_start=PERIOD_START,
         period_end=PERIOD_END,
         target_currency="EUR",
-        broker_scope=broker_scope,
+        broker_scope=_OWNED_BROKERS if broker_scope is None else broker_scope,
+        broker_scope_source=BrokerScopeSource.OWNED if broker_scope is None else BrokerScopeSource.REQUESTED,
+        owned_broker_ids=_OWNED_BROKERS,
     )
 
 
@@ -250,7 +257,8 @@ class TestRiskRequest:
         assert set(analytics) == {"risk_contribution", "historical_var", "correlation"}
         assert analytics["historical_var"].parameters == {"confidence_level": 0.95, "horizon_days": 30}
         assert analytics["correlation"].parameters == {}
-        assert request.scope.broker_ids is None
+        # 78 L10b: the whole portfolio passes its brokers, never `None` (every accessible broker).
+        assert request.scope.broker_ids == list(_OWNED_BROKERS)
         assert request.scope.apply_ownership_share is True
 
     @pytest.mark.asyncio

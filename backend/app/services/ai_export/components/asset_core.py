@@ -89,7 +89,7 @@ from backend.app.services.ai_export.components.asset_resources import (
 )
 from backend.app.services.ai_export.components.envelope import SectionEnvelope
 from backend.app.services.ai_export.components.spec import ComponentSpec
-from backend.app.services.ai_export.components.types import Domain, PeriodBehavior
+from backend.app.services.ai_export.components.types import BrokerScopeSource, Domain, PeriodBehavior
 from backend.app.services.ai_export.dependencies import BuildContext
 from backend.app.services.assets.profile.catalogue import CATALOGUE
 from backend.app.services.assets.profile.store import ProfileStep
@@ -304,7 +304,8 @@ def _build_portfolio_role(scope, report, asset_holdings) -> AssetPortfolioRoleBa
     portfolio) - never a divide-by-zero or a fabricated concentration figure.
     Emits no subjective role label (core/satellite is the reader's job).
     """
-    broker_scope_mode = "SCOPED_BROKERS" if scope.broker_scope else "WHOLE_ACCESSIBLE_PORTFOLIO"
+    # 78 L10b: where the brokers come from, never inferred from an empty scope (which holds no broker)
+    broker_scope_mode = "OWNED_BROKERS" if scope.broker_scope_source is BrokerScopeSource.OWNED else "REQUESTED_BROKERS"
     unavailable: list[AssetPortfolioRoleUnavailable] = []
 
     # This asset's aggregate value across brokers (each leg counted once).
@@ -700,7 +701,7 @@ ASSET_MARKET_SNAPSHOT_SPEC = ComponentSpec(
 
 ASSET_POSITION_SCOPE_SPEC = ComponentSpec(
     component_id="asset.position_scope",
-    version=1,
+    version=2,
     domains=frozenset({Domain.ASSET}),
     output_model=AssetPositionScopePayload,
     builder=_build_position_scope,

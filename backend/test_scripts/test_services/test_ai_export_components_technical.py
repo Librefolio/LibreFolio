@@ -59,7 +59,7 @@ from backend.app.services.ai_export.components.technical_context import (
     FX_TECHNICAL_CONTEXT_COMPONENTS,
     PORTFOLIO_TECHNICAL_CONTEXT_COMPONENTS,
 )
-from backend.app.services.ai_export.components.types import BuildScope, DetailLevel, Domain, PeriodBehavior
+from backend.app.services.ai_export.components.types import BrokerScopeSource, BuildScope, DetailLevel, Domain, PeriodBehavior
 from backend.app.services.ai_export.dependencies import (
     BuildContext,
     build_bucket_plan_for_scope,
@@ -82,6 +82,9 @@ from backend.app.services.portfolio.portfolio_service import PortfolioService
 from backend.app.services.signal_plugins.drawdown.plugin import DrawdownParams, DrawdownPlugin
 from backend.app.services.signals.registry import SignalPluginRegistry
 from backend.app.services.signals.service import SignalService
+
+_OWNED_BROKERS: tuple[int, ...] = (1, 2)
+"""78 L10b: the brokers a whole-scope test reads, named (an empty scope means no broker)."""
 
 #: Frozen 20-instance Asset technical universe.
 ASSET_BUNDLE_INSTANCE_IDS = frozenset(
@@ -263,9 +266,14 @@ def _scope(**overrides) -> BuildScope:
         "period_start": date(2026, 1, 1),
         "period_end": date(2026, 2, 28),
         "target_currency": CURRENCY,
-        "broker_scope": (),
+        # 78 L10b: a whole scope is the owned brokers, named; an empty scope means no broker.
+        "broker_scope": _OWNED_BROKERS,
+        "broker_scope_source": BrokerScopeSource.OWNED,
+        "owned_broker_ids": _OWNED_BROKERS,
     }
     defaults.update(overrides)
+    if "broker_scope" in overrides and "broker_scope_source" not in overrides:
+        defaults["broker_scope_source"] = BrokerScopeSource.REQUESTED
     return BuildScope(**defaults)
 
 
@@ -1058,7 +1066,9 @@ class TestMultiOutputOhlc:
         table = technical_shared.build_indicator_table_payloads(
             (result,),
             context,
-        )[0].model_dump(mode="json")
+        )[
+            0
+        ].model_dump(mode="json")
         row = next(row for row in table["rows"] if row["start_date"] == bucket.start_date.isoformat() and row["end_date"] == bucket.end_date.isoformat())
 
         assert row["cells"]["bands.lower"]["min"]["date"] == middle.isoformat()

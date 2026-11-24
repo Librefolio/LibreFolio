@@ -1935,3 +1935,47 @@ def test_copy_only_credential_normalization_never_changes_source(tmp_path: Path)
     with sqlite3.connect(f"file:{source.resolve()}?mode=ro&immutable=1", uri=True) as connection:
         source_hash = connection.execute("SELECT hashed_password FROM users WHERE username = 'probe_user'").fetchone()[0]
     assert verify_password("OldProbePass123!", source_hash) is True
+
+
+@pytest.mark.asyncio
+async def test_the_probes_all_scope_owns_the_brokers_the_runtime_owns(tmp_path: Path):
+    """78 L10b: the probe's «all» scope is the runtime's owned brokers, by the same rule (role owner, share above zero).
+
+    The runtime reads it in `AiExportSnapshotService._owned_broker_ids` (the Dashboard's rule); the probe in SQL on its
+    copied database (`_owned_brokers`). One book, every kind of access: owner at 1, at a half, at zero, viewer, editor.
+    """
+    from decimal import Decimal  # noqa: PLC0415
+
+    from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine  # noqa: PLC0415
+    from sqlalchemy.pool import NullPool  # noqa: PLC0415
+
+    from backend.app.db.base import SQLModel  # noqa: PLC0415 — every model, for create_all
+    from backend.app.db.models import Broker, BrokerUserAccess, User, UserRole  # noqa: PLC0415
+    from backend.app.services.ai_export.runtime_service import AiExportSnapshotService  # noqa: PLC0415
+    from backend.test_scripts.diagnostics.ai_export_real_prompt_probe import _owned_brokers  # noqa: PLC0415
+
+    database = tmp_path / "owned_parity.sqlite"
+    engine = create_async_engine(f"sqlite+aiosqlite:///{database}", poolclass=NullPool)
+    accesses = (("full", UserRole.OWNER, "1"), ("half", UserRole.OWNER, "0.5"), ("zero", UserRole.OWNER, "0"), ("viewer", UserRole.VIEWER, "0"), ("editor", UserRole.EDITOR, "0"))
+    try:
+        async with engine.begin() as connection:
+            await connection.run_sync(SQLModel.metadata.create_all)
+        async with AsyncSession(engine, expire_on_commit=False) as session:
+            user = User(username="l10b_probe_parity", email="l10b_probe_parity@test.com", hashed_password="fakehash", is_active=True)
+            brokers = {label: Broker(name=f"L10b parity {label}") for label, _role, _share in accesses}
+            session.add_all([user, *brokers.values()])
+            await session.flush()
+            session.add_all(BrokerUserAccess(broker_id=brokers[label].id, user_id=user.id, role=role, share_percentage=Decimal(share)) for label, role, share in accesses)
+            await session.commit()
+            runtime_owned = await AiExportSnapshotService(session)._owned_broker_ids(user.id)
+        user_id = user.id
+        expected = {brokers["full"].id, brokers["half"].id}
+    finally:
+        await engine.dispose()
+
+    with sqlite3.connect(f"file:{database.resolve()}?mode=ro", uri=True) as connection:
+        connection.row_factory = sqlite3.Row
+        probe_owned = {int(row["id"]) for row in _owned_brokers(connection, user_id)}
+
+    assert runtime_owned == expected, "premise: the runtime's rule"
+    assert probe_owned == runtime_owned
