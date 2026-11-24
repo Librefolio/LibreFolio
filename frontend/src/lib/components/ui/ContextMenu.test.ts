@@ -44,7 +44,7 @@ describe('ContextMenu — a blocked item says why (77 SEL-M)', () => {
         open();
         const sync = item('sync');
         expect(sync).toHaveAttribute('aria-disabled', 'true');
-        expect(sync).not.toBeDisabled();
+        expect(sync).not.toHaveAttribute('disabled');
         expect(sync).toHaveAttribute('data-disabled-reason', 'inactive');
         const described = document.getElementById(sync.getAttribute('aria-describedby') ?? '');
         expect(described?.textContent).toBe('The Asset is inactive');

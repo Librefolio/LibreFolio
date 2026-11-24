@@ -569,7 +569,7 @@ describe('FxProviderSelect — a route through a provider to configure (76 N3c)'
         });
         expect(chain).toHaveAttribute('data-needs-setup', 'true');
         expect(chain).toHaveAttribute('aria-disabled', 'true');
-        expect(chain).not.toBeDisabled();
+        expect(chain).not.toHaveAttribute('disabled');
         expect(within(picker).getByTestId('fx-route-direct-ECB')).toHaveAttribute('data-needs-setup', 'false');
 
         await fireEvent.click(chain);
