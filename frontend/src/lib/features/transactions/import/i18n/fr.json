@@ -208,7 +208,8 @@
       "date_unreadable_more": "{n, plural, one {# autre ligne a} other {# autres lignes ont}} une date non valide dans ce format : la même correction s’applique.",
       "traderepublic_other_account": "{count, plural, one {# ligne appartient} other {# lignes appartiennent}} à un autre compte, par exemple le compte JUNIOR d’un enfant, et {count, plural, one {a été ignorée} other {ont été ignorées}} : exportez ce compte depuis son propre accès et importez-le dans un courtier à part.",
       "traderepublic_tax_refund": "{count, plural, one {# remboursement d’impôt a été importé comme intérêt} other {# remboursements d’impôt ont été importés comme intérêts}} (« Tax refund ») : c’est de l’argent rendu sur le gain de l’investissement, il compte donc dans le P&L.",
-      "traderepublic_not_yet_settled": "{count, plural, one {# ligne est datée après aujourd’hui : elle n’est pas encore réglée et a été laissée de côté} other {# lignes sont datées après aujourd’hui : elles ne sont pas encore réglées et ont été laissées de côté}}. Elles viendront avec le prochain export."
+      "traderepublic_not_yet_settled": "{count, plural, one {# ligne est datée après aujourd’hui : elle n’est pas encore réglée et a été laissée de côté} other {# lignes sont datées après aujourd’hui : elles ne sont pas encore réglées et ont été laissées de côté}}. Elles viendront avec le prochain export.",
+      "investimental_order_start_missing": "Ordre {order} ({symbol}, dernière exécution le {date} à {price}) : le fichier commence avec cet ordre déjà en cours, donc sa quantité totale ne se déduit pas du fichier {visible, select, yes {(le fichier montre {quantity} pour {amount} {currency})} other {(aucune des exécutions qu'il montre ne peut être comptée)}}. L'ordre n'a pas été importé : saisissez-le à la main à partir de votre relevé."
     },
     "evidenceRowsTitle": "Lignes du fichier",
     "evidenceRowCount": "{n} lignes",
@@ -565,7 +566,8 @@
       "rows_unreadable": "La dernière colonne indique ce qui n’a pas pu être lu dans chaque ligne.",
       "traderepublic_other_account": "Sur ces lignes, la colonne account_type n’est pas DEFAULT.",
       "traderepublic_tax_refund": "Un impôt positif est de l’argent rendu.",
-      "traderepublic_not_yet_settled": "La date (ou la value_date) de ces lignes est postérieure à aujourd’hui."
+      "traderepublic_not_yet_settled": "La date (ou la value_date) de ces lignes est postérieure à aujourd’hui.",
+      "investimental_order_start_missing": "Chaque ligne donne le volume encore ouvert. Les premières lignes de l'ordre, avec les premières exécutions, ne sont pas dans le fichier."
     },
     "notesCount": "{n, plural, one {# note} many {# notes} other {# notes}}",
     "noNotices": "Ni avertissement ni note",

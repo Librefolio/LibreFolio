@@ -156,6 +156,7 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 
 ### 🐛 Corrections
 
+- Investimental (bêta) : un ordre exécuté en plusieurs fois est importé avec toute la quantité et tout le montant exécutés ; avant, seule sa dernière partie entrait (un ordre de vente de 210 parts arrivait comme 64). Si vous avez déjà importé un tel ordre, supprimez une fois cette transaction et importez de nouveau le fichier : la transaction corrigée arrive comme nouvelle. Un fichier qui commence avec un ordre déjà en cours ne peut pas donner sa quantité totale : cet ordre est laissé de côté, et un avertissement montre ce que contient le fichier, pour que vous le saisissiez à la main.
 - Après un changement du type d'un actif, l'allocation « Par type » montrait encore l'ancien type jusqu'à 24 heures.
 - Sur un téléphone, la fenêtre d'une transaction ne défile plus sur le côté quand l'actif a un nom long : les champs tiennent de nouveau dans l'écran, en consultation et en modification. Le défaut existait déjà dans la 1.3.0.
 - Une transaction ouverte en consultation depuis l'onglet Transactions d'un courtier propose maintenant le crayon de modification, comme sur la page Transactions, à qui peut modifier ce courtier.
