@@ -505,7 +505,6 @@
             "benchmark": "Référence",
             "heldBenchmark": "Référence · en portefeuille, poids {share}"
           },
-          "titleOneAsset": "Risque contre rendement",
           "portfolioName": "Portefeuille"
         },
         "rows": {
@@ -517,9 +516,7 @@
           "notHeld": "Pas dans le portefeuille : l'indice de référence est là pour la comparaison.",
           "expectedReturnShort": "Rend. annuel",
           "namedHelp": "{name}\n{help}"
-        },
-        "titleAsset": "Par rapport à une référence",
-        "benchmarkIsSubject": "La référence est cet actif lui-même : choisissez-en une autre pour comparer."
+        }
       },
       "l4": {
         "title": "Que se passe-t-il si… ?",

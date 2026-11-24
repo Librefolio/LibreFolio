@@ -505,7 +505,6 @@
             "benchmark": "Benchmark",
             "heldBenchmark": "Benchmark · in the portfolio, weight {share}"
           },
-          "titleOneAsset": "Risk against return",
           "portfolioName": "Portfolio"
         },
         "rows": {
@@ -517,9 +516,7 @@
           "notHeld": "Not in the portfolio: the benchmark is shown for comparison.",
           "expectedReturnShort": "Ann. return",
           "namedHelp": "{name}\n{help}"
-        },
-        "titleAsset": "Compared with a reference",
-        "benchmarkIsSubject": "The reference is this asset itself: choose another one to compare with."
+        }
       },
       "l4": {
         "title": "What if…?",
