@@ -509,6 +509,8 @@ before the patch, and after `applyChargePayload` `syncNewGroup` writes the one t
   never moves (a create that follows its parent takes it one way, as before).
 - The asset moves only when it is not empty and the parent's type takes one (not a Deposit or a Withdrawal), and only
   onto rows whose type takes one.
+- A row the sync writes loses the import todos on the fields it wrote that its new values answer (`remainingTodos`), as the row of the Form does (a todo on another field stays): an
+  imported group whose rows came without an asset is unblocked by the asset set on any one of them.
 - A group holding a saved row does not move: the batch's `chargeBrokerMismatch` / `chargeAssetMismatch` stay the guard,
   and nothing changes in the payload.
 - A create that follows its parent (`followsParent`), applied in its own Form, loses the flag before the patch, so the
