@@ -17,6 +17,7 @@
     import CashEntryNameCell from '../shared/CashEntryNameCell.svelte';
     import PlannerDialog from '../shared/PlannerDialog.svelte';
     import HelpTip from '../shared/HelpTip.svelte';
+    import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import TargetInputCell from '../shared/TargetInputCell.svelte';
     import LimitInputCell from '../shared/LimitInputCell.svelte';
     import LimitProblems from '../shared/LimitProblems.svelte';
@@ -24,10 +25,13 @@
     import {withHelpCues} from '../shared/columnHelp';
     import DistributionDialog from './DistributionDialog.svelte';
     import {STATUS_TONES} from '$lib/theme/toneClasses';
-    import {getPlannerProfile, storageKey, testId} from '../profile';
+    import {domId, getPlannerProfile, storageKey, testId} from '../profile';
+    import {stepTitleSlot} from '../shell/stepTitle.svelte';
 
     /** Read once, while the component is created: the Tool's profile (F1 of project 67), the PAC's when none is set. */
     const profile = getPlannerProfile();
+    /** The shell's title row (TL-3 of project 67): the columns button goes there, on the right; null when mounted alone. */
+    const titleSlot = stepTitleSlot();
 
     interface Props {
         draft: PlannerDraft;
@@ -198,6 +202,62 @@
     // 100%» opens from the row's menu on a long press (`enableContextMenu`, as on the Review step, P3), «Balance all» stays in the toolbar.
     const phone = new MediaQuery('max-width: 768px');
 
+    // -- The head's buttons (TL-3 of project 67, the developer's testlist of 21/11) --------------------------------------
+    // Their explanation is the button's own tooltip, after the pointer rests on it, and its description for a screen
+    // reader: no «?» beside them. When the head is too narrow they are icons only, and the tooltip carries the name too.
+    /** The last pointer over the head's buttons was a finger: a tap acts at once, so no tooltip opens over the dialog. */
+    let touchPointer = false;
+    function notePointer(event: PointerEvent): void {
+        touchPointer = event.pointerType === 'touch';
+    }
+    /**
+     * Whether a button's tooltip may open now: never for a finger; and not for a focus the button got back without the
+     * keyboard (a dialog closed with the mouse gives it back), unless the pointer rests on it.
+     */
+    function tipAllowed(trigger: HTMLElement): boolean {
+        if (touchPointer) return false;
+        const focused = trigger.contains(document.activeElement);
+        return !focused || trigger.matches(':hover') || trigger.querySelector(':focus-visible') !== null;
+    }
+    /**
+     * A button's word: hidden below this width of the head, where the three words do not fit one line. Measured on 24/11
+     * (TL-3), the row with every word on one line, both Tools: EN 520 px, ES 556, IT 583, FR 600; 41 px more with the rows
+     * ticked (FR 640 = 40rem). 42rem leaves a margin for the fonts of other systems.
+     */
+    const WORD = '@max-[42rem]:hidden';
+    /** The button's word is out of view (the head's compact form): only then the name alone says something. */
+    function wordHidden(trigger: HTMLElement): boolean {
+        const word = trigger.querySelector('[data-word]');
+        return !word || word.getClientRects().length === 0;
+    }
+    /** The tooltip of a button with an explanation: its name, then what it does. */
+    function tipHtml(name: string, help: string): string {
+        return `<strong>${escapeHtml(name)}</strong><br>${escapeHtml(help)}`;
+    }
+    const copyName = $derived($t(`${KEY}.copyDistribution`, {default: 'Copy current distribution'}));
+    const copyHelp = $derived(
+        $t(`${KEY}.copyHelp`, {
+            default:
+                'Reads how much each of these Assets weighs today in the Brokers you tick, counting only these Assets and not the cash, and brings the ratios to 100%. Assets entered by hand get 0. You see the weights before using them, and a target you changed is replaced only after you confirm.',
+        }),
+    );
+    const addCashName = $derived($t(`${R}.addCash`));
+    const addCashHelp = $derived(profile.text === 'rebalancer' ? $t(`${R}.addCashHelp`) : $t(`${KEY}.addCashHelp`));
+    const balanceAllName = $derived($t(`${KEY}.balanceAll`, {default: 'Balance all'}));
+    const COPY_HELP_ID = domId('distribution-open-help', profile);
+    const ADD_CASH_HELP_ID = domId('cash-entry-add-help', profile);
+    /** The percent line of the limits note: one name per Tool for the figure (TL-3), with it once the preview has it. */
+    const limitsPercent = $derived.by(() => {
+        const base = profile.text === 'rebalancer' ? R : KEY;
+        return totalText !== null ? $t(`${base}.limitsGuide.percentTotal`, {values: {total: totalText}}) : $t(`${base}.limitsGuide.percent`);
+    });
+
+    // The columns button on the shell's title row, while this step is on screen and has a table (TL-3).
+    $effect(() => {
+        if (!titleSlot || draft.data.assets.length === 0) return;
+        return titleSlot.hold(columnsButton);
+    });
+
     /** The name cell: an Asset's icon and name, or a cash row's icon (M3) and name. */
     /**
      * «Now» under the name (G5-1 of project 67, mockup screen 5 on a phone): only while the «Now» column is hidden, as it is
@@ -345,8 +405,9 @@
      an empty bar. -->
 {#snippet head(bar: Snippet)}
     <!-- The step keeps 12 px between its head and the table. Drawn by the table with the panel (a desktop), the head sits in
-         the panel's top slot, 8 px above the rows: 4 px more. On a phone the table has no ticks and no panel: all 12. -->
-    <div class={bar === noBar ? '' : phone.current ? 'pb-3' : 'pb-1'}>
+         the panel's top slot, 8 px above the rows: 4 px more. On a phone the table has no ticks and no panel: all 12. The head
+         is its own container (TL-3): the buttons' words go when it is narrow, on a phone too, where there is no panel. -->
+    <div class="@container {bar === noBar ? '' : phone.current ? 'pb-3' : 'pb-1'}">
         <div class="flex flex-wrap items-center gap-2">
             <p class="text-sm text-lf-secondary" data-testid={testId('targets-intro', profile)}>
                 {#if profile.text === 'rebalancer'}
@@ -355,39 +416,66 @@
                     {$t(`${KEY}.intro`, {default: 'How to split among the Assets the money you invest now, in percent.'})}
                 {/if}
             </p>
-            <div class="ml-auto flex flex-wrap items-center justify-end gap-1.5">
+            <div class="ml-auto flex flex-wrap items-center justify-end gap-1.5" onpointerover={notePointer} onpointerdown={notePointer} data-testid={testId('targets-buttons', profile)}>
                 {@render bar()}
                 {#if draft.data.assets.length > 0}
-                    <button type="button" class={BUTTON_SECONDARY} disabled={!canBalanceAll} data-testid={testId('targets-balance-all', profile)} onclick={() => applyBalance(editable.map((_, index) => index))}>
-                        <Scale class="h-4 w-4" aria-hidden="true" />
-                        {$t(`${KEY}.balanceAll`, {default: 'Balance all'})}
-                    </button>
-                {/if}
-                <div class="flex items-center gap-0.5">
-                    <button type="button" class={BUTTON_SECONDARY} disabled={copyDisabled} data-testid={testId('distribution-open', profile)} onclick={() => (copying = true)}>
-                        <PieChart class="h-4 w-4" aria-hidden="true" />
-                        {$t(`${KEY}.copyDistribution`, {default: 'Copy current distribution'})}
-                    </button>
-                    <HelpTip
-                        label={$t(`${KEY}.copyDistribution`, {default: 'Copy current distribution'})}
-                        help={$t(`${KEY}.copyHelp`, {
-                            default:
-                                'Reads how much each of these Assets weighs today in the Brokers you tick, counting only these Assets and not the cash, and brings the ratios to 100%. Assets entered by hand get 0. You see the weights before using them, and a target you changed is replaced only after you confirm.',
-                        })}
-                        testid={testId('distribution-help', profile)}
-                    />
-                </div>
-                {#if profile.cashEntries !== 'none'}
-                    <div class="flex items-center gap-0.5">
-                        <button type="button" class={BUTTON_SECONDARY} data-testid={testId('cash-entry-add', profile)} onclick={() => (addingCash = true)}>
-                            <Plus class="h-4 w-4" aria-hidden="true" />
-                            {$t(`${R}.addCash`)}
+                    <Tooltip text={balanceAllName} interactiveChild openOnFocus showIf={(trigger) => wordHidden(trigger) && tipAllowed(trigger)}>
+                        <button
+                            type="button"
+                            class={BUTTON_SECONDARY}
+                            disabled={!canBalanceAll}
+                            aria-label={balanceAllName}
+                            data-testid={testId('targets-balance-all', profile)}
+                            onclick={(event) => {
+                                // The click acts; it does not pin the tooltip.
+                                event.stopPropagation();
+                                applyBalance(editable.map((_, index) => index));
+                            }}
+                        >
+                            <Scale class="h-4 w-4" aria-hidden="true" />
+                            <span class={WORD} data-word>{balanceAllName}</span>
                         </button>
-                        <HelpTip label={$t(`${R}.addCash`)} help={profile.text === 'rebalancer' ? $t(`${R}.addCashHelp`) : $t(`${KEY}.addCashHelp`)} />
-                    </div>
+                    </Tooltip>
                 {/if}
-                {#if draft.data.assets.length > 0}
-                    <TableColumns table={tableRef} testid={testId('targets-columns', profile)} />
+                <Tooltip html={tipHtml(copyName, copyHelp)} maxWidth="320px" interactiveChild openOnFocus showIf={tipAllowed}>
+                    <button
+                        type="button"
+                        class={BUTTON_SECONDARY}
+                        disabled={copyDisabled}
+                        aria-label={copyName}
+                        aria-describedby={COPY_HELP_ID}
+                        data-testid={testId('distribution-open', profile)}
+                        onclick={(event) => {
+                            event.stopPropagation();
+                            copying = true;
+                        }}
+                    >
+                        <PieChart class="h-4 w-4" aria-hidden="true" />
+                        <span class={WORD} data-word>{copyName}</span>
+                    </button>
+                </Tooltip>
+                <span id={COPY_HELP_ID} hidden>{copyHelp}</span>
+                {#if profile.cashEntries !== 'none'}
+                    <Tooltip html={tipHtml(addCashName, addCashHelp)} maxWidth="320px" interactiveChild openOnFocus showIf={tipAllowed}>
+                        <button
+                            type="button"
+                            class={BUTTON_SECONDARY}
+                            aria-label={addCashName}
+                            aria-describedby={ADD_CASH_HELP_ID}
+                            data-testid={testId('cash-entry-add', profile)}
+                            onclick={(event) => {
+                                event.stopPropagation();
+                                addingCash = true;
+                            }}
+                        >
+                            <Plus class="h-4 w-4" aria-hidden="true" />
+                            <span class={WORD} data-word>{addCashName}</span>
+                        </button>
+                    </Tooltip>
+                    <span id={ADD_CASH_HELP_ID} hidden>{addCashHelp}</span>
+                {/if}
+                {#if !titleSlot && draft.data.assets.length > 0}
+                    {@render columnsButton()}
                 {/if}
             </div>
         </div>
@@ -397,7 +485,25 @@
                 {preview.reason === 'incomplete' ? $t(`${KEY}.previewIncomplete`) : preview.reason === 'unavailable' ? $t(`${KEY}.previewUnavailable`) : $t(`tools.pacAllocator.planner.issues.${preview.reason}`, {default: $t(`${KEY}.previewUnavailable`)})}
             </p>
         {/if}
+
+        {#if draft.data.assets.length > 0}
+            <!-- The limits note above the table (TL-3): on a phone it is read before the rows, not after them. -->
+            <div class="{NOTICE.info} mt-3" data-testid={testId('targets-limits-note', profile)}>
+                <p class="font-medium">{$t(`${KEY}.limitsGuide.title`)}</p>
+                <ul class="mt-1 list-disc space-y-0.5 pl-5">
+                    <li>{$t(`${KEY}.limitsGuide.end`)}</li>
+                    <li>{$t(`${KEY}.limitsGuide.amount`)}</li>
+                    <li data-testid={testId('targets-limits-percent', profile)}>{limitsPercent}</li>
+                    <li>{$t(`${KEY}.limitsGuide.empty`)}</li>
+                </ul>
+            </div>
+        {/if}
     </div>
+{/snippet}
+
+<!-- The columns button: on the shell's title row (TL-3), or in the head when the step is mounted alone. -->
+{#snippet columnsButton()}
+    <TableColumns table={tableRef} testid={testId('targets-columns', profile)} />
 {/snippet}
 
 {#snippet noBar()}{/snippet}
@@ -456,15 +562,6 @@
         </div>
 
         <LimitProblems {draft} previewProblems={numbers?.limit_problems ?? []} />
-        <p class={NOTICE.info} data-testid={testId('targets-limits-note', profile)}>
-            {#if profile.text === 'rebalancer'}
-                {totalText !== null ? $t('tools.portfolioRebalancer.planner.targets.limitsNoteTotal', {values: {total: totalText}}) : $t('tools.portfolioRebalancer.planner.targets.limitsNote')}
-            {:else if totalText !== null}
-                {$t(`${KEY}.limitsNoteTotal`, {values: {total: totalText}})}
-            {:else}
-                {$t(`${KEY}.limitsNote`, {default: 'Limits on the value at the end of the plan. Write an amount (500) or a percentage of the total (35%). Empty field = no limit.'})}
-            {/if}
-        </p>
     {/if}
 </div>
 

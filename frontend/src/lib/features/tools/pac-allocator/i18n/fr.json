@@ -991,15 +991,21 @@
           "limitMaximum": "max",
           "limitMinimumLabel": "Minimum de {asset}",
           "limitMaximumLabel": "Maximum de {asset}",
-          "limitsNote": "Limites sur la valeur à la fin du plan. Écrivez un montant (500) ou un pourcentage du total (35 %). Champ vide = aucune limite.",
           "limitsCheck": "Vérifiez les limites",
           "limitMinAboveMax": "Le minimum ({minimum}) dépasse le maximum ({maximum}).",
-          "limitsNoteTotal": "Limites de la valeur à la fin du plan. Écrivez un montant (500) ou un pourcentage (35%) du total, l’argent que vous investissez maintenant : {total}. Champ vide = aucune limite.",
           "previewIncomplete": "Les chiffres d’aujourd’hui apparaissent quand aucun champ du brouillon n’est marqué en rouge, à aucune étape.",
           "previewUnavailable": "Les chiffres d’aujourd’hui ne sont pas disponibles pour le moment ; le calcul n’en est pas affecté.",
           "addCashHelp": "Les liquidités d’un courtier dans une devise deviennent une ligne des objectifs avec des limites seulement : ce qui doit rester au moins, ou au plus, à la fin du plan. Elle n’a pas d’objectif et ne compte pas dans le total.",
           "balanceNotNumber": "Un objectif n’est pas un nombre",
-          "balanceNoRoom": "Les lignes non sélectionnées font déjà 100 % ou plus : réduisez-les, ou sélectionnez-les."
+          "balanceNoRoom": "Les lignes non sélectionnées font déjà 100 % ou plus : réduisez-les, ou sélectionnez-les.",
+          "limitsGuide": {
+            "title": "La colonne «Limites» : quoi écrire dans Min et Max",
+            "end": "Elles limitent la valeur de la ligne à la fin du plan.",
+            "amount": "Un montant : «500» veut dire 500 dans la devise de valorisation.",
+            "percent": "Un pourcentage : «35%» veut dire 35% des liquidités que le plan peut investir.",
+            "percentTotal": "Un pourcentage : «35%» veut dire 35% des liquidités que le plan peut investir, {total}.",
+            "empty": "Champ vide : aucune limite."
+          }
         },
         "toolErrors": {
           "cleanup_failed": "Le calcul est terminé, mais la plateforme n’a pas pu nettoyer après lui.",

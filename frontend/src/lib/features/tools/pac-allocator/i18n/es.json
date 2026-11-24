@@ -991,15 +991,21 @@
           "limitMaximum": "máx",
           "limitMinimumLabel": "Mínimo de {asset}",
           "limitMaximumLabel": "Máximo de {asset}",
-          "limitsNote": "Límites sobre el valor al final del plan. Escribe un importe (500) o un porcentaje del total (35 %). Campo vacío = sin límite.",
           "limitsCheck": "Revisa los límites",
           "limitMinAboveMax": "El mínimo ({minimum}) supera el máximo ({maximum}).",
-          "limitsNoteTotal": "Límites del valor al final del plan. Escribe un importe (500) o un porcentaje (35%) del total, el dinero que inviertes ahora: {total}. Campo vacío = ningún límite.",
           "previewIncomplete": "Las cifras de hoy aparecen cuando ningún campo del borrador está marcado en rojo, en ningún paso.",
           "previewUnavailable": "Las cifras de hoy no están disponibles ahora; el cálculo no se ve afectado.",
           "addCashHelp": "El efectivo de un bróker en una divisa se convierte en una fila de los objetivos solo con límites: cuánto debe quedar como mínimo, o como máximo, al final del plan. No tiene objetivo y no cuenta en el total.",
           "balanceNotNumber": "Un objetivo no es un número",
-          "balanceNoRoom": "Las filas no seleccionadas ya suman el 100 % o más: redúcelas, o selecciónalas."
+          "balanceNoRoom": "Las filas no seleccionadas ya suman el 100 % o más: redúcelas, o selecciónalas.",
+          "limitsGuide": {
+            "title": "La columna «Límites»: qué escribir en Mín y Máx",
+            "end": "Limitan el valor de la fila al final del plan.",
+            "amount": "Un importe: «500» significa 500 en la divisa de valoración.",
+            "percent": "Un porcentaje: «35%» significa el 35% de la liquidez que el plan puede invertir.",
+            "percentTotal": "Un porcentaje: «35%» significa el 35% de la liquidez que el plan puede invertir, {total}.",
+            "empty": "Campo vacío: ningún límite."
+          }
         },
         "toolErrors": {
           "cleanup_failed": "El cálculo terminó, pero la plataforma no pudo limpiar después.",

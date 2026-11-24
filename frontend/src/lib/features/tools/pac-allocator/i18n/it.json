@@ -991,15 +991,21 @@
           "limitMaximum": "max",
           "limitMinimumLabel": "Minimo di {asset}",
           "limitMaximumLabel": "Massimo di {asset}",
-          "limitsNote": "Limiti sul valore alla fine del piano. Scrivi un importo (500) o una percentuale del totale (35%). Campo vuoto = nessun limite.",
           "limitsCheck": "Controlla i limiti",
           "limitMinAboveMax": "Il minimo ({minimum}) supera il massimo ({maximum}).",
-          "limitsNoteTotal": "Limiti sul valore alla fine del piano. Scrivi un importo (500) o una percentuale (35%) del totale, il denaro che investi ora: {total}. Campo vuoto = nessun limite.",
           "previewIncomplete": "Le cifre di oggi compaiono quando nessun campo della bozza è segnato in rosso, in nessun passo.",
           "previewUnavailable": "Le cifre di oggi non sono disponibili ora; il calcolo non ne risente.",
           "addCashHelp": "La cassa di un Broker in una valuta diventa una riga degli obiettivi con i soli limiti: quanto deve restare almeno, o al massimo, alla fine del piano. Non ha un obiettivo e non conta nel totale.",
           "balanceNotNumber": "Un obiettivo non è un numero",
-          "balanceNoRoom": "Le righe non selezionate fanno già il 100 % o più: abbassale, o selezionale."
+          "balanceNoRoom": "Le righe non selezionate fanno già il 100 % o più: abbassale, o selezionale.",
+          "limitsGuide": {
+            "title": "La colonna «Limiti»: cosa scrivere in Min e Max",
+            "end": "Sono limiti sul valore della voce alla fine del piano.",
+            "amount": "Un importo: «500» vuol dire 500 nella valuta di valutazione.",
+            "percent": "Una percentuale: «35%» vuol dire il 35% della liquidità che il piano può investire.",
+            "percentTotal": "Una percentuale: «35%» vuol dire il 35% della liquidità che il piano può investire, {total}.",
+            "empty": "Campo vuoto: nessun limite."
+          }
         },
         "toolErrors": {
           "cleanup_failed": "Il calcolo è terminato, ma la piattaforma non è riuscita a ripulire dopo di esso.",

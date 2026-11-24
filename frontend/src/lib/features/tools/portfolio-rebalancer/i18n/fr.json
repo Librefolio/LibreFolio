@@ -42,15 +42,17 @@
           "removeCash": "Retirer les liquidités",
           "intro": "Comment répartir le total qui entre dans le plan, liquidités comprises, en pourcentage.",
           "introTotal": "Comment répartir le total qui entre dans le plan ({total}), liquidités comprises, en pourcentage.",
-          "limitsNote": "Limites de la valeur à la fin du plan. Écrivez un montant (500) ou un pourcentage (35%) du total qui entre dans le plan. Champ vide = aucune limite.",
-          "limitsNoteTotal": "Limites de la valeur à la fin du plan. Écrivez un montant (500) ou un pourcentage (35%) du total qui entre dans le plan : {total}. Champ vide = aucune limite.",
           "now": "Aujourd’hui",
           "nowHelp": "Le poids d’aujourd’hui de cette ligne sur le total qui entre dans le plan. À titre indicatif : ce n’est pas un objectif.",
           "entry": "Ligne",
           "wire": "La part du total qui entre dans le plan que cette ligne doit avoir à la fin, en pourcentage. Les décimales sont admises.",
           "limitsHelp": "Minimum et maximum de la valeur de cette ligne à la fin du plan. Écrivez un montant dans la devise d’évaluation (500) ou un pourcentage du total qui entre dans le plan (35%). Champ vide = aucune limite.",
           "totalHelp": "Les objectifs répartissent le total qui entre dans le plan, positions et liquidités comprises : pour calculer, ils doivent totaliser exactement 100 %. «Tout équilibrer» remet chaque objectif à l’échelle en gardant les proportions (parts égales s’ils sont tous à 0). Cochez des lignes pour ne remettre à l’échelle que celles-ci. «Équilibrer à 100 %» sur une ligne lui donne ce qui manque, ou retire l’excès.",
-          "nowLine": "aujourd’hui {weight}"
+          "nowLine": "aujourd’hui {weight}",
+          "limitsGuide": {
+            "percent": "Un pourcentage : «35%» veut dire 35% du total qui entre dans le plan.",
+            "percentTotal": "Un pourcentage : «35%» veut dire 35% du total qui entre dans le plan, {total}."
+          }
         },
         "removal": {
           "cashEntry": "Liquidités des objectifs {broker} · {currency}"

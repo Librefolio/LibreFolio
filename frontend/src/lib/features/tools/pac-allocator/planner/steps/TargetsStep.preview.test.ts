@@ -10,6 +10,7 @@
  * planner's own formatters).
  */
 import {flushSync, tick} from 'svelte';
+import {get} from 'svelte/store';
 import {afterEach, beforeAll, describe, expect, it, vi} from 'vitest';
 
 vi.mock('$lib/api', () => ({
@@ -19,12 +20,14 @@ vi.mock('$lib/api', () => ({
 
 import {cleanup, fireEvent, render, screen, setupI18n, within} from '$test/component';
 import {setPrivacyEnabled} from '$lib/stores/app/privacyStore.svelte';
+import {t} from '$lib/i18n';
 import {PRIVACY_PLACEHOLDER} from '$lib/utils/privacy/maskable';
 import ProfileHarness from '../../__tests__/ProfileHarness.svelte';
 import {PlannerDraft, type DraftAsset} from '../draft.svelte';
 import {formatExactMoneyPlain, formatExactPercent} from '../format';
 import {PlannerPreview, type PreviewReady} from '../preview.svelte';
 import {PAC_PLANNER_PROFILE, REBALANCER_PLANNER_PROFILE, type PlannerProfile} from '../profile';
+import {STEP_TITLE_CONTEXT, StepTitleSlot} from '../shell/stepTitle.svelte';
 import TargetsStep from './TargetsStep.svelte';
 
 beforeAll(async () => {
@@ -363,5 +366,124 @@ describe('the Targets step and the preview', () => {
                 expect(lines('pac-planner', 'bound_min_above_max')).toHaveLength(0);
             });
         });
+    });
+});
+
+describe('the head (TL-3 of project 67, the testlist of 21/11): the limits note above the table, no «?» beside the buttons, the columns on the title row', () => {
+    const PAC = 'tools.pacAllocator.planner.targets';
+    const REB = 'tools.portfolioRebalancer.planner.targets';
+    const TOOLS = [
+        {profile: PAC_PLANNER_PROFILE, prefix: 'pac-planner', base: PAC, mountAs: null},
+        {profile: REBALANCER_PLANNER_PROFILE, prefix: 'rebalancer-planner', base: REB, mountAs: REBALANCER_PLANNER_PROFILE},
+    ] as const;
+    const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+    it('the note comes before the table: a title and four lines, the percent line with each Tool’s own figure', () => {
+        for (const tool of TOOLS) {
+            const {draft, brokerKey} = scenario(tool.profile);
+            mount(tool.mountAs, draft, previewWith('ready', ready(brokerKey)));
+            const note = screen.getByTestId(`${tool.prefix}-targets-limits-note`);
+            const table = screen.getByTestId(`${tool.prefix}-targets-table`).querySelector('table') as HTMLTableElement;
+            expect(note.compareDocumentPosition(table) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+            expect(note.querySelectorAll('li')).toHaveLength(4);
+            expect(screen.getByTestId(`${tool.prefix}-targets-limits-percent`).textContent?.trim()).toBe(get(t)(`${tool.base}.limitsGuide.percentTotal`, {values: {total: formatExactMoneyPlain(TOTAL)}}));
+            cleanup();
+
+            // Before any preview the line has no figure.
+            mount(tool.mountAs, draft, null);
+            expect(screen.getByTestId(`${tool.prefix}-targets-limits-percent`).textContent?.trim()).toBe(get(t)(`${tool.base}.limitsGuide.percent`));
+            cleanup();
+        }
+    });
+
+    it('no «?» beside a button: the help is its description, and its tooltip once the pointer rests on it', async () => {
+        for (const tool of TOOLS) {
+            const {draft, brokerKey} = scenario(tool.profile);
+            mount(tool.mountAs, draft, previewWith('ready', ready(brokerKey)));
+            expect(screen.queryByTestId(`${tool.prefix}-distribution-help`)).toBeNull();
+            const help = {
+                [`${tool.prefix}-distribution-open`]: [get(t)(`${PAC}.copyDistribution`), get(t)(`${PAC}.copyHelp`)],
+                [`${tool.prefix}-cash-entry-add`]: [get(t)(`${REB}.addCash`), get(t)(`${tool.base}.addCashHelp`)],
+            };
+            for (const [id, [name, text]] of Object.entries(help)) {
+                const button = screen.getByTestId(id);
+                expect(button.getAttribute('aria-label')).toBe(name);
+                expect(document.getElementById(button.getAttribute('aria-describedby') ?? '')?.textContent).toBe(text);
+                // No «?» in the button's group any more.
+                expect(button.parentElement?.parentElement?.querySelector('button[aria-label^="' + name + ':"]')).toBeNull();
+            }
+            const copy = screen.getByTestId(`${tool.prefix}-distribution-open`);
+            await fireEvent.mouseEnter(copy.parentElement as HTMLElement);
+            const tip = await screen.findByRole('tooltip', {}, {timeout: 2000});
+            expect(tip.textContent).toContain(help[`${tool.prefix}-distribution-open`][0]);
+            expect(tip.textContent).toContain(help[`${tool.prefix}-distribution-open`][1]);
+            await fireEvent.mouseLeave(copy.parentElement as HTMLElement);
+            cleanup();
+        }
+    });
+
+    it.each([
+        ['cash-entry-add', 'cash-entry-dialog'],
+        ['distribution-open', 'distribution'],
+    ])('a click on %s acts and pins no tooltip over its dialog', async (button, dialog) => {
+        const {draft, brokerKey} = scenario(REBALANCER_PLANNER_PROFILE);
+        mount(REBALANCER_PLANNER_PROFILE, draft, previewWith('ready', ready(brokerKey)));
+        await fireEvent.click(screen.getByTestId(`rebalancer-planner-${button}`));
+        expect(screen.getByTestId(`rebalancer-planner-${dialog}`)).toBeTruthy();
+        await wait(50);
+        expect(screen.queryByRole('tooltip')).toBeNull();
+    });
+
+    it('a finger gets no tooltip: the tap acts, and no tooltip opens over the dialog after it', async () => {
+        const {draft, brokerKey} = scenario(REBALANCER_PLANNER_PROFILE);
+        mount(REBALANCER_PLANNER_PROFILE, draft, previewWith('ready', ready(brokerKey)));
+        const button = screen.getByTestId('rebalancer-planner-cash-entry-add');
+        const wrapper = button.parentElement as HTMLElement;
+        await fireEvent.pointerOver(button, {pointerType: 'touch'});
+        await fireEvent.pointerDown(button, {pointerType: 'touch'});
+        await fireEvent.touchStart(button);
+        await fireEvent.touchEnd(button);
+        expect(screen.queryByRole('tooltip')).toBeNull();
+        // The browser's mouse events after a tap.
+        await fireEvent.mouseEnter(wrapper);
+        await fireEvent.click(button);
+        expect(screen.getByTestId('rebalancer-planner-cash-entry-dialog')).toBeTruthy();
+        await wait(700);
+        expect(screen.queryByRole('tooltip')).toBeNull();
+    });
+
+    it('the columns button goes on the shell’s title row while the step has a table, and only its own piece leaves with it', () => {
+        const {draft, brokerKey} = scenario(REBALANCER_PLANNER_PROFILE);
+        const slot = new StepTitleSlot();
+        const inShell = () => {
+            render(ProfileHarness, {props: {profile: REBALANCER_PLANNER_PROFILE, child: TargetsStep, childProps: {draft, accountGeneration: 0, preview: previewWith('ready', ready(brokerKey))}}, context: new Map([[STEP_TITLE_CONTEXT, slot]])});
+            flushSync();
+        };
+        inShell();
+        expect(slot.action).not.toBeNull();
+        // Not in the head: the shell draws it.
+        expect(screen.queryByTestId('rebalancer-planner-targets-columns')).toBeNull();
+        cleanup();
+        expect(slot.action).toBeNull();
+
+        // Another step's piece, put while this one was still mounted, stays when this one goes.
+        inShell();
+        const other = (() => {}) as unknown as NonNullable<StepTitleSlot['action']>;
+        slot.hold(other);
+        flushSync();
+        cleanup();
+        expect(slot.action).toBe(other);
+        slot.action = null;
+
+        // Without an Asset there is no table, so no columns button.
+        const empty = new PlannerDraft('EUR', 'proportional', REBALANCER_PLANNER_PROFILE);
+        render(ProfileHarness, {props: {profile: REBALANCER_PLANNER_PROFILE, child: TargetsStep, childProps: {draft: empty, accountGeneration: 0, preview: null}}, context: new Map([[STEP_TITLE_CONTEXT, slot]])});
+        flushSync();
+        expect(slot.action).toBeNull();
+        cleanup();
+
+        // Mounted alone (no shell), the head keeps it.
+        mount(REBALANCER_PLANNER_PROFILE, draft, null);
+        expect(screen.getByTestId('rebalancer-planner-targets-columns')).toBeTruthy();
     });
 });

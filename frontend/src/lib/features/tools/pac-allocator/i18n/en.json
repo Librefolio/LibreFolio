@@ -991,15 +991,21 @@
           "limitMaximum": "max",
           "limitMinimumLabel": "Minimum of {asset}",
           "limitMaximumLabel": "Maximum of {asset}",
-          "limitsNote": "Limits on the value at the end of the plan. Write an amount (500) or a percentage of the total (35%). Empty field = no limit.",
           "limitsCheck": "Check the limits",
           "limitMinAboveMax": "The minimum ({minimum}) is above the maximum ({maximum}).",
-          "limitsNoteTotal": "Limits on the value at the end of the plan. Write an amount (500) or a percentage (35%) of the total, the money you invest now: {total}. Empty field = no limit.",
           "previewIncomplete": "Today's figures appear once no field of the draft is marked in red, on any step.",
           "previewUnavailable": "Today's figures are not available right now; the calculation is not affected.",
           "addCashHelp": "A Broker's cash in one currency becomes a row of the targets with limits only: how much must stay at least, or at most, at the end of the plan. It has no target and does not count in the total.",
           "balanceNotNumber": "A target is not a number",
-          "balanceNoRoom": "The rows not selected already add up to 100% or more: lower them, or select them too."
+          "balanceNoRoom": "The rows not selected already add up to 100% or more: lower them, or select them too.",
+          "limitsGuide": {
+            "title": "The «Limits» column: what to write in Min and Max",
+            "end": "They limit the entry's value at the end of the plan.",
+            "amount": "An amount: «500» means 500 in the valuation currency.",
+            "percent": "A percentage: «35%» means 35% of the cash the plan can invest.",
+            "percentTotal": "A percentage: «35%» means 35% of the cash the plan can invest, {total}.",
+            "empty": "Empty field: no limit."
+          }
         },
         "toolErrors": {
           "cleanup_failed": "The calculation finished, but the platform could not clean up after it.",
