@@ -52,7 +52,8 @@
           "limitsGuide": {
             "percent": "Un pourcentage : «35%» veut dire 35% du total qui entre dans le plan.",
             "percentTotal": "Un pourcentage : «35%» veut dire 35% du total qui entre dans le plan, {total}."
-          }
+          },
+          "nowOtherCash": "dont liquidités sans ligne propre : {weight}"
         },
         "removal": {
           "cashEntry": "Liquidités des objectifs {broker} · {currency}"
@@ -214,6 +215,14 @@
         },
         "objectives": {
           "route_priority": "Route priority"
+        },
+        "issues": {
+          "allocation": {
+            "bounds_min_sum_exceeds_reference": "Les minimums totalisent {minimums} : plus que le total qui entre dans le plan, {reference} (liquidités et valeur estimée des positions)."
+          }
+        },
+        "problems": {
+          "limitMinimumAboveTotal": "Le minimum dépasse à lui seul le total qui entre dans le plan, {reference}."
         }
       }
     }

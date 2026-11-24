@@ -52,7 +52,8 @@
           "limitsGuide": {
             "percent": "Una percentuale: «35%» vuol dire il 35% del totale che entra nel piano.",
             "percentTotal": "Una percentuale: «35%» vuol dire il 35% del totale che entra nel piano, {total}."
-          }
+          },
+          "nowOtherCash": "di cui cassa senza voce: {weight}"
         },
         "removal": {
           "cashEntry": "Cassa degli obiettivi {broker} · {currency}"
@@ -214,6 +215,14 @@
         },
         "objectives": {
           "route_priority": "Route priority"
+        },
+        "issues": {
+          "allocation": {
+            "bounds_min_sum_exceeds_reference": "I minimi sommano {minimums}: più del totale che entra nel piano, {reference} (liquidità e valore stimato delle posizioni)."
+          }
+        },
+        "problems": {
+          "limitMinimumAboveTotal": "Il minimo da solo supera il totale che entra nel piano, {reference}."
         }
       }
     }

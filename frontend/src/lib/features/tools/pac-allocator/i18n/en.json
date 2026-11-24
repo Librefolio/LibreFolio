@@ -304,7 +304,7 @@
             "saved_fx_skipped": "The saved {pair} rate of {skipped_date} is not valid and was skipped: the rate of {used_date} was used instead. Correct it in the {pair} exchange rate editor (Edit Rates); until then the results may be slightly approximate.",
             "bound_max_below_current": "The maximum is below what the plan already holds and sales are off.",
             "bound_min_above_max": "The minimum is higher than the maximum.",
-            "bounds_min_sum_exceeds_reference": "The minimums add up to more than the money the plan can reach.",
+            "bounds_min_sum_exceeds_reference": "The minimums add up to {minimums}: more than the cash the plan can invest, {reference}.",
             "bounds_unsatisfiable": "No plan meets the minimums and maximums set here.",
             "solver_numerical_error": "The solver hit a numerical error while refining the plan: the best plan found so far is shown. It is valid and can be carried out; only its optimality is not proven.",
             "cash_limit_exceeded_by_rounding": "The plan ends this cash entry beyond its limit by {exceeded_by}, because every amount is rounded to the cent. The planner could not hold the plan exactly inside a band this narrow."
@@ -451,7 +451,8 @@
           "limitMinAboveMax": "The minimum is above the maximum.",
           "limitShareMinimumsAboveHundred": "The minimums in percent add up to more than 100%: {assets}.",
           "positionQuantityInvalid": "A position quantity is empty, not a number or below zero.",
-          "fidelityCustomMissing": "«Custom»: write how much you accept to spend for the reference row, a figure above zero."
+          "fidelityCustomMissing": "«Custom»: write how much you accept to spend for the reference row, a figure above zero.",
+          "limitMinimumAboveTotal": "The minimum alone is above the cash the plan can invest, {reference}."
         },
         "removal": {
           "cash": "Cash row {broker} · {currency}",
@@ -973,20 +974,20 @@
         },
         "targets": {
           "copyDistribution": "Copy current distribution",
-          "intro": "How to split among the Assets the money you invest now, in percent.",
+          "intro": "How to split among the Assets the cash the plan can invest, in percent.",
           "remaining": "{value} missing",
           "shape": "Distribution",
           "target": "Target %",
           "total": "Total",
-          "wire": "The share of the money you invest now that goes to this Asset, in percent. Decimals are allowed.",
+          "wire": "The share of the cash the plan can invest that goes to this Asset, in percent. Decimals are allowed.",
           "copyHelp": "Reads how much each of these Assets weighs today in the Brokers you tick, counting only these Assets and not the cash, and brings the ratios to 100%. Assets entered by hand get 0. You see the weights before using them, and a target you changed is replaced only after you confirm.",
           "excess": "+{value} in excess",
           "balance": "Balance to 100%",
-          "totalHelp": "The targets split among the Assets the money you invest now, cash and contributions included: to calculate, they must add up to exactly 100%. «Balance all» rescales every target keeping their ratios (equal parts if they are all 0). Tick some rows to rescale only those, with «Balance the selected rows to 100%». «Balance to 100%» on a row gives that Asset what is missing, or takes away the excess.",
+          "totalHelp": "The targets split among the Assets the cash the plan can invest, contributions included: to calculate, they must add up to exactly 100%. «Balance all» rescales every target keeping their ratios (equal parts if they are all 0). Tick some rows to rescale only those, with «Balance the selected rows to 100%». «Balance to 100%» on a row gives that Asset what is missing, or takes away the excess.",
           "balanceAll": "Balance all",
           "balanceSelected": "Balance the selected rows to 100%",
           "limits": "Limits",
-          "limitsHelp": "Minimum and maximum of this Asset's value at the end of the plan. Write an amount in the valuation currency (500) or a percentage of the plan's total (35%): the total is the money you invest now. Empty field = no limit.",
+          "limitsHelp": "Minimum and maximum of this Asset's value at the end of the plan. Write an amount in the valuation currency (500) or a percentage of the plan's total (35%): the total is the cash the plan can invest. Empty field = no limit.",
           "limitMinimum": "min",
           "limitMaximum": "max",
           "limitMinimumLabel": "Minimum of {asset}",
@@ -1005,7 +1006,8 @@
             "percent": "A percentage: «35%» means 35% of the cash the plan can invest.",
             "percentTotal": "A percentage: «35%» means 35% of the cash the plan can invest, {total}.",
             "empty": "Empty field: no limit."
-          }
+          },
+          "limitsChecking": "Checking the limits…"
         },
         "toolErrors": {
           "cleanup_failed": "The calculation finished, but the platform could not clean up after it.",

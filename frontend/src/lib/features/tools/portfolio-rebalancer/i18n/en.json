@@ -52,7 +52,8 @@
           "limitsGuide": {
             "percent": "A percentage: «35%» means 35% of the total that enters the plan.",
             "percentTotal": "A percentage: «35%» means 35% of the total that enters the plan, {total}."
-          }
+          },
+          "nowOtherCash": "of which cash without an entry: {weight}"
         },
         "removal": {
           "cashEntry": "Cash entry of the targets {broker} · {currency}"
@@ -214,6 +215,14 @@
         },
         "objectives": {
           "route_priority": "Route priority"
+        },
+        "issues": {
+          "allocation": {
+            "bounds_min_sum_exceeds_reference": "The minimums add up to {minimums}: more than the total that enters the plan, {reference} (cash and the estimated value of the positions)."
+          }
+        },
+        "problems": {
+          "limitMinimumAboveTotal": "The minimum alone is above the total that enters the plan, {reference}."
         }
       }
     }

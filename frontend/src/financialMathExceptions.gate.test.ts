@@ -25,6 +25,9 @@
  *   - the Rebalancer's table «Maximum acceptable cost» (R1-F (b) of project 67, developer decision of 21/11/2026,
  *     `acceptableCost.ts`): its rows and cells on the preview's total and the levels' λ, and the «Custom» λ from the
  *     euros the user types, so a choice or a figure changes the table at once. The plan reads λ, never the table.
+ *   - the summary row of the Targets step (TL-4 of project 67, `limitSums.ts`): the limits the user types, summed — an
+ *     amount as typed, a percentage as its share of the preview's total. Drawn only: the verdict on the minimums is the
+ *     backend's `limit_problems`.
  *
  * Each exception must be declared where it lives. The documentation named the four files while the code declared none
  * of them (plan 43, `plan-phase00FinancialMathHome.prompt.md:1494`): this gate was written red against that state, and
@@ -120,6 +123,7 @@ const LOT_WAC = 'src/lib/features/brokers/lots/lotWacPriceChartHelpers.ts';
 const POSITIONS_SERIES = 'src/lib/features/dashboard/positionsSeries.ts';
 const TRADE_AMOUNT = 'src/lib/features/transactions/form/txTradeAmount.ts';
 const ACCEPTABLE_COST = 'src/lib/features/tools/pac-allocator/planner/acceptableCost.ts';
+const LIMIT_SUMS = 'src/lib/features/tools/pac-allocator/planner/limitSums.ts';
 
 interface DeclaredException {
     /** Relative to `frontend/`. */
@@ -149,6 +153,7 @@ const DECLARED_EXCEPTIONS: readonly DeclaredException[] = [
     {file: POSITIONS_SERIES, annualizes: false, measure: "Y5-2, the positions return chart: the backend's fraction in base 100, and the Dashboard history moved to the left edge of the window the user picks"},
     {file: TRADE_AMOUNT, annualizes: false, measure: "W5-9 (#47), the transaction form: the trade's amount from the unit price the user types, or the unit price from the amount — one product or one quotient, exact decimals"},
     {file: ACCEPTABLE_COST, annualizes: false, measure: "R1-F (b) of project 67, the Rebalancer's Strategy step: the table «Maximum acceptable cost» (2·λ·d²/F on the preview's total and the levels' λ) and the «Custom» λ from the euros the user types"},
+    {file: LIMIT_SUMS, annualizes: false, measure: "TL-4 of project 67, the Targets step's summary row: the minimums typed together and the maximums typed together, an amount as typed and a percentage as share × the preview's total"},
 ];
 
 const DECLARED_FILES: ReadonlySet<string> = new Set(DECLARED_EXCEPTIONS.map((entry) => entry.file));

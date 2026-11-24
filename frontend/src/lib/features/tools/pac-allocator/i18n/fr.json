@@ -304,7 +304,7 @@
             "saved_fx_skipped": "Le taux {pair} enregistré du {skipped_date} n’est pas valide et a été ignoré : celui du {used_date} a été utilisé à la place. Corrigez-le dans l’éditeur du taux {pair} (Modifier les taux) ; d’ici là, les résultats peuvent être légèrement approximatifs.",
             "bound_max_below_current": "Le maximum est inférieur à ce que le plan détient déjà et les ventes sont désactivées.",
             "bound_min_above_max": "Le minimum est supérieur au maximum.",
-            "bounds_min_sum_exceeds_reference": "Les minimums totalisent plus que l’argent que le plan peut atteindre.",
+            "bounds_min_sum_exceeds_reference": "Les minimums totalisent {minimums} : plus que les liquidités que le plan peut investir, {reference}.",
             "bounds_unsatisfiable": "Aucun plan ne respecte les minimums et maximums fixés ici.",
             "solver_numerical_error": "Le solveur a rencontré une erreur numérique en affinant le plan : le meilleur plan trouvé jusqu'ici est affiché. Il est valide et exécutable ; seule son optimalité n'est pas prouvée.",
             "cash_limit_exceeded_by_rounding": "The plan ends this cash entry beyond its limit by {exceeded_by}, because every amount is rounded to the cent. The planner could not hold the plan exactly inside a band this narrow."
@@ -451,7 +451,8 @@
           "limitMinAboveMax": "Le minimum dépasse le maximum.",
           "limitShareMinimumsAboveHundred": "Les minimums en pourcentage totalisent plus de 100 % : {assets}.",
           "positionQuantityInvalid": "La quantité d’une position est vide, n’est pas un nombre ou est inférieure à zéro.",
-          "fidelityCustomMissing": "«Personnalisée» : écrivez combien vous acceptez de dépenser pour la ligne de référence, un montant supérieur à zéro."
+          "fidelityCustomMissing": "«Personnalisée» : écrivez combien vous acceptez de dépenser pour la ligne de référence, un montant supérieur à zéro.",
+          "limitMinimumAboveTotal": "Le minimum dépasse à lui seul les liquidités que le plan peut investir, {reference}."
         },
         "removal": {
           "cash": "Ligne de liquidités {broker} · {currency}",
@@ -973,20 +974,20 @@
         },
         "targets": {
           "copyDistribution": "Copier la répartition actuelle",
-          "intro": "Comment répartir entre les actifs l’argent que vous investissez maintenant, en pourcentage.",
+          "intro": "Comment répartir entre les actifs les liquidités que le plan peut investir, en pourcentage.",
           "remaining": "{value} manquant",
           "shape": "Répartition",
           "target": "Cible %",
           "total": "Total",
-          "wire": "La part de l’argent que vous investissez maintenant qui va à cet actif, en pourcentage. Les décimales sont admises.",
+          "wire": "La part des liquidités que le plan peut investir qui va à cet actif, en pourcentage. Les décimales sont admises.",
           "copyHelp": "Lit combien pèse aujourd’hui chacun de ces actifs chez les courtiers que vous cochez, en ne comptant que ces actifs et pas les liquidités, et ramène les rapports à 100 %. Les actifs saisis à la main valent 0. Vous voyez les poids avant de les utiliser, et une cible que vous avez changée n’est remplacée qu’après votre confirmation.",
           "excess": "+{value} en trop",
           "balance": "Équilibrer à 100 %",
-          "totalHelp": "Les cibles répartissent entre les actifs l’argent que vous investissez maintenant, liquidités et versements compris : pour calculer, leur somme doit faire exactement 100 %. « Tout équilibrer » redimensionne chaque cible en gardant leurs proportions (parts égales si elles sont toutes à 0). Cochez des lignes pour ne redimensionner que celles-ci, avec « Équilibrer les lignes sélectionnées à 100 % ». « Équilibrer à 100 % » sur une ligne donne à cet actif ce qui manque, ou retire l’excédent.",
+          "totalHelp": "Les cibles répartissent entre les actifs les liquidités que le plan peut investir, versements compris : pour calculer, leur somme doit faire exactement 100 %. « Tout équilibrer » redimensionne chaque cible en gardant leurs proportions (parts égales si elles sont toutes à 0). Cochez des lignes pour ne redimensionner que celles-ci, avec « Équilibrer les lignes sélectionnées à 100 % ». « Équilibrer à 100 % » sur une ligne donne à cet actif ce qui manque, ou retire l’excédent.",
           "balanceAll": "Tout équilibrer",
           "balanceSelected": "Équilibrer les lignes sélectionnées à 100 %",
           "limits": "Limites",
-          "limitsHelp": "Minimum et maximum de la valeur de cet Actif à la fin du plan. Écrivez un montant dans la devise d’évaluation (500) ou un pourcentage du total du plan (35 %) : le total est l’argent que vous investissez maintenant. Champ vide = aucune limite.",
+          "limitsHelp": "Minimum et maximum de la valeur de cet Actif à la fin du plan. Écrivez un montant dans la devise d’évaluation (500) ou un pourcentage du total du plan (35 %) : le total, ce sont les liquidités que le plan peut investir. Champ vide = aucune limite.",
           "limitMinimum": "min",
           "limitMaximum": "max",
           "limitMinimumLabel": "Minimum de {asset}",
@@ -1005,7 +1006,8 @@
             "percent": "Un pourcentage : «35%» veut dire 35% des liquidités que le plan peut investir.",
             "percentTotal": "Un pourcentage : «35%» veut dire 35% des liquidités que le plan peut investir, {total}.",
             "empty": "Champ vide : aucune limite."
-          }
+          },
+          "limitsChecking": "Vérification des limites en cours…"
         },
         "toolErrors": {
           "cleanup_failed": "Le calcul est terminé, mais la plateforme n’a pas pu nettoyer après lui.",

@@ -54,7 +54,8 @@ lives where, inside and outside the layer, is in `backend.instructions.md`, sect
    one product or quotient on exact decimals, and the total of a parent with its linked charges, one sum per currency;
    and the Rebalancer's table «maximum acceptable cost», `planner/acceptableCost.ts`, on the preview's total and the
    levels' λ, with the «Custom» λ from the euros typed: developer decision of 21/11/2026, R1-F (b) of project 67, so a
-   choice or a figure changes it at once) are the only exceptions, and each must be declared where it lives.
+   choice or a figure changes it at once; and the Targets step's summary row, `planner/limitSums.ts`, the limits typed
+   summed on the preview's total, TL-4 of project 67) are the only exceptions, and each must be declared where it lives.
 7. **Change Decimal precision or rounding only inside `decimal.localcontext()`**, never by mutating `getcontext()`.
    The portfolio replay runs in a worker thread under a copy of the request's context (J-45, `portfolio/engine.py`),
    and that copy shares the same `decimal.Context` object: a `getcontext().prec = …` in the replay would change the

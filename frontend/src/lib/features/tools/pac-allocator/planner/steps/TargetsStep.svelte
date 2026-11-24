@@ -4,13 +4,14 @@
     import {MediaQuery} from 'svelte/reactivity';
     import {t} from '$lib/i18n';
     import DataTable from '$lib/components/table/DataTable.svelte';
-    import type {BulkAction, ColumnDef, RowAction} from '$lib/components/table/types';
+    import type {BulkAction, ColumnDef, FooterCellContent, RowAction} from '$lib/components/table/types';
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {canonicalInput, compareDecimal, decimalSign, rebalanceControlPercentages, remainingControlPercentage, sumControlPercentages} from '$lib/utils/core/exactDecimal';
     import type {PlannerDraft, TargetRow} from '../draft.svelte';
     import {formatExactMoneyPlain, formatExactPercent, formatPlannerPercentUnits} from '../format';
     import type {PlannerPreview} from '../preview.svelte';
-    import {chartPercent} from '../result/model';
+    import {chartPercent, exactSign} from '../result/model';
+    import {formatLimitSum, limitSum, type LimitSum} from '../limitSums';
     import {BUTTON_SECONDARY, HINT, NOTICE} from '../ui';
     import AssetNameCell from '../shared/AssetNameCell.svelte';
     import CashEntryIcon from '../shared/CashEntryIcon.svelte';
@@ -88,6 +89,53 @@
         return 'unknown';
     });
     const excess = $derived(remaining === null ? null : remainingControlPercentage(remaining, '0'));
+
+    // -- The summary row under the table (TL-4 of project 67, the developer's testlist of 21/11) -------------------------
+    // «Metterei in fondo alla tabella una riga di summary»: the targets together, the minimums together, the maximums
+    // together. The minimums turn red on the backend's verdict only (`limit_problems`), so the row and the box never
+    // disagree: a PAC cash entry's trapped cash honours its minimum, and the sum may pass the total while the plan accepts it.
+    const minimumSum = $derived(limitSum(draft, 'minimum', numbers?.total ?? null));
+    const maximumSum = $derived(limitSum(draft, 'maximum', numbers?.total ?? null));
+    const minimumsOver = $derived((numbers?.limit_problems ?? []).some((problem) => problem.code === 'allocation.bounds_min_sum_exceeds_reference'));
+    /** A preview is on its way while limits are typed: the check of the minimums is coming (the sign the developer missed). */
+    const checkingLimits = $derived(preview?.state === 'waiting' && (minimumSum.kind !== 'none' || maximumSum.kind !== 'none'));
+
+    function sumLine(side: 'minimum' | 'maximum', sum: LimitSum, over: boolean): string {
+        if (sum.kind === 'none') return '';
+        const label = side === 'minimum' ? $t(`${KEY}.limitMinimum`, {default: 'min'}) : $t(`${KEY}.limitMaximum`, {default: 'max'});
+        const figure = sum.kind === 'sum' ? formatLimitSum(sum.value, draft.data.valuationCurrency) : '—';
+        const tone = over ? 'font-semibold text-lf-danger' : 'text-lf-secondary';
+        return `<span class="tabular-nums ${tone}" data-testid="${testId(`targets-limits-sum-${side}`, profile)}" data-over="${over ? 'true' : 'false'}"><span class="font-normal text-lf-muted">${escapeHtml(label)}</span> ${escapeHtml(figure)}</span>`;
+    }
+
+    /**
+     * The cash without an entry of its own, today (P-24, the developer's answer of 24/11): it has no row (TL-2), so «Now»
+     * adds up to less than 100%, and the summary row says the rest — under «Now», or under the names while that column is
+     * hidden (a phone). The backend's weight, shown as «Now» shows its own.
+     */
+    const otherCashText = $derived.by((): string | null => {
+        if (!showNow) return null;
+        const item = numbers?.items?.find((candidate) => candidate.kind === 'other_cash');
+        return item && exactSign(item.weight) === 1 ? formatExactPercent(item.weight, 1) : null;
+    });
+
+    const totalClass = $derived(TOTAL_CLASS[totalState]);
+    const footerCells = $derived.by((): Record<string, FooterCellContent> => {
+        const otherCash =
+            otherCashText === null
+                ? ''
+                : `<span class="block whitespace-normal text-xs font-normal ${stale ? 'text-lf-muted' : 'text-lf-secondary'}" data-testid="${testId('targets-now-other-cash', profile)}">${escapeHtml($t('tools.portfolioRebalancer.planner.targets.nowOtherCash', {values: {weight: otherCashText}}))}</span>`;
+        const cells: Record<string, FooterCellContent> = {
+            asset: {type: 'html', html: `<span class="font-medium text-lf-muted">${escapeHtml($t(`${KEY}.total`, {default: 'Total'}))}</span>${nowColumnHidden ? otherCash : ''}`},
+            target: {type: 'html', html: `<span class="font-mono font-medium ${totalClass}" data-testid="${testId('targets-total', profile)}">${escapeHtml(total === null ? '—' : formatPlannerPercentUnits(total))}</span>`},
+        };
+        if (otherCash !== '' && !nowColumnHidden) cells.now = {type: 'html', html: otherCash};
+        const lines = [sumLine('minimum', minimumSum, minimumsOver), sumLine('maximum', maximumSum, false)].filter((line) => line !== '');
+        if (checkingLimits) lines.push(`<span class="font-normal text-lf-muted" role="status" data-testid="${testId('targets-limits-checking', profile)}">${escapeHtml($t(`${KEY}.limitsChecking`, {default: 'Checking the limits…'}))}</span>`);
+        // The table's cells keep one line and cut the rest: these wrap, at a space first, inside a long figure on a phone.
+        if (lines.length > 0) cells.limits = {type: 'html', html: `<div class="flex flex-col items-end gap-0.5 whitespace-normal text-right text-xs [overflow-wrap:anywhere]" data-testid="${testId('targets-limits-sum', profile)}">${lines.join('')}</div>`};
+        return cells;
+    });
     /**
      * The scale of the bars, in percent: the widest target, and in a Tool with «Now» the widest weight today too, so both bars
      * of a row are drawn on one scale (TL-2). Drawing only.
@@ -343,7 +391,7 @@
             {
                 id: 'target',
                 header: () => $t(`${KEY}.target`, {default: 'Target %'}),
-                headerTooltip: () => (profile.text === 'rebalancer' ? $t('tools.portfolioRebalancer.planner.targets.wire') : $t(`${KEY}.wire`, {default: 'The share of the money you invest now that goes to this Asset, in percent. Decimals are allowed.'})),
+                headerTooltip: () => (profile.text === 'rebalancer' ? $t('tools.portfolioRebalancer.planner.targets.wire') : $t(`${KEY}.wire`, {default: 'The share of the cash the plan can invest that goes to this Asset, in percent. Decimals are allowed.'})),
                 type: 'custom',
                 sortable: false,
                 filterable: false,
@@ -360,7 +408,7 @@
                     profile.text === 'rebalancer'
                         ? $t('tools.portfolioRebalancer.planner.targets.limitsHelp')
                         : $t(`${KEY}.limitsHelp`, {
-                              default: "Minimum and maximum of this Asset's value at the end of the plan. Write an amount in the valuation currency (500) or a percentage of the plan's total (35%): the total is the money you invest now. Empty field = no limit.",
+                              default: "Minimum and maximum of this Asset's value at the end of the plan. Write an amount in the valuation currency (500) or a percentage of the plan's total (35%): the total is the cash the plan can invest. Empty field = no limit.",
                           }),
                 type: 'custom',
                 sortable: false,
@@ -368,7 +416,8 @@
                 align: 'right',
                 width: phone.current ? 96 : 184,
                 minWidth: phone.current ? 92 : 176,
-                cell: (row) => ({type: 'custom', component: LimitInputCell, props: {draft, assetKey: row.key, label: rowLabel(row)}}),
+                // TL-4: an Asset's minimum alone above the base of the last preview is red at once; a cash entry's trapped cash counts too.
+                cell: (row) => ({type: 'custom', component: LimitInputCell, props: {draft, assetKey: row.key, label: rowLabel(row), total: row.kind === 'asset' ? () => numbers?.total ?? null : undefined}}),
             },
         ]),
     );
@@ -413,7 +462,7 @@
                 {#if profile.text === 'rebalancer'}
                     {totalText !== null ? $t('tools.portfolioRebalancer.planner.targets.introTotal', {values: {total: totalText}}) : $t('tools.portfolioRebalancer.planner.targets.intro')}
                 {:else}
-                    {$t(`${KEY}.intro`, {default: 'How to split among the Assets the money you invest now, in percent.'})}
+                    {$t(`${KEY}.intro`, {default: 'How to split among the Assets the cash the plan can invest, in percent.'})}
                 {/if}
             </p>
             <div class="ml-auto flex flex-wrap items-center justify-end gap-1.5" onpointerover={notePointer} onpointerdown={notePointer} data-testid={testId('targets-buttons', profile)}>
@@ -536,12 +585,12 @@
                 {rowActions}
                 actionsColumnWidth={phone.current ? '44px' : '64px'}
                 tableLayout="auto"
+                {footerCells}
             />
         </div>
 
         <div class="flex flex-wrap items-center justify-end gap-1.5 pt-1 text-xs font-medium" data-testid={testId('targets-control', profile)} data-balanced={totalState === 'balanced' ? 'true' : 'false'} data-state={totalState}>
-            <span class="text-lf-muted">{$t(`${KEY}.total`, {default: 'Total'})}</span>
-            <span class="font-mono {TOTAL_CLASS[totalState]}" data-testid={testId('targets-total', profile)}>{total === null ? '—' : formatPlannerPercentUnits(total)}</span>
+            <!-- TL-4: the label and the figure moved to the table's summary row; the state and its help stay here. -->
             {#if totalState === 'balanced'}
                 <span class="text-lf-success" aria-hidden="true">✅</span>
             {:else if totalState === 'excess' && excess !== null}
@@ -555,13 +604,13 @@
                     ? $t('tools.portfolioRebalancer.planner.targets.totalHelp')
                     : $t(`${KEY}.totalHelp`, {
                           default:
-                              'The targets split among the Assets the money you invest now, cash and contributions included: to calculate, they must add up to exactly 100%. «Balance all» rescales every target keeping their ratios (equal parts if they are all 0). Tick some rows to rescale only those, with «Balance the selected rows to 100%». «Balance to 100%» on a row gives that Asset what is missing, or takes away the excess.',
+                              'The targets split among the Assets the cash the plan can invest, contributions included: to calculate, they must add up to exactly 100%. «Balance all» rescales every target keeping their ratios (equal parts if they are all 0). Tick some rows to rescale only those, with «Balance the selected rows to 100%». «Balance to 100%» on a row gives that Asset what is missing, or takes away the excess.',
                       })}
                 testid={testId('targets-total-help', profile)}
             />
         </div>
 
-        <LimitProblems {draft} previewProblems={numbers?.limit_problems ?? []} />
+        <LimitProblems {draft} previewProblems={numbers?.limit_problems ?? []} total={numbers?.total ?? null} />
     {/if}
 </div>
 

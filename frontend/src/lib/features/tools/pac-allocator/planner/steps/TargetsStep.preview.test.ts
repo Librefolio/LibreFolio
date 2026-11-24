@@ -24,7 +24,7 @@ import {t} from '$lib/i18n';
 import {PRIVACY_PLACEHOLDER} from '$lib/utils/privacy/maskable';
 import ProfileHarness from '../../__tests__/ProfileHarness.svelte';
 import {PlannerDraft, type DraftAsset} from '../draft.svelte';
-import {formatExactMoneyPlain, formatExactPercent} from '../format';
+import {formatExactMoneyPlain, formatExactPercent, formatPlannerMoneyPlain, formatPlannerPercentUnits} from '../format';
 import {PlannerPreview, type PreviewReady} from '../preview.svelte';
 import {PAC_PLANNER_PROFILE, REBALANCER_PLANNER_PROFILE, type PlannerProfile} from '../profile';
 import {STEP_TITLE_CONTEXT, StepTitleSlot} from '../shell/stepTitle.svelte';
@@ -485,5 +485,151 @@ describe('the head (TL-3 of project 67, the testlist of 21/11): the limits note 
         // Mounted alone (no shell), the head keeps it.
         mount(REBALANCER_PLANNER_PROFILE, draft, null);
         expect(screen.getByTestId('rebalancer-planner-targets-columns')).toBeTruthy();
+    });
+});
+
+describe('the limits check at once (TL-4 of project 67, the testlist of 21/11, row 7)', () => {
+    const SUM_CODE = 'allocation.bounds_min_sum_exceeds_reference';
+    type AppEvents = {events: {name: string; detail?: Record<string, unknown>}[]};
+
+    function sumProblem(entityId: string, minimums: string, reference: string): PreviewReady['limit_problems'][number] {
+        return {
+            code: SUM_CODE,
+            path: {kind: 'field', section: 'targets', entity_kind: 'asset', entity_id: entityId, field: 'minimum'},
+            params: [
+                {kind: 'money', name: 'minimums', value: {amount: minimums, currency: 'EUR'}},
+                {kind: 'money', name: 'reference', value: {amount: reference, currency: 'EUR'}},
+            ],
+        } as unknown as PreviewReady['limit_problems'][number];
+    }
+
+    function appeared(): {name: string; detail?: Record<string, unknown>}[] {
+        return ((window as unknown as {__lf: AppEvents}).__lf.events ?? []).filter((event) => event.name === 'planner.limit-problem.appeared');
+    }
+
+    async function typeMinimum(prefix: string, text: string): Promise<void> {
+        await fireEvent.input(screen.getAllByTestId(`${prefix}-limit-minimum`)[0], {target: {value: text}});
+        flushSync();
+    }
+
+    it('a minimum alone above the total: its line and the red field at once, before any new preview; gone when cleared', async () => {
+        const {draft, brokerKey} = scenario(REBALANCER_PLANNER_PROFILE);
+        mount(REBALANCER_PLANNER_PROFILE, draft, previewWith('ready', ready(brokerKey)));
+        await typeMinimum('rebalancer-planner', '20000');
+
+        const line = within(screen.getByTestId('rebalancer-planner-targets-limits-problems')).getByTestId('rebalancer-planner-targets-limits-problem');
+        expect(line.getAttribute('data-key')).toBe('limitMinimumAboveTotal');
+        expect(line.textContent).toContain(get(t)('tools.portfolioRebalancer.planner.problems.limitMinimumAboveTotal', {values: {reference: formatExactMoneyPlain(TOTAL)}}));
+        expect(screen.getAllByTestId('rebalancer-planner-limit-minimum')[0].getAttribute('aria-invalid')).toBe('true');
+        expect(screen.getAllByTestId('rebalancer-planner-limit')[0].getAttribute('data-above-total')).toBe('true');
+
+        await typeMinimum('rebalancer-planner', '');
+        expect(screen.queryByTestId('rebalancer-planner-targets-limits-problems')).toBeNull();
+        expect(screen.getAllByTestId('rebalancer-planner-limit-minimum')[0].getAttribute('aria-invalid')).toBe('false');
+    });
+
+    it('the sum of the minimums says its two figures, each Tool with its own words; the summary row’s minimums turn red', () => {
+        for (const [profile, prefix, key] of [
+            [REBALANCER_PLANNER_PROFILE, 'rebalancer-planner', `tools.portfolioRebalancer.planner.issues.${SUM_CODE}`],
+            [PAC_PLANNER_PROFILE, 'pac-planner', `tools.pacAllocator.planner.issues.${SUM_CODE}`],
+        ] as const) {
+            const {draft, brokerKey} = scenario(profile);
+            draft.setLimit('asset:probe', 'minimum', '20000');
+            mount(profile, draft, previewWith('ready', {...ready(brokerKey), limit_problems: [sumProblem('asset:probe', '20000', '12345.67')]}));
+            const lines = screen.getAllByTestId(`${prefix}-targets-limits-problem`);
+            // The page's own line gives way to the preview's, which names the Asset in the sum.
+            expect(lines.map((line) => line.getAttribute('data-key'))).toEqual(['bounds_min_sum_exceeds_reference']);
+            expect(lines[0].textContent).toContain(get(t)(key, {values: {minimums: formatExactMoneyPlain({value: {kind: 'finite_decimal', value: '20000'}, currency: 'EUR'}), reference: formatExactMoneyPlain(TOTAL)}}));
+            expect(screen.getByTestId(`${prefix}-targets-limits-sum-minimum`).getAttribute('data-over')).toBe('true');
+            expect(screen.getAllByTestId(`${prefix}-limit-minimum`)[0].getAttribute('aria-invalid')).toBe('true');
+            cleanup();
+        }
+    });
+
+    it('the summary row: the targets, the minimums and the maximums together; red only on the backend’s verdict (trapped cash)', () => {
+        const {draft, brokerKey} = scenario(PAC_PLANNER_PROFILE);
+        const cash = draft.addCashEntry(brokerKey, 'EUR');
+        draft.setLimit('asset:probe', 'minimum', '10%');
+        draft.setLimit(cash.key, 'minimum', '12000');
+        draft.setLimit('asset:probe', 'maximum', '500');
+        // 10% of 12 345,67 + 12 000 = 13 234,567: above the total, but the cash entry's minimum is honoured by cash that
+        // reaches no buy, and the backend names no problem. The row says the sum, not red.
+        mount(PAC_PLANNER_PROFILE, draft, previewWith('ready', ready(brokerKey)));
+        const minimum = screen.getByTestId('pac-planner-targets-limits-sum-minimum');
+        expect(minimum.getAttribute('data-over')).toBe('false');
+        expect(minimum.textContent).toContain(formatPlannerMoneyPlain('13234.57', 'EUR', {approx: true}));
+        expect(screen.getByTestId('pac-planner-targets-limits-sum-maximum').textContent).toContain(formatPlannerMoneyPlain('500', 'EUR'));
+        expect(screen.getByTestId('pac-planner-targets-total').textContent).toBe(formatPlannerPercentUnits(draft.targetTotal));
+        expect(screen.queryByTestId('pac-planner-targets-limits-problems')).toBeNull();
+    });
+
+    it('the summary row says the cash without an entry today (P-24): under «Now», under the names on a phone; never in the PAC', () => {
+        const otherCash = formatExactPercent({kind: 'finite_decimal', value: '0.12'}, 1);
+        const {draft, brokerKey} = scenario(REBALANCER_PLANNER_PROFILE);
+        mount(REBALANCER_PLANNER_PROFILE, draft, previewWith('ready', ready(brokerKey)));
+        const line = screen.getByTestId('rebalancer-planner-targets-now-other-cash');
+        expect(line.textContent).toBe(get(t)('tools.portfolioRebalancer.planner.targets.nowOtherCash', {values: {weight: otherCash}}));
+        expect(line.closest('[data-testid="dt-footer-now"]')).not.toBeNull();
+        cleanup();
+
+        asPhone();
+        mount(REBALANCER_PLANNER_PROFILE, draft, previewWith('ready', ready(brokerKey)));
+        flushSync();
+        expect(screen.getByTestId('rebalancer-planner-targets-now-other-cash').closest('[data-testid="dt-footer-asset"]')).not.toBeNull();
+        cleanup();
+        vi.restoreAllMocks();
+
+        const none = ready(brokerKey);
+        none.items = none.items?.map((item) => (item.kind === 'other_cash' ? {...item, weight: {kind: 'finite_decimal' as const, value: '0'}} : item));
+        mount(REBALANCER_PLANNER_PROFILE, draft, previewWith('ready', none));
+        expect(screen.queryByTestId('rebalancer-planner-targets-now-other-cash')).toBeNull();
+        cleanup();
+
+        const pac = scenario(PAC_PLANNER_PROFILE);
+        mount(PAC_PLANNER_PROFILE, pac.draft, previewWith('ready', ready(pac.brokerKey)));
+        expect(screen.queryByTestId('pac-planner-targets-now-other-cash')).toBeNull();
+    });
+
+    it('while a preview is on its way and limits are typed, the summary row says the check is coming', () => {
+        const {draft, brokerKey} = scenario(REBALANCER_PLANNER_PROFILE);
+        mount(REBALANCER_PLANNER_PROFILE, draft, previewWith('waiting', ready(brokerKey)));
+        expect(screen.queryByTestId('rebalancer-planner-targets-limits-checking')).toBeNull();
+        cleanup();
+
+        draft.setLimit('asset:probe', 'maximum', '500');
+        mount(REBALANCER_PLANNER_PROFILE, draft, previewWith('waiting', ready(brokerKey)));
+        expect(screen.getByTestId('rebalancer-planner-targets-limits-checking')).toBeTruthy();
+        cleanup();
+
+        mount(REBALANCER_PLANNER_PROFILE, draft, previewWith('ready', ready(brokerKey)));
+        expect(screen.queryByTestId('rebalancer-planner-targets-limits-checking')).toBeNull();
+    });
+
+    it('a toast once per problem: typed digit by digit, then named by the preview, it raises one; not for one already there', async () => {
+        const {draft, brokerKey} = scenario(REBALANCER_PLANNER_PROFILE);
+        const preview = previewWith('ready', ready(brokerKey));
+        mount(REBALANCER_PLANNER_PROFILE, draft, preview);
+        const before = appeared().length;
+        for (const text of ['2', '20', '200', '2000', '20000', '200000']) await typeMinimum('rebalancer-planner', text);
+        expect(appeared().length).toBe(before + 1);
+        expect(appeared().at(-1)?.detail).toEqual({tool: 'rebalancer', key: 'limitMinimumAboveTotal'});
+
+        preview.numbers = {...ready(brokerKey), limit_problems: [sumProblem('asset:probe', '200000', '12345.67')]};
+        flushSync();
+        expect(screen.getAllByTestId('rebalancer-planner-targets-limits-problem').map((line) => line.getAttribute('data-key'))).toEqual(['bounds_min_sum_exceeds_reference']);
+        expect(appeared().length).toBe(before + 1);
+
+        // Gone, then back: a new toast.
+        preview.numbers = ready(brokerKey);
+        await typeMinimum('rebalancer-planner', '');
+        await typeMinimum('rebalancer-planner', '30000');
+        expect(appeared().length).toBe(before + 2);
+        cleanup();
+
+        // Back on the step with the problem already there: nothing.
+        const again = appeared().length;
+        mount(REBALANCER_PLANNER_PROFILE, draft, previewWith('ready', ready(brokerKey)));
+        expect(screen.getByTestId('rebalancer-planner-targets-limits-problems')).toBeTruthy();
+        expect(appeared().length).toBe(again);
     });
 });

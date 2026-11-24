@@ -54,7 +54,7 @@
     const lookup = $derived(ready && names ? planLookup(ready, outcome.built.resolved, names) : null);
     /** The entries with a limit (F2, M20): the banner of a `ready_infeasible` result lists them. */
     const limits = $derived(limitedEntries(outcome.built.resolved));
-    const notes = $derived(ready ? presentIssues(notesBesideLimitsBanner(ready, limits), draft, outcome.built.ids).map(listIssue) : []);
+    const notes = $derived(ready ? presentIssues(notesBesideLimitsBanner(ready, limits), draft, outcome.built.ids, profile.text).map(listIssue) : []);
     const orderCount = $derived(solution ? solution.order_rows.length : 0);
     // A plan of transfers only, or conversions only, is still a plan (contract §6.3).
     const hasPlan = $derived(solution !== null && hasPlanSteps(solution));
