@@ -12,6 +12,7 @@
 -->
 <script lang="ts">
     import {_ as t} from '$lib/i18n';
+    import {getStringBadgeStyle} from '$lib/utils/colors';
     import type {DetailGroup} from './profileTabState';
 
     interface Props {
@@ -24,11 +25,13 @@
         ticker: string | null;
         /** The asset's other identifiers (CUSIP, FIGI…), label and value, shown after the ISIN and the ticker when present. */
         otherIdentifiers?: [string, string][];
+        /** The asset's free identifiers (the `OTHER` type): values with no kind, shown as one row of read-only chips. */
+        softIdentifiers?: string[];
         /** Opens a voice's history (E6); without it the rows are plain text. */
         onhistory?: (key: string) => void;
     }
 
-    let {groups, texts, staleTexts = {}, isin, ticker, otherIdentifiers = [], onhistory}: Props = $props();
+    let {groups, texts, staleTexts = {}, isin, ticker, otherIdentifiers = [], softIdentifiers = [], onhistory}: Props = $props();
 
     const left = $derived(groups.filter((group) => group.group !== 'bond'));
     const right = $derived(groups.filter((group) => group.group === 'bond'));
@@ -83,6 +86,17 @@
                                 <dd class="min-w-0 break-all font-mono text-lf-primary">{value}</dd>
                             </div>
                         {/each}
+                        {#if softIdentifiers.length > 0}
+                            <!-- Free values with no kind: chips, as «Modifica asset» draws them, read-only (81 U26b). -->
+                            <div class="grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-3 py-2 text-sm" data-testid="profile-detail-soft-identifiers" data-state="value">
+                                <dt class="text-lf-secondary">{$t('assets.identifiers.otherLabel')}</dt>
+                                <dd class="flex min-w-0 flex-wrap gap-1.5">
+                                    {#each softIdentifiers as value, index (`${value}-${index}`)}
+                                        <span class="inline-flex max-w-full items-center break-all rounded px-2 py-0.5 font-mono text-[11px]" style={getStringBadgeStyle(value)} data-testid="profile-detail-soft-identifier-{index}">{value}</span>
+                                    {/each}
+                                </dd>
+                            </div>
+                        {/if}
                     {/if}
                 </dl>
             </section>

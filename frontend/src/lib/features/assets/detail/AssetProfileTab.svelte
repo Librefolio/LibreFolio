@@ -44,6 +44,8 @@
         ticker: string | null;
         /** The asset's other identifiers (CUSIP, FIGI…), shown with the identity. */
         otherIdentifiers?: [string, string][];
+        /** The free identifiers (type `OTHER`), shown as chips in one row. */
+        softIdentifiers?: string[];
         /** Bumped by the page after anything that writes the profile: the tab reads again. */
         refreshKey?: number;
         /** «Modifica i dati» (E8); without it, no button. */
@@ -58,7 +60,7 @@
         onconfigure?: () => void;
     }
 
-    let {assetId, period, isin, ticker, otherIdentifiers = [], refreshKey = 0, onedit, onhistory, enrichers = null, onrefresh, onconfigure}: Props = $props();
+    let {assetId, period, isin, ticker, otherIdentifiers = [], softIdentifiers = [], refreshKey = 0, onedit, onhistory, enrichers = null, onrefresh, onconfigure}: Props = $props();
 
     /** The asset whose «Aggiorna» is running: the button is busy for that asset only, never for the next one. */
     let refreshingFor = $state<number | null>(null);
@@ -228,7 +230,7 @@
 
         <section class="rounded-xl border border-lf-subtle bg-lf-card p-4 shadow-sm shadow-lf-shadow-card">
             <h3 class="mb-3 text-xs font-semibold uppercase tracking-wide text-lf-muted">{$t('assets.profile.tab.details')}</h3>
-            <ProfileDetails {groups} {texts} {staleTexts} {isin} {ticker} {otherIdentifiers} {onhistory} />
+            <ProfileDetails {groups} {texts} {staleTexts} {isin} {ticker} {otherIdentifiers} {softIdentifiers} {onhistory} />
         </section>
     {/if}
     {#if status !== 'failed'}

@@ -214,7 +214,8 @@
         "loadFailed": "The changes could not be read.",
         "empty": "No change yet.",
         "who": {
-          "deletedUser": "a deleted user"
+          "deletedUser": "a deleted user",
+          "system": "System"
         },
         "what": {
           "first": "First value read: {to}.",

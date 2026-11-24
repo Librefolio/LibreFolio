@@ -214,7 +214,8 @@
         "loadFailed": "Impossible de lire les modifications.",
         "empty": "Aucune modification pour l’instant.",
         "who": {
-          "deletedUser": "un utilisateur supprimé"
+          "deletedUser": "un utilisateur supprimé",
+          "system": "Système"
         },
         "what": {
           "first": "Première valeur lue : {to}.",
