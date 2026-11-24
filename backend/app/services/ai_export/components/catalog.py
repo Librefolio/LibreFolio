@@ -104,7 +104,7 @@ _PORTFOLIO_COMPONENTS: tuple[ComponentSpec, ...] = (
     _component(Domain.PORTFOLIO, "summary", "Portfolio summary", period_behavior=PeriodBehavior.AS_OF),
     _component(Domain.PORTFOLIO, "positions", "All portfolio positions", version=2, period_behavior=PeriodBehavior.AS_OF),
     _component(Domain.PORTFOLIO, "allocations_cash", "Allocations and cash", version=2, dependencies=("portfolio.positions",), period_behavior=PeriodBehavior.AS_OF),
-    _component(Domain.PORTFOLIO, "provenance", "Semantics and provenance", version=3, period_behavior=PeriodBehavior.NONE),
+    _component(Domain.PORTFOLIO, "provenance", "Semantics and provenance", version=4, period_behavior=PeriodBehavior.NONE),
     _component(Domain.PORTFOLIO, "performance", "Portfolio performance and contributors", period_behavior=PeriodBehavior.WINDOWED),
     _component(Domain.PORTFOLIO, "flows_income", "Flows and income", version=2, period_behavior=PeriodBehavior.WINDOWED),
     _component(Domain.PORTFOLIO, "fees_taxes", "Fees and taxes", version=2, period_behavior=PeriodBehavior.WINDOWED),
@@ -121,7 +121,7 @@ _PORTFOLIO_COMPONENTS: tuple[ComponentSpec, ...] = (
     _component(Domain.PORTFOLIO, "fifo_summary", "FIFO summary", version=3, period_behavior=PeriodBehavior.WINDOWED),
     _component(Domain.PORTFOLIO, "fifo_lots", "FIFO open/partial/closed lots", version=3, dependencies=("portfolio.fifo_summary",), period_behavior=PeriodBehavior.WINDOWED),
     _component(Domain.PORTFOLIO, "drawdown_summary", "Portfolio drawdown context", version=2, period_behavior=PeriodBehavior.WINDOWED),
-    _component(Domain.PORTFOLIO, "income_timeline", "Realized income timeline evidence", version=2, period_behavior=PeriodBehavior.WINDOWED),
+    _component(Domain.PORTFOLIO, "income_timeline", "Realized income timeline evidence", version=3, period_behavior=PeriodBehavior.WINDOWED),
 )
 
 # -- Broker ---------------------------------------------------------------------
@@ -130,7 +130,7 @@ _BROKER_COMPONENTS: tuple[ComponentSpec, ...] = (
     _component(Domain.BROKER, "summary", "Broker summary", period_behavior=PeriodBehavior.AS_OF),
     _component(Domain.BROKER, "positions", "All broker positions", version=2, period_behavior=PeriodBehavior.AS_OF),
     _component(Domain.BROKER, "allocation_concentration", "Allocation and concentration", dependencies=("broker.positions",), period_behavior=PeriodBehavior.AS_OF),
-    _component(Domain.BROKER, "provenance", "Semantics and provenance", version=3, period_behavior=PeriodBehavior.NONE),
+    _component(Domain.BROKER, "provenance", "Semantics and provenance", version=4, period_behavior=PeriodBehavior.NONE),
     _component(Domain.BROKER, "performance", "Broker performance and contributors", period_behavior=PeriodBehavior.WINDOWED),
     _component(Domain.BROKER, "flows_income_costs", "Flows, income and costs", version=2, period_behavior=PeriodBehavior.WINDOWED),
     _component(Domain.BROKER, "reconciliation", "Reconciliation", version=2, dependencies=("broker.flows_income_costs",), period_behavior=PeriodBehavior.WINDOWED),

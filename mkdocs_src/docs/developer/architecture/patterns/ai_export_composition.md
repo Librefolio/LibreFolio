@@ -326,7 +326,7 @@ engine outputs and never forecasts:
 
 | Dataset                           | New evidence                                                                                                                             | Honesty rule                                                                                                                                                                                  |
 | --------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `portfolio.income_evidence`       | dated realized `DIVIDEND`/`INTEREST` timeline, ownership-share aware, FX-converted with provenance                                       | realized ledger rows only; missing rate keeps native amount with `conversion_reason`, never coerced to zero; no coupon forecast                                                               |
+| `portfolio.income_evidence`       | dated realized `DIVIDEND`/`INTEREST`/`REWARD` timeline, ownership-share aware, FX-converted with provenance                                       | realized ledger rows only; missing rate keeps native amount with `conversion_reason`, never coerced to zero; no coupon forecast                                                               |
 | `broker.concentration_evidence`   | allocation-by-type/sector/geography/currency slices plus HHI-points and largest-position weight, optional broker-vs-portfolio comparison | slices/HHI read verbatim off the report; explicit coverage/unknown buckets; no row identifiers                                                                                                |
 | `broker.cost_efficiency_evidence` | recorded fees, taxes, total costs, contributor categories, BUY/SELL turnover, average NAV and other denominators, plus explicit ratios   | recorded zero, unavailable, and not applicable stay distinct; formulas/operands/unit/coverage are exported; trading/FX/other subtypes stay unavailable when the source does not classify them |
 | `fx.conversion_timing_context`    | observed period min/max, range position, distance-to-extreme, realized volatility, partial-history flag                                  | observed genuine rates only; no forecast/predictive band; flat/empty range → `range_position_unavailable_reason`; neutral-scenario user inputs surfaced through `missing_user_inputs`         |
@@ -345,9 +345,13 @@ of `income_effects` and out of `period_income`, and the two lists never repeat a
 and count each broker at the report's share (`native_cash.effective_share()`: an
 owner's `share_percentage`, the whole broker when none is recorded; the whole
 broker for an editor or a viewer).
-`portfolio.income_timeline` (version 2, behind `portfolio.income_evidence`) keeps
-every `DIVIDEND`/`INTEREST` amount with its sign, so an older negative correction
-lowers the income exactly as it lowers the report's `period_income`.
+`portfolio.income_timeline` (version 3, behind `portfolio.income_evidence`) keeps
+every income amount with its sign, so an older negative correction lowers the
+income exactly as it lowers the report's `period_income`. It reads the one income
+rule of `financial_math/income.py` (`INCOME_TYPES`, `income_value`): a `REWARD`
+counts at its value on receipt and its row adds `units`, the units received at the
+same share; `reward_count` sits beside `dividend_count` and `interest_count`. A
+`REWARD` with no value fails the section with `income_value_missing`, never a zero.
 `broker.cost_efficiency` (version 2, behind `broker.cost_efficiency_evidence`)
 still sums BUY/SELL turnover by magnitude, multiplied by that share, which it
 exposes as `ownership_share_ratio`.
@@ -639,6 +643,7 @@ Three kinds of removed column are not named:
 | `component` | `OUTPUT DEFINITIONS` | any | a scalar output, not one component of a band |
 | `minimum`, `maximum` | `OUTPUT DEFINITIONS` | any | an output without that bound |
 | `asset_ref` | any | `portfolio.income_timeline` | income not tied to an asset, such as interest on cash |
+| `units` | any | `portfolio.income_timeline` | cash income (a dividend or interest): no units received |
 | `portfolio_weight_percent`, `technical_normalized_weight_percent` | `PERIOD SUMMARY` | `asset.indicators`, `fx.indicators` | one Asset or FX pair: there is no portfolio to weigh it in |
 
 `partial_reason_code` is not on the list: ENTITY STATUS shows only partial results, so

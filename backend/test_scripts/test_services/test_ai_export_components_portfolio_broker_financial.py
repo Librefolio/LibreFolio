@@ -2018,9 +2018,11 @@ class TestBrokerScope:
 
 class TestProvenanceComponentVersion:
     """What the Snapshot Data renderer reads off each section: the provenance envelopes say
-    component_version 3, schema_version 1 (the payload shape is unchanged). Version 2 (D12(a)): the
+    component_version 4, schema_version 1 (the payload shape is unchanged). Version 2 (D12(a)): the
     WAC semantics moved to the single average cost; version 3 (J-17): the valuation hierarchy names
-    ESTIMATED_AT_COST and an ADJUSTMENT is never a price. No prompt wording is asserted."""
+    ESTIMATED_AT_COST and an ADJUSTMENT is never a price; version 4 (79 STK-5): a REWARD is an
+    acquisition at its value on receipt, also counted as income, moving no cash. No prompt wording is
+    asserted beyond the type's name."""
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
@@ -2030,8 +2032,9 @@ class TestProvenanceComponentVersion:
             pytest.param("broker.provenance", {"domain": Domain.BROKER, "broker_id": 5, "broker_scope": (5,)}, broker_financial.BROKER_FINANCIAL_COMPONENTS, id="broker"),
         ],
     )
-    async def test_provenance_envelope_is_component_version_3_schema_version_1(self, monkeypatch, component_id, scope_overrides, components):
-        """Before J-17: component_version 2."""
+    async def test_provenance_envelope_is_component_version_4_schema_version_1(self, monkeypatch, component_id, scope_overrides, components):
+        """Before J-17: component_version 2; before 79 STK-5: 3. The semantics name the REWARD (the type's
+        code only: the sentence around it is free to change)."""
         scope = _scope(**scope_overrides)
         _patch_report(monkeypatch, _report(scope))
         _patch_lots(monkeypatch, {})
@@ -2042,8 +2045,9 @@ class TestProvenanceComponentVersion:
 
         envelope = await context.resolve(component_id, required=True)
 
-        assert (envelope.component_id, envelope.component_version, envelope.schema_version) == (component_id, 3, 1)
+        assert (envelope.component_id, envelope.component_version, envelope.schema_version) == (component_id, 4, 1)
         assert envelope.payload["domain"] == component_id.split(".")[0]
+        assert "REWARD" in envelope.payload["valuation_semantics"]
 
 
 # =============================================================================
