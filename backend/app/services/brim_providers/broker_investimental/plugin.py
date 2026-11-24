@@ -28,9 +28,17 @@ Known limits:
   (``investimental_order_start_missing``) gives what the file shows (date,
   side, symbol, price, the visible quantity and amount) and the order's rows,
   for entering it by hand.
-- The fee: until the fills' fee is read (INV-2), it comes from the last row,
-  and only when a fill closed the order; the export writes ``Fee`` 0 there, so
-  in practice no FEE is emitted.
+
+The fee (1.3.0, INV-2): each row's ``Fee`` is the commission still due on the
+OPEN part of the order, so a fill's commission is the ``Fee`` of the row before
+it minus its own.  The order's commission is the sum over the fills that count
+for the quantity, and becomes one FEE linked to the trade, on its date.  The
+row of an expiry is not a fill: its ``Fee`` is the commission of the part not
+executed, and is not read.  A sum of 0 (bonds, sells: the export writes 0)
+gives no FEE.  One warning notice per file (``investimental_fee_from_order_log``)
+lists the fees read, since the order log's figure may differ slightly from the
+statement.  A fill on which ``Fee`` rises breaks the rule: that order gets no
+FEE and a warning to check its fee on the statement.
 """
 
 from __future__ import annotations
@@ -169,6 +177,8 @@ class _Fill:
     estimated: bool = False
     #: Quantity times the price before it does not give the amount.
     mismatched: bool = False
+    #: The commission it executed: the ``Fee`` before it minus its own (INV-2); 0 without a row before it.
+    fee: Decimal = Decimal("0")
 
 
 def _fill_of(before: Optional[Dict[str, str]], row: Dict[str, str]) -> _Fill:
@@ -188,7 +198,8 @@ def _fill_of(before: Optional[Dict[str, str]], row: Dict[str, str]) -> _Fill:
     quantity = volume if closing else _number_or_zero(before, COL_VOLUME) - volume
     amount = _number_or_zero(before, COL_VALUE) - value
     mismatched = abs(quantity * _number_or_zero(before, COL_PRICE) - amount) > _FILL_TOLERANCE
-    return _Fill(row=row, quantity=quantity, amount=amount, mismatched=mismatched)
+    fee = _number_or_zero(before, COL_FEE) - _number_or_zero(row, COL_FEE)
+    return _Fill(row=row, quantity=quantity, amount=amount, mismatched=mismatched, fee=fee)
 
 
 def _order_start_shown(rows: List[Dict[str, str]]) -> bool:
@@ -196,9 +207,29 @@ def _order_start_shown(rows: List[Dict[str, str]]) -> bool:
     return any((row.get(COL_UPDATE_TYPE) or "").strip().lower() == "new" for row in rows)
 
 
-def _closed_by_fill(row: Dict[str, str]) -> bool:
-    """The order's last row is the fill that closed it (executed and ``Inactive``), not an expiry or a cancellation."""
-    return _row_has_execution_marker(row) and (row.get(COL_STATUS) or "").strip().lower() == "inactive"
+#: The columns of the evidence of the fee notice: one row per FEE read from the order log.
+_FEE_EVIDENCE_COLUMNS = ["Order", "Symbol", "Date", "Amount", "Currency"]
+
+
+def _fee_notice(entries: List[tuple[List[str], int]]) -> BRIMNotice:
+    """One notice per file for the fees read from the order log (INV-2, FEE consultant 24/11): the order log's figure
+    may differ slightly from the statement. One evidence row per FEE, on the line of the order's last fill."""
+    count = len(entries)
+    return BRIMNotice(
+        severity="warning",
+        code="investimental_fee_from_order_log",
+        message=f"{count} fee{'s were' if count != 1 else ' was'} read from the order log: check {'them' if count != 1 else 'it'} against your statement.",
+        context={"count": count},
+        evidence=[
+            BRIMEvidence(
+                title="",
+                headers=list(_FEE_EVIDENCE_COLUMNS),
+                rows=[cells for cells, _ in entries],
+                row_numbers=[line for _, line in entries],
+                comment="Each fee is the drop, at each fill, of the commission still due on the open part of the order.",
+            )
+        ],
+    )
 
 
 #: The columns of an order's rows shown as evidence beside the notice of a skipped order.
@@ -301,7 +332,8 @@ class InvestimentalBrokerProvider(BRIMProvider):
     def plugin_version(self) -> str:
         # 1.1.0 — project 66, P4: a fee or a tax is linked to the booking of its own row.
         # 1.2.0 — project 66, INV-1: an order filled in several parts is the sum of its fills, not its last part.
-        return "1.2.0"
+        # 1.3.0 — project 66, INV-2: the commission of the fills, one FEE per order linked to its trade.
+        return "1.3.0"
 
     @property
     def test_file_pattern(self) -> Optional[str]:
@@ -347,6 +379,7 @@ class InvestimentalBrokerProvider(BRIMProvider):
         skipped_unexecuted = 0
         skipped_invalid = 0
         skipped_start = 0
+        fee_entries: List[tuple[List[str], int]] = []
 
         def get_asset_id(symbol: str) -> int:
             nonlocal next_fake_id
@@ -434,7 +467,6 @@ class InvestimentalBrokerProvider(BRIMProvider):
                 currency = _extract_currency_from_account(selected.get(COL_ACCOUNT_NAME, ""))
                 volume = sum((fill.quantity for fill in fills), Decimal("0"))
                 value = sum((fill.amount for fill in fills), Decimal("0"))
-                fee = _parse_investimental_number(selected.get(COL_FEE, ""))
 
                 if not tx_date or side not in {"buy", "sell"} or not symbol or not currency:
                     skipped_invalid += 1
@@ -470,10 +502,12 @@ class InvestimentalBrokerProvider(BRIMProvider):
                     tags=["import", "investimental"],
                 )
 
-                # Until INV-2 the fee is read from the last row, which is right only when a fill closed the order: after an
-                # expiry it is the commission of the part NOT executed (consultant 23/11, choice x).
-                if fee is not None and fee > 0 and _closed_by_fill(selected):
-                    self._create_charge_of(
+                # INV-2: the commission of the counted fills. A rise of Fee on a fill breaks the rule: no FEE for the order.
+                fee = sum((fill.fee for fill in fills), Decimal("0"))
+                if any(fill.fee < 0 for fill in fills):
+                    warnings.append(f"Order {order_id}: the fee cannot be read from the order log (it rises on a fill); no fee imported, check it against your statement")
+                elif fee > 0:
+                    charge = self._create_charge_of(
                         booking,  # project 66 P4: linked to the booking of its own row; free when that booking was refused
                         row_num=selected_row_num,
                         transactions=transactions,
@@ -488,6 +522,8 @@ class InvestimentalBrokerProvider(BRIMProvider):
                         description=f"Investimental fee: {symbol}",
                         tags=["import", "investimental", "fee"],
                     )
+                    if charge is not None:
+                        fee_entries.append(([order_id, symbol, tx_date.isoformat(), _plain(fee), currency], selected_row_num))
 
         except FileNotFoundError:
             raise BRIMParseError(f"File not found: {file_path}", details={"code": "file_not_found", "context": {"file": file_path.name}}) from None
@@ -496,6 +532,8 @@ class InvestimentalBrokerProvider(BRIMProvider):
         except Exception as e:
             raise BRIMParseError(f"Error parsing file: {e}", details={"code": "file_unreadable", "context": {"error": str(e)}}) from e
 
+        if fee_entries:
+            warnings.append(_fee_notice(fee_entries))
         if skipped_cancelled:
             warnings.append(f"Summary: skipped {skipped_cancelled} cancelled/rejected/expired orders")
         if skipped_unexecuted:
