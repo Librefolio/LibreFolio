@@ -2838,3 +2838,129 @@ class TestRewardIncomeInKind:
         assert income_a == income_b, f"REWARD {income_a} vs DIVIDEND {income_b}"
         assert abs(income_a - self.EXPECTED_INCOME_EUR) < self.TOLERANCE, f"400 BSD at 0.25 EUR/BSD is 100 EUR, got {income_a}"
         print_success("REWARD in BSD: the same period_income as its twin, 100 EUR")
+
+
+# ---------------------------------------------------------------------------
+# Project 79, STK-3 — «spread rewards across lots»: POST /portfolio/lots/analysis with reward_allocation MERGED
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+class TestRewardAllocationMerged:
+    """The lots analysis of saved rows with ``reward_allocation: "MERGED"`` (project 79, STK-3), beside the same request
+    without the field (OWN_LOT, the default) on the same rows.
+
+    One user of this test, one new asset quoted in EUR, one broker: a DEPOSIT of 1000 EUR, lot A (500 for 150 EUR, 10 Jan
+    2024), lot B (500 for 300 EUR, 10 Feb), a REWARD of 20 units valued 0.50 each on 1 Mar, a price of 0.70 on 20 Mar.
+    MERGED spreads the 20 over A and B (10 each, held at the close of 29 Feb): both lots grow to 510 at their own cost,
+    no lot of the reward's, no REWARD income, one REWARD_MERGE row per lot. An airdrop (a REWARD with nothing held before)
+    keeps a lot of its own at cost 0, with an INFO issue that leaves the analysis COMPLETE.
+
+    Cleanup: the brokers (force: their transactions), the asset (its prices by cascade), then the user; a failed step is
+    recorded and fails the test after the rest ran.
+    """
+
+    YEAR = 2024
+    ANALYSES = ["LOT_SUMMARY", "EVENT_HISTORY", "INCOME_EVENTS"]
+
+    @pytest.fixture(autouse=True)
+    def _server(self, test_server):
+        pass
+
+    async def _plant_price(self, client: httpx.AsyncClient, asset_id: int) -> None:
+        response = await client.post(f"{API_BASE}/assets/prices", json=[{"asset_id": asset_id, "prices": [{"date": f"{self.YEAR}-03-20", "close": "0.70", "currency": "EUR"}]}], timeout=TIMEOUT)
+        assert response.status_code == 200, response.text
+
+    def _reward(self, broker_id: int, asset_id: int) -> dict:
+        return {"broker_id": broker_id, "asset_id": asset_id, "type": "REWARD", "date": f"{self.YEAR}-03-01", "quantity": "20", "cost_basis_override": {"code": "EUR", "amount": "0.50"}, "cost_basis_mode": "manual"}
+
+    async def _analysis(self, client: httpx.AsyncClient, asset_id: int, broker_id: int, allocation: str | None) -> dict:
+        """The whole answer (calculation_metadata is in the common parts, not in the method's block)."""
+        body = {"asset_id": asset_id, "broker_ids": [broker_id], "target_currency": "EUR", "date_range": {"end": f"{self.YEAR}-03-28"}, "requested_analyses": self.ANALYSES}
+        if allocation is not None:
+            body["reward_allocation"] = allocation
+        response = await client.post(f"{API_BASE}/portfolio/lots/analysis", json=body, timeout=TIMEOUT)
+        assert response.status_code == 200, response.text
+        return response.json()
+
+    async def test_merged_spreads_the_reward_over_the_lots_held_the_day_before(self):
+        print_section("STK-3: MERGED spreads a REWARD over the lots held the day before")
+        errors: list[str] = []
+        broker_ids: list[int] = []
+        asset_id: int | None = None
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            user_id = await get_current_user_id(client)
+            try:
+                broker_ids.append(await create_broker(client, f"Reward merged {uuid.uuid4().hex[:12]}"))
+                (broker_id,) = broker_ids
+                asset_id = await create_asset(client, asset_type="CRYPTO")
+                creates = [
+                    {"broker_id": broker_id, "type": "DEPOSIT", "date": f"{self.YEAR}-01-02", "quantity": "0", "cash": {"code": "EUR", "amount": "1000"}},
+                    {"broker_id": broker_id, "asset_id": asset_id, "type": "BUY", "date": f"{self.YEAR}-01-10", "quantity": "500", "cash": {"code": "EUR", "amount": "-150"}},
+                    {"broker_id": broker_id, "asset_id": asset_id, "type": "BUY", "date": f"{self.YEAR}-02-10", "quantity": "500", "cash": {"code": "EUR", "amount": "-300"}},
+                    self._reward(broker_id, asset_id),
+                ]
+                ids = TestRewardIncomeInKind._created_ids(await commit_batch(client, creates=creates))
+                lot_a, lot_b, reward_id = ids[1], ids[2], ids[3]
+                await self._plant_price(client, asset_id)
+                merged = await self._analysis(client, asset_id, broker_id, "MERGED")
+                default = await self._analysis(client, asset_id, broker_id, None)
+            finally:
+                await TestRewardIncomeInKind._cleanup(client, broker_ids, asset_id, errors)
+                await delete_current_test_user(client, user_id)
+        assert errors == [], f"cleanup left rows behind: {errors}"
+
+        # --- The request without the field is OWN_LOT: the reward's own lot at its value, its income booked ---
+        assert default["calculation_metadata"]["reward_allocation"] == "OWN_LOT"
+        own = default["methods"]["FIFO"]
+        own_lots = {lot["lot_id"]: lot for lot in own["lots"]}
+        assert Decimal(own_lots[reward_id]["original_cost"]) == Decimal("10"), own_lots[reward_id]
+        assert [event["transaction_id"] for event in own["income_events"] if event["type"] == "REWARD"] == [reward_id]
+
+        # --- MERGED ---
+        assert merged["calculation_metadata"]["reward_allocation"] == "MERGED"
+        block = merged["methods"]["FIFO"]
+        assert block["calculation_status"] == "COMPLETE", (block["calculation_status"], block.get("data_quality"))
+        lots = {lot["lot_id"]: lot for lot in block["lots"]}
+        assert reward_id not in lots, "the merged reward opened a lot of its own"
+        for lot_id, cost in ((lot_a, Decimal("150")), (lot_b, Decimal("300"))):
+            lot = lots[lot_id]
+            assert (Decimal(lot["original_quantity"]), Decimal(lot["open_quantity"]), Decimal(lot["original_cost"])) == (Decimal("510"), Decimal("510"), cost), lot
+            assert Decimal(lot["asset_income"]) == 0, lot
+        assert [event for event in block["income_events"] if event["type"] == "REWARD"] == []
+        merge_rows = sorted((row["lot_id"], Decimal(row["quantity"]), Decimal(row["ratio"]), row["date"]) for row in block["lot_events"] if row["transaction_id"] == reward_id)
+        assert merge_rows == sorted([(lot_a, Decimal("10"), Decimal("1.02"), f"{self.YEAR}-03-01"), (lot_b, Decimal("10"), Decimal("1.02"), f"{self.YEAR}-03-01")]), merge_rows
+        assert {row["kind"] for row in block["lot_events"] if row["transaction_id"] == reward_id} == {"REWARD_MERGE"}
+        print_success("MERGED: A and B at 510 units, cost unchanged, no REWARD income, two REWARD_MERGE rows")
+
+    async def test_merged_airdrop_keeps_its_own_lot_at_no_cost(self):
+        print_section("STK-3: MERGED airdrop keeps a lot of its own at no cost")
+        errors: list[str] = []
+        broker_ids: list[int] = []
+        asset_id: int | None = None
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            user_id = await get_current_user_id(client)
+            try:
+                broker_ids.append(await create_broker(client, f"Reward merged airdrop {uuid.uuid4().hex[:12]}"))
+                (broker_id,) = broker_ids
+                asset_id = await create_asset(client, asset_type="CRYPTO")
+                reward_id = TestRewardIncomeInKind._created_ids(await commit_batch(client, creates=[self._reward(broker_id, asset_id)]))[0]
+                await self._plant_price(client, asset_id)
+                merged = await self._analysis(client, asset_id, broker_id, "MERGED")
+            finally:
+                await TestRewardIncomeInKind._cleanup(client, broker_ids, asset_id, errors)
+                await delete_current_test_user(client, user_id)
+        assert errors == [], f"cleanup left rows behind: {errors}"
+
+        block = merged["methods"]["FIFO"]
+        assert block["calculation_status"] == "COMPLETE", (block["calculation_status"], block.get("data_quality"))
+        lot = next(lot for lot in block["lots"] if lot["lot_id"] == reward_id)
+        assert (Decimal(lot["original_quantity"]), Decimal(lot["original_cost"]), Decimal(lot["asset_income"])) == (Decimal("20"), Decimal("0"), Decimal("0")), lot
+        (issue,) = [issue for issue in block["data_quality"]["issues"] if issue["code"] == "REWARD_NOT_MERGED_NO_OPEN_LOT"]
+        assert (issue["severity"], issue["message_i18n_key"], issue["message_params"]["transaction_id"]) == ("info", "dataQuality.rewardNotMergedNoOpenLot", reward_id), issue
+        (opening,) = [row for row in block["lot_events"] if row["lot_id"] == reward_id and row["transaction_id"] == reward_id]
+        assert (opening["kind"], Decimal(opening["unit_price"])) == ("REWARD", Decimal("0")), opening
+        assert [event for event in block["income_events"] if event["type"] == "REWARD"] == []
+        print_success("MERGED airdrop: own lot at cost 0, INFO issue, COMPLETE")
