@@ -186,6 +186,7 @@
       "growth": "Comment la valeur du portefeuille a évolué sur la période : en argent, en rendement, ou en gains et pertes.",
       "allocation": "Comment le portefeuille est réparti — par type, secteur, pays ou actif — aujourd'hui, ou dans le temps.",
       "positions": "Ce que vous détenez et ce que chaque position a rapporté sur la période, par actif ou par courtier, en tableau ou en carte."
-    }
+    },
+    "analyzeAllocation": "Analyser →"
   }
 }

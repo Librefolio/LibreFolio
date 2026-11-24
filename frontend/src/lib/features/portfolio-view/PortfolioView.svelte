@@ -567,7 +567,7 @@
         <PortfolioBanners issues={dataQualityIssues} actions={banners} />
 
         {#if activeTab === 'panoramica'}
-            <PortfolioOverviewTab snapshot={$data} displayCurrency={appliedCurrency} brokerIds={activeBrokerIds} {testIds} onRequestPnlCandles={() => void pageBusy.join(busy('pnl-candles'), loadPnlCandles)} />
+            <PortfolioOverviewTab snapshot={$data} displayCurrency={appliedCurrency} brokerIds={activeBrokerIds} {testIds} onRequestPnlCandles={() => void pageBusy.join(busy('pnl-candles'), loadPnlCandles)} onAnalyzeAllocation={() => handleTabChange('allocazione')} />
         {:else if activeTab === 'posizioni'}
             <PortfolioPositionsTab
                 testId={testIds.positionsTab}

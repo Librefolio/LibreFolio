@@ -186,6 +186,7 @@
       "growth": "Come si è mosso il valore del portafoglio nel periodo: in denaro, come rendimento o come guadagno e perdita realizzati.",
       "allocation": "Come è suddiviso il portafoglio — per tipo, settore, paese o asset — oggi, o nel tempo.",
       "positions": "Cosa possiedi e quanto ha reso ogni posizione nel periodo, raggruppato per asset o per broker, in tabella o in mappa."
-    }
+    },
+    "analyzeAllocation": "Analizza →"
   }
 }
