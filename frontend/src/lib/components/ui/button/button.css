@@ -22,6 +22,17 @@
         height: max(100%, 40px);
         transform: translate(-50%, -50%);
     }
+
+    /* Inside a field or beside a neighbour (`dense`, C9): 24 px, the floor of WCAG 2.5.8, never less. */
+    .lf-btn.lf-btn-dense::after {
+        width: max(100%, 24px);
+        height: max(100%, 24px);
+    }
+
+    /* A segment of a group (C2) grows in height only: two icon segments side by side never cover each other. */
+    .lf-btn.lf-btn-segment::after {
+        width: 100%;
+    }
 }
 
 /* The sign that a long press is coming: the focus outline grows in the 500 ms of the press (pressable adds the class
@@ -30,6 +41,16 @@
     outline: 0 solid var(--lf-focus);
     outline-offset: 2px;
     animation: lf-btn-press 500ms linear forwards;
+}
+
+/* The outline follows the button's focus (C1): the bar's colour on the green sidebar, inside the button for the bar
+   and for the segments of a group. */
+.lf-btn.lf-btn-bar.lf-pressing {
+    outline-color: var(--lf-bar-focus);
+}
+
+.lf-btn.lf-btn-inset.lf-pressing {
+    outline-offset: -2px;
 }
 
 @keyframes lf-btn-press {
