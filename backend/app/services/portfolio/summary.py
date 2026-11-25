@@ -146,7 +146,8 @@ class PortfolioSummaryMixin:
         # Signed: a legacy negative DIVIDEND/INTEREST correction must reduce period_income,
         # not be folded into the "Other" reconciliation residual via abs() (plan §4.4). A REWARD is income in kind
         # (financial_math.income): its value at receipt, with no cash.
-        _income_accum = sum((period_flows.signed_by_type.get(income_type, Decimal("0")) for income_type in sorted(INCOME_TYPES)), Decimal("0"))
+        _income_by_type = {income_type: period_flows.signed_by_type.get(income_type, Decimal("0")) for income_type in sorted(INCOME_TYPES)}
+        _income_accum = sum(_income_by_type.values(), Decimal("0"))
         _fees_accum = period_flows.absolute_by_type.get(TransactionType.FEE, Decimal("0"))
         _taxes_accum = period_flows.absolute_by_type.get(TransactionType.TAX, Decimal("0"))
         _fees_taxes_accum = Decimal("0") + _fees_accum + _taxes_accum
@@ -674,6 +675,9 @@ class PortfolioSummaryMixin:
             period_unrealized_breakdown=engine_facts._unrealized_breakdown_rows(engine_result, date_from, valuation_date, base_currency) if period_ugl_delta is not None else [],
             period_realized_gain_loss=Currency(code=base_currency, amount=period_realized_val) if period_realized_val is not None else None,
             period_income=Currency(code=base_currency, amount=period_income_val) if period_income_val is not None else None,
+            period_dividends=Currency(code=base_currency, amount=_income_by_type[TransactionType.DIVIDEND]) if period_income_val is not None else None,
+            period_interest=Currency(code=base_currency, amount=_income_by_type[TransactionType.INTEREST]) if period_income_val is not None else None,
+            period_rewards=Currency(code=base_currency, amount=_income_by_type[TransactionType.REWARD]) if period_income_val is not None else None,
             period_fees_taxes=Currency(code=base_currency, amount=period_fees_taxes_val) if period_fees_taxes_val is not None else None,
             period_fees=Currency(code=base_currency, amount=_fees_accum) if _fees_accum else None,
             period_taxes=Currency(code=base_currency, amount=_taxes_accum) if _taxes_accum else None,
