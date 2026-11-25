@@ -6,6 +6,9 @@
   - Multiple file upload support
   - Validates against blocked extensions (executables/scripts)
   - Progress indicator
+  - The standard buttons (85 BTN-2b). The item buttons sit inside the drop zone (`role="button"`): each click stops
+    its propagation, so the zone does not open the file dialog, and the zone's Enter acts only on the zone itself
+    (an Enter on an item button used to open the OS file dialog over the edit, the rename or the removal)
 -->
 <script lang="ts">
     import {createEventDispatcher} from 'svelte';
@@ -15,6 +18,7 @@
     import {formatBytes} from '$lib/utils/files/upload';
     import {uiLocaleStore} from '$lib/stores/app/uiLocale';
     import '$lib/theme/components/media.css';
+    import Button from '$lib/components/ui/button/Button.svelte';
 
     export let maxSizeMB: number = 10;
     export let multiple: boolean = true;
@@ -202,7 +206,7 @@
         on:dragleave={handleDragLeave}
         on:dragover={handleDragOver}
         on:drop={handleDrop}
-        on:keydown={(e) => e.key === 'Enter' && openFileBrowser()}
+        on:keydown={(e) => e.target === e.currentTarget && e.key === 'Enter' && openFileBrowser()}
         role="button"
         tabindex="0"
     >
@@ -212,7 +216,7 @@
             <Upload size={32} class="upload-icon" />
             <p class="drop-text">{$t('uploads.dropOrClick')}</p>
             <p class="drop-hint">
-                {$t('common.max') || 'Max'}: {maxSizeMB}MB
+                {$t('common.max')}: {maxSizeMB}MB
                 {#if multiple}
                     • {$t('common.multipleFiles')}{/if}
             </p>
@@ -227,23 +231,64 @@
                         {/if}
                         <span class="file-name">{file.name}</span>
                         {#if editedIndices.includes(index)}
-                            <button type="button" class="restore-btn" on:click|stopPropagation={() => restoreFile(index)} title={$t('common.restore') || 'Restore original'} data-testid="file-restore-btn">
-                                <RefreshCw size={14} />
-                            </button>
+                            <Button
+                                label={$t('common.restore')}
+                                icon={RefreshCw}
+                                display="icon"
+                                variant="ghost"
+                                tone="warning"
+                                size="sm"
+                                dense
+                                onclick={(e) => {
+                                    e.stopPropagation();
+                                    restoreFile(index);
+                                }}
+                                data-testid="file-restore-btn"
+                            />
                         {/if}
                         {#if isImageFile(file)}
-                            <button type="button" class="edit-btn" on:click|stopPropagation={() => editImage(file, index)} title={$t('common.edit') || 'Edit'} data-testid="file-edit-btn">
-                                <Pencil size={14} />
-                            </button>
+                            <Button
+                                label={$t('common.edit')}
+                                icon={Pencil}
+                                display="icon"
+                                variant="ghost"
+                                size="sm"
+                                dense
+                                onclick={(e) => {
+                                    e.stopPropagation();
+                                    editImage(file, index);
+                                }}
+                                data-testid="file-edit-btn"
+                            />
                         {:else}
-                            <button type="button" class="edit-btn" on:click|stopPropagation={() => editFile(file, index)} title={$t('uploads.rename') || 'Rename'} data-testid="file-edit-btn">
-                                <Pencil size={14} />
-                            </button>
+                            <Button
+                                label={$t('uploads.rename')}
+                                icon={Pencil}
+                                display="icon"
+                                variant="ghost"
+                                size="sm"
+                                dense
+                                onclick={(e) => {
+                                    e.stopPropagation();
+                                    editFile(file, index);
+                                }}
+                                data-testid="file-edit-btn"
+                            />
                         {/if}
                         <span class="file-size">{formatBytes(file.size, $t, $uiLocaleStore)}</span>
-                        <button type="button" class="remove-btn" on:click|stopPropagation={() => removeFile(index)} title={$t('common.remove') || 'Remove'}>
-                            <X size={14} />
-                        </button>
+                        <Button
+                            label={$t('common.remove')}
+                            icon={X}
+                            display="icon"
+                            variant="ghost"
+                            size="sm"
+                            dense
+                            onclick={(e) => {
+                                e.stopPropagation();
+                                removeFile(index);
+                            }}
+                            data-testid="file-remove-btn"
+                        />
                     </div>
                 {/each}
             </div>
@@ -265,13 +310,8 @@
     <!-- Actions -->
     {#if selectedFiles.length > 0 && !hideActions}
         <div class="actions">
-            <button type="button" class="btn btn-secondary" on:click={clearAll} data-testid="file-clear">
-                {$t('common.clear') || 'Clear'}
-            </button>
-            <button type="button" class="btn btn-primary" on:click={uploadFiles} data-testid="file-upload-submit">
-                <Upload size={16} />
-                {$t('uploads.upload')} ({selectedFiles.length})
-            </button>
+            <Button label={$t('common.clear')} variant="secondary" onclick={clearAll} data-testid="file-clear" />
+            <Button label="{$t('uploads.upload')} ({selectedFiles.length})" icon={Upload} variant="primary" onclick={uploadFiles} data-testid="file-upload-submit" />
         </div>
     {/if}
 </div>
@@ -352,16 +392,17 @@
         border-radius: 6px;
     }
 
-    .file-item :global(svg) {
+    /* The row's own icon (the file's kind), never a button's: a button's icon takes the button's colour */
+    .file-item > :global(svg) {
         color: var(--lf-text-muted);
         flex-shrink: 0;
     }
 
-    .file-item :global(svg.image) {
+    .file-item > :global(svg.image) {
         color: var(--lf-cmp-file-uploader-image-icon-text);
     }
 
-    :global(.dark) .file-item :global(svg.image) {
+    :global(.dark) .file-item > :global(svg.image) {
         color: var(--lf-cmp-file-uploader-image-icon-text-dark);
     }
 
@@ -384,50 +425,6 @@
     .file-item.edited {
         border-color: var(--lf-info);
         background: var(--lf-info-soft);
-    }
-
-    .edit-btn,
-    .remove-btn {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        width: 24px;
-        height: 24px;
-        border: none;
-        border-radius: 4px;
-        background: transparent;
-        color: var(--lf-text-muted);
-        cursor: pointer;
-        transition: all 0.15s;
-    }
-
-    .restore-btn {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        width: 24px;
-        height: 24px;
-        border: none;
-        border-radius: 4px;
-        background: transparent;
-        color: var(--lf-warning);
-        cursor: pointer;
-        transition: all 0.15s;
-    }
-
-    .edit-btn:hover {
-        background: var(--lf-info-soft);
-        color: var(--lf-info);
-    }
-
-    .remove-btn:hover {
-        background: var(--lf-danger-soft);
-        color: var(--lf-danger);
-    }
-
-    .restore-btn:hover {
-        background: var(--lf-warning-soft);
-        color: var(--lf-warning);
     }
 
     .errors {
@@ -457,38 +454,5 @@
         display: flex;
         justify-content: flex-end;
         gap: 0.5rem;
-    }
-
-    .btn {
-        display: flex;
-        align-items: center;
-        gap: 0.375rem;
-        padding: 0.5rem 1rem;
-        font-size: 0.875rem;
-        font-weight: 500;
-        border: none;
-        border-radius: 6px;
-        cursor: pointer;
-        transition: all 0.15s;
-    }
-
-    .btn-secondary {
-        background: var(--lf-surface-card);
-        color: var(--lf-text-secondary);
-        box-shadow: inset 0 0 0 1px var(--lf-border-subtle);
-    }
-
-    .btn-secondary:hover {
-        background: var(--lf-surface-hover);
-        color: var(--lf-text-primary);
-    }
-
-    .btn-primary {
-        background: var(--lf-action);
-        color: var(--lf-on-action);
-    }
-
-    .btn-primary:hover {
-        background: var(--lf-action-hover);
     }
 </style>
