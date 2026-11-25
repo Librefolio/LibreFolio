@@ -410,7 +410,8 @@
       "deleteSelected": "Elimina righe selezionate",
       "deleteConfirmMessage": "Eliminare {n} voci da questa distribuzione?",
       "weightPercent": "Peso %",
-      "balance": "Bilancia"
+      "balance": "Bilancia",
+      "askNoSource": "Non c'è ancora una fonte da interrogare per questo asset"
     },
     "showInactive": "Inattivi",
     "edit": {

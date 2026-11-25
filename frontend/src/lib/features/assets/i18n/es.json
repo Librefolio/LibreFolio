@@ -410,7 +410,8 @@
       "deleteSelected": "Eliminar filas seleccionadas",
       "deleteConfirmMessage": "¿Eliminar {n} entradas de esta distribución?",
       "weightPercent": "Peso (%)",
-      "balance": "Equilibrar"
+      "balance": "Equilibrar",
+      "askNoSource": "Todavía no hay ninguna fuente que consultar para este activo"
     },
     "showInactive": "Inactivos",
     "edit": {
