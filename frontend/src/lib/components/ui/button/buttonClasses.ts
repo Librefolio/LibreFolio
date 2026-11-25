@@ -21,7 +21,7 @@
 import './button.css';
 import {BUTTON_TONES, STATUS_TONES} from '$lib/theme/toneClasses';
 
-export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'danger-solid' | 'warning' | 'link' | 'chip' | 'bar-ghost' | 'bar-solid' | 'bar-link';
+export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'ghost-strong' | 'danger' | 'danger-solid' | 'warning' | 'link' | 'link-muted' | 'chip' | 'bar-ghost' | 'bar-solid' | 'bar-link';
 export type ButtonSize = 'xs' | 'sm' | 'md' | 'lg';
 /** A state's colour: with `ghost` the button in that colour, with `chip` the chip of a banner, with `pressed` the fill. */
 export type ButtonTone = 'success' | 'warning' | 'danger' | 'info';
@@ -52,6 +52,11 @@ export interface ButtonClassOptions {
     truncate?: boolean;
     /** Inside a field or beside a neighbour (C9): the finger's target is 24 px (WCAG 2.5.8), not 40. */
     dense?: boolean;
+    /**
+     * In a line of text (C12, the docs icon): `p-0.5` whatever the size, `rounded`, the 24 px target of `dense`; no text
+     * size of its own — a word inherits the line's. `size` then chooses only the icon.
+     */
+    inline?: boolean;
 }
 
 const BASE = 'lf-btn relative inline-flex items-center justify-center font-medium whitespace-nowrap transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-busy:cursor-progress';
@@ -68,11 +73,16 @@ const VARIANTS: Record<Exclude<ButtonVariant, 'chip'>, string> = {
     primary: 'bg-lf-action text-lf-on-action not-disabled:not-aria-disabled:hover:bg-lf-action-hover',
     secondary: 'border border-lf-input bg-lf-card text-lf-secondary not-disabled:not-aria-disabled:hover:bg-lf-hover not-disabled:not-aria-disabled:hover:text-lf-primary',
     ghost: 'text-lf-muted not-disabled:not-aria-disabled:hover:bg-lf-hover not-disabled:not-aria-disabled:hover:text-lf-secondary',
+    /** The other half of the light buttons (C13): the secondary text — the header's controls (D-T23), and every ghost
+     *  that is secondary today. A muted one stays `ghost`: the migration changes nothing in view. */
+    'ghost-strong': 'text-lf-secondary not-disabled:not-aria-disabled:hover:bg-lf-hover not-disabled:not-aria-disabled:hover:text-lf-primary',
     /** The same literal as `ghost` with `tone="danger"`. */
     danger: BUTTON_TONES.ghost.danger,
     'danger-solid': 'bg-lf-danger-solid text-lf-on-danger-solid not-disabled:not-aria-disabled:hover:bg-lf-danger-hover',
     warning: 'bg-lf-warning text-lf-on-status not-disabled:not-aria-disabled:hover:bg-lf-warning-hover',
     link: 'text-lf-link not-disabled:not-aria-disabled:hover:underline',
+    /** Grey at rest, the link's colour on hover: the sign that it opens the guide (C12, `DocsLink`). */
+    'link-muted': 'text-lf-muted not-disabled:not-aria-disabled:hover:text-lf-link',
     /** The green sidebar (C1), its own roles: a ghost on the bar, the filled «log out», the muted link (the version). */
     'bar-ghost': 'text-lf-bar-text not-disabled:not-aria-disabled:hover:bg-lf-bar-hover',
     'bar-solid': 'bg-lf-bar-logout text-lf-bar-text not-disabled:not-aria-disabled:hover:bg-lf-bar-logout-hover',
@@ -95,11 +105,12 @@ const SIZES: Record<ButtonSize, string> = {
     lg: 'w-full gap-2 px-4 py-2.5 text-sm',
 };
 
+/** The gap keeps a ▾ (`menu`, `expanded`) apart from the icon; a lone icon is untouched by it. */
 const ICON_SIZES: Record<ButtonSize, string> = {
-    xs: 'p-1 text-[11px]',
-    sm: 'p-1.5 text-xs',
-    md: 'p-2 text-sm',
-    lg: 'p-2.5 text-sm',
+    xs: 'gap-0.5 p-1 text-[11px]',
+    sm: 'gap-1 p-1.5 text-xs',
+    md: 'gap-1 p-2 text-sm',
+    lg: 'gap-1 p-2.5 text-sm',
 };
 
 /** A link reads as text: no padding, its size only. */
@@ -109,6 +120,9 @@ const LINK_SIZES: Record<ButtonSize, string> = {
     md: 'gap-1.5 text-sm',
     lg: 'gap-2 text-sm',
 };
+
+/** In a line of text (C12): a hair of padding, no text size — the word takes the line's. */
+const INLINE_BOX = 'gap-1 p-0.5';
 
 /** The class that hides the word of `display="auto"` below its threshold. */
 export const WORD_HIDDEN_BELOW: Record<WordThreshold, string> = {
@@ -154,12 +168,12 @@ function colours({variant = 'secondary', pressed, tone, tint, segment}: ButtonCl
 
 /** The classes of a standard button. */
 export function buttonClasses(options: ButtonClassOptions = {}): string {
-    const {variant = 'secondary', size = 'md', shape = 'default', pressed, segment = false, pill = false, truncate = false, dense = false} = options;
+    const {variant = 'secondary', size = 'md', shape = 'default', pressed, segment = false, pill = false, truncate = false, dense = false, inline = false} = options;
     const link = isLink(variant) && pressed === undefined && !segment;
-    const box = link ? LINK_SIZES[size] : shape === 'icon' ? ICON_SIZES[size] : SIZES[size];
-    const radius = segment ? 'rounded-none' : pill ? 'rounded-full' : link ? 'rounded' : 'rounded-lg';
+    const box = inline ? INLINE_BOX : link ? LINK_SIZES[size] : shape === 'icon' ? ICON_SIZES[size] : SIZES[size];
+    const radius = segment ? 'rounded-none' : pill ? 'rounded-full' : link || inline ? 'rounded' : 'rounded-lg';
     const focus = isBar(variant) ? FOCUS.bar : segment ? FOCUS.pageInset : FOCUS.page;
     const flex = truncate ? 'min-w-0' : 'shrink-0';
-    const marks = [segment ? 'lf-btn-segment' : '', dense ? 'lf-btn-dense' : ''].filter(Boolean).join(' ');
+    const marks = [segment ? 'lf-btn-segment' : '', dense || inline ? 'lf-btn-dense' : ''].filter(Boolean).join(' ');
     return [BASE, flex, focus, box, radius, colours(options), marks].filter(Boolean).join(' ');
 }

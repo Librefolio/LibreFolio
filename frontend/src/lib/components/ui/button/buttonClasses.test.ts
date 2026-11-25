@@ -24,7 +24,7 @@ import {ARBITRARY_VALUE_RE, LEGACY_CLASS_RE, ROLE_CLASS_RE} from '../../../../..
 import {BUTTON_TONES, STATUS_TONES} from '$lib/theme/toneClasses';
 import {buttonClasses, ICON_PX, WORD_HIDDEN_BELOW, type ButtonClassOptions, type ButtonSize, type ButtonTone, type ButtonVariant} from './buttonClasses';
 
-const VARIANTS: ButtonVariant[] = ['primary', 'secondary', 'ghost', 'danger', 'danger-solid', 'warning', 'link', 'chip', 'bar-ghost', 'bar-solid', 'bar-link'];
+const VARIANTS: ButtonVariant[] = ['primary', 'secondary', 'ghost', 'ghost-strong', 'danger', 'danger-solid', 'warning', 'link', 'link-muted', 'chip', 'bar-ghost', 'bar-solid', 'bar-link'];
 const SIZES: ButtonSize[] = ['xs', 'sm', 'md', 'lg'];
 const SHAPES = ['default', 'icon'] as const;
 const PRESSED = [undefined, true, false] as const;
@@ -86,7 +86,7 @@ describe('buttonClasses — colour roles only, in every combination', () => {
         expect(failures.slice(0, 20), `${failures.length} combinations break a rule`).toEqual([]);
     });
 
-    it.each([{pill: true}, {truncate: true}, {dense: true}, {pill: true, truncate: true, dense: true}])('the shape options keep the rules: %o', (shapeOptions) => {
+    it.each([{pill: true}, {truncate: true}, {dense: true}, {inline: true}, {pill: true, truncate: true, dense: true}, {inline: true, truncate: true}])('the shape options keep the rules: %o', (shapeOptions) => {
         for (const variant of VARIANTS) {
             const options = {variant, tone: variant === 'chip' ? ('info' as const) : undefined, ...shapeOptions};
             expect(brokenRules(options), variant).toEqual([]);
@@ -167,6 +167,49 @@ describe('buttonClasses — segment, bar, shape options (C1, C2, C3, C7, C9)', (
         expect(tokens(buttonClasses())).not.toContain('min-w-0');
     });
 
+    it('inline (C12): a hair of padding, the small radius, the 24 px target, and the line’s own text size', () => {
+        for (const size of SIZES) {
+            for (const shape of SHAPES) {
+                const classes = tokens(buttonClasses({variant: 'link-muted', size, shape, inline: true}));
+                expect(classes).toEqual(expect.arrayContaining(['gap-1', 'p-0.5', 'rounded', 'lf-btn-dense']));
+                expect(
+                    classes.filter((t) => /^text-(xs|sm|base|lg|\[)/.test(t)),
+                    `${size} ${shape}: no text size of its own`,
+                ).toEqual([]);
+                expect(
+                    classes.filter((t) => /^p[xytrbl]?-/.test(t)),
+                    'only the hair of padding',
+                ).toEqual(['p-0.5']);
+                expect(classes).not.toContain('rounded-lg');
+            }
+        }
+    });
+
+    it('link-muted (C12): muted at rest, the link’s colour on a guarded hover', () => {
+        const classes = tokens(buttonClasses({variant: 'link-muted'}));
+        expect(classes).toContain('text-lf-muted');
+        expect(classes).toContain(`${GUARD}text-lf-link`);
+        expect(classes.filter((t) => t.startsWith('text-lf-') && !t.includes(':'))).toEqual(['text-lf-muted']);
+    });
+
+    it('ghost-strong (C13): the secondary text of the header and of every ghost that is secondary today, no fill', () => {
+        const classes = tokens(buttonClasses({variant: 'ghost-strong'}));
+        expect(classes.filter((t) => t.startsWith('text-lf-') && !t.includes(':'))).toEqual(['text-lf-secondary']);
+        expect(classes).toContain(`${GUARD}bg-lf-hover`);
+        expect(classes).toContain(`${GUARD}text-lf-primary`);
+        expect(classes.filter((t) => (t.startsWith('bg-') || t.startsWith('border')) && !t.includes(':'))).toEqual([]);
+        // The control: plain ghost stays muted.
+        expect(tokens(buttonClasses({variant: 'ghost'})).filter((t) => t.startsWith('text-lf-') && !t.includes(':'))).toEqual(['text-lf-muted']);
+    });
+
+    it('an icon button keeps a gap between its icon and a badge or a chevron', () => {
+        for (const size of SIZES)
+            expect(
+                tokens(buttonClasses({size, shape: 'icon'})).some((t) => t.startsWith('gap-')),
+                size,
+            ).toBe(true);
+    });
+
     it('pill → rounded-full; dense → lf-btn-dense; xs → text-[11px] and a 12 px icon', () => {
         expect(tokens(buttonClasses({pill: true}))).toContain('rounded-full');
         expect(tokens(buttonClasses({pill: true}))).not.toContain('rounded-lg');
@@ -179,7 +222,7 @@ describe('buttonClasses — segment, bar, shape options (C1, C2, C3, C7, C9)', (
 });
 
 describe('buttonClasses — a toggle replaces the variant colours', () => {
-    const PLAIN_VARIANTS: ButtonVariant[] = ['primary', 'secondary', 'ghost', 'danger', 'danger-solid', 'warning', 'link'];
+    const PLAIN_VARIANTS: ButtonVariant[] = ['primary', 'secondary', 'ghost', 'ghost-strong', 'danger', 'danger-solid', 'warning', 'link', 'link-muted'];
 
     it.each(PLAIN_VARIANTS)('%s: pressed true and false carry the toggle colours, not the variant ones', (variant) => {
         const own = roleUtilities(buttonClasses({variant})).filter(plain);
