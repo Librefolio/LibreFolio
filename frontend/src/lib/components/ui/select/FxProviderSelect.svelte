@@ -36,6 +36,7 @@
     import {getPriorityBadgeStyle, getProviderColor} from '$lib/utils/colors';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import Button from '$lib/components/ui/button/Button.svelte';
+    import {pressable} from '$lib/components/ui/button/pressable.svelte';
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
 
     /** A provider note's level (`warning_level`): a data limit that can mislead, or a fact worth knowing. */
@@ -566,6 +567,17 @@
     }
 
     /**
+     * The texts of a route row's badges and ⚠, for the finger, the keyboard and a screen reader (`use:pressable` with
+     * `partTips`, 85 BTN-0c D16): the parts' own tooltips are the mouse's alone, so the click on them stays the row's.
+     */
+    function routeHelp(route: RouteOption, off: ProviderInfo | undefined): string {
+        const lines: string[] = off ? [setupHint(off)] : [];
+        for (const code of new Set(route.providers)) lines.push([getProviderName(code), getProviderDescByCode(code)].filter(Boolean).join(': '));
+        lines.push(...getRouteWarnings(route));
+        return lines.join('\n');
+    }
+
+    /**
      * The providers legend (R1-C of project 67, the developer, 20/11): a plain click on an entry only shows or hides its
      * tooltip, a double click opens the provider's guide. The entry stays a link, so the keyboard (Enter: a click with no
      * pointer, `detail` 0), a click with a modifier key, a middle click and the long press of a phone keep opening it.
@@ -791,6 +803,7 @@
                             {@const off = blockedBy(route)}
                             <button
                                 type="button"
+                                use:pressable={{label: route.label, help: routeHelp(route, off), partTips: true, wordVisible: () => true}}
                                 data-testid="fx-route-direct-{route.providers[0]}"
                                 data-route-key={route.key}
                                 data-needs-setup={off ? 'true' : 'false'}
@@ -837,6 +850,7 @@
                         <!-- Collapsible header -->
                         <button
                             type="button"
+                            use:pressable={{label: $_('fx.route.chainSection'), help: $_('fx.route.chainWarning'), partTips: true, wordVisible: () => true}}
                             class="w-full flex items-center gap-1.5 text-[10px] font-semibold text-lf-muted uppercase tracking-wider hover:text-lf-secondary transition-colors"
                             onclick={() => toggleChainGroup(group.stepCount)}
                             aria-expanded={isExpanded}
@@ -866,6 +880,7 @@
                                 {@const off = blockedBy(route)}
                                 <button
                                     type="button"
+                                    use:pressable={{label: route.label, help: routeHelp(route, off), partTips: true, wordVisible: () => true}}
                                     data-testid="fx-route-chain-{route.stepCount}step-{route.providers.join('-')}"
                                     data-route-key={route.key}
                                     data-needs-setup={off ? 'true' : 'false'}

@@ -33,6 +33,7 @@
 import {describe, expect, it, vi} from 'vitest';
 import type {ComponentProps} from 'svelte';
 import {fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
+import {longPress, touch} from '$test/longPress';
 import type {SelectOption} from './types';
 import SearchSelect from './SearchSelect.svelte';
 import {get} from 'svelte/store';
@@ -656,6 +657,32 @@ describe('AssetSelect — a click on the hint badge chooses the option', () => {
         const option = await waitFor(() => within(dropdown()).getByTestId(`search-select-option-${CACHED_ASSET.id}`));
         const hint = within(option).getByText('probe-hint');
         await fireEvent.click(hint);
+        expect(onchange).toHaveBeenCalledExactlyOnceWith(CACHED_ASSET.id);
+    });
+});
+
+describe('AssetSelect — the hint of a suggested asset, without a mouse (85 BTN-0c, D16)', () => {
+    it('a long press on the option shows the hint and chooses nothing; a tap chooses; the hint is its description', async () => {
+        await setupI18n();
+        const onchange = vi.fn();
+        render(AssetSelect, {value: null, testid: 'hinted-asset', onchange, suggestedIds: [{id: CACHED_ASSET.id, badge: 'probe-hint', badgeTooltip: 'probe: matched by ISIN'}]});
+        await open(screen.getByTestId('hinted-asset-trigger'));
+        const option = await waitFor(() => within(dropdown()).getByTestId(`search-select-option-${CACHED_ASSET.id}`));
+        expect(await longPress(option)).toContain('probe: matched by ISIN');
+        expect(onchange).not.toHaveBeenCalled();
+        expect(option).toHaveAccessibleDescription('probe: matched by ISIN');
+        // The arrows leave the focus in the search: the search points at the option they stand on, hint included.
+        const search = screen.getByTestId('hinted-asset-search');
+        const highlighted = dropdown().querySelector<HTMLElement>('[data-highlighted="true"]')!;
+        expect(search.getAttribute('aria-activedescendant')).toBe(highlighted.id);
+        expect(document.getElementById(highlighted.id)).toBe(highlighted);
+        // Tab reaches the option itself, and shows the hint.
+        await fireEvent.keyDown(document, {key: 'Tab'});
+        option.focus();
+        await waitFor(() => expect(document.querySelector('[role="tooltip"]')?.textContent).toBe('probe: matched by ISIN'));
+        touch(option, 'pointerdown');
+        touch(option, 'pointerup');
+        await fireEvent.click(option);
         expect(onchange).toHaveBeenCalledExactlyOnceWith(CACHED_ASSET.id);
     });
 });
