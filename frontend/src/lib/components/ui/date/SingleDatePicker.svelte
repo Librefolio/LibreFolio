@@ -16,6 +16,7 @@
     import {todayIso} from '$lib/utils/dateOnly';
     import {Calendar, X} from 'lucide-svelte';
     import {_} from '$lib/i18n';
+    import Button from '$lib/components/ui/button/Button.svelte';
     import CalendarMonth from './CalendarMonth.svelte';
     import {parseTypedDate} from '$lib/utils/core/parseTypedDate';
     import {isOutsideClick} from '$lib/utils/core/clickOutside';
@@ -52,7 +53,7 @@
     interface Props {
         /** Selected date (ISO YYYY-MM-DD) */
         value: string;
-        /** Label displayed next to the icon */
+        /** Label displayed next to the icon: «Date» in the user's language when absent, none when empty (`""`). */
         label?: string;
         /** Compact mode (smaller text) */
         compact?: boolean;
@@ -82,7 +83,7 @@
         onvaliditychange?: (state: {valid: boolean}) => void;
     }
 
-    let {value = $bindable(''), label = 'Date', compact = false, inputStyle = false, onchange, disabledDates, allowFuture = false, disabled = false, clearable = false, testid, onvaliditychange}: Props = $props();
+    let {value = $bindable(''), label, compact = false, inputStyle = false, onchange, disabledDates, allowFuture = false, disabled = false, clearable = false, testid, onvaliditychange}: Props = $props();
 
     /**
      * Prefix for the structural test ids. `testid` names the *input*, which is what a
@@ -91,6 +92,11 @@
      * to a shared default — fine for a screen that only has one.
      */
     let tid = $derived(testid ?? 'single-date-picker');
+    let fieldLabel = $derived(label ?? $_('common.date'));
+    /** The icons keep today's sizes: 12 px in a compact field, 14 px otherwise. */
+    let iconSize = $derived<'xs' | 'sm'>(compact && !inputStyle ? 'xs' : 'sm');
+    /** Gives back the icon button's own padding (`p-1` for xs, `p-1.5` for sm): the field keeps its height. */
+    let iconMargin = $derived(iconSize === 'xs' ? '-m-1' : '-m-1.5');
 
     // =========================================================================
     // State
@@ -376,22 +382,25 @@
               ? 'border-lf-focus ring-1 ring-lf-focus'
               : 'border-lf-input hover:border-lf-input-hover'} {disabled ? 'opacity-60' : ''}"
     >
-        <button
-            type="button"
-            class="flex-shrink-0 text-lf-link disabled:cursor-not-allowed"
-            data-testid="{tid}-calendar-button"
+        <!-- The icons sit inside the field (C9, dense). The calendar keeps its link colour and the size of the bare icon:
+             the `link` variant has no padding. -->
+        <Button
+            variant="link"
+            size={iconSize}
+            dense
+            icon={Calendar}
+            display="icon"
+            label={$_('datePicker.openCalendar')}
             {disabled}
-            aria-label={$_('datePicker.openCalendar')}
-            title={$_('datePicker.openCalendar')}
+            aria-expanded={calendarOpen}
             onclick={(e) => {
                 e.stopPropagation();
                 if (calendarOpen) closeCalendar();
                 else openCalendar();
             }}
-        >
-            <Calendar size={inputStyle ? 14 : compact ? 12 : 14} />
-        </button>
-        {#if label}<span class="flex-shrink-0 text-[10px] font-medium tracking-wide text-lf-muted uppercase">{label}</span>{/if}
+            data-testid="{tid}-calendar-button"
+        />
+        {#if fieldLabel}<span class="flex-shrink-0 text-[10px] font-medium tracking-wide text-lf-muted uppercase">{fieldLabel}</span>{/if}
         <input
             bind:this={inputEl}
             type="text"
@@ -430,17 +439,9 @@
             }}
         />
         {#if clearable && shown}
-            <button
-                type="button"
-                class="flex-shrink-0 rounded text-lf-muted hover:text-lf-secondary focus:outline-none focus-visible:ring-2 focus-visible:ring-lf-focus/70 disabled:cursor-not-allowed"
-                {disabled}
-                aria-label={$_('common.clear')}
-                title={$_('common.clear')}
-                data-testid="{tid}-clear"
-                onclick={clearValue}
-            >
-                <X size={inputStyle ? 14 : compact ? 12 : 14} aria-hidden="true" />
-            </button>
+            <span class="flex shrink-0 {iconMargin}">
+                <Button variant="ghost" size={iconSize} dense icon={X} display="icon" label={$_('common.clear')} {disabled} onclick={clearValue} data-testid="{tid}-clear" />
+            </span>
         {/if}
     </div>
 
