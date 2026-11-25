@@ -192,6 +192,25 @@ sezione «In attesa», lotto L9, r.273). Finora parcheggiato solo nel piano.
 decisione cambia. Intanto il RUB arriva da altre banche che lo pubblicano ancora, senza contattare `cbr.ru`: BNR, RBI e
 SARB, entrati con la Q3 (b) dell'ondata 2 (19/11/2026). ECB, Norges Bank, Bank of Canada e Banca d'Italia l'hanno sospeso.
 
+## 🏦 Borsa Italiana: la capitalizzazione delle azioni nel profilo (P-33 b, 24/11/2026)
+
+**Data aggiunta**: 24 Novembre 2026 · **Status**: 📋 FUTURO — da ricontrollare · **Priorità**: 🔽 Bassa
+**Origine**: P-33 (b) della 1.4, corsia 83 (BI-PROF). Il developer: «se non si può fare, amen, mettilo in todo_futuri
+come una cosa da ricontrollare in seguito».
+
+- **Cosa si voleva**: riempire `market_cap` del profilo di un'azione dalla capitalizzazione che la scheda di Borsa
+  Italiana dovrebbe già dare, senza richieste in più.
+- **Perché non c'è**: nelle registrazioni vere delle schede azioni (Enel, ASML, Apple, 10/11/2026) il campo
+  `capitalizzazione` della libreria `borsa-italiana-scraping` è sempre vuoto. La libreria cerca le etichette «Market Cap
+  / Capitalizzazione / Market Capitalization / Cap. di Mercato», ma la pagina azioni non le mostra, o le mostra con
+  un'altra etichetta. Senza un valore mai visto non si conosce l'unità (unità o milioni): scriverlo alla cieca rischia
+  un errore di un fattore un milione.
+- **Da ricontrollare**: trovare su una pagina azioni vera dove sta la capitalizzazione e con quale etichetta; correggere
+  la libreria (`LibreFolio_subRepo/borsaItaliana-scraping`, `scheda.py`) con un test su una pagina salvata; poi
+  l'arricchitore la usa (`enricher_providers/borsa_italiana/plugin.py`, voce `market_cap`).
+- Dettagli: journal, `Release_2/Phase_2/83_xtbExcel/analisi-BI-PROF.md`.
+
+
 # Transazioni e import
 
 ## 🔗 Suggerimento eventi collegabili nella bulk modal (da P2-6)

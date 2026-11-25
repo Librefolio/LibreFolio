@@ -14,7 +14,7 @@
  *
  * @module features/tools/pac-allocator/planner/result/exposureBarColours
  */
-import {categoryColor} from '$lib/theme/chartCategories';
+import {categoryColor, COUNTRY_SEQUENCE, sequenceColor} from '$lib/theme/chartCategories';
 import {familyShade, type ShadePoles} from '$lib/theme/chartShades';
 import {PAC_EXPOSURE_COLORS} from '$lib/theme/chartTheme';
 import {themed} from '$lib/theme/themePair';
@@ -36,9 +36,14 @@ const UNCLASSIFIED_KEY = 'Unknown';
 
 /**
  * The colour of each row's actual weight, in the order of `rows`. `dimension` is the exposure dimension of the bars:
- * `asset_type` reads the types' table, any other the sectors'.
+ * `asset_type` reads the types' table, `geography` the countries' sequence, ranked in the order of `rows` as the
+ * Rebalancer's bullets rank theirs (TL-5 of project 67: the PAC's countries as bars too), any other the sectors'.
  */
 export function actualColours(rows: readonly WeightRow[], dimension: string, dark: boolean, poles: ShadePoles): string[] {
+    if (dimension === 'geography') {
+        let rank = 0;
+        return rows.map((row) => (row.id === UNCATEGORISED_CATEGORY_ID ? categoryColor('sector', UNCLASSIFIED_KEY, dark) : sequenceColor(COUNTRY_SEQUENCE, rank++, dark, poles)));
+    }
     // A sector's id is a planner id: «Health Care» travels as `enc:Health_20Care`, so its colour is looked up by its name.
     if (dimension !== 'asset_type') return rows.map((row) => categoryColor('sector', row.id === UNCATEGORISED_CATEGORY_ID ? UNCLASSIFIED_KEY : fromPlannerId(row.id), dark));
 

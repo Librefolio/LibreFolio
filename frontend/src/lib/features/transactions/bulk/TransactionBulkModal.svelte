@@ -118,6 +118,8 @@
         wireClonedRows,
         bulkChargeCandidates,
         type BulkChargeProbe,
+        newGroupOf,
+        syncNewGroup,
     } from './bulkCharges';
     import {SPLIT_TYPE_MAP, splitHalfType, postSplitType, splitTypeToSend} from './splitTypes';
     import {txRowRef} from '../chargeLinkRules';
@@ -3458,11 +3460,21 @@
     function handleFormPushed(payload: Record<string, unknown>) {
         const isDual = payload._dual === true;
         let pushedTempId: string | null = formEditingTempId;
+        // 66 TL-3b: the row's broker and asset as shown before this «Apply», to tell what changed (`syncNewGroup`).
+        const editedBefore = formEditingTempId != null && !isDual ? ops.find((d) => d.tempId === formEditingTempId) : undefined;
+        const before = editedBefore ? followedFields(editedBefore) : undefined;
         if (formEditingTempId != null) {
             // Patching an existing draft row
             if (isDual) {
                 patchDualRowFromForm(formEditingTempId, payload);
             } else {
+                // §11.4: a create that followed its parent, applied in its own form, keeps what that form gives it. The flag
+                // goes before the patch, or `syncFollowers` would write the parent's broker, asset and date back over it.
+                if (editedBefore?.followsParent) {
+                    const own = {...editedBefore};
+                    delete own.followsParent;
+                    ops = ops.map((d) => (d.tempId === own.tempId ? own : d));
+                }
                 patchRowFromForm(formEditingTempId, payload);
             }
         } else {
@@ -3474,6 +3486,8 @@
             }
         }
         if (!isDual && pushedTempId != null) applyChargePayload(pushedTempId, payload, formEditingTempId != null);
+        // 66 TL-3b (P-30): in an all-new group, the broker or asset changed on one row moves onto the others, both ways.
+        if (before && pushedTempId != null) ops = syncNewGroup(ops, pushedTempId, {broker_id: before.broker_id, asset_id: before.asset_id}, {effective: (d) => followedFields(d), assetAllowed: (type) => getTypeRule(type as TransactionTypeCode).assetField !== 'forbidden'});
         formOpen = false;
         formEditingTempId = null;
         // R3-B2: trigger validation after FormModal pushes a draft
@@ -4652,6 +4666,7 @@
     getBulkContext={() => getBulkContextExcluding(formEditingTempId)}
     allowChargeEdits={formChargeEdits}
     bulkCandidates={formBulkCandidates}
+    groupSync={formEditingTempId != null && newGroupOf(ops, formEditingTempId) !== null}
     getWacResult={(tempId) => {
         // Direct lookup (standalone ADJUSTMENT)
         const direct = wacResults.get(tempId);

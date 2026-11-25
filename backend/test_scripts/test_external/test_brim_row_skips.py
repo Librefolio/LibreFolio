@@ -97,7 +97,7 @@ NEW_VERSIONS = {
     "broker_swissquote": "1.2.0",
     "broker_ibkr": "1.2.0",  # project 66 P4: the commission is linked to its trade
     "broker_fineco": "1.6.0",  # project 66 P2a: the commission is linked to its trade
-    "broker_xtb": "2.0.0",  # lane 83: the History report workbook only (the CSV is no longer read); RowSkips for the rows left out
+    "broker_xtb": "2.1.0",  # lane 83: the History report workbook only, RowSkips for the rows left out; 2.1.0 lot 83-B: the cash keeps the sign of Amount
 }
 
 

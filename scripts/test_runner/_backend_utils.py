@@ -294,6 +294,15 @@ def utils_docs_shared_nav(verbose: bool = False, test_names: list = None) -> boo
     return run_command(cmd, "Docs shared navigation tests", verbose=verbose)
 
 
+def utils_docs_absolute_hreflang(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the hook that makes the hreflang alternates of the documentation absolute and keeps the site path (lane 84, DW-2)."""
+    print_section("Utils: Docs absolute hreflang")
+    print_info("Testing: mkdocs_src/hooks/absolute_hreflang.py, and the alternates of the built site (when it is built)")
+    print_info("Tests: a relative alternate is resolved from its page and keeps /LibreFolio/, absolute and root-relative ones stay, the other links are not touched, no site_url leaves the page, every alternate of the built site is under the site address")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_docs_absolute_hreflang.py", test_names)
+    return run_command(cmd, "Docs absolute hreflang tests", verbose=verbose)
+
+
 def utils_docs_mermaid_colours(verbose: bool = False, test_names: list = None) -> bool:
     """Test that a Mermaid node with its own fill also sets its text colour (E9C)."""
     print_section("Utils: Docs Mermaid Colours")
@@ -842,6 +851,15 @@ Tests for utility modules and helper functions:
         name="Docs shared navigation",
         desc="mkdocs_src/hooks/shared_nav.py: after the build each page keeps the menu Material draws for a pruned navigation (the branch of the page whole, every other group one link to its first page) and the whole menu of the language is written once, javascripts/nav/nav.<lang>.<hash>.js, read by nav-enhance.js before Material starts; the round trip (the script's algorithm in Python, same keys) gives every page the menu it had, on a synthetic site and on a copy of real pages; a group the shared menu does not hold stays whole; 404.html and serve untouched; the menu comes before the code in the file; the hook is registered",
         # Trees in tmp_path and a copy of a few real pages (read only): no DB, no server, no network, no repo writes.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "docs-absolute-hreflang",
+        utils_docs_absolute_hreflang,
+        name="Docs absolute hreflang",
+        desc="mkdocs_src/hooks/absolute_hreflang.py: the alternates Material writes are relative to their page (../it/user/ on user/) or start with a slash (the home pages); each becomes an absolute address resolved from its page, so the site's path (/LibreFolio/) is kept (resolved from site_url alone, ../it/user/ led to https://host/it/user/, outside the site, and the English alternate of every page led to the home); an already absolute one and a root-relative one stay; the order of the attributes does not matter and the canonical and RSS links are not touched; without a site_url the page is untouched; idempotent; on a built site every alternate of every page (404 aside) leads to a page of the site in the language it names and the English developer pages name no translation (needs a mkdocs build made after the fix: a site built before it is red by design)",
+        # Strings and the hook loaded by path; the built-site check only reads: no DB, no server, no network, no repo writes.
         isolation="pure",
     )
     add_test(

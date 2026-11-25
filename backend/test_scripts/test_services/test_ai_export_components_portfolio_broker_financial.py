@@ -45,7 +45,7 @@ from backend.app.services.ai_export.components.payloads.portfolio_broker import 
 from backend.app.services.ai_export.components.registry import ComponentRegistry
 from backend.app.services.ai_export.components.resources import BROKER_REPORT_RESOURCE, PORTFOLIO_REPORT_RESOURCE
 from backend.app.services.ai_export.components.spec import ComponentSpec
-from backend.app.services.ai_export.components.types import BuildScope, DetailLevel, Domain
+from backend.app.services.ai_export.components.types import BrokerScopeSource, BuildScope, DetailLevel, Domain
 from backend.app.services.ai_export.dependencies import (
     BuildContext,
     RequiredComponentBuildError,
@@ -55,6 +55,9 @@ from backend.app.services.financial_math.native_cash import CONVERSION_DUST
 from backend.app.services.financial_math.portfolio import period as period_math
 from backend.app.services.portfolio.lots_analysis_service import LotsAnalysisService
 from backend.app.services.portfolio.portfolio_service import PortfolioService
+
+_OWNED_BROKERS: tuple[int, ...] = (1, 2)
+"""78 L10b: the brokers a whole-scope test reads, named (an empty scope means no broker)."""
 
 CURRENCY = "USD"
 
@@ -78,9 +81,14 @@ def _scope(**overrides) -> BuildScope:
         "period_start": date(2026, 1, 1),
         "period_end": date(2026, 1, 10),
         "target_currency": CURRENCY,
-        "broker_scope": (),
+        # 78 L10b: a whole scope is the owned brokers, named; an empty scope means no broker.
+        "broker_scope": _OWNED_BROKERS,
+        "broker_scope_source": BrokerScopeSource.OWNED,
+        "owned_broker_ids": _OWNED_BROKERS,
     }
     defaults.update(overrides)
+    if "broker_scope" in overrides and "broker_scope_source" not in overrides:
+        defaults["broker_scope_source"] = BrokerScopeSource.REQUESTED
     return BuildScope(**defaults)
 
 
@@ -367,9 +375,9 @@ def _patch_lots(monkeypatch: pytest.MonkeyPatch, responses_by_asset: dict[int, L
     # as module-globals from within `load_lots_results`'s closure, which is
     # defined in `shared_payloads` itself - patching them there (not on
     # portfolio_financial/broker_financial, which never import those names) is
-    # what actually takes effect. `resolve_accessible_broker_ids` is only
-    # exercised for a whole-portfolio (empty `broker_scope`) scope; tests that
-    # pass an explicit non-empty `broker_scope` never reach it.
+    # what actually takes effect. Since 78 L10b `load_lots_results` never calls
+    # `resolve_accessible_broker_ids` (an empty scope means no broker); the patch
+    # stays so a regression to «every accessible broker» reads an empty list.
     monkeypatch.setattr(shared_payloads, "discover_transacted_asset_ids", _fake_discover)
     monkeypatch.setattr(shared_payloads, "resolve_accessible_broker_ids", _fake_resolve_accessible_broker_ids)
     return calls

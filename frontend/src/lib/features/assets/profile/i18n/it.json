@@ -39,7 +39,10 @@
         "issuer_type": "Tipo di emittente",
         "issuer_lei": "LEI dell'emittente",
         "outstanding_amount": "Ammontare in circolazione",
-        "reference_price_date": "Data del prezzo di riferimento"
+        "reference_price_date": "Data del prezzo di riferimento",
+        "website": "Sito web",
+        "revenue": "Fatturato",
+        "net_income": "Utile netto"
       },
       "choices": {
         "replication": {
@@ -119,7 +122,8 @@
         "size": "dimensione",
         "legal_form": "forma giuridica",
         "issuer": "emittente",
-        "description": "descrizione"
+        "description": "descrizione",
+        "financials": "risultati di bilancio"
       },
       "edit": {
         "title": "Dati del profilo",
@@ -190,7 +194,9 @@
         "companySector": "Settore",
         "staleConfirmed": "Confermato il {date}, non aggiornato",
         "noEnrichersText": "I dati di questa scheda sono quelli scritti a mano o arrivati alla creazione dell'asset: nessuno li aggiorna.",
-        "configureHint": "Apre la finestra dell'asset, con quella degli arricchitori sopra"
+        "configureHint": "Apre la finestra dell'asset, con quella degli arricchitori sopra",
+        "fiscalYear": "esercizio {year}",
+        "openWebsite": "Apri il sito in una nuova scheda"
       },
       "row": {
         "pending": "{count, plural, one {# modifica in attesa} other {# modifiche in attesa}}"

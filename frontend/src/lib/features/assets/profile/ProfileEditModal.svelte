@@ -656,7 +656,7 @@
             {/if}
         </div>
 
-        <footer class="px-4 sm:px-6 py-3 border-t border-lf-subtle bg-lf-panel flex flex-wrap items-center justify-between gap-2">
+        <footer class="px-4 sm:px-6 py-3 border-t border-lf-subtle bg-lf-panel flex flex-wrap items-center justify-between gap-2" data-testid="profile-edit-footer">
             <span class="text-xs font-medium {valid ? 'text-lf-success' : 'text-lf-danger'}" data-testid="profile-edit-validity" data-valid={valid ? 'true' : 'false'} data-problems={problemCount}>
                 {valid ? `✓ ${$t('assets.profile.edit.valid')}` : $t('assets.profile.edit.invalid', {values: {count: problemCount}})}
             </span>

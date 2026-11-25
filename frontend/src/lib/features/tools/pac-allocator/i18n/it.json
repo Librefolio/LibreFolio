@@ -304,7 +304,7 @@
             "saved_fx_skipped": "Il tasso {pair} salvato del {skipped_date} non è valido ed è stato saltato: al suo posto è stato usato quello del {used_date}. Va corretto nell’editor del cambio {pair} (Modifica tassi); fino ad allora i risultati potrebbero essere lievemente approssimati.",
             "bound_max_below_current": "Il massimo è sotto ciò che il piano già possiede e le vendite sono disattivate.",
             "bound_min_above_max": "Il minimo è più alto del massimo.",
-            "bounds_min_sum_exceeds_reference": "I minimi sommano più del denaro che il piano può raggiungere.",
+            "bounds_min_sum_exceeds_reference": "I minimi sommano {minimums}: più della liquidità che il piano può investire, {reference}.",
             "bounds_unsatisfiable": "Nessun piano rispetta i minimi e i massimi impostati qui.",
             "solver_numerical_error": "Il risolutore ha incontrato un errore numerico mentre affinava il piano: è mostrato il miglior piano trovato fin qui. È valido ed eseguibile; manca solo la prova che sia il migliore.",
             "cash_limit_exceeded_by_rounding": "The plan ends this cash entry beyond its limit by {exceeded_by}, because every amount is rounded to the cent. The planner could not hold the plan exactly inside a band this narrow."
@@ -390,7 +390,7 @@
           "turnover": "Turnover",
           "plan_score": "Score",
           "target_distance": "Distance from the targets",
-          "wealth_loss": "Money lost",
+          "wealth_loss": "Costi e commissioni",
           "operation_count": "Fewer operations"
         },
         "origin": {
@@ -451,7 +451,8 @@
           "limitMinAboveMax": "Il minimo supera il massimo.",
           "limitShareMinimumsAboveHundred": "I minimi in percentuale sommano più del 100%: {assets}.",
           "positionQuantityInvalid": "La quantità di una posizione è vuota, non è un numero o è sotto zero.",
-          "fidelityCustomMissing": "«Personalizzata»: scrivi quanto accetti di spendere per la riga di riferimento, una cifra maggiore di zero."
+          "fidelityCustomMissing": "«Personalizzata»: scrivi quanto accetti di spendere per la riga di riferimento, una cifra maggiore di zero.",
+          "limitMinimumAboveTotal": "Il minimo da solo supera la liquidità che il piano può investire, {reference}."
         },
         "removal": {
           "cash": "Riga di cassa {broker} · {currency}",
@@ -578,7 +579,7 @@
             "notesHelp": "I messaggi che il calcolo ha lasciato su questo piano, avvisi o informazioni. Quando ce ne sono, sono elencati subito sotto."
           },
           "kpi": {
-            "explicitCost": "Costi",
+            "explicitCost": "Costi e commissioni",
             "finalInvested": "Investito dopo",
             "fixedReference": "Base degli obiettivi",
             "funding": "Liquidità scelta: {selected}, di cui {reachable} raggiungibile dal piano e {trapped} no.",
@@ -589,7 +590,7 @@
             "help": {
               "fixedReference": "L’importo a cui si applicano le percentuali obiettivo: quanto già possiedi degli Asset scelti, più la liquidità che il piano può raggiungere.",
               "finalInvested": "Il valore degli Asset scelti a fine piano.",
-              "shortfall": "La parte della base che non finisce negli Asset: liquidità rimasta libera, costi e arrotondamenti.",
+              "shortfall": "La parte della base che non finisce negli Asset: liquidità rimasta libera, costi e arrotondamenti. Sotto, la liquidità valuta per valuta, ognuna nella sua: all’inizio e alla fine, versamenti compresi.",
               "explicitCost": "Commissioni dei Broker, spread dei cambi valuta e margini sul prezzo che hai impostato, su tutto il piano.",
               "orders": "Quanti ordini il piano ti chiede di inserire.",
               "selectedFunding": "La liquidità che hai scelto per il piano, esistente e nuova, ai tassi del passo FX. Una parte che non può raggiungere un Broker dove puoi comprare è segnata come non raggiungibile e resta fuori dalla base degli obiettivi."
@@ -621,7 +622,10 @@
               "nodeLimit": "Limite di nodi",
               "engine": "Motore"
             },
-            "autoConversions": "{count, plural, one {# conversione automatica} other {# conversioni automatiche}}"
+            "autoConversions": "{count, plural, one {# conversione automatica} other {# conversioni automatiche}}",
+            "cashTitle": "Liquidità all’inizio → alla fine",
+            "cashTo": "alla fine",
+            "cashUnused": "di cui versamenti non usati: {value}"
           },
           "ledger": {
             "fields": {
@@ -973,33 +977,40 @@
         },
         "targets": {
           "copyDistribution": "Copia la distribuzione attuale",
-          "intro": "Come dividere fra gli Asset il denaro che investi ora, in percentuale.",
+          "intro": "Come dividere fra gli Asset la liquidità che il piano può investire, in percentuale.",
           "remaining": "{value} mancante",
           "shape": "Distribuzione",
           "target": "Obiettivo %",
           "total": "Totale",
-          "wire": "La quota del denaro che investi ora che va a questo Asset, in percentuale. Sono ammessi i decimali.",
+          "wire": "La quota della liquidità che il piano può investire che va a questo Asset, in percentuale. Sono ammessi i decimali.",
           "copyHelp": "Legge quanto pesa oggi ciascuno di questi Asset nei Broker che spunti, contando solo questi Asset e non la cassa, e porta i rapporti al 100%. Gli Asset inseriti a mano valgono 0. Vedi i pesi prima di usarli, e un obiettivo che hai cambiato viene sostituito solo dopo la tua conferma.",
           "excess": "+{value} in eccesso",
           "balance": "Bilancia al 100%",
-          "totalHelp": "Gli obiettivi dividono fra gli Asset il denaro che investi ora, cassa e versamenti compresi: per calcolare devono sommare esattamente il 100%. «Bilancia tutto» riscala ogni obiettivo mantenendo i loro rapporti (parti uguali se sono tutti a 0). Spunta alcune righe per riscalare solo quelle, con «Bilancia le righe selezionate al 100%». «Bilancia al 100%» su una riga dà a quell’Asset quanto manca, o toglie l’eccesso.",
+          "totalHelp": "Gli obiettivi dividono fra gli Asset la liquidità che il piano può investire, versamenti compresi: per calcolare devono sommare esattamente il 100%. «Bilancia tutto» riscala ogni obiettivo mantenendo i loro rapporti (parti uguali se sono tutti a 0). Spunta alcune righe per riscalare solo quelle, con «Bilancia le righe selezionate al 100%». «Bilancia al 100%» su una riga dà a quell’Asset quanto manca, o toglie l’eccesso.",
           "balanceAll": "Bilancia tutto",
           "balanceSelected": "Bilancia le righe selezionate al 100%",
           "limits": "Limiti",
-          "limitsHelp": "Minimo e massimo del valore di questo Asset alla fine del piano. Scrivi un importo nella valuta di valutazione (500) o una percentuale del totale del piano (35%): il totale è il denaro che investi ora. Campo vuoto = nessun limite.",
+          "limitsHelp": "Minimo e massimo del valore di questo Asset alla fine del piano. Scrivi un importo nella valuta di valutazione (500) o una percentuale del totale del piano (35%): il totale è la liquidità che il piano può investire. Campo vuoto = nessun limite.",
           "limitMinimum": "min",
           "limitMaximum": "max",
           "limitMinimumLabel": "Minimo di {asset}",
           "limitMaximumLabel": "Massimo di {asset}",
-          "limitsNote": "Limiti sul valore alla fine del piano. Scrivi un importo (500) o una percentuale del totale (35%). Campo vuoto = nessun limite.",
           "limitsCheck": "Controlla i limiti",
           "limitMinAboveMax": "Il minimo ({minimum}) supera il massimo ({maximum}).",
-          "limitsNoteTotal": "Limiti sul valore alla fine del piano. Scrivi un importo (500) o una percentuale (35%) del totale, il denaro che investi ora: {total}. Campo vuoto = nessun limite.",
           "previewIncomplete": "Le cifre di oggi compaiono quando nessun campo della bozza è segnato in rosso, in nessun passo.",
           "previewUnavailable": "Le cifre di oggi non sono disponibili ora; il calcolo non ne risente.",
           "addCashHelp": "La cassa di un Broker in una valuta diventa una riga degli obiettivi con i soli limiti: quanto deve restare almeno, o al massimo, alla fine del piano. Non ha un obiettivo e non conta nel totale.",
           "balanceNotNumber": "Un obiettivo non è un numero",
-          "balanceNoRoom": "Le righe non selezionate fanno già il 100 % o più: abbassale, o selezionale."
+          "balanceNoRoom": "Le righe non selezionate fanno già il 100 % o più: abbassale, o selezionale.",
+          "limitsGuide": {
+            "title": "La colonna «Limiti»: cosa scrivere in Min e Max",
+            "end": "Sono limiti sul valore della voce alla fine del piano.",
+            "amount": "Un importo: «500» vuol dire 500 nella valuta di valutazione.",
+            "percent": "Una percentuale: «35%» vuol dire il 35% della liquidità che il piano può investire.",
+            "percentTotal": "Una percentuale: «35%» vuol dire il 35% della liquidità che il piano può investire, {total}.",
+            "empty": "Campo vuoto: nessun limite."
+          },
+          "limitsChecking": "Verifica dei limiti in corso…"
         },
         "toolErrors": {
           "cleanup_failed": "Il calcolo è terminato, ma la piattaforma non è riuscita a ripulire dopo di esso.",

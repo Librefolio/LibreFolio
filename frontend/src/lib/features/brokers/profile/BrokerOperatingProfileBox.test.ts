@@ -10,7 +10,10 @@
 import {flushSync, tick} from 'svelte';
 import {afterEach, beforeAll, describe, expect, it, vi} from 'vitest';
 
-vi.mock('$lib/stores/reference/currencyStore', () => ({
+vi.mock('$lib/stores/reference/currencyStore', async () => ({
+    // The box writes an amount's currency beside its increment (TL-6 of project 67), through the shared formatter.
+    currencyStoreVersion: (await import('svelte/store')).writable(0),
+    getCurrencyInfo: (code: string) => ({code, name: `${code} fixture`, symbol: code, flag_emoji: '', country_codes: [], country_names: []}),
     ensureCurrenciesLoaded: vi.fn(async () => undefined),
     getAllCurrencies: () => ['EUR', 'USD', 'CHF', 'GBP'].map((code) => ({code, name: `${code} fixture`, symbol: code, flag_emoji: '', country_codes: [], country_names: []})),
     suggestCurrency: vi.fn(async () => ({canonical: true, suggestion: null, candidates: []})),
@@ -53,6 +56,38 @@ const last = (onchange: ReturnType<typeof vi.fn>) => onchange.mock.calls.at(-1)?
 const block = (currency: string) => screen.getAllByTestId('broker-profile-mode').find((item) => item.getAttribute('data-currency') === currency) as HTMLElement;
 
 describe('BrokerOperatingProfileBox', () => {
+    it('a Broker that said nothing reads «The Broker converts», badged as the default; «Converti tu» keeps the badge on the default (TL-6)', async () => {
+        const onchange = mount(toDraft(null));
+        const card = (mode: string) => screen.getAllByTestId('broker-profile-conversion-mode').find((item) => item.getAttribute('data-mode') === mode) as HTMLElement;
+        expect(card('automatic').getAttribute('data-selected')).toBe('true');
+        expect(card('manual').getAttribute('data-selected')).toBe('false');
+        expect(within(card('automatic')).getByTestId('broker-profile-conversion-modes-default')).toBeTruthy();
+        expect(within(card('manual')).queryByTestId('broker-profile-conversion-modes-default')).toBeNull();
+        await fireEvent.click(within(card('manual')).getByTestId('broker-profile-conversion-mode-radio'));
+        expect(last(onchange).conversionMode).toBe('manual');
+        document.body.innerHTML = '';
+        mount({...toDraft(null), conversionMode: 'manual'});
+        expect(card('manual').getAttribute('data-selected')).toBe('true');
+        expect(within(card('automatic')).getByTestId('broker-profile-conversion-modes-default')).toBeTruthy();
+    });
+
+    it('the order row has three columns: an amount shows its currency beside the number, aligned right; whole units none (TL-6)', async () => {
+        const draft = toDraft(DOCUMENT);
+        draft.rules[0].orderKind = 'monetary_amount';
+        draft.rules[0].step = '0.01';
+        mount(draft);
+        const row = within(block('EUR')).getByTestId('broker-profile-mode-row');
+        const currency = within(row).getByTestId('broker-profile-mode-step-currency');
+        expect(currency.getAttribute('data-currency')).toBe('EUR');
+        expect(currency.textContent).toContain('EUR');
+        expect(within(row).getByTestId('broker-profile-mode-step').className).toContain('text-right');
+        document.body.innerHTML = '';
+        mount(toDraft(DOCUMENT));
+        const units = within(block('EUR')).getByTestId('broker-profile-mode-step-currency');
+        expect(units.getAttribute('data-currency')).toBe('');
+        expect(units.textContent?.trim()).toBe('');
+    });
+
     it('renders one block per currency and reports every edit', async () => {
         const onchange = mount(toDraft(DOCUMENT));
         expect(screen.getAllByTestId('broker-profile-mode').map((item) => item.getAttribute('data-currency'))).toEqual(['EUR']);

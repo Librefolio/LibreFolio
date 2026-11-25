@@ -144,14 +144,44 @@ class RebalancerCashItemRow(AllocationStrictModel):
     maximum: ExactMoney | None = Field(description="The item's maximum final cash as an amount in the valuation currency; null when not set.")
 
 
-class RebalancerUninvestedRow(AllocationStrictModel):
-    """What is neither in an Asset nor in a cash item with a target, before and after the plan: ``N = F − Assets − cash
-    items with a target``. Its target is zero. After the plan it includes the money the plan lost."""
+class RebalancerUninvestedPart(AllocationStrictModel):
+    """One of the two parts of the uninvested row (TL-5 of project 67), before and after the plan, on ``F``."""
 
     before_value: ExactMoney
     before_weight: ExactNumber
     final_value: ExactMoney
     final_weight: ExactNumber
+
+
+class RebalancerUninvestedRow(AllocationStrictModel):
+    """What is neither in an Asset nor in a cash item with a target, before and after the plan: ``N = F − Assets − cash
+    items with a target``. Its target is zero. After the plan it includes the money the plan lost.
+
+    Its two parts (TL-5 of project 67, the developer's answer of 24/11): ``untargeted_cash``, the cash with no target and the
+    contributions not deposited — all of ``N`` before the plan, ``N`` less the money lost after it — and ``costs``, the money
+    the plan lost: zero before the plan, ``F − W`` after it. Together they are the row."""
+
+    before_value: ExactMoney
+    before_weight: ExactNumber
+    final_value: ExactMoney
+    final_weight: ExactNumber
+    untargeted_cash: RebalancerUninvestedPart
+    costs: RebalancerUninvestedPart
+
+    @model_validator(mode="after")
+    def validate_parts(self) -> RebalancerUninvestedRow:
+        parts = (self.untargeted_cash, self.costs)
+        for field in ("before_value", "final_value"):
+            if len({getattr(part, field).currency for part in parts} | {getattr(self, field).currency}) != 1:
+                raise ValueError("The uninvested row and its parts must use one currency")
+            if sum((money_fraction(getattr(part, field)) for part in parts), Fraction()) != money_fraction(getattr(self, field)):
+                raise ValueError(f"The uninvested row's parts must sum to its {field}")
+        for field in ("before_weight", "final_weight"):
+            if sum((exact_fraction(getattr(part, field)) for part in parts), Fraction()) != exact_fraction(getattr(self, field)):
+                raise ValueError(f"The uninvested row's parts must sum to its {field}")
+        if money_fraction(self.costs.before_value) != 0:
+            raise ValueError("Nothing is lost before the plan")
+        return self
 
 
 class PlannerFundingAction(AllocationStrictModel):
@@ -620,6 +650,26 @@ class PlannerMoneyLost(AllocationStrictModel):
         return sum((money_fraction(getattr(self, name)) for name in type(self).model_fields), Fraction())
 
 
+class PlannerCurrencyCash(AllocationStrictModel):
+    """The plan's cash in one currency, in that currency, every Broker summed (TL-5 of project 67, contract §6.1): ``initial``
+    the cash chosen for the plan plus the contributions declared in it; ``final`` the spendable cash the Brokers end with
+    plus the contributions not deposited, which ``unused_contributions`` repeats. The tax the plan sets aside is not
+    spendable: it is among the money lost. ``final`` may be a few minor units below zero, where a rounding top-up covers it."""
+
+    currency: CurrencyCode
+    initial: ExactMoney
+    final: ExactMoney
+    unused_contributions: ExactMoney
+
+    @model_validator(mode="after")
+    def validate_cash(self) -> PlannerCurrencyCash:
+        if {self.initial.currency, self.final.currency, self.unused_contributions.currency} != {self.currency}:
+            raise ValueError("A currency's cash is written in that currency")
+        if money_fraction(self.initial) < 0 or money_fraction(self.unused_contributions) < 0:
+            raise ValueError("The cash at the start and the unused contributions cannot be negative")
+        return self
+
+
 class PlannerPlanAccounts(AllocationStrictModel):
     """The accounts of the plan (contract §6.1, specifica §5-§6), the same for both Tools: the wealth before (``F``: the
     invested value plus every selected cash and contribution) and after (``W``: Assets plus spendable cash), the money lost
@@ -629,10 +679,12 @@ class PlannerPlanAccounts(AllocationStrictModel):
     final_wealth: ExactMoney
     money_lost: PlannerMoneyLost
     uninvested: ExactMoney
+    final_cash: ExactMoney = Field(description="All the cash at the end of the plan, in the valuation currency: ``W`` less the Assets after it — the cash items with and without a target and the contributions not deposited (TL-5 of project 67).")
+    cash_by_currency: list[PlannerCurrencyCash] = Field(description="The cash at the start and at the end, one row per currency the plan holds cash in, the valuation currency first, then by code (TL-5 of project 67).")
 
     @model_validator(mode="after")
     def validate_accounts(self) -> PlannerPlanAccounts:
-        values = [self.initial_wealth, self.final_wealth, self.uninvested, *(getattr(self.money_lost, name) for name in type(self.money_lost).model_fields)]
+        values = [self.initial_wealth, self.final_wealth, self.uninvested, self.final_cash, *(getattr(self.money_lost, name) for name in type(self.money_lost).model_fields)]
         if len({money.currency for money in values}) != 1:
             raise ValueError("Plan accounts must use one currency, the valuation currency")
         if money_fraction(self.initial_wealth) < 0:
@@ -641,6 +693,10 @@ class PlannerPlanAccounts(AllocationStrictModel):
             raise ValueError("Money lost on fees, spread, margins and taxes cannot be negative")
         if self.money_lost.total() != money_fraction(self.initial_wealth) - money_fraction(self.final_wealth):
             raise ValueError("The money lost, by entry, must sum to the initial less the final wealth")
+        currencies = [row.currency for row in self.cash_by_currency]
+        valuation = self.initial_wealth.currency
+        if currencies != sorted(currencies, key=lambda code: (code != valuation, code)) or len(set(currencies)) != len(currencies):
+            raise ValueError("The cash by currency lists each currency once, the valuation currency first, then by code")
         return self
 
 

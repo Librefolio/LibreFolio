@@ -8,8 +8,10 @@
  * shot ever reaches a real site. The real enrichers are then absent from the catalogue, and the seeded fund
  * (`PROFILE_HISTORY_FUND` in `populate_mock_data.py`, bound to justETF and Borsa Italiana) would show its sources by code
  * and its enrichers as «not active on this instance» — not what a user's instance shows. {@link serveGalleryEnrichers}
- * answers the catalogue instead, as an instance with the four real enrichers answers it. Nothing else is routed: no read,
- * no test, no search reaches a site (the shots only open and close windows).
+ * answers the catalogue instead, as an instance with the four real enrichers answers it. No read and no test reaches a
+ * site (the shots only open and close windows); «Riconosci» and «Cerca online» of the enrichers' window are answered by
+ * {@link serveGalleryEnricherAnswers} (82 ENR-4), as the real enrichers would answer for the seeded iShares Core MSCI
+ * World (`GALLERY_RECOGNIZED_ASSET`).
  *
  * ## How it is made
  *
@@ -90,7 +92,7 @@ export const GALLERY_ENRICHERS_CATALOGUE = {
                     'yield_gross',
                     'yield_net',
                 ],
-                STOCK: ['legal_form', 'sector'],
+                STOCK: ['description', 'issuer_country', 'legal_form', 'net_income', 'revenue', 'sector', 'website'],
                 FUND: ['fund_currency', 'inception_date', 'management_fee'],
             },
             default_priority: {
@@ -211,7 +213,7 @@ export const GALLERY_ENRICHERS_CATALOGUE = {
             terms: 'price_source',
             accepted_identifier_types: ['TICKER'],
             params_schema: [],
-            supports_search: false,
+            supports_search: true,
             voices: {
                 STOCK: ['description', 'industry', 'issuer_country', 'market_cap', 'sector'],
                 ETF_REAL_ESTATE: ['description', 'fund_provider', 'inception_date', 'sector', 'ter'],
@@ -273,4 +275,45 @@ export const GALLERY_ENRICHERS_CATALOGUE = {
 export async function serveGalleryEnrichers(page: Page): Promise<void> {
     const body = JSON.stringify(schemas.FAEnrichersCatalogue.parse(GALLERY_ENRICHERS_CATALOGUE));
     await page.route('**/api/v1/assets/enrichers', (route) => (route.request().method() === 'GET' ? route.fulfill({status: 200, contentType: 'application/json', body}) : route.fallback()));
+}
+
+/** The seeded ETF the enrichers' window is shot on (82 ENR-4): no enrichers yet, its ISIN and its bare ticker. */
+export const GALLERY_RECOGNIZED_ASSET = {name: 'iShares Core MSCI World UCITS ETF USD (Acc)', isin: 'IE00B4L5Y983', ticker: 'IWDA'};
+/** What the user types in «Cerca online» for the shot. */
+export const GALLERY_ENRICHER_QUERY = 'iShares Core MSCI World';
+
+const ESMA_NAME = 'ISHARES III PLC - ISHARES CORE MSCI WORLD UCITS ETF';
+const JUSTETF_NAME = 'iShares Core MSCI World UCITS ETF USD (Acc)';
+
+function sse(events: object[]): string {
+    return events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join('');
+}
+
+function recognition(code: string, identifierType: string, identifier: string, name: string) {
+    return {event: 'enricher_result', code, identifier_type: identifierType, identifier, status: 'found', name, page_url: null, identifiers: {}, conflicts: {}, error: null, params: {}};
+}
+
+/**
+ * «Riconosci» and «Cerca online» answered as the real enrichers would for {@link GALLERY_RECOGNIZED_ASSET} (82 ENR-4):
+ * justETF and ESMA know its ISIN (they enter the list by themselves), Yahoo Finance finds only its bare ticker (it waits
+ * in «Non in elenco»); a search by name finds three Yahoo listings, each on its market. Every other enricher answers
+ * nothing.
+ */
+export async function serveGalleryEnricherAnswers(page: Page): Promise<void> {
+    const {isin, ticker} = GALLERY_RECOGNIZED_ASSET;
+    const recognized = sse([
+        recognition('justetf', 'ISIN', isin, JUSTETF_NAME),
+        recognition('esma', 'ISIN', isin, ESMA_NAME),
+        recognition('yfinance', 'TICKER', ticker, 'iShares Core MSCI World UCITS ETF USD (Acc)'),
+        {event: 'done', found_order: ['justetf', 'esma', 'yfinance'], default_order: ['justetf', 'yfinance', 'esma'], identifiers: {ISIN: isin, TICKER: ticker}},
+    ]);
+    await page.route('**/api/v1/assets/enrichers/recognize', (route) => route.fulfill({status: 200, contentType: 'text/event-stream', body: recognized}));
+    await page.route('**/api/v1/assets/enrichers/search?*', (route) => {
+        const url = new URL(route.request().url());
+        const codes = url.searchParams.getAll('codes');
+        const hit = (symbol: string, market: string) => ({name: 'iShares Core MSCI World UCITS ETF', binding: {identifier_type: 'TICKER', identifier: symbol}, asset_type: 'ETF', page_url: `https://finance.yahoo.com/quote/${symbol}`, market});
+        const results = (code: string) => (code === 'yfinance' ? [hit('SWDA.MI', 'Milan'), hit('SWDA.L', 'London'), hit('IWDA.AS', 'Amsterdam')] : []);
+        const events = codes.map((code) => ({event: 'enricher_results', code, status: 'ok', via: 'search', results: results(code), accepted_identifier_types: code === 'yfinance' ? ['TICKER'] : ['ISIN'], retry_after: null, error_code: null}));
+        return route.fulfill({status: 200, contentType: 'text/event-stream', body: sse([...events, {event: 'done', codes}])});
+    });
 }

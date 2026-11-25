@@ -17,6 +17,12 @@ export type ProfileGroup = 'orderMode' | 'buyFee' | 'sellFee' | 'conversion' | '
 export const PROFILE_GROUPS: readonly ProfileGroup[] = ['orderMode', 'buyFee', 'sellFee', 'conversion', 'taxRegime'];
 
 export type ConversionMode = 'manual' | 'automatic';
+/**
+ * What a Broker with no conversion said does (TL-6 of project 67, the developer's choice of 23/11: «per tutti, prima di
+ * essere specificato»): it converts by itself when the orders execute. The backend reads the same (`broker_profile.py`);
+ * the panel marks it «default», and every planner fallback reads it from here.
+ */
+export const DEFAULT_CONVERSION_MODE: ConversionMode = 'automatic';
 export type TaxRegime = 'administered' | 'declarative';
 export type OrderKind = 'whole_quantity' | 'monetary_amount';
 
@@ -81,7 +87,7 @@ export interface RuleDraft {
 
 export interface ProfileDraft {
     rules: RuleDraft[];
-    /** `null`: not chosen; the document leaves the key out (the backend reads `manual`). */
+    /** `null`: not chosen; the document leaves the key out (the backend reads `automatic`, `DEFAULT_CONVERSION_MODE`). */
     conversionMode: ConversionMode | null;
     /** `null`: not chosen; the document leaves the key out (it reads `declarative`, M6, M18). */
     taxRegime: TaxRegime | null;
@@ -162,11 +168,12 @@ function documentRow(rule: RuleDraft): ProfileRow {
 
 /**
  * The document a draft saves, or `null` when the panel says nothing the backend's defaults do not say already: no rule, no
- * regime, and the conversion absent or `manual`. The backend serves `conversion_mode` always (its default is `manual`), so
- * a saved profile cleared of its rules goes back to «no profile», not to a document that only repeats the default.
+ * regime, and the conversion absent or the default (`automatic`, TL-6). The backend serves `conversion_mode` always, so a
+ * saved profile cleared of its rules goes back to «no profile», not to a document that only repeats the default; «Converti
+ * tu» is saved, even alone.
  */
 export function fromDraft(draft: ProfileDraft): OperatingProfileDocument | null {
-    if (draft.rules.length === 0 && draft.taxRegime === null && (draft.conversionMode === null || draft.conversionMode === 'manual')) return null;
+    if (draft.rules.length === 0 && draft.taxRegime === null && (draft.conversionMode === null || draft.conversionMode === DEFAULT_CONVERSION_MODE)) return null;
     return {
         profile_version: 1,
         order_modes: draft.rules.map(documentRow),

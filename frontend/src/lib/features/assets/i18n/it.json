@@ -254,7 +254,8 @@
       "enrichersError": "Non è stato possibile cercare gli arricchitori: sceglili a mano.",
       "enrichersReview": "Controlla o cambia",
       "enrichersReading": "I loro dati si stanno leggendo adesso.",
-      "enrichersReadingWaiting": "Troppe richieste: i loro dati si leggeranno da soli fra poco."
+      "enrichersReadingWaiting": "Troppe richieste: i loro dati si leggeranno da soli fra poco.",
+      "enrichersTickerOnly": "Trovato solo col ticker, da controllare: {names}. Aggiungilo da «Arricchitori» col «+»."
     },
     "provider": {
       "assignment": "Assegnazione Provider",

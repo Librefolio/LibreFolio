@@ -242,7 +242,13 @@
     <!-- svelte-ignore a11y_click_events_have_key_events -->
     {#if noTransition}
         <div class="modal-backdrop" style="z-index: {zIndex};" bind:this={backdropEl} tabindex="-1" onmousedown={handleBackdropMouseDown} onclick={handleBackdropClick} onkeydown={handleKeydown} role="dialog" aria-modal="true" aria-labelledby={labelledBy} data-testid={testId || undefined}>
-            <div class="modal-content {tone === 'danger' ? 'border-2 border-lf-danger-line' : 'border border-lf-raised'} text-lf-primary {contentClass}" data-tone={tone} style="max-width: {maxWidthValue};{allowOverflow ? ' overflow: visible;' : ''}" onclick={stopPropagation}>
+            <div
+                class="modal-content {tone === 'danger' ? 'border-2 border-lf-danger-line' : 'border border-lf-raised'} text-lf-primary {contentClass}"
+                data-tone={tone}
+                data-overflow={allowOverflow ? 'visible' : 'hidden'}
+                style="max-width: {maxWidthValue};{allowOverflow ? ' overflow: visible;' : ''}"
+                onclick={stopPropagation}
+            >
                 {#if children}{@render children()}{/if}
             </div>
         </div>
@@ -264,6 +270,7 @@
             <div
                 class="modal-content {tone === 'danger' ? 'border-2 border-lf-danger-line' : 'border border-lf-raised'} text-lf-primary {contentClass}"
                 data-tone={tone}
+                data-overflow={allowOverflow ? 'visible' : 'hidden'}
                 style="max-width: {maxWidthValue};{allowOverflow ? ' overflow: visible;' : ''}"
                 onclick={stopPropagation}
                 transition:scale={{duration: 200, start: 0.95}}
@@ -295,13 +302,25 @@
        border is one ternary on `tone` (rule 4 of the design system): a colour a caller passes through contentClass
        would lose to it by name, so a danger frame is `tone="danger"`. */
     .modal-content {
+        /* The frame's radius, one value: the footer rule below reads it too */
+        --lf-modal-radius: 0.75rem;
         background: var(--lf-surface-card);
-        border-radius: 0.75rem;
+        border-radius: var(--lf-modal-radius);
         box-shadow: 0 25px 50px -12px var(--lf-shadow-raised);
         width: 100%;
         max-height: 90vh;
         display: flex;
         flex-direction: column;
         overflow: hidden;
+    }
+
+    /* With allowOverflow the content is not clipped to the round corners (a dropdown must overflow the frame): a footer
+       at the bottom, which may have a background of its own (the enrichers' window, the profile editor), rounds its
+       bottom corners itself, with the frame's radius (82 ENR-4c). The footer is the content's last element, or the last
+       element of its single wrapper. */
+    .modal-content[data-overflow='visible'] > :global(footer:last-child),
+    .modal-content[data-overflow='visible'] > :global(:last-child > footer:last-child) {
+        border-bottom-left-radius: var(--lf-modal-radius);
+        border-bottom-right-radius: var(--lf-modal-radius);
     }
 </style>

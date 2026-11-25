@@ -25,6 +25,18 @@ class Domain(StrEnum):
     FX = "fx"
 
 
+class BrokerScopeSource(StrEnum):
+    """Where a scope's brokers come from (78 L10b, D13).
+
+    `OWNED`: the request named no broker, so the scope is the brokers the user owns (role owner, share above zero), the
+    Dashboard's rule. It may be empty: then the scope holds **no broker**, never «every accessible broker».
+    `REQUESTED`: the request named its brokers (a Dashboard filter, an API list, a Broker export's broker).
+    """
+
+    OWNED = "owned"
+    REQUESTED = "requested"
+
+
 class DetailLevel(StrEnum):
     """Snapshot detail level requested by the caller."""
 
@@ -149,16 +161,24 @@ class BuildScope:
     Domain-specific entity/broker-scope invariants (enforced in
     `__post_init__`, see the workstream D2 plan section):
     - `PORTFOLIO`: no entity target - `asset_id`/`broker_id`/`base_currency`/
-      `quote_currency` must all be `None`. `broker_scope` may be empty (whole
-      portfolio, every accessible broker) or a non-empty subset of broker IDs.
+      `quote_currency` must all be `None`. `broker_scope` is the export's
+      brokers.
     - `BROKER`: `broker_id` is required and `broker_scope` must be *exactly*
       `(broker_id,)` - a Broker-domain scope can never mix in other brokers.
     - `ASSET`: `asset_id` is required (positive int); `broker_id`/
-      `base_currency`/`quote_currency` must be `None`. `broker_scope` may be
-      empty or non-empty (position scoping across brokers).
+      `base_currency`/`quote_currency` must be `None`. `broker_scope` scopes
+      the position across brokers.
     - `FX`: `base_currency` and `quote_currency` are required and must be
-      distinct; `asset_id`/`broker_id` must be `None`. `broker_scope` may be
-      empty or non-empty (exposure scoping across brokers).
+      distinct; `asset_id`/`broker_id` must be `None`. `broker_scope` scopes
+      the exposure across brokers.
+
+    **An empty `broker_scope` means no broker (78 L10b, D13), never «every
+    accessible broker».** `broker_scope_source` says where the brokers come
+    from (`BrokerScopeSource`), and `owned_broker_ids` are the brokers the user
+    owns, resolved once by `prepare_request` (the Broker export's comparison
+    reads them). Every reader that hands brokers to a service goes through
+    `broker_scope.scope_broker_ids`, which refuses an empty scope instead of
+    passing `None`.
     """
 
     request_id: str
@@ -169,6 +189,8 @@ class BuildScope:
     period_end: Date
     target_currency: str
     broker_scope: tuple[int, ...] = ()
+    broker_scope_source: BrokerScopeSource = BrokerScopeSource.REQUESTED
+    owned_broker_ids: tuple[int, ...] = ()
     asset_id: int | None = None
     broker_id: int | None = None
     base_currency: str | None = None
@@ -188,6 +210,9 @@ class BuildScope:
             raise BuildScopeError("period_start must not be after period_end")
         object.__setattr__(self, "target_currency", normalize_currency_code(self.target_currency))
         object.__setattr__(self, "broker_scope", _normalize_broker_scope(self.broker_scope))
+        object.__setattr__(self, "owned_broker_ids", _normalize_broker_scope(self.owned_broker_ids))
+        if not isinstance(self.broker_scope_source, BrokerScopeSource):
+            raise BuildScopeError(f"broker_scope_source must be a BrokerScopeSource member, got {self.broker_scope_source!r}")
 
         if self.asset_id is not None:
             object.__setattr__(self, "asset_id", require_positive_int(self.asset_id, "asset_id", error_cls=BuildScopeError))

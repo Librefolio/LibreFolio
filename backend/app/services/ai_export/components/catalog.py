@@ -120,7 +120,7 @@ _PORTFOLIO_COMPONENTS: tuple[ComponentSpec, ...] = (
     _component(Domain.PORTFOLIO, "event_digest", "Aggregate recent technical event digest", period_behavior=PeriodBehavior.WINDOWED),
     _component(Domain.PORTFOLIO, "fifo_summary", "FIFO summary", version=3, period_behavior=PeriodBehavior.WINDOWED),
     _component(Domain.PORTFOLIO, "fifo_lots", "FIFO open/partial/closed lots", version=3, dependencies=("portfolio.fifo_summary",), period_behavior=PeriodBehavior.WINDOWED),
-    _component(Domain.PORTFOLIO, "drawdown_summary", "Portfolio drawdown context", version=2, period_behavior=PeriodBehavior.WINDOWED),
+    _component(Domain.PORTFOLIO, "drawdown_summary", "Portfolio drawdown context", version=3, period_behavior=PeriodBehavior.WINDOWED),
     _component(Domain.PORTFOLIO, "income_timeline", "Realized income timeline evidence", version=3, period_behavior=PeriodBehavior.WINDOWED),
     # 78 L8a: the risk evidence of today's holdings over their own 12-month window (`risk_evidence.py`)
     _component(Domain.PORTFOLIO, "risk_concentration", "Risk concentration of today's holdings", period_behavior=PeriodBehavior.AS_OF),
@@ -149,7 +149,7 @@ _BROKER_COMPONENTS: tuple[ComponentSpec, ...] = (
     _component(Domain.BROKER, "fifo_lots", "All applicable FIFO lots (broker-scoped)", version=3, dependencies=("broker.fifo_summary",), period_behavior=PeriodBehavior.WINDOWED),
     _component(Domain.BROKER, "drawdown_summary", "Broker drawdown context", version=2, period_behavior=PeriodBehavior.WINDOWED),
     _component(Domain.BROKER, "concentration_context", "Broker concentration context", version=2, dependencies=("broker.allocation_concentration",), period_behavior=PeriodBehavior.AS_OF),
-    _component(Domain.BROKER, "concentration_comparison", "Broker vs portfolio concentration comparison", version=2, period_behavior=PeriodBehavior.AS_OF),
+    _component(Domain.BROKER, "concentration_comparison", "Broker vs portfolio concentration comparison", version=3, period_behavior=PeriodBehavior.AS_OF),
     _component(Domain.BROKER, "cost_efficiency", "Broker cost efficiency evidence", version=2, dependencies=("broker.flows_income_costs",), period_behavior=PeriodBehavior.WINDOWED),
 )
 
@@ -159,7 +159,7 @@ _ASSET_COMPONENTS: tuple[ComponentSpec, ...] = (
     _component(Domain.ASSET, "identity", "Asset identity", version=2, period_behavior=PeriodBehavior.NONE),
     _component(Domain.ASSET, "profile", "Asset profile: its voices as dated facts", period_behavior=PeriodBehavior.WINDOWED),
     _component(Domain.ASSET, "market_snapshot", "Current market snapshot", dependencies=("asset.identity",), period_behavior=PeriodBehavior.AS_OF),
-    _component(Domain.ASSET, "position_scope", "Position scope across brokers", period_behavior=PeriodBehavior.AS_OF),
+    _component(Domain.ASSET, "position_scope", "Position scope across brokers", version=2, period_behavior=PeriodBehavior.AS_OF),
     _component(Domain.ASSET, "provenance", "Semantics and provenance", version=2, period_behavior=PeriodBehavior.NONE),
     _component(Domain.ASSET, "positions_by_broker", "Positions per broker", version=2, dependencies=("asset.position_scope",), period_behavior=PeriodBehavior.AS_OF),
     _component(Domain.ASSET, "cost_value_pl", "Cost, value and P&L", dependencies=("asset.positions_by_broker",), period_behavior=PeriodBehavior.AS_OF),

@@ -304,7 +304,7 @@
             "saved_fx_skipped": "El tipo de cambio {pair} guardado del {skipped_date} no es válido y se ha omitido: en su lugar se ha usado el del {used_date}. Corrígelo en el editor del tipo de cambio {pair} (Editar tipos de cambio); hasta entonces, los resultados pueden ser ligeramente aproximados.",
             "bound_max_below_current": "El máximo está por debajo de lo que el plan ya posee y las ventas están desactivadas.",
             "bound_min_above_max": "El mínimo es mayor que el máximo.",
-            "bounds_min_sum_exceeds_reference": "Los mínimos suman más que el dinero que el plan puede alcanzar.",
+            "bounds_min_sum_exceeds_reference": "Los mínimos suman {minimums}: más que la liquidez que el plan puede invertir, {reference}.",
             "bounds_unsatisfiable": "Ningún plan cumple los mínimos y máximos fijados aquí.",
             "solver_numerical_error": "El solucionador encontró un error numérico al afinar el plan: se muestra el mejor plan encontrado hasta ahora. Es válido y ejecutable; solo falta la prueba de que sea el óptimo.",
             "cash_limit_exceeded_by_rounding": "The plan ends this cash entry beyond its limit by {exceeded_by}, because every amount is rounded to the cent. The planner could not hold the plan exactly inside a band this narrow."
@@ -390,7 +390,7 @@
           "turnover": "Rotación",
           "plan_score": "Score",
           "target_distance": "Distance from the targets",
-          "wealth_loss": "Money lost",
+          "wealth_loss": "Costes y comisiones",
           "operation_count": "Fewer operations"
         },
         "origin": {
@@ -451,7 +451,8 @@
           "limitMinAboveMax": "El mínimo supera el máximo.",
           "limitShareMinimumsAboveHundred": "Los mínimos en porcentaje suman más del 100 %: {assets}.",
           "positionQuantityInvalid": "La cantidad de una posición está vacía, no es un número o es menor que cero.",
-          "fidelityCustomMissing": "«Personalizada»: escribe cuánto aceptas gastar para la fila de referencia, una cifra mayor que cero."
+          "fidelityCustomMissing": "«Personalizada»: escribe cuánto aceptas gastar para la fila de referencia, una cifra mayor que cero.",
+          "limitMinimumAboveTotal": "El mínimo por sí solo supera la liquidez que el plan puede invertir, {reference}."
         },
         "removal": {
           "cash": "Fila de efectivo {broker} · {currency}",
@@ -578,7 +579,7 @@
             "notesHelp": "Los mensajes que el cálculo dejó sobre este plan, avisos o información. Cuando los hay, se listan justo debajo."
           },
           "kpi": {
-            "explicitCost": "Costes",
+            "explicitCost": "Costes y comisiones",
             "finalInvested": "Invertido después",
             "fixedReference": "Base de los objetivos",
             "funding": "Efectivo elegido: {selected}, del que {reachable} es alcanzable por el plan y {trapped} no.",
@@ -589,7 +590,7 @@
             "help": {
               "fixedReference": "El importe al que se aplican los porcentajes objetivo: lo que ya tienes de los activos elegidos, más el efectivo que el plan puede alcanzar.",
               "finalInvested": "El valor de los activos elegidos al final del plan.",
-              "shortfall": "La parte de la base que no acaba en los activos: efectivo que queda libre, costes y redondeos.",
+              "shortfall": "La parte de la base que no acaba en los Activos: liquidez que queda libre, costes y redondeos. Debajo, la liquidez divisa por divisa, cada una en la suya: al inicio y al final, aportaciones incluidas.",
               "explicitCost": "Comisiones de los brókeres, spreads de cambio de divisa y márgenes de precio que fijaste, en todo el plan.",
               "orders": "Cuántas órdenes te pide el plan que coloques.",
               "selectedFunding": "El efectivo que elegiste para el plan, existente y nuevo, a los tipos de cambio del paso Cambio. Una parte que no puede llegar a un bróker donde puedes comprar se marca como no alcanzable y queda fuera de la base de los objetivos."
@@ -621,7 +622,10 @@
               "nodeLimit": "Límite de nodos",
               "engine": "Motor"
             },
-            "autoConversions": "{count, plural, one {# conversión automática} other {# conversiones automáticas}}"
+            "autoConversions": "{count, plural, one {# conversión automática} other {# conversiones automáticas}}",
+            "cashTitle": "Liquidez al inicio → al final",
+            "cashTo": "al final",
+            "cashUnused": "de los cuales aportaciones no usadas: {value}"
           },
           "ledger": {
             "fields": {
@@ -973,33 +977,40 @@
         },
         "targets": {
           "copyDistribution": "Copiar la distribución actual",
-          "intro": "Cómo repartir entre los activos el dinero que inviertes ahora, en porcentaje.",
+          "intro": "Cómo repartir entre los activos la liquidez que el plan puede invertir, en porcentaje.",
           "remaining": "{value} faltante",
           "shape": "Distribución",
           "target": "Objetivo %",
           "total": "Total",
-          "wire": "La parte del dinero que inviertes ahora que va a este activo, en porcentaje. Se admiten decimales.",
+          "wire": "La parte de la liquidez que el plan puede invertir que va a este activo, en porcentaje. Se admiten decimales.",
           "copyHelp": "Lee cuánto pesa hoy cada uno de estos activos en los brókeres que marques, contando solo estos activos y no el efectivo, y lleva las proporciones al 100 %. Los activos introducidos a mano valen 0. Ves los pesos antes de usarlos, y un objetivo que hayas cambiado solo se sustituye después de que confirmes.",
           "excess": "+{value} de más",
           "balance": "Equilibrar al 100 %",
-          "totalHelp": "Los objetivos reparten entre los activos el dinero que inviertes ahora, efectivo y aportaciones incluidos: para calcular deben sumar exactamente el 100 %. «Equilibrar todo» reescala todos los objetivos manteniendo sus proporciones (partes iguales si todos están a 0). Marca algunas filas para reescalar solo esas, con «Equilibrar las filas seleccionadas al 100 %». «Equilibrar al 100 %» en una fila da a ese activo lo que falta, o quita el exceso.",
+          "totalHelp": "Los objetivos reparten entre los activos la liquidez que el plan puede invertir, aportaciones incluidas: para calcular deben sumar exactamente el 100 %. «Equilibrar todo» reescala todos los objetivos manteniendo sus proporciones (partes iguales si todos están a 0). Marca algunas filas para reescalar solo esas, con «Equilibrar las filas seleccionadas al 100 %». «Equilibrar al 100 %» en una fila da a ese activo lo que falta, o quita el exceso.",
           "balanceAll": "Equilibrar todo",
           "balanceSelected": "Equilibrar las filas seleccionadas al 100 %",
           "limits": "Límites",
-          "limitsHelp": "Mínimo y máximo del valor de este Activo al final del plan. Escribe un importe en la divisa de valoración (500) o un porcentaje del total del plan (35 %): el total es el dinero que inviertes ahora. Campo vacío = sin límite.",
+          "limitsHelp": "Mínimo y máximo del valor de este Activo al final del plan. Escribe un importe en la divisa de valoración (500) o un porcentaje del total del plan (35 %): el total es la liquidez que el plan puede invertir. Campo vacío = sin límite.",
           "limitMinimum": "mín",
           "limitMaximum": "máx",
           "limitMinimumLabel": "Mínimo de {asset}",
           "limitMaximumLabel": "Máximo de {asset}",
-          "limitsNote": "Límites sobre el valor al final del plan. Escribe un importe (500) o un porcentaje del total (35 %). Campo vacío = sin límite.",
           "limitsCheck": "Revisa los límites",
           "limitMinAboveMax": "El mínimo ({minimum}) supera el máximo ({maximum}).",
-          "limitsNoteTotal": "Límites del valor al final del plan. Escribe un importe (500) o un porcentaje (35%) del total, el dinero que inviertes ahora: {total}. Campo vacío = ningún límite.",
           "previewIncomplete": "Las cifras de hoy aparecen cuando ningún campo del borrador está marcado en rojo, en ningún paso.",
           "previewUnavailable": "Las cifras de hoy no están disponibles ahora; el cálculo no se ve afectado.",
           "addCashHelp": "El efectivo de un bróker en una divisa se convierte en una fila de los objetivos solo con límites: cuánto debe quedar como mínimo, o como máximo, al final del plan. No tiene objetivo y no cuenta en el total.",
           "balanceNotNumber": "Un objetivo no es un número",
-          "balanceNoRoom": "Las filas no seleccionadas ya suman el 100 % o más: redúcelas, o selecciónalas."
+          "balanceNoRoom": "Las filas no seleccionadas ya suman el 100 % o más: redúcelas, o selecciónalas.",
+          "limitsGuide": {
+            "title": "La columna «Límites»: qué escribir en Mín y Máx",
+            "end": "Limitan el valor de la fila al final del plan.",
+            "amount": "Un importe: «500» significa 500 en la divisa de valoración.",
+            "percent": "Un porcentaje: «35%» significa el 35% de la liquidez que el plan puede invertir.",
+            "percentTotal": "Un porcentaje: «35%» significa el 35% de la liquidez que el plan puede invertir, {total}.",
+            "empty": "Campo vacío: ningún límite."
+          },
+          "limitsChecking": "Comprobando los límites…"
         },
         "toolErrors": {
           "cleanup_failed": "El cálculo terminó, pero la plataforma no pudo limpiar después.",

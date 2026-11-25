@@ -30,6 +30,7 @@ import {
 } from './draft.svelte';
 import {rememberFxPairIssues} from './fxIssues';
 import type {PlannerSource, SourceAsset, SourceBroker, SourceHolding, SourceCurrentWeight, SourceIssue, SourceQuery, SourceSection} from './source';
+import {DEFAULT_CONVERSION_MODE} from '$lib/features/brokers/profile/brokerOperatingProfile';
 
 export type CopyConflict = {id: string; kind: 'cash'; cashKey: string; label: string; currency: string; previous: string; previousStamp: CopyRef | null; incoming: string; incomingStamp: CopyRef; ownershipShare: string; economicAmount: string; selected: string};
 
@@ -258,7 +259,7 @@ function upsertBroker(draft: PlannerDraft, row: SourceBroker, copy: CopyRecord):
     const existing = draft.broker(key);
     // P3 (D11 a): the profile's modes, and only those; none (or no profile) gives the default mode per observed currency.
     const profileModes = modesFromProfile(row.operating_profile, () => draft.nextId('mode'));
-    const profileConversion = row.operating_profile ? (row.operating_profile.conversion_mode ?? 'manual') : null;
+    const profileConversion = row.operating_profile ? (row.operating_profile.conversion_mode ?? DEFAULT_CONVERSION_MODE) : null;
     if (existing) {
         // Identity facts follow the source; modes and funding are the user's configuration. The copy of the
         // profile follows the source too (D12): «Restore» and the review's «modified» read it.
@@ -288,7 +289,7 @@ function upsertBroker(draft: PlannerDraft, row: SourceBroker, copy: CopyRecord):
         stamp,
         enteredAt: nowTimestamp(),
         modes: profileModes ? profileModes.map((mode) => ({...mode})) : draft.defaultModes(row.observed_currencies),
-        conversionMode: profileConversion ?? 'manual',
+        conversionMode: profileConversion ?? DEFAULT_CONVERSION_MODE,
         copiedModes: profileModes,
         copiedConversionMode: profileConversion,
         funding: [],

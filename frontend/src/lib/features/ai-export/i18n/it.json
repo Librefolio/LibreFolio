@@ -21,8 +21,8 @@
     "period": "Periodo AI",
     "periodHelp": "Periodo di esportazione indipendente che termina alla data dello snapshot.",
     "periodCustom": "Personalizzato",
-    "userNotes": "Note per l’AI",
-    "userNotesPlaceholder": "Aggiungi contesto o domande facoltative…",
+    "userNotes": "La tua domanda",
+    "userNotesPlaceholder": "Facoltativa. Fai la tua domanda, o aggiungi il contesto che l’AI deve conoscere…",
     "payloadStats": "Dimensione prompt finale",
     "payloadStatsHelp": "Stima del testo che verrà effettivamente copiato negli appunti.",
     "tokenSeverity": {
@@ -315,6 +315,7 @@
     "tooManyPriceDays": "Questa esportazione leggerebbe troppi giorni di prezzi. Scegli un periodo più breve.",
     "replyInstructions": {
       "dataReceived": "Dati acquisiti, sono pronto per sentire le tue domande."
-    }
+    },
+    "noOwnedBrokers": "Non possiedi nessun broker: questa selezione legge le tue posizioni e la tua liquidità, e quelle dei broker condivisi con te non sono incluse."
   }
 }

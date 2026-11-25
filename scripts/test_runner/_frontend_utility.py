@@ -190,6 +190,7 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/features/assets/enrichers/enrichersEditState.test.ts",
             "src/lib/features/assets/enrichers/enricherCalls.test.ts",
             "src/lib/features/assets/enrichers/recognizeStream.test.ts",
+            "src/lib/features/assets/enrichers/enricherSearchStream.test.ts",
             "src/lib/features/assets/bulk/assetBulkEdit.test.ts",
             "src/lib/features/assets/bulk/assetBulkVerify.test.ts",
             "src/lib/features/assets/assetPayload.test.ts",
@@ -527,6 +528,7 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/features/assets/profile/profileAutoAsk.test.ts",
             "src/lib/features/assets/profile/AssetModalProfileRow.test.ts",
             "src/lib/features/assets/enrichers/AssetEnrichersModal.test.ts",
+            "src/lib/features/assets/enrichers/EnricherOnlineSearch.test.ts",
             "src/lib/features/assets/enrichers/enricherRecognition.test.ts",
             "src/lib/features/assets/AssetModal.enrichers.test.ts",
             "src/lib/features/assets/AssetModal.profile.test.ts",
@@ -568,6 +570,7 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/features/transactions/form/TransactionFormModal.parent.test.ts",
             "src/lib/features/transactions/form/TransactionFormModal.link.test.ts",
             "src/lib/features/transactions/form/TransactionFormModal.reward.test.ts",
+            "src/lib/features/transactions/form/TransactionFormModal.groupSync.test.ts",
             "src/lib/features/transactions/bulk/TransactionPickerModal.test.ts",
             "src/lib/features/transactions/bulk/TransactionBulkModal.test.ts",
             "src/lib/features/transactions/TransactionsTable.privacy.test.ts",
@@ -729,6 +732,7 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/features/tools/pac-allocator/planner/result/StateNotice.test.ts",
             "src/lib/features/tools/pac-allocator/planner/result/ResultCell.test.ts",
             "src/lib/features/tools/pac-allocator/planner/result/ExposureBars.test.ts",
+            "src/lib/features/tools/pac-allocator/planner/result/ExposureSection.test.ts",
             "src/lib/features/tools/pac-allocator/planner/result/model.test.ts",
             "src/lib/features/tools/pac-allocator/planner/result/text.test.ts",
             "src/lib/features/tools/pac-allocator/planner/result/RefreshNotice.test.ts",
@@ -755,6 +759,7 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/features/tools/pac-allocator/planner/review.rebalancer.test.ts",
             "src/lib/features/tools/pac-allocator/planner/steps/FidelityTable.test.ts",
             "src/lib/features/tools/pac-allocator/planner/acceptableCost.test.ts",
+            "src/lib/features/tools/pac-allocator/planner/limitsCheck.test.ts",
             "src/lib/features/tools/pac-allocator/planner/steps/RebalancerStrategyStep.test.ts",
             "src/lib/features/tools/pac-allocator/planner/result/ResultView.rebalancer.test.ts",
             "src/lib/features/tools/pac-allocator/planner/result/OperationalPlan.test.ts",
@@ -1210,6 +1215,18 @@ def front_docs_search_language(verbose: bool = False, ui: bool = False, headed: 
     if not _ensure_test_users():
         return False
     return _run_playwright("docs/search-language.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
+def front_docs_shared_nav(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the documentation's shared menu and English-only developer manual in the browser, desktop and phone: the menu put back from its shared file, a group put back toggles as Material draws it, developer links in English with a read-only selector, an old Italian address redirects (lane 84)."""
+    print_section("Frontend Docs Shared Navigation Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("docs/shared-nav.spec.ts", ui=ui, headed=headed, debug=debug, project="", test_names=test_names, coverage=coverage)
 
 
 def front_page_policy(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
@@ -1867,6 +1884,15 @@ def populate_registry(registry: dict) -> None:
         desc="The documentation's search by language (DOC-2, route B), written red-first and run in a slot: on the home page of each language (it, fr, es, en) a search for «sharpe» finds pages of that language only, from that language's own index (search_index.<lang>.json answered 200, the full search_index.json never fetched), with the toggle in the search dialog there and unchecked; on the Italian page the toggle reloads the page with the query kept and checked, results in all four languages and the full index; the toggle off again goes back to Italian only from the Italian index; the stored preference holds on the French home page",
         prereq="Docs site built after the hook and the script are in (dev.py mkdocs build): search/search_index.<lang>.json and javascripts/search-language.js in the site",
         tests="docs/search-language.spec.ts",
+    )
+    add_test(
+        cat,
+        "docs-shared-nav",
+        front_docs_shared_nav,
+        name="Docs Shared Navigation",
+        desc="The documentation's shared menu in the browser (lane 84, lots D and E), on the English and the Italian page of user/fx/: the page as the lane serves it is the shrunk one (data-lf-nav, links standing for groups), the lane answers the language's menu file javascripts/nav/nav.<lang>.<hash>.js 200 and immutable, and the page ends with no such link left: each is the group it replaced, its first page the one the link led to, the groups of the page's own branch open and the current page the one active link; a group put back starts indeterminate (md-toggle--indeterminate: shown expanded, as navigation.expand draws a group outside the page's branch), on a desktop the first click on its label folds it and the second opens it with its first page on screen, on a phone (drawer) the first click opens it; both Playwright projects (desktop, mobile) run; from the Italian page every menu link to the developer manual leads to /developer/ (never /it/developer/), the page it reaches is English with a read-only language selector that does not open and the stored language still Italian; an old /it/developer/ address ends on the English page with its query and anchor; every origin but the lane's refused, no console or page error",
+        prereq="Docs site built after the shared_nav, developer_english_only and minify_html hooks and nav-enhance.js are in (dev.py mkdocs build)",
+        tests="docs/shared-nav.spec.ts",
     )
     add_test(
         cat,

@@ -254,7 +254,8 @@
       "enrichersError": "No se pudieron buscar los enriquecedores: elígelos a mano.",
       "enrichersReview": "Revisar o cambiar",
       "enrichersReading": "Sus datos se están leyendo ahora.",
-      "enrichersReadingWaiting": "Demasiadas solicitudes: sus datos se leerán solos en un momento."
+      "enrichersReadingWaiting": "Demasiadas solicitudes: sus datos se leerán solos en un momento.",
+      "enrichersTickerOnly": "Encontrado solo por su ticker, por comprobar: {names}. Añádelo desde «Enriquecedores» con «+»."
     },
     "provider": {
       "assignment": "Asignación de Proveedor",

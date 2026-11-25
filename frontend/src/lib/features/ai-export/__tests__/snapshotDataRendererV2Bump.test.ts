@@ -57,13 +57,24 @@ const V2_SECTIONS: ReadonlyArray<[string, Record<string, unknown>]> = [
     ['broker.flows_income_costs', {broker_id: 5, period_start: '2024-01-01', period_end: '2024-12-31', target_currency: 'EUR', unallocated: [], effects: []}],
 ];
 
+/** The first version the renderer does not know: 3, except where a later bump moved the component on (78 L10b). */
+function nextUnknownVersion(componentId: string): number {
+    return componentId === 'broker.concentration_comparison' ? 4 : 3;
+}
+
 describe('AI Export v2 bump — T-U9, MF-C2 and F-AI (b)', () => {
     it.each(V2_SECTIONS)('%s v2 renders compactly, not as YAML', (componentId, payload) => {
         expect(render(componentId, 2, payload)).not.toContain(FALLBACK);
     });
 
-    it.each(V2_SECTIONS)('%s v3 is unknown to the renderer and falls back to YAML', (componentId, payload) => {
-        expect(render(componentId, 3, payload)).toContain(FALLBACK);
+    it.each(V2_SECTIONS)('%s: the version after the current one is unknown to the renderer and falls back to YAML', (componentId, payload) => {
+        expect(render(componentId, nextUnknownVersion(componentId), payload)).toContain(FALLBACK);
+    });
+
+    // 78 L10b: the comparison's portfolio side became the owned brokers, whole (v3); the payload keeps its shape.
+    it('broker.concentration_comparison v3 renders compactly, not as YAML', () => {
+        const [, payload] = V2_SECTIONS.find(([componentId]) => componentId === 'broker.concentration_comparison')!;
+        expect(render('broker.concentration_comparison', 3, payload)).not.toContain(FALLBACK);
     });
 
     it('keeps a null slice percent as the literal null, never 0', () => {

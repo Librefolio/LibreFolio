@@ -43,8 +43,9 @@ describe('AI Export prompt renderer', () => {
         });
 
         // Red until E-24: answer_focus, the trusted instruction to answer rather than restate the data, comes right after the
-        // optional user notes and right before the legal notice; the legal notice comes right before response_language,
-        // which stays last: the app's trusted instruction.
+        // optional user question and right before the legal notice; the legal notice comes right before response_language,
+        // which stays last: the app's trusted instruction. 78 L2: the user's text is the User Question, in the old shape
+        // too, and keeps its place before that trusted closing.
         expect(diagnostics.sections.map((section) => section.id)).toEqual([
             'analysis_objective',
             'shared_verification_instructions',
@@ -53,15 +54,18 @@ describe('AI Export prompt renderer', () => {
             'snapshot_data',
             'additional_librefolio_data',
             'domain_notes',
-            'user_notes',
+            'user_question',
             'answer_focus',
             'legal_notice',
             'response_language',
         ]);
-        // Red until E-24: user_notes only when non-empty; without them answer_focus follows domain_notes.
+        // Red until E-24: user_question only when non-empty; without it answer_focus follows domain_notes.
         expect(withoutNotes.sections.map((section) => section.id)).toEqual(['analysis_objective', 'shared_verification_instructions', 'response_contract', 'snapshot_metadata', 'snapshot_data', 'additional_librefolio_data', 'domain_notes', 'answer_focus', 'legal_notice', 'response_language']);
         expect(diagnostics.rendered.mode).toBe('full_prompt');
-        expect(diagnostics.sections.find((section) => section.id === 'user_notes')?.content).toContain('Focus on recovery duration.');
+        const question = diagnostics.sections.find((section) => section.id === 'user_question')?.content ?? '';
+        expect(question).toContain('Focus on recovery duration.');
+        expect(question.startsWith(`## User Question\n\n${sharedInstructions.AI_EXPORT_USER_QUESTION_INTRO}\n\n`), 'the old shape takes the sentence too (78 L2)').toBe(true);
+        expect(diagnostics.rendered.prompt).not.toContain('## User Notes');
         expect(diagnostics.sections.find((section) => section.id === 'response_language')?.content).toContain('Italian');
     });
 

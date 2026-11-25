@@ -212,7 +212,8 @@
       "investimental_order_start_missing": "Ordine {order} ({symbol}, ultimo eseguito il {date} a {price}): il file comincia con quest'ordine già avviato, quindi la quantità intera non si ricava dal file {visible, select, yes {(il file mostra {quantity} per {amount} {currency})} other {(nessuno degli eseguiti che mostra si può contare)}}. L'ordine non è stato importato: inseriscilo a mano dall'estratto.",
       "reward_value": "Il file non dà il valore di questo premio: inserisci il valore di una sola unità nel giorno in cui l'hai ricevuto, non il totale, per importare la riga.",
       "investimental_fee_from_order_log": "{count, plural, one {# commissione è stata letta dal registro degli ordini: può differire di poco dall'estratto, controllala lì.} other {# commissioni sono state lette dal registro degli ordini: possono differire di poco dall'estratto, controllale lì.}}",
-      "xtb_positions_outside_period": "Per {count, plural, one {# strumento} other {# strumenti}} la quantità importata da questo report è diversa da quella che XTB mostra aperta: le operazioni fatte prima dell'inizio del report (o dopo la sua fine) non sono nel file. Genera il report con l'intervallo «All» per importare tutta la cronologia."
+      "xtb_positions_outside_period": "Per {count, plural, one {# strumento} other {# strumenti}} la quantità importata da questo report è diversa da quella che XTB mostra aperta: le operazioni fatte prima dell'inizio del report (o dopo la sua fine) non sono nel file. Genera il report con l'intervallo «All» per importare tutta la cronologia.",
+      "xtb_tax_refund": "{count, plural, one {# rimborso d’imposta è stato importato come interesse} other {# rimborsi d’imposta sono stati importati come interessi}} («Tax refund»): sono soldi restituiti dal guadagno dell’investimento, quindi contano nel P&L."
     },
     "evidenceRowsTitle": "Righe del file",
     "evidenceRowCount": "{n} righe",
@@ -574,7 +575,8 @@
       "traderepublic_not_yet_settled": "La data (o la value_date) di queste righe è successiva a oggi.",
       "investimental_order_start_missing": "Ogni riga dice il volume ancora aperto. Le prime righe dell'ordine, con i primi eseguiti, non sono nel file.",
       "investimental_fee_from_order_log": "Ogni commissione è quanto scende, a ogni eseguito, la commissione ancora dovuta sulla parte aperta dell'ordine.",
-      "xtb_positions_outside_period": "Volume aperto dal foglio Open Positions, accanto alla quantità netta delle righe di Cash Operations importate."
+      "xtb_positions_outside_period": "Volume aperto dal foglio Open Positions, accanto alla quantità netta delle righe di Cash Operations importate.",
+      "xtb_tax_refund": "Un’imposta positiva è denaro restituito."
     },
     "notesCount": "{n, plural, one {# nota} other {# note}}",
     "noNotices": "Nessun avviso né nota",

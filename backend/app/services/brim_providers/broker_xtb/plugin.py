@@ -67,6 +67,23 @@ OUTSIDE_PERIOD_CODE = "xtb_positions_outside_period"
 OUTSIDE_PERIOD_MESSAGE = "For {n} instruments the quantity imported from this report differs from the quantity XTB shows open: trades made before the " "report's start (or after its end) are not in the file. Generate the report with the date range «All» to import the whole history."
 OUTSIDE_PERIOD_COMMENT = "Open volume from the Open Positions sheet, next to the net quantity of the Cash Operations rows imported."
 
+TAX_REFUND_CODE = "xtb_tax_refund"
+TAX_REFUND_MESSAGE = "{n} tax refunds were imported as interest («Tax refund»): money given back from the investment's gain, so it counts in the P&L."
+TAX_REFUND_COMMENT = "A positive tax is money given back."
+
+# The sign the cash of each type must have. A row whose Amount has the other sign is never flipped: a tax given back
+# becomes a «Tax refund» interest, any other one is left out as not recognised (a reversal or a correction to look at).
+CASH_SIGN: Dict[TransactionType, int] = {
+    TransactionType.BUY: -1,
+    TransactionType.SELL: 1,
+    TransactionType.DEPOSIT: 1,
+    TransactionType.DIVIDEND: 1,
+    TransactionType.INTEREST: 1,
+    TransactionType.WITHDRAWAL: -1,
+    TransactionType.FEE: -1,
+    TransactionType.TAX: -1,
+}
+
 CURRENCY_MISSING_CODE = "xtb_account_currency_missing"
 CURRENCY_AMBIGUOUS_CODE = "xtb_account_currency_ambiguous"
 
@@ -184,7 +201,9 @@ class XTBBrokerProvider(BRIMProvider):
     def plugin_version(self) -> str:
         # 2.0.0 — lane 83: the History report workbook (.xlsx) only; the old Cash Operations CSV is no longer read (XTB no
         # longer exports it); unknown and unreadable rows in the two shared notices (RowSkips).
-        return "2.0.0"
+        # 2.1.0 — lot 83-B: the cash keeps the sign of Amount: a tax given back is an INTEREST «Tax refund» with an info note,
+        # any other sign that does not fit its type (a negative dividend or interest, a positive fee) is a row not recognised.
+        return "2.1.0"
 
     @property
     def test_file_pattern(self) -> Optional[str]:
@@ -271,6 +290,7 @@ class XTBBrokerProvider(BRIMProvider):
         imported_quantity: Dict[str, Decimal] = defaultdict(Decimal)
         transfers: List[_Row] = []
         quiet: Dict[str, int] = defaultdict(int)
+        tax_refunds: List[_Row] = []
 
         for row in source.rows:
             if not row.type_raw:
@@ -299,19 +319,29 @@ class XTBBrokerProvider(BRIMProvider):
                 continue
 
             quantity, price = _parse_xtb_comment_quantity_price(row.comment)
+            # The cash is the Amount as written, sign included: a sign that does not fit the type is never flipped (lot 83-B).
             amount = row.amount
+            refund = False
+            if amount == 0:
+                if tx_type in (TransactionType.BUY, TransactionType.SELL):
+                    skips.unknown(row.line, row.cells, f"{tx_type.value} with amount 0")
+                else:
+                    quiet["zero_amount"] += 1  # a cash row of 0 moves nothing
+                continue
+            if (amount > 0) != (CASH_SIGN[tx_type] > 0):
+                if tx_type != TransactionType.TAX:
+                    skips.unknown(row.line, row.cells, f"{tx_type.value} with a {'positive' if amount > 0 else 'negative'} amount")
+                    continue
+                # A tax given back is income from the investment: an INTEREST «Tax refund» (the plugin rule 6), listed in an info note.
+                tx_type = TransactionType.INTEREST
+                refund = True
+                tax_refunds.append(row)
             if tx_type == TransactionType.BUY:
                 quantity = abs(quantity)
-                amount = -abs(amount)
             elif tx_type == TransactionType.SELL:
                 quantity = -abs(quantity)
-                amount = abs(amount)
-            elif tx_type in (TransactionType.DIVIDEND, TransactionType.INTEREST, TransactionType.DEPOSIT):
+            else:
                 quantity = Decimal("0")
-                amount = abs(amount)
-            elif tx_type in (TransactionType.WITHDRAWAL, TransactionType.FEE, TransactionType.TAX):
-                quantity = Decimal("0")
-                amount = -abs(amount)
 
             asset_required = tx_type in (TransactionType.BUY, TransactionType.SELL, TransactionType.DIVIDEND)
             asset_optional = tx_type in (TransactionType.INTEREST, TransactionType.FEE, TransactionType.TAX)
@@ -341,6 +371,8 @@ class XTBBrokerProvider(BRIMProvider):
             if price is not None:
                 description_parts.append(f"price={price}")
             description = " | ".join(description_parts)
+            if refund:
+                description = f"Tax refund: {description}"
 
             self._create_transaction(
                 row_num=row.line,
@@ -370,6 +402,24 @@ class XTBBrokerProvider(BRIMProvider):
             logger.info("XTB rows left out", reason=reason, count=count)
 
         notices: List[BRIMNotice] = []
+        if tax_refunds:
+            notices.append(
+                BRIMNotice(
+                    severity="info",
+                    code=TAX_REFUND_CODE,
+                    message=TAX_REFUND_MESSAGE.format(n=len(tax_refunds)),
+                    evidence=[
+                        BRIMEvidence(
+                            title="",
+                            headers=list(source.headers),
+                            rows=[(row.cells + [""] * len(source.headers))[: len(source.headers)] for row in tax_refunds],
+                            row_numbers=[row.line for row in tax_refunds],
+                            comment=TAX_REFUND_COMMENT,
+                        )
+                    ],
+                    context={"count": len(tax_refunds)},
+                )
+            )
         outside = _outside_period(source.open_positions, imported_quantity)
         if outside:
             notices.append(outside)

@@ -42,7 +42,7 @@
     import {toasts} from '$lib/stores/app/toastStore.svelte';
     import {pageBusy} from '$lib/stores/app/pageBusy.svelte';
     import {getBrokerRole} from '$lib/stores/reference/brokerStore';
-    import {txStoreSetAll, txStoreGet, txStoreCanEdit} from '$lib/features/transactions/txStore.svelte';
+    import {txStoreSetAll, txStoreGet, txStoreCanEdit, txStoreAddExtras} from '$lib/features/transactions/txStore.svelte';
     import {guardEditableRows} from '$lib/features/transactions/bulk/selectionGuards';
     import {promoteNotesDiverge} from '$lib/features/transactions/bulk/promoteHelpers';
     import {invalidate as invalidatePortfolioCache} from '$lib/stores/portfolio/portfolioStore.svelte';
@@ -927,7 +927,12 @@
     onSwitchToEdit={() => {
         highlightDrivenViewTxId = null;
         formOpen = false;
-        if (formItems?.[0]) handleEditRow(formItems[0]);
+        const row = formItems?.[0];
+        if (!row) return;
+        // A row reached with «Open» may have been saved after the page loaded: the bulk workspace reads the originals
+        // from the store, so add it there first (as the broker tab does).
+        txStoreAddExtras([row]);
+        handleEditRow(row);
     }}
 />
 <TransactionBulkModal

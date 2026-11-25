@@ -25,6 +25,7 @@ from backend.app.schemas.pac_allocator.rows import (
     RebalancerScoreSummary,
     RebalancerTieBreakStage,
     RebalancerUnavailableWeight,
+    RebalancerUninvestedPart,
     RebalancerUninvestedRow,
 )
 from backend.app.services.financial_math.weights import largest_weight_deviation_at
@@ -155,11 +156,25 @@ def build_uninvested_row(scenario: ExactPlannerScenario, evaluation: ExactEvalua
     before, _final = _cash_values(scenario, evaluation)
     before_items = sum((before.get((entry.broker_id, entry.currency), _ZERO) for entry in scenario.cash_entries if entry.weight != _ZERO), _ZERO)
     before_value = wealth - accounting.current_invested - before_items
+    # TL-5 of project 67: the row's two parts. The money lost is ``F − W`` (``wealth_loss``); what is left of ``N`` is the
+    # cash with no target and the contributions not deposited.
+    lost = accounting.wealth_loss
+
+    def part(before: ExactRatio, final: ExactRatio) -> RebalancerUninvestedPart:
+        return RebalancerUninvestedPart(
+            before_value=ratio_to_money(before, currency),
+            before_weight=_share(before, wealth),
+            final_value=ratio_to_money(final, currency),
+            final_weight=_share(final, wealth),
+        )
+
     return RebalancerUninvestedRow(
         before_value=ratio_to_money(before_value, currency),
         before_weight=_share(before_value, wealth),
         final_value=ratio_to_money(accounting.uninvested, currency),
         final_weight=_share(accounting.uninvested, wealth),
+        untargeted_cash=part(before_value, accounting.uninvested - lost),
+        costs=part(_ZERO, lost),
     )
 
 

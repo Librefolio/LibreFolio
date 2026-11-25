@@ -137,7 +137,8 @@
         "undo": "Annuler"
       },
       "openFailed": "La transaction n'a pas pu être ouverte",
-      "candidatesFailed": "Les transactions à lier n'ont pas pu être chargées"
+      "candidatesFailed": "Les transactions à lier n'ont pas pu être chargées",
+      "groupSyncHint": "Tant que les lignes de ce groupe (la transaction et ses frais liés) sont toutes nouvelles, elles partagent courtier et actif : les changer ici les change sur chaque ligne du groupe."
     },
     "bulk": {
       "resetRow": "Réinitialiser la ligne",

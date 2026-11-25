@@ -48,10 +48,15 @@ type ProblemCode = Literal["bound_min_above_max", "bounds_min_sum_exceeds_refere
 
 @dataclass(frozen=True, slots=True)
 class LimitProblem:
-    """A check that failed and the entries that cause it, in the order of ``LimitEntry.key``."""
+    """A check that failed and the entries that cause it, in the order of ``LimitEntry.key``.
+
+    ``sums`` is set by the check on the sum of the minimums only (TL-4 of project 67): the sum it counted and the reference it
+    compared it with, so the sentence the user reads carries the two figures the check used, whatever page shows it.
+    """
 
     code: ProblemCode
     entries: tuple[LimitEntry, ...]
+    sums: tuple[ExactRatio, ExactRatio] | None = None
 
 
 def _zero_plan(scenario: ExactPlannerScenario) -> ExactEvaluation:
@@ -112,7 +117,8 @@ def check_minimum_above_maximum(scenario: ExactPlannerScenario, reference: Exact
 def check_minimums_exceed_reference(scenario: ExactPlannerScenario, reference: ExactRatio, trapped_by_cell: dict[tuple[str, str], ExactRatio] | None = None) -> tuple[LimitProblem, ...]:
     """Check 2 (M1, T12): the minimums of all entries, Assets and cash cells, add up to more than ``reference``.
 
-    One problem naming every entry that counts in the sum, or none. The base is ``fixed_reference`` (D7). Cash that reaches no
+    One problem naming every entry that counts in the sum, with that sum and ``reference`` (``sums``), or none. The base is
+    ``fixed_reference`` (D7). Cash that reaches no
     buy is outside it but sits in its cell (``trapped_cash_by_cell``), so for a cash cell only the part of the minimum above
     its trapped cash counts, and a cell wholly covered by it is not named: a check before the calculation must never be
     stricter than reality. Without ``trapped_by_cell`` nothing is deducted.
@@ -127,8 +133,9 @@ def check_minimums_exceed_reference(scenario: ExactPlannerScenario, reference: E
             value = max(ExactRatio(0), value - trapped.get((entry.broker_id, entry.currency), ExactRatio(0)))
         if value > ExactRatio(0):
             counted.append((entry, value))
-    if sum((value for _, value in counted), ExactRatio(0)) > reference:
-        return (LimitProblem("bounds_min_sum_exceeds_reference", tuple(entry for entry, _ in counted)),)
+    total = sum((value for _, value in counted), ExactRatio(0))
+    if total > reference:
+        return (LimitProblem("bounds_min_sum_exceeds_reference", tuple(entry for entry, _ in counted), (total, reference)),)
     return ()
 
 

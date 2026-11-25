@@ -25,8 +25,8 @@ the first two is in [Risk UI](../../frontend/components/features/risk-lab.md).
 | Broker Detail, **Risk** tab | `{kind: "portfolio", broker_ids: [id]}` | `levels/RiskLevelsPanel.svelte` |
 | Assets page, **Correlation** tab (the *Asset Global* lab) | `{kind: "asset_set", asset_ids: [...]}` | `AssetSetRiskPanel.svelte` |
 | Asset Detail, **Risk & Scenarios** tab | `{kind: "asset", asset_id}` | `AssetRiskTab.svelte` → `levels/RiskLevelsPanel.svelte` |
-| AI Export drawdown context | Portfolio, broker or asset; `drawdown_summary` only | `RiskService.execute()`, called in-process by `backend/app/services/ai_export/components/drawdown_context.py` |
-| AI Export risk evidence | `{kind: "portfolio", broker_ids}`: the export's broker filter (one switch, D10), `current_composition`, 12 months up to the end of the export period; `risk_contribution`, `historical_var` (95 %, 30 days) and `correlation` in one request | `RiskService.execute()`, called in-process by `backend/app/services/ai_export/components/risk_evidence.py` |
+| AI Export drawdown context | Portfolio or broker: the export's brokers (`export_risk_scope`, 78 L10); or an asset; `drawdown_summary` only | `RiskService.execute()`, called in-process by `backend/app/services/ai_export/components/drawdown_context.py` |
+| AI Export risk evidence | `{kind: "portfolio", broker_ids}`: the export's brokers, as the drawdown (`export_risk_scope`, 78 L10), `current_composition`, 12 months up to the end of the export period; `risk_contribution`, `historical_var` (95 %, 30 days) and `correlation` in one request | `RiskService.execute()`, called in-process by `backend/app/services/ai_export/components/risk_evidence.py` |
 
 The Svelte paths are relative to `frontend/src/lib/features/risk/`. The AI Export side is
 described in [AI Export Composition](../../architecture/patterns/ai_export_composition.md).

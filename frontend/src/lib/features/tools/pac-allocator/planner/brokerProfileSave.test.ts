@@ -91,7 +91,8 @@ describe('planProfileSave', () => {
 
     it('save to the broker profile does not invent a mode for a currency the user did not fill', () => {
         // A block left without a currency, and no profile at all: only EUR is written.
-        const plan = planProfileSave(null, [EUR, {...USD, key: 'mode:3', currency: ''}], 'manual');
+        // The planner's Broker at the default conversion (TL-6: «automatic»), so the conversion is not a change either.
+        const plan = planProfileSave(null, [EUR, {...USD, key: 'mode:3', currency: ''}], 'automatic');
 
         expect(plan.changes).toEqual([{kind: 'currency', currency: 'EUR', change: 'created'}]);
         expect(plan.document?.order_modes?.map((item) => item.currency)).toEqual(['EUR']);

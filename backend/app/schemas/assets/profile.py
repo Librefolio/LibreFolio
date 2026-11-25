@@ -95,9 +95,17 @@ class ProfileTopic(StrEnum):
     YIELD = "yield"
     DURATION = "duration"
     SIZE = "size"
+    FINANCIALS = "financials"
     LEGAL_FORM = "legal_form"
     ISSUER = "issuer"
     DESCRIPTION = "description"
+
+
+class ProfilePeriod(StrEnum):
+    """The span a voice's value covers, when it is a figure of a period (BI-PROF): the tab names the period beside the
+    value, from the value's source date."""
+
+    FISCAL_YEAR = "fiscal_year"
 
 
 class FAProfileVoice(StrictModel):
@@ -116,6 +124,7 @@ class FAProfileVoice(StrictModel):
     choices: tuple[str, ...] = Field((), description="The codes a choice voice accepts; empty for the others")
     map_keys: Optional[ProfileMapKeys] = Field(None, description="What a map voice's keys are; None for the others")
     topic: ProfileTopic = Field(..., description="What the voice is about, in one word: the enrichers' window says what an enricher fills by its voices' topics")
+    period: Optional[ProfilePeriod] = Field(None, description="fiscal_year: the value is a figure of the fiscal year that ends on its source date; None for a voice that is not a period's figure")
 
 
 class FAProfileReadOutcome(StrictModel):

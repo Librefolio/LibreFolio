@@ -41,6 +41,7 @@ __all__ = [
     "MAX_FIXED_DECIMAL_CHARS",
     "MAX_INTEGER_TEXT_CHARS",
     "WireNumberTooLargeError",
+    "ratio_to_display_decimal",
     "ratio_to_exact_number",
     "ratio_to_fixed_decimal",
     "ratio_to_money",
@@ -186,6 +187,17 @@ def _display_projection(value: ExactRatio) -> tuple[str, int]:
         if len(text) <= MAX_FIXED_DECIMAL_CHARS:
             return text, emitted_scale
     raise WireNumberTooLargeError(f"exact value {value.numerator}/{value.denominator} has no display projection within the wire's {MAX_FIXED_DECIMAL_CHARS}-character limit")
+
+
+def ratio_to_display_decimal(value: ExactRatio) -> str:
+    """The decimal text a reader sees for ``value``: what ``ratio_to_exact_number`` shows of it.
+
+    The exact text when the value terminates and fits, else the same rounded ``display_decimal`` the ``exact_ratio`` branch
+    carries. For a figure published as text beside an ``ExactMoney`` of the same value (an issue's money param next to the
+    preview's ``total``, TL-4 of project 67): the two then read the same on screen, digit for digit.
+    """
+    number = ratio_to_exact_number(value)
+    return number.value if isinstance(number, FiniteDecimal) else number.display_decimal
 
 
 def ratio_to_exact_number(value: ExactRatio) -> ExactNumber:

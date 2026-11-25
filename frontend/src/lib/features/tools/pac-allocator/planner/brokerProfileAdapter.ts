@@ -7,7 +7,7 @@
  * across. The panel writes an empty fee field for zero, the planner `'0'` (`DEFAULT_FEE`); the cap stays empty for «none»
  * on both sides.
  */
-import {toDraft, type ConversionMode, type OperatingProfileDocument, type ProfileDraft, type RuleDraft} from '$lib/features/brokers/profile/brokerOperatingProfile';
+import {DEFAULT_CONVERSION_MODE, toDraft, type ConversionMode, type OperatingProfileDocument, type ProfileDraft, type RuleDraft} from '$lib/features/brokers/profile/brokerOperatingProfile';
 import {DEFAULT_FEE} from './defaults';
 import type {DraftMode} from './draft.svelte';
 
@@ -83,6 +83,6 @@ export function modeKeys(knownKeys: Iterable<string>, nextKey: () => string): (r
 export function modesOf(draft: ProfileDraft, keyFor: (ruleKey: string) => string): {modes: DraftMode[]; conversionMode: ConversionMode} {
     return {
         modes: draft.rules.map((rule) => modeFromRule(rule, keyFor(rule.key))),
-        conversionMode: draft.conversionMode ?? 'manual',
+        conversionMode: draft.conversionMode ?? DEFAULT_CONVERSION_MODE,
     };
 }

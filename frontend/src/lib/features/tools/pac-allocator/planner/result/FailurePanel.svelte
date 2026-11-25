@@ -33,7 +33,7 @@
     } as const;
 
     let showCodes = $state(false);
-    const items = $derived(presentIssues(result.issues, draft, ids).map(listIssue));
+    const items = $derived(presentIssues(result.issues, draft, ids, profile.text).map(listIssue));
 </script>
 
 <section class="{CARD} space-y-3" aria-labelledby={domId('failure-title', profile)} data-testid={testId('failure', profile)} data-state={result.result_state}>

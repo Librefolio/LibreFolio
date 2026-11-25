@@ -1,7 +1,7 @@
 <!--
   The icon of a cash entry (F3a of project 67, M3): the Broker's logo with a small circle in its corner holding the
   currency's symbol, as the composite Asset types do (`utils/assetTypes.ts`, there as images; here in CSS). Without a
-  Broker («Other cash») a plain circle with a wallet stands for all the cash.
+  Broker a plain circle with a wallet stands for the cash.
 -->
 <script lang="ts">
     import {Wallet} from 'lucide-svelte';

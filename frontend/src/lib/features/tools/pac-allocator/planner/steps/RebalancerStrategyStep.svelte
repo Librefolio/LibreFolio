@@ -6,7 +6,8 @@
   field in euros, inside its card: the most the user accepts to spend for the reference row of the table. The preview
   class turns the euros into the draft's λ on the preview's total (`acceptableCost.ts`, R1-F (b) of project 67): at once
   when its numbers are current, with no call. The draft keeps λ, never the euros, so a new total gives other euros back
-  for the same λ (§7.3). An empty, zero or negative field is an error on the field and a local problem of the step.
+  for the same λ (§7.3). Another choice keeps the last λ aside (`customLambdaMemory`, TL-1): the table's «Custom» column
+  stays for comparison, and «Custom» chosen again finds its figure, even after leaving the step. An empty, zero or negative field is an error on the field and a local problem of the step.
   Without the preview's total (one that cannot be counted yet) the field is off and the table's line says why. No figure
   is computed in this component.
 
@@ -69,11 +70,15 @@
     function choose(next: Choice): void {
         if (next === chosen) return;
         if (next === 'custom') {
-            draft.data.fidelity = {kind: 'custom', lambda: ''};
+            // TL-1: the λ remembered comes back with «Custom», so its field and column are there again, even after leaving
+            // the step (the euros typed live only in this component).
+            draft.data.fidelity = {kind: 'custom', lambda: draft.customLambdaMemory};
             // Euros typed before another choice go again, so the user finds the field as they left it.
             if (typed !== null && positive(typed)) preview?.setCustomEuros(draft, typed);
             return;
         }
+        // Leaving «Custom»: its λ stays as the column kept for comparison (TL-1); the plan reads only the new choice.
+        if (fidelity.kind === 'custom' && fidelity.lambda !== '') draft.customLambdaMemory = fidelity.lambda;
         draft.data.fidelity = next === 'target_first' ? {kind: 'target_first'} : ({kind: 'level', level: next} as DraftFidelity);
     }
 
@@ -82,7 +87,8 @@
         // The draft's λ belongs to the figure converted: a new figure has none until it is converted (at once on a current
         // total), so a calculation never runs on the λ of an older figure (a problem of the step meanwhile).
         draft.data.fidelity = {kind: 'custom', lambda: ''};
-        // A figure above zero becomes λ; anything else withdraws the euros waiting.
+        // A figure above zero becomes λ; anything else withdraws the euros waiting, and forgets the figure (TL-1).
+        if (!positive(text)) draft.customLambdaMemory = '';
         preview?.setCustomEuros(draft, positive(text) ? text : '');
     }
 
@@ -163,7 +169,7 @@
         />
     </section>
 
-    <FidelityTable {preview} {fidelity} />
+    <FidelityTable {preview} {fidelity} rememberedLambda={draft.customLambdaMemory} />
 </div>
 
 {#snippet customField(choice: Choice, selected: boolean)}

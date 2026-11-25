@@ -242,7 +242,7 @@
                                 <ul class="{HINT} mt-1 space-y-0.5 tabular-nums">
                                     <li data-part="distance_weight">{$t(`${R}.proof.lambda`, {default: 'λ {value}', values: {value: formatPlannerPlainDecimal(exactDisplay(score.distance_weight).text)}})}</li>
                                     <li data-part="distance_per_wealth">{$t(`${R}.header.distance`, {default: 'Distance/F {value}', values: {value: scoreMoney(score.distance_per_wealth)}})}</li>
-                                    <li data-part="wealth_loss">{$t(`${R}.header.moneyLost`, {default: 'Money lost {value}', values: {value: scoreMoney(score.wealth_loss)}})}</li>
+                                    <li data-part="wealth_loss">{$t(`${R}.header.moneyLost`, {default: 'Costs and fees {value}', values: {value: scoreMoney(score.wealth_loss)}})}</li>
                                 </ul>
                             {/if}
                         </div>

@@ -26,6 +26,7 @@ from backend.app.services.enrichers.base import (
     RATE_LIMITED,
     EnricherBinding,
     EnricherPlugin,
+    EnricherRateLimited,
     EnricherReadItem,
     EnricherReadStatus,
     EnricherRecognition,
@@ -309,7 +310,13 @@ class JustETFEnricher(EnricherPlugin):
         if load_overview is None:
             raise RuntimeError("justetf-scraping is not installed")
         _PACER.wait()
-        frame = load_overview()
+        try:
+            frame = load_overview()
+        except Exception as error:
+            limited = rate_limited_from_exception(error, PROVIDER_NAME)
+            if limited is None:
+                raise
+            raise EnricherRateLimited(f"{PROVIDER_NAME} refused the search for too many requests", retry_after=limited.retry_after) from error
         needle = query.strip().lower()
         if not needle:
             return []

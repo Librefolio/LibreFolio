@@ -155,14 +155,15 @@ describe('a copied Broker and its operating profile', () => {
 
         expect(broker.modes.map((item) => item.currency)).toEqual(['EUR', 'USD']);
         expect(mode(broker, 'EUR')).toMatchObject({kind: 'whole_quantity', step: '1', fixedFee: '0', ratePercent: '0', floor: '0', cap: ''});
-        expect(broker.conversionMode).toBe('manual');
+        // TL-6 of project 67: a Broker that said nothing converts by itself.
+        expect(broker.conversionMode).toBe('automatic');
         expect(broker.copiedModes).toBeNull();
         expect(broker.copiedConversionMode).toBeNull();
         // A profile with no order mode gives the default modes too, and its conversion mode.
         const other = new PlannerDraft('EUR', 'proportional');
-        const onlyConversion = copyBroker(other, brokerRow({profile_version: 1, order_modes: [], conversion_mode: 'automatic'}));
+        const onlyConversion = copyBroker(other, brokerRow({profile_version: 1, order_modes: [], conversion_mode: 'manual'}));
         expect(onlyConversion.modes.map((item) => item.currency)).toEqual(['EUR', 'USD']);
-        expect(onlyConversion.conversionMode).toBe('automatic');
+        expect(onlyConversion.conversionMode).toBe('manual');
     });
 
     it('the request built from copied modes equals the one built by hand', () => {

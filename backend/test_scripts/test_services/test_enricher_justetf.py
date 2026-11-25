@@ -83,6 +83,7 @@ from backend.app.services.assets.profile.catalogue import normalize_value
 from backend.app.services.enrichers.base import (
     RATE_LIMITED,
     EnricherBinding,
+    EnricherRateLimited,
     EnricherReadItem,
     EnricherReadStatus,
     EnricherRecognition,
@@ -1012,6 +1013,42 @@ def test_search(plugin, library, query, isins):
         isin = result.binding.identifier
         assert result == EnricherSearchResult(name=NAMES[isin], binding=EnricherBinding("ISIN", isin), asset_type=AssetType.ETF, page_url=_page(isin))
     assert library.calls == [], "search reads the list, never a page"
+
+
+@pytest.mark.parametrize(
+    ("error", "retry_after"),
+    [
+        (RuntimeError("Failed to fetch overview: status 429"), None),
+        (_HTTPError(SimpleNamespace(status_code=429, headers={"Retry-After": "120"})), 120.0),
+        (AssetRateLimitedError("justETF: too many requests", retry_after=45.0), 45.0),
+    ],
+    ids=["library-text", "response-429", "asset-rate-limited"],
+)
+def test_search_refusal_is_enricher_rate_limited(je, plugin, monkeypatch, error, retry_after):
+    """ENR-3b: a refusal while the list loads is never an empty result."""
+    assert rate_limited_from_exception(error, CODE) is not None, "barrier: the core reads it as a refusal"
+
+    def refused(*args: Any, **kwargs: Any) -> pd.DataFrame:
+        raise error
+
+    monkeypatch.setattr(je, "load_overview", refused, raising=True)
+    with pytest.raises(EnricherRateLimited) as raised:
+        plugin.search("msci world")
+    assert raised.value.retry_after == retry_after
+    assert raised.value.__cause__ is error
+
+
+def test_search_another_failure_is_not_a_refusal(je, plugin, monkeypatch):
+    failure = ValueError("unexpected table layout")
+    assert rate_limited_from_exception(failure, CODE) is None, "barrier: not a refusal"
+
+    def broken(*args: Any, **kwargs: Any) -> pd.DataFrame:
+        raise failure
+
+    monkeypatch.setattr(je, "load_overview", broken, raising=True)
+    with pytest.raises(ValueError) as raised:
+        plugin.search("msci world")
+    assert raised.value is failure and not isinstance(raised.value, EnricherRateLimited)
 
 
 # =============================================================================

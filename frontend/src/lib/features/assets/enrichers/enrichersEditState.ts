@@ -63,6 +63,9 @@ export interface EnrichersContext {
     recognitions: Record<string, EnricherRecognition>;
     /** The codes «Riconosci» is still asking. */
     searching: string[];
+    /** The tickers a found one may enter by (ENR-2): the price assignment's symbol; any other ticker is the asset's own,
+     *  bare, and never enters by itself (R2, R6). */
+    trustedTickers?: string[];
 }
 
 /** Whether the instance can use a chosen enricher. */
@@ -107,6 +110,11 @@ export interface ChosenRow {
     foundName: string | null;
     pageUrl: string | null;
     issue: BindingIssue | null;
+    /** «Riconosci» found nothing with the binding the row still holds (R3): the row says so, to correct or search. */
+    notFoundWith: {identifier_type: string; identifier: string} | null;
+    /** «Riconosci» found, with the binding the row still holds, an asset naming another identifier (B4): the problem
+     *  stays after the addition, so the row keeps saying so. The type → value the source named. */
+    conflictWith: Record<string, string> | null;
 }
 
 /** Why an enricher is not in the list, in the order «Non in elenco» shows them. */
@@ -124,6 +132,8 @@ export interface OtherRow {
     fills: string[];
     /** It can be added: not one that does not cover the type, nor one not configured, nor one «Riconosci» is still asking. */
     canAdd: boolean;
+    /** Found only by a ticker (R2): it never enters by itself, the user reads its name and adds it. */
+    tickerOnly: boolean;
 }
 
 // =============================================================================
@@ -150,14 +160,51 @@ export function removeEnricher(draft: EnrichersDraft, code: string): EnrichersDr
     return {...draft, order: draft.order.filter((candidate) => candidate !== code)};
 }
 
+/** What the asset already knows, for an enricher added by hand (R3): the types it accepts and the asset's identifiers. */
+export interface AddFrom {
+    /** The identifier types the enricher accepts, in the order its plugin declares them. */
+    accepted?: string[];
+    /** The asset's identifiers, type → value. */
+    identifiers?: Record<string, string>;
+}
+
 /**
- * Put an enricher in the list, at the end: with the binding it had (removed and put back), else the one a recognition
- * named, else one to type, already on `defaultType` (the first identifier type it accepts).
+ * Put an enricher in the list, at the end (R3, «usa i dati che hai»): with the binding it had (removed and put back),
+ * else the one a recognition asked with (found, or not found with X: the row then says so), else the first identifier
+ * of the asset of a type it accepts, in the order its plugin declares them (ESMA ← the asset's ISIN), else one to
+ * type, already on the first type it accepts.
  */
-export function addEnricher(draft: EnrichersDraft, code: string, recognition?: EnricherRecognition | null, defaultType = ''): EnrichersDraft {
+export function addEnricher(draft: EnrichersDraft, code: string, recognition?: EnricherRecognition | null, from: AddFrom = {}): EnrichersDraft {
     if (draft.order.includes(code)) return draft;
-    const binding = draft.bindings[code] ?? (recognition ? recognitionBinding(recognition) : {identifier_type: defaultType, identifier: ''});
+    const binding = draft.bindings[code] ?? (recognition ? recognitionBinding(recognition) : assetBinding(from));
     return {order: [...draft.order, code], bindings: {...draft.bindings, [code]: binding}};
+}
+
+/** The binding the asset's identifiers give an enricher: the first type it accepts that the asset holds, else empty. */
+export function assetBinding(from: AddFrom): EnricherBinding {
+    const accepted = from.accepted ?? [];
+    const known = accepted.find((type) => (from.identifiers?.[type] ?? '').trim() !== '');
+    return known ? {identifier_type: known, identifier: (from.identifiers?.[known] ?? '').trim()} : {identifier_type: accepted[0] ?? '', identifier: ''};
+}
+
+/**
+ * «Riconosci»'s proposal taken into the window's draft (R2), while the user has not touched the list: the found ones,
+ * in the proposal's order (the order of arrival, then `default_order`). It never reaches the asset by itself: it is
+ * saved only with «Usa questi arricchitori» and «Salva Modifiche» (K2). Once the user touched the list the window stops
+ * calling this: what is found later waits in «Non in elenco».
+ */
+export function adoptProposal(draft: EnrichersDraft, proposal: Record<string, EnricherBinding>): EnrichersDraft {
+    return {order: Object.keys(proposal), bindings: {...draft.bindings, ...proposal}};
+}
+
+/**
+ * A found enricher that enters the list by itself: not one found by a ticker (R2, another listing is possible), unless
+ * that ticker is one of `trustedTickers`, the price assignment's symbol (ENR-2, R6: `SWDA.MI`, the listing the asset is
+ * priced on).
+ */
+export function entersAlone(recognition: EnricherRecognition | null | undefined, trustedTickers: readonly string[] = []): boolean {
+    if (recognition?.status !== 'found') return false;
+    return recognition.identifier_type !== 'TICKER' || trustedTickers.includes(recognition.identifier);
 }
 
 /** A new order: the codes given that are chosen, then the chosen ones it did not name, in their order. */
@@ -175,8 +222,9 @@ export function setBinding(draft: EnrichersDraft, code: string, binding: Enriche
 // Bindings
 // =============================================================================
 
-function recognitionBinding(recognition: EnricherRecognition): EnricherBinding {
-    return {identifier_type: recognition.identifier_type, identifier: recognition.identifier};
+/** The binding a recognition answered for: its type and identifier, and its parameters (a seed's, ENR-2). */
+export function recognitionBinding(recognition: EnricherRecognition): EnricherBinding {
+    return {...((recognition.params as Record<string, unknown> | undefined) ?? {}), identifier_type: recognition.identifier_type, identifier: recognition.identifier};
 }
 
 /** A search result or a recognition chosen: its type and identifier, the binding's parameters kept. */
@@ -256,6 +304,8 @@ export function chosenRows(draft: EnrichersDraft, context: EnrichersContext): Ch
             foundName: recognition?.status === 'found' ? (recognition.name ?? null) : null,
             pageUrl: recognition?.page_url ?? null,
             issue: availability === 'off' ? null : bindingIssue(binding, info),
+            notFoundWith: recognition?.status === 'not_found' && binding?.identifier_type === recognition.identifier_type && binding?.identifier === recognition.identifier ? {identifier_type: recognition.identifier_type, identifier: recognition.identifier} : null,
+            conflictWith: recognition?.status === 'conflict' && binding?.identifier_type === recognition.identifier_type && binding?.identifier === recognition.identifier && Object.keys(recognition.conflicts ?? {}).length ? {...recognition.conflicts} : null,
         };
     });
 }
@@ -278,9 +328,174 @@ export function otherRows(draft: EnrichersDraft, context: EnrichersContext): Oth
             const reason = otherReason(info.code, info, draft, context);
             const recognition = context.recognitions[info.code] ?? null;
             const binding = reason === 'removed' ? draft.bindings[info.code] : reason === 'found' && recognition ? recognitionBinding(recognition) : null;
-            return {code: info.code, info, reason, binding, recognition, fills: fillsOf(info, context.assetType), canAdd: reason !== 'not_covering' && reason !== 'not_configured' && reason !== 'searching'};
+            return {
+                code: info.code,
+                info,
+                reason,
+                binding,
+                recognition,
+                fills: fillsOf(info, context.assetType),
+                canAdd: reason !== 'not_covering' && reason !== 'not_configured' && reason !== 'searching',
+                tickerOnly: reason === 'found' && !entersAlone(recognition, context.trustedTickers),
+            };
         });
     return rows.sort((left, right) => OTHER_REASONS.indexOf(left.reason) - OTHER_REASONS.indexOf(right.reason));
+}
+
+// =============================================================================
+// «Cerca online» (ENR-3)
+// =============================================================================
+
+/** One result of the search across enrichers: a binding ready to add (`EnricherSearchHit` of the stream). */
+export interface SearchHit {
+    name: string;
+    binding: EnricherBinding;
+    asset_type?: string | null;
+    page_url?: string | null;
+    market?: string | null;
+}
+
+/** One enricher's answer to the search across enrichers. */
+export interface SearchAnswer {
+    code: string;
+    status: string;
+    via: string | null;
+    results: SearchHit[];
+    accepted_identifier_types: string[];
+}
+
+/** A pill of the search: an enricher it asks (it covers the type and is not chosen), on or off. */
+export interface SearchPill {
+    code: string;
+    info: EnricherInfo;
+    on: boolean;
+    /** No search of its own: it answers an identifier of its types only (R12, «solo ISIN»). */
+    identifierOnly: boolean;
+}
+
+/** A row of the search's results. */
+export interface SearchRow {
+    code: string;
+    hit: SearchHit;
+    /** R13: the result names an ISIN different from the asset's or from one already chosen; `against` says whose. */
+    conflict: {isin: string; against: string} | null;
+}
+
+function covers(info: EnricherInfo, assetType: string): boolean {
+    return (info.default_priority as Record<string, number | null | undefined>)[assetType] != null && info.configured !== false;
+}
+
+/** The pills (R10): the enrichers that cover the asset's type and are not chosen, on unless turned off. */
+export function searchPills(draft: EnrichersDraft, catalogue: EnricherInfo[], assetType: string, off: ReadonlySet<string>): SearchPill[] {
+    return catalogue.filter((info) => covers(info, assetType) && !draft.order.includes(info.code)).map((info) => ({code: info.code, info, on: !off.has(info.code), identifierOnly: !info.supports_search}));
+}
+
+/** The chosen enrichers that cover the type: not searched, named under the pills («In elenco, non si cercano»). */
+export function searchExcluded(draft: EnrichersDraft, catalogue: EnricherInfo[], assetType: string): EnricherInfo[] {
+    return draft.order.map((code) => catalogue.find((info) => info.code === code)).filter((info): info is EnricherInfo => !!info && covers(info, assetType));
+}
+
+/** The ISINs a result must agree with (R13): the asset's, then each chosen binding's, with whose it is. */
+function knownIsins(draft: EnrichersDraft, assetIdentifiers: Record<string, string>): {isin: string; against: string}[] {
+    const known: {isin: string; against: string}[] = [];
+    const own = assetIdentifiers.ISIN?.trim().toUpperCase();
+    if (own) known.push({isin: own, against: 'asset'});
+    for (const code of draft.order) {
+        const binding = draft.bindings[code];
+        if (binding?.identifier_type === 'ISIN' && binding.identifier) known.push({isin: binding.identifier.trim().toUpperCase(), against: code});
+    }
+    return known;
+}
+
+/**
+ * The rows of the search (R11, R13): every result of an enricher that answered and is not chosen, in the order the
+ * answers are given; a result naming an ISIN different from the asset's or a chosen one's says so.
+ */
+export function searchRows(answers: SearchAnswer[], draft: EnrichersDraft, assetIdentifiers: Record<string, string>): SearchRow[] {
+    const known = knownIsins(draft, assetIdentifiers);
+    const rows: SearchRow[] = [];
+    for (const answer of answers) {
+        if (answer.status !== 'ok' || draft.order.includes(answer.code)) continue;
+        for (const hit of answer.results) {
+            const isin = hit.binding.identifier_type === 'ISIN' ? hit.binding.identifier.trim().toUpperCase() : null;
+            const other = isin ? known.find((entry) => entry.isin !== isin) : undefined;
+            rows.push({code: answer.code, hit, conflict: other && isin ? {isin: other.isin, against: other.against} : null});
+        }
+    }
+    return rows;
+}
+
+/** Put a search result in the list (R11): at the end, with the result's binding; the row stays closed. */
+export function addFromSearch(draft: EnrichersDraft, code: string, binding: EnricherBinding): EnrichersDraft {
+    if (draft.order.includes(code)) return draft;
+    return {order: [...draft.order, code], bindings: {...draft.bindings, [code]: {...binding}}};
+}
+
+/**
+ * The question to ask after a result is added (R12): its ISIN to the enrichers without a search that accept an ISIN,
+ * cover the type and are not chosen; null when there is no ISIN, nobody to ask, or that ISIN was asked already.
+ */
+export function isinFollowUp(binding: EnricherBinding, draft: EnrichersDraft, catalogue: EnricherInfo[], assetType: string, asked: ReadonlySet<string>): {isin: string; codes: string[]} | null {
+    if (binding.identifier_type !== 'ISIN' || !binding.identifier) return null;
+    const isin = binding.identifier.trim().toUpperCase();
+    if (asked.has(isin)) return null;
+    const codes = catalogue.filter((info) => covers(info, assetType) && !info.supports_search && !draft.order.includes(info.code) && info.accepted_identifier_types.includes('ISIN')).map((info) => info.code);
+    return codes.length ? {isin, codes} : null;
+}
+
+/** The identifier types R7 proposes for the asset: the global ones, the same in every source. Never a ticker: the
+ *  asset's TICKER column is the bare one (R2, R6), and a listing's symbol (`SWDA.MI`) lives in its binding. */
+const SUGGESTED_TYPES: readonly string[] = ['ISIN', 'LEI'];
+
+/**
+ * The identifiers the search found, proposed for the asset's empty columns (R7): the ISIN or LEI binding of each
+ * enricher added from the search, for a column in `columnTypes` the asset has no value for; never one that would
+ * overwrite, never a ticker.
+ */
+export function suggestedIdentifiers(draft: EnrichersDraft, fromSearch: Iterable<string>, assetIdentifiers: Record<string, string>, columnTypes: readonly string[]): Record<string, string> {
+    const suggested: Record<string, string> = {};
+    for (const code of fromSearch) {
+        if (!draft.order.includes(code)) continue;
+        const binding = draft.bindings[code];
+        const type = binding?.identifier_type;
+        if (!type || !binding.identifier || !SUGGESTED_TYPES.includes(type) || !columnTypes.includes(type)) continue;
+        if ((assetIdentifiers[type] ?? '').trim() || type in suggested) continue;
+        suggested[type] = binding.identifier;
+    }
+    return suggested;
+}
+
+// =============================================================================
+// The line of «Riconosci» in the enrichers' window (ENR-1)
+// =============================================================================
+
+/** Where «Riconosci» stands, for the line on top of the enrichers' window. */
+export type RecognitionLineState = 'running' | 'found' | 'none' | 'refused' | 'error' | 'no_identifiers';
+
+export interface RecognitionLine {
+    state: RecognitionLineState;
+    /** The covering enrichers that answered, and how many there are (`running`). */
+    answered: number;
+    asked: number;
+    /** The codes found, in the order of the catalogue (`found`). */
+    found: string[];
+}
+
+/**
+ * The line of «Riconosci» (R1): asking (how many answered), found (who), none, waiting out a refusal, failed; or nothing
+ * to recognise with (`canAsk` false: no identifier any covering enricher accepts). `null` before it starts. `askable`
+ * are the codes expected to answer (configured, accepting an identifier the asset holds): the cascade never answers
+ * for the others, so «N of M» counts on these only; the found ones are any covering one.
+ */
+export function recognitionLine(status: 'idle' | 'running' | 'done' | 'refused' | 'error', recognitions: Record<string, EnricherRecognition>, covering: string[], canAsk: boolean, askable: string[] = covering): RecognitionLine | null {
+    const answered = askable.filter((code) => code in recognitions).length;
+    const found = covering.filter((code) => recognitions[code]?.status === 'found');
+    const line = (state: RecognitionLineState): RecognitionLine => ({state, answered, asked: askable.length, found});
+    if (status === 'running') return line('running');
+    if (status === 'refused') return line('refused');
+    if (status === 'error') return line('error');
+    if (status === 'done') return line(found.length ? 'found' : 'none');
+    return canAsk ? null : line('no_identifiers');
 }
 
 // =============================================================================

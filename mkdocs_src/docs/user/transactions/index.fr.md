@@ -35,7 +35,7 @@ Sans filtre ni tri, les deux lignes d'une paire liée (un transfert ou un change
 
 Chacune de ces actions ouvre l'espace de travail groupé, et rien ne change avant **Tout enregistrer**. Modifier ou supprimer un côté d'une paire liée entraîne son partenaire.
 
-**Cloner** conserve la date d'origine : c'est ainsi que vous réenregistrez une ligne historique, par exemple sous un autre type. Cloner une transaction avec des frais liés copie aussi ses frais, liés à la copie ; cloner des frais donne une copie liée à la même transaction. Si vous retirez du lot la copie d'une transaction, les copies de ses frais que vous n'avez pas modifiées partent avec elle.
+**Cloner** conserve la date d'origine : c'est ainsi que vous réenregistrez une ligne historique, par exemple sous un autre type. Cloner une transaction avec des frais liés copie aussi ses frais, liés à la copie ; cloner des frais donne une copie liée à la même transaction. Si vous retirez du lot la copie d'une transaction, les copies de ses frais que vous n'avez pas modifiées partent avec elle. Tant que la copie et ses frais sont tous nouveaux, ils partagent courtier et actif : corrigez l'actif de la copie, ou de l'un de ses frais, et les autres suivent, chacun gardant sa date.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
     <img class="gallery-img" data-category="transactions" data-name="clone-flow" alt="Espace de travail groupé avec une ligne de transaction clonée">

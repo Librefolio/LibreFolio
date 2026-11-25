@@ -68,7 +68,7 @@ from backend.app.services.ai_export.components.fx_timing_context import (
 from backend.app.services.ai_export.components.registry import ComponentRegistry
 from backend.app.services.ai_export.components.technical_context import FX_TECHNICAL_CONTEXT_COMPONENTS
 from backend.app.services.ai_export.components.technical_shared import FxRateHistoryError, load_fx_rate_series
-from backend.app.services.ai_export.components.types import BuildScope, DetailLevel, Domain
+from backend.app.services.ai_export.components.types import BrokerScopeSource, BuildScope, DetailLevel, Domain
 from backend.app.services.ai_export.dependencies import BuildContext, RequiredComponentBuildError, ResourceLoadError, build_bucket_plan_for_scope
 from backend.app.services.fx.base import RateNotFoundError
 from backend.app.services.fx.conversion import convert_bulk
@@ -127,8 +127,13 @@ def _scope(
     start: date = date(2025, 1, 1),
     end: date = date(2025, 1, 10),
     broker_scope: tuple[int, ...] = (),
+    owned: tuple[int, ...] | None = None,
     detail_level: DetailLevel = DetailLevel.STANDARD,
 ) -> BuildScope:
+    """`owned`: the user's owned brokers, the scope of a request without a list (78 L10b); `broker_scope` otherwise.
+
+    The market components read no broker: their tests pass neither.
+    """
     return BuildScope(
         request_id=f"req-{user_id}-{base}-{quote}-{target}-{end.isoformat()}-{detail_level.value}",
         user_id=user_id,
@@ -137,7 +142,9 @@ def _scope(
         period_start=start,
         period_end=end,
         target_currency=target,
-        broker_scope=broker_scope,
+        broker_scope=broker_scope if owned is None else owned,
+        broker_scope_source=BrokerScopeSource.REQUESTED if owned is None else BrokerScopeSource.OWNED,
+        owned_broker_ids=owned or (),
         base_currency=base,
         quote_currency=quote,
     )
@@ -191,6 +198,12 @@ async def _seed_warmup_anchor(session, *, base: str, quote: str, rate: str) -> N
     behavior under test for the visible dates (those are still seeded by the caller as before).
     """
     await _seed_rate(session, base=base, quote=quote, rate=rate, day=date(1990, 1, 1), source="ECB")
+
+
+async def _owned_ids(session, user_id: int) -> tuple[int, ...]:
+    """The brokers the user owns (role owner, share above zero): an exposure build without a list reads them (78 L10b)."""
+    rows = await session.execute(select(BrokerUserAccess.broker_id).where(BrokerUserAccess.user_id == user_id, BrokerUserAccess.role == "OWNER", BrokerUserAccess.share_percentage > 0))
+    return tuple(sorted(rows.scalars().all()))
 
 
 async def _make_broker(session, user: User, *, name: str) -> Broker:
@@ -406,7 +419,7 @@ class TestExposureEmpty:
     @pytest.mark.asyncio
     async def test_empty_exposure_is_valid_success(self, session, test_user):
         await _make_broker(session, test_user, name="EmptyBroker")
-        scope = _scope(user_id=test_user.id, base="EUR", quote="USD", target="EUR", start=date(2025, 1, 1), end=date(2025, 1, 5))
+        scope = _scope(user_id=test_user.id, owned=await _owned_ids(session, test_user.id), base="EUR", quote="USD", target="EUR", start=date(2025, 1, 1), end=date(2025, 1, 5))
         context = _context(session, scope)
 
         base_quote_envelope = await context.resolve("fx.exposure_base_quote", required=True)
@@ -453,7 +466,7 @@ class TestExposureCashAndPositions:
     @pytest.mark.asyncio
     async def test_cash_and_trading_currency_rows_present_with_correct_linkage(self, session, test_user, scenario):
         broker, usd_asset, _jpy_asset = scenario
-        scope = _scope(user_id=test_user.id, base="EUR", quote="USD", target="EUR", start=date(2025, 1, 1), end=date(2025, 1, 1))
+        scope = _scope(user_id=test_user.id, owned=await _owned_ids(session, test_user.id), base="EUR", quote="USD", target="EUR", start=date(2025, 1, 1), end=date(2025, 1, 1))
         context = _context(session, scope)
         envelope = await context.resolve("fx.exposure_base_quote", required=True)
         payload = FxExposureBaseQuotePayload.model_validate(envelope.payload)
@@ -484,7 +497,7 @@ class TestExposureCashAndPositions:
         incorrectly produce).
         """
         _broker, usd_asset, _jpy_asset = scenario
-        scope = _scope(user_id=test_user.id, base="EUR", quote="USD", target="EUR", start=date(2025, 1, 1), end=date(2025, 1, 1))
+        scope = _scope(user_id=test_user.id, owned=await _owned_ids(session, test_user.id), base="EUR", quote="USD", target="EUR", start=date(2025, 1, 1), end=date(2025, 1, 1))
         context = _context(session, scope)
         envelope = await context.resolve("fx.exposure_base_quote", required=True)
         payload = FxExposureBaseQuotePayload.model_validate(envelope.payload)
@@ -513,7 +526,7 @@ class TestExposureCashAndPositions:
         """
         _broker, usd_asset, _jpy_asset = scenario
         monkeypatch.setattr(fx_core_module, "_rate_reconciles", lambda *_args, **_kwargs: False)
-        scope = _scope(user_id=test_user.id, base="EUR", quote="USD", target="EUR", start=date(2025, 1, 1), end=date(2025, 1, 1))
+        scope = _scope(user_id=test_user.id, owned=await _owned_ids(session, test_user.id), base="EUR", quote="USD", target="EUR", start=date(2025, 1, 1), end=date(2025, 1, 1))
         context = _context(session, scope)
         envelope = await context.resolve("fx.exposure_base_quote", required=True)
         payload = FxExposureBaseQuotePayload.model_validate(envelope.payload)
@@ -528,7 +541,7 @@ class TestExposureCashAndPositions:
     @pytest.mark.asyncio
     async def test_no_look_through_excludes_unrelated_currency(self, session, test_user, scenario):
         _broker, _usd_asset, jpy_asset = scenario
-        scope = _scope(user_id=test_user.id, base="EUR", quote="USD", target="EUR", start=date(2025, 1, 1), end=date(2025, 1, 1))
+        scope = _scope(user_id=test_user.id, owned=await _owned_ids(session, test_user.id), base="EUR", quote="USD", target="EUR", start=date(2025, 1, 1), end=date(2025, 1, 1))
         context = _context(session, scope)
         envelope = await context.resolve("fx.exposure_base_quote", required=True)
         payload = FxExposureBaseQuotePayload.model_validate(envelope.payload)
@@ -539,7 +552,7 @@ class TestExposureCashAndPositions:
     async def test_deterministic_row_order_across_fresh_contexts(self, session, test_user, scenario):
         """Two independent `BuildContext`s (as two separate requests would get) over the same
         underlying data must produce byte-identical, deterministically-ordered rows."""
-        scope = _scope(user_id=test_user.id, base="EUR", quote="USD", target="EUR", start=date(2025, 1, 1), end=date(2025, 1, 1))
+        scope = _scope(user_id=test_user.id, owned=await _owned_ids(session, test_user.id), base="EUR", quote="USD", target="EUR", start=date(2025, 1, 1), end=date(2025, 1, 1))
 
         context_a = _context(session, scope)
         envelope_a = await context_a.resolve("fx.exposure_base_quote", required=True)
@@ -556,7 +569,7 @@ class TestExposureCashAndPositions:
     async def test_all_detail_levels_preserve_full_cardinality(self, session, test_user, scenario):
         row_counts = set()
         for detail_level in DetailLevel:
-            scope = _scope(user_id=test_user.id, base="EUR", quote="USD", target="EUR", start=date(2025, 1, 1), end=date(2025, 1, 1), detail_level=detail_level)
+            scope = _scope(user_id=test_user.id, owned=await _owned_ids(session, test_user.id), base="EUR", quote="USD", target="EUR", start=date(2025, 1, 1), end=date(2025, 1, 1), detail_level=detail_level)
             context = _context(session, scope)
             envelope = await context.resolve("fx.exposure_base_quote", required=True)
             row_counts.add(len(envelope.payload["rows"]))
@@ -586,7 +599,7 @@ class TestExposureMismatchedValuationCurrency:
         await _seed_rate(session, base="EUR", quote="USD", rate="1.10", day=date(2025, 1, 1))
         await _seed_rate(session, base="EUR", quote="GBP", rate="0.85", day=date(2025, 1, 1))
 
-        scope = _scope(user_id=test_user.id, base="EUR", quote="USD", target="EUR", start=date(2025, 1, 1), end=date(2025, 1, 1))
+        scope = _scope(user_id=test_user.id, owned=await _owned_ids(session, test_user.id), base="EUR", quote="USD", target="EUR", start=date(2025, 1, 1), end=date(2025, 1, 1))
         context = _context(session, scope)
         envelope = await context.resolve("fx.exposure_base_quote", required=True)
         payload = FxExposureBaseQuotePayload.model_validate(envelope.payload)
@@ -614,7 +627,7 @@ class TestExposureMismatchedValuationCurrency:
         await _seed_rate(session, base="EUR", quote="USD", rate="1.10", day=date(2025, 1, 1))
         await _seed_rate(session, base="EUR", quote="GBP", rate="0.85", day=date(2025, 1, 1))
 
-        scope = _scope(user_id=test_user.id, base="EUR", quote="USD", target="EUR", start=date(2025, 1, 1), end=date(2025, 1, 1))
+        scope = _scope(user_id=test_user.id, owned=await _owned_ids(session, test_user.id), base="EUR", quote="USD", target="EUR", start=date(2025, 1, 1), end=date(2025, 1, 1))
         context = _context(session, scope)
         base_quote_envelope = await context.resolve("fx.exposure_base_quote", required=True)
         base_quote_payload = FxExposureBaseQuotePayload.model_validate(base_quote_envelope.payload)
@@ -645,7 +658,7 @@ class TestExposureQuoteBaseQuantity:
         await _price(session, bond_asset, day=date(2025, 1, 1), close="98", currency="USD")
         await _seed_rate(session, base="EUR", quote="USD", rate="1.10", day=date(2025, 1, 1))
 
-        scope = _scope(user_id=test_user.id, base="EUR", quote="USD", target="EUR", start=date(2025, 1, 1), end=date(2025, 1, 1))
+        scope = _scope(user_id=test_user.id, owned=await _owned_ids(session, test_user.id), base="EUR", quote="USD", target="EUR", start=date(2025, 1, 1), end=date(2025, 1, 1))
         context = _context(session, scope)
         envelope = await context.resolve("fx.exposure_base_quote", required=True)
         payload = FxExposureBaseQuotePayload.model_validate(envelope.payload)
@@ -693,7 +706,7 @@ class TestExposureConversionProvenance:
         await _deposit(session, broker_b, amount="3000", currency="EUR", day=date(2025, 1, 1))
         await _seed_rate(session, base="EUR", quote="GBP", rate="0.85", day=date(2025, 1, 1), source="ECB")
 
-        scope = _scope(user_id=test_user.id, base="EUR", quote="USD", target="GBP", start=date(2025, 1, 1), end=date(2025, 1, 1))
+        scope = _scope(user_id=test_user.id, owned=await _owned_ids(session, test_user.id), base="EUR", quote="USD", target="GBP", start=date(2025, 1, 1), end=date(2025, 1, 1))
         context = _context(session, scope)
         await context.resolve("fx.exposure_base_quote", required=True)
         provenance_envelope = await context.resolve("fx.exposure_provenance", required=True)
@@ -731,7 +744,7 @@ class TestExposureConversionProvenance:
 
         monkeypatch.setattr(fx_core_module, "convert_bulk", _counting_convert_bulk)
 
-        scope = _scope(user_id=test_user.id, base="EUR", quote="USD", target="GBP", start=date(2025, 1, 1), end=date(2025, 1, 1))
+        scope = _scope(user_id=test_user.id, owned=await _owned_ids(session, test_user.id), base="EUR", quote="USD", target="GBP", start=date(2025, 1, 1), end=date(2025, 1, 1))
         context = _context(session, scope)
         await context.resolve("fx.exposure_base_quote", required=True)
         await context.resolve("fx.exposure_provenance", required=True)
@@ -947,7 +960,7 @@ class TestExposureSummary:
     async def test_zero_exposure_summary_is_explicit_not_missing(self, session, test_user):
         """No matching rows => explicit computed zero-state (False/0), never "missing data"."""
         await _make_broker(session, test_user, name="ZeroSummaryBroker")
-        scope = _scope(user_id=test_user.id, base="EUR", quote="USD", target="EUR", start=date(2025, 1, 1), end=date(2025, 1, 5))
+        scope = _scope(user_id=test_user.id, owned=await _owned_ids(session, test_user.id), base="EUR", quote="USD", target="EUR", start=date(2025, 1, 1), end=date(2025, 1, 5))
         context = _context(session, scope)
         payload = FxExposureBaseQuotePayload.model_validate((await context.resolve("fx.exposure_base_quote", required=True)).payload)
 
@@ -972,7 +985,7 @@ class TestExposureSummary:
         for offset in range(5):
             await _seed_rate(session, base="EUR", quote="USD", rate="1.10", day=date(2025, 1, 1 + offset))
 
-        scope = _scope(user_id=test_user.id, base="EUR", quote="USD", target="EUR", start=date(2025, 1, 1), end=date(2025, 1, 5))
+        scope = _scope(user_id=test_user.id, owned=await _owned_ids(session, test_user.id), base="EUR", quote="USD", target="EUR", start=date(2025, 1, 1), end=date(2025, 1, 5))
         context = _context(session, scope)
         payload = FxExposureBaseQuotePayload.model_validate((await context.resolve("fx.exposure_base_quote", required=True)).payload)
 
@@ -997,7 +1010,7 @@ class TestExposureSummary:
         await _seed_warmup_anchor(session, base="EUR", quote="USD", rate="1.10")
         for offset in range(5):
             await _seed_rate(session, base="EUR", quote="USD", rate="1.10", day=date(2025, 1, 1 + offset))
-        scope = _scope(user_id=test_user.id, base="EUR", quote="USD", target="EUR", start=date(2025, 1, 1), end=date(2025, 1, 5))
+        scope = _scope(user_id=test_user.id, owned=await _owned_ids(session, test_user.id), base="EUR", quote="USD", target="EUR", start=date(2025, 1, 1), end=date(2025, 1, 5))
         context = _context(session, scope)
         payload = FxExposureBaseQuotePayload.model_validate((await context.resolve("fx.exposure_base_quote", required=True)).payload)
 

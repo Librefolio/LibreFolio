@@ -190,7 +190,7 @@ default order ask only the enrichers that cover the asset's type.
 
 | Method | Default | Description |
 |---|---|---|
-| `search(query)` | raises `NotImplementedError` | The assets the source finds for a word, as `EnricherSearchResult` (`name`, `binding`, `asset_type`, `page_url`). `supports_search` turns `True` by itself when you override it |
+| `search(query)` | raises `NotImplementedError` | The assets the source finds for a word, as `EnricherSearchResult` (`name`, `binding`, `asset_type`, `page_url`, and `market` when the source names the listing's market). `supports_search` turns `True` by itself when you override it. It feeds «Search online» at the top of the enrichers' window, where each result is a binding the user adds with «+»: return bindings `recognize` and `read` take as they are. A refusal for too many requests raises `EnricherRateLimited` (with the source's `retry_after`), never an empty list |
 | `params_schema` | `[]` | A property: the extra parameters of a binding, which the enrichers window draws as a form ([Binding Parameters](#params)) |
 | `shutdown()` | no-op | Release what the plugin holds, at the server's shutdown |
 
@@ -286,8 +286,12 @@ stored form. A source text the plugin cannot translate into a choice code leaves
 is never guessed.
 
 Each voice also declares a **topic** (`ProfileTopic`: costs, structure, manager, countries, sectors, coupons, maturity,
-yield, duration, size, legal form, issuer, description). The enrichers window shows what an enricher fills by the
-topics of the voices it declares for the asset's type, not by the voices' names.
+yield, duration, size, financials, legal form, issuer, description). The enrichers window shows what an enricher fills by
+the topics of the voices it declares for the asset's type, not by the voices' names.
+
+A voice that is the figure of a period declares it (`period`): `fiscal_year` for a company's `revenue` and
+`net_income`, the figures of the fiscal year that ends on the value's **source date**. The enricher gives that end date
+in `source_dates`, and the «Profile» tab writes the year beside the value («… (fiscal year 2025)»).
 
 !!! warning "A fund's management fee is not its TER"
 
@@ -441,15 +445,20 @@ window with `enrichersOnOpen`: the enrichers' window on top, for that opening on
 |---|---|---|
 | `GET /enrichers` | The catalogue: every served enricher with what it declares, `configured` and `missing_settings`, and the default order per asset type | Class attributes only, no call |
 | `POST /enrichers/recognize` | The cascade as Server-Sent Events: `enricher_result`, `identifier_learned`, then `done` (`found_order`, `default_order`, `identifiers`) | `recognize` |
-| `GET /enrichers/{code}/search?q=…` | One enricher's search; 400 for an enricher that does not search | `search` |
+| `GET /enrichers/search?q=…&codes=…&asset_type=…` | «Search online» (ENR-3): one text on several enrichers at once, as Server-Sent Events, one `enricher_results` per enricher (`status`: `ok`, `identifier_only`, `rate_limited`, `not_configured`, `off`, `not_covering`, `error`) then `done`; one probe for the whole search | `search`; for an enricher without one, `recognize` when the text has the form of an identifier it accepts (an ISIN or a LEI, check digits included), else `identifier_only` |
+| `GET /enrichers/{code}/search?q=…` | One enricher's search; 400 for an enricher that does not search; 429 `RATE_LIMITED` with `Retry-After` when the source refused (`EnricherRateLimited`) | `search` |
 | `POST /enrichers/{code}/test` | `recognize` one binding; writes nothing | `recognize` |
 
 - `{code}/search` and `{code}/test` answer **404** when the enricher is not served (not installed, test-only outside test
   mode, turned off by `LIBREFOLIO_ENRICHERS_ENABLED`), and **422** with `error_code: "NOT_CONFIGURED"` when a required
   setting is empty (`not_configured_error()` in `backend/app/api/plugin_errors.py`).
 - `recognize` skips an enricher that is not configured, with no error.
-- `recognize`, `search`, `test` and `POST /assets/profile/ask` count on the per-user probe limit
-  (`enforce_probe_limit()`): past it, 429 `PROBE_RATE_LIMITED` before any call. «Refresh» is not counted.
+- `recognize`, `search` (one enricher or several: one count per search), `test` and `POST /assets/profile/ask` count on
+  the per-user probe limit (`enforce_probe_limit()`): past it, 429 `PROBE_RATE_LIMITED` before any call. «Refresh» is
+  not counted.
+- In `GET /enrichers/search`, a source's refusal is `rate_limited` with the same wait as the 429 of
+  `{code}/search` (`refusal_wait()` in `backend/app/services/enrichers/search.py`); any other failure is `error` with
+  the code `SOURCE_ERROR`, its cause in the server log; a client that closes the stream stops the waiting.
 - The bindings are written and read with the asset (`POST`/`PATCH /assets`, field `enrichers`; `GET /assets`).
 
 ---
@@ -586,8 +595,8 @@ The real plugins are the best reference:
 | Plugin | Covers | Shows |
 |---|---|---|
 | `backend/app/services/enricher_providers/justetf/plugin.py` | ETFs and ETCs, by ISIN | A library call per page; `source_dates` for countries and sectors (the holdings date); a search over the site's full list; a sector table of the source's own words |
-| `backend/app/services/enricher_providers/yahoo_finance/plugin.py` (code `yfinance`) | Shares first, funds second, by ticker | `keys` used to skip a call; no ISIN returned by `recognize` |
-| `backend/app/services/enricher_providers/borsa_italiana/plugin.py` | Bonds, funds, Milan shares, by ISIN or internal fund code | `params_schema` with `x-i18n-key` labels; the binding's `language`; one library session per read; `management_fee`, not `ter`; `annual_coupon_rate` from `financial_math` |
+| `backend/app/services/enricher_providers/yahoo_finance/plugin.py` (code `yfinance`) | Shares first, funds second, by ticker | `keys` used to skip a call; no ISIN returned by `recognize`; a search with `yf.Search`, each result bound by the symbol with the market's suffix (`SWDA.MI`) |
+| `backend/app/services/enricher_providers/borsa_italiana/plugin.py` | Bonds, funds, Milan shares, by ISIN or internal fund code | `params_schema` with `x-i18n-key` labels; the binding's `language`; one library session per read; `management_fee`, not `ter`; `annual_coupon_rate` from `financial_math`; a share's second page (the company profile: `description`, `issuer_country`, `website`, and `revenue` / `net_income` of the last fiscal year, scaled by the table's unit and dated by the fiscal year's end, voices with `period: fiscal_year`) read only when `keys` asks for its voices, its voices declared only when the installed library has the reader |
 | `backend/app/services/enricher_providers/esma/plugin.py` | Every instrument a European market trades, by ISIN, after the sources of each type | Our library `esma-registers` (ESMA's FIRDS register, one call per ISIN); the CFI code read as `legal_form`, a bond's `coupon_type` and `issuer_type`, a fund's `distribution_policy`; the LEI handed to the cascade; a register's «fixed rate» written as `coupon_rate` only when the CFI says fixed |
 | `backend/app/services/enricher_providers/mockenrich/plugin.py` | Test only | Fixed answers for every outcome (`MOCK_NOT_FOUND`, `MOCK_ERROR`, `MOCK_RATE_LIMITED`), no network |
 

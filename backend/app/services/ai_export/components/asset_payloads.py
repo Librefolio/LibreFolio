@@ -291,9 +291,11 @@ class AssetPortfolioRoleBasis(AssetComponentModel):
     cancellation) - this is what makes `portfolio_weight_ratio` a stable
     concentration weight even with short positions.
 
-    `broker_scope_mode` records whether the denominator spans the whole
-    accessible portfolio (`WHOLE_ACCESSIBLE_PORTFOLIO`, no `BuildScope.
-    broker_scope`) or only the requested broker subset (`SCOPED_BROKERS`).
+    `broker_scope_mode` says where the brokers of the denominator come from
+    (78 L10b, version 2): `OWNED_BROKERS`, the request named none, so the
+    brokers the user owns, each at the user's share; `REQUESTED_BROKERS`, the
+    request named them. Until version 1 it read `WHOLE_ACCESSIBLE_PORTFOLIO`
+    or `SCOPED_BROKERS`, and said `SCOPED_BROKERS` for every request.
 
     Every value is `None`-with-reason (see `unavailable`) rather than a
     silent `0` whenever a contributing leg lacks a valuation, so a partial
@@ -303,7 +305,7 @@ class AssetPortfolioRoleBasis(AssetComponentModel):
     target_currency: CurrencyCode
     valuation_basis: Literal["current_market_value"] = "current_market_value"
     denominator_basis: Literal["gross_absolute_open_position_value"] = "gross_absolute_open_position_value"
-    broker_scope_mode: Literal["WHOLE_ACCESSIBLE_PORTFOLIO", "SCOPED_BROKERS"]
+    broker_scope_mode: Literal["OWNED_BROKERS", "REQUESTED_BROKERS"]
     asset_market_value: SafeDecimal | None = None
     asset_gross_absolute_value: SafeDecimal | None = None
     portfolio_gross_absolute_value: SafeDecimal | None = None

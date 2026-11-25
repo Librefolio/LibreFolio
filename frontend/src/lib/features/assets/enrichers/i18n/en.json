@@ -44,13 +44,48 @@
       "issueTypeNotAccepted": "This enricher does not read this identifier type",
       "reasons": {
         "removed": "removed by you",
-        "found": "found",
+        "found": "knows the asset",
         "searching": "waiting: search in progress…",
         "not_found": "with {type} {identifier} it finds nothing",
         "conflict": "it names another asset",
         "error": "the source did not answer",
         "not_configured": "to configure on this instance",
-        "not_covering": "does not cover this asset type"
+        "not_covering": "does not cover this asset type",
+        "foundByTicker": "found only with the ticker {ticker}: check it is this one"
+      },
+      "notFoundWith": "Nothing found with {type} {identifier}: correct it or search",
+      "onlyType": "the only one {name} reads",
+      "line": {
+        "running": "Looking for the enrichers that know this asset with its identifiers… {answered} of {asked} answered",
+        "found": "{count, plural, one {# enricher knows} other {# enrichers know}} the asset: {names}.",
+        "foundAdopted": "Check the order and press «Use these enrichers»: they are saved with the asset.",
+        "foundOutside": "The ones not in your list are under «Not in the list», with «+».",
+        "none": "No enricher knows the asset with its identifiers: you can add one below.",
+        "refused": "Too many requests to the sources: waiting, the search starts again by itself in a moment.",
+        "error": "The enrichers could not be searched: add them by hand.",
+        "no_identifiers": "The asset has no identifiers to recognise: add the enrichers from the search above."
+      },
+      "conflictWith": "Different identifier: the source names {named}",
+      "price": "Prices",
+      "search": {
+        "title": "Search online",
+        "suggestions": "Suggestions:",
+        "placeholder": "Name, ISIN or ticker…",
+        "pills": "Enrichers:",
+        "identifierOnly": "{types} only",
+        "excluded": "In your list, not searched: {names}. A wrong one? Remove it with 🗑 and it can be searched again.",
+        "none": "{name}: no results for «{q}»",
+        "identifierHint": "{name}: type an identifier ({types}), or add a result that carries one",
+        "refusedOne": "{name}: too many requests, try again in a moment",
+        "failedOne": "{name}: the source did not answer",
+        "refused": "Too many searches: wait a moment and type again.",
+        "failed": "The search did not work: try again.",
+        "withIsinTyped": "with the ISIN typed",
+        "withIsinOf": "with the ISIN of {name}",
+        "conflict": "ISIN different from {whose}: {isin}",
+        "whoseAsset": "the asset",
+        "confirmAdd": "Add anyway",
+        "added": "{name} added to the list (#{n})"
       }
     }
   }

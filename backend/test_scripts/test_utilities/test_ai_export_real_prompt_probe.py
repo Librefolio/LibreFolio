@@ -11,6 +11,7 @@ import pytest
 from backend.app.services.accounts.auth_service import hash_password, verify_password
 from backend.test_scripts.diagnostics.ai_export_real_prompt_probe import (
     COMPOSITION_COMPONENTS,
+    NAMED_FILTERED_PROMPT_RETENTION,
     NAMED_PROMPT_RETENTION,
     PUBLIC_CATALOG_V1_ANALYSES,
     PUBLIC_CATALOG_V1_DATASETS,
@@ -301,6 +302,9 @@ def test_broker_scope_diagnostics_distinguish_scope_positions_and_period_contrib
     )
 
     assert diagnostics == {
+        "export_scope_present": False,
+        "export_scope_included_broker_count": None,
+        "export_scope_excluded_broker_count": None,
         "broker_scope_refs": ["B1", "B2"],
         "scoped_broker_count": 2,
         "position_broker_count": 1,
@@ -308,6 +312,20 @@ def test_broker_scope_diagnostics_distinguish_scope_positions_and_period_contrib
         "entity_directory_broker_count": 2,
         "scope_directory_consistent": True,
     }
+
+
+def test_broker_scope_diagnostics_report_the_export_scope_fact_by_counts_only():
+    # 78 L10: a filtered Portfolio export's scope fact, as counts: never a broker id or name in the probe's artifacts
+    diagnostics = measure_broker_scope_diagnostics(
+        {
+            "entity_directory": {"brokers": [{"broker_id": 5, "display_name": "First"}]},
+            "export_scope": {"included_broker_ids": [5], "excluded_brokers": [{"broker_id": index, "display_name": f"Out {index}"} for index in range(10, 16)]},
+            "sections": [{"component_id": "portfolio.provenance", "payload": {"scoped_broker_count": 1, "broker_scope": [5]}}],
+        }
+    )
+
+    assert diagnostics is not None
+    assert (diagnostics["export_scope_present"], diagnostics["export_scope_included_broker_count"], diagnostics["export_scope_excluded_broker_count"]) == (True, 1, 6)
 
 
 def test_deterministic_asset_ranking_uses_history_observations_then_id():
@@ -1647,6 +1665,20 @@ def test_named_and_global_retention_deduplicates_by_stable_key():
     assert all(len(selected_reasons) == len(set(selected_reasons)) for selected_reasons in reasons.values())
 
 
+def test_the_filtered_portfolio_case_is_named_once_on_the_first_single_broker_scope():
+    # 78 L10: «named_portfolio_protection_filtered_3m_standard» goes to the first broker-filtered Portfolio prompt only
+    (selection_id, period, detail), names = next(iter(NAMED_FILTERED_PROMPT_RETENTION.items()))
+    whole = {**_public_metric(selection_id, period, detail, 1_000, index=1), "scope_alias": "all"}
+    first = {**_public_metric(selection_id, period, detail, 1_100, index=2), "scope_alias": "broker_anon_01"}
+    second = {**_public_metric(selection_id, period, detail, 1_200, index=3), "scope_alias": "broker_anon_02"}
+
+    reasons = select_prompt_retention_reasons([second, whole, first])
+
+    assert set(names) <= set(reasons[stable_metric_key_text(first)])
+    assert not set(names) & set(reasons.get(stable_metric_key_text(second), []))
+    assert not set(names) & set(reasons.get(stable_metric_key_text(whole), []))
+
+
 def test_selective_retention_promotes_only_selected_and_manifest_is_complete(tmp_path: Path):
     entries = [_public_metric("portfolio.pac_planning", "3M", "standard" if index == 0 else "compact", 1_000 + index * 73, index=index) for index in range(20)]
     staged: dict[str, Path] = {}
@@ -1903,3 +1935,47 @@ def test_copy_only_credential_normalization_never_changes_source(tmp_path: Path)
     with sqlite3.connect(f"file:{source.resolve()}?mode=ro&immutable=1", uri=True) as connection:
         source_hash = connection.execute("SELECT hashed_password FROM users WHERE username = 'probe_user'").fetchone()[0]
     assert verify_password("OldProbePass123!", source_hash) is True
+
+
+@pytest.mark.asyncio
+async def test_the_probes_all_scope_owns_the_brokers_the_runtime_owns(tmp_path: Path):
+    """78 L10b: the probe's «all» scope is the runtime's owned brokers, by the same rule (role owner, share above zero).
+
+    The runtime reads it in `AiExportSnapshotService._owned_broker_ids` (the Dashboard's rule); the probe in SQL on its
+    copied database (`_owned_brokers`). One book, every kind of access: owner at 1, at a half, at zero, viewer, editor.
+    """
+    from decimal import Decimal  # noqa: PLC0415
+
+    from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine  # noqa: PLC0415
+    from sqlalchemy.pool import NullPool  # noqa: PLC0415
+
+    from backend.app.db.base import SQLModel  # noqa: PLC0415 — every model, for create_all
+    from backend.app.db.models import Broker, BrokerUserAccess, User, UserRole  # noqa: PLC0415
+    from backend.app.services.ai_export.runtime_service import AiExportSnapshotService  # noqa: PLC0415
+    from backend.test_scripts.diagnostics.ai_export_real_prompt_probe import _owned_brokers  # noqa: PLC0415
+
+    database = tmp_path / "owned_parity.sqlite"
+    engine = create_async_engine(f"sqlite+aiosqlite:///{database}", poolclass=NullPool)
+    accesses = (("full", UserRole.OWNER, "1"), ("half", UserRole.OWNER, "0.5"), ("zero", UserRole.OWNER, "0"), ("viewer", UserRole.VIEWER, "0"), ("editor", UserRole.EDITOR, "0"))
+    try:
+        async with engine.begin() as connection:
+            await connection.run_sync(SQLModel.metadata.create_all)
+        async with AsyncSession(engine, expire_on_commit=False) as session:
+            user = User(username="l10b_probe_parity", email="l10b_probe_parity@test.com", hashed_password="fakehash", is_active=True)
+            brokers = {label: Broker(name=f"L10b parity {label}") for label, _role, _share in accesses}
+            session.add_all([user, *brokers.values()])
+            await session.flush()
+            session.add_all(BrokerUserAccess(broker_id=brokers[label].id, user_id=user.id, role=role, share_percentage=Decimal(share)) for label, role, share in accesses)
+            await session.commit()
+            runtime_owned = await AiExportSnapshotService(session)._owned_broker_ids(user.id)
+        user_id = user.id
+        expected = {brokers["full"].id, brokers["half"].id}
+    finally:
+        await engine.dispose()
+
+    with sqlite3.connect(f"file:{database.resolve()}?mode=ro", uri=True) as connection:
+        connection.row_factory = sqlite3.Row
+        probe_owned = {int(row["id"]) for row in _owned_brokers(connection, user_id)}
+
+    assert runtime_owned == expected, "premise: the runtime's rule"
+    assert probe_owned == runtime_owned

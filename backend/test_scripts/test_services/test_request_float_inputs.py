@@ -71,7 +71,8 @@ Under test: the app of ``backend/app/main.py``, its routes, and the schemas thei
     *free-form position*. The walk of (a) notes every one a request reaches, by owner, named as a leaf is (``{*}`` the
     values of a mapping), with the routes that reach it; what it does for the float leaves does not change. The set is
     exactly ``KNOWN_FREE_FORM``: a new one fails until it is added there with its probe, and one no request reaches any
-    more fails until it is removed. The five of today: ``FAProviderAssignmentItem.provider_params{*}`` (``Any``,
+    more fails until it is removed. Among them: ``FAEnricherSeed.params{*}`` (``Any``,
+    ``POST /api/v1/assets/enrichers/recognize``, 82 ENR-2), ``FAProviderAssignmentItem.provider_params{*}`` (``Any``,
     ``POST /api/v1/assets/provider``), ``FAProviderProbeRequest.provider_params{*}`` (``Any``,
     ``POST /api/v1/assets/provider/probe``), ``RiskAnalyticRequest.parameters{*}`` (``JsonValue``,
     ``POST /api/v1/risk/query``), ``SignalRequest.params{*}`` (``JsonValue``, ``POST /api/v1/assets/prices/query``,
@@ -135,6 +136,7 @@ from starlette.requests import Request
 import backend.app.main as app_main
 from backend.app.config import API_V1_PREFIX
 from backend.app.schemas.assets.assets import FAAssetCreateItem, FAAssetPatchItem
+from backend.app.schemas.assets.enrichers import FAEnricherRecognizeRequest
 from backend.app.schemas.provider import FAProviderAssignmentItem, FAProviderProbeRequest
 from backend.app.schemas.risk.scope import RiskAnalyticRequest
 from backend.app.schemas.signals.result import SignalRequest
@@ -763,6 +765,11 @@ def probe_risk_analytic(value: JsonValue) -> BaseModel:
     return RiskAnalyticRequest.model_validate({"instance_id": "a1", "analytic_code": "volatility", "parameters": value})
 
 
+def probe_enricher_seed(value: JsonValue) -> BaseModel:
+    """``POST /api/v1/assets/enrichers/recognize``: the parameters of a seed (82 ENR-2)."""
+    return FAEnricherRecognizeRequest.model_validate({"asset_type": "ETF", "identifiers": {}, "seeds": [{"code": "borsa_italiana", "identifier_type": "ISIN", "identifier": "IT0003128367", "params": value}]})
+
+
 def probe_signal_request(value: JsonValue) -> BaseModel:
     """``POST /api/v1/assets/prices/query``, ``/fx/currencies/convert`` and ``/signals/preview``: a signal of a list."""
     return SignalRequest.model_validate({"instance_id": "s1", "signal_code": "EMA", "params": value})
@@ -778,6 +785,7 @@ def probe_tool_compute_item(value: JsonValue) -> BaseModel:
 KNOWN_FREE_FORM: dict[str, Callable[[JsonValue], BaseModel]] = {
     "backend.app.schemas.assets.assets.FAAssetCreateItem.profile{*}": probe_asset_create,
     "backend.app.schemas.assets.assets.FAAssetPatchItem.profile{*}": probe_asset_patch,
+    "backend.app.schemas.assets.enrichers.FAEnricherSeed.params{*}": probe_enricher_seed,
     "backend.app.schemas.provider.FAProviderAssignmentItem.provider_params{*}": probe_provider_assignment,
     "backend.app.schemas.provider.FAProviderProbeRequest.provider_params{*}": probe_provider_probe,
     "backend.app.schemas.risk.scope.RiskAnalyticRequest.parameters{*}": probe_risk_analytic,

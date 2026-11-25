@@ -66,7 +66,7 @@ const NOT_PROVEN_REASON_HELP: Record<string, BadgeHelp> = {
 };
 /** The Rebalancer's proven optimum: its objective, the tie-breaks apart (F4a of project 67, step 7). */
 const REBALANCER_OPTIMAL_PROVEN =
-    "The solver proved that no plan has a better score (with «Target first»: a smaller distance from the targets, then less money lost), and the exact check of the plan matches its numbers. The tie-breaks after it may have stopped earlier: they only choose among plans just as good. The proof holds within the solver's small calculation margin, which grows with the amounts.";
+    "The solver proved that no plan has a better score (with «Target first»: a smaller distance from the targets, then lower costs and fees), and the exact check of the plan matches its numbers. The tie-breaks after it may have stopped earlier: they only choose among plans just as good. The proof holds within the solver's small calculation margin, which grows with the amounts.";
 
 /** Lot MG of project 67: what the margin of a «local optimum» is. «Should»: the bound is the solver's, not a proof. */
 const MARGIN_HELP = "The best possible plan should be at most {margin} better than this one: the solver's own bounds say so, and they are not a proof.";
@@ -458,18 +458,32 @@ export function ordersByBroker(orders: readonly PlannerOrderRow[]): {brokerId: s
 
 // -- allocation: before, target and after (F4a of project 67, contract §6.2) ----------------
 
-/** One row of the allocation: an Asset, a cash entry with a target (the Rebalancer's), or the «uninvested» row. */
-export type AllocationRow<A extends {asset_id: string} = RebalancerAssetRow> = {kind: 'asset'; id: string; row: A} | {kind: 'cash'; id: string; row: RebalancerCashRow} | {kind: 'uninvested'; id: 'uninvested'; row: RebalancerUninvestedRow};
+/** One of the two parts of the uninvested row (TL-5 of project 67): before and after, value and weight, no target. */
+export type RebalancerUninvestedPart = RebalancerUninvestedRow['untargeted_cash'];
+
+/** The two parts of the uninvested row, in the order the table shows them: the cash with no target, then the costs. */
+export const UNINVESTED_PARTS = ['untargeted_cash', 'costs'] as const;
+export type UninvestedPartKind = (typeof UNINVESTED_PARTS)[number];
+
+/** One row of the allocation: an Asset, a cash entry with a target (the Rebalancer's), or a part of the uninvested row. */
+export type AllocationRow<A extends {asset_id: string} = RebalancerAssetRow> = {kind: 'asset'; id: string; row: A} | {kind: 'cash'; id: string; row: RebalancerCashRow} | {kind: UninvestedPartKind; id: UninvestedPartKind; row: RebalancerUninvestedPart};
+
+/** Whether a row is a part of the uninvested row: no target, no gap, no limits. */
+export function isUninvestedPart(entry: AllocationRow<{asset_id: string}>): entry is Extract<AllocationRow<{asset_id: string}>, {kind: UninvestedPartKind}> {
+    return (UNINVESTED_PARTS as readonly string[]).includes(entry.kind);
+}
 
 /**
- * The allocation's rows, as published: every Asset, then every cash entry, then the «uninvested» row (contract §6.2). The
- * PAC's solution has its Assets only. Nothing is computed: each row is the backend's.
+ * The allocation's rows, as published: every Asset, then every cash entry, then the two parts of the uninvested row
+ * (contract §6.2; TL-5 of project 67, the developer's answer of 24/11: «Cassa senza obiettivo» and «Costi e commissioni»,
+ * the same words as everywhere). The PAC's solution has its Assets only. Nothing is computed: each row is the backend's.
  */
 export function allocationRows<A extends {asset_id: string}>(solution: {asset_rows: readonly A[]; cash_rows?: readonly RebalancerCashRow[]; uninvested_row?: RebalancerUninvestedRow}): AllocationRow<A>[] {
+    const uninvested = solution.uninvested_row;
     return [
         ...solution.asset_rows.map((row): AllocationRow<A> => ({kind: 'asset', id: row.asset_id, row})),
         ...(solution.cash_rows ?? []).map((row): AllocationRow<A> => ({kind: 'cash', id: `cash:${row.broker_id}:${row.currency}`, row})),
-        ...(solution.uninvested_row ? [{kind: 'uninvested' as const, id: 'uninvested' as const, row: solution.uninvested_row}] : []),
+        ...(uninvested ? UNINVESTED_PARTS.map((kind): AllocationRow<A> => ({kind, id: kind, row: uninvested[kind]})) : []),
     ];
 }
 

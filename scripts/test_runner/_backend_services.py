@@ -36,8 +36,11 @@ AI_EXPORT_SERVICE_TEST_PATHS = (
     "backend/test_scripts/test_services/test_ai_export_components_technical.py",
     "backend/test_scripts/test_services/test_ai_export_composer.py",
     "backend/test_scripts/test_services/test_ai_export_dataset_analysis_catalogs.py",
+    "backend/test_scripts/test_services/test_ai_export_drawdown_broker_scope.py",
+    "backend/test_scripts/test_services/test_ai_export_export_scope.py",
     "backend/test_scripts/test_services/test_ai_export_fifo_failed_reconstruction.py",
     "backend/test_scripts/test_services/test_ai_export_linked_charges.py",
+    "backend/test_scripts/test_services/test_ai_export_owned_broker_scope.py",
     "backend/test_scripts/test_services/test_ai_export_portfolio_fifo_summary_in_transit.py",
     "backend/test_scripts/test_services/test_ai_export_price_day_budget.py",
     "backend/test_scripts/test_services/test_ai_export_risk_evidence_cash_share.py",
@@ -52,6 +55,7 @@ AI_EXPORT_SERVICE_TEST_PATHS = (
 # the shared DB) so the unit can honestly declare PURE isolation and run beside
 # anything.
 AI_EXPORT_PURE_TEST_PATHS = (
+    "backend/test_scripts/test_services/test_ai_export_broker_scope_contract.py",
     "backend/test_scripts/test_services/test_ai_export_build_failure_log.py",
     "backend/test_scripts/test_services/test_ai_export_components_drawdown_total_loss.py",
     "backend/test_scripts/test_services/test_ai_export_fx_payload_invariants.py",
@@ -1656,6 +1660,16 @@ def services_enricher_rate_limit(verbose: bool = False, test_names: list = None)
     return run_command(cmd, "Enricher rate-limit tests", verbose=verbose)
 
 
+def services_enricher_search_refusal(verbose: bool = False, test_names: list = None) -> bool:
+    """Test that a source's refusal of an enricher's search is a 429 RATE_LIMITED with Retry-After (ENR-3b)."""
+    print_section("Services: Enricher Search Refusal")
+    print_info("Testing: api/v1/assets/enrichers.py (search_enricher, source_refused), services/enrichers/base.py (EnricherRateLimited)")
+    print_info("Tests: EnricherRateLimited(retry_after) -> 429 RATE_LIMITED, Retry-After = ceil(wait) >= 1, 60 when none named; another failure is not a 429; an answer is returned")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_enricher_search_refusal.py", test_names)
+    return run_command(cmd, "Enricher search refusal tests", verbose=verbose)
+
+
 def services_quote_base_suggestion(verbose: bool = False, test_names: list = None) -> bool:
     """Z-32 (d): a provider's quote base suggestion (FAQuoteBaseSuggestion) in its search results and in the probe's metadata."""
     print_section("Services: Quote Base Suggestion (Z-32 d)")
@@ -1691,7 +1705,7 @@ def services_bulk_writes_chunked(verbose: bool = False, test_names: list = None)
 def services_bulk_current_values(verbose: bool = False, test_names: list = None) -> bool:
     """Project 76 C1+C2+C3: the bulk current-price read of asset providers (C1 pure; C2 and C3 on a private SQLite, no server, no network)."""
     print_section("Services: Bulk Current Values (project 76, C1+C2+C3)")
-    print_info("Testing: schemas/prices.py (FACurrentValueRequest), services/assets/base.py (supports_bulk_current, bulk_current_max_items, get_current_values_bulk), asset_source_providers/mockprov/plugin.py, " "services/assets/bulk_current.py and price_query.get_current_prices_bulk (C2)")
+    print_info("Testing: schemas/prices.py (FACurrentValueRequest), services/assets/base.py (supports_bulk_current, bulk_current_max_items, get_current_values_bulk), asset_source_providers/mockprov/plugin.py, services/assets/bulk_current.py and price_query.get_current_prices_bulk (C2)")
     print_info(
         "Tests: the default refuses (NOT_SUPPORTED); class-definition guards (TypeError); the request refuses extra fields and an empty key; mockprov answers per key like get_current_value, omits on command, answers NOT_FOUND per item, refuses the whole call when rate limited, and records every call"
     )
@@ -2281,6 +2295,22 @@ def services_enricher_recognize(verbose: bool = False, test_names: list = None) 
     print_info("Testing: backend/app/services/enrichers/recognize.py")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_enricher_recognize.py", test_names)
     return run_command(cmd, "Enricher recognize tests", verbose=verbose)
+
+
+def services_enricher_search_across(verbose: bool = False, test_names: list = None) -> bool:
+    """Test «Cerca online»: one text searched across several enrichers (ENR-3)."""
+    print_section("Services: Enricher Search Across")
+    print_info("Testing: backend/app/services/enrichers/search.py, api/v1/assets/enrichers.py (search_across_enrichers, search_enricher), enricher_providers/mockenrich/plugin.py (search)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_enricher_search_across.py", test_names)
+    return run_command(cmd, "Enricher search across tests", verbose=verbose)
+
+
+def services_identifier_shape(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the ISIN and LEI shape checks (ENR-3, R12)."""
+    print_section("Services: Identifier Shape")
+    print_info("Testing: backend/app/utils/asset/identifier_shape.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_identifier_shape.py", test_names)
+    return run_command(cmd, "Identifier shape tests", verbose=verbose)
 
 
 def services_enricher_justetf(verbose: bool = False, test_names: list = None) -> bool:
@@ -4166,6 +4196,16 @@ Note: No backend server required.
     )
     add_test(
         cat,
+        "enricher-search-refusal",
+        services_enricher_search_refusal,
+        name="Enricher Search Refusal",
+        desc="ENR-3b: GET /assets/enrichers/{code}/search turns an enricher's EnricherRateLimited (any RateLimitedError) into 429 with detail.error_code RATE_LIMITED, an int detail.retry_after = the Retry-After header = ceil(wait) >= 1 (60 when the source named none); another failure of the plugin is re-raised, not a 429; an answer and an empty list are returned as they are",
+        # PURE: no DB, no server, no network. The route coroutine is called directly with the enricher lookup and the probe
+        # limit replaced by stubs (monkeypatch): the shared backend serves only mockenrich, whose search is a mock rule.
+        isolation="pure",
+    )
+    add_test(
+        cat,
         "quote-base-suggestion",
         services_quote_base_suggestion,
         name="Quote Base Suggestion",
@@ -4731,6 +4771,24 @@ Note: No backend server required.
         services_enricher_recognize,
         name="Enricher Recognize",
         desc="Project 68 B4: recognize_cascade asks the enrichers covering the type with the first known identifier they accept (request order first); a strong identifier found and not known is learned before the round it starts (once, even from two sources); a different strong one is a conflict that adds and starts nothing; a ticker only reported; found never asked again, not found asked again with a learned identifier; a raising plugin is an error, the others answer; answers in order of arrival (threading.Event holds) and default_order keeps it; mockenrich ISIN → LEI learned",
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "enricher-search-across",
+        services_enricher_search_across,
+        name="Enricher Search Across",
+        desc="ENR-3: search_one per status (search ok; R12 recognize found/not found only for a text shaped as an accepted ISIN/LEI, else identifier_only with no call; RateLimitedError -> rate_limited with refusal_wait, ceil >= 1 or 60; other failure -> error SOURCE_ERROR, cause logged once with the enricher code, message not in the outcome); asked_codes (dedupe, default order of the type, every served); search_enrichers (off, not_covering, not_configured first and without a call, one failing source never stops the others, answers as they finish, aclose() cancels the tasks in flight); GET /assets/enrichers/search called as a coroutine (422 short text / 17 codes / bad code before the probe, one probe, one enricher_results per code with exactly the event keys then done); per-enricher search 400 without a search and results with market; mockenrich search contract",
+        # PURE: configured_enricher and the logger of search.py replaced by stubs, lab enrichers never registered, route functions
+        # called as coroutines with the probe limit replaced by a counter. No DB, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "identifier-shape",
+        services_identifier_shape,
+        name="Identifier Shape",
+        desc="ENR-3 R12: isin_shaped (ISO 6166 Luhn) and lei_shaped (ISO 17442 MOD 97-10) accept real identifiers in any case with spaces around, refuse a wrong check digit, length or charset; IDENTIFIER_SHAPES names ISIN and LEI",
         isolation="pure",
     )
     # PURE: the plugin module's get_etf_overview and load_overview replaced by fakes (recorded overviews in

@@ -98,6 +98,8 @@ def _session_with_accessible_brokers(broker_ids: list[int]) -> AsyncMock:
         result = MagicMock()
         if entity is not None and entity.__name__ == "BrokerUserAccess":
             result.scalars.return_value.all.return_value = broker_ids
+            # 78 L10b: the owned-broker read; every accessible broker is owned here, at share 1.
+            result.all.return_value = [(broker_id, decimal.Decimal("1")) for broker_id in broker_ids]
         else:
             result.scalars.return_value = ()
         return result
@@ -271,8 +273,8 @@ def test_catalog_exposes_exact_public_v1_catalog_without_prompts():
 
 
 def test_default_services_share_immutable_registries_and_cached_catalog():
-    first = AiExportSnapshotService(_session_with_accessible_brokers([]))
-    second = AiExportSnapshotService(_session_with_accessible_brokers([]))
+    first = AiExportSnapshotService(_session_with_accessible_brokers([1]))
+    second = AiExportSnapshotService(_session_with_accessible_brokers([1]))
 
     assert first.component_registry is second.component_registry
     assert first.dataset_registry is second.dataset_registry
@@ -374,7 +376,7 @@ async def test_dataset_selection_builds_manifest_sections_and_stable_stats(
 
 @pytest.mark.asyncio
 async def test_snapshot_stats_remain_exact_with_large_unicode_payload():
-    session = _session_with_accessible_brokers([])
+    session = _session_with_accessible_brokers([1])
     component = _component(
         "portfolio.summary",
         Domain.PORTFOLIO,
@@ -403,7 +405,7 @@ async def test_snapshot_stats_remain_exact_with_large_unicode_payload():
 
 @pytest.mark.asyncio
 async def test_snapshot_exposes_deduplicated_sampling_manifests_in_v1():
-    session = _session_with_accessible_brokers([])
+    session = _session_with_accessible_brokers([1])
     sampling_diagnostics = {}
 
     def _build(context, dependencies):  # noqa: ARG001
@@ -538,7 +540,8 @@ async def test_snapshot_builds_minimal_entity_directory_from_component_reference
 
 
 @pytest.mark.asyncio
-async def test_all_accessible_scope_keeps_inactive_broker_in_entity_directory():
+async def test_owned_scope_keeps_inactive_broker_in_entity_directory():
+    """A request without brokers reads the owned brokers (78 L10b); one with no position still has its directory row."""
     session = AsyncMock(spec=AsyncSession)
 
     async def _execute(statement):
@@ -546,6 +549,7 @@ async def test_all_accessible_scope_keeps_inactive_broker_in_entity_directory():
         result = MagicMock()
         if entity is BrokerUserAccess:
             result.scalars.return_value.all.return_value = [3, 4]
+            result.all.return_value = [(3, decimal.Decimal("1")), (4, decimal.Decimal("1"))]
         elif entity is Asset:
             result.scalars.return_value = (
                 SimpleNamespace(
@@ -596,7 +600,7 @@ async def test_all_accessible_scope_keeps_inactive_broker_in_entity_directory():
 
 @pytest.mark.asyncio
 async def test_analysis_selection_echoes_contract_and_required_manifest():
-    session = _session_with_accessible_brokers([])
+    session = _session_with_accessible_brokers([1])
     component = _component(
         "portfolio.summary",
         Domain.PORTFOLIO,
@@ -625,7 +629,7 @@ async def test_analysis_selection_echoes_contract_and_required_manifest():
 
 @pytest.mark.asyncio
 async def test_prepare_request_rejects_catalog_selection_and_contract_mismatches():
-    session = _session_with_accessible_brokers([])
+    session = _session_with_accessible_brokers([1])
     component = _component(
         "portfolio.summary",
         Domain.PORTFOLIO,
@@ -736,7 +740,7 @@ async def test_explicit_inaccessible_broker_scope_is_rejected_without_filtering(
 
 @pytest.mark.asyncio
 async def test_required_component_failure_and_missing_asset_are_typed():
-    session = _session_with_accessible_brokers([])
+    session = _session_with_accessible_brokers([1])
     source_component = _component(
         "asset.identity",
         Domain.ASSET,
@@ -780,7 +784,7 @@ async def test_required_component_failure_and_missing_asset_are_typed():
 
 @pytest.mark.asyncio
 async def test_fx_exposure_analysis_with_empty_rows_is_not_applicable():
-    session = _session_with_accessible_brokers([])
+    session = _session_with_accessible_brokers([1])
     exposure = _component(
         "fx.exposure_base_quote",
         Domain.FX,
@@ -853,7 +857,7 @@ async def test_asset_analysis_applicability_uses_real_component_payloads(
     output,
     reason_code,
 ):
-    session = _session_with_accessible_brokers([])
+    session = _session_with_accessible_brokers([1])
     component = _component(
         component_id,
         Domain.ASSET,
@@ -919,7 +923,7 @@ def _fx_request_with_catalog_v2(*, start: date, end: date) -> AiExportFxSnapshot
 async def test_fx_direct_exposure_does_not_force_rate_history_coverage():
     period_start = date(2026, 1, 1)
     period_end = date(2026, 3, 31)
-    session = _session_with_accessible_brokers([])
+    session = _session_with_accessible_brokers([1])
     component = _component("fx.exposure_base_quote", Domain.FX, _RowsPayload, _RowsPayload())
     dataset = _dataset("fx.direct_exposure", Domain.FX, ("fx.exposure_base_quote",))
     service = _service(session, (component,), (dataset,))
@@ -954,7 +958,7 @@ async def test_fx_snapshot_with_complete_history_has_no_history_coverage_warning
     must be None (no partial-history warning is surfaced)."""
     period_start = date(2026, 1, 1)
     period_end = date(2026, 3, 31)
-    session = _session_with_accessible_brokers([])
+    session = _session_with_accessible_brokers([1])
 
     # Full coverage: history starts exactly at period_start
     full_observations = [
@@ -1013,7 +1017,7 @@ async def test_fx_snapshot_with_partial_history_yields_coverage_and_reason():
         )
     partial_series = FxRateSeriesResource.from_observations(observations)
 
-    session = _session_with_accessible_brokers([])
+    session = _session_with_accessible_brokers([1])
     component = _component("fx.overview", Domain.FX, _ValuePayload, _ValuePayload(value=1))
     dataset = _dataset("fx.overview", Domain.FX, ("fx.overview",))
     service = _service(session, (component,), (dataset,))
@@ -1061,7 +1065,7 @@ async def test_fx_snapshot_source_error_propagates_reason_code():
         builder=_build_with_fx_error,
         period_behavior=PeriodBehavior.WINDOWED,
     )
-    session = _session_with_accessible_brokers([])
+    session = _session_with_accessible_brokers([1])
     dataset = _dataset("fx.overview", Domain.FX, ("fx.overview",))
     service = _service(session, (component,), (dataset,))
     request = _fx_request_with_catalog_v2(start=date(2026, 1, 1), end=date(2026, 3, 31))

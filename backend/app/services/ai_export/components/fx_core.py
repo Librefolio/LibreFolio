@@ -59,6 +59,7 @@ from backend.app.db.models import Asset, FxRate
 from backend.app.schemas.common import Currency, OpenDateRangeModel
 from backend.app.schemas.portfolio.report import PortfolioReportQuery, PortfolioReportResponse
 from backend.app.schemas.portfolio.summary import PortfolioHolding, PortfolioSummary
+from backend.app.services.ai_export.components.broker_scope import scope_broker_ids
 from backend.app.services.ai_export.components.envelope import SectionEnvelope
 from backend.app.services.ai_export.components.fx_payloads import (
     FxConversionProvenancePayload,
@@ -297,7 +298,7 @@ async def _load_exposure_report(context: BuildContext) -> PortfolioReportRespons
         from backend.app.services.portfolio.portfolio_service import PortfolioService  # noqa: PLC0415
 
         query = PortfolioReportQuery(
-            broker_ids=list(scope.broker_scope) or None,
+            broker_ids=scope_broker_ids(scope, reader="fx exposure report"),
             date_range=OpenDateRangeModel(start=scope.period_start, end=scope.period_end),
             target_currency=scope.target_currency,
             include_summary=True,

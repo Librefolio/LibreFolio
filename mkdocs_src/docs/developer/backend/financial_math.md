@@ -785,7 +785,11 @@ flowchart LR
    reference row, `x·F / (2·d²)` to six significant digits, on exact rationals (`BigInt`). The preview gives `F` and
    the levels' `λ` (`FIDELITY_LEVEL_WEIGHTS` of `pac_allocator/models.py`, which the plan reads too); the page combines
    them, so a level chosen or a figure typed changes the table at once, with no call. The plan reads `λ`, never the
-   table, so the table has no backend copy. The line is the size of the calculation: a small sum or product on the numbers the user types stays in
+   table, so the table has no backend copy. And the summary row of the Targets step
+   (`frontend/src/lib/features/tools/pac-allocator/planner/limitSums.ts`, TL-4 of project 67): the minimums the user
+   types together and the maximums together, an amount as typed and a percentage as its share of the preview's total,
+   on exact rationals. It is drawn only: whether the minimums are too many is the backend's verdict
+   (`limit_problems`), which counts a cash entry's trapped cash. The line is the size of the calculation: a small sum or product on the numbers the user types stays in
    the browser; anything with a series, a date, a rate or a rule is the backend's. Each exception must be declared
    where it lives.
    The measuring tool takes the backend's annualization floor: `MIN_ANNUALIZATION_DAYS` in

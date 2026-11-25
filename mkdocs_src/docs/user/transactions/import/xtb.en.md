@@ -104,6 +104,12 @@ the sales already listed there, and **Open Positions** is a snapshot of today, u
 Any other type (CFD results, swaps, spin-offs, transfers to another XTB account…) is left out, and an amber warning
 lists those rows with a link to open an issue on GitHub.
 
+**Signs as written.** LibreFolio keeps the sign of each **Amount**, it never flips one. A *Withholding tax* with a
+positive amount is tax given back: it is imported as **Interest** «Tax refund», on the same instrument, so it counts in
+your gains, and a blue note lists those rows. A row whose sign does not fit its type in any other way (a negative
+dividend or interest, such as a correction, or a positive fee) is left out and listed in the amber warning, for you to
+check.
+
 ## ⚠️ Good to know
 
 - **Account currency.** Every amount of the report is in your account's currency, also for an ETF quoted in dollars:

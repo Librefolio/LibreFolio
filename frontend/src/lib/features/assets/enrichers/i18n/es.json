@@ -44,13 +44,48 @@
       "issueTypeNotAccepted": "Este enriquecedor no lee este tipo de identificador",
       "reasons": {
         "removed": "quitado por ti",
-        "found": "encontrado",
+        "found": "conoce el activo",
         "searching": "en espera: búsqueda en curso…",
         "not_found": "con {type} {identifier} no encuentra nada",
         "conflict": "indica otro activo",
         "error": "la fuente no respondió",
         "not_configured": "por configurar en esta instancia",
-        "not_covering": "no cubre este tipo de activo"
+        "not_covering": "no cubre este tipo de activo",
+        "foundByTicker": "encontrado solo con el ticker {ticker}: comprueba que sea este"
+      },
+      "notFoundWith": "No se encontró nada con {type} {identifier}: corrígelo o busca",
+      "onlyType": "el único que {name} lee",
+      "line": {
+        "running": "Buscando los enriquecedores que conocen el activo con sus identificadores… {answered} de {asked} han respondido",
+        "found": "{count, plural, one {# enriquecedor conoce} other {# enriquecedores conocen}} el activo: {names}.",
+        "foundAdopted": "Revisa el orden y pulsa «Usar estos enriquecedores»: se guardan con el activo.",
+        "foundOutside": "Los que no están en tu lista están en «Fuera de la lista», con «+».",
+        "none": "Ningún enriquecedor conoce el activo con sus identificadores: puedes añadir uno aquí abajo.",
+        "refused": "Demasiadas solicitudes a las fuentes: esperando, la búsqueda se reanuda sola en un momento.",
+        "error": "No se pudieron buscar los enriquecedores: añádelos a mano.",
+        "no_identifiers": "El activo no tiene identificadores que reconocer: añade los enriquecedores desde la búsqueda de arriba."
+      },
+      "conflictWith": "Identificador distinto: la fuente indica {named}",
+      "price": "Precios",
+      "search": {
+        "title": "Buscar en línea",
+        "suggestions": "Sugerencias:",
+        "placeholder": "Nombre, ISIN o ticker…",
+        "pills": "Enriquecedores:",
+        "identifierOnly": "solo {types}",
+        "excluded": "En tu lista, no se buscan: {names}. ¿Uno equivocado? Quítalo con 🗑 y vuelve a poder buscarse.",
+        "none": "{name}: ningún resultado para «{q}»",
+        "identifierHint": "{name}: escribe un identificador ({types}), o añade un resultado que lo lleve",
+        "refusedOne": "{name}: demasiadas solicitudes, reinténtalo en un momento",
+        "failedOne": "{name}: la fuente no respondió",
+        "refused": "Demasiadas búsquedas: espera un momento y vuelve a escribir.",
+        "failed": "La búsqueda no funcionó: reinténtalo.",
+        "withIsinTyped": "con el ISIN escrito",
+        "withIsinOf": "con el ISIN de {name}",
+        "conflict": "ISIN distinto de {whose}: {isin}",
+        "whoseAsset": "el del activo",
+        "confirmAdd": "Añadir igualmente",
+        "added": "{name} añadido a la lista (#{n})"
       }
     }
   }

@@ -36,7 +36,7 @@
     import {onDestroy, tick, untrack} from 'svelte';
     import {_ as t} from '$lib/i18n';
     import {currentLanguage} from '$lib/stores/app/language';
-    import {X, ArrowRight, ArrowDown, Check, Pencil, Save, Info} from 'lucide-svelte';
+    import {X, ArrowRight, ArrowDown, Check, Pencil, Save, Info, Loader2} from 'lucide-svelte';
     import {getRoleIcon, getRoleIconColor} from '$lib/utils/broker/brokerRoleHelpers';
     import {getBrokerIconHtmlById} from '$lib/utils/broker/brokerHelpers';
 
@@ -169,6 +169,9 @@
          *  database's (a row in both is the host's), `exclude` drops database rows the host already marked or linked; `null`
          *  for a mode the host does not answer. A new row carries `_bulkKey` (`op-<tempId>`) and its name in `_rowRef`. */
         bulkCandidates?: (mode: 'charges' | 'parent', probe: {broker_id: number; asset_id: number | null; type: string}) => {rows: TXReadItem[]; exclude: number[]} | null;
+        /** Project 66 (TL-3b): the row belongs to an all-new group of the Bulk, whose broker and asset move together: a line
+         *  under the broker says so. */
+        groupSync?: boolean;
     }
 
     let {
@@ -196,6 +199,7 @@
         onOpenTransaction,
         highlightTxId = null,
         bulkCandidates,
+        groupSync = false,
     }: Props = $props();
 
     let guideObservedOpen = false;
@@ -1842,6 +1846,7 @@
                     {autocompleteNonce}
                     {brokerIdValue}
                     {rowSaved}
+                    groupSync={groupSync && !isReadonly}
                     {brokerImmutable}
                     {brokers}
                     {brokersForSelect}
@@ -1989,9 +1994,12 @@
                         data-testid="tx-form-save"
                         use:guideAnchor={'transaction.create.save'}
                         title={committing ? $t('common.saving') : !commitOnSave ? $t('common.apply') : $t('common.save')}
+                        aria-label={committing ? $t('common.saving') : !commitOnSave ? $t('common.apply') : $t('common.save')}
+                        aria-busy={committing}
                     >
                         {#if committing}
-                            <span class="hidden sm:inline">{$t('common.saving')}</span>
+                            <!-- D2: below `sm` the word hides; the spinner keeps the button from going blank. -->
+                            <Loader2 size={15} class="animate-spin" /> <span class="hidden sm:inline">{$t('common.saving')}</span>
                         {:else if !commitOnSave}
                             <Check size={16} /> <span class="hidden sm:inline">{$t('common.apply')}</span>
                         {:else}

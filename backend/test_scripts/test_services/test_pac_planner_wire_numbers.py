@@ -48,6 +48,7 @@ from backend.app.services.pac_allocator.wire_numbers import (
     MAX_FIXED_DECIMAL_CHARS,
     MAX_INTEGER_TEXT_CHARS,
     WireNumberTooLargeError,
+    ratio_to_display_decimal,
     ratio_to_exact_number,
     ratio_to_fixed_decimal,
     ratio_to_money,
@@ -360,6 +361,16 @@ def test_ratio_to_money_uses_exact_ratio_branch_for_non_terminating() -> None:
     assert money.currency == "USD"
     assert isinstance(money.value, WireExactRatio)
     assert exact_fraction(money.value) == Fraction(1, 3)
+
+
+@pytest.mark.parametrize("ratio", [R(2500), R(204398, 100), R(1, 3), R(-2, 3), R(10**30 + 1, 7)])
+def test_display_decimal_reads_as_the_exact_number_does(ratio: R) -> None:
+    """TL-4 of project 67: an issue's money param, written beside an ``ExactMoney`` of the same value, reads the same on
+    screen: the exact text when the value terminates, else the same rounded ``display_decimal``; always a fixed decimal."""
+    number = ratio_to_exact_number(ratio)
+    expected = number.value if isinstance(number, FiniteDecimal) else number.display_decimal
+    assert ratio_to_display_decimal(ratio) == expected
+    assert _FIXED_DECIMAL_RE.match(expected), repr(expected)
 
 
 def test_ratio_to_price_projects_value_and_quote_base() -> None:

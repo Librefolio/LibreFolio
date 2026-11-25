@@ -97,7 +97,7 @@ from backend.app.services.ai_export.components.resources import (
     PORTFOLIO_PRICE_RESULTS_RESOURCE,
     PORTFOLIO_REPORT_RESOURCE,
 )
-from backend.app.services.ai_export.components.types import BuildScope, DetailLevel, Domain, PeriodBehavior, ResourceKey, TemporalAggregatorSpec
+from backend.app.services.ai_export.components.types import BrokerScopeSource, BuildScope, DetailLevel, Domain, PeriodBehavior, ResourceKey, TemporalAggregatorSpec
 from backend.app.services.ai_export.composer import Composer
 from backend.app.services.ai_export.datasets.catalog import EXPECTED_DATASET_COUNT
 from backend.app.services.ai_export.dependencies import (
@@ -110,6 +110,9 @@ from backend.app.services.assets.manager import AssetSourceManager
 from backend.app.services.portfolio.lots_analysis_service import LotsAnalysisService
 from backend.app.services.portfolio.portfolio_service import PortfolioService
 from backend.app.services.signals.service import SignalService
+
+_OWNED_BROKERS: tuple[int, ...] = (1, 2)
+"""78 L10b: the brokers a whole-scope test reads, named (an empty scope means no broker)."""
 
 CURRENCY = "USD"
 
@@ -133,9 +136,14 @@ def _portfolio_scope(**overrides) -> BuildScope:
         "period_start": date(2026, 1, 1),
         "period_end": date(2026, 1, 20),
         "target_currency": CURRENCY,
-        "broker_scope": (),
+        # 78 L10b: a whole scope is the owned brokers, named; an empty scope means no broker.
+        "broker_scope": _OWNED_BROKERS,
+        "broker_scope_source": BrokerScopeSource.OWNED,
+        "owned_broker_ids": _OWNED_BROKERS,
     }
     defaults.update(overrides)
+    if "broker_scope" in overrides and "broker_scope_source" not in overrides:
+        defaults["broker_scope_source"] = BrokerScopeSource.REQUESTED
     return BuildScope(**defaults)
 
 

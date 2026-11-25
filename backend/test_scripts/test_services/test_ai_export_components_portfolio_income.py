@@ -64,11 +64,14 @@ from backend.app.services.ai_export.components.portfolio_income import (
     _load_income_records,
 )
 from backend.app.services.ai_export.components.registry import ComponentRegistry
-from backend.app.services.ai_export.components.types import BuildScope, DetailLevel, Domain
+from backend.app.services.ai_export.components.types import BrokerScopeSource, BuildScope, DetailLevel, Domain
 from backend.app.services.ai_export.dependencies import BuildContext, ResourceLoadError, build_bucket_plan_for_scope
 from backend.app.services.financial_math.income import INCOME_TYPES
 from backend.app.services.financial_math.portfolio.classifier import ScopeAwareTransactionClassifier
 from backend.test_scripts.test_services._engine_native_cash import engine_native_cash
+
+_OWNED_BROKERS: tuple[int, ...] = (1, 2)
+"""78 L10b: the brokers a whole-scope test reads, named (an empty scope means no broker)."""
 
 PERIOD_START = date(2024, 1, 1)
 PERIOD_END = date(2024, 12, 31)
@@ -89,9 +92,14 @@ def _scope(**overrides) -> BuildScope:
         "period_start": PERIOD_START,
         "period_end": PERIOD_END,
         "target_currency": TARGET,
-        "broker_scope": (),
+        # 78 L10b: a whole scope is the owned brokers, named; an empty scope means no broker.
+        "broker_scope": _OWNED_BROKERS,
+        "broker_scope_source": BrokerScopeSource.OWNED,
+        "owned_broker_ids": _OWNED_BROKERS,
     }
     defaults.update(overrides)
+    if "broker_scope" in overrides and "broker_scope_source" not in overrides:
+        defaults["broker_scope_source"] = BrokerScopeSource.REQUESTED
     return BuildScope(**defaults)
 
 

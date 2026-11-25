@@ -212,7 +212,8 @@
       "investimental_order_start_missing": "Orden {order} ({symbol}, última ejecución el {date} a {price}): el archivo empieza con esta orden ya en curso, así que su cantidad total no se deduce del archivo {visible, select, yes {(el archivo muestra {quantity} por {amount} {currency})} other {(ninguna de las ejecuciones que muestra se puede contar)}}. La orden no se ha importado: introdúcela a mano con tu extracto.",
       "reward_value": "El archivo no indica el valor de esta recompensa: introduce el valor de una sola unidad el día en que la recibiste, no el total, para importar esta fila.",
       "investimental_fee_from_order_log": "{count, plural, one {# comisión se ha leído del registro de órdenes: puede diferir un poco de tu extracto, compruébala allí.} other {# comisiones se han leído del registro de órdenes: pueden diferir un poco de tu extracto, compruébalas allí.}}",
-      "xtb_positions_outside_period": "Para {count, plural, one {# instrumento} other {# instrumentos}} la cantidad importada de este informe es distinta de la que XTB muestra abierta: las operaciones hechas antes del inicio del informe (o después de su fin) no están en el archivo. Genera el informe con el intervalo «All» para importar todo el historial."
+      "xtb_positions_outside_period": "Para {count, plural, one {# instrumento} other {# instrumentos}} la cantidad importada de este informe es distinta de la que XTB muestra abierta: las operaciones hechas antes del inicio del informe (o después de su fin) no están en el archivo. Genera el informe con el intervalo «All» para importar todo el historial.",
+      "xtb_tax_refund": "{count, plural, one {# devolución de impuestos se importó como interés} other {# devoluciones de impuestos se importaron como intereses}} («Tax refund»): es dinero devuelto de la ganancia de la inversión, así que cuenta en el P&L."
     },
     "evidenceRowsTitle": "Filas del archivo",
     "evidenceRowCount": "{n} filas",
@@ -574,7 +575,8 @@
       "traderepublic_not_yet_settled": "La fecha (o la value_date) de estas filas es posterior a hoy.",
       "investimental_order_start_missing": "Cada fila da el volumen aún abierto. Las primeras filas de la orden, con las primeras ejecuciones, no están en el archivo.",
       "investimental_fee_from_order_log": "Cada comisión es lo que baja, en cada ejecución, la comisión aún debida sobre la parte abierta de la orden.",
-      "xtb_positions_outside_period": "Volumen abierto de la hoja Open Positions, junto a la cantidad neta de las filas de Cash Operations importadas."
+      "xtb_positions_outside_period": "Volumen abierto de la hoja Open Positions, junto a la cantidad neta de las filas de Cash Operations importadas.",
+      "xtb_tax_refund": "Un impuesto positivo es dinero devuelto."
     },
     "notesCount": "{n, plural, one {# nota} other {# notas}}",
     "noNotices": "Sin advertencias ni notas",

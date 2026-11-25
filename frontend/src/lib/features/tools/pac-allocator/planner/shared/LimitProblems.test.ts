@@ -131,7 +131,7 @@ describe('LimitProblems', () => {
 
     describe('the cross checks the preview names (R1-E of project 67)', () => {
         /** One of the preview's cross checks, on `key`'s target entry, as the wire gives it (a field path). */
-        const problem = (code: string, key: string): PreviewLimitProblem => ({code, path: {kind: 'field', section: 'targets', entity_kind: 'asset', entity_id: key, field: 'minimum'}}) as PreviewLimitProblem;
+        const problem = (code: string, key: string): PreviewLimitProblem => ({code, path: {kind: 'field', section: 'targets', entity_kind: 'asset', entity_id: key, field: 'minimum'}, params: []}) as PreviewLimitProblem;
         const lines = (key: string) => screen.queryAllByTestId('pac-planner-targets-limits-problem').filter((line) => line.getAttribute('data-key') === key);
 
         it('minimums above the money: one line naming every entry the wire names one by one', async () => {

@@ -7,6 +7,10 @@
   on the two maps, target and after the plan, under their bullets (R1-D of project 67: F4a said «no maps»; the developer,
   20/11: «per l'area geografica mi aspettavo comunque la mappa doppia … magari sotto a questo a proiettile»). «Today» stays
   in the bullets; the cash, which is no place, too.
+  TL-5 of project 67 (the developer, 23/11: «la mappa geografica e le sue barre falle come ti ho detto in pac e
+  ribilanciatore»): one layout in both Tools — types and sectors side by side, then the countries on the whole width, the
+  two maps first and their bars under them: the Rebalancer's bullets, the PAC's two bars (no bullet in the PAC). The
+  Rebalancer's maps say «target», never the PAC's «ideal».
 -->
 <script lang="ts">
     import {untrack} from 'svelte';
@@ -62,11 +66,10 @@
         return (EXPOSURE_DIMENSIONS as readonly string[]).includes(row.dimension) ? labels.text($t, row.dimension as ExposureDimension, row.label) : row.label;
     }
 
-    /** The PAC: the countries first, on the whole width; types and sectors side by side under them. The Rebalancer: types
-     * and sectors side by side, then the countries on the whole width. */
+    /** Both Tools: types and sectors side by side, then the countries on the whole width (TL-5). */
     const views = $derived(
         exposureGroups(rows)
-            .sort((a, b) => (rebalancer ? Number(a.dimension === 'geography') - Number(b.dimension === 'geography') : Number(b.dimension === 'geography') - Number(a.dimension === 'geography')))
+            .sort((a, b) => Number(a.dimension === 'geography') - Number(b.dimension === 'geography'))
             .map((group) => ({
                 ...group,
                 folded: group.onlyUncategorised && !expanded.has(group.dimension),
@@ -76,6 +79,14 @@
     );
     const words = $derived(exposureTooltipText($t));
     const bulletWords = $derived(bulletTooltipText($t));
+    /** The Rebalancer's maps: «Target» and «After the plan», and the direction against the target, never the PAC's «ideal». */
+    const mapWords = $derived({
+        target: bulletWords.target,
+        final: bulletWords.after,
+        above: $t(`${R}.mapAbove`, {default: 'Above the target'}),
+        below: $t(`${R}.mapBelow`, {default: 'Below the target'}),
+        equal: $t(`${R}.mapEqual`, {default: 'In line with the target'}),
+    });
 
     /** A Rebalancer row for its bullet chart: the colour key is the category's own name (a type code, a sector, a country),
      * read back from its planner id (`enc:Real_20Estate` is «Real Estate»), never the label, which the user may have
@@ -122,18 +133,16 @@
                     </p>
                 {:else}
                     <div class="mt-2">
-                        {#if rebalancer}
-                            <RebalancerExposureBullets rows={view.bullets} dimension={view.dimension} />
-                            {#if view.dimension === 'geography'}
-                                <div class="mt-4">
-                                    <ExposureMaps rows={view.weights.filter((row) => row.id !== 'cash')} titles={{target: bulletWords.target, final: bulletWords.after}} />
-                                </div>
-                            {/if}
-                        {:else if view.dimension === 'geography'}
-                            <ExposureMaps rows={view.weights} />
-                        {:else}
-                            <ExposureBars rows={view.weights} dimension={view.dimension} />
+                        {#if view.dimension === 'geography'}
+                            <ExposureMaps rows={rebalancer ? view.weights.filter((row) => row.id !== 'cash') : view.weights} titles={rebalancer ? mapWords : undefined} />
                         {/if}
+                        <div class={view.dimension === 'geography' ? 'mt-4' : ''}>
+                            {#if rebalancer}
+                                <RebalancerExposureBullets rows={view.bullets} dimension={view.dimension} />
+                            {:else}
+                                <ExposureBars rows={view.weights} dimension={view.dimension} />
+                            {/if}
+                        </div>
                     </div>
                     <ul class="sr-only" data-testid={testId('exposures-values', profile)}>
                         {#each view.weights as row, index (row.id)}

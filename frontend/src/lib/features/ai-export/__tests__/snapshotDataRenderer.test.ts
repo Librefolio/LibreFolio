@@ -1720,6 +1720,8 @@ describe('AI Export compact Snapshot Data renderer', () => {
 
         it.each([
             ['portfolio.drawdown_summary', 2],
+            // 78 L10: the export's brokers instead of every accessible one; the payload's shape is unchanged
+            ['portfolio.drawdown_summary', 3],
             ['broker.drawdown_summary', 2],
             ['asset.drawdown_summary', 2],
             ['portfolio.asset_drawdown_snapshot', 2],
@@ -1736,7 +1738,7 @@ describe('AI Export compact Snapshot Data renderer', () => {
         });
 
         it.each([
-            ['portfolio.drawdown_summary v3', 'portfolio.drawdown_summary', 3, 1],
+            ['portfolio.drawdown_summary v4', 'portfolio.drawdown_summary', 4, 1],
             ['broker.drawdown_summary v3', 'broker.drawdown_summary', 3, 1],
             ['asset.drawdown_summary v3', 'asset.drawdown_summary', 3, 1],
             ['portfolio.asset_drawdown_snapshot v3', 'portfolio.asset_drawdown_snapshot', 3, 1],
@@ -2412,11 +2414,11 @@ describe('AI Export compact Snapshot Data renderer', () => {
             readonly reason: string;
         }
 
-        /** `asset.position_scope` v1: the asset is valued, another portfolio leg is not, so the denominator and the ratio are null. */
+        /** `asset.position_scope` v2 (78 L10b): the asset is valued, another portfolio leg is not, so the denominator and the ratio are null. */
         function positionScopeSection(unavailable: readonly UnavailableRow[]) {
             return {
                 component_id: 'asset.position_scope',
-                component_version: 1,
+                component_version: 2,
                 schema_id: 'asset.position_scope',
                 schema_version: 1,
                 payload: {
@@ -2430,7 +2432,7 @@ describe('AI Export compact Snapshot Data renderer', () => {
                         target_currency: 'EUR',
                         valuation_basis: 'current_market_value',
                         denominator_basis: 'gross_absolute_open_position_value',
-                        broker_scope_mode: 'WHOLE_ACCESSIBLE_PORTFOLIO',
+                        broker_scope_mode: 'OWNED_BROKERS',
                         asset_market_value: '500',
                         asset_gross_absolute_value: '500',
                         portfolio_gross_absolute_value: null,

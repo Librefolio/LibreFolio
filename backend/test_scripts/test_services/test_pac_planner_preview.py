@@ -341,6 +341,24 @@ def test_a_limit_of_the_wrong_shape_still_makes_the_preview_invalid() -> None:
     assert "allocation.target_weight_out_of_range" in {issue.code for issue in result.issues}
 
 
+def _sum_figures(issues) -> set[tuple]:
+    """The money params of every ``bounds_min_sum_exceeds_reference`` issue, as (name, amount, currency) per issue."""
+    return {tuple(sorted((param.name, param.value.amount, param.value.currency) for param in issue.params)) for issue in issues if issue.code == "allocation.bounds_min_sum_exceeds_reference"}
+
+
+def test_the_sum_of_the_minimums_carries_its_two_figures() -> None:
+    """TL-4 of project 67: the problem says the sum it counted and the base it used, in the valuation currency. The base reads
+    the same as the preview's ``total`` (the Rebalancer's ``F``), and the plan's refusal carries the same figures."""
+    payload = _with_limits(reb.t4(), minimum="20000")
+    result = _rebalancer_preview(payload)
+    assert result.result_state == "preview_ready"
+    assert result.total.value.kind == "finite_decimal"
+    assert _sum_figures(result.limit_problems) == {(("minimums", "20000", "EUR"), ("reference", result.total.value.value, "EUR"))}
+
+    plan = plan_rebalancing(REBALANCER_TOOL_INPUT_ADAPTER.validate_python(_with_limits(reb.t4(), minimum="20000")))
+    assert _sum_figures(plan.issues) == _sum_figures(result.limit_problems)
+
+
 def test_pac_preview_keeps_its_total_with_a_limit_problem() -> None:
     """Q2 for the PAC: a minimum over the cash it invests keeps the total and names the problem."""
     payload = {**_pac_request(), "operation": "preview"}
@@ -349,3 +367,5 @@ def test_pac_preview_keeps_its_total_with_a_limit_problem() -> None:
     assert PAC_TOOL_OUTPUT_ADAPTER.validate_python(result.model_dump(mode="python")) == result
     assert result.result_state == "preview_ready" and _money(result.total) == 5
     assert "allocation.bounds_min_sum_exceeds_reference" in {problem.code for problem in result.limit_problems}
+    # TL-4 of project 67: the base in the sentence is the PAC's own total, the cash the plan can invest.
+    assert _sum_figures(result.limit_problems) == {(("minimums", "50", "EUR"), ("reference", result.total.value.value, "EUR"))}

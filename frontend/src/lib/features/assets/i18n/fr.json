@@ -254,7 +254,8 @@
       "enrichersError": "Impossible de rechercher les enrichisseurs : choisissez-les à la main.",
       "enrichersReview": "Vérifier ou modifier",
       "enrichersReading": "Leurs données sont en cours de lecture.",
-      "enrichersReadingWaiting": "Trop de demandes : leurs données seront lues d'elles-mêmes dans un instant."
+      "enrichersReadingWaiting": "Trop de demandes : leurs données seront lues d'elles-mêmes dans un instant.",
+      "enrichersTickerOnly": "Trouvé seulement par son ticker, à vérifier : {names}. Ajoutez-le depuis « Enrichisseurs » avec « + »."
     },
     "provider": {
       "assignment": "Attribution du Fournisseur",
