@@ -3,6 +3,7 @@ import {AI_EXPORT_PAGE_FEATURE_LABEL_KEYS, AI_EXPORT_PAGE_LABEL_KEYS, AI_EXPORT_
 import {renderFencedSection, serializeYaml} from '../serialization';
 import {findAiExportResponseContract, type AiExportFollowUpsResponseContract, type AiExportSectionsResponseContract} from './responseContracts';
 import {renderSnapshotDataText, type RenderedSnapshotDataText, type SnapshotFormatDiagnostics, type SnapshotSignalMetric} from './snapshotDataRenderer';
+import {AI_EXPORT_TOOL_GUIDES, AI_EXPORT_TOOLS_NAV_KEY} from './toolGuides';
 import {
     AI_EXPORT_ANSWER_FOCUS_INSTRUCTIONS,
     AI_EXPORT_DATA_RECEIVED_KEY,
@@ -39,8 +40,11 @@ export interface RenderAiExportPromptInput {
     readonly snapshot: AiExportSnapshotResponse;
     readonly responseLanguage: AiExportResponseLanguageDisplayName;
     readonly userNotes?: string;
-    readonly translate?: (key: string) => string;
+    /** The interface's translation; `values` fill a message's `{name}` placeholders (78 L4a: the tool's labels). */
+    readonly translate?: AiExportPromptTranslate;
 }
+
+export type AiExportPromptTranslate = (key: string, values?: Readonly<Record<string, string>>) => string;
 
 export interface AiExportFinalPromptStats {
     readonly characterCountUtf16CodeUnits: number;
@@ -62,6 +66,7 @@ export interface RenderedAiExportPrompt {
 
 export type AiExportPromptSectionId =
     | 'export_scope'
+    | 'librefolio_tool'
     | 'analysis_objective'
     | 'shared_verification_instructions'
     | 'response_contract'
@@ -321,6 +326,42 @@ function renderSnapshotData(
     };
 }
 
+/**
+ * «Calcolalo in LibreFolio» (78 L4a): for each tool the analysis suggests, where to find it and what to enter, step by
+ * step. Every label of the tool is the tool's own i18n key, quoted; the AI Export writes only the sentences around them.
+ * Null when the analysis suggests no tool.
+ */
+/** The way to the tool, the first points of the list: open LibreFolio, the sidebar's Tools, the tool's card. */
+const TOOL_PATH_STEPS = 3;
+
+function renderLibreFolioTool(entry: AiExportAnalysisCatalogEntry, translate: AiExportPromptTranslate = (key) => key): string | null {
+    const tools = entry.suggested_tools ?? [];
+    if (tools.length === 0) return null;
+    const lines = [`## ${translate('aiExport.tool.heading')}`, '', translate('aiExport.tool.intro')];
+    for (const {tool_code: toolCode} of tools) {
+        const guide = AI_EXPORT_TOOL_GUIDES[toolCode];
+        if (!guide) throw new AiExportPromptRenderError('incompatible_selection', `Unknown suggested tool: ${toolCode}`);
+        const name = translate(guide.nameKey);
+        lines.push(
+            '',
+            `### ${name}`,
+            '',
+            `- **${translate('aiExport.tool.when')}**: ${translate(guide.whenKey)}`,
+            // 78 L4b: one numbered list, the way to the tool as its first three points (two lists lost the way in the trials)
+            `- **${translate('aiExport.tool.inputs')}**:`,
+            `  1. ${translate('aiExport.additionalData.steps.openLibreFolio')}`,
+            `  2. ${translate('aiExport.tool.steps.sidebar')}: "${translate(AI_EXPORT_TOOLS_NAV_KEY)}"`,
+            `  3. ${translate('aiExport.tool.steps.card')}: "${name}"`,
+            ...guide.steps.map((step, index) => {
+                const values = Object.fromEntries(Object.entries(step.values ?? {}).map(([placeholder, key]) => [placeholder, `"${translate(key)}"`]));
+                return `  ${index + TOOL_PATH_STEPS + 1}. "${translate(step.labelKey)}": ${translate(step.explanationKey, values)}`;
+            }),
+            `- **${translate('aiExport.tool.returns')}**: ${translate(guide.returnsKey)}`,
+        );
+    }
+    return lines.join('\n');
+}
+
 function renderAdditionalData(input: RenderAiExportPromptInput): string {
     if (input.selection.kind !== 'analysis' || input.selection.entry.kind !== 'analysis') {
         throw new AiExportPromptRenderError('incompatible_selection', 'Additional LibreFolio data guidance requires an analysis selection');
@@ -476,6 +517,9 @@ function buildAiExportPrompt(input: RenderAiExportPromptInput, diagnostics: bool
             sections.push({id: 'snapshot_metadata', content: snapshotMetadata.content});
             sections.push({id: 'snapshot_data', content: snapshotData.content});
             sections.push({id: 'additional_librefolio_data', content: renderAdditionalData(input)});
+            // 78 L4a: «Calcolalo in LibreFolio», the tool the analysis sends the user to, after the data it suggests
+            const tool = renderLibreFolioTool(entry, input.translate);
+            if (tool !== null) sections.push({id: 'librefolio_tool', content: tool});
             sections.push({id: 'domain_notes', content: renderDomainNotes(input.snapshot)});
             sections.push({id: 'legal_notice', content: renderLegalNotice(input)});
             if (notes) sections.push({id: 'user_question', content: renderUserQuestion(notes)});

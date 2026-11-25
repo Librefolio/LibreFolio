@@ -362,30 +362,24 @@ def _public_table_data_row_count(block: str) -> int:
     return count
 
 
-def _checklist_item_count(prompt: str, marker: str) -> int:
-    count = 0
-    for line in prompt.splitlines():
-        if marker not in line:
-            continue
-        items = line.split(marker, maxsplit=1)[1].strip().rstrip(".")
-        count += len([item for item in items.split(";") if item.strip()])
-    return count
+# One input of a LibreFolio tool in «Calcolalo in LibreFolio» (78 L4a): `  N. "<the tool's label>": …`. The quoted label
+# right after the number tells it from the path's steps (`  N. Sidebar: "Tools"`) in every language.
+_TOOL_INPUT_STEP_PATTERN = re.compile(r'^  \d+\. "[^"\n]+": ', re.MULTILINE)
 
 
-def measure_targeted_adequacy_diagnostics(selection_id: str, prompt: str) -> dict[str, object]:
-    """Small prompt-content diagnostics used only by targeted adequacy runs."""
+def measure_targeted_adequacy_diagnostics(selection_id: str, prompt: str, section_ids: Sequence[str] = ()) -> dict[str, object]:
+    """Small prompt-content diagnostics used only by targeted adequacy runs.
+
+    PAC (78 L4a): the v4 text no longer carries the question checklists the old measures counted («Capital and
+    cadence», «REQUIRED WHEN MISSING:»); the probe now measures the tool block, from the renderer's section ids and the
+    language-independent shape of its input steps. Which questions the answer asks is read in the `agy` trials only.
+    """
     if selection_id == "portfolio.pac_planning":
-        categories = [category for category in ("Capital and cadence", "Goals and horizon", "Risk preferences", "Operational constraints") if category in prompt]
         portfolio_block = _component_prompt_block(prompt, "portfolio.drawdown_summary")
         asset_block = _component_prompt_block(prompt, "portfolio.asset_drawdown_snapshot")
-        required_questions = _checklist_item_count(prompt, "REQUIRED WHEN MISSING:")
-        required_material_questions = _checklist_item_count(prompt, "REQUIRED WHEN MISSING AND MATERIAL:")
         return {
-            "question_categories": categories,
-            "question_category_count": len(categories),
-            "required_question_count": required_questions + required_material_questions,
-            "required_material_question_count": required_material_questions,
-            "optional_question_count": _checklist_item_count(prompt, "OPTIONAL WHEN MATERIAL:"),
+            "tool_section_present": "librefolio_tool" in section_ids,
+            "tool_input_step_count": len(_TOOL_INPUT_STEP_PATTERN.findall(prompt)),
             "portfolio_drawdown_rows": _public_table_data_row_count(portfolio_block),
             "asset_drawdown_rows": _public_table_data_row_count(asset_block),
             "drawdown_rows": _public_table_data_row_count(portfolio_block) + _public_table_data_row_count(asset_block),
@@ -2954,7 +2948,7 @@ def _run_case(  # noqa: C901 — flat probe step driver
                 "renderer_equivalence": rendered.get("renderer_equivalence"),
                 "manifest_checks": manifest_checks,
                 "manifest_impact": rendered.get("manifest_impact"),
-                "targeted_adequacy_diagnostics": measure_targeted_adequacy_diagnostics(str(selection["id"]), prompt),
+                "targeted_adequacy_diagnostics": measure_targeted_adequacy_diagnostics(str(selection["id"]), prompt, [str(row.get("id")) for row in section_rows]),
             }
         )
         apply_prompt_category(metric)

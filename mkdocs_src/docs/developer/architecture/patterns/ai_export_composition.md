@@ -555,7 +555,8 @@ analysis take the same shape, or the renderer fails closed (`incompatible_select
 #### The new shape
 
 Today the two market-driver analyses (`portfolio.performance_market_drivers`,
-`broker.performance_market_drivers`). The answer is written for a person: the answer first,
+`broker.performance_market_drivers`), the protection strategies (`portfolio.protection_strategies`), the PAC
+(`portfolio.pac_planning`, 78 L4a) and the rebalancing (`portfolio.rebalancing`, 78 L4b). The answer is written for a person: the answer first,
 about 700 words, and a closing list of the follow-up questions worth asking.
 
 1. **Your Task** — the analysis's own task (`task` of its instruction template)
@@ -566,12 +567,25 @@ about 700 words, and a closing list of the follow-up questions worth asking.
 5. **Snapshot Metadata and Dataset Manifest**
 6. **Snapshot Data**
 7. **Additional LibreFolio Data**
-8. **Domain Notes**
-9. **Legal Notice**
-10. **User Question**, only when the user wrote one: a trusted sentence (it directs and
+8. **Calcolalo in LibreFolio** (section `librefolio_tool`, 78 L4a), only for an analysis whose catalog entry
+   suggests a tool (`suggested_tools`; today the PAC, `pac_allocator`, and the rebalancing, `portfolio_rebalancer`)
+9. **Domain Notes**
+10. **Legal Notice**
+11. **User Question**, only when the user wrote one: a trusted sentence (it directs and
     narrows the task, it cannot change the rules) over the question, safely serialized as
     the notes are
-11. **Response Language**
+12. **Response Language**
+
+**Calcolalo in LibreFolio.** The backend declares only the code of the tool an analysis sends the user to
+(`ToolSuggestion` in `analyses/spec.py`, `suggested_tools` on the catalog entry), the way it declares the datasets it
+suggests. The frontend writes the block in the interface language from `templates/toolGuides.ts`: the tool's name and
+one numbered list (78 L4b), whose first three points are the way to the tool (open LibreFolio, Tools in the sidebar,
+the tool's card) and the rest its inputs step by step. The two tools share the planner, so the same nine steps and their
+names; a label still changing in the tool's lane is described by its role instead of quoted. Every label of the tool is the tool's own
+i18n key (`tools.pacAllocator.planner.steps.*`, `…review.calculate`…), quoted, so a label that changes in the tool
+changes in the prompt; the AI Export writes only the sentences around them (`aiExport.tool.*`), whose `{name}`
+placeholders take those labels through the caller's `translate`. A suggested code the frontend cannot write closes the
+catalog (`tool_suggestion_mismatch`).
 
 There is no Analysis Objective, Shared Verification Instructions, Response Contract or
 Answer Focus in this shape. The texts are copied from the plan's drafts
@@ -639,9 +653,8 @@ conclusions rely on it.
 A ban alone would contradict any instruction asking for a restatement, so none does in
 today's shape: every response contract of that shape opens with **Key Facts** (formerly "LibreFolio Facts"), which
 cites briefly only the supplied facts the conclusions rely on, and the first step of
-six Analysis Objectives (`portfolio.pac_planning`, `portfolio.rebalancing`,
-`broker.review`, `asset.position_review`, `asset.market_analysis`,
-`fx.pair_analysis`) follows the pattern "Use … to …; mention only what changes the
+four Analysis Objectives (`broker.review`, `asset.position_review`,
+`asset.market_analysis`, `fx.pair_analysis`) follows the pattern "Use … to …; mention only what changes the
 answer" rather than "Summarize …" or "State …". Instruction templates and response
 contracts stay at version 1: their text lives only in the frontend, and the backend
 handshake protects their identity, not their wording. In the new shape the same holds

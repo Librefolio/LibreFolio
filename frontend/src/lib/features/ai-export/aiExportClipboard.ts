@@ -3,7 +3,7 @@ import {fetchAiExportSnapshot} from './aiExportClient';
 import {findCompatibleAiExportSelection, type AiExportCatalogCompatibilityResult} from './catalog/compatibility';
 import {AI_EXPORT_CATALOG_VERSION, type AiExportCompatibleSelection, type AiExportDomain, type AiExportSnapshotResponse} from './catalog/shared';
 import {aiExportOptionsFingerprint, normalizeAiExportUserNotes, resolveAiExportPeriod, type AiExportOptionsSelection} from './aiExportOptions';
-import {renderAiExportPrompt, type AiExportPromptStats, type RenderedAiExportPrompt} from './templates/promptRenderer';
+import {renderAiExportPrompt, type AiExportPromptStats, type AiExportPromptTranslate, type RenderedAiExportPrompt} from './templates/promptRenderer';
 
 export interface AiExportPortfolioContext {
     readonly domain: 'portfolio';
@@ -42,7 +42,7 @@ export interface PrepareAiExportInput {
     readonly context: AiExportRequestContext;
     readonly options: AiExportOptionsSelection;
     readonly compatibility: AiExportCatalogCompatibilityResult;
-    readonly translate?: (key: string) => string;
+    readonly translate?: AiExportPromptTranslate;
 }
 
 export interface PreparedAiExport {

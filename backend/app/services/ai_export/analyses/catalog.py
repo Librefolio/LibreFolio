@@ -18,6 +18,7 @@ from backend.app.services.ai_export.analyses.spec import (
     AnalysisRegistry,
     AnalysisRegistryError,
     AnalysisSpec,
+    ToolSuggestion,
 )
 from backend.app.services.ai_export.catalog_visibility import CatalogVisibility
 from backend.app.services.ai_export.components.types import DetailLevel, Domain
@@ -44,6 +45,7 @@ def _analysis(
     optional: tuple[str, ...] = (),
     applicability_code: str = "always_applicable",
     suggestions: tuple[AdditionalExportSuggestion, ...] = (),
+    tools: tuple[str, ...] = (),
 ) -> AnalysisSpec:
     analysis_id = f"{domain.value}.{suffix}"
     return AnalysisSpec(
@@ -62,6 +64,7 @@ def _analysis(
         response_contract_id=f"{analysis_id}.response",
         response_contract_version=AI_EXPORT_RESPONSE_CONTRACT_VERSION,
         additional_export_suggestions=suggestions,
+        suggested_tools=tuple(ToolSuggestion(tool_code=tool_code) for tool_code in tools),
         visibility=CatalogVisibility.PUBLIC,
     )
 
@@ -86,6 +89,8 @@ PUBLIC_ANALYSES: tuple[AnalysisSpec, ...] = (
         "pac_planning",
         icon="calendar-clock",
         required=("portfolio.overview_and_history",),
+        # 78 L4a: the number of units is the PAC allocator's job; the prompt sends the user there, step by step
+        tools=("pac_allocator",),
         suggestions=(
             _suggest(
                 "portfolio.asset_history",
@@ -100,6 +105,8 @@ PUBLIC_ANALYSES: tuple[AnalysisSpec, ...] = (
         "rebalancing",
         icon="scale",
         required=("portfolio.overview_and_history",),
+        # 78 L4b: the units are the Portfolio rebalancer's job; the prompt sends the user there, step by step
+        tools=("portfolio_rebalancer",),
         suggestions=(
             _suggest(
                 "portfolio.asset_history",
