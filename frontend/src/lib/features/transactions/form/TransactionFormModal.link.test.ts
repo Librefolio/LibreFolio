@@ -667,4 +667,39 @@ describe('TransactionFormModal — the charges picker inside the Bulk (66 TL-2)'
         const drafts = (onPushDraft.mock.calls[0][0] as {_charges: Array<Record<string, unknown>>})._charges;
         expect(drafts.find((d) => d.id === 23)).toMatchObject({id: 23, linkNew: true, state: 'linked', description: 'Bulk note of 23', cash: {amount: '7', code: 'EUR'}});
     });
+
+    // 66 TL-11: an op- row has «Unlink» now; one picked in this very opening was never the parent's, so «Unlink» only
+    // takes it back out — no draft left, and the picker offers it again (as a saved picked one, F4).
+    it('TL-11: a new Bulk row picked in this opening, then unlinked: out of the section and of Apply, and offered again', async () => {
+        answerPickers({withoutParent: () => []});
+        const handed = [{key: 'op-n-own', id: null, type: 'FEE', cash: {amount: '3', code: 'EUR'}, description: 'own', original: null, state: 'linked'}];
+        const bulkCandidates = vi.fn(() => ({rows: [bulkCharge(-7, 5, {_bulkKey: 'op-n-fee', _rowRef: 'row 4'})], exclude: []}));
+        const onPushDraft = vi.fn();
+        bulkHosted(onPushDraft, {...txRow({id: 10, broker_id: 1, asset_id: 5, type: 'BUY', charges_count: 0}), _charges: handed}, {bulkCandidates});
+        await waitFor(() => expect(rows().map((r) => r.getAttribute('data-charge-key'))).toEqual(['op-n-own']));
+        await fireEvent.click(await screen.findByTestId('tx-form-charges-link-existing'));
+        await waitForPickerIds([-7]);
+        await pickRow(-7);
+        await fireEvent.click(screen.getByTestId('tx-picker-add'));
+        await waitFor(() => expect(screen.queryByTestId('tx-picker-modal')).toBeNull());
+        await waitFor(() => expect(rows().map((r) => r.getAttribute('data-charge-key'))).toEqual(['op-n-own', 'op-n-fee']));
+
+        expect(screen.queryByTestId('tx-form-charge-unlink-op-n-fee'), '66 TL-11: no «Unlink» on a new charge of the Bulk').not.toBeNull();
+        await fireEvent.click(screen.getByTestId('tx-form-charge-unlink-op-n-fee'));
+
+        await waitFor(() => expect(rows().map((r) => r.getAttribute('data-charge-key'))).toEqual(['op-n-own']));
+        await fireEvent.click(screen.getByTestId('tx-form-charges-link-existing'));
+        await waitForPickerIds([-7]);
+        await fireEvent.click(screen.getByTestId('tx-picker-cancel'));
+        await waitFor(() => expect(screen.queryByTestId('tx-picker-modal')).toBeNull());
+
+        await waitFor(() => expect(screen.getByTestId('tx-form-save')).toBeEnabled());
+        await fireEvent.click(screen.getByTestId('tx-form-save'));
+        expect(onPushDraft).toHaveBeenCalledTimes(1);
+        const drafts = (onPushDraft.mock.calls[0][0] as {_charges: Array<Record<string, unknown>>})._charges;
+        expect(
+            drafts.map((d) => [d.key, d.state]),
+            'the picked one left no draft; the one handed stays linked',
+        ).toEqual([['op-n-own', 'linked']]);
+    });
 });

@@ -94,7 +94,7 @@
     import TxFormParentSection from './TxFormParentSection.svelte';
     import TransactionPickerModal from '../bulk/TransactionPickerModal.svelte';
     import {notify} from '$lib/stores/app/notify.svelte';
-    import {chargeCashDirection, chargeFromPicked, chargeRowsMissingAmount, chargesFromRows, chargesKey, linkedCharges, type ChargeDraft} from './txCharges';
+    import {bulkRowOf, chargeCashDirection, chargeFromPicked, chargeRowsMissingAmount, chargesFromRows, chargesKey, linkedCharges, type ChargeDraft, type HandedNewParent} from './txCharges';
 
     // =========================================================================
     // Types
@@ -163,8 +163,12 @@
         /** Project 66 (F3): open another transaction in this same modal, in the same mode («Open» on a charge or on the
          *  parent). Without it there is no «Open». */
         onOpenTransaction?: (id: number) => void;
-        /** Project 66 (F3): the charge the user came from, highlighted among the parent's charges. */
+        /** Project 66 (TL-11): the same for a new row of the Bulk, which has no id, by its `tempId`. */
+        onOpenRow?: (tempId: string) => void;
+        /** Project 66 (F3): the charge the user came from, highlighted among the parent's charges; a new one by its key
+         *  (`op-<tempId>`, TL-11). */
         highlightTxId?: number | null;
+        highlightKey?: string | null;
         /** Project 66 (TL-2): the host's own rows a picker may offer, read on the host's state (the Bulk). `rows` join the
          *  database's (a row in both is the host's), `exclude` drops database rows the host already marked or linked; `null`
          *  for a mode the host does not answer. A new row carries `_bulkKey` (`op-<tempId>`) and its name in `_rowRef`. */
@@ -197,7 +201,9 @@
         initialOptionalOpen = false,
         allowChargeEdits = false,
         onOpenTransaction,
+        onOpenRow,
         highlightTxId = null,
+        highlightKey = null,
         bulkCandidates,
         groupSync = false,
     }: Props = $props();
@@ -371,13 +377,15 @@
     let parentLoad = $state<'loading' | 'ready' | 'error'>('ready');
     let parentUnlinked = $state(false);
     let parentRequest = 0;
-    /** «Open» waiting for the discard confirmation: the transaction to show once the user confirms. */
-    let pendingOpenId = $state<number | null>(null);
+    /** «Open» waiting for the discard confirmation: what shows the other row once the user confirms. */
+    let pendingOpen = $state.raw<(() => void) | null>(null);
     /** F4: the transaction picked as this charge's parent, linked when the host saves. */
     let parentPending = $state<TXReadItem | null>(null);
     /** F4: the picker, for the charges of this parent or for the parent of this charge. */
     let pickerMode = $state<'charges' | 'parent' | null>(null);
     let pickerRows = $state<TXReadItem[]>([]);
+    /** 66 TL-11: the Bulk's new rows picked in this opening (`op-<tempId>`). */
+    let pickedKeys = $state.raw<ReadonlySet<string>>(new Set());
     /** F4: the broker and asset the picks were made for; changing either drops them (a link needs both equal). */
     let pickedFor = $state<string | null>(null);
     const linkContext = $derived(`${draft.broker_id ?? ''}|${draft.asset_id ?? ''}`);
@@ -544,7 +552,7 @@
             lastTypeForReset = draft.type;
             startChargesLoad(row);
             startParentLoad(row);
-            pendingOpenId = null;
+            pendingOpen = null;
             initialDraftKey = baselineKey();
         });
         // Async hydration (brokers + currencies + asset cache for the picked asset).
@@ -696,6 +704,7 @@
      */
     function startChargesLoad(row: TXReadItem | null) {
         const request = ++chargesRequest;
+        pickedKeys = new Set();
         const handed = (row as unknown as {_charges?: unknown} | null)?._charges;
         if (Array.isArray(handed)) {
             charges = handed as ChargeDraft[];
@@ -797,6 +806,7 @@
         if (pickerMode === 'charges') {
             const picked = rows.map(chargeFromPicked).filter((draftRow): draftRow is ChargeDraft => draftRow !== null);
             charges = [...charges, ...picked];
+            pickedKeys = new Set([...pickedKeys, ...picked.map((charge) => charge.key).filter((key) => bulkRowOf(key) !== null)]);
         } else if (pickerMode === 'parent' && rows.length === 1) {
             parentPending = rows[0];
         }
@@ -805,12 +815,21 @@
 
     /** «Open» (F3): show another transaction in this modal; with unsaved changes, after the discard confirmation. */
     function requestOpenTransaction(id: number) {
+        requestOpen(() => onOpenTransaction?.(id));
+    }
+
+    /** The same on a new row of the Bulk (66 TL-11). */
+    function requestOpenRow(tempId: string) {
+        requestOpen(() => onOpenRow?.(tempId));
+    }
+
+    function requestOpen(show: () => void) {
         if (hasUnsavedChanges()) {
-            pendingOpenId = id;
+            pendingOpen = show;
             confirmCloseOpen = true;
             return;
         }
-        onOpenTransaction?.(id);
+        show();
     }
 
     /** Detect unsaved changes vs. the snapshot taken at modal-open. */
@@ -830,10 +849,10 @@
 
     function confirmDiscardAndClose() {
         confirmCloseOpen = false;
-        if (pendingOpenId !== null) {
-            const id = pendingOpenId;
-            pendingOpenId = null;
-            onOpenTransaction?.(id);
+        if (pendingOpen !== null) {
+            const show = pendingOpen;
+            pendingOpen = null;
+            show();
             return;
         }
         onClose();
@@ -1084,8 +1103,10 @@
     let chargesEditable = $derived(!isReadonly && !commitOnSave && allowChargeEdits);
     let chargesMissing = $derived(chargesEditable ? chargeRowsMissingAmount(charges) : []);
     let hasSavedParent = $derived((mainRow?.parent_transaction_id ?? 0) > 0);
+    /** 66 TL-11: the charge's parent, when it is a new row of the Bulk (handed with the row). */
+    let newParent = $derived((mainRow as unknown as {_newParent?: HandedNewParent | null} | null)?._newParent ?? null);
     /** The charge's «Linked to»: with a saved parent always; without one only where it can be linked (F4). */
-    let showParent = $derived(!pairLayout && rule.chargeRole === 'charge' && (hasSavedParent || chargesEditable));
+    let showParent = $derived(!pairLayout && rule.chargeRole === 'charge' && (hasSavedParent || newParent !== null || chargesEditable));
     let showCharges = $derived(!pairLayout && rule.chargeRole === 'parent' && (chargesEditable || chargesLoad !== 'ready' || linkedCharges(charges).length > 0));
     let hasLocalErrors = $derived(formChecks.some((check) => check.kind === 'format') || (showCharges && chargesMissing.length > 0));
 
@@ -1935,7 +1956,10 @@
                     loadState={chargesLoad}
                     missingKeys={chargesMissing}
                     onOpen={onOpenTransaction ? requestOpenTransaction : null}
+                    onOpenRow={onOpenRow ? requestOpenRow : null}
                     highlightId={highlightTxId}
+                    {highlightKey}
+                    {pickedKeys}
                     onLinkExisting={chargesEditable && mainRow?.related_transaction_id == null ? openChargesPicker : null}
                 />
             {/if}
@@ -1947,10 +1971,12 @@
                     parent={parentRow}
                     loadState={parentLoad}
                     unlinked={parentUnlinked}
+                    handed={newParent}
+                    onOpenHanded={onOpenRow && !parentUnlinked ? (key) => requestOpenRow(bulkRowOf(key) ?? key) : null}
                     onOpen={onOpenTransaction && !parentUnlinked ? requestOpenTransaction : null}
                     onUnlink={chargesEditable && !parentUnlinked ? () => (parentUnlinked = true) : null}
                     pending={parentPending}
-                    onLink={chargesEditable && !hasSavedParent && mainRow?.related_transaction_id == null ? openParentPicker : null}
+                    onLink={chargesEditable && !hasSavedParent && newParent === null && mainRow?.related_transaction_id == null ? openParentPicker : null}
                     onUndo={() => (parentPending = null)}
                 />
             {/if}
@@ -2034,7 +2060,7 @@
     onConfirm={confirmDiscardAndClose}
     onCancel={() => {
         confirmCloseOpen = false;
-        pendingOpenId = null;
+        pendingOpen = null;
     }}
     zIndex={70}
 />

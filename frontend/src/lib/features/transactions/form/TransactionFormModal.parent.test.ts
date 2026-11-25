@@ -398,3 +398,213 @@ describe('TransactionFormModal — parent link and Open (66 F3)', () => {
         expect(screen.getByTestId('tx-form-parent-summary')).not.toHaveTextContent('#10');
     });
 });
+
+// ---------------------------------------------------------------------------------------------------------------
+//  TL-11 — a charge under a NEW parent of the Bulk. The Bulk hands `_newParent: {key: 'op-<tempId>', ref, row}` on the
+//  charge's item: the section shows that row (no server read), named by `ref`, with «Open» (`onOpenRow('<tempId>')`) and
+//  «Unlink» (`_parent_unlink: true`). With a saved parent nothing changes. RED until `_newParent` / `onOpenRow` exist.
+//
+//  The discard question's testids are the ConfirmModal's own (`confirm-modal-confirm` / `confirm-modal-cancel`).
+// ---------------------------------------------------------------------------------------------------------------
+
+/** A new BUY of the Bulk as it hands it to the charge's form: no id, signed as the ledger. */
+const NEW_PARENT = () => ({key: 'op-n-buy', ref: 'row 4', row: txRow({id: 0, date: '2024-05-17', cash: {code: 'EUR', amount: '-137'}, description: 'new buy'})});
+
+/** A new FEE of the Bulk (no id), under a new parent unless `over` says otherwise. */
+const newFee = (over: Record<string, unknown> = {}) => txRow({id: 0, type: 'FEE', asset_id: null, quantity: '0', cash: {code: 'EUR', amount: '-2'}, description: 'new fee', _newParent: NEW_PARENT(), ...over});
+
+/** The form as the Bulk hosts it on a new row (`mode: 'create'` with the row handed). */
+function bulkNewRow(row: Record<string, unknown>, extra: Record<string, unknown> = {}) {
+    const onPushDraft = vi.fn();
+    const onOpenRow = vi.fn();
+    const onOpenTransaction = vi.fn();
+    return {onPushDraft, onOpenRow, onOpenTransaction, ...mount({mode: 'create', commitOnSave: false, allowChargeEdits: true, onPushDraft, onOpenRow, onOpenTransaction, items: [row], ...extra})};
+}
+
+/** The section shows the handed new parent: the barrier of every case below. */
+async function showsNewParent() {
+    await waitFor(() => expect(screen.getByTestId('tx-form-parent'), '66 TL-11: the form does not show the new parent it was handed').toHaveAttribute('data-state', 'ready'));
+    expect(parentBox()).toHaveAttribute('data-parent-key', 'op-n-buy');
+}
+
+async function applyAndRead(onPushDraft: ReturnType<typeof vi.fn>): Promise<Record<string, unknown>> {
+    await waitFor(() => expect(screen.getByTestId('tx-form-save')).toBeEnabled());
+    await fireEvent.click(screen.getByTestId('tx-form-save'));
+    expect(onPushDraft).toHaveBeenCalledTimes(1);
+    return onPushDraft.mock.calls[0][0] as Record<string, unknown>;
+}
+
+describe('TransactionFormModal — a charge under a new parent of the Bulk (66 TL-11)', () => {
+    beforeAll(async () => {
+        vi.mocked(zodiosApi.get_transaction_types_api_v1_transactions_types_get).mockResolvedValue(TYPES_WITH_CHARGE_ROLES);
+        await setupI18n();
+        await ensureTypesLoaded();
+    });
+
+    beforeEach(() => {
+        queryApi().mockReset();
+        queryApi().mockImplementation(async () => []);
+        guideAnchors.clear();
+    });
+
+    afterEach(() => {
+        cleanup();
+        guideAnchors.clear();
+    });
+
+    it('the new parent is shown from the handed row, named by its ref, with no server read and no «Link to a transaction…»', async () => {
+        bulkNewRow(newFee());
+
+        await showsNewParent();
+        expect(parentBox(), 'a new row has no id').toHaveAttribute('data-parent-id', '');
+        const summary = screen.getByTestId('tx-form-parent-summary');
+        expect(summary, 'named by its ref').toHaveTextContent('row 4');
+        expect(summary, 'never by an id').not.toHaveTextContent('#');
+        expect(summary, 'its date').toHaveTextContent('2024-05-17');
+        expect(summary, 'its amount').toHaveTextContent(/137/);
+        expect(screen.queryByTestId('tx-form-parent-link'), 'a linked charge offers no other parent').toBeNull();
+        expect(idsCalls(), 'no read by id').toHaveLength(0);
+        expect(queryApi(), 'no read at all').not.toHaveBeenCalled();
+    });
+
+    it('a SAVED charge linked under a new parent here is shown the same way (its own id is not the parent’s)', async () => {
+        const onOpenRow = vi.fn();
+        mount({mode: 'edit', unlockImmutable: true, commitOnSave: false, allowChargeEdits: true, onPushDraft: vi.fn(), onOpenRow, onOpenTransaction: vi.fn(), items: [{...FEE_ROW(null), _newParent: NEW_PARENT()}]});
+
+        await showsNewParent();
+        expect(parentBox()).toHaveAttribute('data-parent-id', '');
+        expect(screen.getByTestId('tx-form-parent-summary')).toHaveTextContent('row 4');
+        expect(screen.queryByTestId('tx-form-parent-link')).toBeNull();
+        expect(idsCalls()).toHaveLength(0);
+    });
+
+    it('«Open» asks the host for the new row (onOpenRow with its tempId), never for a saved id, and closes nothing', async () => {
+        const {onOpenRow, onOpenTransaction, onClose} = bulkNewRow(newFee());
+        await showsNewParent();
+
+        await fireEvent.click(screen.getByTestId('tx-form-parent-open'));
+
+        expect(onOpenRow).toHaveBeenCalledTimes(1);
+        expect(onOpenRow.mock.calls[0][0]).toBe('n-buy');
+        expect(onOpenTransaction).not.toHaveBeenCalled();
+        expect(onClose).not.toHaveBeenCalled();
+    });
+
+    it('without onOpenRow there is no «Open» on a new parent, even with onOpenTransaction', async () => {
+        bulkNewRow(newFee(), {onOpenRow: undefined});
+
+        await showsNewParent();
+        expect(screen.queryByTestId('tx-form-parent-open')).toBeNull();
+        // The rest of the section is there: the absence is «Open»'s alone.
+        expect(screen.getByTestId('tx-form-parent-unlink')).toBeInTheDocument();
+    });
+
+    it('«Unlink»: the state unlinked, no «Open», no «Unlink», no «Link to a transaction…»; the form is dirty; Apply carries _parent_unlink', async () => {
+        const {onPushDraft, onClose} = bulkNewRow(newFee());
+        await showsNewParent();
+
+        await fireEvent.click(screen.getByTestId('tx-form-parent-unlink'));
+
+        await waitFor(() => expect(parentBox()).toHaveAttribute('data-state', 'unlinked'));
+        expect(screen.getByTestId('tx-form-parent-unlinked')).toBeInTheDocument();
+        for (const gone of ['tx-form-parent-open', 'tx-form-parent-unlink', 'tx-form-parent-link']) expect(screen.queryByTestId(gone), gone).toBeNull();
+
+        await fireEvent.click(screen.getByTestId('tx-form-cancel'));
+        await screen.findByTestId('confirm-modal-confirm');
+        expect(onClose).not.toHaveBeenCalled();
+        await fireEvent.click(screen.getByTestId('confirm-modal-cancel'));
+        await waitFor(() => expect(screen.queryByTestId('confirm-modal-confirm')).toBeNull());
+
+        const payload = await applyAndRead(onPushDraft);
+        expect(payload._parent_unlink).toBe(true);
+        expect(payload).not.toHaveProperty('_parent_link');
+    });
+
+    it('nothing touched: Apply carries no _parent_unlink, and closing asks nothing', async () => {
+        const first = bulkNewRow(newFee());
+        await showsNewParent();
+        await fireEvent.click(screen.getByTestId('tx-form-cancel'));
+        expect(screen.queryByTestId('confirm-modal-confirm')).toBeNull();
+        expect(first.onClose).toHaveBeenCalledTimes(1);
+        cleanup();
+
+        const second = bulkNewRow(newFee());
+        await showsNewParent();
+        expect(await applyAndRead(second.onPushDraft)).not.toHaveProperty('_parent_unlink');
+    });
+
+    it('not editable (no allowChargeEdits, then a read-only form): the new parent is shown with no «Unlink»', async () => {
+        bulkNewRow(newFee(), {allowChargeEdits: false});
+        await showsNewParent();
+        expect(screen.queryByTestId('tx-form-parent-unlink')).toBeNull();
+        cleanup();
+
+        bulkNewRow(newFee(), {mode: 'view'});
+        await showsNewParent();
+        expect(screen.queryByTestId('tx-form-parent-unlink')).toBeNull();
+    });
+
+    it('unsaved changes: «Open» asks to discard first; Cancel keeps everything, confirming navigates', async () => {
+        const {onOpenRow, onClose} = bulkNewRow(newFee());
+        await showsNewParent();
+        await typeInto('tx-form-cash-amount', '9');
+
+        await fireEvent.click(screen.getByTestId('tx-form-parent-open'));
+        await screen.findByTestId('confirm-modal-confirm');
+        expect(onOpenRow).not.toHaveBeenCalled();
+        await fireEvent.click(screen.getByTestId('confirm-modal-cancel'));
+        await waitFor(() => expect(screen.queryByTestId('confirm-modal-confirm')).toBeNull());
+        expect(onOpenRow).not.toHaveBeenCalled();
+        expect(onClose).not.toHaveBeenCalled();
+        expect(screen.getByTestId('tx-form-cash-amount'), 'the amount typed is kept').toHaveDisplayValue(/^9/);
+        expect(parentBox()).toHaveAttribute('data-state', 'ready');
+
+        await fireEvent.click(screen.getByTestId('tx-form-parent-open'));
+        await fireEvent.click(await screen.findByTestId('confirm-modal-confirm'));
+        expect(onOpenRow).toHaveBeenCalledTimes(1);
+        expect(onOpenRow.mock.calls[0][0]).toBe('n-buy');
+        expect(onClose).not.toHaveBeenCalled();
+    });
+
+    it('an «Open» cancelled at the question is forgotten: a later Cancel, discarded, closes and does not navigate', async () => {
+        const {onOpenRow, onClose} = bulkNewRow(newFee());
+        await showsNewParent();
+        await typeInto('tx-form-cash-amount', '9');
+        await fireEvent.click(screen.getByTestId('tx-form-parent-open'));
+        await fireEvent.click(await screen.findByTestId('confirm-modal-cancel'));
+        await waitFor(() => expect(screen.queryByTestId('confirm-modal-confirm')).toBeNull());
+
+        await fireEvent.click(screen.getByTestId('tx-form-cancel'));
+        await fireEvent.click(await screen.findByTestId('confirm-modal-confirm'));
+
+        expect(onClose).toHaveBeenCalledTimes(1);
+        expect(onOpenRow).not.toHaveBeenCalled();
+    });
+
+    // --- guards, green before and after ---
+
+    it('guard: a saved parent is unchanged — read by id, named by #id, «Open» by id, no data-parent-key of a new row', async () => {
+        answer(() => [PARENT_10()]);
+        const onOpenRow = vi.fn();
+        const onOpenTransaction = vi.fn();
+        mount({mode: 'edit', unlockImmutable: true, commitOnSave: false, allowChargeEdits: true, onPushDraft: vi.fn(), onOpenRow, onOpenTransaction, items: [FEE_ROW()]});
+
+        await waitFor(() => expect(parentBox()).toHaveAttribute('data-state', 'ready'));
+        expect(parentBox()).toHaveAttribute('data-parent-id', '10');
+        expect(parentBox().getAttribute('data-parent-key') ?? '', 'no new row').not.toMatch(/^op-/);
+        expect(screen.getByTestId('tx-form-parent-summary')).toHaveTextContent('#10');
+        expect(idsCalls()).toHaveLength(1);
+        await fireEvent.click(screen.getByTestId('tx-form-parent-open'));
+        expect(onOpenTransaction).toHaveBeenCalledWith(10);
+        expect(onOpenRow).not.toHaveBeenCalled();
+    });
+
+    it('guard: a charge with no parent at all still offers «Link to a transaction…»', async () => {
+        bulkNewRow(newFee({_newParent: undefined}));
+
+        await waitFor(() => expect(screen.getByTestId('tx-form-parent')).toHaveAttribute('data-state', 'empty'));
+        expect(screen.getByTestId('tx-form-parent-link')).toBeInTheDocument();
+        expect(screen.queryByTestId('tx-form-parent-unlink')).toBeNull();
+        expect(screen.queryByTestId('tx-form-parent-open')).toBeNull();
+    });
+});
