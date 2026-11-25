@@ -304,7 +304,7 @@
             "saved_fx_skipped": "The saved {pair} rate of {skipped_date} is not valid and was skipped: the rate of {used_date} was used instead. Correct it in the {pair} exchange rate editor (Edit Rates); until then the results may be slightly approximate.",
             "bound_max_below_current": "The maximum is below what the plan already holds and sales are off.",
             "bound_min_above_max": "The minimum is higher than the maximum.",
-            "bounds_min_sum_exceeds_reference": "The minimums add up to more than the money the plan can reach.",
+            "bounds_min_sum_exceeds_reference": "The minimums add up to {minimums}: more than the cash the plan can invest, {reference}.",
             "bounds_unsatisfiable": "No plan meets the minimums and maximums set here.",
             "solver_numerical_error": "The solver hit a numerical error while refining the plan: the best plan found so far is shown. It is valid and can be carried out; only its optimality is not proven.",
             "cash_limit_exceeded_by_rounding": "The plan ends this cash entry beyond its limit by {exceeded_by}, because every amount is rounded to the cent. The planner could not hold the plan exactly inside a band this narrow."
@@ -390,7 +390,7 @@
           "turnover": "Turnover",
           "plan_score": "Score",
           "target_distance": "Distance from the targets",
-          "wealth_loss": "Money lost",
+          "wealth_loss": "Costs and fees",
           "operation_count": "Fewer operations"
         },
         "origin": {
@@ -451,7 +451,8 @@
           "limitMinAboveMax": "The minimum is above the maximum.",
           "limitShareMinimumsAboveHundred": "The minimums in percent add up to more than 100%: {assets}.",
           "positionQuantityInvalid": "A position quantity is empty, not a number or below zero.",
-          "fidelityCustomMissing": "«Custom»: write how much you accept to spend for the reference row, a figure above zero."
+          "fidelityCustomMissing": "«Custom»: write how much you accept to spend for the reference row, a figure above zero.",
+          "limitMinimumAboveTotal": "The minimum alone is above the cash the plan can invest, {reference}."
         },
         "removal": {
           "cash": "Cash row {broker} · {currency}",
@@ -578,7 +579,7 @@
             "notesHelp": "The messages the calculation left about this plan, warnings or information. When there are any, they are listed just below."
           },
           "kpi": {
-            "explicitCost": "Costs",
+            "explicitCost": "Costs and fees",
             "finalInvested": "Invested after",
             "fixedReference": "Base of the targets",
             "funding": "Cash chosen: {selected}, of which {reachable} reachable by the plan and {trapped} not.",
@@ -589,7 +590,7 @@
             "help": {
               "fixedReference": "The amount the target percentages apply to: what you already hold of the chosen Assets, plus the cash the plan can reach.",
               "finalInvested": "The value of the chosen Assets at the end of the plan.",
-              "shortfall": "The part of the base that does not end up in the Assets: cash left free, costs and rounding.",
+              "shortfall": "The part of the base that does not end up in the Assets: cash left free, costs and rounding. Under it, the cash currency by currency, each in its own: at the start and at the end, contributions included.",
               "explicitCost": "Broker fees, currency exchange spreads and the price margins you set, over the whole plan.",
               "orders": "How many orders the plan asks you to place.",
               "selectedFunding": "The cash you chose for the plan, existing and new, at the rates of the FX step. A part that cannot reach a Broker where you can buy is marked not reachable and stays out of the base of the targets."
@@ -621,7 +622,10 @@
               "nodeLimit": "Node limit",
               "engine": "Engine"
             },
-            "autoConversions": "{count, plural, one {# automatic conversion} other {# automatic conversions}}"
+            "autoConversions": "{count, plural, one {# automatic conversion} other {# automatic conversions}}",
+            "cashTitle": "Cash at the start → at the end",
+            "cashTo": "at the end",
+            "cashUnused": "of which contributions not used: {value}"
           },
           "ledger": {
             "fields": {
@@ -973,33 +977,40 @@
         },
         "targets": {
           "copyDistribution": "Copy current distribution",
-          "intro": "How to split among the Assets the money you invest now, in percent.",
+          "intro": "How to split among the Assets the cash the plan can invest, in percent.",
           "remaining": "{value} missing",
           "shape": "Distribution",
           "target": "Target %",
           "total": "Total",
-          "wire": "The share of the money you invest now that goes to this Asset, in percent. Decimals are allowed.",
+          "wire": "The share of the cash the plan can invest that goes to this Asset, in percent. Decimals are allowed.",
           "copyHelp": "Reads how much each of these Assets weighs today in the Brokers you tick, counting only these Assets and not the cash, and brings the ratios to 100%. Assets entered by hand get 0. You see the weights before using them, and a target you changed is replaced only after you confirm.",
           "excess": "+{value} in excess",
           "balance": "Balance to 100%",
-          "totalHelp": "The targets split among the Assets the money you invest now, cash and contributions included: to calculate, they must add up to exactly 100%. «Balance all» rescales every target keeping their ratios (equal parts if they are all 0). Tick some rows to rescale only those, with «Balance the selected rows to 100%». «Balance to 100%» on a row gives that Asset what is missing, or takes away the excess.",
+          "totalHelp": "The targets split among the Assets the cash the plan can invest, contributions included: to calculate, they must add up to exactly 100%. «Balance all» rescales every target keeping their ratios (equal parts if they are all 0). Tick some rows to rescale only those, with «Balance the selected rows to 100%». «Balance to 100%» on a row gives that Asset what is missing, or takes away the excess.",
           "balanceAll": "Balance all",
           "balanceSelected": "Balance the selected rows to 100%",
           "limits": "Limits",
-          "limitsHelp": "Minimum and maximum of this Asset's value at the end of the plan. Write an amount in the valuation currency (500) or a percentage of the plan's total (35%): the total is the money you invest now. Empty field = no limit.",
+          "limitsHelp": "Minimum and maximum of this Asset's value at the end of the plan. Write an amount in the valuation currency (500) or a percentage of the plan's total (35%): the total is the cash the plan can invest. Empty field = no limit.",
           "limitMinimum": "min",
           "limitMaximum": "max",
           "limitMinimumLabel": "Minimum of {asset}",
           "limitMaximumLabel": "Maximum of {asset}",
-          "limitsNote": "Limits on the value at the end of the plan. Write an amount (500) or a percentage of the total (35%). Empty field = no limit.",
           "limitsCheck": "Check the limits",
           "limitMinAboveMax": "The minimum ({minimum}) is above the maximum ({maximum}).",
-          "limitsNoteTotal": "Limits on the value at the end of the plan. Write an amount (500) or a percentage (35%) of the total, the money you invest now: {total}. Empty field = no limit.",
           "previewIncomplete": "Today's figures appear once no field of the draft is marked in red, on any step.",
           "previewUnavailable": "Today's figures are not available right now; the calculation is not affected.",
           "addCashHelp": "A Broker's cash in one currency becomes a row of the targets with limits only: how much must stay at least, or at most, at the end of the plan. It has no target and does not count in the total.",
           "balanceNotNumber": "A target is not a number",
-          "balanceNoRoom": "The rows not selected already add up to 100% or more: lower them, or select them too."
+          "balanceNoRoom": "The rows not selected already add up to 100% or more: lower them, or select them too.",
+          "limitsGuide": {
+            "title": "The «Limits» column: what to write in Min and Max",
+            "end": "They limit the entry's value at the end of the plan.",
+            "amount": "An amount: «500» means 500 in the valuation currency.",
+            "percent": "A percentage: «35%» means 35% of the cash the plan can invest.",
+            "percentTotal": "A percentage: «35%» means 35% of the cash the plan can invest, {total}.",
+            "empty": "Empty field: no limit."
+          },
+          "limitsChecking": "Checking the limits…"
         },
         "toolErrors": {
           "cleanup_failed": "The calculation finished, but the platform could not clean up after it.",

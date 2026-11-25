@@ -68,10 +68,12 @@ from backend.app.schemas.pac_allocator.exact import FiniteDecimal, exact_fractio
 from backend.app.schemas.pac_allocator.results import PacPlannerReadyIncumbentResult
 from backend.app.schemas.pac_allocator.solutions import DeploymentUnavailable, PacIncumbentSolution
 from backend.app.services.pac_allocator import models as pac_models
+from backend.app.services.pac_allocator import planner as PL
 from backend.app.services.pac_allocator import planner_report as PR
 from backend.app.services.pac_allocator import rebalancer_report as RR
 from backend.app.services.pac_allocator.compiler import compile_policy_program
 from backend.app.services.pac_allocator.evaluation.evaluator import build_exact_policy_view, evaluate_exact_candidate
+from backend.app.services.pac_allocator.evaluation.scenario import build_scenario_index, to_valuation
 from backend.app.services.pac_allocator.models import CandidateActionVector, CandidateDecision, ExactExposure
 from backend.app.services.pac_allocator.proof import OptimalProvenConclusion, conclude_with_solver
 from backend.app.services.pac_allocator.solver import solve_policy_program
@@ -1455,3 +1457,135 @@ def test_pac_plan_accounts_count_trapped_cash_as_uninvested() -> None:
     assert evaluation.accounting.trapped_funding == R(12)
     # Nothing is bought (the do-nothing candidate): the shortfall is the 10 reachable, the trapped 12 the rest.
     assert (_wire_fraction(accounts.initial_wealth), _wire_fraction(accounts.uninvested)) == (22, 10 + 12)
+
+
+# =============================================================================
+# TL-5 of project 67: the cash currency by currency, and the two parts of the uninvested row
+# =============================================================================
+
+
+def _cash_rows(accounts) -> list[tuple[str, Fraction, Fraction, Fraction]]:
+    return [(row.currency, _wire_fraction(row.initial), _wire_fraction(row.final), _wire_fraction(row.unused_contributions)) for row in accounts.cash_by_currency]
+
+
+def _valued(scenario, amount: Fraction, currency: str) -> Fraction:
+    value = to_valuation(build_scenario_index(scenario), R(amount.numerator, amount.denominator), currency)
+    return Fraction(value.numerator, value.denominator)
+
+
+def test_cash_by_currency_on_t4_the_cash_spent_on_the_purchase() -> None:
+    """T4: 200 EUR of cash, a purchase of 195 and 5 of fee — EUR 200 at the start, 0 at the end, no contribution. The
+    uninvested row (200 before, the 5 of fee after) splits into the cash with no target (200 → 0) and the costs (0 → 5)."""
+    scenario = cases.t4()
+    _view, evaluation, _run = _rebalancer_plan(scenario)
+    accounts = PR.build_plan_accounts(scenario, evaluation)
+    assert _cash_rows(accounts) == [("EUR", 200, 0, 0)]
+    assert _wire_fraction(accounts.final_cash) == 0
+    row = RR.build_uninvested_row(scenario, evaluation)
+    assert (_wire_fraction(row.before_value), _wire_fraction(row.final_value)) == (200, 5)
+    parts = {name: (_wire_fraction(part.before_value), _wire_fraction(part.final_value)) for name, part in (("cash", row.untargeted_cash), ("costs", row.costs))}
+    assert parts == {"cash": (200, 0), "costs": (0, 5)}
+    wealth = Fraction(10_000)
+    for part in (row.untargeted_cash, row.costs):
+        assert exact_fraction(part.before_weight) * wealth == _wire_fraction(part.before_value)
+        assert exact_fraction(part.final_weight) * wealth == _wire_fraction(part.final_value)
+
+
+def test_cash_by_currency_counts_the_contribution_not_deposited_at_the_end() -> None:
+    """The PAC with a contribution no route reaches (10 reachable + 7 trapped + 5 contributed, nothing bought): EUR 22 at the
+    start and at the end, 5 of it the contribution not deposited. A contribution deposited would be in a ledger's
+    ``funding_in`` already: only its remainder is added."""
+    capability = ev._capability("capability:buy")
+    fee = ev._fee("fee:buy", capability.capability_id, "buy")
+    broker_a, broker_b = ev._broker("broker:a", (capability,), (fee,)), ev._broker("broker:b")
+    scenario = ev._scenario(
+        "scenario:trapped-contribution",
+        product="pac",
+        policy="proportional",
+        assets=(ev._asset("asset:a"),),
+        brokers=(broker_a, broker_b),
+        existing_cash=(ev._cash("cash:reachable", broker_a.broker_id, R(10)), ev._cash("cash:trapped", broker_b.broker_id, R(7))),
+        contributions=(ev._contribution("contribution:trapped", R(5)),),
+        order_routes=(ev._order_route("route:buy", broker_id=broker_a.broker_id, asset_id="asset:a", capability=capability, fee_id=fee.fee_schedule_id, side="buy"),),
+    )
+    view = build_exact_policy_view(scenario)
+    evaluation = evaluate_exact_candidate(scenario, view, ev._candidate(view))
+    accounts = PR.build_plan_accounts(scenario, evaluation)
+    assert _cash_rows(accounts) == [("EUR", 22, 22, 5)]
+    assert _wire_fraction(accounts.final_cash) == 22
+
+
+@pytest.mark.parametrize("build", [pytest.param(lambda: cases.t6(with_usd=True, target_fidelity=pac_models.ExactTargetFidelity(kind="weighted", distance_weight=R(4))), id="rebalancer-t6-usd"), pytest.param(_coarse_funding_fx_scenario, id="pac-fx")])
+def test_cash_by_currency_closes_on_the_accounts(build) -> None:
+    """Every currency in its own, valued in the valuation currency: the start sums to the cash chosen (``selected_funding``),
+    the end to ``W`` less the Assets after the plan, the published ``final_cash``; the valuation currency first, then by code; no row with nothing at
+    either end."""
+    scenario = build()
+    _view, evaluation = _evaluate(scenario)
+    accounts = PR.build_plan_accounts(scenario, evaluation)
+    rows = _cash_rows(accounts)
+    accounting = evaluation.accounting
+    assert sum((_valued(scenario, initial, code) for code, initial, _final, _unused in rows), Fraction()) == Fraction(accounting.selected_funding.numerator, accounting.selected_funding.denominator)
+    held = accounting.final_wealth - accounting.final_invested
+    assert sum((_valued(scenario, final, code) for code, _initial, final, _unused in rows), Fraction()) == Fraction(held.numerator, held.denominator) == _wire_fraction(accounts.final_cash)
+    codes = [code for code, *_ in rows]
+    assert codes[0] == scenario.valuation_currency and codes[1:] == sorted(codes[1:])
+    assert all(initial != 0 or final != 0 for _code, initial, final, _unused in rows)
+
+
+# =============================================================================
+# TL-6 of project 67: the default conversion mode becomes «automatic»; the mode only presents the plan
+# =============================================================================
+
+
+def _dumped(value):
+    if isinstance(value, list):
+        return [_dumped(item) for item in value]
+    return value.model_dump(mode="json") if hasattr(value, "model_dump") else value
+
+
+def _without_presentation(parts: dict) -> dict:
+    """A solution's parts with what the conversion mode decides taken out: the conversions' mode, and every step number."""
+    data = {key: _dumped(value) for key, value in parts.items()}
+    for row in data["conversions"]:
+        row.pop("mode")
+        row.pop("sequence")
+    for section in ("funding_actions", "transfers", "order_rows"):
+        for row in data.get(section, []):
+            row.pop("sequence")
+    return data
+
+
+def test_the_conversion_mode_changes_no_figure_of_a_pac_plan() -> None:
+    """The engine's plan replayed with the Broker converting by hand and by itself: every row, figure and account is the
+    same; only the conversions' mode and the step numbers differ (TL-6: a Broker with no profile now reads «automatic»)."""
+    base = _coarse_funding_fx_scenario()
+    # The engine's plan, not the maximal candidate of ``_evaluate``, which no order of steps can pay.
+    _view, run = _solve(base)
+    assert run.candidate is not None
+    parts = {}
+    for mode in ("manual", "automatic"):
+        scenario = _with_conversion_mode(base, "broker:destination", mode)
+        view = build_exact_policy_view(scenario, purpose="primary")
+        evaluation = evaluate_exact_candidate(scenario, view, replace(run.candidate, view_id=view.view_id))
+        parts[mode] = PL._build_solution_parts(scenario, view, evaluation, ())
+    assert parts["automatic"]["conversions"] and {row.mode for row in parts["automatic"]["conversions"]} == {"automatic"}
+    assert all(row.sequence is None for row in parts["automatic"]["conversions"])
+    assert all(row.sequence is not None for row in parts["manual"]["conversions"])
+    assert _without_presentation(parts["manual"]) == _without_presentation(parts["automatic"])
+
+
+def test_the_conversion_mode_changes_no_figure_of_a_rebalancer_plan() -> None:
+    """The Rebalancer, one solver run, its plan (an exchange and a purchase) replayed under both modes: the same figures."""
+    base = cases.scenario("fx-mode", holdings={"asset:a": R(5000), "asset:usd": R(0)}, cash=R(5000), weights={"asset:a": R(1, 2), "asset:usd": R(1, 2)}, prices={"asset:a": R(1), "asset:usd": R(10)}, usd_asset="asset:usd")
+    _view, run = _solve(base)
+    assert run.candidate is not None
+    parts = {}
+    for mode in ("manual", "automatic"):
+        scenario = _with_conversion_mode(base, cases.BROKER, mode)
+        view = build_exact_policy_view(scenario, purpose="primary")
+        evaluation = evaluate_exact_candidate(scenario, view, replace(run.candidate, view_id=view.view_id))
+        parts[mode] = PL._rebalancer_solution_parts(scenario, view, evaluation, (), run)
+    assert parts["automatic"]["conversions"] and {row.mode for row in parts["automatic"]["conversions"]} == {"automatic"}
+    assert parts["manual"]["order_rows"], "PREMISE: a purchase after the exchange"
+    assert _without_presentation(parts["manual"]) == _without_presentation(parts["automatic"])

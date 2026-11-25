@@ -16,6 +16,7 @@ import {canonicalInput, decimalSign, percentToFraction} from '$lib/utils/core/ex
 import {positionIsCopied, type CopyRef, type DraftFidelity, type DraftPosition, type PlannerDraft} from './draft.svelte';
 import {wireLimit} from './limits';
 import type {PlannerStep} from './types';
+import {DEFAULT_CONVERSION_MODE} from '$lib/features/brokers/profile/brokerOperatingProfile';
 
 type Copied = (stamp: CopyRef, step: PlannerStep, entityKey: string) => string;
 type Manual = (entityKey: string, suffix: string, label: string, enteredAt: string, step: PlannerStep) => string;
@@ -56,7 +57,7 @@ export function positionOnlyBrokers(draft: PlannerDraft, copied: Copied) {
             broker_id: position.brokerKey,
             identity: {kind: 'domain_broker' as const, source_broker_id: String(position.sourceBrokerId), name: position.brokerName.trim().slice(0, 128), active: true},
             provenance_id: copied(position.stamp, 'brokers', position.brokerKey),
-            conversion_mode: 'manual' as const,
+            conversion_mode: DEFAULT_CONVERSION_MODE,
         });
     }
     return brokers;

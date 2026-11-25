@@ -5046,6 +5046,7 @@ def test_sum_of_minimums_above_the_reference_names_the_entries() -> None:
     (problem,) = check_minimums_exceed_reference(scenario, reference)
     assert problem.code == "bounds_min_sum_exceeds_reference"
     assert [entry.key for entry in problem.entries] == ["asset:asset:a", "asset:asset:b"]
+    assert problem.sums == (R(190), R(150))  # TL-4 of project 67: the two figures the check compared
 
     fine = _limited_scenario(asset_a=(_LIMIT_A("amount", R(100)), None), asset_b=(_LIMIT_A("share", R(1, 3)), None))
     assert check_minimums_exceed_reference(fine, reference) == ()  # 100 + 50 = 150 is not above 150
@@ -5313,6 +5314,9 @@ def test_sum_of_minimums_ignores_the_trapped_cash_of_a_cell() -> None:
     above = replace(scenario, cash_entries=(replace(scenario.cash_entries[0], minimum=pac_models.ExactLimit("amount", R(31))),))
     (problem,) = check_minimums_exceed_reference(above, reference, trapped)  # one euro beyond the trapped 30 needs reachable money
     assert [entry.key for entry in problem.entries] == ["asset:asset:a", "cash:broker:idle:EUR"]
+    # TL-4 of project 67: the sum counts only the cell's euro above its trapped cash, and the base is the reachable 100, below
+    # the 130 of cash the scenario holds. The sentence says «101 … more than 100», never a sum below its base.
+    assert problem.sums == (R(101), R(100))
 
 
 # ---------------------------------------------------------------------------

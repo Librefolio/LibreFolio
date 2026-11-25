@@ -43,7 +43,7 @@
     import {formatExactPercent, formatPlannerPercentUnits} from '../format';
     import HelpTip from '../shared/HelpTip.svelte';
     import {HINT} from '../ui';
-    import {exposureTooltipHtml, exposureTooltipText} from './exposureTooltip';
+    import {exposureTooltipHtml, exposureTooltipText, type ExposureTooltipText} from './exposureTooltip';
     import {chartPercent, type MapWeightRow} from './model';
     import {themed} from '$lib/theme/themePair';
     import {chartNeutrals, GEO_MAP_COLORS} from '$lib/theme/chartTheme';
@@ -57,9 +57,10 @@
 
     interface Props {
         rows: readonly MapWeightRow[];
-        /** The two maps' names, when the Tool calls them otherwise: the Rebalancer's «Target» and «After the plan», where
-         * «actual» would read as today. The PAC's «ideal» and «actual» when absent. */
-        titles?: {target: string; final: string};
+        /** The two maps' names and the direction in their tooltips, when the Tool calls them otherwise: the Rebalancer's
+         * «Target» and «After the plan», where «actual» would read as today, and «above the target» (TL-5 of project 67). The
+         * PAC's «ideal» and «actual» when absent. */
+        titles?: Pick<ExposureTooltipText, 'target' | 'final' | 'above' | 'below' | 'equal'>;
     }
 
     let {rows, titles}: Props = $props();

@@ -4,7 +4,8 @@
  *
  * The figures are the page's (`acceptableCost.ts`, R1-F (b) of project 67), on the preview's total and the λ of its levels:
  * the component shows what the helper counts (its own figures are tested there). Four rows of money in the wrong place,
- * the reference row marked; one column per level; the «Custom» column only while that choice is active with a λ (M32);
+ * the reference row marked; one column per level; the «Custom» column, highlighted while that choice is active with a λ
+ * (M32), kept plain on the λ remembered under another choice (TL-1);
  * «Target first» has no column, a line under the table says so (M33). While the preview waits
  * the figures stay, muted; after a failure the table goes and a line says why. Every figure is the user's money (derived
  * from the total): masked in privacy mode. Nothing reads translated text: figures are compared with the planner's own
@@ -73,8 +74,8 @@ function previewWith(state: PlannerPreview['state'], numbers: PreviewReady | nul
 
 const BALANCED: DraftFidelity = {kind: 'level', level: 'balanced'};
 
-function mount(preview: PlannerPreview | null, fidelity: DraftFidelity = BALANCED): void {
-    render(ProfileHarness, {props: {profile: REBALANCER_PLANNER_PROFILE, child: FidelityTable, childProps: {preview, fidelity}}});
+function mount(preview: PlannerPreview | null, fidelity: DraftFidelity = BALANCED, rememberedLambda = ''): void {
+    render(ProfileHarness, {props: {profile: REBALANCER_PLANNER_PROFILE, child: FidelityTable, childProps: {preview, fidelity, rememberedLambda}}});
     flushSync();
 }
 
@@ -118,6 +119,25 @@ describe('the table «Maximum acceptable cost»', () => {
         expect(cells('custom')).toEqual([]);
         cleanup();
         mount(previewWith('ready', ready()), {kind: 'custom', lambda: ''});
+        expect(cells('custom')).toEqual([]);
+    });
+
+    it('a figure remembered keeps the «Custom» column under another choice, not highlighted (TL-1)', () => {
+        const highlighted = (): (string | null)[] =>
+            screen
+                .getAllByTestId('rebalancer-planner-fidelity-cell')
+                .filter((cell) => cell.getAttribute('data-level') === 'custom')
+                .map((cell) => cell.getAttribute('data-highlight'));
+        mount(previewWith('ready', ready()), BALANCED, '0.6');
+        expect(cells('custom').map((text, index) => text.includes(whole(['2.4', '15', '60', '240'][index])))).toEqual([true, true, true, true]);
+        expect(highlighted()).toEqual(['false', 'false', 'false', 'false']);
+        cleanup();
+        // «Target first» too: the column is a comparison, whatever the choice.
+        mount(previewWith('ready', ready()), {kind: 'target_first'}, '0.6');
+        expect(highlighted()).toEqual(['false', 'false', 'false', 'false']);
+        cleanup();
+        // «Custom» chosen reads its own λ, never the one remembered: a new figure still converting has no column.
+        mount(previewWith('ready', ready()), {kind: 'custom', lambda: ''}, '0.6');
         expect(cells('custom')).toEqual([]);
     });
 

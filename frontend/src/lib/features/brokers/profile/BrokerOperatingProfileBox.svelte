@@ -5,7 +5,10 @@
 
   In the mockup's order (screen 14): a block per currency (M21: currency, order type, increment, purchase fee, sale fee
   with «same as the purchase», remove), «Add currency» and «Copy the rules from another currency»; then the currency
-  conversion and the tax regime as big choice cards (M6), «Declarative» badged as the default (M18).
+  conversion and the tax regime as big choice cards (M6), «Declarative» badged as the default (M18), and «The Broker
+  converts when you buy» too (TL-6 of project 67: the default of a Broker that said nothing). The order row has three
+  columns: the order type, the increment aligned right, and beside it, for an order by amount, its currency in the
+  project's form (`symbol flag code`).
 
   `groups` chooses what is shown (every group when absent: «Edit broker»); a hidden group is kept in the draft and handed
   back untouched (P2, fact 8). `stepFor` lets the caller reset the increment when the order type changes, `rootTestid`
@@ -22,7 +25,11 @@
     import SimpleSelect from '$lib/components/ui/select/SimpleSelect.svelte';
     import ExactDecimalInput from '$lib/components/ui/input/ExactDecimalInput.svelte';
     import ChoiceCards from './ChoiceCards.svelte';
-    import {copyRules, newRule, PROFILE_GROUPS, profileProblems, type ConversionMode, type FeeDraft, type OrderKind, type ProfileDraft, type ProfileField, type ProfileGroup, type RuleDraft, type TaxRegime} from './brokerOperatingProfile';
+    import {currentLanguage} from '$lib/stores/app/language';
+    import {currencyStoreVersion, ensureCurrenciesLoaded} from '$lib/stores/reference/currencyStore';
+    import {sanitizeHtml} from '$lib/utils/core/sanitizeHtml';
+    import {formatCurrencyCodeHtml} from '$lib/utils/currency/currencyFormat';
+    import {copyRules, DEFAULT_CONVERSION_MODE, newRule, PROFILE_GROUPS, profileProblems, type ConversionMode, type FeeDraft, type OrderKind, type ProfileDraft, type ProfileField, type ProfileGroup, type RuleDraft, type TaxRegime} from './brokerOperatingProfile';
 
     interface Props {
         draft: ProfileDraft;
@@ -103,6 +110,15 @@
         {name: 'fixed', suffix: 'fixed', label: () => $_('brokers.operatingProfile.feeFixed')},
     ];
     const sideLabel = (side: 'buy' | 'sell') => (side === 'buy' ? $_('brokers.operatingProfile.buyFee') : $_('brokers.operatingProfile.sellFee'));
+
+    // The currency beside an amount's increment (TL-6): the catalogue gives its symbol and flag; until it arrives, the code.
+    $effect(() => {
+        ensureCurrenciesLoaded($currentLanguage).catch(() => undefined);
+    });
+    function currencyHtml(code: string): string {
+        void $currencyStoreVersion;
+        return formatCurrencyCodeHtml(code);
+    }
 
     const conversionOptions = $derived([
         {value: 'manual' as ConversionMode, label: $_(`${P}.conversionManual`)},
@@ -197,8 +213,9 @@
                 {#each [...new Set(problems.filter((problem) => problem.ruleKey === rule.key).map((problem) => problem.key))] as key (key)}
                     <p class="text-xs text-lf-danger" data-testid={id('mode-problem')} data-key={key}>{problemText(key)}</p>
                 {/each}
-                <div class="grid gap-2 sm:grid-cols-2">
-                    <div class="space-y-1">
+                <!-- Three columns from `sm`; on a phone the order type takes its own line, so its select is not cut. -->
+                <div class="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]" data-testid={id('mode-row')}>
+                    <div class="col-span-2 min-w-0 space-y-1 sm:col-span-1">
                         <span class="block text-xs font-medium text-lf-secondary">{$_(`${P}.orderKind`)}</span>
                         <SimpleSelect
                             value={rule.orderKind}
@@ -215,7 +232,7 @@
                             }}
                         />
                     </div>
-                    <label class="block space-y-1">
+                    <label class="block min-w-0 space-y-1">
                         <span class="flex items-center gap-1 text-xs font-medium text-lf-secondary">
                             {$_(`${P}.step`)}
                             <Tooltip text={$_(`${P}.stepHelp`)} maxWidth="320px"><Info size={14} class="text-lf-muted" aria-hidden="true" /></Tooltip>
@@ -227,12 +244,17 @@
                             externalInvalid={invalid(rule, 'step')}
                             {disabled}
                             testid={id('mode-step')}
+                            className="text-right"
                             onchange={(value) => {
                                 rule.step = value;
                                 changed();
                             }}
                         />
                     </label>
+                    <!-- The third column: the currency of an amount, beside its number; nothing for whole units, or while no currency is chosen. -->
+                    <span class="flex min-h-10 items-center whitespace-nowrap text-sm text-lf-secondary" data-testid={id('mode-step-currency')} data-currency={rule.orderKind === 'monetary_amount' ? rule.currency : ''}>
+                        {#if rule.orderKind === 'monetary_amount' && rule.currency !== ''}<span>{@html sanitizeHtml(currencyHtml(rule.currency))}</span>{/if}
+                    </span>
                 </div>
                 {#if shows('buyFee')}
                     <div class="space-y-2 border-t border-lf-subtle pt-3" data-testid={id('group')} data-group="buyFee">
@@ -328,6 +350,8 @@
                 legend={$_(`${P}.conversion`)}
                 options={conversionOptions}
                 value={working.conversionMode}
+                defaultValue={DEFAULT_CONVERSION_MODE}
+                defaultLabel={$_(`${P}.defaultBadge`)}
                 {disabled}
                 testid={id('conversion-modes')}
                 cardTestid={id('conversion-mode')}

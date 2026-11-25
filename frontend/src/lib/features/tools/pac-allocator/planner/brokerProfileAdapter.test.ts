@@ -52,7 +52,8 @@ describe('brokerProfileAdapter', () => {
 
         expect(back.modes.slice(0, 2)).toEqual(MODES);
         expect(back.modes[2]).toEqual({key: 'mode-new:1', currency: 'CHF', kind: 'whole_quantity', step: '1', fixedFee: '0', ratePercent: '0', floor: '0', cap: ''});
-        expect(back.conversionMode).toBe('manual');
+        // No conversion chosen reads the default (TL-6 of project 67: the Broker converts by itself).
+        expect(back.conversionMode).toBe('automatic');
         // A later edit of the same draft keeps the new mode's key.
         draft.rules[2].step = '2';
         expect(modesOf(draft, keyFor).modes[2]).toMatchObject({key: 'mode-new:1', step: '2'});

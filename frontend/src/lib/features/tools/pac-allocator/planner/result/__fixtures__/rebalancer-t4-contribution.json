@@ -587,6 +587,66 @@
           "display_decimal": "0.007281553398058252",
           "display_scale": 18,
           "display_authority": "non_authoritative"
+        },
+        "untargeted_cash": {
+          "before_value": {
+            "value": {
+              "kind": "finite_decimal",
+              "value": "500"
+            },
+            "currency": "EUR"
+          },
+          "before_weight": {
+            "kind": "exact_ratio",
+            "numerator": "5",
+            "denominator": "103",
+            "display_decimal": "0.04854368932038835",
+            "display_scale": 17,
+            "display_authority": "non_authoritative"
+          },
+          "final_value": {
+            "value": {
+              "kind": "finite_decimal",
+              "value": "70"
+            },
+            "currency": "EUR"
+          },
+          "final_weight": {
+            "kind": "exact_ratio",
+            "numerator": "7",
+            "denominator": "1030",
+            "display_decimal": "0.006796116504854369",
+            "display_scale": 18,
+            "display_authority": "non_authoritative"
+          }
+        },
+        "costs": {
+          "before_value": {
+            "value": {
+              "kind": "finite_decimal",
+              "value": "0"
+            },
+            "currency": "EUR"
+          },
+          "before_weight": {
+            "kind": "finite_decimal",
+            "value": "0"
+          },
+          "final_value": {
+            "value": {
+              "kind": "finite_decimal",
+              "value": "5"
+            },
+            "currency": "EUR"
+          },
+          "final_weight": {
+            "kind": "exact_ratio",
+            "numerator": "1",
+            "denominator": "2060",
+            "display_decimal": "0.000485436893203883",
+            "display_scale": 18,
+            "display_authority": "non_authoritative"
+          }
         }
       },
       "funding_actions": [
@@ -1137,7 +1197,40 @@
             "value": "75"
           },
           "currency": "EUR"
-        }
+        },
+        "final_cash": {
+          "value": {
+            "kind": "finite_decimal",
+            "value": "70"
+          },
+          "currency": "EUR"
+        },
+        "cash_by_currency": [
+          {
+            "currency": "EUR",
+            "initial": {
+              "value": {
+                "kind": "finite_decimal",
+                "value": "500"
+              },
+              "currency": "EUR"
+            },
+            "final": {
+              "value": {
+                "kind": "finite_decimal",
+                "value": "70"
+              },
+              "currency": "EUR"
+            },
+            "unused_contributions": {
+              "value": {
+                "kind": "finite_decimal",
+                "value": "70"
+              },
+              "currency": "EUR"
+            }
+          }
+        ]
       },
       "score": {
         "distance_weight": {

@@ -36,23 +36,24 @@
         },
         "targets": {
           "cashEntry": "Liquidités · {broker} · {currency}",
-          "otherCash": "Autres liquidités",
-          "otherCashHelp": "Toutes les liquidités sans objectif propre : elles comptent toujours 0 %, et le plan peut les utiliser pour acheter.",
           "addCash": "Ajouter des liquidités",
           "addCashHelp": "Les liquidités d’un courtier dans une devise deviennent une ligne des objectifs, avec objectif et limites, comme un actif.",
           "addCashNone": "Chaque courtier et devise du scénario a déjà sa ligne de liquidités.",
           "removeCash": "Retirer les liquidités",
           "intro": "Comment répartir le total qui entre dans le plan, liquidités comprises, en pourcentage.",
           "introTotal": "Comment répartir le total qui entre dans le plan ({total}), liquidités comprises, en pourcentage.",
-          "limitsNote": "Limites de la valeur à la fin du plan. Écrivez un montant (500) ou un pourcentage (35%) du total qui entre dans le plan. Champ vide = aucune limite.",
-          "limitsNoteTotal": "Limites de la valeur à la fin du plan. Écrivez un montant (500) ou un pourcentage (35%) du total qui entre dans le plan : {total}. Champ vide = aucune limite.",
           "now": "Aujourd’hui",
           "nowHelp": "Le poids d’aujourd’hui de cette ligne sur le total qui entre dans le plan. À titre indicatif : ce n’est pas un objectif.",
           "entry": "Ligne",
           "wire": "La part du total qui entre dans le plan que cette ligne doit avoir à la fin, en pourcentage. Les décimales sont admises.",
           "limitsHelp": "Minimum et maximum de la valeur de cette ligne à la fin du plan. Écrivez un montant dans la devise d’évaluation (500) ou un pourcentage du total qui entre dans le plan (35%). Champ vide = aucune limite.",
           "totalHelp": "Les objectifs répartissent le total qui entre dans le plan, positions et liquidités comprises : pour calculer, ils doivent totaliser exactement 100 %. «Tout équilibrer» remet chaque objectif à l’échelle en gardant les proportions (parts égales s’ils sont tous à 0). Cochez des lignes pour ne remettre à l’échelle que celles-ci. «Équilibrer à 100 %» sur une ligne lui donne ce qui manque, ou retire l’excès.",
-          "nowLine": "aujourd’hui {weight}"
+          "nowLine": "aujourd’hui {weight}",
+          "limitsGuide": {
+            "percent": "Un pourcentage : «35%» veut dire 35% du total qui entre dans le plan.",
+            "percentTotal": "Un pourcentage : «35%» veut dire 35% du total qui entre dans le plan, {total}."
+          },
+          "nowOtherCash": "dont liquidités sans ligne propre : {weight}"
         },
         "removal": {
           "cashEntry": "Liquidités des objectifs {broker} · {currency}"
@@ -121,17 +122,19 @@
             "beforeValueHelp": "Ce que vaut la ligne aujourd’hui : les parts détenues au cours de cotation, ou les liquidités.",
             "targetShareHelp": "La part choisie pour cette ligne à l’étape Objectifs, sur tout le portefeuille.",
             "targetValueHelp": "Ce que vaudrait la ligne avec exactement sa part cible de tout le portefeuille d’aujourd’hui.",
-            "finalShareHelp": "Sa valeur après le plan, en part de tout le portefeuille d’aujourd’hui, liquidités comprises. L’argent perdu en frais et en impôts compte dans la ligne du non investi.",
+            "finalShareHelp": "Sa valeur après le plan, en part de tout le portefeuille d’aujourd’hui, liquidités comprises. Ce que le plan dépense en frais et en impôts est dans la ligne « Frais et commissions ».",
             "finalValueHelp": "Ce que vaut la ligne après le plan : les parts détenues plus celles achetées, ou les liquidités restantes.",
             "boughtHelp": "La valeur de ce que le plan achète de cet Actif, au cours de cotation : sans frais ni marge sur le prix.",
             "residualHelp": "Valeur après le plan moins valeur idéale : positive si la ligne finit au-dessus de sa part, négative si en dessous.",
-            "uninvested": "Non investi",
-            "uninvestedHelp": "Tout ce qui n’est ni dans un Actif ni dans des liquidités avec leur propre objectif : aujourd’hui, et après le plan, où cela compte aussi l’argent perdu en frais et en impôts.",
             "minimum": "Minimum",
             "minimumHelp": "Le minimum fixé pour cette ligne à l’étape Objectifs : sa valeur après le plan ne descend pas en dessous.",
             "maximum": "Maximum",
             "maximumHelp": "Le maximum fixé pour cette ligne à l’étape Objectifs : sa valeur après le plan ne dépasse pas.",
-            "title": "Allocation par ligne"
+            "title": "Allocation par ligne",
+            "untargetedCash": "Liquidités sans objectif",
+            "untargetedCashHelp": "Les liquidités sans objectif propre et les versements que le plan n’utilise pas. Avant le plan, c’est tout ce qui n’est ni dans un Actif ni dans une liquidité avec objectif ; après, la même chose sans l’argent que le plan dépense en frais.",
+            "costs": "Frais et commissions",
+            "costsHelp": "Ce que le plan dépense : commissions, écarts de change, marges de prix, impôts et arrondis. Rien avant le plan. Avec les liquidités sans objectif, il forme ce qui n’est pas investi."
           },
           "kpi": {
             "valueToday": "Vaut aujourd’hui",
@@ -139,28 +142,29 @@
             "partsAssets": "Actifs",
             "partsCash": "Liquidités",
             "valueAfter": "Vaudra après",
-            "valueAfterHelp": "Tout le portefeuille après le plan : les Actifs et les liquidités restantes. C’est la valeur d’aujourd’hui moins l’argent perdu.",
+            "valueAfterHelp": "Tout le portefeuille après le plan : les Actifs et les liquidités restantes. C’est la valeur d’aujourd’hui moins les frais et commissions.",
             "valueAfterHeld": "dans {assets, plural, one {# Actif} other {# Actifs}} et {cash, plural, one {# ligne de liquidités} other {# lignes de liquidités}}",
-            "moneyLost": "Argent perdu",
+            "moneyLost": "Frais et commissions",
             "moneyLostHelp": "Ce que le plan vous coûte : frais, écarts de change, marges sur le prix, impôts et arrondis. La valeur d’aujourd’hui moins ce montant est la valeur après.",
-            "noLoss": "Rien de perdu",
+            "noLoss": "Aucun coût",
             "foreignWithholding": "Retenue à la source étrangère",
             "largestDeviation": "Écart maximal à l’objectif",
             "largestDeviationHelp": "L’éloignement de la ligne la plus éloignée de son objectif, après et avant le plan, en points de pourcentage : l’écart entre sa part et sa part cible. Comptent les Actifs et les liquidités avec un objectif ; le non investi non.",
             "points": "{value} points",
             "beforePoints": "avant : {value} points",
-            "uninvestedShare": "{value} du total",
             "transfers": "{count, plural, one {# virement} other {# virements}}",
             "deviationItem": "{item} : {weight} contre {target}",
             "beforePointsItem": "avant : {value} points, {item} à {weight} contre {target}",
-            "cashItem": "Liquidités {broker} {currency}"
+            "cashItem": "Liquidités {broker} {currency}",
+            "finalCash": "Resté en liquidités",
+            "finalCashHelp": "Toutes les liquidités à la fin du plan, dans la devise d’évaluation : les liquidités avec et sans objectif et les versements non utilisés. En dessous, devise par devise et chacune dans la sienne : combien il y en avait au début et combien il en reste."
           },
           "header": {
             "score": "Score {value}",
-            "scoreHelp": "Le score que le plan minimise : λ × distance/F + argent perdu. Ici λ {lambda}, distance/F {distance}, argent perdu {lost}.",
+            "scoreHelp": "Le score que le plan minimise : λ × distance/F + frais et commissions. Ici λ {lambda}, distance/F {distance}, frais et commissions {lost}.",
             "distance": "Distance/F {value}",
-            "distanceHelp": "L’éloignement du portefeuille de ses objectifs à la fin, en argent : les écarts au carré de chaque ligne sur tout le portefeuille. «La cible avant tout» la réduit au maximum, puis l’argent perdu.",
-            "moneyLost": "Argent perdu {value}"
+            "distanceHelp": "L’éloignement du portefeuille de ses objectifs à la fin, en argent : les écarts au carré de chaque ligne sur tout le portefeuille. «La cible avant tout» la réduit au maximum, puis les frais et commissions.",
+            "moneyLost": "Frais et commissions {value}"
           },
           "ledger": {
             "fields": {
@@ -186,7 +190,7 @@
           },
           "badges": {
             "help": {
-              "optimalProven": "The solver proved that no plan has a better score (with «Target first»: a smaller distance from the targets, then less money lost), and the exact check of the plan matches its numbers. The tie-breaks after it may have stopped earlier: they only choose among plans just as good. The proof holds within the solver's small calculation margin, which grows with the amounts."
+              "optimalProven": "The solver proved that no plan has a better score (with «Target first»: a smaller distance from the targets, then lower costs and fees), and the exact check of the plan matches its numbers. The tie-breaks after it may have stopped earlier: they only choose among plans just as good. The proof holds within the solver's small calculation margin, which grows with the amounts."
             }
           },
           "states": {
@@ -209,11 +213,22 @@
             "showAll": "Show all ({count})",
             "showFewer": "Show fewer",
             "title": "Exposures – today, after the plan, target",
-            "help": "How the whole portfolio, cash included, spreads by Asset type, sector and country: today, after the plan, and your target. The cash is the last row of each chart. The charts do not change the plan."
+            "help": "How the whole portfolio, cash included, spreads by Asset type, sector and country: today, after the plan, and your target. The cash is the last row of each chart. The charts do not change the plan.",
+            "mapAbove": "Au-dessus de l’objectif",
+            "mapBelow": "En dessous de l’objectif",
+            "mapEqual": "Conforme à l’objectif"
           }
         },
         "objectives": {
           "route_priority": "Route priority"
+        },
+        "issues": {
+          "allocation": {
+            "bounds_min_sum_exceeds_reference": "Les minimums totalisent {minimums} : plus que le total qui entre dans le plan, {reference} (liquidités et valeur estimée des positions)."
+          }
+        },
+        "problems": {
+          "limitMinimumAboveTotal": "Le minimum dépasse à lui seul le total qui entre dans le plan, {reference}."
         }
       }
     }

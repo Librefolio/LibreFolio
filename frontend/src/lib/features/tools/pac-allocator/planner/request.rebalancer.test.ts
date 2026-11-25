@@ -231,7 +231,7 @@ describe('the Rebalancer request, «Invest only»', () => {
         const wire = build(draft);
 
         const held = (wire.brokers as Wire[]).find((broker) => broker.broker_id === 'broker:9');
-        expect(held).toMatchObject({broker_id: 'broker:9', identity: {kind: 'domain_broker', source_broker_id: '9', name: 'Held broker probe', active: true}, conversion_mode: 'manual'});
+        expect(held).toMatchObject({broker_id: 'broker:9', identity: {kind: 'domain_broker', source_broker_id: '9', name: 'Held broker probe', active: true}, conversion_mode: 'automatic'});
         expect(held).not.toHaveProperty('capabilities');
         expect(held).not.toHaveProperty('fee_schedules');
         expect((wire.order_routes as Wire[]).some((route) => route.broker_id === 'broker:9')).toBe(false);

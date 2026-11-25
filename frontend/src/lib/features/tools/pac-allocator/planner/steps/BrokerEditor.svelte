@@ -13,7 +13,7 @@
     import {t} from '$lib/i18n';
     import ExactDecimalInput from '$lib/components/ui/input/ExactDecimalInput.svelte';
     import BrokerOperatingProfileBox from '$lib/features/brokers/profile/BrokerOperatingProfileBox.svelte';
-    import {fromDraft, profileProblems, type OrderKind, type ProfileDraft, type ProfileGroup} from '$lib/features/brokers/profile/brokerOperatingProfile';
+    import {DEFAULT_CONVERSION_MODE, fromDraft, profileProblems, type OrderKind, type ProfileDraft, type ProfileGroup} from '$lib/features/brokers/profile/brokerOperatingProfile';
     import {modeKeys, modesFromProfile, modesOf, profileDraftOf} from '../brokerProfileAdapter';
     import {planProfileSave, readStoredProfile, writeStoredProfile, type ProfileSavePhase, type ProfileSavePlan, type ProfileWriteOutcome} from '../brokerProfileSave';
     import {DEFAULT_QUANTITY_STEP} from '../defaults';
@@ -70,7 +70,7 @@
     const requiredCurrencies = untrack(() => (addedKey ? [addCurrency] : []));
 
     /** The panel's starting draft: a new object only on «Restore», so the panel never restarts while the user types. */
-    let boxDraft = $state.raw<ProfileDraft>(untrack(() => profileDraftOf(working?.modes ?? [], working?.conversionMode ?? 'manual')));
+    let boxDraft = $state.raw<ProfileDraft>(untrack(() => profileDraftOf(working?.modes ?? [], working?.conversionMode ?? DEFAULT_CONVERSION_MODE)));
     /** The panel's latest draft, for its local problems. */
     let latest = $state.raw<ProfileDraft>(untrack(() => boxDraft));
     const problems = $derived(profileProblems(latest));
@@ -97,7 +97,7 @@
     function restoreProposed(): void {
         if (!working) return;
         working.modes = working.copiedModes ? structuredClone($state.snapshot(working.copiedModes)) : draft.defaultModes(working.observedCurrencies);
-        working.conversionMode = working.copiedConversionMode ?? 'manual';
+        working.conversionMode = working.copiedConversionMode ?? DEFAULT_CONVERSION_MODE;
         keyFor = modeKeys(
             working.modes.map((mode) => mode.key),
             () => draft.nextId('mode'),
@@ -112,7 +112,7 @@
     /** Only a Broker copied from LibreFolio has a profile to write; a manual one never (W2). */
     const savable = $derived(working !== null && working.origin === 'copied' && working.sourceBrokerId !== null);
     /** The profile as the last copy (or save) knew it; `null` when it had none. */
-    const knownProfile = $derived(working && (working.copiedModes !== null || working.copiedConversionMode !== null) ? fromDraft(profileDraftOf(working.copiedModes ?? [], working.copiedConversionMode ?? 'manual')) : null);
+    const knownProfile = $derived(working && (working.copiedModes !== null || working.copiedConversionMode !== null) ? fromDraft(profileDraftOf(working.copiedModes ?? [], working.copiedConversionMode ?? DEFAULT_CONVERSION_MODE)) : null);
     /** Off when the scenario says nothing the profile does not say already. */
     const saveHasChanges = $derived(working ? planProfileSave(knownProfile, working.modes, working.conversionMode).changes.length > 0 : false);
     let savePhase = $state<ProfileSavePhase | null>(null);
@@ -153,7 +153,7 @@
             return;
         }
         const copiedModes = modesFromProfile(plan.document, () => draft.nextId('mode'));
-        const copiedConversionMode = plan.document ? (plan.document.conversion_mode ?? 'manual') : null;
+        const copiedConversionMode = plan.document ? (plan.document.conversion_mode ?? DEFAULT_CONVERSION_MODE) : null;
         working.copiedModes = copiedModes;
         working.copiedConversionMode = copiedConversionMode;
         // The draft's Broker learns the new copy too: the account changed even if this window is cancelled.

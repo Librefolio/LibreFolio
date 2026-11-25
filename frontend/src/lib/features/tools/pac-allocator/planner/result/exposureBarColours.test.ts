@@ -43,7 +43,7 @@ vi.mock('$lib/api', () => ({
 
 import {contrastRatio, readTokens, resolveColour, toHex} from '../../../../../../../scripts/theme/theme-roles.mjs';
 import {ciede2000, deltaE00, SHARMA_PAIRS} from '$test/colorDistance';
-import {CATEGORY_BUCKETS, CATEGORY_KEYS, categoryColor, type CategoryKind} from '$lib/theme/chartCategories';
+import {CATEGORY_BUCKETS, CATEGORY_KEYS, categoryColor, COUNTRY_SEQUENCE, sequenceColor, type CategoryKind} from '$lib/theme/chartCategories';
 import {familyShade, shadePoles, type ShadePoles} from '$lib/theme/chartShades';
 import {PAC_EXPOSURE_COLORS} from '$lib/theme/chartTheme';
 import {setRoleReader} from '$lib/theme/roleColors';
@@ -153,6 +153,17 @@ describe('actualColours — an Asset type reads its family, a subtype a shade of
     });
 });
 
+describe('actualColours — the countries read the countries’ sequence, ranked in the order of the rows (TL-5 of project 67)', () => {
+    it.each(THEMES)('%s: each country its rank of the sequence, past its end a shade of the round; the uncategorised share the unclassified bucket and no rank', (_theme, dark) => {
+        const codes = Array.from({length: COUNTRY_SEQUENCE.length + 2}, (_, index) => `C${String(index).padStart(2, '0')}`);
+        const rows = [row(codes[0], decimal('0.2')), row(UNCATEGORISED_CATEGORY_ID, decimal('0.1')), ...codes.slice(1).map((code) => row(code, decimal('0.01')))];
+        const expected = codes.map((_code, rank) => sequenceColor(COUNTRY_SEQUENCE, rank, dark, poles(dark)));
+        expect(new Set(expected).size, 'barrier: a rank mixed up would go unseen').toBe(codes.length);
+
+        expect(actualColours(rows, 'geography', dark, poles(dark))).toEqual([expected[0], categoryColor('sector', 'Unknown', dark), ...expected.slice(1)]);
+    });
+});
+
 describe('actualColours — what reads as unclassified', () => {
     it.each(THEMES)('%s: the uncategorised remainder reads the unclassified bucket, in both dimensions', (_theme, dark) => {
         const table: Record<string, CategoryKind> = {asset_type: 'type', sector: 'sector'};
@@ -219,6 +230,15 @@ interface Exception {
  * bucket, measured 8.046; and the «Other» grey that OTHER and Other share, measured 8.696 (8.69 in the coordinator's
  * measure). The dark theme has none: its nearest colour, «Unknown» again, is at 10.07.
  */
+/**
+ * The countries' shades past the sequence's end that sit under the floor (TL-5 of project 67, measured on 24/11/2026): their
+ * ranks among the first 250 countries, and the closest distance. A finding for the designer, not a decision: see the test.
+ */
+const COUNTRY_SHADES_UNDER_FLOOR: Record<Theme, {ranks: number[]; closest: number}> = {
+    light: {ranks: [24, 27, 34, 38, 41, 48, 52, 54, 108, 111, 118, 122, 125, 132, 136, 138, 192, 195, 202, 206, 209, 216, 220, 222], closest: 1.06},
+    dark: {ranks: [27, 34, 38, 39, 41, 52, 111, 118, 122, 123, 125, 136, 195, 202, 206, 207, 209, 220], closest: 6.95},
+};
+
 const EXCEPTIONS: readonly Exception[] = [
     {theme: 'light', categories: ['bucket Unknown'], recorded: 8.05},
     {theme: 'light', categories: ['type OTHER', 'sector Other'], recorded: 8.7},
@@ -297,6 +317,23 @@ describe('the rule of the 10s — the ideal stays apart from every colour a row 
         expect(verdict.under, `these colours are closer than ΔE00 ${FLOOR} to the ideal weight: its bar would read as that category`).toEqual([]);
         expect(verdict.closer, 'an excepted colour is closer to the ideal than recorded: the values moved toward each other').toEqual([]);
         expect(verdict.unneeded, `an excepted colour is now at least ΔE00 ${FLOOR} from the ideal: remove its exception`).toEqual([]);
+    });
+
+    it.each(THEMES)('%s: the countries’ shades past the sequence’s end, up to 250 countries, measured against the ideal: the recorded ones only, never closer (TL-5 of project 67)', (theme, dark) => {
+        const cardPoles = shadePoles(dark, cardOf(dark));
+        // Rank 0 to the sequence's length − 1 are keys of the tables, measured above with their exceptions. Past them the
+        // rounds take shades (GR5), and some come close to the ideal's grey: a finding of TL-5, when the PAC began drawing
+        // its countries as two bars, for the designer (the Rebalancer's bullets set the same colours beside their grey
+        // «today»). Recorded, so a colour that moves closer or a new one under the floor is seen.
+        const shades = Array.from({length: 250 - COUNTRY_SEQUENCE.length}, (_, index) => COUNTRY_SEQUENCE.length + index).map((rank) => ({rank, distance: deltaE00(idealColour(dark), sequenceColor(COUNTRY_SEQUENCE, rank, dark, cardPoles))}));
+        expect(shades.length, 'barrier: the rounds past the first were measured').toBeGreaterThan(200);
+        const under = shades.filter(({distance}) => distance < FLOOR);
+        const recorded = COUNTRY_SHADES_UNDER_FLOOR[theme];
+        expect(
+            under.map(({rank}) => rank),
+            `the country ranks under ΔE00 ${FLOOR} from the ideal`,
+        ).toEqual(recorded.ranks);
+        expect(Math.min(...under.map(({distance}) => distance)), 'the closest is no closer than recorded').toBeGreaterThanOrEqual(recorded.closest - TOLERANCE);
     });
 
     it('records exactly two exceptions, both in the light theme: «Unknown» and the «Other» grey, each one colour', () => {

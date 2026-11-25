@@ -30,10 +30,13 @@ import type {
     PlannerRequestOrderRoute,
     PlannerRequestProvenance,
     PlannerResolvedRequest,
+    PlannerExactMoney,
     PlannerIssue,
     PlannerStep,
 } from './types';
-import {entityLabel} from './issues';
+import {entityLabel, issueParamValues} from './issues';
+import {formatExactMoneyPlain} from './format';
+import {compareExact} from './result/model';
 
 export interface LocalProblem {
     id: string;
@@ -195,13 +198,16 @@ export function limitProblems(draft: PlannerDraft): LimitProblem[] {
     return found;
 }
 
-/** One of the limits' cross checks the last preview names: its code and the target entry it is on (contract 2.0.0). */
-export type PreviewLimitProblem = Pick<PlannerIssue, 'code' | 'path'>;
+/**
+ * One of the limits' cross checks the last preview names: its code, the target entry it is on (contract 2.0.0) and its
+ * params (the sum of the minimums carries the sum it counted and the base it used, TL-4 of project 67).
+ */
+export type PreviewLimitProblem = Pick<PlannerIssue, 'code' | 'path' | 'params'>;
 
 /** The sentence of each cross check, under `tools.pacAllocator.planner.issues.`: the words «Calculate» shows for it. */
 const PREVIEW_LIMIT_FALLBACKS: Record<string, string> = {
     bound_min_above_max: 'The minimum is higher than the maximum.',
-    bounds_min_sum_exceeds_reference: 'The minimums add up to more than the money the plan can reach.',
+    bounds_min_sum_exceeds_reference: 'The minimums add up to {minimums}: more than the cash the plan can invest, {reference}.',
     bound_max_below_current: 'The maximum is below what the plan already holds and sales are off.',
 };
 
@@ -219,6 +225,7 @@ export function previewLimitProblems(draft: PlannerDraft, problems: readonly Pre
     const shareSum = local.some((problem) => problem.key === 'limitShareMinimumsAboveHundred');
     const found: LimitProblem[] = [];
     const sumNames: string[] = [];
+    let sumValues: Record<string, string> = {};
     for (const problem of problems) {
         const key = problem.code.replace(/^allocation\./, '');
         if (!(key in PREVIEW_LIMIT_FALLBACKS)) continue;
@@ -228,12 +235,47 @@ export function previewLimitProblems(draft: PlannerDraft, problems: readonly Pre
         const rowKey = entity === null ? null : entity.kind === 'asset' ? entity.id : (draft.targetRows.find((row) => row.kind === 'cash' && `${row.entry.brokerKey}:${row.entry.currency}` === entity.id)?.key ?? entity.id);
         if (key === 'bounds_min_sum_exceeds_reference') {
             if (!shareSum && name !== null && !sumNames.includes(name)) sumNames.push(name);
+            // Every entry of the sum carries the same two figures: the line says them once.
+            sumValues = issueParamValues(problem);
             continue;
         }
         if (key === 'bound_min_above_max' && conflicts.has(rowKey)) continue;
         found.push({key, fallback: PREVIEW_LIMIT_FALLBACKS[key], entity: name, assetKey: rowKey, values: {}});
     }
-    if (sumNames.length > 0) found.push({key: 'bounds_min_sum_exceeds_reference', fallback: PREVIEW_LIMIT_FALLBACKS.bounds_min_sum_exceeds_reference, entity: sumNames.join(', '), assetKey: null, values: {}});
+    if (sumNames.length > 0) found.push({key: 'bounds_min_sum_exceeds_reference', fallback: PREVIEW_LIMIT_FALLBACKS.bounds_min_sum_exceeds_reference, entity: sumNames.join(', '), assetKey: null, values: sumValues});
+    return found;
+}
+
+/** Whether the preview names `rowKey` in the sum of the minimums: its own line then says what the minimum alone said. */
+function inMinimumsSum(problems: readonly PreviewLimitProblem[], rowKey: string): boolean {
+    return problems.some((problem) => problem.code === 'allocation.bounds_min_sum_exceeds_reference' && 'entity_kind' in problem.path && problem.path.entity_kind === 'asset' && problem.path.entity_id === rowKey);
+}
+
+/** Whether the Asset `assetKey` has a minimum, an amount, above `total` (`minimumsAboveTotal`; its field is drawn red). */
+export function minimumAboveTotal(draft: PlannerDraft, assetKey: string, total: PlannerExactMoney | null): boolean {
+    if (total === null) return false;
+    const minimum = parseLimit(draft.data.limits[assetKey]?.minimum);
+    if (minimum === null || minimum === 'invalid' || minimum.kind !== 'amount') return false;
+    return compareExact({kind: 'finite_decimal', value: minimum.value}, total.value) === 1;
+}
+
+/**
+ * The Assets whose minimum, an amount, is alone above the Tool's base (TL-4 of project 67: «mi aspettavo che appena il
+ * numero inserito fosse troppo alto il banner comparisse»): said at once, on the base of the last preview (`total`, its
+ * figure while a newer one is on its way), before the preview names the sum. An Asset only: for a cash entry the backend
+ * counts only the part of the minimum above the cash that reaches no buy, so the page would be stricter than the plan.
+ * A share above 100% is `limitProblems`' own. It warns and stops nothing, like the preview's checks; once the preview
+ * names the Asset in the sum of the minimums, that line says it, with both figures. No base (no preview yet, or a failed
+ * one): nothing to compare with.
+ */
+export function minimumsAboveTotal(draft: PlannerDraft, total: PlannerExactMoney | null, problems: readonly PreviewLimitProblem[] = []): LimitProblem[] {
+    if (total === null) return [];
+    const found: LimitProblem[] = [];
+    for (const row of draft.targetRows) {
+        if (row.kind !== 'asset' || !minimumAboveTotal(draft, row.key, total)) continue;
+        if (inMinimumsSum(problems, row.key)) continue;
+        found.push({key: 'limitMinimumAboveTotal', fallback: 'The minimum alone is above the cash the plan can invest, {reference}.', entity: row.asset.name, assetKey: row.key, values: {reference: formatExactMoneyPlain(total)}});
+    }
     return found;
 }
 

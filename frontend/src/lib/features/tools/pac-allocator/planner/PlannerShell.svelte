@@ -33,6 +33,7 @@
     import HelpTip from './shared/HelpTip.svelte';
     import IssueList from './shared/IssueList.svelte';
     import StepNav from './shell/StepNav.svelte';
+    import {provideStepTitleSlot} from './shell/stepTitle.svelte';
     import SummaryPanel from './shell/SummaryPanel.svelte';
     import ScenarioStep from './steps/ScenarioStep.svelte';
     import LiquidityStep from './steps/LiquidityStep.svelte';
@@ -59,6 +60,8 @@
 
     /** Read once, while the shell is created: the profile the Tool's wrapper set, the PAC's when none. */
     const profile = getPlannerProfile();
+    /** A step's own piece on its title row, on the right (TL-3 of project 67: the Targets step's columns button). */
+    const titleSlot = provideStepTitleSlot();
 
     const STEP_TITLE_ID = domId('step-title', profile);
     const STEP_ALERT_ID = domId('step-alert', profile);
@@ -409,7 +412,8 @@
             </div>
 
             <section class="min-w-0 {CARD}" aria-labelledby={STEP_TITLE_ID} data-testid={testId('step', profile)} data-step={step}>
-                <!-- R11.1: the Route step says what it is for in its own title, on one line, with the «?» beside it. -->
+                <!-- R11.1: the Route step says what it is for in its own title, on one line, with the «?» beside it. A step's own
+                     piece goes on the right of the row (TL-3 of project 67: the Targets step's columns button). -->
                 <div class="mb-4 flex items-center gap-0.5">
                     <h2 id={STEP_TITLE_ID} tabindex="-1" class="{SECTION_TITLE} focus:outline-none">
                         {$t(stepKey(step), {default: STEP_FALLBACKS[step]})}{#if step === 'routing'}<span data-testid={testId('routing-intro', profile)}>{' '}– {$t(`${PLANNER_KEY}.routing.intro`, {default: 'What each Broker can buy'})}</span>{/if}
@@ -423,6 +427,9 @@
                             })}
                             testid={testId('routing-help', profile)}
                         />
+                    {/if}
+                    {#if titleSlot.action}
+                        <div class="ml-auto flex shrink-0 items-center" data-testid={testId('step-title-action', profile)}>{@render titleSlot.action()}</div>
                     {/if}
                 </div>
 

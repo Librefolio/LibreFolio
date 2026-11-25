@@ -174,7 +174,15 @@
         "foreign_withholding_tax": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"},
         "rounding": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"}
       },
-      "uninvested": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"}
+      "uninvested": {"value": {"kind": "finite_decimal", "value": "0"}, "currency": "EUR"},
+      "final_cash": {
+        "value": {
+          "kind": "finite_decimal",
+          "value": "0"
+        },
+        "currency": "EUR"
+      },
+      "cash_by_currency": []
     },
     "objectives": {
       "stages": [

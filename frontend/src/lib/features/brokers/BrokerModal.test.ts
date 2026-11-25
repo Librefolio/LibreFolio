@@ -577,8 +577,8 @@ describe('BrokerModal — the operating profile (P2 of project 67)', () => {
     const EDIT_DATA = {name: 'P2 profile desk', description: '', portal_url: '', icon_url: '', default_import_plugin: '', allow_cash_overdraft: false, allow_asset_shorting: false, is_active: true, opened_at: '2019-05-06'};
     /**
      * The broker exactly as `GET /brokers/{id}` serves it, dumped from the backend's `BRReadItem` (P1): every fee field
-     * written out, `conversion_mode: "manual"` always present (its default), `tax_regime` absent (an absent regime is
-     * served absent).
+     * written out, `conversion_mode` always present (its default, `automatic` since TL-6 of project 67), `tax_regime` absent
+     * (an absent regime is served absent).
      */
     const SERVED_BROKER = {
         id: 1,
@@ -604,7 +604,7 @@ describe('BrokerModal — the operating profile (P2 of project 67)', () => {
                     fees: [{fee_schedule_id: 'fee:EUR:buy', capability_id: 'mode:EUR', side: 'buy', fixed_fee: null, rate: '0.0019', variable_floor: null, variable_cap: {kind: 'none'}}],
                 },
             ],
-            conversion_mode: 'manual',
+            conversion_mode: 'automatic',
         },
     } as const;
     const STORED = SERVED_BROKER.operating_profile;
@@ -662,6 +662,17 @@ describe('BrokerModal — the operating profile (P2 of project 67)', () => {
         const body = await submitAndBody();
 
         expect(body).toHaveProperty('operating_profile', null);
+    });
+
+    it('a profile saved with «Converti tu» keeps it: cleared of its rules it still sends the choice, not null (TL-6)', async () => {
+        await openEdit({...STORED, conversion_mode: 'manual'});
+        const manual = screen.getAllByTestId('broker-profile-conversion-mode').find((card) => card.getAttribute('data-mode') === 'manual');
+        expect(manual?.getAttribute('data-selected')).toBe('true');
+        await fireEvent.click(screen.getByTestId('broker-profile-mode-remove'));
+
+        const body = await submitAndBody();
+
+        expect(body).toHaveProperty('operating_profile', {profile_version: 1, order_modes: [], conversion_mode: 'manual'});
     });
 
     it('a failed read leaves the form usable and the profile untouched', async () => {

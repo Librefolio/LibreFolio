@@ -4,8 +4,8 @@
  *
  * Under the Rebalancer's profile the targets table holds the Assets and the cash entries in one `DataTable`: «Add a cash
  * entry» offers the scenario's Broker × currency pairs; a cash row has the cash icon (the Broker's logo with the currency's
- * circle), a target and the limits of F2, and the total counts it. «Other cash», all the cash without a target of its own,
- * is a fixed row at 0 %. Under the PAC's profile none of this exists in F3a. Mounted below a Tool wrapper in miniature
+ * circle), a target and the limits of F2, and the total counts it. The cash without a target of its own has no row (TL-2):
+ * the plan counts it, the table does not show it. Under the PAC's profile none of this exists in F3a. Mounted below a Tool wrapper in miniature
  * (`../../__tests__/ProfileHarness.svelte`); driven through test ids.
  */
 import {flushSync, tick} from 'svelte';
@@ -63,7 +63,7 @@ function mount(profile: PlannerProfile | null, draft: PlannerDraft, preview: Pla
     flushSync();
 }
 
-/** A ready preview where «Other cash» is worth something today: the row is shown only then (R1-C of project 67). */
+/** A ready preview where the cash without an entry (`other_cash`) is worth something today. */
 function otherCashWorthToday(): PlannerPreview {
     const money = {value: {kind: 'finite_decimal' as const, value: '50'}, currency: 'EUR'};
     const numbers: PreviewReady = {
@@ -149,17 +149,18 @@ describe('the targets table and the cash entries', () => {
         expect(within(menu).getByTestId('rebalancer-planner-cash-entry-remove')).toBeTruthy();
     });
 
-    it('«Other cash» is a fixed row at 0 % while some cash has no entry and is worth something today', () => {
+    it('cash with no entry, worth something today, has no row: the plan counts it, the table does not show it (TL-2)', () => {
         const {draft} = scenario(REBALANCER_PLANNER_PROFILE);
         mount(REBALANCER_PLANNER_PROFILE, draft, otherCashWorthToday());
 
-        expect(screen.getByTestId('rebalancer-planner-target-other-cash')).toBeTruthy();
-        // Only the Asset is editable: one target field, one limits cell.
+        expect(screen.queryByTestId('dt-row-checkbox-other-cash')).toBeNull();
+        // The Asset alone: one target field, one limits cell, one row.
         expect(screen.getAllByTestId('rebalancer-planner-target-input')).toHaveLength(1);
         expect(screen.getAllByTestId('rebalancer-planner-limit')).toHaveLength(1);
+        expect(screen.getAllByTestId('rebalancer-planner-target-bar')).toHaveLength(1);
     });
 
-    it('the PAC adds cash rows with limits only: no target, outside the total, and no «Other cash» (step 14, U8)', async () => {
+    it('the PAC adds cash rows with limits only: no target, outside the total (step 14, U8)', async () => {
         const {draft, brokerKey} = scenario(PAC_PLANNER_PROFILE);
         mount(null, draft);
 
@@ -178,6 +179,5 @@ describe('the targets table and the cash entries', () => {
         expect(screen.getAllByTestId('pac-planner-limit').map((cell) => cell.getAttribute('data-asset-key'))).toContain(key);
         expect(screen.getAllByTestId('pac-planner-target').map((cell) => cell.getAttribute('data-asset-key'))).toEqual(['asset:probe']);
         expect(draft.targetTotal).toBe('90');
-        expect(screen.queryByTestId('pac-planner-target-other-cash')).toBeNull();
     });
 });
