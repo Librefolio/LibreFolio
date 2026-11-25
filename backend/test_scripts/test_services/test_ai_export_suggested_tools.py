@@ -9,7 +9,7 @@ rounding together: the PAC prompt sends the user there step by step (developer, 
 AI Export would send the user to a tool they cannot find: every suggested code must be a tool of the registry.
 
 The cases:
-- ST-01: the PAC suggests `pac_allocator`, and no other public analysis suggests a tool yet (the rebalancer comes with L4b).
+- ST-01: the PAC suggests `pac_allocator`, the rebalancing `portfolio_rebalancer` (78 L4b); no other analysis a tool.
 - ST-02: every suggested code is a tool of the tool registry, the one the Tools page lists.
 - ST-03: the runtime catalog entry carries the codes, in order; an analysis without tools carries an empty tuple.
 - ST-04: a malformed code, a duplicate, or a value that is not a `ToolSuggestion` is refused at declaration.
@@ -38,8 +38,8 @@ def _suggesting() -> dict[str, tuple[str, ...]]:
     return {analysis.analysis_id: tuple(tool.tool_code for tool in analysis.suggested_tools) for analysis in build_analysis_registry() if analysis.suggested_tools}
 
 
-def test_st01_the_pac_suggests_the_pac_allocator_and_nothing_else_suggests_a_tool():
-    assert _suggesting() == {PAC: ("pac_allocator",)}
+def test_st01_the_pac_and_the_rebalancing_suggest_their_tools_and_nothing_else_does():
+    assert _suggesting() == {PAC: ("pac_allocator",), "portfolio.rebalancing": ("portfolio_rebalancer",)}
 
 
 def test_st02_every_suggested_code_is_a_tool_of_the_registry():
@@ -54,7 +54,8 @@ def test_st03_the_runtime_catalog_carries_the_codes():
     catalog = AiExportSnapshotService.get_catalog()
     by_id = {entry.id: entry for entry in catalog.analyses}
     assert [tool.tool_code for tool in by_id[PAC].suggested_tools] == ["pac_allocator"]
-    assert by_id["portfolio.rebalancing"].suggested_tools == ()
+    assert [tool.tool_code for tool in by_id["portfolio.rebalancing"].suggested_tools] == ["portfolio_rebalancer"]
+    assert by_id["portfolio.fiscal_lots"].suggested_tools == ()
     assert by_id[PAC].model_dump(mode="json")["suggested_tools"] == [{"tool_code": "pac_allocator"}]
 
 

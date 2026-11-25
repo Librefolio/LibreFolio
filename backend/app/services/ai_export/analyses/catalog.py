@@ -105,6 +105,8 @@ PUBLIC_ANALYSES: tuple[AnalysisSpec, ...] = (
         "rebalancing",
         icon="scale",
         required=("portfolio.overview_and_history",),
+        # 78 L4b: the units are the Portfolio rebalancer's job; the prompt sends the user there, step by step
+        tools=("portfolio_rebalancer",),
         suggestions=(
             _suggest(
                 "portfolio.asset_history",
