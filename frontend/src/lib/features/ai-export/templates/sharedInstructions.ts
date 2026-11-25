@@ -56,7 +56,12 @@ export function aiExportReplyInstructions(dataReceived: string): string {
 }
 
 export const AI_EXPORT_DOMAIN_NOTES: Readonly<Record<AiExportDomain, readonly string[]>> = {
-    portfolio: ['Portfolio values use the selected target currency and the active broker scope.', 'FIFO lots are runtime economic calculations; allocation currency is not look-through exposure.'],
+    // 78 L6: a co-owned broker counts at the user's share (the PAC allocator's «From your Brokers» shows the whole account)
+    portfolio: [
+        'Portfolio values use the selected target currency and the active broker scope.',
+        "Each broker counts at the user's ownership share: for a broker the user co-owns, the quantities and the cash shown are the user's part, not the whole account.",
+        'FIFO lots are runtime economic calculations; allocation currency is not look-through exposure.',
+    ],
     broker: [
         'Broker data covers only the selected accessible broker, not necessarily the whole portfolio.',
         'FIFO and performance sections use their declared runtime methodologies.',
