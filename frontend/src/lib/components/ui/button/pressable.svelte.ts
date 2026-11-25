@@ -22,8 +22,14 @@
  *   click or a keyboard focus show the reason, and the click is stopped (`preventDefault`: a `submit` does not send).
  * - **Disabled without a reason but reachable** (`off`, an icon-only button): the same, with the name alone.
  * - **Busy**: clicks are stopped (`preventDefault`, a `submit` included), nothing starts twice.
- * - **When the name shows** (77 SEL-D2): never when the word is in view and there is nothing more to say. A help or a
- *   reason always shows, with the name in bold.
+ * - **When the name shows** (77 SEL-D2; 85, R2): only when the word is out of view, in bold on the first line, with the
+ *   help or the reason from the second. With the word in view the bubble is the help or the reason alone, on a long press
+ *   too; with neither there is no bubble (the long press still does not act).
+ * - **A help is the element's description** to a screen reader (`aria-describedby`); the name stays the name.
+ * - **A row whose parts carry their own hover tips** (`partTips`: a `Tooltip insideControl` on a badge or a ⚠ inside it):
+ *   the parts answer the mouse; this behaviour gives their texts, as the row's `help`, to the finger (long press) and to
+ *   the keyboard, and to a screen reader as every help. A row with no help is an ordinary one: a long press on it drops
+ *   no click.
  *
  * The click listener runs in the capture phase, so it is ahead of every handler of the element itself (Svelte
  * delegates `onclick` to the root, a legacy `on:click` sits on the element): a dropped click never reaches them.
@@ -50,7 +56,7 @@ export type TipPosition = 'top' | 'bottom' | 'left' | 'right';
 export interface PressableOptions {
     /** The name: the tooltip's bold line, and what a long press shows. */
     label: string;
-    /** An explanation shown under the name (plain text). */
+    /** An explanation shown under the name (plain text), and the element's description to a screen reader. */
     help?: string;
     /** The help holds `$…$` inline maths (KaTeX), as `Tooltip`. */
     math?: boolean;
@@ -65,6 +71,9 @@ export interface PressableOptions {
     wordVisible?: (element: HTMLElement) => boolean;
     /** Mouse and keyboard side of the tooltip; a finger always opens above (below only without room). */
     tipPosition?: TipPosition;
+    /** A row whose parts carry their own hover tips (`Tooltip insideControl`): no tip from here on a mouse rest, and
+     *  without a help a long press is an ordinary press (85 BTN-0c, D16). */
+    partTips?: boolean;
     /** The action, run on a click the behaviour lets through. */
     onpress?: (event: MouseEvent) => void;
 }
@@ -88,6 +97,9 @@ interface TipProps {
     onbodypointer: (inside: boolean) => void;
 }
 
+/** The ids of the descriptions, unique in the page. */
+let describedCount = 0;
+
 /** Only one name is open in the whole app at a time. */
 let closeOpenTip: (() => void) | null = null;
 
@@ -109,13 +121,12 @@ function installTabListener(): void {
     );
 }
 
-/** The tooltip's HTML for these options, or '' when there is nothing worth showing. Exported for its tests. */
+/** The tooltip's HTML for these options, or '' when there is nothing worth showing. The name is the first line, in bold,
+ *  only when the word is out of view: above a word in view there is no title, the text alone. Exported for its tests. */
 export function tipHtml(options: PressableOptions, wordInView: boolean): string {
-    const name = `<strong>${escapeHtml(options.label)}</strong>`;
-    if (options.reason) return `${name}\n${escapeHtml(options.reason)}`;
-    if (options.off) return name;
-    if (options.help) return wordInView ? escapeHtml(options.help) : `${name}\n${escapeHtml(options.help)}`;
-    return wordInView ? '' : name;
+    const name = wordInView ? '' : `<strong>${escapeHtml(options.label)}</strong>`;
+    const text = escapeHtml(options.reason || (options.off ? '' : options.help) || '');
+    return [name, text].filter(Boolean).join('\n');
 }
 
 export const pressable: Action<HTMLElement, PressableOptions> = (element, initial) => {
@@ -132,8 +143,45 @@ export const pressable: Action<HTMLElement, PressableOptions> = (element, initia
     let overTip = false;
     let tipProps: TipProps | null = null;
     let tipInstance: ReturnType<typeof mount> | null = null;
+    /** The help as the hidden text the element's `aria-describedby` points at. */
+    let description: HTMLElement | null = null;
 
     installTabListener();
+    describe();
+
+    /** Adds or removes the description among the ids of the element's `aria-describedby`: the caller's own stay. */
+    function listDescription(id: string, listed: boolean) {
+        const ids = (element.getAttribute('aria-describedby') ?? '').split(/\s+/).filter((other) => other && other !== id);
+        if (listed) ids.push(id);
+        if (ids.length > 0) element.setAttribute('aria-describedby', ids.join(' '));
+        else element.removeAttribute('aria-describedby');
+    }
+
+    function dropDescription() {
+        if (!description) return;
+        listDescription(description.id, false);
+        description.remove();
+        description = null;
+    }
+
+    /** The help is the element's description. The text stays out of the element, so out of its name. */
+    function describe() {
+        if (!options.help) {
+            dropDescription();
+            return;
+        }
+        if (!description) {
+            description = document.createElement('span');
+            description.id = `lf-described-${++describedCount}`;
+            description.hidden = true;
+            document.body.appendChild(description);
+            listDescription(description.id, true);
+        }
+        description.textContent = options.help;
+    }
+
+    /** `partTips` with nothing to say: the long press has no tip to show, so it must not drop the click either. */
+    const isPlainRow = () => !!options.partTips && !isOff() && !tipHtml(options, wordInView());
 
     const wordInView = () => options.wordVisible?.(element) ?? false;
     /** Off and reachable: a reason, or an icon's name. */
@@ -232,6 +280,8 @@ export const pressable: Action<HTMLElement, PressableOptions> = (element, initia
         }
         endPress();
         if (tipSource && tipSource !== 'reason') hideTip();
+        press = null;
+        if (isPlainRow()) return;
         const current: Press = {x: event.clientX, y: event.clientY, timer: null, fired: false};
         press = current;
         if (options.busy) return;
@@ -305,7 +355,7 @@ export const pressable: Action<HTMLElement, PressableOptions> = (element, initia
     function onPointerEnter(event: PointerEvent) {
         if (event.pointerType !== 'mouse') return;
         clearLeave();
-        if (quiet || tipSource) return;
+        if (options.partTips || quiet || tipSource) return;
         clearHover();
         hoverTimer = setTimeout(() => {
             hoverTimer = null;
@@ -345,6 +395,7 @@ export const pressable: Action<HTMLElement, PressableOptions> = (element, initia
     return {
         update(next: PressableOptions) {
             options = next;
+            describe();
             if (!tipSource || !tipProps) return;
             // A reason that went away, or a name that has nothing left to say, closes; otherwise the text follows.
             if (tipSource === 'reason' && !isOff()) {
@@ -363,6 +414,7 @@ export const pressable: Action<HTMLElement, PressableOptions> = (element, initia
             if (tipInstance) void unmount(tipInstance);
             tipInstance = null;
             tipProps = null;
+            dropDescription();
         },
     };
 };

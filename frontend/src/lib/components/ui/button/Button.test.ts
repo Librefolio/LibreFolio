@@ -28,7 +28,7 @@ import LegacyButtonHost from './__tests__/LegacyButtonHost.svelte';
 import ButtonGroupHarness from './__tests__/ButtonGroupHarness.svelte';
 import CloseButton from './CloseButton.svelte';
 import {buttonClasses} from './buttonClasses';
-import {HOVER_DELAY_MS, LONG_PRESS_CLICK_WINDOW_MS, LONG_PRESS_MS, MOVE_TOLERANCE_PX} from './pressable.svelte';
+import {HOVER_DELAY_MS, LONG_PRESS_CLICK_WINDOW_MS, LONG_PRESS_MS, MOVE_TOLERANCE_PX, pressable, type PressableOptions} from './pressable.svelte';
 
 beforeAll(async () => {
     await setupI18n();
@@ -299,12 +299,11 @@ describe('Button — off with a reason', () => {
         expect(button).toBeDisabled();
     });
 
-    it('a click does not act, is cancelled, and shows the reason with the name', () => {
+    it('a click does not act, is cancelled, and shows the reason alone: the label is in view', () => {
         const {onclick, button} = renderButton({label: 'Delete selected', icon: Trash2, reason: REASON, reasonCode: 'no_selection'});
         expect(click(button)).toBe(false);
         expect(onclick).not.toHaveBeenCalled();
-        expect(tooltip()?.querySelector('strong')?.textContent).toBe('Delete selected');
-        expect(tooltip()?.textContent).toContain(REASON);
+        expect(tooltip()?.textContent).toBe(REASON);
     });
 
     it('a touch tap shows the reason too, and does not act', async () => {
@@ -659,5 +658,124 @@ describe('Button — hideWord, compact and a segment alone (BTN-2d, C16)', () =>
         expect(button.className).toBe(buttonClasses({size: 'sm', compact: true, segment: true, pressed}));
         expect(button.classList.contains('lf-btn-segment'), 'only a group joins it').toBe(false);
         expect(button).toHaveAttribute('aria-pressed', String(pressed));
+    });
+});
+
+/**
+ * `partTips` (85 BTN-0c, D16): a row whose badges and ⚠ carry hover-only tooltips of their own. The action is used
+ * straight on an element, as the rows do (`use:pressable`).
+ */
+describe('pressable — a row whose parts carry their own tips', () => {
+    function row(options: Partial<PressableOptions> = {}) {
+        const element = document.createElement('button');
+        element.textContent = 'Alpha';
+        document.body.appendChild(element);
+        const onpress = vi.fn();
+        const full = (more: Partial<PressableOptions>): PressableOptions => ({label: 'Alpha', partTips: true, wordVisible: () => true, onpress, ...more});
+        const action = pressable(element, full(options));
+        if (!action?.update || !action.destroy) throw new Error('pressable returns its update and destroy');
+        return {
+            element,
+            onpress,
+            update: (more: Partial<PressableOptions>) => action.update!(full(more)),
+            destroy: () => {
+                action.destroy!();
+                element.remove();
+            },
+        };
+    }
+
+    it('a long press shows the help and drops the click; the mouse rest shows nothing from the row', async () => {
+        const {element, onpress, destroy} = row({help: 'A note'});
+        pointer(element, 'pointerenter', 'mouse');
+        await advance(HOVER_DELAY_MS * 2);
+        expect(tooltip(), 'the parts answer the mouse').toBeNull();
+        pointer(element, 'pointerleave', 'mouse');
+
+        pointer(element, 'pointerdown', 'touch');
+        await advance(LONG_PRESS_MS);
+        expect(tooltip()?.textContent).toBe('A note');
+        pointer(element, 'pointerup', 'touch');
+        click(element);
+        expect(onpress).not.toHaveBeenCalled();
+        destroy();
+    });
+
+    it('with no help a long press is an ordinary press: no tip, and the click acts', async () => {
+        const {element, onpress, destroy} = row();
+        pointer(element, 'pointerdown', 'touch');
+        await advance(LONG_PRESS_MS);
+        expect(tooltip()).toBeNull();
+        pointer(element, 'pointerup', 'touch');
+        click(element);
+        expect(onpress).toHaveBeenCalledTimes(1);
+        destroy();
+    });
+
+    it('the help is the description, out of the name, beside the caller’s own; it follows the help and goes with the element', () => {
+        const {element, update, destroy} = row({help: 'A note'});
+        expect(element).toHaveAccessibleDescription('A note');
+        expect(element).toHaveAccessibleName('Alpha');
+        update({help: 'Another'});
+        expect(element).toHaveAccessibleDescription('Another');
+        const id = element.getAttribute('aria-describedby')!;
+        update({});
+        expect(element).not.toHaveAttribute('aria-describedby');
+        expect(document.getElementById(id)).toBeNull();
+        element.setAttribute('aria-describedby', 'caller-own');
+        update({help: 'Back'});
+        expect(element.getAttribute('aria-describedby')).toMatch(/^caller-own lf-described-\d+$/);
+        const back = element.getAttribute('aria-describedby')!.split(' ')[1];
+        destroy();
+        expect(element).toHaveAttribute('aria-describedby', 'caller-own');
+        expect(document.getElementById(back), 'nothing is left in the page').toBeNull();
+    });
+});
+
+/**
+ * A button with an explanation (85, the developer's rule R2): one bubble, the label on the first line only when it is out
+ * of view; a screen reader gets the label as the name and the help as the description.
+ */
+describe('Button — a help', () => {
+    const HELP = 'Shows both providers side by side.';
+
+    for (const {display, text} of [
+        {display: 'text', text: HELP},
+        {display: 'icon', text: `Compare\n${HELP}`},
+    ] as const) {
+        it(`a long press on a button shown as ${display} writes ${display === 'icon' ? 'the label, then the help' : 'the help alone: the label is in view'}, and drops the click`, async () => {
+            const {button, onclick} = renderButton({label: 'Compare', icon: Pencil, display, help: HELP});
+            pointer(button, 'pointerdown', 'touch');
+            await advance(LONG_PRESS_MS);
+            expect(tooltip()?.textContent).toBe(text);
+            pointer(button, 'pointerup', 'touch');
+            click(button);
+            expect(onclick).not.toHaveBeenCalled();
+        });
+    }
+
+    it('a long press on a button whose label is in view, with no help, shows nothing and still does not act', async () => {
+        const {button, onclick} = renderButton({label: 'Compare', display: 'text'});
+        pointer(button, 'pointerdown', 'touch');
+        await advance(LONG_PRESS_MS);
+        expect(tooltip()).toBeNull();
+        pointer(button, 'pointerup', 'touch');
+        click(button);
+        expect(onclick).not.toHaveBeenCalled();
+    });
+
+    it('a reason follows the same rule: an icon-only button writes its label first', () => {
+        const {button} = renderButton({label: 'Compare', icon: Pencil, display: 'icon', reason: 'Nothing to compare.'});
+        click(button);
+        expect(tooltip()?.textContent).toBe('Compare\nNothing to compare.');
+    });
+
+    it('the label is the name and the help the description, on a text and on an icon-only button', () => {
+        for (const display of ['text', 'icon'] as const) {
+            const {button, unmount} = renderButton({label: 'Compare', icon: Pencil, display, help: HELP});
+            expect(button, display).toHaveAccessibleName('Compare');
+            expect(button, display).toHaveAccessibleDescription(HELP);
+            unmount();
+        }
     });
 });

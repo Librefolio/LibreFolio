@@ -1,7 +1,7 @@
 <!--
   The standard button (project 85, BTN-0): the recipe (`buttonClasses`) and the behaviour (`pressable`) together, with
   the right names for the properties. Tap = action on release; long press = the name, no action; mouse rest = the
-  name; Tab = the name. The name shows only when the word is out of view, or with a help or a reason.
+  name; Tab = the name. The name shows only when the word is out of view; a help or a reason always, alone under a word in view.
 
   - `label` is mandatory: the name for everyone (`aria-label` when the word is not the label) and the tooltip's text.
   - Disabled without a reason → native `disabled`, except an icon (`display` `icon` or `auto`): `aria-disabled`, and the
