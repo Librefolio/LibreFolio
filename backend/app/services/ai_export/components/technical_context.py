@@ -33,6 +33,8 @@ from backend.app.services.ai_export.components.technical_shared import (
 from backend.app.services.ai_export.components.types import DetailLevel, Domain, PeriodBehavior
 from backend.app.services.ai_export.dependencies import BuildContext
 from backend.app.services.ai_export.temporal import ObservedPoint, uniform_observed_buckets
+from backend.app.services.financial_math.returns import price_return
+from backend.app.services.risk.metrics import sample_standard_deviation
 from backend.app.services.signals.registry import SignalPluginRegistry
 
 _ASSET_CONTEXT_EVENT_KEYS = frozenset(
@@ -296,14 +298,30 @@ def _subtract_calendar_months(value: date, months: int) -> date:
     return value.replace(year=year, month=month, day=min(value.day, calendar.monthrange(year, month)[1]))
 
 
-def _observed_asset_points(result: FAPriceQueryResult | None, *, start: date, end: date) -> tuple[tuple[date, float], ...]:
+def _observed_asset_closes(result: FAPriceQueryResult | None, *, start: date, end: date) -> tuple[tuple[date, Decimal], ...]:
+    """The closes actually observed in the window, as stored (no carried-forward day)."""
     if result is None or coherent_price_currency(result) is None:
         return ()
-    return tuple((point.date, float(point.close)) for point in result.prices if start <= point.date <= end and (point.backward_fill_info is None or point.backward_fill_info.days_back == 0))
+    return tuple((point.date, point.close) for point in result.prices if start <= point.date <= end and (point.backward_fill_info is None or point.backward_fill_info.days_back == 0))
+
+
+def _observed_asset_points(result: FAPriceQueryResult | None, *, start: date, end: date) -> tuple[tuple[date, float], ...]:
+    return tuple((day, float(close)) for day, close in _observed_asset_closes(result, start=start, end=end))
 
 
 def _observed_fx_points(series: FxRateSeriesResource, *, start: date, end: date) -> tuple[tuple[date, float], ...]:
     return tuple((item.requested_date, float(item.rate)) for item in series.observations if start <= item.requested_date <= end and not item.backward_filled and item.actual_date == item.requested_date)
+
+
+def _daily_return_volatility(observed: Sequence[tuple[date, Decimal]]) -> float | None:
+    """The sample volatility (ddof = 1) of the simple returns between consecutive observed values; None under two returns.
+
+    One definition for every row that writes `daily_return_volatility_ratio` (78 L6 S1): the return from
+    `financial_math.returns.price_return`, the deviation from `risk.metrics.sample_standard_deviation`, the Risk engine's own.
+    A zero value gives no return and is skipped. Observations are quote days: the standard count.
+    """
+    returns = [float(change) for (_, previous), (_, current) in zip(observed, observed[1:], strict=False) if (change := price_return(previous, current)) is not None]
+    return sample_standard_deviation(returns) if len(returns) >= 2 else None
 
 
 def _value_on_or_before(points: Sequence[tuple[date, float]], target: date) -> tuple[date, float] | None:
@@ -678,7 +696,8 @@ async def _build_universe_market_context(context: BuildContext, *, universe_kwar
     detected = []
     for asset_id in universe.asset_ids:
         result = universe.price_results.by_asset_id.get(asset_id)
-        points = _observed_asset_points(result, start=scope.period_start, end=scope.period_end)
+        closes = _observed_asset_closes(result, start=scope.period_start, end=scope.period_end)
+        points = tuple((day, float(close)) for day, close in closes)
         signals = tuple(result.signals) if result is not None else ()
         detected.extend(signal_results_to_discrete_events(signals, entity_id=f"asset:{asset_id}", asset_id=asset_id))
         rows.append(
@@ -690,6 +709,8 @@ async def _build_universe_market_context(context: BuildContext, *, universe_kwar
                 period_start=scope.period_start,
                 period_end=scope.period_end,
                 portfolio_weight_ratio=float(universe.weights.get(asset_id, Decimal(0))),
+                # 78 L6 S1: the volatility a close-only ETF had none of (NATR needs highs and lows)
+                daily_return_volatility_ratio=_daily_return_volatility(closes),
             )
         )
         history.extend(
@@ -895,14 +916,14 @@ async def _build_broker_context_events(context: BuildContext, dependencies: Mapp
 
 PORTFOLIO_TECHNICAL_CONTEXT_COMPONENTS: tuple[ComponentSpec, ...] = (
     ComponentSpec("portfolio.technical_coverage", 1, frozenset({Domain.PORTFOLIO}), TechnicalUniverseCoveragePayload, _build_portfolio_coverage, period_behavior=PeriodBehavior.WINDOWED),
-    ComponentSpec("portfolio.asset_market_context", 1, frozenset({Domain.PORTFOLIO}), TechnicalMarketContextPayload, _build_portfolio_market_context, period_behavior=PeriodBehavior.WINDOWED),
+    ComponentSpec("portfolio.asset_market_context", 2, frozenset({Domain.PORTFOLIO}), TechnicalMarketContextPayload, _build_portfolio_market_context, period_behavior=PeriodBehavior.WINDOWED),
     ComponentSpec("portfolio.context_events", 1, frozenset({Domain.PORTFOLIO}), TechnicalContextEventsPayload, _build_portfolio_context_events, period_behavior=PeriodBehavior.WINDOWED),
     ComponentSpec("portfolio.event_digest", 1, frozenset({Domain.PORTFOLIO}), TechnicalEventDigestPayload, _build_portfolio_event_digest, period_behavior=PeriodBehavior.WINDOWED),
 )
 
 BROKER_TECHNICAL_CONTEXT_COMPONENTS: tuple[ComponentSpec, ...] = (
     ComponentSpec("broker.technical_coverage", 1, frozenset({Domain.BROKER}), TechnicalUniverseCoveragePayload, _build_broker_coverage, period_behavior=PeriodBehavior.WINDOWED),
-    ComponentSpec("broker.asset_market_context", 1, frozenset({Domain.BROKER}), TechnicalMarketContextPayload, _build_broker_market_context, period_behavior=PeriodBehavior.WINDOWED),
+    ComponentSpec("broker.asset_market_context", 2, frozenset({Domain.BROKER}), TechnicalMarketContextPayload, _build_broker_market_context, period_behavior=PeriodBehavior.WINDOWED),
     ComponentSpec("broker.context_events", 1, frozenset({Domain.BROKER}), TechnicalContextEventsPayload, _build_broker_context_events, period_behavior=PeriodBehavior.WINDOWED),
 )
 

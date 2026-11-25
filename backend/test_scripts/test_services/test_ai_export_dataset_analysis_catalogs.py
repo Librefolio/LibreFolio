@@ -357,8 +357,9 @@ class TestIntegratedComponentCatalog:
         its frozen placeholder, which the replacement validation requires to be equal. The payload shape does not change:
         schema_version stays 1. `broker.allocation_concentration` carries no slice and stays at version 1. 78 L10b: the
         comparison's portfolio side becomes the owned brokers, whole, and a broker not owned is unavailable: a builder
-        change, so `broker.concentration_comparison` is at version 3, the one bump of release 1.4 (1.3.0 shipped 2)."""
-        expected_version = 3 if component_id == "broker.concentration_comparison" else 2
+        change, so `broker.concentration_comparison` is at version 3, the one bump of release 1.4 (1.3.0 shipped 2). 78 L6 S7:
+        `portfolio.allocations_cash` adds the cash per broker, version 3 likewise."""
+        expected_version = 3 if component_id in {"broker.concentration_comparison", "portfolio.allocations_cash"} else 2
         placeholder = next(spec for spec in ALL_FOUNDATION_COMPONENTS if spec.component_id == component_id)
         real = next(spec for spec in ALL_REAL_COMPONENTS if spec.component_id == component_id)
         registered = component_registry.get(component_id)
