@@ -71,13 +71,15 @@ describe('PageBackButton', () => {
         expect(goto).toHaveBeenCalledWith('/dashboard?start=2026-01-01&end=2026-06-30');
     });
 
-    it('is named after the generic «back» label, in the title and for assistive tools', () => {
+    // BTN-2a: the standard Button names an icon by its aria-label and shows the name on a rest or a long press; a native
+    // `title` would be a second, browser-drawn tooltip of the same text.
+    it('is named after the generic «back» label for assistive tools, with no native title', () => {
         trackNavigation('enter', '/dashboard');
         trackNavigation('link', '/assets');
         render(PageBackButton, {fallback: '/dashboard', testId: BUTTON});
         const button = screen.getByTestId(BUTTON);
-        expect(button.getAttribute('title')).toBeTruthy();
-        expect(button.getAttribute('aria-label')).toBe(button.getAttribute('title'));
-        expect(button.getAttribute('title')).not.toBe('common.back'); // the key resolved, not shown raw
+        expect(button.getAttribute('aria-label')).toBeTruthy();
+        expect(button.getAttribute('aria-label')).not.toBe('common.back'); // the key resolved, not shown raw
+        expect(button.hasAttribute('title'), 'the name is the tooltip of the standard button, not a title').toBe(false);
     });
 });
