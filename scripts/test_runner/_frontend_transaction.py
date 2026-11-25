@@ -372,6 +372,18 @@ def front_tx_bulk_group_sync(verbose: bool = False, ui: bool = False, headed: bo
     return _run_playwright("transactions/tx-bulk-group-sync.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_tx_bulk_new_group_nav(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """In the Bulk, moving between a new parent and its charges, and unlinking them, from both forms (project 66, TL-11)."""
+    print_section("Frontend TX Bulk New Group Navigation Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("transactions/tx-bulk-new-group-nav.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_tx_view_open_edit(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """The view's pencil on a row reached with «Open» opens that row in the Bulk, also when the page's list lacks it (project 66, TL-1c)."""
     print_section("Frontend TX View Open Edit Tests")
@@ -1007,7 +1019,7 @@ def populate_registry(registry: dict) -> None:
         "tx-charges-unlink",
         front_tx_charges_unlink,
         name="TX Charges Unlink Tests",
-        desc="Project 66 TL-9: on the Transactions page, a BUY and its TAX ticked → «Unlink» (count 1) → the panel; cancel saves nothing; confirm → event tx.charges.unlinked and the TAX has no parent, read back by id; a BUY and a free FEE → no «Unlink»",
+        desc="Project 66 TL-9: on the Transactions page, a BUY and its TAX ticked → «Unlink» (count 1) → the panel; cancel saves nothing; confirm → event tx.charges.unlinked and the TAX has no parent, read back by id; a BUY and a free FEE → no «Unlink»; on a phone a BUY and the TAX of another BUY → «Link» off (linked) and «Unlink» (1) together, no sideways scroll, «Unlink» tapped",
         tests="transactions/tx-charges-unlink.spec.ts",
     )
     add_test(
@@ -1073,6 +1085,14 @@ def populate_registry(registry: dict) -> None:
         name="TX Bulk Group Sync Tests",
         desc="Project 66 TL-3b: in the Bulk, an all-new group (a BUY copy from «Clona» and its charge copies) keeps broker and asset in step — the asset changed in a charge copy's Form moves the parent and the sibling (help line shown), a FEE born in the parent's Form keeps the asset of its own Form and moves the group; guard: a new BUY with a saved FEE linked under it is not synced (no help line, chargeAssetMismatch, «Save all» refused) — read back from the server",
         tests="transactions/tx-bulk-group-sync.spec.ts",
+    )
+    add_test(
+        cat,
+        "tx-bulk-new-group-nav",
+        front_tx_bulk_new_group_nav,
+        name="TX Bulk New Group Navigation Tests",
+        desc="Project 66 TL-11: in the Bulk, a new BUY and the FEE born in its form — the FEE's form shows the BUY by its row label, «Open» there (the FEE highlighted) and back, «Unlink» from either form → a row of its own, saved with no parent on the BUY's broker, asset and date; a saved free FEE linked under a new BUY, unlinked in its form → nothing sent about its parent, still free — read back by id",
+        tests="transactions/tx-bulk-new-group-nav.spec.ts",
     )
     add_test(
         cat,

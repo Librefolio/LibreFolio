@@ -10,7 +10,11 @@
  *   confirm → the event `tx.charges.unlinked` names the TAX; the selection bar goes, the page settles, the TAX is a row of
  *   its own; on the server the TAX has no parent, the FEE still has, the BUY counts one; the types were never asked for.
  *
- * RED until TL-9: it stops where the bar must offer «Unlink».
+ *   On a phone (375 × 812, touch): a BUY and the TAX of ANOTHER BUY ticked → «Link» off (`linked`) and «Unlink» (1)
+ *   together in the bar; the page does not scroll sideways, «Unlink» is wholly on screen, its tap opens the panel in
+ *   unlink mode; cancel saves nothing (66 TL-11).
+ *
+ * RED until TL-9 (the first): it stops where the bar must offer «Unlink».
  *
  * testids relied on: broker-detail-page[data-busy] · broker-refresh[data-busy] · broker-tab-transazioni ·
  * broker-transactions-tab · broker-transactions · tx-table · tr[data-row-id="tx-<id>"] · dt-row-checkbox-tx-<id>
@@ -19,13 +23,14 @@
  * tx-charges-modal-table tr[data-row-id="parent"] · tx-charges-modal-confirm.
  * The verdict is the server, read back by id, the event's payload and the requests; never the translated words.
  *
- * The test works on an account of its own (`../fixtures/linked-charges.ts`); the afterEach deletes what of its rows is
+ * Every test works on an account of its own (`../fixtures/linked-charges.ts`); the afterEach deletes what of its rows is
  * left, together, then the account.
  */
 import {expect, test, type Page} from '../fixtures/playwright';
 import {navigateTo} from '../fixtures/auth-helpers';
 import {eventSeq, waitForEvent, waitForSettled} from '../fixtures/app-events';
-import {cleanupOwnedAccount, emptyOwnedAccount} from '../fixtures/owned-pair';
+import {daysAgoIso} from '../fixtures/dates';
+import {cleanupOwnedAccount, commitCreates, emptyOwnedAccount} from '../fixtures/owned-pair';
 import {COMMIT_PATH, readByIds, seedLinkedBuy} from '../fixtures/linked-charges';
 
 test.setTimeout(90_000);
@@ -137,5 +142,65 @@ test.describe('Broker page, Transactions tab — «Unlink the charges» from the
         expect(after.get(s.feeId)?.parent_transaction_id ?? null, `the FEE still points at the BUY: ${dump}`).toBe(s.buyId);
         expect(after.get(s.buyId)?.charges_count, `the BUY counts one charge: ${dump}`).toBe(1);
         expect(typesAsked, 'the unlink never asks for the transaction types (the page keeps its cold path)').toEqual([]);
+    });
+
+    // A context of its own (375 × 812, a touch screen), nested so it keeps this block's cleanup.
+    test.describe('on a phone', () => {
+        test.use({viewport: {width: 375, height: 812}, isMobile: true, hasTouch: true});
+        // Infrastructure, not data: both projects of playwright.config.ts run Chromium, so this never skips there.
+        test.skip(({browserName}) => browserName !== 'chromium', 'isMobile and the touch screen are Chromium emulation here');
+
+        test('a BUY and the TAX of another BUY ticked on the tab: «Link» off and «Unlink» (1) share the bar, the page does not scroll sideways, «Unlink» is tapped; cancel saves nothing', async ({page, request}) => {
+            const s = await seedLinkedBuy(page, request, owned, committedIds, 'chgv2', 'ChgV');
+            const [otherBuyId] = await commitCreates(page, [{broker_id: s.broker.id, asset_id: s.assetId, type: 'BUY', date: daysAgoIso(4), quantity: '5', cash: {code: 'USD', amount: '-50'}, description: `Other buy ${s.marker}`}], 'commit another BUY');
+            committedIds.push(otherBuyId);
+            const commits: CommitPayload[] = [];
+            page.on('request', (req) => {
+                if (req.method() === 'POST' && new URL(req.url()).pathname === COMMIT_PATH) commits.push(req.postDataJSON() as CommitPayload);
+            });
+
+            await openTabOnGroup(page, s.broker.id, s.buyId, [s.feeId, s.taxId]);
+            const device = await page.evaluate(() => ({touchPoints: navigator.maxTouchPoints, phone: window.matchMedia('(max-width: 639px)').matches}));
+            expect(device.touchPoints, 'the page must see a touch screen (hasTouch)').toBeGreaterThan(0);
+            expect(device.phone, 'the page must be drawn at phone width, below 640 px').toBe(true);
+            for (const id of [otherBuyId, s.taxId]) {
+                const checkbox = txTable(page).getByTestId(`dt-row-checkbox-tx-${id}`);
+                await expect(checkbox).toHaveAttribute('data-state', 'unchecked', {timeout: 8_000});
+                await checkbox.tap();
+                await expect(checkbox, 'a tap on its checkbox ticks the row').toHaveAttribute('data-state', 'checked', {timeout: 5_000});
+            }
+
+            const bar = txTable(page).getByTestId('selection-toolbar');
+            await expect(bar).toHaveAttribute('data-selected-count', '2', {timeout: 5_000});
+            await expect(bar.getByTestId('toolbar-action-delete')).toBeVisible({timeout: 5_000});
+            const link = bar.getByTestId('toolbar-action-link-charges');
+            await expect(link, '«Link» is in the bar, off').toBeVisible({timeout: 5_000});
+            await expect(link).toHaveAttribute('data-disabled-reason', 'linked');
+            const unlink = bar.getByTestId('toolbar-action-unlink-charges');
+            await expect(unlink).toBeVisible({timeout: 5_000});
+            await expect(unlink).toBeEnabled();
+            await expect(bar.getByTestId('toolbar-action-unlink-charges-count')).toHaveText('1');
+
+            // The bar has no overflow control (DataTableToolbar): every action is drawn, so both must fit the screen.
+            const doc = await page.evaluate(() => ({scroll: document.documentElement.scrollWidth, client: document.documentElement.clientWidth}));
+            expect(doc.scroll, `the page scrolls sideways: scrollWidth ${doc.scroll}, clientWidth ${doc.client}`).toBeLessThanOrEqual(doc.client + 1);
+            for (const action of [link, unlink]) await expect(action, 'wholly on screen').toBeInViewport({ratio: 0.99});
+
+            await unlink.tap();
+            const content = page.getByTestId('tx-charges-modal-content');
+            await expect(content).toBeVisible({timeout: 8_000});
+            await expect(content).toHaveAttribute('data-mode', 'unlink');
+            const heads = content.getByTestId('tx-charges-modal-table').locator('thead');
+            await expect(heads).toContainText(`#${s.taxId}`);
+            await expect(heads, 'the other BUY is no column of the panel').not.toContainText(`#${otherBuyId}`);
+            await expect(content.locator('[data-testid="tx-charges-modal-table"] tbody tr[data-row-id="parent"]')).toContainText(`#${s.buyId}`);
+
+            await content.getByTestId('tx-charges-modal-cancel').tap();
+            await expect(content).toBeHidden({timeout: 8_000});
+            expect(commits, 'cancelled: the tab committed nothing').toEqual([]);
+            const kept = await readByIds(page, [s.feeId, s.taxId]);
+            expect([kept.get(s.feeId)?.parent_transaction_id ?? null, kept.get(s.taxId)?.parent_transaction_id ?? null], 'both charges still point at their BUY').toEqual([s.buyId, s.buyId]);
+            await expect(bar, 'the selection is kept').toHaveAttribute('data-selected-count', '2');
+        });
     });
 });
