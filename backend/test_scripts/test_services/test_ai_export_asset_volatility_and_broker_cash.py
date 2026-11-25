@@ -22,6 +22,7 @@ The cases:
 - AV-01: the portfolio row of each asset has the volatility, equal to the definition computed here from the seeded closes.
 - AV-02: the broker export gives the same figure for the same asset (one definition, one value).
 - AV-03: with a single close in the period the volatility is None.
+- AV-04: `fx.market_summary` uses the same definition on the seeded rates (no population deviation).
 - BC-01: `cash_by_broker` has B1 and B2, their cash adds up to `cash_total`, and the list says its basis (the user's
   share); with nothing in flight the cash in transit is zero.
 - BC-02: B2 counts at its share: half of its EUR and of its USD balances.
@@ -276,6 +277,16 @@ async def test_av03_a_single_close_in_the_period_has_no_volatility(single_close_
 
     assert _volatility(payload, single_close_book.assets["CLOSE_ONLY"]) is None
     assert _volatility(payload, single_close_book.assets["OTHER"]) is not None, "premise: the other asset keeps its closes"
+
+
+@pytest.mark.asyncio
+async def test_av04_the_fx_summary_uses_the_same_definition(book):
+    payload = await _resolve(book, _scope(book, Domain.FX, base_currency="EUR", quote_currency="USD"), "fx.market_summary")
+
+    rows = payload["entities"]
+    assert len(rows) == 1
+    expected = _definition(_observed(RATES))
+    assert rows[0]["daily_return_volatility_ratio"] == pytest.approx(expected, abs=TOLERANCE)
 
 
 # =============================================================================

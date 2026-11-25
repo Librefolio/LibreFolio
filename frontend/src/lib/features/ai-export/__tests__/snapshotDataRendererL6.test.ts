@@ -3,7 +3,7 @@
  *
  * 78 L6 · S1 + S7 — the renderer knows the three versions the lot moves, and prints their new data compactly.
  *
- * `portfolio.asset_market_context` and `broker.asset_market_context` (v2) carry the daily
+ * `portfolio.asset_market_context` and `broker.asset_market_context` (v2) and `fx.market_summary` (v2) carry the daily
  * return volatility; `portfolio.allocations_cash` (v3) carries the cash of each broker, the basis it counts on (the
  * user's share) and the cash in transit as a figure of its own. A version missing from
  * `COMPACT_COMPONENT_VERSIONS` falls back to YAML: each one renders compactly, and its new data is in the text.
@@ -39,6 +39,13 @@ describe('78 L6: the versions of S1 and S7 render compactly', () => {
         expect(content).not.toContain(FALLBACK);
         expect(content).toContain('daily_return_volatility_percent');
         expect(content).toContain('1.23%');
+    });
+
+    it('fx.market_summary v2 prints the daily return volatility, not as YAML', () => {
+        const row = {...marketRow, entity_id: 'fx:EUR/USD', value_unit: 'USD_per_EUR'};
+        const content = render('fx.market_summary', 2, {policy_code: 'fx_market_context_v2', entities: [row]}, {kind: 'fx', base_currency: 'EUR', quote_currency: 'USD'});
+        expect(content).not.toContain(FALLBACK);
+        expect(content).toContain('daily_return_volatility_percent');
     });
 
     it('portfolio.allocations_cash v3 prints the cash of each broker by its public reference, not as YAML', () => {

@@ -7,7 +7,6 @@ import math
 from collections.abc import Mapping, Sequence
 from datetime import date, timedelta
 from decimal import Decimal
-from statistics import pstdev
 
 from pydantic import Field
 
@@ -309,8 +308,13 @@ def _observed_asset_points(result: FAPriceQueryResult | None, *, start: date, en
     return tuple((day, float(close)) for day, close in _observed_asset_closes(result, start=start, end=end))
 
 
+def _observed_fx_rates(series: FxRateSeriesResource, *, start: date, end: date) -> tuple[tuple[date, Decimal], ...]:
+    """The rates actually published in the window, as stored (no backward-filled day)."""
+    return tuple((item.requested_date, item.rate) for item in series.observations if start <= item.requested_date <= end and not item.backward_filled and item.actual_date == item.requested_date)
+
+
 def _observed_fx_points(series: FxRateSeriesResource, *, start: date, end: date) -> tuple[tuple[date, float], ...]:
-    return tuple((item.requested_date, float(item.rate)) for item in series.observations if start <= item.requested_date <= end and not item.backward_filled and item.actual_date == item.requested_date)
+    return tuple((day, float(rate)) for day, rate in _observed_fx_rates(series, start=start, end=end))
 
 
 def _daily_return_volatility(observed: Sequence[tuple[date, Decimal]]) -> float | None:
@@ -856,7 +860,8 @@ async def _build_fx_market_summary(context: BuildContext, dependencies: Mapping[
     scope = context.scope
     assert scope is not None and scope.base_currency is not None and scope.quote_currency is not None
     bundle = await load_fx_technical_bundle(context)
-    points = _observed_fx_points(bundle.rate_series, start=scope.period_start, end=scope.period_end)
+    rates = _observed_fx_rates(bundle.rate_series, start=scope.period_start, end=scope.period_end)
+    points = tuple((day, float(rate)) for day, rate in rates)
     entity_id = f"fx:{scope.base_currency}/{scope.quote_currency}"
     discrete = signal_results_to_discrete_events(bundle.signal_results, entity_id=entity_id)
     events = _event_rows(
@@ -865,7 +870,6 @@ async def _build_fx_market_summary(context: BuildContext, dependencies: Mapping[
         max_per_entity=8,
     )
     latest_events = _latest_category_events(discrete, allowed_keys=_FX_CONTEXT_EVENT_KEYS)
-    daily_returns = [current[1] / previous[1] - 1 for previous, current in zip(points, points[1:], strict=False) if previous[1] != 0]
     row = _market_context_row(
         entity_id=entity_id,
         value_unit=f"{scope.quote_currency}_per_{scope.base_currency}",
@@ -873,7 +877,8 @@ async def _build_fx_market_summary(context: BuildContext, dependencies: Mapping[
         results=bundle.signal_results,
         period_start=scope.period_start,
         period_end=scope.period_end,
-        daily_return_volatility_ratio=pstdev(daily_returns) if len(daily_returns) >= 2 else None,
+        # 78 L6: the same definition as the portfolio and broker rows (sample volatility; until v1 a population one)
+        daily_return_volatility_ratio=_daily_return_volatility(rates),
         include_short_trend=True,
         include_fx_momentum=True,
     )
@@ -934,7 +939,7 @@ ASSET_TECHNICAL_CONTEXT_COMPONENTS: tuple[ComponentSpec, ...] = (
 
 FX_TECHNICAL_CONTEXT_COMPONENTS: tuple[ComponentSpec, ...] = (
     ComponentSpec("fx.technical_coverage", 1, frozenset({Domain.FX}), TechnicalSingleEntityCoveragePayload, _build_fx_coverage, period_behavior=PeriodBehavior.WINDOWED),
-    ComponentSpec("fx.market_summary", 1, frozenset({Domain.FX}), TechnicalMarketContextPayload, _build_fx_market_summary, period_behavior=PeriodBehavior.WINDOWED),
+    ComponentSpec("fx.market_summary", 2, frozenset({Domain.FX}), TechnicalMarketContextPayload, _build_fx_market_summary, period_behavior=PeriodBehavior.WINDOWED),
 )
 
 TECHNICAL_CONTEXT_COMPONENTS: tuple[ComponentSpec, ...] = (

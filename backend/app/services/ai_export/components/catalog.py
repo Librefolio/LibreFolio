@@ -184,7 +184,7 @@ _FX_COMPONENTS: tuple[ComponentSpec, ...] = (
     _component(Domain.FX, "indicators", "Technical indicators", dependencies=("fx.rate_ohlc",), period_behavior=PeriodBehavior.AGGREGATED, aggregator=_SIGNAL_PROFILE_BUCKET_AGGREGATOR),
     _component(Domain.FX, "states_events", "Technical states and events", period_behavior=PeriodBehavior.WINDOWED),
     _component(Domain.FX, "technical_coverage", "FX source and Signal coverage", period_behavior=PeriodBehavior.WINDOWED),
-    _component(Domain.FX, "market_summary", "Focused FX market context", period_behavior=PeriodBehavior.WINDOWED),
+    _component(Domain.FX, "market_summary", "Focused FX market context", version=2, period_behavior=PeriodBehavior.WINDOWED),
     _component(Domain.FX, "exposure_base_quote", "Direct base/quote exposures", period_behavior=PeriodBehavior.WINDOWED),
     _component(Domain.FX, "exposure_provenance", "Conversion provenance for exposures", dependencies=("fx.exposure_base_quote",), period_behavior=PeriodBehavior.NONE),
     _component(Domain.FX, "timing_context", "FX conversion timing context", dependencies=("fx.current_rate", "fx.conversion_provenance"), period_behavior=PeriodBehavior.WINDOWED),
