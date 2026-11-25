@@ -604,6 +604,11 @@ calls `handleFormOpenTransaction(id)`:
 - a failed read gives the `tx.form.open.failed` toast; a late answer (the workspace or the Form closed, or the Form
   moved to another row) does nothing. The Form itself is open only while the workspace is (`open && formOpen`).
 
+On a new row, which has no id, the Form calls `handleFormOpenRow(tempId)` (66 TL-11): the row is in the workspace
+already, so nothing is read or added; a closed group opens, and the row the user came from is highlighted by its id, or
+by its key (`formHighlightKey`) when it is new too. `newParentOf` hands the Form of a charge its parent when that is a
+new row (`_newParent`); a saved parent keeps travelling as `parent_transaction_id` (`effectiveParentId`).
+
 **«Link» in the workspace (U3).** The toolbar's «Link» (`tx-bulk-link-charges` in `TxBulkToolbar`) joins one parent
 and its charges among the selected rows, new ones included. `bulkLinkSelection` (`bulk/bulkCharges.ts`) applies the
 page's rules, `linkSelection` of `chargeLinkRules.ts`, to mirror rows built from the operations:

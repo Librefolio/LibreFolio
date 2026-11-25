@@ -300,6 +300,13 @@ A FEE or a TAX can point at the transaction it belongs to (project 66; the backe
   existing discard confirmation comes first. The transactions page and the portfolio views wire it in read-only; the
   bulk workspace wires it too, and brings the target into the batch as a row ([«Open» in the
   workspace](../../state/transaction-draft.md#workspace-intent)).
+- **New rows of the Bulk (66 TL-11).** They have no id, so the Form reaches them by key (`op-<tempId>`):
+    - a charge under a new parent is handed that parent (`_newParent`: key, row reference, values), and «Linked to» shows
+      it without a read, with no «Link to a transaction…»;
+    - in the parent's section a row the Bulk holds (`op-`) has «Open» and «Unlink»; one typed in this opening (`new-`) has
+      only the bin; an `op-` row picked in this opening is only taken back out (`pickedKeys`);
+    - «Open» on them is `onOpenRow(tempId)`, behind the same discard confirmation, with `highlightKey` for a row that has
+      no id.
 - **The unsaved-changes baseline** (`baselineKey()`) includes the charges; a charge row without an amount is a local
   error that blocks «Apply».
 
