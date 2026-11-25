@@ -2,6 +2,7 @@
     import type {ComponentType} from 'svelte';
     import {applyLinearShrink, innerContentWidth, type ShrinkTarget} from '$lib/utils/layout/labelShrink';
     import {guideAnchor} from '$lib/features/onboarding/guideAnchors.svelte';
+    import {pressable} from '$lib/components/ui/button/pressable.svelte';
 
     export interface TabItem {
         id: string;
@@ -45,6 +46,25 @@
     }
 
     let {tabs, activeTab = $bindable(''), onchange, class: className = '', hideLabelOnMobile = false, showLabels, fillWidth = false, shrinkLabelsToFit = false, scrollable = false}: Props = $props();
+
+    /** Whether the tab's word is in view now: a tab without an icon always shows it, a hidden one never does, and the
+     *  responsive one (`hidden sm:inline`) is measured. A tab whose word is out of view names itself (long press, rest,
+     *  Tab) through `pressable` (85 BTN-2d, D8: no `title`); for a reader, a label that may hide (`showLabels={false}`,
+     *  or `hideLabelOnMobile` below `sm`) leaves the name to `aria-label`. */
+    function tabWordVisible(tab: TabItem): boolean {
+        if (!tab.icon || showLabels === true) return true;
+        if (showLabels === false) return false;
+        if (!hideLabelOnMobile) return true;
+        const label = labelRefs[tab.id];
+        return !!label && label.getClientRects().length > 0;
+    }
+
+    /** The name of a tab whose word may hide: the label and what it carries (a badge's number, the dot's words), which an
+     *  `aria-label` would otherwise cover. */
+    function tabName(tab: TabItem): string {
+        const extra = tab.badge != null && tab.badge > 0 ? String(tab.badge) : tab.dot?.label;
+        return extra ? `${tab.label}, ${extra}` : tab.label;
+    }
 
     function handleTabClick(tabId: string) {
         activeTab = tabId;
@@ -191,8 +211,8 @@
                 use:guideAnchor={tab.guideAnchor ?? ''}
                 role="tab"
                 aria-selected={activeTab === tab.id}
-                aria-label={tab.icon && showLabels === false ? tab.label : undefined}
-                title={tab.label}
+                aria-label={tab.icon && (showLabels === false || (showLabels === undefined && hideLabelOnMobile)) ? tabName(tab) : undefined}
+                use:pressable={{label: tab.label, tipPosition: 'bottom', wordVisible: () => tabWordVisible(tab)}}
                 onclick={() => handleTabClick(tab.id)}
             >
                 {#if tab.icon}
