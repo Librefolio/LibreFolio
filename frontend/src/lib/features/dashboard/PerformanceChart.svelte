@@ -15,10 +15,9 @@
     import {chartInitOptions} from '$lib/components/charts/chartPixelRatio';
     import {attachChartReady} from '$lib/utils/chartReady';
     import {createResizeWatcher} from '$lib/utils/core/resizeWatcher';
-    import {goto} from '$app/navigation';
-    import {ExternalLink, Layers} from 'lucide-svelte';
+    import {assetMenuItems, runAssetAction} from './assetActions';
     import {t} from '$lib/i18n';
-    import ContextMenu, {type ContextMenuItem} from '$lib/components/ui/ContextMenu.svelte';
+    import ContextMenu from '$lib/components/ui/ContextMenu.svelte';
     import {getCurrencyInfo} from '$lib/stores/reference/currencyStore';
     import {buildGridColors, buildTooltipDivider, buildTooltipHeader, buildTooltipRow, buildTooltipTheme, setupTooltipAutoHide, scheduleFirstRenderStabilityFix} from '$lib/components/charts/echartsTooltipHelpers';
     import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
@@ -1202,14 +1201,10 @@
             x={contextMenu.x}
             y={contextMenu.y}
             anchorEl={contextMenu.anchorEl}
-            items={[
-                {id: 'view-asset', label: $t('brokers.lots.viewAsset') || 'View Asset', icon: ExternalLink as unknown as ContextMenuItem['icon']},
-                {id: 'analyze-lots', label: $t('brokers.lots.analyze') || 'Analyze Lots', icon: Layers as unknown as ContextMenuItem['icon']},
-            ] satisfies ContextMenuItem[]}
+            items={assetMenuItems($t)}
             onAction={(id) => {
                 if (!contextMenu) return;
-                if (id === 'view-asset') void goto(`/assets/${contextMenu.assetId}`);
-                else if (id === 'analyze-lots') onAnalyze?.(contextMenu.assetId);
+                runAssetAction(id, contextMenu.assetId, onAnalyze);
                 contextMenu = null;
             }}
             onClose={() => (contextMenu = null)}

@@ -656,6 +656,7 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/features/assets/ProviderAttributionNote.test.ts",
             "src/lib/features/assets/AssetTable.privacy.test.ts",
             "src/lib/features/dashboard/KpiSection.test.ts",
+            "src/lib/features/dashboard/assetActions.test.ts",
             "src/lib/features/dashboard/ExposureTable.test.ts",
             "src/lib/features/dashboard/ExposureTreemap.test.ts",
             "src/lib/features/dashboard/GrowthChart.tooltip.test.ts",
