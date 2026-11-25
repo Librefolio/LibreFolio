@@ -106,6 +106,7 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 - **Le calcul montre sa phase** pendant l'attente : « Je contrôle les données », « Je construis le modèle », « Je cherche le plan », « Je vérifie les comptes », « Je prépare le résultat », avec sa position (« 2 sur 5 »).
 - **Quand un courtier convertit la devise à chaque achat, le plan le dit.** Il compte une conversion par paire de devises ; le courtier peut arrondir chaque ordre séparément, donc quelques centimes par ordre peuvent différer.
 - Quand un calcul de l'Allocateur PAC ou du Rééquilibreur de portefeuille échoue, **Copier la requête** copie les données envoyées, à joindre à un signalement. Le serveur ne conserve rien.
+- **AI Export : la volatilité journalière de chaque actif dans les données Portefeuille et Courtier, et les liquidités de chaque courtier**, à votre part pour un courtier en copropriété, avec les liquidités en transit entre courtiers sur une ligne à part.
 
 ### 🔄 Modifié
 
@@ -235,6 +236,7 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 - FX : une paire ne peut plus être synchronisée deux fois en même temps. Tant qu'une paire se synchronise, ses boutons **Synchroniser** sont désactivés et l'indiquent, **Sync. Tout** compte chaque paire qu'il couvre, et le serveur refuse une seconde demande pour la même paire (409) au lieu de la lancer. La synchronisation hebdomadaire laisse à la vôtre une paire que vous synchronisez.
 - API : `POST /fx/currencies/sync` répond **409** `fx_sync_in_progress` (avec les paires occupées et le début de leur synchronisation) lorsqu'une paire de la requête est déjà en cours de synchronisation.
 - Paramètres › Plugins : saisir une clé d'API ou un jeton ne fait plus proposer au navigateur d'enregistrer un mot de passe (les champs de clé sont des champs de texte masqués, pas des champs de mot de passe).
+- AI Export : la volatilité du résumé FX utilise la même définition que la page Risque (écart type d'échantillon).
 
 ### ⚠️ Changements incompatibles
 

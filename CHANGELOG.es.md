@@ -106,6 +106,7 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 - **El cálculo muestra su fase** mientras esperas: «Compruebo los datos», «Construyo el modelo», «Busco el plan», «Verifico las cuentas», «Preparo el resultado», con su posición («2 de 5»).
 - **Cuando un bróker convierte la divisa en cada compra, el plan lo dice.** Cuenta una conversión por par de divisas; el bróker puede redondear cada orden por separado, así que algunos céntimos por orden pueden diferir.
 - Cuando un cálculo del Asignador PAC o del Reequilibrador de cartera falla, **Copiar la solicitud** copia los datos enviados, para adjuntarlos a un informe. El servidor no guarda nada.
+- **AI Export: la volatilidad diaria de cada activo en los datos de Cartera y Bróker, y el efectivo de cada bróker**, a tu cuota para un bróker en copropiedad, con el efectivo en tránsito entre brókeres en una línea propia.
 
 ### 🔄 Cambios
 
@@ -235,6 +236,7 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 - FX: un par ya no puede sincronizarse dos veces a la vez. Mientras un par se sincroniza, sus botones **Sincronizar** están desactivados y lo indican, **Sinc. Todo** cuenta cada par que abarca, y el servidor rechaza una segunda solicitud para el mismo par (409) en lugar de iniciarla. La sincronización semanal deja a la tuya un par que estás sincronizando.
 - API: `POST /fx/currencies/sync` responde **409** `fx_sync_in_progress` (con los pares ocupados y cuándo empezó su sincronización) cuando un par de la solicitud ya se está sincronizando.
 - Configuración › Plugins: escribir una clave de API o un token ya no hace que el navegador ofrezca guardar una contraseña (los campos de clave son campos de texto enmascarados, no campos de contraseña).
+- AI Export: la volatilidad del resumen FX usa la misma definición que la página Riesgo (desviación típica muestral).
 
 ### ⚠️ Cambios incompatibles
 

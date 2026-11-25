@@ -106,6 +106,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The calculation shows its phase** while you wait: «Checking the data», «Building the model», «Searching for the plan», «Verifying the figures», «Preparing the result», with its position («2 of 5»).
 - **When a Broker converts currency at each purchase, the plan says so.** It counts one conversion per currency pair; the broker may round each order separately, so a few cents per order may differ.
 - When a calculation of the PAC allocator or of the Portfolio rebalancer fails, **Copy the request** copies the data it sent, to attach to a report. Nothing is kept on the server.
+- **AI Export: each asset's daily volatility in the Portfolio and Broker data, and the cash of each broker**, at your share for a broker you co-own, with the cash moving between brokers on its own line.
 
 ### 🔄 Changed
 
@@ -235,6 +236,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - FX: a pair can no longer be synced twice at once. While a pair syncs, its **Sync** buttons are off and say so, **Sync All** counts for every pair it covers, and the server refuses a second request for the same pair (409) instead of starting it. The weekly sync leaves a pair you are syncing to your sync.
 - API: `POST /fx/currencies/sync` answers **409** `fx_sync_in_progress` (with the busy pairs and when their sync began) when a pair of the request is already syncing.
 - Settings › Plugins: typing an API key or a token no longer makes the browser offer to save a password (the key fields are masked text fields, not password fields).
+- AI Export: the FX summary's volatility uses the same definition as the Risk page (sample deviation).
 
 ### ⚠️ Breaking changes
 
