@@ -1029,8 +1029,9 @@ const UNCATEGORISED_EXPOSURE = 'allocation.uncategorised';
 const PAC_EXPOSURE_ROWS = {geography: [SEEDED_COUNTRY, UNCATEGORISED_EXPOSURE], asset_type: ['ETF', 'STOCK'], sector: ['Other', 'Technology', UNCATEGORISED_EXPOSURE]} as const;
 
 /**
- * `tools/pac-result-exposures`: «Exposures – ideal vs actual» — the two world maps, target shares and shares after the plan, the
- * bars by Asset type and by sector ({@link PAC_EXPOSURE_ROWS} says which). The section starts closed
+ * `tools/pac-result-exposures`: «Exposures – ideal vs actual» — the bars by Asset type and by sector side by side, then the
+ * countries: the two world maps, target shares and shares after the plan, and their bars under them (TL-5 of project 67: one
+ * layout in both Tools; {@link PAC_EXPOSURE_ROWS} says which rows). The section starts closed
  * (ResultView.svelte, `OPEN_BY_DEFAULT`) and renders its body only while open (ResultSection.svelte): it is opened from its title
  * and the outcome asserted, so a lost click fails here instead of shooting the closed section; {@link closePacExposures} closes it
  * after the shot. The body is then waited for on what it publishes: the three dimensions, each folded or not, with their rows; the
@@ -1040,8 +1041,8 @@ const PAC_EXPOSURE_ROWS = {geography: [SEEDED_COUNTRY, UNCATEGORISED_EXPOSURE], 
  * - desktop: from the section's title; the spec's tall-screen rule (galleryTallShots.ts, `extendScreenToBlock`) then grows the
  *   screen down to the section's end, so the whole section is in one image;
  * - mobile: the section is far taller than the phone's screen, and the bars are the subject — the colours of the two
- *   distributions — so the body ends at the bottom of the screen with as much of the maps above it as fits, and the type and sector
- *   blocks are asserted whole in the shot.
+ *   distributions — so the shot takes the section from its title, the type and sector blocks first and whole in it, the countries
+ *   below the fold.
  * Returns the section, the region the shot settles.
  */
 export async function framePacExposures(page: Page, viewport: 'desktop' | 'mobile'): Promise<Locator> {
@@ -1057,8 +1058,9 @@ export async function framePacExposures(page: Page, viewport: 'desktop' | 'mobil
 
     const exposures = section.getByTestId('pac-planner-exposures');
     await expect(exposures).toBeVisible();
-    // Always the three dimensions (result/model.ts, `exposureGroups`), the countries first.
+    // Always the three dimensions (result/model.ts, `exposureGroups`): types, sectors, then the countries (TL-5).
     await expect(exposures.getByTestId('pac-planner-exposures-dimension')).toHaveCount(3);
+    await expect.poll(() => exposures.getByTestId('pac-planner-exposures-dimension').evaluateAll((blocks) => blocks.map((block) => block.getAttribute('data-dimension'))), {message: 'the dimensions are not in the order of TL-5'}).toEqual(['asset_type', 'sector', 'geography']);
     const dimension = (id: 'geography' | 'asset_type' | 'sector') => exposures.locator(`[data-testid="pac-planner-exposures-dimension"][data-dimension="${id}"]`);
     const geography = dimension('geography');
     const types = dimension('asset_type');
@@ -1087,12 +1089,13 @@ export async function framePacExposures(page: Page, viewport: 'desktop' | 'mobil
     await expect(maps.getByTestId('pac-planner-exposures-off-map')).toBeVisible();
     await expect(types.getByTestId('pac-planner-exposures-bars'), 'the bars by Asset type are not drawn').toHaveAttribute('data-chart-ready', 'true', {timeout: DRAW_TIMEOUT});
     await expect(sectors.getByTestId('pac-planner-exposures-bars'), 'the bars by sector are not drawn').toHaveAttribute('data-chart-ready', 'true', {timeout: DRAW_TIMEOUT});
+    await expect(geography.getByTestId('pac-planner-exposures-bars'), 'the bars by country are not drawn').toHaveAttribute('data-chart-ready', 'true', {timeout: DRAW_TIMEOUT});
 
     if (viewport === 'desktop') {
         await framePacBlock(page, {first: section, last: section});
         return section;
     }
-    await framePacBlock(page, {first: section, last: exposures, keep: 'bottom'});
+    await framePacBlock(page, {first: section, last: sectors});
     await expect(types, 'the bars by Asset type are not whole in the shot').toBeInViewport({ratio: 1});
     await expect(sectors, 'the bars by sector are not whole in the shot').toBeInViewport({ratio: 1});
     return section;
