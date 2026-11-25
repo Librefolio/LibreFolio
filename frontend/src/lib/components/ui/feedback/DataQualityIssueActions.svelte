@@ -6,10 +6,14 @@
   A banner renders both halves where its layout wants them and gets nothing for a shape that is not the half's.
   Shared by `DataQualityBanner` (grouped mode) and `LotDataQualityBanner` (project 69, L4): one drawing, one set of
   `data-testid`s. The click is the parent's (`onaction`): the component opens, navigates and syncs nothing itself.
+  Every chip is the standard `Button`, `variant="chip"` in the row's tone, `size="xs"` (85 BTN-2d).
 -->
 <script lang="ts">
     import {_} from '$lib/i18n';
-    import {ArrowUpRight, Loader2} from 'lucide-svelte';
+    import {ArrowUpRight} from 'lucide-svelte';
+    import Button from '$lib/components/ui/button/Button.svelte';
+    import type {ButtonTone} from '$lib/components/ui/button/buttonClasses';
+    import {DATA_QUALITY_TONE} from '$lib/theme/toneClasses';
     import {formatPairSlugHtml, formatPairSlugPlain} from '$lib/utils/currency/currencyFormat';
     import type {DataQualityIssue} from './DataQualityBanner.svelte';
     import {assetTargets, ctaIcon, ctaLabel, fixShape} from './dataQualityCta';
@@ -17,19 +21,25 @@
     interface Props {
         issue: DataQualityIssue;
         placement: 'head' | 'items';
-        /** The chip and button classes of the row's severity (`STATUS_TONES.bannerChip`, rule 12). */
-        chipClass: string;
+        /** The row's tone (`DATA_QUALITY_TONE`, rule 12); the issue's own severity when absent. */
+        tone?: ButtonTone;
+        /**
+         * @deprecated The chips are `Button variant="chip"` now and take `tone`: ignored, kept only until
+         * `LotDataQualityBanner` passes `tone` instead.
+         */
+        chipClass?: string;
         onaction?: (action: string, target: string | null, issue: DataQualityIssue) => void;
-        /** The issue code whose action is running: its button shows a spinner and is disabled. */
+        /** The issue code whose action is running: its button shows a spinner and is busy. */
         busyCode?: string | null;
     }
 
-    let {issue, placement, chipClass, onaction, busyCode = null}: Props = $props();
+    let {issue, placement, tone, onaction, busyCode = null}: Props = $props();
 
     const shape = $derived(fixShape(issue));
     const action = $derived(issue.cta_action ?? '');
     const CtaIcon = $derived(ctaIcon(issue.cta_action));
     const pairs = $derived(issue.affected_fx_pairs ?? []);
+    const chipTone = $derived<ButtonTone>(tone ?? DATA_QUALITY_TONE[issue.severity] ?? 'info');
     const translate = (key: string) => $_(key);
 
     function handleCta() {
@@ -39,34 +49,24 @@
 
 {#if placement === 'head' && shape === 'all'}
     <div>
-        <button type="button" class="inline-flex items-center gap-1 px-2 py-0.5 rounded {chipClass} transition-colors font-medium text-[11px] shrink-0 disabled:opacity-60 disabled:cursor-not-allowed" onclick={handleCta} disabled={busyCode === issue.code} data-testid="data-quality-cta-{issue.code}">
-            {#if busyCode === issue.code}
-                <Loader2 size={11} class="animate-spin" />
-            {:else}
-                <CtaIcon size={11} />
-            {/if}
-            {ctaLabel(translate, issue.cta_action)}
-        </button>
+        <Button variant="chip" tone={chipTone} size="xs" icon={CtaIcon} label={ctaLabel(translate, issue.cta_action)} busy={busyCode === issue.code} onclick={handleCta} data-testid="data-quality-cta-{issue.code}" />
     </div>
 {:else if placement === 'items' && shape === 'each-asset'}
-    <!-- One «go to asset» chip per affected asset: the chip is the item and its fix. -->
+    <!-- One «go to asset» chip per affected asset: the chip is the item and its fix. A long name cuts, and the whole
+         name shows on a long press, a rest or Tab while it is cut. -->
     <div class="flex flex-wrap gap-1.5 mt-0.5" data-testid="data-quality-nav-assets-{issue.code}">
         {#each assetTargets(issue) as tgt}
-            <button class="inline-flex items-center gap-1 px-2 py-0.5 rounded {chipClass} transition-colors font-medium text-[11px] min-w-0 max-w-[16rem]" onclick={() => onaction?.('navigate_asset', String(tgt.id), issue)} title={tgt.name} data-testid="data-quality-nav-asset-{tgt.id}">
-                <ArrowUpRight size={11} class="shrink-0" />
-                <span class="truncate">{tgt.name}</span>
-            </button>
+            <Button variant="chip" tone={chipTone} size="xs" icon={ArrowUpRight} label={tgt.name} truncate class="max-w-[16rem]" onclick={() => onaction?.('navigate_asset', String(tgt.id), issue)} data-testid="data-quality-nav-asset-{tgt.id}" />
         {/each}
     </div>
 {:else if placement === 'items' && shape === 'each-pair'}
-    <!-- One chip per pair, the action on that pair: adding or opening works on one pair at a time. -->
+    <!-- One chip per pair, the action on that pair: adding or opening works on one pair at a time. The word is the pair
+         with its flags; the name says the action and the pair. -->
     <div class="flex flex-wrap gap-1.5 mt-0.5" data-testid="data-quality-fx-pairs-{issue.code}">
         {#each pairs as pair (pair)}
-            {@const label = `${ctaLabel(translate, issue.cta_action)}: ${formatPairSlugPlain(pair)}`}
-            <button type="button" class="inline-flex items-center gap-1 px-2 py-0.5 rounded {chipClass} transition-colors font-medium text-[11px] min-w-0" onclick={() => onaction?.(action, pair, issue)} title={label} aria-label={label} data-testid="data-quality-fx-pair-{pair}">
-                <CtaIcon size={11} class="shrink-0" />
+            <Button variant="chip" tone={chipTone} size="xs" icon={CtaIcon} label="{ctaLabel(translate, issue.cta_action)}: {formatPairSlugPlain(pair)}" onclick={() => onaction?.(action, pair, issue)} data-testid="data-quality-fx-pair-{pair}">
                 <span class="inline-flex items-center gap-0.5">{@html formatPairSlugHtml(pair)}</span>
-            </button>
+            </Button>
         {/each}
     </div>
 {/if}
