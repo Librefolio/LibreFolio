@@ -118,7 +118,7 @@ lib/features/brokers/lots/LotWacPriceChart.svelte	4
 lib/features/brokers/lots/LotsAnalysisPanel.svelte	4
 lib/features/brokers/profile/BrokerOperatingProfileBox.svelte	5
 lib/features/changelog/WhatsNewModal.svelte	1
-lib/features/dashboard/AllocationPanel.svelte	4
+lib/features/dashboard/AllocationPanel.svelte	3
 lib/features/dashboard/ExposureTreemap.svelte	1
 lib/features/dashboard/GrowthChart.svelte	7
 lib/features/dashboard/PositionsPanel.svelte	4

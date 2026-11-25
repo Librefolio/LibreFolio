@@ -16,6 +16,7 @@
     import {UNIT_PRICE_DECIMALS, type TradeAmountDriver} from '$lib/features/transactions/form/txTradeAmount';
     import TxCellMark from '$lib/features/transactions/form/TxCellMark.svelte';
     import type {TxFormCell, TxFormCheckKind} from '$lib/features/transactions/form/txFormChecks';
+    import Button from '$lib/components/ui/button/Button.svelte';
     import CompactCashCell from '$lib/features/transactions/form/CompactCashCell.svelte';
     import TransactionTypeSearchSelect from '../TransactionTypeSearchSelect.svelte';
     import WacPreviewSection from '../wac/WacPreviewSection.svelte';
@@ -420,9 +421,7 @@
                 </p>
             {/if}
             {#if rewardCloseDate}
-                <button type="button" class="mt-1 text-xs text-lf-link underline hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lf-focus" onclick={onUseRewardClose} data-testid="tx-form-reward-use-close" data-date={rewardCloseDate}>
-                    {$t('transactions.costBasisOverride.rewardUseClose', {values: {date: rewardCloseDate}})}
-                </button>
+                <Button label={$t('transactions.costBasisOverride.rewardUseClose', {values: {date: rewardCloseDate}})} variant="link" size="sm" class="mt-1" onclick={onUseRewardClose} data-testid="tx-form-reward-use-close" data-date={rewardCloseDate} />
             {/if}
         </div>
     {/if}
