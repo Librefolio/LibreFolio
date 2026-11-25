@@ -5,6 +5,8 @@
  * are the user's choices, how they are remembered per page, and how they read as chips.
  *
  * - `classes`: `null` = every class (the first opening: the whole portfolio); a list = those classes; `[]` = none.
+ * - `types`: asset types kept on their own, beside `classes`: a class kept in part is not in `classes`, its kept types are here
+ *   (86, D-13). A whole class takes every type it holds, today's and the ones to come. Nothing with `classes` null.
  * - `excludeBuckets`: the buckets taken out of the 100 % (`Unknown`, `Other`), where the dimension has them.
  * - `excludeAssetIds`: assets taken out whole.
  *
@@ -19,15 +21,17 @@ export type ExcludableBucket = 'Unknown' | 'Other';
 export interface AllocationFilters {
     /** `null`: every class. */
     classes: string[] | null;
+    /** Asset types kept on their own (the classes kept in part). */
+    types: string[];
     excludeBuckets: ExcludableBucket[];
     excludeAssetIds: number[];
 }
 
 /** The first opening: the whole portfolio, nothing excluded. */
-export const NO_FILTERS: AllocationFilters = Object.freeze({classes: null, excludeBuckets: [], excludeAssetIds: []}) as AllocationFilters;
+export const NO_FILTERS: AllocationFilters = Object.freeze({classes: null, types: [], excludeBuckets: [], excludeAssetIds: []}) as AllocationFilters;
 
 export function emptyFilters(): AllocationFilters {
-    return {classes: null, excludeBuckets: [], excludeAssetIds: []};
+    return {classes: null, types: [], excludeBuckets: [], excludeAssetIds: []};
 }
 
 const EXCLUDABLE: readonly string[] = ['Unknown', 'Other'];
@@ -41,9 +45,9 @@ export function filtersStorageKey(scope: {kind: 'portfolio'} | {kind: 'broker'; 
     return scope.kind === 'broker' ? `allocation-filters:broker:${scope.brokerId}` : 'allocation-filters:dashboard';
 }
 
-/** What is stored: the three fields, nothing else. */
+/** What is stored: the four fields, nothing else. */
 export function serializeFilters(filters: AllocationFilters): string {
-    return JSON.stringify({classes: filters.classes, excludeBuckets: filters.excludeBuckets, excludeAssetIds: filters.excludeAssetIds});
+    return JSON.stringify({classes: filters.classes, types: filters.types, excludeBuckets: filters.excludeBuckets, excludeAssetIds: filters.excludeAssetIds});
 }
 
 /**
@@ -56,10 +60,13 @@ export function parseFilters(raw: string | null | undefined): AllocationFilters 
         const value: unknown = JSON.parse(raw);
         if (value === null || typeof value !== 'object' || Array.isArray(value)) return emptyFilters();
         const record = value as Record<string, unknown>;
-        const classes = Array.isArray(record.classes) && record.classes.every((item) => typeof item === 'string' && item.length > 0 && item.length <= 64) ? uniq(record.classes as string[]).slice(0, 64) : null;
+        const names = (item: unknown): item is string => typeof item === 'string' && item.length > 0 && item.length <= 64;
+        const classes = Array.isArray(record.classes) && record.classes.every(names) ? uniq(record.classes as string[]).slice(0, 64) : null;
+        // Absent in what a version before the two levels stored: no class was kept in part.
+        const types = classes !== null && Array.isArray(record.types) ? uniq(record.types.filter(names)).slice(0, 64) : [];
         const excludeBuckets = Array.isArray(record.excludeBuckets) ? (uniq(record.excludeBuckets.filter((item): item is ExcludableBucket => typeof item === 'string' && EXCLUDABLE.includes(item))) as ExcludableBucket[]) : [];
         const excludeAssetIds = Array.isArray(record.excludeAssetIds) ? uniq(record.excludeAssetIds.filter((item): item is number => typeof item === 'number' && Number.isInteger(item))).slice(0, 1000) : [];
-        return {classes, excludeBuckets, excludeAssetIds};
+        return {classes, types, excludeBuckets, excludeAssetIds};
     } catch {
         return emptyFilters();
     }
@@ -78,30 +85,90 @@ export function classesOn(filters: AllocationFilters, present: readonly string[]
     return filters.classes === null ? [...present] : [...filters.classes];
 }
 
-/** True when the class is in the selection. */
+/** A class the scope holds, and the types that make it up today (the cash has none). */
+export interface PresentClass {
+    asset_class: string;
+    types: ReadonlyArray<{asset_type: string}>;
+}
+
+/** How much of a set of choices is on. */
+export type ChoiceState = 'on' | 'off' | 'mixed';
+
+export function choiceState(on: number, total: number): ChoiceState {
+    return on === 0 ? 'off' : on === total ? 'on' : 'mixed';
+}
+
+/** True when the whole class is in the selection. */
 export function isClassOn(filters: AllocationFilters, assetClass: string): boolean {
     return filters.classes === null || filters.classes.includes(assetClass);
 }
 
-/** Turns one class on or off. Every present class on again is «every class» (`null`) when nothing saved is left over. */
-export function setClass(filters: AllocationFilters, assetClass: string, on: boolean, present: readonly string[]): AllocationFilters {
-    const current = classesOn(filters, present);
-    const next = on ? uniq([...current, assetClass]) : current.filter((item) => item !== assetClass);
-    const everyPresent = present.length > 0 && present.every((item) => next.includes(item)) && next.every((item) => present.includes(item));
-    return {...filters, classes: everyPresent ? null : next};
+/** True when the type is in the selection: its whole class is, or it is kept on its own. */
+export function isTypeOn(filters: AllocationFilters, assetClass: string, assetType: string): boolean {
+    return isClassOn(filters, assetClass) || filters.types.includes(assetType);
 }
 
-/** Takes one class out of a chip: the last one gone is «every class» again, never an empty selection. */
+/** Whether a class is kept whole, in part or not at all. */
+export function classState(filters: AllocationFilters, item: PresentClass): ChoiceState {
+    if (isClassOn(filters, item.asset_class)) return 'on';
+    return choiceState(item.types.filter((type) => filters.types.includes(type.asset_type)).length, Math.max(1, item.types.length));
+}
+
+const typeNames = (item: PresentClass): string[] => item.types.map((type) => type.asset_type);
+
+/** The same choices; «every class» (`null`) when every present class is whole and nothing saved is left over. */
+function withClasses(filters: AllocationFilters, classes: string[], types: string[], present: readonly PresentClass[]): AllocationFilters {
+    const names = present.map((item) => item.asset_class);
+    const every = names.length > 0 && names.every((item) => classes.includes(item)) && classes.every((item) => names.includes(item)) && types.length === 0;
+    return {...filters, classes: every ? null : classes, types: every ? [] : types};
+}
+
+/** Turns one class on or off, whole: the types kept on their own in it are gone. */
+export function setClass(filters: AllocationFilters, assetClass: string, on: boolean, present: readonly PresentClass[]): AllocationFilters {
+    const current = classesOn(
+        filters,
+        present.map((item) => item.asset_class),
+    );
+    const own = new Set(present.filter((item) => item.asset_class === assetClass).flatMap(typeNames));
+    const types = filters.types.filter((type) => !own.has(type));
+    return withClasses(filters, on ? uniq([...current, assetClass]) : current.filter((item) => item !== assetClass), types, present);
+}
+
+/** Turns one type of a class on or off: every type on is the whole class again, some leave the class and stay on their own. */
+export function setType(filters: AllocationFilters, assetClass: string, assetType: string, on: boolean, present: readonly PresentClass[]): AllocationFilters {
+    const item = present.find((candidate) => candidate.asset_class === assetClass);
+    const all = item ? typeNames(item) : [assetType];
+    const kept = all.filter((type) => (type === assetType ? on : isTypeOn(filters, assetClass, type)));
+    if (kept.length === all.length) return setClass(filters, assetClass, true, present);
+    const classes = classesOn(
+        filters,
+        present.map((candidate) => candidate.asset_class),
+    ).filter((candidate) => candidate !== assetClass);
+    return withClasses(filters, classes, uniq([...filters.types.filter((type) => !all.includes(type)), ...kept]), present);
+}
+
+/** Every class whole, or none. */
+export function setEveryClass(filters: AllocationFilters, on: boolean): AllocationFilters {
+    return {...filters, classes: on ? null : [], types: []};
+}
+
+/** Takes one class out of a chip: the last choice gone is «every class» again, never an empty selection. */
 export function removeClassChip(filters: AllocationFilters, assetClass: string): AllocationFilters {
     if (filters.classes === null) return filters;
     const next = filters.classes.filter((item) => item !== assetClass);
-    return {...filters, classes: next.length === 0 ? null : next};
+    return {...filters, classes: next.length === 0 && filters.types.length === 0 ? null : next};
+}
+
+/** Takes one type out of a chip, as `removeClassChip`. */
+export function removeTypeChip(filters: AllocationFilters, assetType: string): AllocationFilters {
+    const types = filters.types.filter((item) => item !== assetType);
+    return {...filters, types, classes: types.length === 0 && filters.classes?.length === 0 ? null : filters.classes};
 }
 
 /** A click on a class of the matrix: the selection becomes that class alone; on the class that is already alone, every class again. */
 export function focusClass(filters: AllocationFilters, assetClass: string): AllocationFilters {
-    const alone = filters.classes !== null && filters.classes.length === 1 && filters.classes[0] === assetClass;
-    return {...filters, classes: alone ? null : [assetClass]};
+    const alone = filters.classes !== null && filters.classes.length === 1 && filters.classes[0] === assetClass && filters.types.length === 0;
+    return {...filters, classes: alone ? null : [assetClass], types: []};
 }
 
 export function setBucketExcluded(filters: AllocationFilters, bucket: ExcludableBucket, excluded: boolean): AllocationFilters {
@@ -129,15 +196,21 @@ export function hasFilters(filters: AllocationFilters): boolean {
 // Chips
 // ---------------------------------------------------------------------------
 
-export type AllocationChip = {kind: 'class'; value: string} | {kind: 'bucket'; value: ExcludableBucket} | {kind: 'asset'; value: number};
+export type AllocationChip = {kind: 'class'; value: string} | {kind: 'type'; value: string} | {kind: 'bucket'; value: ExcludableBucket} | {kind: 'asset'; value: number};
 
-/** One chip per choice, in the order the panels list them: classes kept, buckets out, assets out. The filter button's number is their count. */
+/** One chip per choice, in the order the panels list them: classes kept, types kept on their own, buckets out, assets out. The filter button's number is their count. */
 export function filterChips(filters: AllocationFilters): AllocationChip[] {
-    return [...(filters.classes ?? []).map((value): AllocationChip => ({kind: 'class', value})), ...filters.excludeBuckets.map((value): AllocationChip => ({kind: 'bucket', value})), ...filters.excludeAssetIds.map((value): AllocationChip => ({kind: 'asset', value}))];
+    return [
+        ...(filters.classes ?? []).map((value): AllocationChip => ({kind: 'class', value})),
+        ...filters.types.map((value): AllocationChip => ({kind: 'type', value})),
+        ...filters.excludeBuckets.map((value): AllocationChip => ({kind: 'bucket', value})),
+        ...filters.excludeAssetIds.map((value): AllocationChip => ({kind: 'asset', value})),
+    ];
 }
 
 export function removeChip(filters: AllocationFilters, chip: AllocationChip): AllocationFilters {
     if (chip.kind === 'class') return removeClassChip(filters, chip.value);
+    if (chip.kind === 'type') return removeTypeChip(filters, chip.value);
     if (chip.kind === 'bucket') return setBucketExcluded(filters, chip.value, false);
     return setAssetExcluded(filters, chip.value, false);
 }
@@ -148,5 +221,5 @@ export function sameFilters(left: AllocationFilters, right: AllocationFilters): 
 }
 
 function normalized(filters: AllocationFilters): AllocationFilters {
-    return {classes: filters.classes === null ? null : [...filters.classes].sort(), excludeBuckets: [...filters.excludeBuckets].sort(), excludeAssetIds: [...filters.excludeAssetIds].sort((a, b) => a - b)};
+    return {classes: filters.classes === null ? null : [...filters.classes].sort(), types: [...filters.types].sort(), excludeBuckets: [...filters.excludeBuckets].sort(), excludeAssetIds: [...filters.excludeAssetIds].sort((a, b) => a - b)};
 }

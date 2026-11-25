@@ -2,8 +2,9 @@
  * The words of the «Allocazione» tab that come from the data: a class, a bucket, an asset. Pure: the translator is a
  * parameter, so a component test can pass its own.
  *
- * A class is the asset type of what is held (`STOCK`, `BOND`, `ETF`…) or the cash, `Liquidity`; its words are the app's
- * own (`assets.types.*`, `assets.typeHints.ETF`), and a class the catalogue does not know shows as it came.
+ * A class is the asset type of what is held (`STOCK`, `BOND`, `ETF`…) or the cash, `Liquidity`: its words are the plural ones of
+ * the tab (`allocation.classes.*`). An asset type says the app's own word (`assets.types.*`). What the catalogue does not know
+ * shows as it came.
  *
  * @module features/allocation/allocationLabels
  */
@@ -18,15 +19,15 @@ export function classKey(assetClass: string): string {
     return assetClass.toUpperCase();
 }
 
+/** A class, in the plural («Stocks»): it stands for everything it holds, so it never shares the name of its first type. */
 export function classLabel(t: Translate, assetClass: string): string {
-    return t(`assets.types.${classKey(assetClass)}`, {default: assetClass});
+    return t(`allocation.classes.${classKey(assetClass)}`, {default: typeLabel(t, assetClass)});
 }
 
-/** What a class also holds: the ETFs of that content, or what an ETF with no content is; empty when there is nothing to say. */
-export function classHint(t: Translate, assetClass: string): string {
-    const key = classKey(assetClass);
-    if (key === 'ETF') return t('assets.typeHints.ETF', {default: ''});
-    return t(`allocation.classHint.${key}`, {default: ''});
+/** An asset type, by the app's own word («Stock», «Stock ETF»). */
+export function typeLabel(t: Translate, assetType: string): string {
+    if (assetType === 'Unknown') return bucketLabel(t, assetType);
+    return t(`assets.types.${classKey(assetType)}`, {default: assetType});
 }
 
 export function bucketLabel(t: Translate, bucket: string): string {
@@ -37,17 +38,18 @@ export function bucketHint(t: Translate, bucket: ExcludableBucket): string {
     return t(`allocation.bucket.${bucket}Hint`, {default: ''});
 }
 
-/** The name a chip stands for: a class, a bucket, or an asset (its number until the answer that names it lands). */
+/** The name a chip stands for: a class, a type, a bucket, or an asset (its number until the answer that names it lands). */
 export function chipName(t: Translate, chip: AllocationChip, assetNames: ReadonlyMap<number, string>): string {
     if (chip.kind === 'class') return classLabel(t, chip.value);
+    if (chip.kind === 'type') return typeLabel(t, chip.value);
     if (chip.kind === 'bucket') return bucketLabel(t, chip.value);
     return assetNames.get(chip.value) ?? `#${chip.value}`;
 }
 
-/** What a chip says: a class kept by its name, a bucket or an asset taken out as «Without …». */
+/** What a chip says: a class or a type kept by its name, a bucket or an asset taken out as «Without …». */
 export function chipText(t: Translate, chip: AllocationChip, assetNames: ReadonlyMap<number, string>): string {
     const name = chipName(t, chip, assetNames);
-    return chip.kind === 'class' ? name : t('allocation.chip.without', {values: {name}});
+    return chip.kind === 'class' || chip.kind === 'type' ? name : t('allocation.chip.without', {values: {name}});
 }
 
 // ---------------------------------------------------------------------------
@@ -78,7 +80,7 @@ export function sliceLabel(deps: RowLabelDeps, dimension: AllocationDimension, k
     const {t} = deps;
     if (dimension === 'asset' && assetId != null) return {text: deps.assetNames.get(assetId) ?? `#${assetId}`};
     if (key === 'Unknown' || key === 'Other') return {text: bucketLabel(t, key), glyph: BUCKET_GLYPH[key]};
-    if (key === 'Liquidity') return {text: classLabel(t, key), iconUrl: getAssetTypeIconUrl(LIQUIDITY_KEY)};
+    if (key === 'Liquidity') return {text: typeLabel(t, key), iconUrl: getAssetTypeIconUrl(LIQUIDITY_KEY)};
     if (dimension === 'geography') {
         const info = deps.country(key);
         return {text: info.name, glyph: info.flag_emoji};
@@ -87,7 +89,7 @@ export function sliceLabel(deps: RowLabelDeps, dimension: AllocationDimension, k
         const i18nKey = `sectors.${sectorI18nKey(key)}`;
         return {text: t(i18nKey, {default: key.replace(/_/g, ' ')}), glyph: deps.sectorEmoji(key)};
     }
-    if (dimension === 'type') return {text: classLabel(t, key), iconUrl: getAssetTypeIconUrl(key)};
+    if (dimension === 'type') return {text: typeLabel(t, key), iconUrl: getAssetTypeIconUrl(key)};
     return {text: key};
 }
 

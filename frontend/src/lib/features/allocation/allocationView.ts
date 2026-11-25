@@ -152,7 +152,7 @@ export interface MatrixCellModel {
     present: boolean;
     /** 0–1: how heavy the cell is next to the heaviest, only to tint it. */
     intensity: number;
-    /** In the selection: the class is on and the column is not taken out of the 100 %. */
+    /** In the selection: the class is kept, whole or in part, and the column is not taken out of the 100 %. */
     selected: boolean;
 }
 
@@ -168,7 +168,7 @@ export interface MatrixModel {
  * The matrix as a grid, with what the filters keep marked. The tint is a drawing of the cell's share next to the heaviest cell
  * (a ratio for the colour, never shown); the shares themselves are the backend's. A cell the backend did not list is empty.
  */
-export function matrixModel(view: AllocationResponse, isClassOn: (assetClass: string) => boolean, excludedBuckets: ReadonlySet<string>): MatrixModel | null {
+export function matrixModel(view: AllocationResponse, isClassKept: (assetClass: string) => boolean, excludedBuckets: ReadonlySet<string>): MatrixModel | null {
     // Only the exclusions the dimension has count (the backend applies a bucket only where the dimension lists it): a saved «Other» does nothing in Area.
     const matrix = view.matrix;
     if (!matrix) return null;
@@ -189,7 +189,7 @@ export function matrixModel(view: AllocationResponse, isClassOn: (assetClass: st
                 shareOfPortfolio: cell?.share_of_portfolio ?? null,
                 present: !!cell && num(cell.amount) !== 0,
                 intensity: heaviest > 0 ? weight / heaviest : 0,
-                selected: isClassOn(assetClass) && !(applicable.has(key) && excludedBuckets.has(key)),
+                selected: isClassKept(assetClass) && !(applicable.has(key) && excludedBuckets.has(key)),
             };
         }),
     );
