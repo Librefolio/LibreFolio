@@ -145,7 +145,9 @@
       "tooManyItems": "Non è stato salvato nulla: il server accetta al massimo {max, number} valori per salvataggio, e questo ne conteneva {count, number}. Salvali in più parti."
     },
     "errorWithRequestId": "{message} (codice: {requestId})",
-    "selectionActions": "Azioni sulla selezione"
+    "selectionActions": "Azioni sulla selezione",
+    "moveUp": "Sposta su",
+    "moveDown": "Sposta giù"
   },
   "csvImport": {
     "title": "Importa dati CSV",
@@ -284,7 +286,9 @@
     "resolvingStart": "Ricerca…",
     "openCalendar": "Apri il calendario",
     "formatHint": "Scrivi la data oppure scegliela dal calendario. Formati accettati: 2026-08-07, 2026/8/7, 7-8-2026, 7.8.2026 — l’anno va scritto per esteso.",
-    "invalidDate": "Inserisci una data valida e disponibile."
+    "invalidDate": "Inserisci una data valida e disponibile.",
+    "previousMonth": "Mese precedente",
+    "nextMonth": "Mese successivo"
   },
   "error": {
     "pageNotFound": "Pagina Non Trovata",
@@ -380,7 +384,13 @@
     "confirmBulkAction": "Sei sicuro di voler eseguire questa azione su",
     "filterLabel": "Filtro",
     "resetLayout": "Ripristina disposizione",
-    "selectionHint": "Seleziona una o più righe per agire su tutte insieme."
+    "selectionHint": "Seleziona una o più righe per agire su tutte insieme.",
+    "copyCell": "Copia cella",
+    "copyRow": "Copia riga",
+    "cellCopied": "Cella copiata",
+    "rowCopied": "Riga copiata",
+    "copyFailed": "Impossibile copiare negli appunti",
+    "showSelectedOnly": "Mostra solo i selezionati"
   },
   "date": {
     "today": "Oggi",

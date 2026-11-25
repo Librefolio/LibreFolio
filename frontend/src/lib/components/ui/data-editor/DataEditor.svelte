@@ -24,6 +24,7 @@
     import type {ColumnDef, DataRow, RowStatus} from './DataEditorTypes';
     import DataTable from '$lib/components/table/DataTable.svelte';
     import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
+    import Button from '$lib/components/ui/button/Button.svelte';
     import type {BulkAction, ColumnDef as DTColumnDef, RowAction as DTRowAction} from '$lib/components/table/types';
     import SingleDatePicker from '$lib/components/ui/date/SingleDatePicker.svelte';
     import {CurrencySearchSelect} from '$lib/components/ui/select';
@@ -650,20 +651,11 @@
         <!-- Left: actions -->
         <div class="flex items-center gap-2">
             {#if !isReadonly}
-                <button class="flex items-center gap-1 px-2.5 py-1.5 text-xs bg-lf-card border border-lf-subtle rounded-lg hover:bg-lf-hover text-lf-secondary transition-colors" onclick={() => (importModalOpen = true)} data-testid="fx-data-import-btn">
-                    <Upload size={13} />
-                    {$t('dataEditor.importCsv')}
-                </button>
-                <button class="flex items-center gap-1 px-2.5 py-1.5 text-xs bg-lf-card border border-lf-subtle rounded-lg hover:bg-lf-hover text-lf-secondary transition-colors" onclick={handleAddRow} data-testid="fx-data-add-row-btn">
-                    <Plus size={13} />
-                    {$t('common.addRow')}
-                </button>
+                <Button label={$t('dataEditor.importCsv')} icon={Upload} size="sm" onclick={() => (importModalOpen = true)} data-testid="fx-data-import-btn" />
+                <Button label={$t('common.addRow')} icon={Plus} size="sm" onclick={handleAddRow} data-testid="fx-data-add-row-btn" />
             {/if}
             {#if exportModal}
-                <button class="flex items-center gap-1 px-2.5 py-1.5 text-xs bg-lf-card border border-lf-subtle rounded-lg hover:bg-lf-hover text-lf-secondary transition-colors" onclick={() => (exportModalOpen = true)} data-testid="data-editor-export-btn">
-                    <Download size={13} />
-                    {$t('dataEditor.exportCsv')}
-                </button>
+                <Button label={$t('dataEditor.exportCsv')} icon={Download} size="sm" onclick={() => (exportModalOpen = true)} data-testid="data-editor-export-btn" />
             {/if}
         </div>
 

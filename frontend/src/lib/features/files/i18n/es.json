@@ -96,7 +96,15 @@
     "docsHelp": "Los archivos que subiste: los informes de brókeres por importar y las imágenes que usa LibreFolio, con el espacio que ocupan.",
     "confirmBulkDownload": {
       "message": "¿Descargar {n} archivo(s)?"
-    }
+    },
+    "rotateLeft": "Girar a la izquierda (15°)",
+    "rotateRight": "Girar a la derecha (15°)",
+    "qualityDown": "Bajar la calidad",
+    "qualityUp": "Subir la calidad",
+    "quality": "Calidad",
+    "ellipsePreview": "Vista previa redonda",
+    "aspectFree": "Libre",
+    "editorNotReady": "La imagen todavía se está preparando: un momento"
   },
   "files": {
     "deleteFailed": "Error al eliminar el archivo"

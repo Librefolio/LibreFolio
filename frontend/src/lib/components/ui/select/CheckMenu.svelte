@@ -9,11 +9,15 @@
 
   Test ids: `{testId}-button`, `{testId}-panel`, `{testId}-clear`, and one `{testId}-{value}` per
   value, the only ones carrying `aria-pressed`.
+
+  The value rows stay hand-written (checkbox-like rows: a square, an icon, a count). The clear is the standard `Button`
+  (85 BTN-2c), never `pressed`: a test finds the options by `[aria-pressed]` under the same prefix.
 -->
 <script lang="ts">
     import {Check} from 'lucide-svelte';
     import type {ComponentType} from 'svelte';
 
+    import Button from '$lib/components/ui/button/Button.svelte';
     import FilterButton from './FilterButton.svelte';
     import SelectPopover from './SelectPopover.svelte';
 
@@ -71,10 +75,9 @@
             {/each}
         </div>
         {#if active}
-            <div class="border-t border-lf-subtle p-1">
-                <button type="button" class="w-full rounded-md px-2 py-1 text-left text-xs text-lf-link hover:bg-lf-hover" onclick={onclear} data-testid="{testId}-clear">
-                    {clearLabel}
-                </button>
+            <!-- At its own width, so it sits left without fighting the recipe's `justify-center`; the wrapper keeps the place. -->
+            <div class="border-t border-lf-subtle px-3 py-2">
+                <Button label={clearLabel} variant="link" size="sm" dense onclick={onclear} data-testid="{testId}-clear" />
             </div>
         {/if}
     {/snippet}

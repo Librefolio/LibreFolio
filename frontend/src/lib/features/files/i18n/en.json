@@ -96,7 +96,15 @@
     "docsHelp": "The files you uploaded: broker reports to import and the images LibreFolio uses, with the space they take.",
     "confirmBulkDownload": {
       "message": "Download {n} file(s)?"
-    }
+    },
+    "rotateLeft": "Rotate left (15°)",
+    "rotateRight": "Rotate right (15°)",
+    "qualityDown": "Lower quality",
+    "qualityUp": "Higher quality",
+    "quality": "Quality",
+    "ellipsePreview": "Round preview",
+    "aspectFree": "Free",
+    "editorNotReady": "The image is still being prepared: one moment"
   },
   "files": {
     "deleteFailed": "Failed to delete file"

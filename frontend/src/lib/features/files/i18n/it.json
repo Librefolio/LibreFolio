@@ -96,7 +96,15 @@
     "docsHelp": "I file che hai caricato: i report dei broker da importare e le immagini che LibreFolio usa, con lo spazio che occupano.",
     "confirmBulkDownload": {
       "message": "Scaricare {n} file?"
-    }
+    },
+    "rotateLeft": "Ruota a sinistra (15°)",
+    "rotateRight": "Ruota a destra (15°)",
+    "qualityDown": "Riduci la qualità",
+    "qualityUp": "Aumenta la qualità",
+    "quality": "Qualità",
+    "ellipsePreview": "Anteprima rotonda",
+    "aspectFree": "Libero",
+    "editorNotReady": "L'immagine è ancora in preparazione: un attimo"
   },
   "files": {
     "deleteFailed": "Impossibile eliminare il file"

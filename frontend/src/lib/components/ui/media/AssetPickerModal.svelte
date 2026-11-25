@@ -8,6 +8,10 @@
   3. Upload - Upload a new file (opens ImageEditModal for images)
 
   Returns the selected URL or uploaded file URL.
+
+  The standard buttons (85 BTN-2b): the ✕ is `CloseButton`; «Existing» and «URL» keep their own markup for now (they
+  look like tabs, but a real ARIA tab list needs its arrow keys and panels: the lot that brings `TabBar`); «Upload» is an action beside them (it opens the file dialog, it is never selected), a `Button`; the grid/list
+  toggles are `pressed` buttons; the confirm is `busy` while a personal file is made common.
 -->
 <script lang="ts">
     import {createEventDispatcher} from 'svelte';
@@ -21,6 +25,8 @@
     import LazyImage from './LazyImage.svelte';
     import FileGrid from '$lib/features/files/FileGrid.svelte';
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
+    import Button from '$lib/components/ui/button/Button.svelte';
+    import CloseButton from '$lib/components/ui/button/CloseButton.svelte';
     import type {ColumnDef} from '$lib/components/table';
     import {DataTable} from '$lib/components/table';
     import type {UploadedFile} from '$lib/types';
@@ -63,7 +69,7 @@
     // Computed
     $: filteredFiles = searchQuery ? existingFiles.filter((f) => f.original_name.toLowerCase().includes(searchQuery.toLowerCase())) : existingFiles;
 
-    $: modalTitle = title || $_('uploads.selectAsset') || 'Select Image';
+    $: modalTitle = title || $_('uploads.selectAsset');
 
     // Validate URL - accept absolute URLs, relative paths, and any non-empty trimmed input
     $: {
@@ -203,7 +209,7 @@
     const listColumns: ColumnDef<UploadedFile>[] = [
         {
             id: 'filename',
-            header: () => $_('uploads.fileName') || 'Name',
+            header: () => $_('uploads.fileName'),
             cell: (row) => {
                 if (isImage(row.mime_type)) {
                     return {
@@ -227,7 +233,7 @@
         },
         {
             id: 'size',
-            header: () => $_('uploads.fileSize') || 'Size',
+            header: () => $_('uploads.fileSize'),
             cell: (row) => ({type: 'size' as const, bytes: row.size_bytes}),
             type: 'size',
             width: 90,
@@ -235,7 +241,7 @@
         },
         {
             id: 'type',
-            header: () => $_('common.type') || 'Type',
+            header: () => $_('common.type'),
             cell: (row) => row.mime_type || '-',
             type: 'text',
             width: 120,
@@ -258,25 +264,24 @@
         <!-- Header -->
         <div class="picker-header">
             <h2 class="picker-title">{modalTitle}</h2>
-            <button class="close-btn" on:click={close} type="button">
-                <X size={20} />
-            </button>
+            <CloseButton onclick={close} data-testid="asset-picker-close" />
         </div>
 
         <!-- Tabs -->
         <div class="picker-tabs">
-            <button class="tab-btn" class:active={activeTab === 'existing'} data-testid="asset-picker-existing-tab" on:click={() => (activeTab = 'existing')} type="button">
-                <FolderOpen size={14} />
-                {$_('uploads.existingFiles') || 'Existing'}
-            </button>
-            <button class="tab-btn" class:active={activeTab === 'url'} data-testid="asset-picker-url-tab" on:click={() => (activeTab = 'url')} type="button">
-                <Link size={14} />
-                {$_('uploads.fromUrl') || 'URL'}
-            </button>
-            <button class="tab-btn" class:active={activeTab === 'upload'} data-testid="asset-picker-upload-tab" on:click={handleUploadClick} type="button">
-                <Upload size={14} />
-                {$_('uploads.upload') || 'Upload'}
-            </button>
+            <div class="picker-tablist">
+                <button class="tab-btn" class:active={activeTab === 'existing'} data-testid="asset-picker-existing-tab" on:click={() => (activeTab = 'existing')} type="button">
+                    <FolderOpen size={14} />
+                    {$_('uploads.existingFiles')}
+                </button>
+                <button class="tab-btn" class:active={activeTab === 'url'} data-testid="asset-picker-url-tab" on:click={() => (activeTab = 'url')} type="button">
+                    <Link size={14} />
+                    {$_('uploads.fromUrl')}
+                </button>
+            </div>
+            <div class="picker-tabs-action">
+                <Button label={$_('uploads.upload')} icon={Upload} variant="ghost" size="sm" onclick={handleUploadClick} data-testid="asset-picker-upload-tab" />
+            </div>
             <input accept="image/*" bind:this={uploadInput} class="hidden-input" on:change={handleFileSelected} type="file" />
         </div>
 
@@ -285,23 +290,23 @@
             {#if activeTab === 'url'}
                 <!-- URL Input -->
                 <div class="url-section">
-                    <label class="url-label" for="asset-url-input">{$_('uploads.imageUrl') || 'Image URL'}</label>
+                    <label class="url-label" for="asset-url-input">{$_('uploads.imageUrl')}</label>
                     <div style="display:flex; gap:0.5rem; align-items:center;">
                         <input type="url" id="asset-url-input" data-testid="asset-picker-url-input" class="url-input" style="flex:1;" bind:value={urlInput} placeholder="https://example.com/image.png" />
                         {#if urlInput}
-                            <button
-                                type="button"
-                                class="btn btn-secondary"
-                                style="white-space:nowrap; padding:0.375rem 0.75rem; font-size:0.8125rem; color:var(--lf-danger);"
-                                on:click={() => {
+                            <Button
+                                label={$_('common.clear')}
+                                icon={X}
+                                display="icon"
+                                variant="secondary"
+                                onclick={() => {
                                     urlInput = '';
                                 }}
-                            >
-                                <X size={14} />
-                            </button>
+                                data-testid="asset-picker-url-clear"
+                            />
                         {/if}
                     </div>
-                    <p class="url-hint">{$_('uploads.urlHint') || 'Enter a remote URL or a local path from Files'}</p>
+                    <p class="url-hint">{$_('uploads.urlHint')}</p>
                     {#if urlInput && urlValid}
                         <div class="url-preview" class:circular={circularPreview}>
                             <div class="url-preview-img-wrapper">
@@ -320,29 +325,23 @@
                     <div class="existing-toolbar">
                         <div class="search-box">
                             <Search size={14} />
-                            <input type="text" class="search-input" bind:value={searchQuery} placeholder={$_('common.search') || 'Search...'} data-testid="asset-picker-search" />
+                            <input type="text" class="search-input" bind:value={searchQuery} placeholder={$_('common.search')} data-testid="asset-picker-search" />
                             {#if searchQuery}
-                                <button type="button" class="search-clear" on:click={() => (searchQuery = '')}>
-                                    <X size={12} />
-                                </button>
+                                <Button label={$_('common.clear')} icon={X} display="icon" variant="ghost" size="xs" dense onclick={() => (searchQuery = '')} data-testid="asset-picker-search-clear" />
                             {/if}
                         </div>
                         <div class="view-toggle">
-                            <button type="button" class="toggle-btn" class:active={existingViewMode === 'grid'} on:click={() => (existingViewMode = 'grid')}>
-                                <LayoutGrid size={14} />
-                            </button>
-                            <button type="button" class="toggle-btn" class:active={existingViewMode === 'list'} on:click={() => (existingViewMode = 'list')}>
-                                <List size={14} />
-                            </button>
+                            <Button label={$_('sharedResource.viewGrid')} icon={LayoutGrid} display="icon" size="sm" dense pressed={existingViewMode === 'grid'} onclick={() => (existingViewMode = 'grid')} data-testid="asset-picker-view-grid" />
+                            <Button label={$_('sharedResource.viewTable')} icon={List} display="icon" size="sm" dense pressed={existingViewMode === 'list'} onclick={() => (existingViewMode = 'list')} data-testid="asset-picker-view-list" />
                         </div>
                     </div>
 
                     <!-- File browser -->
                     {#if loadingFiles}
-                        <div class="empty-state">{$_('common.loading') || 'Loading...'}</div>
+                        <div class="empty-state">{$_('common.loading')}</div>
                     {:else if filteredFiles.length === 0}
                         <div class="empty-state">
-                            {searchQuery ? $_('common.noResults') || 'No results' : $_('uploads.noFiles') || 'No files'}
+                            {searchQuery ? $_('common.noResults') : $_('uploads.noFiles')}
                         </div>
                     {:else if existingViewMode === 'grid'}
                         <FileGrid files={filteredFiles} mode="select" cardSize="compact" showSearch={false} showActions={false} selectedFileId={selectedFile?.id || null} previewSize="120x120" onselect={(e) => selectExistingFile(e.file)} ondblselect={() => confirmSelection()} />
@@ -365,7 +364,7 @@
                                 enableColumnResize={false}
                                 enablePagination={false}
                                 enableColumnVisibility={false}
-                                emptyMessage={searchQuery ? $_('common.noResults') || 'No results' : $_('uploads.noFiles') || 'No files'}
+                                emptyMessage={searchQuery ? $_('common.noResults') : $_('uploads.noFiles')}
                                 isLoading={loadingFiles}
                             />
                         </div>
@@ -376,12 +375,8 @@
 
         <!-- Footer -->
         <div class="picker-footer">
-            <button class="btn btn-secondary" data-testid="asset-picker-cancel" on:click={close} type="button">
-                {$_('common.cancel') || 'Cancel'}
-            </button>
-            <button class="btn btn-primary" data-testid="asset-picker-confirm" disabled={(activeTab === 'url' && !urlValid && !(initialUrl && !urlInput)) || (activeTab === 'existing' && !selectedFile) || confirming} on:click={confirmSelection} type="button">
-                {$_('uploads.useSelected') || 'Use Selected'}
-            </button>
+            <Button label={$_('common.cancel')} variant="secondary" onclick={close} data-testid="asset-picker-cancel" />
+            <Button label={$_('uploads.useSelected')} variant="primary" disabled={(activeTab === 'url' && !urlValid && !(initialUrl && !urlInput)) || (activeTab === 'existing' && !selectedFile)} busy={confirming} onclick={confirmSelection} data-testid="asset-picker-confirm" />
         </div>
     </div>
 </ModalBase>
@@ -411,30 +406,24 @@
         color: var(--lf-text-primary);
     }
 
-    .close-btn {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        width: 32px;
-        height: 32px;
-        border: none;
-        border-radius: 0.375rem;
-        background: transparent;
-        color: var(--lf-text-muted);
-        cursor: pointer;
-    }
-
-    .close-btn:hover {
-        background: var(--lf-surface-hover);
-        color: var(--lf-text-primary);
-    }
-
     /* Tabs */
     .picker-tabs {
         display: flex;
+        align-items: center;
         gap: 0;
         border-bottom: 1px solid var(--lf-border-subtle);
         padding: 0 0.5rem;
+    }
+
+    .picker-tablist {
+        display: flex;
+        align-self: stretch;
+    }
+
+    /* The upload action sits beside the tabs; it is never a selected tab */
+    .picker-tabs-action {
+        display: flex;
+        align-items: center;
     }
 
     .tab-btn {
@@ -618,45 +607,9 @@
         color: var(--lf-text-placeholder);
     }
 
-    .search-clear {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        width: 16px;
-        height: 16px;
-        border: none;
-        background: var(--lf-surface-neutral);
-        border-radius: 50%;
-        color: var(--lf-text-muted);
-        cursor: pointer;
-    }
-
     .view-toggle {
         display: flex;
         gap: 0.125rem;
-    }
-
-    .toggle-btn {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        width: 28px;
-        height: 28px;
-        border: 1px solid var(--lf-border-subtle);
-        border-radius: 0.25rem;
-        background: var(--lf-surface-card);
-        color: var(--lf-text-muted);
-        cursor: pointer;
-    }
-
-    .toggle-btn:hover {
-        background: var(--lf-surface-hover);
-    }
-
-    .toggle-btn.active {
-        background: var(--lf-checked);
-        color: var(--lf-on-checked);
-        border-color: var(--lf-checked);
     }
 
     .empty-state {
@@ -694,43 +647,5 @@
         gap: 0.5rem;
         padding: 0.75rem 1rem;
         border-top: 1px solid var(--lf-border-subtle);
-    }
-
-    .btn {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.375rem;
-        padding: 0.375rem 0.875rem;
-        font-size: 0.8125rem;
-        font-weight: 500;
-        border-radius: 0.375rem;
-        border: none;
-        cursor: pointer;
-        transition: all 0.15s;
-    }
-
-    .btn:disabled {
-        opacity: 0.5;
-        cursor: not-allowed;
-    }
-
-    .btn-primary {
-        background: var(--lf-action);
-        color: var(--lf-on-action);
-    }
-
-    .btn-primary:hover:not(:disabled) {
-        background: var(--lf-action-hover);
-    }
-
-    .btn-secondary {
-        background: var(--lf-surface-card);
-        color: var(--lf-text-secondary);
-        box-shadow: inset 0 0 0 1px var(--lf-border-subtle);
-    }
-
-    .btn-secondary:hover:not(:disabled) {
-        background: var(--lf-surface-hover);
-        color: var(--lf-text-primary);
     }
 </style>

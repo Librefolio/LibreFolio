@@ -10,6 +10,7 @@
     import {ArrowLeft} from 'lucide-svelte';
     import {_} from '$lib/i18n';
     import {canGoBack, goBack} from '$lib/stores/app/navigationStore';
+    import Button from '$lib/components/ui/button/Button.svelte';
 
     interface Props {
         /** Where ← goes if the stack turns out empty by the time it is pressed (a race, never the normal case). */
@@ -22,7 +23,6 @@
 </script>
 
 {#if $canGoBack}
-    <button class="p-2 rounded-lg hover:bg-lf-hover text-lf-muted transition-colors" data-testid={testId} onclick={() => goBack(fallback)} title={$_('common.back')} aria-label={$_('common.back')}>
-        <ArrowLeft size={20} />
-    </button>
+    <!-- The standard icon button (85 BTN-2a): its name «Back» by long press, rest or Tab; no browser `title`. -->
+    <Button label={$_('common.back')} icon={ArrowLeft} display="icon" variant="ghost" size="lg" onclick={() => goBack(fallback)} data-testid={testId} />
 {/if}

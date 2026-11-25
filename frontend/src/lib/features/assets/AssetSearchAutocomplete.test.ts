@@ -1564,7 +1564,7 @@ describe('AssetSearchAutocomplete — a provider to configure is switched off (7
         expect(chip('beta')).toHaveAttribute('data-configured', 'false');
         expect(chip('beta')).toHaveAttribute('aria-disabled', 'true');
         expect(chip('beta')).toHaveAttribute('data-selected', 'false');
-        expect(chip('beta')).not.toBeDisabled();
+        expect(chip('beta')).not.toHaveAttribute('disabled');
         expect(chip('alpha')).toHaveAttribute('data-configured', 'true');
         expect(chip('alpha')).toHaveAttribute('data-selected', 'true');
         expect(chipCodes(), 'the order of the list, switched off in place').toEqual(['alpha', 'beta']);

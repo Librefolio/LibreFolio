@@ -35,6 +35,8 @@ import type {ComponentProps} from 'svelte';
 import {fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
 import type {SelectOption} from './types';
 import SearchSelect from './SearchSelect.svelte';
+import {get} from 'svelte/store';
+import {_} from 'svelte-i18n';
 
 /** The asset cache `AssetSelect` reads, owned by the last block: one active asset with an icon of its own, a ticker and a currency. */
 const CACHED_ASSET = vi.hoisted(() => ({
@@ -159,6 +161,26 @@ describe('SearchSelect', () => {
             await fireEvent.input(search, {target: {value: 'nippon'}});
             expect(within(dropdown()).getByTestId('search-select-option-JPY')).toBeInTheDocument();
             expect(within(dropdown()).queryByTestId('search-select-option-EUR')).toBeNull();
+        });
+
+        // 85 BTN-2c: the search's clear is the standard Button, an icon named common.clear.
+        it('the search’s clear is named common.clear and empties the query, the full list back', async () => {
+            await setupI18n();
+            const {trigger} = mount();
+            await open(trigger);
+            const search = screen.getByTestId('ccy-search') as HTMLInputElement;
+            expect(screen.queryByTestId('ccy-search-clear'), 'no query, no clear').toBeNull();
+            await fireEvent.input(search, {target: {value: 'nippon'}});
+            expect(within(dropdown()).queryByTestId('search-select-option-EUR'), 'barrier: the query narrowed the list').toBeNull();
+
+            const clear = screen.getByTestId('ccy-search-clear');
+            expect(clear.tagName).toBe('BUTTON');
+            expect(clear).toHaveAttribute('aria-label', get(_)('common.clear'));
+            expect(clear.hasAttribute('title')).toBe(false);
+            await fireEvent.click(clear);
+            expect(search.value).toBe('');
+            expect(within(dropdown()).getByTestId('search-select-option-EUR')).toBeInTheDocument();
+            expect(screen.queryByTestId('ccy-search-clear')).toBeNull();
         });
 
         it('drops a section header once its section is emptied by the query', async () => {
@@ -618,6 +640,23 @@ describe('AssetSelect — the chosen asset on the trigger', () => {
 
         expect([...(icon.parentElement as HTMLElement).classList], 'the full-size trigger lost the icon box around the chosen asset').toEqual(expect.arrayContaining(['w-7', 'h-7']));
         expect(stackedLines(trigger), 'the full-size trigger no longer writes the name above the label and the currency').toHaveLength(1);
+    });
+});
+
+// 85 BTN-0c, D16: the hint badge of a suggested asset carries a hover-only tooltip (`insideControl`); its old wrapper
+// stopped the click, and a click on the badge chose nothing.
+describe('AssetSelect — a click on the hint badge chooses the option', () => {
+    it('the badge with a tooltip is part of the option: its click chooses the asset', async () => {
+        await setupI18n();
+        const onchange = vi.fn();
+        render(AssetSelect, {value: null, testid: 'hinted-asset', onchange, suggestedIds: [{id: CACHED_ASSET.id, badge: 'probe-hint', badgeTooltip: 'probe: matched by ISIN'}]});
+        const trigger = screen.getByTestId('hinted-asset-trigger');
+        await open(trigger);
+        // The assets load before the list fills: the option itself is the barrier.
+        const option = await waitFor(() => within(dropdown()).getByTestId(`search-select-option-${CACHED_ASSET.id}`));
+        const hint = within(option).getByText('probe-hint');
+        await fireEvent.click(hint);
+        expect(onchange).toHaveBeenCalledExactlyOnceWith(CACHED_ASSET.id);
     });
 });
 
