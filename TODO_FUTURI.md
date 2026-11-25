@@ -927,6 +927,89 @@ serializzabili. Se il processo cade si perde solo la cache. Alternativa: `diskca
 
 **Nota**: la Fase B di SearXNG resta archiviata, finché `ddgs` regge.
 
+## 🧮 Gestore dei calcoli degli Strumenti come processo unico (idea del developer, 21/11/2026)
+
+**Data aggiunta**: 25 Novembre 2026 · **Status**: 📋 In attesa, nessun lotto aperto · **Priorità**: non detta
+
+**Il problema.** Ogni processo del server ha il suo esecutore dei calcoli (`backend/app/services/tools/executor.py`,
+`ToolExecutor`): la sua coda, i suoi posti, la sua regola «un piano alla volta» per utente. Con un processo solo, come
+nell'immagine Docker, va tutto bene. Con più processi (`dev.py server --workers N`) no:
+
+- **«Continua» può arrivare al processo sbagliato.** Con «pausa e riprendi» (lotti PAUSA, non cominciati il 25/11) un
+  piano resta in pausa dentro il processo che lo ha calcolato. La risposta dell'utente è una seconda richiesta, e il
+  sistema operativo sceglie a quale processo darla.
+- **I conti sono per processo.** Con tre processi i posti sono tre volte tanti, e «un piano alla volta» vale solo
+  dentro ciascuno.
+- **Ogni processo del server carica il risolutore.** Sono circa 24 MB l'uno: 81 MB col plugin, contro 57 MB col solo
+  modulo dell'anteprima, misurati dal consulente su una copia del codice del 20/11. Che il server carichi il plugin
+  all'avvio (`registry.auto_discover`) è letto sul codice, non misurato sul server vero.
+
+**L'idea, con le parole del developer.**
+
+- 21/11/2026, nella chat del consulente: «e se facessimo il calcolo come un processo singleton a parte? che viene
+  istanziato quando serve dal primo a cui serve, e se qualcunaltro arriva si mette in coda? così quando tutta la coda
+  si svuota il processo si auto termina e risparmia memoria, ed è compito del processo ricordare i vari calcoli
+  pendenti dei vari richiedenti, anzi evitiamo di caricare le librerie pesanti ed essendo un processo diverso, se
+  crasha il sistema operativo protegge il processo di libre, cosa ne pensi? è complicato da fare il motore così»
+- 21/11/2026, poco dopo: «[…] per altro potremmo comunque fare che il manager è un singleton processo unico a parte,
+  e i worker si collegano a lui, ma che dentro il processo unico continuiamo a usare multiprocesing per farlo in
+  reale parallelismo ed evitare che se uno dei processi crasha, si perdono gli altri, cosa ne pensi?»
+- 25/11/2026, riferite dal coordinatore: «per ora B, in attesa che realizziamo il processo singleton che avevo
+  pianificato, credo sia già in todo_futuri, se così non fosse fallo aggiungere all'agente progettista, ne avevo
+  parlato con lui»
+
+**Cosa c'è già oggi.** Ogni calcolo gira in un processo suo, che finisce col calcolo. Se quel processo muore il
+server resta in piedi e l'utente vede un errore (`worker_crashed`). Ogni calcolo ha il suo tetto di memoria
+(`process_tree.py`, `OwnedProcessTree`). Manca solo il padrone unico: coda e posti (`_admit`, `_batches`) vivono
+dentro ogni processo del server.
+
+**La forma giudicata** (del consulente, sulla seconda frase del developer). Un gestore leggero, in un processo a
+parte, che non calcola:
+
+- lo avvia il primo processo del server che ne ha bisogno, e gli altri si collegano a lui;
+- per ogni calcolo avvia un processo figlio, come oggi: parallelismo vero, e un calcolo che muore non porta via gli
+  altri;
+- si spegne da solo quando non ha più calcoli.
+
+Un processo unico che calcola dentro di sé perderebbe il tetto di memoria per calcolo e l'isolamento dai crash.
+
+**Cosa sostituirebbe.**
+
+- **Il passaggio fra processi di «continua» e «va bene così»** (la strada B, sotto): ogni processo del server parla
+  con lo stesso gestore, quindi il comando arriva sempre.
+- **I conti per processo:** una coda, i posti e «un piano alla volta» contati una volta sola per tutta la macchina.
+- **Il risolutore nei processi del server.** Questo si toglie anche senza il gestore, caricando il plugin più tardi.
+
+**Costi e punti aperti** (del consulente). Non cambia il motore: cambia la piattaforma degli Strumenti, perché il
+supervisore esce dal server e diventa un processo.
+
+- **L'avvio:** chi lo fa partire quando due processi arrivano insieme, e come gli altri lo trovano.
+- **Lo spegnimento da solo,** mentre arriva una richiesta nuova.
+- **Il crash del gestore:** si perdono i calcoli in corso di tutti gli utenti. Oggi si perdono solo quelli di un
+  processo.
+- **Le righe d'avanzamento:** ogni processo del server deve fare da tramite fra il gestore e la pagina.
+- **Tocca gli stessi file** che il lotto PAUSA-2 riscrive.
+- **A chi serve:** solo a chi avvia più processi. L'immagine Docker ne avvia uno.
+- **Nessuna stima.**
+
+**Fino ad allora.** Vale la strada B, decisa dal developer il 25/11: «continua» resta una seconda richiesta; il
+processo che la riceve e non ha quel calcolo la passa a quello che lo ha, sulla stessa macchina; se non ci riesce,
+rifiuta, e la pagina tiene il piano mostrato. I conti restano per processo: è un limite noto, e questa è una lettura
+del consulente, non una frase del developer.
+
+**Rapporto con «Cache Server Centralizzato per Multi-Worker Uvicorn»** (osservazione del consulente). Le due voci
+nascono dallo stesso fatto, più di un processo del server, e hanno la stessa forma: un processo per tutta la
+macchina, a cui gli altri si collegano. Hanno anche lo stesso punto delicato, cosa succede quando quel processo cade:
+lì si perde la cache, qui i calcoli in corso. Non sono un disegno solo: il cache server parte col server e resta
+acceso, il gestore parte quando serve e si spegne. Conviene guardarle insieme, almeno per scegliere un modo solo di
+avviare e trovare un servizio locale.
+
+**Prerequisiti** (del consulente): «pausa e riprendi» costruita, così il gestore si disegna sul protocollo
+definitivo; e un bisogno reale di più processi.
+
+**Dove sta il dettaglio**: `LibreFolio_developer_journal/Release_2/Phase_2/67_rebalancer/plan-phase02Step7SearchTime.prompt.md`,
+§3 punto 2 (le due risposte del developer e la strada B) e lotto PAUSA-2.
+
 ## ⚡ Migrazione a ORJSONResponse per performance JSON
 
 **Data aggiunta**: 11 Giugno 2026 · **Priorità**: P4
