@@ -161,6 +161,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The Docker image is about 22 MB lighter**: the 30 default avatars are WebP in the image (2.6 MB instead of 24.7 MB), and so are the copies a new instance seeds into its data folder. Instances already started keep the avatars they have.
 - **The documentation site is much lighter**: its pages no longer carry the theme's indentation; the developer manual, English only, is no longer copied into Italian, French and Spanish (the old addresses lead to the English page, and the language selector says the manual is in English); each page no longer carries the whole menu, which it reads once per language from one file. The site's HTML goes from 387 MB to about 55 MB; the pages look and work the same, and the menu file is downloaded once per release.
 - **Dashboard › Risk follows the broker filter**, like the other tabs: with a filter on, the risk is the one of the brokers it keeps, at your share, and the panel says it reads a subset. Before, it always covered every broker you own.
+- **Buttons**: dialogs, the header, the date picker, the guide icons, the image editor, the file pickers and the pickers (FX routes, assets, signals, filters) use one standard button. An icon's name shows on a long press, a mouse rest or the keyboard; the date picker's month arrows, the list arrows and the search's clear buttons now have a name in your language; while an image is still being prepared, its tools say why they are off at the first tap.
+- **Tables on a phone**: the row menu opens to the left of the finger and above it, instead of under the thumb; a long press on a row no longer selects its text, and the menu ends with «Copy cell» and «Copy row» (tab-separated, ready for a spreadsheet; masked values stay masked in privacy mode).
 
 #### 🎯 PAC allocator and Tools
 
@@ -239,6 +241,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - API: `POST /fx/currencies/sync` answers **409** `fx_sync_in_progress` (with the busy pairs and when their sync began) when a pair of the request is already syncing.
 - Settings › Plugins: typing an API key or a token no longer makes the browser offer to save a password (the key fields are masked text fields, not password fields).
 - AI Export: the FX summary's volatility uses the same definition as the Risk page (sample deviation).
+- A click on a provider badge or a note inside an FX route now adds the route, and a click on the warning or the badge of an asset in the asset pickers now chooses it: the small tooltip on those parts used to swallow the click.
+- A busy or disabled chip inside a banner no longer lights up on hover, and a row-menu item with a hint no longer shows two tooltips at once.
+- In the file uploader, Enter on a file's edit, rename or remove button no longer also opens the file dialog; in a tree picker (the chart signals), Enter on the search's clear button empties the search instead of choosing the highlighted item.
 
 ### ⚠️ Breaking changes
 

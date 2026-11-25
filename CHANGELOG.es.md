@@ -161,6 +161,8 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 - **La imagen Docker es unos 22 MB más ligera**: los 30 avatares predeterminados están en WebP en la imagen (2,6 MB en lugar de 24,7 MB), igual que las copias que una nueva instancia pone en su carpeta de datos. Las instancias ya iniciadas conservan sus avatares.
 - **El sitio de la documentación es mucho más ligero**: las páginas ya no llevan la sangría del tema; el manual para desarrolladores, solo en inglés, ya no se copia en italiano, francés y español (las direcciones antiguas llevan a la página en inglés, y el selector de idioma indica que el manual está en inglés); cada página ya no lleva el menú entero, que lee una vez por idioma de un solo archivo. El HTML del sitio pasa de 387 MB a unos 55 MB; las páginas se ven y funcionan como antes, y el archivo del menú se descarga una vez por versión.
 - **Panel › Riesgo sigue el filtro de brókeres**, como las demás pestañas: con un filtro activo, el riesgo es el de los brókeres que quedan, en tu parte, y el panel indica que lee una parte. Antes cubría siempre todos tus brókeres.
+- **Botones**: las ventanas, la cabecera, el calendario, los iconos de la guía, el editor de imágenes, la elección de archivos y los selectores (rutas FX, activos, señales, filtros) usan un único botón estándar. El nombre de un icono aparece con una pulsación larga, con el ratón quieto o con el teclado; las flechas del mes, las flechas de las listas y la ✕ de las búsquedas ahora tienen un nombre en tu idioma; mientras una imagen se prepara, sus herramientas dicen por qué están apagadas al primer toque.
+- **Tablas en el teléfono**: el menú de una fila se abre a la izquierda del dedo y encima, en vez de debajo del pulgar; una pulsación larga sobre una fila ya no selecciona su texto, y el menú termina con «Copiar celda» y «Copiar fila» (separada por tabuladores, lista para una hoja de cálculo; los valores ocultos siguen ocultos en modo privacidad).
 
 #### 🎯 Asignador PAC y Herramientas
 
@@ -239,6 +241,9 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 - API: `POST /fx/currencies/sync` responde **409** `fx_sync_in_progress` (con los pares ocupados y cuándo empezó su sincronización) cuando un par de la solicitud ya se está sincronizando.
 - Configuración › Plugins: escribir una clave de API o un token ya no hace que el navegador ofrezca guardar una contraseña (los campos de clave son campos de texto enmascarados, no campos de contraseña).
 - AI Export: la volatilidad del resumen FX usa la misma definición que la página Riesgo (desviación típica muestral).
+- Un clic en la insignia de un proveedor o en una nota dentro de una ruta FX ahora añade la ruta, y un clic en el aviso o la insignia de un activo en los selectores ahora lo elige: el pequeño tooltip de esas partes se tragaba el clic.
+- Un chip ocupado o apagado dentro de un aviso ya no se ilumina al pasar el ratón, y una entrada del menú de fila con una explicación ya no muestra dos tooltips a la vez.
+- En la carga de archivos, Intro en editar, renombrar o quitar un archivo ya no abre también la elección de archivos; en un selector en árbol (las señales de los gráficos), Intro en la ✕ de la búsqueda la vacía en vez de elegir el elemento resaltado.
 
 ### ⚠️ Cambios incompatibles
 

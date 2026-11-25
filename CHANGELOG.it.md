@@ -161,6 +161,8 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 - **L'immagine Docker è più leggera di circa 22 MB**: i 30 avatar predefiniti nell'immagine sono in WebP (2,6 MB invece di 24,7 MB), e lo sono anche le copie che una nuova istanza mette nella sua cartella dati. Le istanze già avviate tengono gli avatar che hanno.
 - **Il sito della documentazione è molto più leggero**: le pagine non portano più l'indentazione del tema; il manuale per sviluppatori, solo in inglese, non viene più copiato in italiano, francese e spagnolo (i vecchi indirizzi portano alla pagina inglese, e il selettore della lingua dice che il manuale è in inglese); ogni pagina non porta più il menu intero, che legge una volta per lingua da un solo file. L'HTML del sito passa da 387 MB a circa 55 MB; le pagine si vedono e funzionano come prima, e il file del menu si scarica una volta per release.
 - **Dashboard › Rischio segue il filtro dei broker**, come le altre schede: con un filtro attivo il rischio è quello dei broker che restano, per la tua quota, e il pannello dice che legge una parte. Prima copriva sempre tutti i broker che possiedi.
+- **Bottoni**: le finestre, la testata, il calendario, le icone della guida, l'editor delle immagini, la scelta dei file e i selettori (route FX, asset, segnali, filtri) usano un bottone standard unico. Il nome di un'icona compare con la pressione lunga, col mouse fermo o da tastiera; le frecce del mese, le frecce degli elenchi e la ✕ delle ricerche ora hanno un nome nella tua lingua; mentre un'immagine è ancora in preparazione, i suoi strumenti dicono perché sono spenti al primo tocco.
+- **Tabelle sul telefono**: il menu di una riga si apre a sinistra del dito e sopra, invece che sotto il pollice; la pressione lunga su una riga non seleziona più il testo, e il menu finisce con «Copia cella» e «Copia riga» (separata da tabulazioni, pronta per un foglio di calcolo; i valori mascherati restano mascherati con la privacy).
 
 #### 🎯 Allocatore PAC e Strumenti
 
@@ -239,6 +241,9 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 - API: `POST /fx/currencies/sync` risponde **409** `fx_sync_in_progress` (con le coppie occupate e da quando è iniziata la loro sincronizzazione) quando una coppia della richiesta è già in sincronizzazione.
 - Impostazioni › Plugin: scrivere una chiave API o un token non fa più proporre al browser di salvare una password (i campi delle chiavi sono campi di testo mascherati, non campi password).
 - AI Export: la volatilità del riepilogo FX usa la stessa definizione della pagina Rischio (deviazione campionaria).
+- Un clic sul badge di un provider o su una nota dentro una route FX ora aggiunge la route, e un clic sull'avviso o sul badge di un asset nei selettori ora lo sceglie: il piccolo tooltip di quelle parti si mangiava il clic.
+- Un chip occupato o spento dentro un avviso non si illumina più al passaggio del mouse, e una voce del menu di riga con una spiegazione non mostra più due tooltip insieme.
+- Nel caricamento dei file, Invio su modifica, rinomina o rimuovi di un file non apre più anche la scelta dei file; in un selettore ad albero (i segnali dei grafici), Invio sulla ✕ della ricerca la svuota invece di scegliere la voce evidenziata.
 
 ### ⚠️ Modifiche incompatibili
 
