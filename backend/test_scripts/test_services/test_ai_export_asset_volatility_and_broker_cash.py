@@ -23,6 +23,7 @@ The cases:
 - AV-02: the broker export gives the same figure for the same asset (one definition, one value).
 - AV-03: with a single close in the period the volatility is None.
 - AV-04: `fx.market_summary` uses the same definition on the seeded rates (no population deviation).
+- AV-05: the asset's own export gives the portfolio row's figure for that asset (78 L6 S2: its row never got it).
 - BC-01: `cash_by_broker` has B1 and B2, their cash adds up to `cash_total`, and the list says its basis (the user's
   share); with nothing in flight the cash in transit is zero.
 - BC-02: B2 counts at its share: half of its EUR and of its USD balances.
@@ -287,6 +288,17 @@ async def test_av04_the_fx_summary_uses_the_same_definition(book):
     assert len(rows) == 1
     expected = _definition(_observed(RATES))
     assert rows[0]["daily_return_volatility_ratio"] == pytest.approx(expected, abs=TOLERANCE)
+
+
+@pytest.mark.asyncio
+async def test_av05_the_asset_export_gives_the_portfolio_rows_figure(book):
+    asset_id = book.assets["CLOSE_ONLY"]
+    portfolio = await _resolve(book, _scope(book, Domain.PORTFOLIO), "portfolio.asset_market_context")
+    asset = await _resolve(book, _scope(book, Domain.ASSET, asset_id=asset_id), "asset.position_market_context")
+
+    expected = _definition(_observed(SERIES["CLOSE_ONLY"]))
+    assert _volatility(asset, asset_id) == pytest.approx(expected, abs=TOLERANCE)
+    assert _volatility(asset, asset_id) == pytest.approx(_volatility(portfolio, asset_id), abs=TOLERANCE)
 
 
 # =============================================================================

@@ -169,7 +169,7 @@ _ASSET_COMPONENTS: tuple[ComponentSpec, ...] = (
     _component(Domain.ASSET, "indicators", "Technical indicators", dependencies=("asset.ohlc_returns",), period_behavior=PeriodBehavior.AGGREGATED, aggregator=_SIGNAL_PROFILE_BUCKET_AGGREGATOR),
     _component(Domain.ASSET, "states_events", "Technical states and events", period_behavior=PeriodBehavior.WINDOWED),
     _component(Domain.ASSET, "technical_coverage", "Single-asset technical coverage", period_behavior=PeriodBehavior.WINDOWED),
-    _component(Domain.ASSET, "position_market_context", "Focused position market context", period_behavior=PeriodBehavior.WINDOWED),
+    _component(Domain.ASSET, "position_market_context", "Focused position market context", version=2, period_behavior=PeriodBehavior.WINDOWED),
     _component(Domain.ASSET, "drawdown_summary", "Asset drawdown context", version=2, dependencies=("asset.market_snapshot",), period_behavior=PeriodBehavior.WINDOWED),
 )
 
