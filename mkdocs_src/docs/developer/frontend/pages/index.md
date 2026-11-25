@@ -191,7 +191,8 @@ frontend/src/routes/
   selection asks about a parent's linked charges first, through the same flow as the Transactions page
   (`chargesDeleteFlow.svelte.ts`, see
   [Deleting a parent and keeping its charges](../state/transaction-draft.md#workspace-intent)); «Link the charges» in
-  the selection bar goes through the page's flow too (`chargesLinkFlow.svelte.ts`)
+  the selection bar goes through the page's flow too (`chargesLinkFlow.svelte.ts`), and so does «Unlink the charges»
+  (`chargesUnlinkFlow.svelte.ts`)
 - Info tab: broker details and the embedded sharing panel
   ([BrokerSharingPanel](../components/features/brokers/modals.md#broker-sharing-panel))
 
@@ -222,7 +223,11 @@ frontend/src/routes/
     - **Link** in the selection bar (one parent and its charges) goes through `createChargesLinkFlow`
       (`lib/features/transactions/chargesLinkFlow.svelte.ts`, shared with a broker's Transactions tab): it follows
       `linkSelection` of `chargeLinkRules.ts`, loads the type rules itself once two rows are selected, and saves at once (`linkCommit`) after the
-      `TxChargesActionModal` confirmation. **Delete** goes through `createChargesDeleteFlow` (`chargesDeleteFlow.svelte.ts`): a parent whose
+      `TxChargesActionModal` confirmation. **Unlink** goes through `createChargesUnlinkFlow`
+      (`chargesUnlinkFlow.svelte.ts`, shared too): it takes the selected rows `isUnlinkable` says (a saved parent, a broker
+      the user edits), fixes them at the click, and saves at once (`unlinkCommit`, parent `0`) after the same panel in
+      `unlink` mode. It needs no type rules and never asks for them, so one ticked charge is enough and a broker's page
+      keeps its cold path. **Delete** goes through `createChargesDeleteFlow` (`chargesDeleteFlow.svelte.ts`): a parent whose
       charges are not all selected opens the same panel («Keep the charges» / «Delete all») before the bulk workspace
       ([Deleting a parent and keeping its charges](../state/transaction-draft.md#workspace-intent)).
 
