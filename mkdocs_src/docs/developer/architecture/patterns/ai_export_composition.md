@@ -160,6 +160,18 @@ the report history (`series_steps.value_at`), not derived by difference: it is i
 and the Liquidity slice of `by_type` is `cash_total` plus it. The history omits a zero amount, so the component writes
 an explicit zero; it is null only when the history has no step on that day.
 
+**Market rows declare what they report (78 L6 S2).** The four market-context components each have their own row in
+`technical_context.py`: `TechnicalMarketContextRow` for the Portfolio and Broker overviews (with each asset's
+`portfolio_weight_ratio` and NATR), `AssetPositionMarketContextRow` (`asset.position_market_context`, v2: EMA 20, NATR,
+ATR and the Bollinger bands) and `FxMarketContextRow` (`fx.market_summary`: EMA 20, PPO and ROC; no NATR, since a rate
+has no highs and lows), all on `MarketContextRowBase`.
+`_market_context_row` takes the row's class and fills only the columns it declares. A column a component does not report
+is therefore not in its payload, so the renderer never names it on `omitted_null_columns` («explicitly unavailable»),
+even when its signal is computed for the breadth or the events and the coverage table lists it as `ok`;
+a declared column that cannot be computed (an EMA 200 on a short history) stays `null` and is still named. Every row
+prints its columns in one order, `MARKET_CONTEXT_COLUMN_ORDER`. The asset's row also carries the daily return
+volatility, on the definition above.
+
 Projection builders read the same request-scoped price/rate/Signal resources as
 the complete components. They do not filter rendered payloads and do not repeat
 I/O or Signal calculation. Signal/output allowlists, limited-history depth, and
