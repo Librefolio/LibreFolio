@@ -409,7 +409,9 @@ PROFILE_DOCUMENT: dict = {
 
 #: SHA-256 of the profile's JSON schema, version 1. A change of shape or meaning of a field is a new version (D15):
 #: a lot that edits the request's mode or fee classes changes the documents already saved, and this pin says so.
-PROFILE_SCHEMA_FINGERPRINT = "ac15821c037ab1295a3b928e0df6450a72a74767e8a43c48db5e4eaa077f251d"
+#: TL-6 of project 67 moves it in version 1: ``conversion_mode`` defaults to ``automatic``. Every saved text carries the
+#: key (``operating_profile_text``), so no saved profile changes meaning: the two tests below pin both readings.
+PROFILE_SCHEMA_FINGERPRINT = "477d05eec4c14cdc8c3e8a06c4caf6399a4ef35535d4a9b8ee4e28661d03036d"
 
 
 def _document(**changes) -> dict:
@@ -593,6 +595,25 @@ class TestBrokerOperatingProfile:
 
     def test_profile_document_shape_is_frozen_for_version_1(self):
         assert _schema_fingerprint() == PROFILE_SCHEMA_FINGERPRINT, "the operating profile's shape changed: a new optional field keeps version 1, a change of shape or meaning is a new " "version whose reader converts the old one (decision D15); then pin the new fingerprint"
+
+    def test_a_profile_saved_with_manual_still_reads_manual(self):
+        """TL-6: a text as the old code saved it — rules and ``manual``, the old default, written out — reads ``manual``, and
+        is written back with it: the user changes it by hand."""
+        saved = operating_profile_text(BrokerOperatingProfile.model_validate(_document(conversion_mode="manual")))
+        assert json.loads(saved)["conversion_mode"] == "manual"
+        profile = stored_operating_profile(saved)
+        assert profile is not None and profile.conversion_mode == "manual"
+        assert json.loads(operating_profile_text(profile))["conversion_mode"] == "manual"
+
+    def test_a_profile_without_the_conversion_reads_the_broker_converting(self):
+        """TL-6: no conversion said reads ``automatic`` (the developer, 23/11), and the saved text says it."""
+        document = _document()
+        del document["conversion_mode"]
+        profile = BrokerOperatingProfile.model_validate(document)
+        assert profile.conversion_mode == "automatic"
+        assert json.loads(operating_profile_text(profile))["conversion_mode"] == "automatic"
+        empty = stored_operating_profile(json.dumps({"profile_version": 1}))
+        assert empty is not None and empty.conversion_mode == "automatic"
 
     @pytest.mark.parametrize("case", list(REFUSALS))
     def test_profile_refuses_what_it_can_recognise(self, case):

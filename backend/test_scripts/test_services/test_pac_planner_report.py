@@ -68,6 +68,7 @@ from backend.app.schemas.pac_allocator.exact import FiniteDecimal, exact_fractio
 from backend.app.schemas.pac_allocator.results import PacPlannerReadyIncumbentResult
 from backend.app.schemas.pac_allocator.solutions import DeploymentUnavailable, PacIncumbentSolution
 from backend.app.services.pac_allocator import models as pac_models
+from backend.app.services.pac_allocator import planner as PL
 from backend.app.services.pac_allocator import planner_report as PR
 from backend.app.services.pac_allocator import rebalancer_report as RR
 from backend.app.services.pac_allocator.compiler import compile_policy_program
@@ -1530,3 +1531,61 @@ def test_cash_by_currency_closes_on_the_accounts(build) -> None:
     codes = [code for code, *_ in rows]
     assert codes[0] == scenario.valuation_currency and codes[1:] == sorted(codes[1:])
     assert all(initial != 0 or final != 0 for _code, initial, final, _unused in rows)
+
+
+# =============================================================================
+# TL-6 of project 67: the default conversion mode becomes «automatic»; the mode only presents the plan
+# =============================================================================
+
+
+def _dumped(value):
+    if isinstance(value, list):
+        return [_dumped(item) for item in value]
+    return value.model_dump(mode="json") if hasattr(value, "model_dump") else value
+
+
+def _without_presentation(parts: dict) -> dict:
+    """A solution's parts with what the conversion mode decides taken out: the conversions' mode, and every step number."""
+    data = {key: _dumped(value) for key, value in parts.items()}
+    for row in data["conversions"]:
+        row.pop("mode")
+        row.pop("sequence")
+    for section in ("funding_actions", "transfers", "order_rows"):
+        for row in data.get(section, []):
+            row.pop("sequence")
+    return data
+
+
+def test_the_conversion_mode_changes_no_figure_of_a_pac_plan() -> None:
+    """The engine's plan replayed with the Broker converting by hand and by itself: every row, figure and account is the
+    same; only the conversions' mode and the step numbers differ (TL-6: a Broker with no profile now reads «automatic»)."""
+    base = _coarse_funding_fx_scenario()
+    # The engine's plan, not the maximal candidate of ``_evaluate``, which no order of steps can pay.
+    _view, run = _solve(base)
+    assert run.candidate is not None
+    parts = {}
+    for mode in ("manual", "automatic"):
+        scenario = _with_conversion_mode(base, "broker:destination", mode)
+        view = build_exact_policy_view(scenario, purpose="primary")
+        evaluation = evaluate_exact_candidate(scenario, view, replace(run.candidate, view_id=view.view_id))
+        parts[mode] = PL._build_solution_parts(scenario, view, evaluation, ())
+    assert parts["automatic"]["conversions"] and {row.mode for row in parts["automatic"]["conversions"]} == {"automatic"}
+    assert all(row.sequence is None for row in parts["automatic"]["conversions"])
+    assert all(row.sequence is not None for row in parts["manual"]["conversions"])
+    assert _without_presentation(parts["manual"]) == _without_presentation(parts["automatic"])
+
+
+def test_the_conversion_mode_changes_no_figure_of_a_rebalancer_plan() -> None:
+    """The Rebalancer, one solver run, its plan (an exchange and a purchase) replayed under both modes: the same figures."""
+    base = cases.scenario("fx-mode", holdings={"asset:a": R(5000), "asset:usd": R(0)}, cash=R(5000), weights={"asset:a": R(1, 2), "asset:usd": R(1, 2)}, prices={"asset:a": R(1), "asset:usd": R(10)}, usd_asset="asset:usd")
+    _view, run = _solve(base)
+    assert run.candidate is not None
+    parts = {}
+    for mode in ("manual", "automatic"):
+        scenario = _with_conversion_mode(base, cases.BROKER, mode)
+        view = build_exact_policy_view(scenario, purpose="primary")
+        evaluation = evaluate_exact_candidate(scenario, view, replace(run.candidate, view_id=view.view_id))
+        parts[mode] = PL._rebalancer_solution_parts(scenario, view, evaluation, (), run)
+    assert parts["automatic"]["conversions"] and {row.mode for row in parts["automatic"]["conversions"]} == {"automatic"}
+    assert parts["manual"]["order_rows"], "PREMISE: a purchase after the exchange"
+    assert _without_presentation(parts["manual"]) == _without_presentation(parts["automatic"])
