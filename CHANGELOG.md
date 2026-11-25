@@ -175,6 +175,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Settings: the filter menu (Plugins, Preferences, Global settings) stays in view while you scroll; choosing a filter brings you back to the top of the list.
 - Email change: the confirmation page shows the address you are about to confirm, and its messages are shorter.
 - API: `POST /email/email-change/check` also answers `new_email` when the link is `ready`.
+- **AI Export: the PAC and rebalancing prompts end with «Calculate it in LibreFolio».** They say where to find the PAC allocator and the Portfolio rebalancer and what to enter at each step, with the labels you see in the app (for the rebalancer also which «Target fidelity» suits the plan), so the AI hands you the values and the tool calculates units and orders.
 
 ### 🐛 Fixed
 

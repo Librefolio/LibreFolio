@@ -175,6 +175,7 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 - Impostazioni: il menu dei filtri (Plugin, Preferenze, Impostazioni Globali) resta in vista mentre scorri; scegliere un filtro ti riporta all'inizio dell'elenco.
 - Cambio email: la pagina di conferma mostra l'indirizzo che stai per confermare e i suoi messaggi sono più brevi.
 - API: `POST /email/email-change/check` risponde anche `new_email` quando il link è `ready`.
+- **AI Export: i prompt del PAC e del ribilanciamento finiscono con «Calcolalo in LibreFolio».** Dicono dove trovare l'Allocatore PAC e il Ribilanciatore e cosa inserire a ogni passo, con le etichette che vedi nell'app (per il Ribilanciatore anche quale «Fedeltà al target» si adatta al piano), così l'AI ti passa i valori e lo strumento calcola quote e ordini.
 
 ### 🐛 Corretto
 

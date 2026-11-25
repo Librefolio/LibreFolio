@@ -175,6 +175,7 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 - Configuración: el menú de filtros (Plugins, Preferencias, Configuración Global) se mantiene a la vista mientras te desplazas; elegir un filtro te lleva de nuevo al principio de la lista.
 - Cambio de correo: la página de confirmación muestra la dirección que vas a confirmar y sus mensajes son más cortos.
 - API: `POST /email/email-change/check` responde también `new_email` cuando el enlace está `ready`.
+- **AI Export: los prompts del PAC y del reequilibrio terminan con «Calcúlalo en LibreFolio».** Dicen dónde encontrar el Asignador PAC y el Reequilibrador de cartera y qué introducir en cada paso, con las etiquetas que ves en la app (para el reequilibrador, también qué «Fidelidad al objetivo» conviene al plan), para que la IA te dé los valores y la herramienta calcule unidades y órdenes.
 
 ### 🐛 Corregido
 
