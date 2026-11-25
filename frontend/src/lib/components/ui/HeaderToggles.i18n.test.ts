@@ -2,13 +2,14 @@
 /**
  * Header toggles — PrivacyToggle and ThemeToggle label themselves through i18n (Vitest + jsdom).
  *
- * Subject. Both toggles take their `aria-label` and `title` from catalogue keys:
- *   - PrivacyToggle (runes): `header.privacy.hide` while amounts are shown, `header.privacy.show`
- *     while they are hidden — one string on both attributes — and `aria-pressed` carries the
- *     state itself;
- *   - ThemeToggle (legacy): `header.theme.switchToDark` (aria-label) and `header.theme.dark`
- *     (title) in the light theme, `header.theme.switchToLight` and `header.theme.light` in the
- *     dark one.
+ * Subject. Both toggles take their name (`aria-label`) from catalogue keys:
+ *   - PrivacyToggle: `header.privacy.hide` while amounts are shown, `header.privacy.show` while
+ *     they are hidden, and `aria-pressed` carries the state itself;
+ *   - ThemeToggle: `header.theme.switchToDark` in the light theme, `header.theme.switchToLight`
+ *     in the dark one.
+ * Since 85 BTN-2a both are standard Buttons: the name shows in the design system's tooltip (a
+ * mouse rest, a long press, Tab), so neither carries a native `title` any more — a second,
+ * browser-drawn tooltip of the same text. Each step checks the title is absent.
  * They used to be English literals in the components, so the header spoke English in every
  * locale, to screen readers and in every tooltip.
  *
@@ -23,8 +24,8 @@
  * `currentLanguage.set(lang)`, which drives svelte-i18n's `locale`. Both dictionaries are loaded
  * in `beforeAll`, so a switch is a pure state change: the test measures the components following
  * the locale, not the loader. Most switches happen in place, because the header stays mounted
- * while the user changes language — and ThemeToggle is legacy, the component kind whose template
- * may track less than it reads (R20, see BrokerCard.test.ts). Only an in-place step sees that.
+ * while the user changes language — and a template may track less than it reads (R20, see
+ * BrokerCard.test.ts; ThemeToggle was legacy until BTN-2a). Only an in-place step sees that.
  *
  * Privacy moves through the real store (`setPrivacyEnabled`) and through the button's own click
  * (`togglePrivacy`), both ways, each change flushed with `tick()`; it is reset after each test.
@@ -67,14 +68,13 @@ const LOCALES: readonly Lang[] = ['en', 'it'];
 
 const PRIVACY_KEYS = {shown: 'header.privacy.hide', hidden: 'header.privacy.show'} as const;
 const THEME_KEYS = {
-    light: {aria: 'header.theme.switchToDark', title: 'header.theme.dark'},
-    dark: {aria: 'header.theme.switchToLight', title: 'header.theme.light'},
+    light: {aria: 'header.theme.switchToDark'},
+    dark: {aria: 'header.theme.switchToLight'},
 } as const;
 /** Pairs of keys one attribute switches between: equal values would make a switch invisible. */
 const STATE_PAIRS = [
     [PRIVACY_KEYS.shown, PRIVACY_KEYS.hidden],
     [THEME_KEYS.light.aria, THEME_KEYS.dark.aria],
-    [THEME_KEYS.light.title, THEME_KEYS.dark.title],
 ] as const;
 const ALL_KEYS = STATE_PAIRS.flat();
 
@@ -121,15 +121,15 @@ function expectPrivacyToggle(lang: Lang, hidden: boolean, step: string): void {
     const label = fromCatalog(lang, key);
     const toggle = privacyToggle();
     expect(toggle.getAttribute('aria-label'), `${step} — aria-label is ${lang}:${key}`).toBe(label);
-    expect(toggle.getAttribute('title'), `${step} — title is ${lang}:${key}`).toBe(label);
+    expect(toggle.hasAttribute('title'), `${step} — no native title: the name is the standard tooltip`).toBe(false);
     expect(toggle.getAttribute('aria-pressed'), `${step} — aria-pressed follows the flag`).toBe(String(hidden));
 }
 
 function expectThemeToggle(lang: Lang, theme: ResolvedTheme, step: string): void {
-    const {aria, title} = THEME_KEYS[theme];
+    const {aria} = THEME_KEYS[theme];
     const toggle = themeToggle();
     expect(toggle.getAttribute('aria-label'), `${step} — aria-label is ${lang}:${aria}`).toBe(fromCatalog(lang, aria));
-    expect(toggle.getAttribute('title'), `${step} — title is ${lang}:${title}`).toBe(fromCatalog(lang, title));
+    expect(toggle.hasAttribute('title'), `${step} — no native title: the name is the standard tooltip`).toBe(false);
 }
 
 async function mountPrivacyToggle(): Promise<void> {
@@ -223,7 +223,6 @@ describe('ThemeToggle — labels from the catalogue', () => {
         expectThemeToggle('it', 'light', 'en → it in place, light');
         const itLight = labels(themeToggle());
         expect(itLight.aria, 'it, light — aria-label differs from en').not.toBe(enLight.aria);
-        expect(itLight.title, 'it, light — title differs from en').not.toBe(enLight.title);
 
         await click(themeToggle());
         expect(getCurrentResolvedTheme(), 'control: the click applied the dark theme').toBe('dark');
@@ -234,7 +233,6 @@ describe('ThemeToggle — labels from the catalogue', () => {
         expectThemeToggle('en', 'dark', 'it → en in place, dark');
         const enDark = labels(themeToggle());
         expect(enDark.aria, 'en, dark — aria-label differs from it').not.toBe(itDark.aria);
-        expect(enDark.title, 'en, dark — title differs from it').not.toBe(itDark.title);
     });
 
     it.each(LOCALES)('a click switches between switchToDark and switchToLight, both ways (%s)', async (lang) => {

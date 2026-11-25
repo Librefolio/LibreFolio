@@ -647,9 +647,12 @@ describe('Header navigation, resizing and teardown', () => {
             expect(removeWindow).toHaveBeenCalledWith(type, registration?.[1]);
         }
         for (const type of ['focusin', 'focusout']) {
-            const registration = addDocument.mock.calls.find(([eventType]) => eventType === type);
-            expect(registration).toBeDefined();
-            expect(removeDocument).toHaveBeenCalledWith(type, registration?.[1], true);
+            // Header's own listeners are the capture-phase ones (`true`). Svelte registers its event-delegation handler
+            // on the document too, for every delegated event of the tree (`{passive: false}`, before Header's onMount):
+            // identified by position, the first `focusin` registration was Svelte's, not Header's (85 BTN-2a triage).
+            const own = addDocument.mock.calls.filter(([eventType, , options]) => eventType === type && options === true);
+            expect(own, `Header registers exactly one capture-phase ${type} listener`).toHaveLength(1);
+            expect(removeDocument).toHaveBeenCalledWith(type, own[0][1], true);
         }
         window.dispatchEvent(new Event('scroll'));
         window.dispatchEvent(new Event('resize'));

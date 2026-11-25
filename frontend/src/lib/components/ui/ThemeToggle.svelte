@@ -2,15 +2,17 @@
     /**
      * ThemeToggle - Switch between light and dark themes
      *
-     * Uses centralized themeStore for all theme logic.
+     * Uses centralized themeStore for all theme logic. The standard icon button (85 BTN-2a): one name, the action it
+     * performs («Switch to dark theme»), by long press, rest or Tab — no browser `title` saying something else (D14).
      */
     import {onMount} from 'svelte';
     import {Moon, Sun} from 'lucide-svelte';
     import {_} from '$lib/i18n';
+    import Button from '$lib/components/ui/button/Button.svelte';
     import {applyTheme, getCurrentResolvedTheme, getStoredThemePreference, initThemeListener} from '$lib/stores/app/themeStore';
 
-    let theme: 'light' | 'dark' = 'light';
-    let mounted = false;
+    /** Read at once in the browser, so the button has its icon from the first frame. */
+    let theme = $state<'light' | 'dark'>(typeof window === 'undefined' ? 'light' : getCurrentResolvedTheme());
 
     function toggleTheme() {
         const newTheme = theme === 'light' ? 'dark' : 'light';
@@ -20,7 +22,6 @@
 
     onMount(() => {
         theme = getCurrentResolvedTheme();
-        mounted = true;
 
         const cleanup = initThemeListener();
 
@@ -40,19 +41,4 @@
     });
 </script>
 
-<button
-    aria-label={theme === 'light' ? $_('header.theme.switchToDark') : $_('header.theme.switchToLight')}
-    class="p-2 rounded-lg transition-colors duration-200 text-lf-secondary hover:bg-lf-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lf-focus"
-    data-testid="theme-toggle"
-    on:click={toggleTheme}
-    title={theme === 'light' ? $_('header.theme.dark') : $_('header.theme.light')}
->
-    {#if !mounted}
-        <!-- Placeholder during SSR -->
-        <div class="w-5 h-5"></div>
-    {:else if theme === 'light'}
-        <Moon size={20} />
-    {:else}
-        <Sun size={20} />
-    {/if}
-</button>
+<Button label={theme === 'light' ? $_('header.theme.switchToDark') : $_('header.theme.switchToLight')} icon={theme === 'light' ? Moon : Sun} display="icon" variant="ghost-strong" size="lg" onclick={toggleTheme} data-testid="theme-toggle" />
