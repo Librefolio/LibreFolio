@@ -1172,7 +1172,8 @@
                                         onclick={() => {
                                             showSelectedOnly = !showSelectedOnly;
                                         }}
-                                        title="Show selected only"
+                                        title={$t('table.showSelectedOnly')}
+                                        aria-label={$t('table.showSelectedOnly')}
                                     >
                                         <Filter size={12} />
                                     </button>

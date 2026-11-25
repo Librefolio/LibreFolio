@@ -389,7 +389,8 @@
     "copyRow": "Copier la ligne",
     "cellCopied": "Cellule copiée",
     "rowCopied": "Ligne copiée",
-    "copyFailed": "Impossible de copier dans le presse-papiers"
+    "copyFailed": "Impossible de copier dans le presse-papiers",
+    "showSelectedOnly": "Afficher uniquement la sélection"
   },
   "date": {
     "today": "Aujourd'hui",

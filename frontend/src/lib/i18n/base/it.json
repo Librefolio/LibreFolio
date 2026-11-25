@@ -389,7 +389,8 @@
     "copyRow": "Copia riga",
     "cellCopied": "Cella copiata",
     "rowCopied": "Riga copiata",
-    "copyFailed": "Impossibile copiare negli appunti"
+    "copyFailed": "Impossibile copiare negli appunti",
+    "showSelectedOnly": "Mostra solo i selezionati"
   },
   "date": {
     "today": "Oggi",

@@ -389,7 +389,8 @@
     "copyRow": "Copy row",
     "cellCopied": "Cell copied",
     "rowCopied": "Row copied",
-    "copyFailed": "Could not copy to the clipboard"
+    "copyFailed": "Could not copy to the clipboard",
+    "showSelectedOnly": "Show selected only"
   },
   "date": {
     "today": "Today",

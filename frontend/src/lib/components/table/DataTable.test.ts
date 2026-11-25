@@ -74,6 +74,8 @@ import {Trash2} from 'lucide-svelte';
 import {cleanup, fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
 import {getUserStorageKey} from '$lib/utils/storage';
 import DataTable from './DataTable.svelte';
+import enCatalogue from '$lib/i18n/en.json';
+import itCatalogue from '$lib/i18n/it.json';
 import type {ColumnDef, RowAction} from './types';
 
 interface Row {
@@ -488,6 +490,23 @@ describe('DataTable — show-selected-only', () => {
         await waitFor(() => expect(onShowSelectedOnlyChange).toHaveBeenLastCalledWith(false));
         expect(screen.getByTestId('dt-show-selected-only')).toHaveAttribute('data-state', 'off');
         expect(pageIds()).toEqual(['r1', 'r2', 'r3', 'r4']);
+    });
+
+    // 85 BTN-2c: the button used to say «Show selected only» in English in every language (a literal title).
+    it('is named from the catalogue in the interface language: aria-label and title, never English or the raw key', async () => {
+        const expected = itCatalogue.table.showSelectedOnly;
+        expect(expected, 'premise: the Italian text differs from the English one').not.toBe(enCatalogue.table.showSelectedOnly);
+        await setupI18n('it');
+        try {
+            mount('selected-only-it', {data: rows(2)});
+            const button = screen.getByTestId('dt-show-selected-only');
+            expect(button).toHaveAttribute('aria-label', expected);
+            expect(button).toHaveAttribute('title', expected);
+            expect(button.getAttribute('aria-label')).not.toBe('Show selected only');
+            expect(button.getAttribute('aria-label')).not.toBe('table.showSelectedOnly');
+        } finally {
+            await setupI18n('en');
+        }
     });
 });
 

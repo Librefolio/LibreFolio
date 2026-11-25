@@ -389,7 +389,8 @@
     "copyRow": "Copiar fila",
     "cellCopied": "Celda copiada",
     "rowCopied": "Fila copiada",
-    "copyFailed": "No se pudo copiar al portapapeles"
+    "copyFailed": "No se pudo copiar al portapapeles",
+    "showSelectedOnly": "Mostrar solo los seleccionados"
   },
   "date": {
     "today": "Hoy",
