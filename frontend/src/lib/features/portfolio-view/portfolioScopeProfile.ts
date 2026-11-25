@@ -119,7 +119,8 @@ export function portfolioScopeProfile(scope: PortfolioViewScope): PortfolioScope
             rootGuideAnchor: null,
             rootSpacing: 'space-y-6',
             toolbar: {
-                thresholds: {oneRow: 1000, denseRow: 840, stackFilters: 530, oneColumn: 430, labelHideActions: 270, labelHideTabs: 660},
+                // `labelHideTabs`: six tabs at 75 % take 690 px in Spanish, the widest (see the dashboard's note below).
+                thresholds: {oneRow: 1000, denseRow: 840, stackFilters: 530, oneColumn: 430, labelHideActions: 270, labelHideTabs: 710},
                 debugName: 'brokerDetail',
                 pickerMaxWidthTwoRow: 470,
             },
@@ -138,10 +139,10 @@ export function portfolioScopeProfile(scope: PortfolioViewScope): PortfolioScope
         rootGuideAnchor: 'page.dashboard',
         rootSpacing: 'space-y-4',
         toolbar: {
-            // `labelHideTabs`: 460 for four tabs, 570 for five (the Allocazione tab, lane 80). The label of every tab shrinks to
-            // 75 % before it hides, so the floor is the sum of the five tabs at that size: 512 px in French, the widest, against 414
-            // for the four (measured 23/11/2026); the old margin (+11 %) gives 570. The broker's 660 already holds its six (586 → 651).
-            thresholds: {oneRow: 1000, denseRow: 990, stackFilters: 510, oneColumn: 390, noExtraLabel: 410, labelHideActions: 210, labelHideTabs: 570},
+            // `labelHideTabs`: below it the tabs show their icons alone. A row of tabs shrinks its words to 75 % first, so the
+            // threshold sits above the bar that holds them at that size in the widest language, Spanish: 596 px (it was 570,
+            // and from 579 the last tab stood 17 px past the bar). Measured by toolbar-width-sweep in four languages, 25/11/2026.
+            thresholds: {oneRow: 1000, denseRow: 990, stackFilters: 510, oneColumn: 390, noExtraLabel: 410, labelHideActions: 210, labelHideTabs: 610},
             debugName: 'dashboard',
             pickerMaxWidthTwoRow: undefined,
         },
