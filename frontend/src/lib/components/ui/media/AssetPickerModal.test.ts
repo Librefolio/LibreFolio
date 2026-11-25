@@ -371,3 +371,50 @@ describe('AssetPickerModal', () => {
         });
     });
 });
+
+/**
+ * The standard buttons (85 BTN-2b): the grid / list switch is two toggles (`aria-pressed` follows the view, one at a
+ * time); confirm is busy while a personal file is made common — `aria-busy`, and a second click starts nothing.
+ */
+describe('AssetPickerModal — the standard buttons (85 BTN-2b)', () => {
+    it('the view toggles say which view is on, and switch it', async () => {
+        listFiles.mockResolvedValue({items: [file('pic', 'pic.png')]});
+        mount({});
+        await fireEvent.click(screen.getByTestId('asset-picker-existing-tab'));
+        const grid = await screen.findByTestId('asset-picker-view-grid');
+        const list = screen.getByTestId('asset-picker-view-list');
+        const pressed = () => [grid.getAttribute('aria-pressed'), list.getAttribute('aria-pressed')];
+        const start = pressed();
+        expect(
+            start.filter((value) => value === 'true'),
+            'exactly one view is on',
+        ).toHaveLength(1);
+        await fireEvent.click(list);
+        expect(pressed()).toEqual(['false', 'true']);
+        await fireEvent.click(grid);
+        expect(pressed()).toEqual(['true', 'false']);
+    });
+
+    it('confirm is busy while a personal file is made common, and a second click starts nothing', async () => {
+        const ME: SignedInUser = {id: 7, username: 'review-me', is_superuser: false};
+        signedIn.set(ME);
+        const own = file('own-personal', 'own-personal.png', 'image/png', {scope: 'personal', uploaded_by_user_id: ME.id});
+        listFiles.mockResolvedValue({items: [own]});
+        const patch = deferred<UploadedFile>();
+        scopeBoundary.setUploadScope.mockReturnValueOnce(patch.promise);
+        const {select} = mount({});
+
+        await fireEvent.click(await screen.findByTestId('file-grid-size-own-personal'));
+        const confirm = screen.getByTestId('asset-picker-confirm');
+        await waitFor(() => expect(confirm).not.toBeDisabled());
+        expect(confirm.hasAttribute('aria-busy')).toBe(false);
+        await fireEvent.click(confirm);
+        await waitFor(() => expect(confirm).toHaveAttribute('aria-busy', 'true'));
+        expect(confirm).toHaveAttribute('aria-disabled', 'true');
+        await fireEvent.click(confirm);
+        expect(scopeBoundary.setUploadScope, 'nothing starts twice').toHaveBeenCalledTimes(1);
+
+        patch.resolve({...own, scope: 'common'});
+        await waitFor(() => expect(select).toHaveBeenCalledTimes(1));
+    });
+});
