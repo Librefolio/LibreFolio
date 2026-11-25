@@ -124,3 +124,46 @@ export function tableRowIdsFor(lotIds: readonly number[], shown: readonly Groupa
     }
     return ids;
 }
+
+// ---------------------------------------------------------------------------
+// The rewards that entered a lot (86, D-22) — the «Rewards in lots» view
+// ---------------------------------------------------------------------------
+
+/** A reward spread over the lots its broker held the day before: the units one lot took (a `REWARD_MERGE` row of `lot_events`). */
+export interface RewardEntry {
+    transactionId: number;
+    date: string;
+    quantity: number | null;
+}
+
+/** The fields of a lot event this module reads. */
+export interface RewardEventRow {
+    lot_id: number;
+    kind: string;
+    transaction_id: number;
+    date: string;
+    quantity: unknown;
+}
+
+/** The rewards that entered each lot, by lot id, in date order. Empty unless the rewards join the lots. */
+export function rewardEntriesByLot(events: readonly RewardEventRow[], toNumber: (value: unknown) => number | null): Map<number, RewardEntry[]> {
+    const byLot = new Map<number, RewardEntry[]>();
+    for (const event of events) {
+        if (event.kind !== 'REWARD_MERGE') continue;
+        const list = byLot.get(event.lot_id) ?? [];
+        list.push({transactionId: event.transaction_id, date: event.date, quantity: toNumber(event.quantity)});
+        byLot.set(event.lot_id, list);
+    }
+    for (const list of byLot.values()) list.sort((a, b) => a.date.localeCompare(b.date) || a.transactionId - b.transactionId);
+    return byLot;
+}
+
+/** The id of an entry's row: never a number, so never a lot id, and never a group id. */
+export function rewardEntryRowId(lotId: number, transactionId: number): string {
+    return `reward-entry:${lotId}:${transactionId}`;
+}
+
+/** The rows in display order with, right after each open lot, the rows of the rewards that entered it, in date order. */
+export function withRewardEntries<R extends {rowId: string}>(rows: readonly R[], entriesOf: (row: R) => readonly R[], expanded: ReadonlySet<string>): R[] {
+    return rows.flatMap((row) => (expanded.has(row.rowId) ? [row, ...entriesOf(row)] : [row]));
+}

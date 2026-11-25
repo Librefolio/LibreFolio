@@ -707,6 +707,7 @@
                         onGotoOpeningTransaction={handleGotoOpeningTransaction}
                         onRowDoubleClick={handleTableRowDoubleClick}
                         matchingMethod={activeMethod}
+                        {lotEvents}
                     />
 
                     <LotComparisonChart selectedLots={effectiveSelectedLots} {valueHistory} {returnHistory} range={selectionRange} {incomeEvents} {brokers} {currency} {xAxisRange} matchingMethod={activeMethod} />

@@ -310,6 +310,11 @@
         "title": "{n, plural, one {# recompensa} other {# recompensas}}",
         "open": "Mostrar los lotes de las recompensas",
         "close": "Ocultar los lotes de las recompensas"
+      },
+      "rewardEntry": {
+        "open": "Mostrar las recompensas que entraron en este lote",
+        "close": "Ocultar las recompensas que entraron en este lote",
+        "units": "+{quantity} unidades"
       }
     },
     "createdInSystem": "Creado en el Sistema",

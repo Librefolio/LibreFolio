@@ -310,6 +310,11 @@
         "title": "{n, plural, one {# récompense} other {# récompenses}}",
         "open": "Afficher les lots des récompenses",
         "close": "Masquer les lots des récompenses"
+      },
+      "rewardEntry": {
+        "open": "Afficher les récompenses entrées dans ce lot",
+        "close": "Masquer les récompenses entrées dans ce lot",
+        "units": "+{quantity} unités"
       }
     },
     "createdInSystem": "Créé dans le Système",
