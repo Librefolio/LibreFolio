@@ -938,8 +938,11 @@ describe('buildAllocationRingData — rounding', () => {
  * Why (re-pin, DV): the sector names carry the emoji of the sector store (the backend's one map), which
  * arrive after the first build; a new list of emoji rebuilds in full too, so the guard also requires
  * `lastEmojiVersion === emojiVersion`, the store's version the full build wrote its names from.
+ *
+ * Why (re-pin, 86 B): one mounted pie changes its mode on the «Allocation» tab; a new mode draws the whole option
+ * again, so the guard also requires `!modeSwitched`.
  */
-const FAST_PATH_HEADER = /if\s*\(\s*chartFullyInitialized\s*&&\s*lastDark\s*===\s*isDark\s*&&\s*lastLocale\s*===\s*locale\s*&&\s*lastEmojiVersion\s*===\s*emojiVersion\s*&&\s*sameTypeSet\s*\)\s*\{/;
+const FAST_PATH_HEADER = /if\s*\(\s*chartFullyInitialized\s*&&\s*!modeSwitched\s*&&\s*lastDark\s*===\s*isDark\s*&&\s*lastLocale\s*===\s*locale\s*&&\s*lastEmojiVersion\s*===\s*emojiVersion\s*&&\s*sameTypeSet\s*\)\s*\{/;
 
 /** The two series of D72 since the redesign of 24/09, as `ringSeries()` names them. */
 const RING_SERIES_IDS = ['alloc-base', 'alloc-outer'];
@@ -1061,7 +1064,7 @@ function expectOnlyTheTwoRingSeries(code: string): void {
  * the very `FAST_PATH_HEADER` the real check uses.
  */
 const SINGLE_SERIES_FAST_PATH = `
-        if (chartFullyInitialized && lastDark === isDark && lastLocale === locale && lastEmojiVersion === emojiVersion && sameTypeSet) {
+        if (chartFullyInitialized && !modeSwitched && lastDark === isDark && lastLocale === locale && lastEmojiVersion === emojiVersion && sameTypeSet) {
             // was: {id: 'alloc-base', data: baseRingData}, {id: 'alloc-outer', data: outerRingData}
             chartInstance.setOption({series: [{data: chartData}]});
             return;
