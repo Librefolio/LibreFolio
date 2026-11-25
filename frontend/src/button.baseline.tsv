@@ -35,12 +35,12 @@ lib/components/ui/media/AssetPickerModal.svelte	2
 lib/components/ui/modals/ConfirmModal.svelte	1
 lib/components/ui/modals/SyncModalBase.svelte	4
 lib/components/ui/modals/SyncResultRow.svelte	2
-lib/components/ui/select/AssetPickerPanel.svelte	5
-lib/components/ui/select/CheckMenu.svelte	2
+lib/components/ui/select/AssetPickerPanel.svelte	1
+lib/components/ui/select/CheckMenu.svelte	1
 lib/components/ui/select/FilterButton.svelte	1
-lib/components/ui/select/FxProviderSelect.svelte	8
-lib/components/ui/select/SearchSelect.svelte	3
-lib/components/ui/select/TreeSelect.svelte	2
+lib/components/ui/select/FxProviderSelect.svelte	3
+lib/components/ui/select/SearchSelect.svelte	2
+lib/components/ui/select/TreeSelect.svelte	1
 lib/features/ai-export/AiExportMenu.svelte	1
 lib/features/ai-export/AiExportOptionsPanel.svelte	9
 lib/features/allocation/AllocationChips.svelte	1
