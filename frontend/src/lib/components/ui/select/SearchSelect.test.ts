@@ -35,6 +35,8 @@ import type {ComponentProps} from 'svelte';
 import {fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
 import type {SelectOption} from './types';
 import SearchSelect from './SearchSelect.svelte';
+import {get} from 'svelte/store';
+import {_} from 'svelte-i18n';
 
 /** The asset cache `AssetSelect` reads, owned by the last block: one active asset with an icon of its own, a ticker and a currency. */
 const CACHED_ASSET = vi.hoisted(() => ({
@@ -159,6 +161,26 @@ describe('SearchSelect', () => {
             await fireEvent.input(search, {target: {value: 'nippon'}});
             expect(within(dropdown()).getByTestId('search-select-option-JPY')).toBeInTheDocument();
             expect(within(dropdown()).queryByTestId('search-select-option-EUR')).toBeNull();
+        });
+
+        // 85 BTN-2c: the search's clear is the standard Button, an icon named common.clear.
+        it('the search’s clear is named common.clear and empties the query, the full list back', async () => {
+            await setupI18n();
+            const {trigger} = mount();
+            await open(trigger);
+            const search = screen.getByTestId('ccy-search') as HTMLInputElement;
+            expect(screen.queryByTestId('ccy-search-clear'), 'no query, no clear').toBeNull();
+            await fireEvent.input(search, {target: {value: 'nippon'}});
+            expect(within(dropdown()).queryByTestId('search-select-option-EUR'), 'barrier: the query narrowed the list').toBeNull();
+
+            const clear = screen.getByTestId('ccy-search-clear');
+            expect(clear.tagName).toBe('BUTTON');
+            expect(clear).toHaveAttribute('aria-label', get(_)('common.clear'));
+            expect(clear.hasAttribute('title')).toBe(false);
+            await fireEvent.click(clear);
+            expect(search.value).toBe('');
+            expect(within(dropdown()).getByTestId('search-select-option-EUR')).toBeInTheDocument();
+            expect(screen.queryByTestId('ccy-search-clear')).toBeNull();
         });
 
         it('drops a section header once its section is emptied by the query', async () => {

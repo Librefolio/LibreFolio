@@ -26,6 +26,10 @@
 
   The panel keeps the caller's order (`assetSelectOrder` is `AssetSelect`'s, for a caller that wants
   it). Its own test ids all start with `testId`, so two pickers on a page never share one.
+
+  The action buttons are the standard `Button` (85 BTN-2c): the filters' clear, select/deselect visible, cancel
+  (`{testId}-cancel`) and confirm. The «create new» footer stays a hand-written `<button>` on the recipe
+  (`buttonClasses`): a full-width row whose word cuts and sits left, which `Button` (centred) cannot draw.
 -->
 <script lang="ts">
     import {untrack, type Snippet} from 'svelte';
@@ -33,6 +37,8 @@
 
     import {scrollOnOverflow} from '$lib/actions/scrollOnOverflow';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
+    import Button from '$lib/components/ui/button/Button.svelte';
+    import {buttonClasses} from '$lib/components/ui/button/buttonClasses';
     import {_ as t} from '$lib/i18n';
     import {currentLanguage} from '$lib/stores/app/language';
     import {currencyStoreVersion, ensureCurrenciesLoaded, getCurrencyInfo} from '$lib/stores/reference/currencyStore';
@@ -485,10 +491,7 @@
             floating={mode === 'single'}
         />
         {#if filtersActive}
-            <button type="button" class="ml-auto inline-flex items-center gap-0.5 text-[11px] text-lf-link hover:underline" onclick={clearFilters} data-testid="{testId}-filters-clear">
-                <X size={11} />
-                {$t('assetPicker.filters.clear')}
-            </button>
+            <Button label={$t('assetPicker.filters.clear')} icon={X} variant="link" size="xs" dense class="ml-auto" onclick={clearFilters} data-testid="{testId}-filters-clear" />
         {/if}
     </div>
 {/snippet}
@@ -534,15 +537,15 @@
             <div class="max-h-80 overflow-y-auto">
                 {#if rows.length > 0}
                     <div class="flex items-center justify-between px-3 pt-2 text-[11px] text-lf-muted">
-                        <button
-                            type="button"
-                            class="text-lf-link hover:underline disabled:opacity-40 disabled:hover:no-underline"
+                        <Button
+                            label={allChecked ? $t('assetPicker.deselectVisible') : $t('assetPicker.selectVisible')}
+                            variant="link"
+                            size="xs"
+                            dense
                             disabled={allChecked && !visibleIds.some((id) => checked.includes(id))}
                             onclick={() => (checked = toggleVisibleRows(checked, visibleIds, room))}
                             data-testid="{testId}-toggle-visible"
-                        >
-                            {allChecked ? $t('assetPicker.deselectVisible') : $t('assetPicker.selectVisible')}
-                        </button>
+                        />
                         <span class="tabular-nums">{rows.length}</span>
                     </div>
                     <div class="p-1" role="listbox" aria-multiselectable="true">
@@ -605,10 +608,8 @@
             {/if}
 
             <div class="flex items-center justify-end gap-2 border-t border-lf-subtle p-2">
-                <button type="button" class="rounded-md px-2.5 py-1 text-xs text-lf-secondary hover:bg-lf-hover" onclick={close}>{$t('common.cancel')}</button>
-                <button type="button" class="rounded-md bg-lf-action px-2.5 py-1 text-xs font-medium text-lf-on-action hover:bg-lf-action-hover disabled:opacity-40" disabled={checked.length === 0} onclick={confirm} data-testid="{testId}-confirm">
-                    {$t('assetPicker.confirm', {values: {count: checked.length}})}
-                </button>
+                <Button label={$t('common.cancel')} variant="ghost-strong" size="sm" onclick={close} data-testid="{testId}-cancel" />
+                <Button label={$t('assetPicker.confirm', {values: {count: checked.length}})} variant="primary" size="sm" disabled={checked.length === 0} onclick={confirm} data-testid="{testId}-confirm" />
             </div>
         {/snippet}
     </SelectPopover>
@@ -744,10 +745,14 @@
 
                 <!-- The caller's own action at the foot (RN-12: the transaction form's «New asset»), as SearchSelect's sticky footer. -->
                 {#if createLabel && onCreateNew}
-                    <button type="button" class="flex w-full shrink-0 items-center gap-2 border-t border-lf-subtle px-4 py-2.5 text-left text-sm text-lf-link transition-colors hover:bg-lf-selected" onclick={createNew} data-testid="{testId}-create-new">
-                        <Plus size={14} class="shrink-0" />
-                        <span class="truncate font-medium">{createLabel}</span>
-                    </button>
+                    <!-- On the recipe, not `Button` (85 BTN-2c): `Button` centres its word, and this row's word sits left and
+                         cuts. The word takes the free width (`flex-1`), so no `justify-*` fights the recipe's. -->
+                    <div class="shrink-0 border-t border-lf-subtle">
+                        <button type="button" class="{buttonClasses({variant: 'link', truncate: true})} w-full px-4 py-2.5" onclick={createNew} data-testid="{testId}-create-new">
+                            <Plus size={14} class="shrink-0" aria-hidden="true" />
+                            <span class="min-w-0 flex-1 truncate text-left">{createLabel}</span>
+                        </button>
+                    </div>
                 {/if}
             {/snippet}
         </SelectPopover>

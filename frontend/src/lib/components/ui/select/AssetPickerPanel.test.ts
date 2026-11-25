@@ -858,6 +858,19 @@ describe('AssetPickerPanel, mode="multi": the lab’s «+»', () => {
         expect(screen.queryByTestId(`${MULTI}-panel`)).toBeNull();
     });
 
+    // 85 BTN-2c: Cancel is a standard Button with a test id of its own; it closes and adds nothing, the checks dropped.
+    it('Cancel closes the panel and adds nothing', async () => {
+        const {onadd} = mountMulti();
+        const panel = await openMulti();
+        await fireEvent.click(multiRow(panel, 13));
+        expect(multiConfirm(panel), 'barrier: something is checked').not.toBeDisabled();
+        const cancel = within(panel).getByTestId(`${MULTI}-cancel`);
+        expect(cancel.tagName).toBe('BUTTON');
+        await fireEvent.click(cancel);
+        expect(screen.queryByTestId(`${MULTI}-panel`)).toBeNull();
+        expect(onadd).not.toHaveBeenCalled();
+    });
+
     it('confirms on Enter in the search, and does nothing on Enter with nothing checked', async () => {
         const {onadd} = mountMulti();
         const panel = await openMulti();
