@@ -46,6 +46,7 @@ import pytest
 
 from backend.app.services.financial_math.portfolio.allocation_view import (
     LIQUIDITY,
+    MATRIX_DIMENSIONS,
     AllocationDimension,
     AllocationFilters,
     AllocationView,
@@ -197,10 +198,11 @@ class TestTheIdentity:
         AllocationFilters(classes=frozenset({"STOCK", LIQUIDITY}), exclude_buckets=frozenset({"Unknown"})),
         AllocationFilters(exclude_asset_ids=frozenset({X}), exclude_buckets=frozenset({"Unknown", "Other"})),
         AllocationFilters(classes=frozenset()),
+        AllocationFilters(classes=frozenset({"BOND"}), types=frozenset({"ETF_STOCK"})),
     )
 
     @pytest.mark.parametrize("dimension", ALL_DIMENSIONS)
-    @pytest.mark.parametrize("filters", FILTERS, ids=lambda f: f"classes={sorted(f.classes) if f.classes is not None else None}-ex={sorted(f.exclude_buckets)}-assets={sorted(f.exclude_asset_ids)}")
+    @pytest.mark.parametrize("filters", FILTERS, ids=lambda f: f"classes={sorted(f.classes) if f.classes is not None else None}-types={sorted(f.types)}-ex={sorted(f.exclude_buckets)}-assets={sorted(f.exclude_asset_ids)}")
     def test_base_outside_excluded_is_the_nav_every_day(self, dimension, filters):
         for day in _days(date(2025, 4, 2), BOOK_TO):
             view = _view(_states_through(day), dimension, filters)
@@ -209,7 +211,7 @@ class TestTheIdentity:
             assert view.base == sum((item.amount for item in view.slices), ZERO)
             assert view.outside.amount == sum((row.amount for row in view.outside.by_class), ZERO)
 
-    @pytest.mark.parametrize("dimension", [d for d in ALL_DIMENSIONS if d is not AllocationDimension.ASSET])
+    @pytest.mark.parametrize("dimension", sorted(MATRIX_DIMENSIONS))
     def test_the_matrix_is_the_nav_whatever_the_filters(self, dimension):
         for day in (SECURITY_IN_TRANSIT, CASH_IN_TRANSIT, BOOK_TO):
             states = _states_through(day)
@@ -224,7 +226,7 @@ class TestTheIdentity:
         for filters in (AllocationFilters(), AllocationFilters(classes=frozenset())):
             view = _view(_states_through(SECURITY_IN_TRANSIT), dimension, filters)
             assert _unattributable(view)[UnattributableReason.IN_TRANSIT] == state.in_transit_asset_market_value, "always, whatever the class filter"
-        if dimension is not AllocationDimension.ASSET:
+        if dimension in MATRIX_DIMENSIONS:
             assert {row.reason: row.amount for row in view.matrix.unattributed}[UnattributableReason.IN_TRANSIT] == state.in_transit_asset_market_value
 
     def test_the_cash_in_transit_is_liquidity(self):
@@ -312,6 +314,46 @@ class TestTheFilters:
         assert [item.share_of_selection for item in view.slices] == [Decimal("66.67"), Decimal("33.33")]
         assert [item.share_of_portfolio for item in view.slices] == [Decimal("45.66"), Decimal("22.83")]
         assert view.base_share_of_portfolio == Decimal("68.49")
+
+    def test_a_class_kept_in_part_keeps_the_types_named(self):
+        """86, D-13: STOCK is not in ``classes``, its ETF_STOCK is in ``types``: the share stays outside, with its class."""
+        view = _hand_view(PORTFOLIO, AllocationDimension.TYPE, AllocationFilters(classes=frozenset({"BOND"}), types=frozenset({"ETF_STOCK"})))
+        assert _amounts(view) == {"ETF_STOCK": Decimal("1000"), "ETF_BOND": Decimal("300")}
+        assert {row.asset_class: row.amount for row in view.outside.by_class} == {"STOCK": Decimal("500"), "CRYPTO": Decimal("200"), LIQUIDITY: Decimal("150")}
+        assert view.portfolio_total == _sum_of_view(view)
+
+    def test_a_whole_class_takes_every_type_and_a_type_named_twice_counts_once(self):
+        whole = _hand_view(PORTFOLIO, AllocationDimension.SECTOR, AllocationFilters(classes=frozenset({"STOCK"})))
+        named = _hand_view(PORTFOLIO, AllocationDimension.SECTOR, AllocationFilters(classes=frozenset({"STOCK"}), types=frozenset({"ETF_STOCK", "STOCK"})))
+        assert named == whole
+
+    @pytest.mark.parametrize(
+        "filters",
+        [AllocationFilters(types=frozenset({"ETF_STOCK"})), AllocationFilters(classes=None, types=frozenset())],
+        ids=["every-class-and-a-type", "every-class"],
+    )
+    def test_with_every_class_the_types_say_nothing(self, filters):
+        assert _hand_view(PORTFOLIO, AllocationDimension.TYPE, filters) == _hand_view(PORTFOLIO, AllocationDimension.TYPE)
+
+    def test_a_type_the_scope_does_not_hold_has_no_effect(self):
+        view = _hand_view(PORTFOLIO, AllocationDimension.TYPE, AllocationFilters(classes=frozenset(), types=frozenset({"ETF_CRYPTO"})))
+        assert view.base == ZERO and view.slices == ()
+
+    def test_the_type_filter_holds_in_the_history_too(self):
+        filters = AllocationFilters(classes=frozenset(), types=frozenset({"ETF_STOCK"}))
+        view = _hand_view([PORTFOLIO], AllocationDimension.TYPE, filters, include_history=True)
+        assert {component["name"] for step in view.history for component in step["components"]} == {"ETF_STOCK"}
+
+    def test_the_classes_carry_their_types_and_the_amounts_add_up(self):
+        view = _hand_view(PORTFOLIO, AllocationDimension.SECTOR, AllocationFilters(classes=frozenset()))
+        types = {row.asset_class: [(item.asset_type, item.amount) for item in row.types] for row in view.classes}
+        assert types == {"STOCK": [("ETF_STOCK", Decimal("1000")), ("STOCK", Decimal("500"))], "BOND": [("ETF_BOND", Decimal("300"))], "CRYPTO": [("CRYPTO", Decimal("200"))], LIQUIDITY: []}
+        for row in view.classes:
+            assert not row.types or sum((item.amount for item in row.types), ZERO) == row.amount
+
+    def test_the_type_dimension_has_no_matrix(self):
+        """86, D-15: each type sits in one class, so the matrix would be one block per row."""
+        assert _hand_view(PORTFOLIO, AllocationDimension.TYPE).matrix is None
 
     def test_the_geography_has_no_liquidity(self):
         on = _hand_view(PORTFOLIO, AllocationDimension.GEOGRAPHY)
@@ -406,7 +448,7 @@ class TestTheFilters:
         geography = _hand_view(PORTFOLIO, AllocationDimension.GEOGRAPHY)
         assert LIQUIDITY not in geography.matrix.rows
         assert {row.reason: row.amount for row in geography.matrix.unattributed} == {UnattributableReason.NO_COUNTRY: Decimal("150"), UnattributableReason.IN_TRANSIT: Decimal("40")}
-        for view in (sector, geography, _hand_view(PORTFOLIO, AllocationDimension.TYPE)):
+        for view in (sector, geography):
             assert _sum_of_matrix(view) == PORTFOLIO.nav_value
         first = next(cell for cell in sector.matrix.cells if cell.key == "Technology")
         assert first.share_of_portfolio == Decimal("31.96")
@@ -439,7 +481,7 @@ class TestTheFilters:
         for dimension in ALL_DIMENSIONS:
             view = build_allocation_view([], asset_types={}, asset_classifications={}, dimension=dimension, include_history=True)
             assert (view.as_of, view.portfolio_total, view.base, view.slices, view.classes, view.history) == (None, ZERO, ZERO, (), (), [])
-            assert (view.matrix is None) is (dimension is AllocationDimension.ASSET)
+            assert (view.matrix is None) is (dimension not in MATRIX_DIMENSIONS)
 
     def test_liquidity_is_not_an_excludable_bucket(self):
         with pytest.raises(ValueError, match="not an excludable bucket"):

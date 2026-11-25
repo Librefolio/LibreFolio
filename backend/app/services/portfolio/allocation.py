@@ -42,6 +42,7 @@ class PortfolioAllocationMixin:
         dimension = AllocationDimension(query.dimension)
         filters = AllocationFilters(
             classes=frozenset(query.classes) if query.classes is not None else None,
+            types=frozenset(query.types),
             exclude_buckets=frozenset(query.exclude_buckets),
             exclude_asset_ids=frozenset(query.exclude_asset_ids),
         )
