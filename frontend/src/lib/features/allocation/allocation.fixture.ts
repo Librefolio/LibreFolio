@@ -36,9 +36,16 @@ export function makeView(overrides: Partial<AllocationResponse> = {}): Allocatio
             unattributable: [{reason: 'in_transit', amount: '0.00'}],
         },
         classes: [
-            {asset_class: 'STOCK', amount: '41000.00'},
-            {asset_class: 'BOND', amount: '22000.00'},
-            {asset_class: 'Liquidity', amount: '5000.00'},
+            {
+                asset_class: 'STOCK',
+                amount: '41000.00',
+                types: [
+                    {asset_type: 'ETF_STOCK', amount: '37000.00'},
+                    {asset_type: 'STOCK', amount: '4000.00'},
+                ],
+            },
+            {asset_class: 'BOND', amount: '22000.00', types: [{asset_type: 'BOND', amount: '22000.00'}]},
+            {asset_class: 'Liquidity', amount: '5000.00', types: []},
         ],
         assets: [
             {asset_id: 1, asset_class: 'STOCK', amount: '19600.00', name: 'World ETF', ticker: 'WRLD', asset_type: 'ETF_STOCK', icon_url: null},

@@ -4,6 +4,7 @@
   browse navigation. Svelte 5 runes.
 -->
 <script lang="ts">
+    import LinkBadge from '$lib/components/ui/display/LinkBadge.svelte';
     import {_ as t} from '$lib/i18n';
     import {ArrowLeft, ArrowRightLeft, ExternalLink} from 'lucide-svelte';
     import AssetBrowseNav from '$lib/features/assets/AssetBrowseNav.svelte';
@@ -86,11 +87,11 @@
                 </div>
                 <div class="flex items-center gap-2 flex-nowrap max-w-full min-w-0" data-testid="asset-detail-badges-where">
                     {#if (assetInfo.tx_count ?? 0) > 0}
-                        <a href={transactionsHref} data-testid="asset-detail-transactions-link" class="{badgeBase} border border-lf-focus text-lf-link hover:bg-lf-selected focus-visible:outline-lf-focus">
+                        <LinkBadge href={transactionsHref} testId="asset-detail-transactions-link">
                             <ArrowRightLeft size={12} />
                             {$t('transactions.title')}
                             <span class="font-bold" data-testid="asset-detail-transactions-count">{assetInfo.tx_count}</span>
-                        </a>
+                        </LinkBadge>
                     {/if}
 
                     <svelte:element

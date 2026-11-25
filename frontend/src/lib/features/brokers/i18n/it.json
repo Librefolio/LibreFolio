@@ -310,6 +310,11 @@
         "title": "{n, plural, one {# premio} other {# premi}}",
         "open": "Mostra i lotti dei premi",
         "close": "Nascondi i lotti dei premi"
+      },
+      "rewardEntry": {
+        "open": "Mostra i premi entrati in questo lotto",
+        "close": "Nascondi i premi entrati in questo lotto",
+        "units": "+{quantity} unità"
       }
     },
     "createdInSystem": "Creato nel Sistema",

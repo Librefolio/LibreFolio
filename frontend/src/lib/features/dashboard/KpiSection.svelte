@@ -165,6 +165,19 @@
             {emoji: '🔴', label: $_('dashboard.totalWithdrawn'), value: totalWithdrawnStr},
         ]),
     );
+    // The three kinds of income and their figures come from the backend and add up to the row: never sum the history here.
+    const incomeTooltipHtml = $derived.by(() => {
+        const rows = [
+            {emoji: '💰', label: $_('dashboard.incomeDividends'), amount: safeCurrency(summary?.period_dividends), testid: 'kpi-income-dividends'},
+            {emoji: '📈', label: $_('dashboard.incomeInterest'), amount: safeCurrency(summary?.period_interest), testid: 'kpi-income-interest'},
+            {emoji: '🎁', label: $_('dashboard.incomeRewards'), amount: safeCurrency(summary?.period_rewards), testid: 'kpi-income-rewards'},
+        ];
+        if (rows.every((row) => row.amount === null)) return undefined;
+        return tooltipRows(
+            $_('dashboard.incomeTooltip'),
+            rows.map(({emoji, label, amount, testid}) => ({emoji, label: escapeHtml(label), value: formatMoney(amount?.code, amount?.amount, {signed: true}), testid})),
+        );
+    });
     const feesTooltipHtml = $derived(
         tooltipRows($_('dashboard.feesAndTaxesTooltip', {values: {fees: '', taxes: ''}}).split('\n')[0], [
             {emoji: '🏦', label: $_('dashboard.feesLabel') || 'Commissions', value: feesOnlyStr},
@@ -303,7 +316,18 @@
                         valueColor={pnlValueColor(uglDeltaAmt)}
                     />
                     <KpiMetricBar label={$_('dashboard.realizedSales')} tooltip={$_('dashboard.realizedSalesTooltip')} value={realizedStr} numericValue={realizedAmt} formatValue={fmtMoney} barPct={pnlBarPct(realizedAmt)} barColor={pnlBarColor(realizedAmt)} valueColor={pnlValueColor(realizedAmt)} />
-                    <KpiMetricBar label={$_('dashboard.income')} tooltip={$_('dashboard.incomeTooltip')} value={incomeStr} numericValue={incomeAmt} formatValue={fmtMoney} barPct={pnlBarPct(incomeAmt)} barColor={SIGN_BAR.kpi.gain} valueColor={SIGN_TEXT.kpi.gain} />
+                    <KpiMetricBar
+                        testid="kpi-income"
+                        label={$_('dashboard.income')}
+                        tooltipHtml={incomeTooltipHtml}
+                        tooltip={incomeTooltipHtml ? undefined : $_('dashboard.incomeTooltip')}
+                        value={incomeStr}
+                        numericValue={incomeAmt}
+                        formatValue={fmtMoney}
+                        barPct={pnlBarPct(incomeAmt)}
+                        barColor={SIGN_BAR.kpi.gain}
+                        valueColor={SIGN_TEXT.kpi.gain}
+                    />
                     <KpiMetricBar label={$_('dashboard.feesAndTaxes')} tooltipHtml={feesTooltipHtml} value={feesStr} numericValue={feesAmt} formatValue={fmtMoney} barPct={pnlBarPct(feesAmt)} barColor={SIGN_BAR.kpi.loss} valueColor={SIGN_TEXT.kpi.loss} />
                 </div>
                 <p class="text-[10px] text-lf-muted mt-1 italic">{$_('dashboard.cashFlowAdjustedResult')}</p>
@@ -324,8 +348,9 @@
             <div class="h-7 w-3/4 bg-lf-neutral rounded animate-pulse"></div>
             <div class="h-3 w-1/2 bg-lf-panel rounded animate-pulse mt-2"></div>
         {:else}
-            <!-- Timing effect hero (no bar) -->
-            <div class="flex items-center justify-between">
+            <!-- Timing effect hero (no bar). From `md`, as tall as the other two cards' figure and the line under it (less the gap
+                 this card has and they do not), so the three lists of rows start on one line. -->
+            <div class="flex items-center justify-between md:min-h-[calc(1.5*clamp(0.95rem,8cqw,1.5rem)+0.5rem)]">
                 <Tooltip text={$_('dashboard.timingEffectTooltip')} position="top">
                     <div class="flex flex-col cursor-help">
                         <span class="text-[10px] text-lf-muted uppercase tracking-wide border-b border-dotted border-lf-input inline-block">{$_('dashboard.timingEffect')}</span>

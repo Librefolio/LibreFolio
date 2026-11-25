@@ -137,7 +137,7 @@ How to read it:
 
 - **New capital or reinvested.** A purchase first spends the returns already held as cash at that broker (**Reinvested**, green as in **Abs**); the rest is **New capital** (blue). Money moved to or from a broker outside the view changes that cash as a deposit or a withdrawal would, as in **Abs** above. Sales are never drawn.
 - **Signs are kept.** A negative correction on a past dividend shrinks the dividend bar; fees and taxes stay below zero.
-- **It matches the KPIs.** For the same dates and brokers, **Dividend** and **Interest** add up exactly to the **Dividends & interest** row of the [Period P&L card](kpi-cards.md#card-1-period-pl).
+- **It matches the KPIs.** For the same dates and brokers, **Dividend**, **Interest** and **Reward** add up exactly to the **Income** row of the [Period P&L card](kpi-cards.md#card-1-period-pl).
 - **One legend entry.** Both purchase zones are named **Purchase Cost**: one click hides both, and the **Abs** area of the same name too.
 - **Missing exchange rates.** An amount that cannot be converted on its date is left out, not counted as zero; the [Data Quality banner](index.md#data-quality-banner) reports it.
 
@@ -198,7 +198,7 @@ The **Asset Allocation** panel shows how your portfolio is split, today and over
 
 The panel remembers the view and the tab in this browser, for each user, and shares them with the broker pages.
 
-To look at only a part of your portfolio, with filters, a table and a class-by-dimension matrix, click **Analyze →** beside the panel's title: it opens the [Allocation tab](allocation.md).
+To look at only a part of your portfolio, with filters, a table and a class-by-dimension matrix, click the **Analyze** badge beside the panel's title: it opens the [Allocation tab](allocation.md).
 
 ### 🧩 By Asset {: #allocation-by-asset }
 

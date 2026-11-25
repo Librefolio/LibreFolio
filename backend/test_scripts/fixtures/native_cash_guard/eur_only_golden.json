@@ -7531,6 +7531,10 @@
           "amount": "0",
           "code": "EUR"
         },
+        "period_dividends": {
+          "amount": "11.34000000",
+          "code": "EUR"
+        },
         "period_fees": {
           "amount": "2.50000000",
           "code": "EUR"
@@ -7541,6 +7545,10 @@
         },
         "period_income": {
           "amount": "12.090000000",
+          "code": "EUR"
+        },
+        "period_interest": {
+          "amount": "0.750000000",
           "code": "EUR"
         },
         "period_market_value_start": {
@@ -7565,6 +7573,10 @@
         },
         "period_realized_gain_loss": {
           "amount": "26.97600000",
+          "code": "EUR"
+        },
+        "period_rewards": {
+          "amount": "0",
           "code": "EUR"
         },
         "period_taxes": {
@@ -8165,6 +8177,10 @@
         "amount": "0",
         "code": "EUR"
       },
+      "period_dividends": {
+        "amount": "11.34000000",
+        "code": "EUR"
+      },
       "period_fees": {
         "amount": "2.50000000",
         "code": "EUR"
@@ -8175,6 +8191,10 @@
       },
       "period_income": {
         "amount": "12.090000000",
+        "code": "EUR"
+      },
+      "period_interest": {
+        "amount": "0.750000000",
         "code": "EUR"
       },
       "period_market_value_start": {
@@ -8199,6 +8219,10 @@
       },
       "period_realized_gain_loss": {
         "amount": "26.97600000",
+        "code": "EUR"
+      },
+      "period_rewards": {
+        "amount": "0",
         "code": "EUR"
       },
       "period_taxes": {
@@ -11377,12 +11401,20 @@
           "amount": "14035.816000000",
           "code": "EUR"
         },
+        "period_dividends": {
+          "amount": "0",
+          "code": "EUR"
+        },
         "period_fees": null,
         "period_fees_taxes": {
           "amount": "0",
           "code": "EUR"
         },
         "period_income": {
+          "amount": "0",
+          "code": "EUR"
+        },
+        "period_interest": {
           "amount": "0",
           "code": "EUR"
         },
@@ -11407,6 +11439,10 @@
           "code": "EUR"
         },
         "period_realized_gain_loss": {
+          "amount": "0",
+          "code": "EUR"
+        },
+        "period_rewards": {
           "amount": "0",
           "code": "EUR"
         },
@@ -11962,12 +11998,20 @@
         "amount": "14035.816000000",
         "code": "EUR"
       },
+      "period_dividends": {
+        "amount": "0",
+        "code": "EUR"
+      },
       "period_fees": null,
       "period_fees_taxes": {
         "amount": "0",
         "code": "EUR"
       },
       "period_income": {
+        "amount": "0",
+        "code": "EUR"
+      },
+      "period_interest": {
         "amount": "0",
         "code": "EUR"
       },
@@ -11992,6 +12036,10 @@
         "code": "EUR"
       },
       "period_realized_gain_loss": {
+        "amount": "0",
+        "code": "EUR"
+      },
+      "period_rewards": {
         "amount": "0",
         "code": "EUR"
       },

@@ -64,11 +64,12 @@ export interface AllocationResponse {
         by_asset: Array<{asset_id: number; amount: string}>;
         unattributable: Array<{reason: 'in_transit' | 'no_country'; amount: string}>;
     };
-    classes: Array<{asset_class: string; amount: string}>;
+    /** The classes the scope holds, largest first, each with the asset types that make it up (none for the cash). */
+    classes: Array<{asset_class: string; amount: string; types: Array<{asset_type: string; amount: string}>}>;
     assets: AllocationScopeAsset[];
     /** The selection's history in steps, when it was asked (`include_history`); `null` otherwise. */
     history: AllocationHistoryStep[] | null;
-    /** Class × dimension of the WHOLE portfolio, whatever the filters; `null` in the asset dimension. */
+    /** Class × dimension of the WHOLE portfolio, whatever the filters; `null` in the type and asset dimensions. */
     matrix: AllocationMatrixView | null;
 }
 
@@ -151,7 +152,7 @@ export function normalizeAllocation(raw: RawAllocationResponse): AllocationRespo
             by_asset: raw.excluded.by_asset ?? [],
             unattributable: raw.excluded.unattributable ?? [],
         },
-        classes: raw.classes ?? [],
+        classes: (raw.classes ?? []).map((row) => ({asset_class: row.asset_class, amount: row.amount, types: row.types ?? []})),
         assets: (raw.assets ?? []).map((asset) => ({asset_id: asset.asset_id, asset_class: asset.asset_class, amount: asset.amount, name: asset.name, ticker: text(asset.ticker), asset_type: text(asset.asset_type), icon_url: text(asset.icon_url)})),
         matrix: normalizeMatrix(raw.matrix),
         history: Array.isArray(raw.history) && raw.history.every((step) => typeof step === 'object' && step !== null && !Array.isArray(step) && 'date' in step) ? normalizeHistory(raw.history as unknown as RawHistoryStep[]) : null,
@@ -179,7 +180,10 @@ export function buildAllocationQuery({scope, dimension, filters, includeHistory 
     if (scope.start || scope.end) body.date_range = {...(scope.start ? {start: scope.start} : {}), ...(scope.end ? {end: scope.end} : {})};
     if (scope.currency) body.target_currency = scope.currency;
     if (scope.fullShare) body.apply_ownership_share = false;
-    if (filters.classes !== null) body.classes = [...filters.classes];
+    if (filters.classes !== null) {
+        body.classes = [...filters.classes];
+        if (filters.types.length > 0) body.types = [...filters.types];
+    }
     if (filters.excludeBuckets.length > 0) body.exclude_buckets = [...filters.excludeBuckets];
     if (filters.excludeAssetIds.length > 0) body.exclude_asset_ids = [...filters.excludeAssetIds];
     if (includeHistory) body.include_history = true;

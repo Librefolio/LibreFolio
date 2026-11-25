@@ -9,7 +9,7 @@ The **Allocation** tab of the [Dashboard](index.md) answers one question: **wher
 - 🧩 **[The Class × dimension matrix](#matrix)** — where the selection sits in the whole portfolio
 - 📌 **[Good to know](#good-to-know)** — scope, privacy, what is remembered
 
-For the quick look at your allocation on the Overview tab, see the [Allocation Panel](charts.md#allocation-panel): its **Analyze →** link opens this tab.
+For the quick look at your allocation on the Overview tab, see the [Allocation Panel](charts.md#allocation-panel): its **Analyze** badge opens this tab.
 
 <div class="screenshot-container" style="max-width: 900px; margin: 1rem auto;">
     <img class="gallery-img" data-category="dashboard" data-name="allocation-tab" alt="The Allocation tab: the three boxes on top (Base of the 100%, Outside the filter, Excluded from the 100%), the filters beside the chart, the donut chart with the base in its middle, and the table of slices below" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
@@ -25,7 +25,7 @@ Every euro of your net worth lands in exactly one of three places, and the three
 |-----|---------------|
 | **Base of the 100%** | The part you are looking at: the amount that the chart and the table split into slices, with its share of the whole portfolio and a bar that draws it. |
 | **Outside the filter** | What your class filter leaves out: every asset of a class you switched off, and your cash when **Liquidity** is off, listed class by class. |
-| **Excluded from the 100%** | What you took out yourself (a whole asset, or the **Unclassified** or **Other** part of the slices) and two amounts LibreFolio cannot place in the current dimension, each with its reason. |
+| **Excluded from the 100%** | What you took out yourself (a whole asset, or the **No data** or **Other** part of the slices) and two amounts LibreFolio cannot place in the current dimension, each with its reason. |
 
 **Base + Outside the filter + Excluded from the 100% = your net worth** on the last day of the period, the same figure as the Net Worth [KPI card](kpi-cards.md). With no filter on, the base is the whole portfolio and the other two boxes say *Nothing*.
 
@@ -48,22 +48,29 @@ On a wide screen the filters are a column beside the chart; on a phone they open
 
 ### 🏷️ Classes {: #filters-classes }
 
-A **class** is what an asset *holds*, not the label it carries: an ETF of stocks counts as **Stocks**, a bond ETF as **Bonds**, and so on for commodities, real estate and crypto. An ETF with no declared content stays **ETF**, and your cash is **Liquidity**. Only the classes you hold in the period are listed, each with its amount on the last day and a switch; the count at the top says how many are on.
+A **class** is what an asset *holds*, not the label it carries: an ETF of stocks counts as **Stocks**, a bond ETF as **Bonds**, and so on for commodities, real estate and crypto. An ETF with no declared content stays under **ETFs**, and your cash is **Liquidity**. Only the classes you hold in the period are listed, each with its total on the last day and a switch; the count at the top says how many are kept.
 
-### ➖ Outside the 100% {: #filters-outside }
+**Two levels.** A class that holds more than one asset type opens on a click: under it, each type with its amount and its own switch — **Stocks** opens on *Stock ETF* and *Stock*, **Real estate assets** on *Real estate ETF* and *Real estate crowdfunding*.
 
-Switches that take a part of the slices out of the base, where the current dimension has it:
+- The switch of a **class** turns all its types on or off, and a class that is on also takes the types you will buy later.
+- With only some of its types on, the class is **mixed**: its switch rests in the middle, with a dash. One click from there turns all of it on.
 
-| Bucket | What it is | Where it exists |
-|--------|------------|-----------------|
-| **Unclassified** | The part with no declared sector, country or type | Sector, Area and Type |
-| **Other** | The «Other» sector of the data sources | Sector only |
+The same switch sits on the title of every panel, for everything the panel lists.
 
-The panel shows only the buckets that exist in the dimension you are looking at, and hides itself when there are none (the **Asset** dimension has neither). **Liquidity** is not here: it is a class, switched on and off with the others.
+### ❔ Unclassified {: #filters-outside }
+
+The part of the slices that says nothing about your portfolio. Everything is on at first; switch an entry off to take it out of the base, where the current dimension has it:
+
+| Entry | What it is | Where it exists |
+|-------|------------|-----------------|
+| **No data** | The source does not give the sector, the country or the type | Sector, Area and Type |
+| **Other** | The source itself says «Other» | Sector only |
+
+The panel shows only the entries that exist in the dimension you are looking at, and hides itself when there are none (the **Asset** dimension has neither). **Liquidity** is not here: it is a class, switched on and off with the others.
 
 ### 🔎 Included assets {: #filters-assets }
 
-Every asset of the classes that are on, each with a switch: switching one off takes the whole asset out of the base, and its value moves to **Excluded from the 100%**. Above 10 assets a search box lets you find one by name or ticker.
+Every asset of the types that are on, each with a switch: switching one off takes the whole asset out of the base, and its value moves to **Excluded from the 100%**. Above 10 assets a search box lets you find one by name or ticker, and the switch on the panel's title then acts on the assets it shows.
 
 **Remove filters** brings everything back. Your choices are remembered for each page: the Dashboard and every broker's page have their own, so a selection made on one broker never changes another. The first time you open a page it shows the whole portfolio.
 
@@ -109,16 +116,16 @@ What is excluded stays at the bottom, struck through and with no share: the asse
 
 ## 🧩 The Class × Dimension Matrix {: #matrix }
 
-Under the table, a grid with one row per class and one column per bucket of the dimension you chose above: **Sector**, **Area** or **Type**. There is no matrix for **Asset**, where each asset sits in one class only.
+Under the table, a grid with one row per class and one column per bucket of the dimension you chose above: **Sector** or **Area**. There is no matrix for **Type** and **Asset**, where each bucket sits in one class only.
 
 <div class="screenshot-container" style="max-width: 900px; margin: 1rem auto;">
     <img class="gallery-img" data-category="dashboard" data-name="allocation-matrix" alt="The Class by Sector matrix at the first opening: one row for each class, one column for each sector, every cell showing its share of the whole portfolio in a tint proportional to its weight, with the cells the selection keeps framed" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
 - Every cell is a **share of the whole portfolio**, whatever the filters say; a dot means the cell is empty. The tint only draws the weight of the cell next to the heaviest one.
-- The **framed cells** are the selection: the classes that are on, in the columns you did not take out. So you see where your selection sits in the whole.
+- The **framed cells** are the selection: the classes that are on, whole or in part, in the columns you did not take out. So you see where your selection sits in the whole.
 - **Click a cell** (or a class name) to keep only that class; click the same class again to bring every class back.
-- **Click the Unclassified or Other column** to take it out of the 100%, and click it again to put it back.
+- **Click the No data or Other column** to take it out of the 100%, and click it again to put it back.
 - What has no column — cash in the geography, securities in transit — is listed under the grid, so the grid and that line add up to your net worth.
 
 The matrix is shown under the table in both **Now** and **History**.
@@ -142,6 +149,6 @@ The matrix is shown under the table in both **Now** and **History**.
 ## 🔗 Related {: #related }
 
 - 📊 **[Dashboard](index.md)** — the other tabs, the date range, the currency and the broker filter
-- 🥧 **[Charts](charts.md#allocation-panel)** — the Allocation Panel of the Overview, with its **Analyze →** link
+- 🥧 **[Charts](charts.md#allocation-panel)** — the Allocation Panel of the Overview, with its **Analyze** badge
 - 🔍 **[Positions & Analysis](positions.md)** — the holdings behind the slices
 - 🏦 **[Brokers](../brokers/index.md)** — each broker's page, with its own Allocation tab

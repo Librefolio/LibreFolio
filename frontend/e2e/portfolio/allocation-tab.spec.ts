@@ -49,7 +49,7 @@ const PRIVACY_PLACEHOLDER = '•••';
 const PRIVACY_STORAGE_KEY = 'librefolio-privacy';
 
 /** What the first opening leaves out of the body: no class filter, no exclusion, no history. */
-const FILTER_KEYS = ['classes', 'exclude_buckets', 'exclude_asset_ids', 'include_history'];
+const FILTER_KEYS = ['classes', 'types', 'exclude_buckets', 'exclude_asset_ids', 'include_history'];
 
 type AllocationBody = {
     broker_ids?: number[];
@@ -58,6 +58,7 @@ type AllocationBody = {
     apply_ownership_share?: boolean;
     dimension?: string;
     classes?: string[];
+    types?: string[];
     exclude_buckets?: string[];
     exclude_asset_ids?: number[];
     include_history?: boolean;
@@ -73,7 +74,7 @@ type AllocationAnswer = {
     slices: Array<{key: string; asset_id: number | null; amount: string; assets: Array<{asset_id: number; amount: string}>}>;
     outside: {amount: string; by_class: Array<{asset_class: string; amount: string}>};
     excluded: {amount: string; by_bucket: Array<{key: string; amount: string}>; by_asset: Array<{asset_id: number; amount: string}>};
-    classes: Array<{asset_class: string; amount: string}>;
+    classes: Array<{asset_class: string; amount: string; types: Array<{asset_type: string; amount: string}>}>;
     assets: Array<{asset_id: number; asset_class: string; amount: string; name: string}>;
     matrix: AllocationMatrixAnswer | null;
     history: unknown[] | null;
@@ -94,7 +95,7 @@ interface Allocation {
 }
 
 type BrokerListItem = {id: number; name: string; user_role?: string | null; user_share_percentage?: string | number | null};
-type StoredFilters = {classes: string[] | null; excludeBuckets: string[]; excludeAssetIds: number[]};
+type StoredFilters = {classes: string[] | null; types: string[]; excludeBuckets: string[]; excludeAssetIds: number[]};
 
 // ---------------------------------------------------------------------------------------------------------------------------------
 // What the page asked, and what it was told
@@ -552,7 +553,7 @@ test.describe('«Allocazione» tab (lane 80, #89)', () => {
             const sinceClear = calls.length;
             await page.getByTestId(`${DASH}-filters-clear`).click();
             await answeredAfter(calls, sinceClear, isFirstOpening, '«Rimuovi filtri» never asked the first-opening question again');
-            await expect.poll(() => readStored(page, keys.dashboard), {message: 'the cleared filters were not stored as the first opening', timeout: PAGE_TIMEOUT}).toEqual({classes: null, excludeBuckets: [], excludeAssetIds: []});
+            await expect.poll(() => readStored(page, keys.dashboard), {message: 'the cleared filters were not stored as the first opening', timeout: PAGE_TIMEOUT}).toEqual({classes: null, types: [], excludeBuckets: [], excludeAssetIds: []});
             await expect(page.getByTestId(`${DASH}-filters-clear`), 'the link goes away with the last filter').toHaveCount(0);
             await expect(page.getByTestId(`${DASH}-filters-class-${dropped}`)).toHaveAttribute('data-on', 'true');
         } finally {
@@ -596,7 +597,7 @@ test.describe('«Allocazione» tab (lane 80, #89)', () => {
             // Exclude it.
             await openFilters(page, DASH);
             const toggle = page.getByTestId(`${DASH}-filters-bucket-${bucket}-switch`);
-            await expect(toggle, `precondition: ${bucket} is in the base`).toHaveAttribute('aria-checked', 'false');
+            await expect(toggle, `precondition: ${bucket} is in the base: its switch is on (86, D-14)`).toHaveAttribute('aria-checked', 'true');
             const since = calls.length;
             await toggle.click();
             const excluded = await answeredAfter(calls, since, (body) => body.dimension === dimension && sameSet(body.exclude_buckets, [bucket]), `excluding ${bucket} never asked with exclude_buckets`);
@@ -613,6 +614,7 @@ test.describe('«Allocazione» tab (lane 80, #89)', () => {
             await waitForSettled(tab, PAGE_TIMEOUT);
             // The excluded box: a row for the bucket in the DOM on every layout, drawn from `md` up (below it the boxes are one line).
             await expect(bucketRow).toHaveCount(1);
+            await expect(toggle).toHaveAttribute('aria-checked', 'false');
             if (await hasSideBoxes(page)) await expect(bucketRow).toBeVisible();
             await expect(tableRow(page, DASH, `excluded:bucket:${bucket}`)).toBeVisible();
             await expect.poll(async () => (await readStored(page, keys.dashboard))?.excludeBuckets ?? [], {message: 'the exclusion was not stored', timeout: PAGE_TIMEOUT}).toEqual([bucket]);
@@ -694,6 +696,55 @@ test.describe('«Allocazione» tab (lane 80, #89)', () => {
         }
     });
 
+    test('a class kept in part asks for its type beside the other classes, is mixed and remembered, and one click on it turns all of it on', async ({page}) => {
+        test.setTimeout(150_000);
+        const calls = recordAllocations(page);
+        await login(page, TEST_USER);
+        const keys = await userStorageKeys(page);
+        await forgetStored(page, [keys.dashboard]);
+        // The mock portfolio may hold one type per class: the largest class of the answer also lists a second type, which the backend does not know.
+        let added: {assetClass: string; type: string} | null = null;
+        await page.route(`**${ALLOCATION_PATH}`, async (route) => {
+            const response = await route.fetch();
+            const answer = (await response.json()) as AllocationAnswer;
+            const item = answer.classes.find((row) => row.types.length > 0);
+            if (item) {
+                added = {assetClass: item.asset_class, type: item.types[0].asset_type};
+                item.types.push({asset_type: 'ETF_TEST', amount: '0.00'});
+            }
+            await route.fulfill({response, json: answer});
+        });
+        try {
+            const tab = await openDashboardTab(page);
+            const first = await answeredAfter(calls, 0, isFirstOpening, 'the tab never asked the first-opening question');
+            await expect.poll(() => added, {message: 'no class of the answer lists a type'}).not.toBeNull();
+            const {assetClass, type} = added!;
+            await openFilters(page, DASH);
+            const row = page.getByTestId(`${DASH}-filters-class-${assetClass}`);
+            await expect(row).toHaveAttribute('data-state', 'on');
+            await page.getByTestId(`${DASH}-filters-class-${assetClass}-toggle`).click();
+            await expect(page.getByTestId(`${DASH}-filters-type-${type}`)).toBeVisible();
+
+            const since = calls.length;
+            await page.getByTestId(`${DASH}-filters-type-ETF_TEST-switch`).click();
+            const others = first.answer.classes.map((item) => item.asset_class).filter((item) => item !== assetClass);
+            const part = await answeredAfter(calls, since, (body) => sameSet(body.classes, others) && sameSet(body.types, [type]), 'a type switched off never asked for the others on their own');
+            expectNavIdentity(part.answer, 'a class in part');
+            await waitForSettled(tab, PAGE_TIMEOUT);
+            await expect(row).toHaveAttribute('data-state', 'mixed');
+            await expect(page.getByTestId(`${DASH}-filters-class-${assetClass}-switch`)).toHaveAttribute('aria-checked', 'mixed');
+            await expect(page.getByTestId(`${DASH}-filters-classes-all`)).toHaveAttribute('aria-checked', 'mixed');
+            await expect.poll(async () => (await readStored(page, keys.dashboard))?.types ?? [], {timeout: PAGE_TIMEOUT}).toEqual([type]);
+
+            const sinceAll = calls.length;
+            await page.getByTestId(`${DASH}-filters-class-${assetClass}-switch`).click();
+            await answeredAfter(calls, sinceAll, isFirstOpening, 'the class switch from mixed never asked for everything');
+            await expect(row).toHaveAttribute('data-state', 'on');
+        } finally {
+            await cleanUp(page, [keys.dashboard]);
+        }
+    });
+
     test('from Type to Asset and Sector the pie keeps nothing of the rings; the switches of the filters share one width and one right edge', async ({page}) => {
         test.setTimeout(120_000);
         const calls = recordAllocations(page);
@@ -739,7 +790,7 @@ test.describe('«Allocazione» tab (lane 80, #89)', () => {
             const button = page.getByTestId(`${DASH}-filters-button`);
             if (await button.count()) await button.click();
             await page.getByTestId(`${DASH}-filters-assets-toggle`).click();
-            const switches = page.getByTestId(`${DASH}-filters`).getByRole('switch');
+            const switches = page.getByTestId(`${DASH}-filters`).locator('[data-testid$="-switch"], [data-testid$="-all"]');
             await expect(switches.first()).toBeVisible();
             const boxes = await switches.evaluateAll((nodes) => nodes.map((node) => node.getBoundingClientRect()).map(({width, right}) => ({width, right: Math.round(right)})));
             expect(
@@ -852,7 +903,7 @@ test.describe('«Allocazione» tab (lane 80, #89)', () => {
         }
     });
 
-    test('the Class × dimension matrix follows the answer, a click on a cell keeps its class alone and a second click gives every class back, it follows the dimension and is gone in Asset', async ({page}) => {
+    test('the Class × dimension matrix follows the answer, a click on a cell keeps its class alone and a second click gives every class back, it follows the dimension and is gone in Type and Asset', async ({page}) => {
         test.setTimeout(240_000);
         const calls = recordAllocations(page);
         await login(page, TEST_USER);
@@ -938,8 +989,8 @@ test.describe('«Allocazione» tab (lane 80, #89)', () => {
             };
             let exclusionDone = await tryExclusion('sector', first.answer, sectorMatrix);
 
-            // 3. Area and Type: the matrix is in the dimension of the answer on screen, with its columns; in Asset it is gone.
-            for (const dimension of ['geography', 'type'] as const) {
+            // 3. Area: the matrix is in the dimension of the answer on screen, with its columns; in Type and Asset it is gone (86, D-15).
+            for (const dimension of ['geography'] as const) {
                 const sinceDimension = calls.length;
                 await chooseDimension(page, DASH, dimension);
                 const answered = await answeredAfter(calls, sinceDimension, (body) => body.dimension === dimension && !('include_history' in body), `choosing ${dimension} never asked with that dimension`);
@@ -954,14 +1005,16 @@ test.describe('«Allocazione» tab (lane 80, #89)', () => {
             // Part 4 is required, as the bucket case of the Dashboard test above: the data must offer an excludable bucket (Unknown, Other) as a column.
             if (!exclusionDone) throw new Error('No dimension of the Dashboard answer has an excludable bucket (Unknown, Other) among its matrix columns: seed an asset with no sector, country or type in backend/test_scripts/test_db/populate_mock_data.py.');
 
-            const sinceAsset = calls.length;
-            await chooseDimension(page, DASH, 'asset');
-            const asset = await answeredAfter(calls, sinceAsset, (body) => body.dimension === 'asset' && !('include_history' in body), 'choosing Asset never asked with dimension asset');
-            expect(asset.answer.matrix ?? null, 'the asset answer carries a matrix').toBeNull();
-            await expect(results).toHaveAttribute('data-dimension', 'asset', {timeout: PAGE_TIMEOUT});
-            await expect(page.getByTestId(`${DASH}-results-center`), 'the asset pie is not drawn yet').toBeVisible({timeout: PAGE_TIMEOUT});
-            await waitForSettled(tab, PAGE_TIMEOUT);
-            await expect(page.getByTestId(MATRIX), 'the matrix is still on screen in the asset dimension').toHaveCount(0);
+            for (const dimension of ['type', 'asset'] as const) {
+                const sinceDimension = calls.length;
+                await chooseDimension(page, DASH, dimension);
+                const answered = await answeredAfter(calls, sinceDimension, (body) => body.dimension === dimension && !('include_history' in body), `choosing ${dimension} never asked with that dimension`);
+                expect(answered.answer.matrix ?? null, `the ${dimension} answer carries a matrix`).toBeNull();
+                await expect(results).toHaveAttribute('data-dimension', dimension, {timeout: PAGE_TIMEOUT});
+                await expect(page.getByTestId(`${DASH}-results-center`), `the ${dimension} pie is not drawn yet`).toBeVisible({timeout: PAGE_TIMEOUT});
+                await waitForSettled(tab, PAGE_TIMEOUT);
+                await expect(page.getByTestId(MATRIX), `the matrix is still on screen in the ${dimension} dimension`).toHaveCount(0);
+            }
         } finally {
             await cleanUp(page, [keys.dashboard]);
         }

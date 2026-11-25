@@ -29,8 +29,8 @@
     "unrealizedDeltaTooltip": "Variazione del guadagno/perdita latente sulle posizioni ancora aperte.",
     "realizedSales": "Vendite",
     "realizedSalesTooltip": "Guadagno o perdita realizzata dalle vendite nel periodo, e dai titoli ceduti a un costo (per esempio a un broker che LibreFolio non segue), calcolata rispetto al costo medio di carico.",
-    "income": "Dividendi e interessi",
-    "incomeTooltip": "Proventi incassati nel periodo da dividendi, interessi o cedole.",
+    "income": "Proventi",
+    "incomeTooltip": "Quello che i tuoi asset e la tua liquidità ti hanno pagato nel periodo, in contanti o in unità:",
     "feesAndTaxes": "Costi e imposte",
     "feesLabel": "Commissioni",
     "taxesLabel": "Imposte",
@@ -187,6 +187,9 @@
       "allocation": "Come è suddiviso il portafoglio — per tipo, settore, paese o asset — oggi, o nel tempo.",
       "positions": "Cosa possiedi e quanto ha reso ogni posizione nel periodo, raggruppato per asset o per broker, in tabella o in mappa."
     },
-    "analyzeAllocation": "Analizza →"
+    "analyzeAllocation": "Analizza",
+    "incomeDividends": "Dividendi",
+    "incomeInterest": "Interessi",
+    "incomeRewards": "Premi"
   }
 }

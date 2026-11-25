@@ -452,6 +452,7 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/components/ui/input/passwordFields.gate.test.ts",
             "src/lib/components/ui/input/PasswordStrength.test.ts",
             "src/lib/components/ui/input/Switch.test.ts",
+            "src/lib/components/ui/display/LinkBadge.test.ts",
             "src/lib/features/allocation/allocationFilters.test.ts",
             "src/lib/features/allocation/allocationQuery.test.ts",
             "src/lib/features/allocation/allocationController.test.ts",

@@ -132,7 +132,7 @@ test.describe('Dashboard charts and view matrix', () => {
     });
 
     for (const width of [768, 1440]) {
-        test(`The rows of the Net Worth card start on the line of the period P&L card's, at ${width} px`, async ({page}) => {
+        test(`The rows of the three KPI cards start on one line, at ${width} px`, async ({page}) => {
             await page.setViewportSize({width, height: 900});
             await page.goto('/dashboard');
             await expect(page.getByTestId('dashboard-page')).toHaveAttribute('data-busy', 'false', {timeout: 30_000});
@@ -141,7 +141,7 @@ test.describe('Dashboard charts and view matrix', () => {
 
             const top = async (card: string) => (await page.getByTestId(card).getByTestId('kpi-rows').boundingBox())!.y;
             const tops = {pnl: await top('kpi-period-pnl'), returns: await top('kpi-returns'), netWorth: await top('kpi-net-worth')};
-            expect(Math.abs(tops.netWorth - tops.pnl), JSON.stringify(tops)).toBeLessThanOrEqual(1);
+            expect(Math.max(...Object.values(tops)) - Math.min(...Object.values(tops)), JSON.stringify(tops)).toBeLessThanOrEqual(1);
         });
     }
 
