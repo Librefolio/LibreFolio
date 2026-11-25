@@ -129,6 +129,12 @@
          */
         opensPage?: (row: T) => boolean;
         /**
+         * Optional (66 TL-4): the rows a selected id is read from, when a selected row can be out of `data` and still
+         * count (a closed group's ticked charges in the Bulk, which keep their tick as a row of another page does).
+         * Absent: `data`.
+         */
+        selectionData?: readonly T[];
+        /**
          * 77 SEL-A: the table draws its `bulkActions` itself, through the rule of `resolveSelectionAction` (hidden, off
          * with its reason, or on, always with the number of rows each one takes). The bar sits at the top of the table,
          * with a hint while nothing is selected; the actions come down into the dock at the bottom — above the
@@ -200,6 +206,7 @@
         alwaysShowPagination = false,
         footerCells,
         opensPage,
+        selectionData,
         selectionPanel = false,
         selectionHint,
         selectionHead,
@@ -466,7 +473,7 @@
     let selectedRows = $derived(
         Object.keys(rowSelection)
             .filter((id) => rowSelection[id])
-            .map((id) => data.find((row) => getRowId(row) === id))
+            .map((id) => (selectionData ?? data).find((row) => getRowId(row) === id))
             .filter((r): r is T => r !== undefined),
     );
 
