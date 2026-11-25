@@ -81,17 +81,17 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 - **Reequilibrador de cartera**, una nueva herramienta en la página Herramientas: lleva una cartera que ya tienes de vuelta hacia sus pesos objetivo. No envía órdenes.
   - **De dónde parte:** de las posiciones que LibreFolio registra en cada bróker. Puedes cambiar una cantidad para simular otra cartera; LibreFolio no se modifica. En una cuenta compartida con otros, el bróker muestra tu cuota como insignia con tu rol, como en la página del bróker.
   - **Brókeres:** un bróker donde tienes posiciones pero no operas cuenta como «solo posiciones», y «Añadir al plan» permite que el plan opere también allí.
-  - **Objetivos:** en porcentaje de toda la cartera, efectivo incluido. El efectivo de un bróker en una divisa puede ser una fila propia («Añadir efectivo»); el resto es «Otro efectivo», al 0 %, mostrado cuando hoy vale algo. La columna «Ahora» muestra el peso actual de cada fila.
+  - **Objetivos:** en porcentaje de toda la cartera, efectivo incluido. El efectivo de un bróker en una divisa puede ser una fila propia («Añadir efectivo»); el resto no tiene fila: el plan lo cuenta, y el resultado lo muestra como «Liquidez sin objetivo». La columna «Ahora» muestra el peso actual de cada fila.
   - **Estrategia:** «Solo invertir» usa el efectivo para comprar lo que está por debajo del objetivo y no vende nada; «Invertir y vender» aparece como próximamente.
   - **Fidelidad al objetivo:** «Atento a los costes», «Equilibrado», «Fiel al objetivo», «El objetivo ante todo» o «Personalizada». Fija cuánto aceptas gastar en comisiones para devolver el dinero al objetivo, y la tabla «Coste máximo aceptable» muestra esa cifra para cada suma mal colocada.
   - **Resultado:**
     - el plan en el orden en que ejecutarlo: primero los depósitos, las transferencias entre brókeres y los cambios de divisa, después las compras en cada bróker;
     - la tabla «Asignación por partida»: hoy, objetivo y después del plan, con tus límites;
-    - las cifras clave: «Vale hoy», «Valdrá después», «Dinero perdido», y la «Distancia máxima al objetivo» con la partida a la que pertenece;
+    - las cifras clave: «Vale hoy», «Valdrá después», «Queda en liquidez» (todo el efectivo al final, con una línea por divisa: al inicio → al final), «Costes y comisiones», y la «Distancia máxima al objetivo» con la partida a la que pertenece;
     - las exposiciones por tipo de activo, sector y país — hoy, después del plan y tu objetivo — sobre toda la cartera, efectivo incluido; los países también en dos mapas del mundo, tu objetivo y después del plan.
   - **Qué tan seguro es el plan:** la búsqueda se ejecuta tres veces, y un plan se demuestra el mejor solo cuando una segunda búsqueda lo confirma. Un plan no demostrado se presenta como un óptimo local, con su margen cuando las búsquedas lo dan: el mejor plan posible debería ser como mucho esa cantidad mejor.
   - **Cada búsqueda tiene sus 30 s.** En un servidor con tres o más CPU utilizables las tres búsquedas se ejecutan a la vez. Con una o dos se ejecutan por turnos, cada una con sus 30 s completos, así que el cálculo puede tardar hasta unos 1 minuto 45 s con una CPU y 1 minuto 10 s con dos; el panel de espera muestra ese límite más largo (135 s con una CPU, 100 s con dos). El cálculo informa de cada paso, así que su conexión nunca queda mucho tiempo en silencio; detrás de Nginx, la página del administrador sobre proxies inversos sugiere también `proxy_read_timeout 150s;` como margen.
-- **El perfil operativo de un bróker**, en la ventana del bróker. Reúne cómo toma las órdenes (por número de unidades o por importe, con su incremento) y sus comisiones de compra y de venta (mínimo, porcentaje, máximo, parte fija), divisa por divisa, además de cómo convierte la divisa y su régimen fiscal («Administrado» o «Declarativo»).
+- **El perfil operativo de un bróker**, en la ventana del bróker. Reúne cómo toma las órdenes (por número de unidades o por importe, con su incremento) y sus comisiones de compra y de venta (mínimo, porcentaje, máximo, parte fija), divisa por divisa, además de cómo convierte la divisa («El bróker convierte cuando compras» por defecto, o «Conviertes tú antes de comprar») y su régimen fiscal («Administrado» o «Declarativo»).
   - Las herramientas lo copian en un plan, donde todavía puedes cambiarlo.
   - «Guardar en el bróker», en el editor del bróker del planificador, lleva tus cambios al bróker tras una confirmación que los enumera.
   - API: leer y modificar un bróker llevan `operating_profile`.
@@ -170,6 +170,7 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 - En la página Herramientas, el título de una herramienta pasa a la línea siguiente entre palabras, y el enlace a la documentación queda a su lado, como icono.
 - **AI Export: «Notas para la IA» pasa a ser «Tu pregunta».** Lo que escribes ahí es la pregunta que la IA responde primero, en cada análisis.
 - **AI Export cuenta solo los brókeres que posees.** Las exportaciones de activo y de divisa, y una exportación sin filtro de brókeres, leen los brókeres que posees, cada uno a tu cuota, como el Dashboard; los brókeres compartidos contigo quedan fuera. La comparación de un bróker lo mide frente a tus propios brókeres. Si no posees ningún bróker, los análisis que leen posiciones o exposición lo dicen, y los de solo mercado siguen disponibles.
+- **Asignador PAC, el resultado**: bajo «No invertido» una línea por divisa muestra el efectivo al inicio → al final; «Costes» ahora se llama «Costes y comisiones»; las exposiciones se disponen como en el Reequilibrador, tipos y sectores lado a lado, y luego los países con sus dos mapas primero.
 
 ### 🐛 Corregido
 

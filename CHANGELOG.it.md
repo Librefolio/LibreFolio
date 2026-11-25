@@ -81,17 +81,17 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 - **Ribilanciatore**, un nuovo strumento nella pagina Strumenti: riporta un portafoglio che possiedi già verso i suoi pesi obiettivo. Non invia ordini.
   - **Da dove parte:** dalle posizioni che LibreFolio registra presso ogni Broker. Puoi cambiare una quantità per simulare un altro portafoglio; LibreFolio non viene modificato. Su un conto condiviso con altri, il Broker mostra la tua quota come badge con il tuo ruolo, come nella pagina del broker.
   - **Broker:** un Broker dove hai posizioni ma non operi conta come «solo posizioni», e «Aggiungi al piano» permette al piano di operare anche lì.
-  - **Obiettivi:** in percentuale del portafoglio intero, cassa compresa. La cassa di un Broker in una valuta può essere una riga a sé («Aggiungi una cassa»); il resto è «Altra cassa», allo 0 %, mostrata quando oggi vale qualcosa. La colonna «Ora» mostra il peso di oggi di ogni riga.
+  - **Obiettivi:** in percentuale del portafoglio intero, cassa compresa. La cassa di un Broker in una valuta può essere una riga a sé («Aggiungi una cassa»); il resto non ha una riga: il piano la conta, e il risultato la mostra come «Cassa senza obiettivo». La colonna «Ora» mostra il peso di oggi di ogni riga.
   - **Strategia:** «Investi soltanto» usa la cassa per comprare ciò che è sotto obiettivo e non vende nulla; «Investi e vendi» è indicato come in arrivo.
   - **Fedeltà al target:** «Attento ai costi», «Bilanciato», «Fedele al target», «Target prima di tutto» o «Personalizzata». Dice quanto accetti di spendere in commissioni per rimettere i soldi sull'obiettivo, e la tabella «Costo massimo accettabile» mostra quella cifra per ogni somma nel posto sbagliato.
   - **Risultato:**
     - il piano nell'ordine in cui eseguirlo: prima versamenti, trasferimenti tra Broker e cambi di valuta, poi gli acquisti presso ogni Broker;
     - la tabella «Allocazione per voce»: oggi, obiettivo e dopo il piano, con i tuoi limiti;
-    - i numeri chiave: «Vale oggi», «Varrà dopo», «Soldi persi», e la «Distanza massima dall'obiettivo» con la voce a cui appartiene;
+    - i numeri chiave: «Vale oggi», «Varrà dopo», «Rimasto in cassa» (tutta la cassa alla fine, con una riga per valuta: all'inizio → alla fine), «Costi e commissioni», e la «Distanza massima dall'obiettivo» con la voce a cui appartiene;
     - le esposizioni per tipo di asset, settore e paese — oggi, dopo il piano e il tuo obiettivo — sul portafoglio intero, cassa compresa; i paesi anche su due mappe del mondo, il tuo obiettivo e dopo il piano.
   - **Quanto è sicuro il piano:** la ricerca gira tre volte, e un piano è dimostrato il migliore solo quando una seconda ricerca lo conferma. Un piano non dimostrato mostra il suo margine quando le ricerche ne danno uno: «Ottimo locale (entro …)», e il piano migliore possibile dovrebbe essere al massimo di tanto migliore.
   - **Ogni ricerca ha i suoi 30 s.** Su un server con tre o più CPU utilizzabili le tre ricerche girano insieme. Con una o due girano a turno, ognuna con i suoi 30 s interi, quindi il calcolo può durare fino a circa 1 minuto e 45 s con una CPU e 1 minuto e 10 s con due; il pannello d'attesa mostra quel limite più lungo (135 s con una CPU, 100 s con due). Il calcolo segnala ogni passo, quindi la sua connessione non resta mai a lungo in silenzio; dietro Nginx, la pagina dell'amministratore sui reverse proxy ora suggerisce anche `proxy_read_timeout 150s;` come margine.
-- **Il profilo operativo di un broker**, nella finestra del broker. Raccoglie come il broker prende gli ordini (per numero di quote o per importo, con il suo incremento) e le sue commissioni di acquisto e di vendita (minimo, percentuale, massimo, parte fissa), valuta per valuta, oltre a come converte la valuta e il suo regime fiscale («Amministrato» o «Dichiarativo»).
+- **Il profilo operativo di un broker**, nella finestra del broker. Raccoglie come il broker prende gli ordini (per numero di quote o per importo, con il suo incremento) e le sue commissioni di acquisto e di vendita (minimo, percentuale, massimo, parte fissa), valuta per valuta, oltre a come converte la valuta («Converte il Broker quando compri» di default, oppure «Converti tu prima di comprare») e il suo regime fiscale («Amministrato» o «Dichiarativo»).
   - Gli strumenti lo copiano in un piano, dove puoi ancora cambiarlo.
   - «Salva nel broker», nell'editor del Broker del pianificatore, riporta le tue modifiche nel broker dopo una conferma che le elenca.
   - API: la lettura e la modifica di un broker portano `operating_profile`.
@@ -170,6 +170,7 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 - Nella pagina Strumenti il titolo di uno strumento va a capo tra le parole, e il link alla documentazione resta accanto, come icona.
 - **AI Export: «Note per l'AI» diventa «La tua domanda».** Quello che scrivi lì è la domanda a cui l'AI risponde per prima, in ogni analisi.
 - **L'AI Export conta solo i broker che possiedi.** Gli export di asset e cambi, e un export senza filtro sui broker, leggono i broker che possiedi, ciascuno alla tua quota, come la Dashboard; i broker condivisi con te restano fuori. Il confronto di un broker lo misura sui tuoi broker. Se non possiedi nessun broker, le analisi che leggono posizioni o esposizione lo dicono, e quelle di solo mercato restano disponibili.
+- **Allocatore PAC, il risultato**: sotto «Non investito» una riga per valuta mostra la cassa all'inizio → alla fine; «Costi» ora si chiama «Costi e commissioni»; le esposizioni sono disposte come nel Ribilanciatore, tipi e settori affiancati, poi i paesi con prima le due mappe.
 
 ### 🐛 Corretto
 

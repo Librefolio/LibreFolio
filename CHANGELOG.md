@@ -81,17 +81,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Portfolio rebalancer**, a new tool on the Tools page: it brings a portfolio you already hold back towards its target weights. It places no orders.
   - **Where it starts:** the positions LibreFolio records at each Broker. You can change a quantity to simulate another portfolio; LibreFolio is not changed. On an account shared with others, the Broker shows your share as a badge with your role, as on the broker page.
   - **Brokers:** a Broker where you hold positions but do not trade counts as «positions only», and «Add to the plan» lets the plan trade there too.
-  - **Targets:** in percent of the whole portfolio, cash included. A Broker's cash in one currency can be a row of its own («Add a cash entry»); the rest is «Other cash», at 0 %, shown when it is worth something today. The «Now» column shows each row's weight today.
+  - **Targets:** in percent of the whole portfolio, cash included. A Broker's cash in one currency can be a row of its own («Add a cash entry»); the rest has no row: the plan counts it, and the result shows it as «Cash with no target». The «Now» column shows each row's weight today.
   - **Strategy:** «Invest only» uses the cash to buy what is below target and sells nothing; «Invest and sell» is shown as coming soon.
   - **Target fidelity:** «Cost-aware», «Balanced», «Faithful to the target», «Target first» or «Custom». It sets how much you accept to spend in fees to put money back on target, and the «Maximum acceptable cost» table shows that amount for each sum of money in the wrong place.
   - **Result:**
     - the plan in the order to carry it out: deposits, transfers between Brokers and currency exchanges first, then the purchases at each Broker;
     - the «Allocation per entry» table: today, target and after the plan, with your limits;
-    - the key figures: «Worth today», «Worth after», «Money lost», and the «Largest gap from target» with the entry it belongs to;
+    - the key figures: «Worth today», «Worth after», «Left in cash» (all the cash at the end, with one line per currency: at the start → at the end), «Costs and fees», and the «Largest gap from target» with the entry it belongs to;
     - the exposures by asset type, sector and country — today, after the plan and your target — on the whole portfolio, cash included; the countries also on two world maps, your target and after the plan.
   - **How sure the plan is:** the search runs three times, and a plan is proven the best only when a second search confirms it. A plan not proven shows its margin when the searches give one: «Local optimum (within …)», and the best possible plan should be at most that much better.
   - **Each search has its own 30 s.** On a server with three or more usable CPUs the three searches run at once. With one or two, they run in turns, each with its whole 30 s, so the calculation can take up to about 1 minute 45 s on one CPU and 1 minute 10 s on two; the waiting panel shows that longer limit (135 s on one CPU, 100 s on two). The calculation reports each step, so its connection never stays silent for long; behind Nginx, the administrator's page on reverse proxies now also suggests `proxy_read_timeout 150s;` as a margin.
-- **A broker's operating profile**, in the broker window. It holds how the broker takes orders (by number of units or by amount, with its increment) and its purchase and sale fees (minimum, percentage, maximum, fixed part), currency by currency, plus how it converts currency and its tax regime («Administered» or «Declarative»).
+- **A broker's operating profile**, in the broker window. It holds how the broker takes orders (by number of units or by amount, with its increment) and its purchase and sale fees (minimum, percentage, maximum, fixed part), currency by currency, plus how it converts currency («The Broker converts when you buy» by default, or «You convert before buying») and its tax regime («Administered» or «Declarative»).
   - The tools copy it into a plan, where you can still change it.
   - «Save to the broker», in the planner's Broker editor, writes your changes back to the broker after a confirmation that lists them.
   - API: reading and updating a broker carry `operating_profile`.
@@ -170,6 +170,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - On the Tools page, a tool's title wraps between words, and the documentation link stays beside it, as an icon.
 - **AI Export: «Notes for the AI» becomes «Your question».** What you write there is the question the AI answers first, in every analysis.
 - **AI Export counts only the brokers you own.** Asset and currency exports, and an export with no broker filter, read the brokers you own, each at your share, as the Dashboard does; brokers shared with you are left out. The broker comparison measures a broker against your own brokers. If you own no broker, the analyses that read positions or exposure say so, and the market-only ones stay available.
+- **PAC allocator, the result**: under «Not invested» one line per currency shows the cash at the start → at the end; «Costs» is now «Costs and fees»; the exposures are laid out as in the Rebalancer, types and sectors side by side, then the countries with their two maps first.
 
 ### 🐛 Fixed
 
