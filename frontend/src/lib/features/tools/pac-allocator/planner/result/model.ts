@@ -419,6 +419,15 @@ export function planSteps(funding: readonly PlannerFundingAction[], conversions:
     return steps.sort((a, b) => a.sequence - b.sequence);
 }
 
+/**
+ * The count beside «Operational plan» (TL-8 of project 67, the developer's answer of 23/11): every numbered step — deposits,
+ * the exchanges you make, the Rebalancer's transfers — and every order, the same rule in both Tools. An exchange the Broker
+ * makes by itself is no step (`planSteps`). The «Orders» key figure still counts the orders alone.
+ */
+export function planStepCount(solution: {funding_actions: readonly PlannerFundingAction[]; conversions: readonly PlannerConversion[]; order_rows: readonly unknown[]}): number {
+    return planSteps(solution.funding_actions, solution.conversions, planTransfers(solution)).length + solution.order_rows.length;
+}
+
 /** The lists a plan is made of; `transfers` only in the Rebalancer's. */
 export interface PlanLists {
     funding_actions: readonly unknown[];

@@ -24,7 +24,7 @@
     import StaleBanner from './StaleBanner.svelte';
     import StateNotice from './StateNotice.svelte';
     import ToolErrorPanel from './ToolErrorPanel.svelte';
-    import {hasPlanSteps, isReady, limitedEntries, notesBesideLimitsBanner, planLookup, planSteps, planTransfers, resultNames} from './model';
+    import {hasPlanSteps, isReady, limitedEntries, notesBesideLimitsBanner, planLookup, planStepCount, resultNames} from './model';
     import {getPlannerProfile, domId, testId} from '../profile';
 
     /** Read once, while the component is created: the Tool's profile (F1 of project 67), the PAC's when none is set. */
@@ -55,11 +55,10 @@
     /** The entries with a limit (F2, M20): the banner of a `ready_infeasible` result lists them. */
     const limits = $derived(limitedEntries(outcome.built.resolved));
     const notes = $derived(ready ? presentIssues(notesBesideLimitsBanner(ready, limits), draft, outcome.built.ids, profile.text).map(listIssue) : []);
-    const orderCount = $derived(solution ? solution.order_rows.length : 0);
     // A plan of transfers only, or conversions only, is still a plan (contract §6.3).
     const hasPlan = $derived(solution !== null && hasPlanSteps(solution));
-    // The section counts the orders in the PAC (unchanged), every step in the Rebalancer: its transfers and exchanges are steps too.
-    const planCount = $derived(solution && profile.text === 'rebalancer' ? planSteps(solution.funding_actions, solution.conversions, planTransfers(solution)).length + orderCount : orderCount);
+    // Every numbered step and every order, in both Tools (TL-8 of project 67): `planStepCount`.
+    const planCount = $derived(solution ? planStepCount(solution) : 0);
     const sections = $derived(solution ? ['allocation', ...(hasPlan ? ['plan'] : []), 'exposures', 'ledger', 'proof'] : ['proof']);
     /** R9.8: the allocation and the operational plan open, the rest on request. */
     const OPEN_BY_DEFAULT = new Set(['allocation', 'plan']);
