@@ -1,7 +1,7 @@
 <!--
   AllocationMatrix — Class × dimension of the WHOLE portfolio (lane 80, F4): one row per class, one column per bucket of the
-  dimension chosen above (Area, Sector, Type), each cell the share of the portfolio the backend gave it. It does not move with the
-  filters: the framed cells are what the filters keep (the class is on and the column is not taken out of the 100 %), so the user sees
+  dimension chosen above (Area, Sector), each cell the share of the portfolio the backend gave it. It does not move with the
+  filters: the framed cells are what the filters keep (the class is on, whole or in part, and the column is not taken out of the 100 %), so the user sees
   where the selection sits in the whole.
 
   - A click on a cell keeps only its class (and a click on that class again goes back to every class); a click on the class's name
@@ -10,7 +10,7 @@
     percentages: shown whatever the privacy toggle says. The amount is in the tooltip and masked with it.
   - What has no column (the cash in the geography, the securities in transit) is listed under the table with its reason, so the
     table and that line add up to the net worth.
-  - Nothing is drawn in the asset dimension (the answer has no matrix there) and when no class is held.
+  - Nothing is drawn in the type and asset dimensions (the answer has no matrix there: a type or an asset sits in one class only) and when no class is held.
 
   Test ids: `{testId}` (root), `-class-{CLASS}` (the class's name), `-col-{bucket}` (a column header), `-cell-{CLASS}-{bucket}`
   (`data-selected`, `data-share`), `-unattributed`.
@@ -21,10 +21,10 @@
     import {formatPercent} from '$lib/utils/core/formatPercent';
     import {ensureCountriesLoaded, getCountryInfo} from '$lib/stores/reference/countryStore';
     import {ensureSectorsLoaded, getSectorEmoji, sectorEmojiVersion} from '$lib/stores/reference/sectorStore';
-    import {focusClass, isClassOn, setBucketExcluded, type AllocationFilters, type ExcludableBucket} from './allocationFilters';
+    import {classState, focusClass, setBucketExcluded, type AllocationFilters, type ExcludableBucket} from './allocationFilters';
     import type {AllocationResponse} from './allocationQuery';
     import {assetNamesOf, matrixModel} from './allocationView';
-    import {classHint, classLabel, sliceLabel, type RowLabel, type Translate} from './allocationLabels';
+    import {classLabel, sliceLabel, type RowLabel, type Translate} from './allocationLabels';
     import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
 
     interface Props {
@@ -43,7 +43,7 @@
     const sectorVersion = $derived(sectorEmojiVersion());
 
     const t = (key: string, options?: Parameters<Translate>[1]) => $_(key, options as never);
-    const model = $derived(matrixModel(view, (assetClass) => isClassOn(filters, assetClass), new Set(filters.excludeBuckets)));
+    const model = $derived(matrixModel(view, (assetClass) => classState(filters, view.classes.find((item) => item.asset_class === assetClass) ?? {asset_class: assetClass, types: []}) !== 'off', new Set(filters.excludeBuckets)));
     const excludable = $derived(new Set<string>(view.applicable_buckets));
     const names = $derived(assetNamesOf(view));
 
@@ -92,16 +92,9 @@
                 </thead>
                 <tbody>
                     {#each model.rows as assetClass, rowIndex (assetClass)}
-                        {@const hint = classHint(t, assetClass)}
                         <tr>
                             <th class="sticky left-0 bg-lf-card px-1 text-left font-medium text-lf-secondary" scope="row">
-                                <button
-                                    type="button"
-                                    class="flex items-center gap-1.5 whitespace-nowrap rounded px-1 py-0.5 hover:bg-lf-hover"
-                                    onclick={() => onchange(focusClass(filters, assetClass))}
-                                    title={hint ? `${classLabel(t, assetClass)} (${hint})` : classLabel(t, assetClass)}
-                                    data-testid="{testId}-class-{assetClass}"
-                                >
+                                <button type="button" class="flex items-center gap-1.5 whitespace-nowrap rounded px-1 py-0.5 hover:bg-lf-hover" onclick={() => onchange(focusClass(filters, assetClass))} title={classLabel(t, assetClass)} data-testid="{testId}-class-{assetClass}">
                                     <img src={getAssetTypeIconUrl(assetClass)} alt="" class="h-4 w-4 shrink-0 object-contain" />
                                     {classLabel(t, assetClass)}
                                 </button>

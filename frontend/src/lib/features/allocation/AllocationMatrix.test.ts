@@ -77,14 +77,14 @@ describe('drawing', () => {
 
 describe('the selection', () => {
     it('frames every cell at the first opening (every class is in), but not a column taken out', () => {
-        mount({}, {classes: null, excludeBuckets: ['Unknown'], excludeAssetIds: []});
+        mount({}, {classes: null, types: [], excludeBuckets: ['Unknown'], excludeAssetIds: []});
         expect(cell('STOCK', 'USA')).toHaveAttribute('data-selected', 'true');
         expect(cell('BOND', 'ITA')).toHaveAttribute('data-selected', 'true');
         expect(cell('STOCK', 'Unknown')).toHaveAttribute('data-selected', 'false');
     });
 
     it('frames only the row of the class kept', () => {
-        mount({}, {classes: ['STOCK'], excludeBuckets: [], excludeAssetIds: []});
+        mount({}, {classes: ['STOCK'], types: [], excludeBuckets: [], excludeAssetIds: []});
         expect(cell('STOCK', 'ITA')).toHaveAttribute('data-selected', 'true');
         expect(cell('BOND', 'ITA')).toHaveAttribute('data-selected', 'false');
     });
@@ -94,27 +94,27 @@ describe('clicking', () => {
     it('a cell, or the name of its class, keeps only that class; again on it, every class', async () => {
         const onchange = mount();
         await fireEvent.click(cell('BOND', 'ITA'));
-        expect(onchange).toHaveBeenLastCalledWith({classes: ['BOND'], excludeBuckets: [], excludeAssetIds: []});
+        expect(onchange).toHaveBeenLastCalledWith({classes: ['BOND'], types: [], excludeBuckets: [], excludeAssetIds: []});
         await fireEvent.click(screen.getByTestId('m-class-STOCK'));
-        expect(onchange).toHaveBeenLastCalledWith({classes: ['STOCK'], excludeBuckets: [], excludeAssetIds: []});
+        expect(onchange).toHaveBeenLastCalledWith({classes: ['STOCK'], types: [], excludeBuckets: [], excludeAssetIds: []});
         cleanup();
 
-        const again = mount({}, {classes: ['STOCK'], excludeBuckets: [], excludeAssetIds: []});
+        const again = mount({}, {classes: ['STOCK'], types: [], excludeBuckets: [], excludeAssetIds: []});
         await fireEvent.click(cell('STOCK', 'USA'));
-        expect(again).toHaveBeenLastCalledWith({classes: null, excludeBuckets: [], excludeAssetIds: []});
+        expect(again).toHaveBeenLastCalledWith({classes: null, types: [], excludeBuckets: [], excludeAssetIds: []});
     });
 
     it('a column that is a bucket the dimension lets the user take out toggles that exclusion; a country is no button', async () => {
         const onchange = mount();
         expect(screen.getByTestId('m-col-USA').tagName).toBe('SPAN');
         await fireEvent.click(screen.getByTestId('m-col-Unknown'));
-        expect(onchange).toHaveBeenLastCalledWith({classes: null, excludeBuckets: ['Unknown'], excludeAssetIds: []});
+        expect(onchange).toHaveBeenLastCalledWith({classes: null, types: [], excludeBuckets: ['Unknown'], excludeAssetIds: []});
         cleanup();
 
-        const back = mount({}, {classes: null, excludeBuckets: ['Unknown'], excludeAssetIds: []});
+        const back = mount({}, {classes: null, types: [], excludeBuckets: ['Unknown'], excludeAssetIds: []});
         expect(screen.getByTestId('m-col-Unknown')).toHaveAttribute('data-excluded', 'true');
         await fireEvent.click(screen.getByTestId('m-col-Unknown'));
-        expect(back).toHaveBeenLastCalledWith({classes: null, excludeBuckets: [], excludeAssetIds: []});
+        expect(back).toHaveBeenLastCalledWith({classes: null, types: [], excludeBuckets: [], excludeAssetIds: []});
     });
 });
 

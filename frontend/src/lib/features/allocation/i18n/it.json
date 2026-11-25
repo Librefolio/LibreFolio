@@ -28,28 +28,20 @@
     "filters": {
       "button": "Filtri",
       "classes": "Classi",
-      "excluded": "Fuori dal 100%",
+      "excluded": "Non classificato",
       "assets": "Asset compresi",
       "countOf": "{on} di {total}",
-      "countActive": "{n, plural, one {# attivo} other {# attivi}}",
       "clear": "Rimuovi filtri",
       "remembered": "Ricordato per questa pagina",
       "searchAssets": "Cerca asset",
       "noMatch": "Nessun asset corrisponde.",
-      "noAssets": "Nessun asset nelle classi accese."
-    },
-    "classHint": {
-      "STOCK": "anche ETF azionari",
-      "BOND": "anche ETF obbligazionari",
-      "COMMODITY": "anche ETC e ETF materie prime",
-      "REAL_ESTATE": "anche ETF immobiliari",
-      "CRYPTO": "anche ETF cripto"
+      "noAssets": "Nessun asset nei tipi accesi."
     },
     "bucket": {
-      "Unknown": "Non classificato",
-      "UnknownHint": "la parte senza settore, paese o tipo dichiarato",
+      "Unknown": "Senza dato",
+      "UnknownHint": "la fonte non dice il settore, il paese o il tipo",
       "Other": "Altro",
-      "OtherHint": "il settore «Altro» delle fonti"
+      "OtherHint": "la fonte dichiara «Altro»"
     },
     "chip": {
       "without": "Senza {name}",
@@ -94,6 +86,21 @@
       "unattributed": "Fuori dalle colonne:",
       "cell": "{class}, {bucket}: {share}",
       "cellEmpty": "{class}, {bucket}: niente"
+    },
+    "classes": {
+      "STOCK": "Azioni",
+      "ETF": "ETF",
+      "BOND": "Obbligazioni",
+      "CRYPTO": "Criptovalute",
+      "FUND": "Fondi",
+      "CROWDFUND": "Progetti di crowdfunding",
+      "HOLD": "Beni detenuti",
+      "COMMODITY": "Materie prime",
+      "REAL_ESTATE": "Immobili",
+      "INDEX": "Indici",
+      "ETF_MONETARY": "ETF monetari",
+      "OTHER": "Altri",
+      "LIQUIDITY": "Liquidità"
     }
   }
 }
