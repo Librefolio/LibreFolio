@@ -7,6 +7,7 @@
  */
 
 import {zodiosApi} from '$lib/api';
+import {compareDecimal} from '$lib/utils/core/exactDecimal';
 
 /** A value on receipt read from the price history: per unit, in the price's currency, with the day of the close. */
 export interface RewardValueSuggestion {
@@ -61,4 +62,9 @@ export async function fetchRewardValues(requests: readonly RewardValueRequest[])
 export async function fetchRewardValue(assetId: number, date: string): Promise<RewardValueSuggestion | null> {
     const answers = await fetchRewardValues([{assetId, date}]);
     return answers?.find((answer) => answer.assetId === assetId && answer.date === date)?.suggestion ?? null;
+}
+
+/** Whether two values on receipt are the same number in the same currency (`61.250000` is `61.25`); an empty one equals nothing. */
+export function sameRewardValue(left: {code: string; amount: string} | null | undefined, right: {code: string; amount: string} | null | undefined): boolean {
+    return left != null && right != null && left.code === right.code && compareDecimal(left.amount, right.amount) === 0;
 }

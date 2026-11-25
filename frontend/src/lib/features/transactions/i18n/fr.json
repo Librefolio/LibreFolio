@@ -217,7 +217,8 @@
       "rewardLabel": "Valeur à la réception",
       "rewardTooltip": "Ce que valaient ces unités le jour où vous les avez reçues : c'est à la fois le revenu de la récompense et le coût du lot qu'elle ouvre.",
       "warningReward": "La valeur à la réception est vide : sans elle, la récompense ne peut pas être enregistrée. Saisissez ce que valaient ces unités le jour où vous les avez reçues, ou 0 pour les compter sans coût.",
-      "rewardFromHistory": "Depuis l'historique des prix : la clôture du {date}. Modifiez-la si la plateforme indique une autre valeur."
+      "rewardFromHistory": "Depuis l'historique des prix : la clôture du {date}. Modifiez-la si la plateforme indique une autre valeur.",
+      "rewardUseClose": "Utiliser la clôture du {date}"
     },
     "wacPreview": {
       "calculating": "Calcul en cours...",

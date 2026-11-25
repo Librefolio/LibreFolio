@@ -73,7 +73,7 @@
     import {normalizeDecimalInput} from '$lib/utils/core/parseDecimalInput';
     import {preFloorDates} from '$lib/features/transactions/preFloorDate';
     import {calculateTradeValue, tradeHasUnitPrice, type TradeAmountDriver} from '$lib/features/transactions/form/txTradeAmount';
-    import {fetchRewardValue, type RewardValueSuggestion} from '$lib/features/transactions/form/rewardValue';
+    import {fetchRewardValue, sameRewardValue, type RewardValueSuggestion} from '$lib/features/transactions/form/rewardValue';
     import {computeTxFormChecks, type TxFormCell, type TxFormCheckKind} from '$lib/features/transactions/form/txFormChecks';
     import {deduplicateIssues, signLabel, signHintKey} from '$lib/features/transactions/form/txFormFields';
     import {isBulkBalanceIssue} from '$lib/features/transactions/bulk/bulkDisplay';
@@ -967,25 +967,64 @@
     });
 
     // A REWARD's value on receipt, suggested from the asset's price history (project 79, STK-2a, aligned by STK-4b): the
-    // close of that very day, per unit, read by the backend (the same reader as the bulk's «fill from price history»), into
-    // an empty field only. The note under the field shows while the value is still the
-    // suggestion; the user's own value is never overwritten.
-    let rewardSuggestion = $state<RewardValueSuggestion | null>(null);
-    let rewardSuggestionKey = '';
+    // close of that very day, per unit, read by the backend (the same reader as the bulk's «fill from price history»).
+    // It goes into an empty field only, and while it stays untouched it follows the asset and the day (86): a new day empties
+    // the field first, so the close of another day can never be saved. The user's own value is never overwritten; when it
+    // differs from the day's close, a link brings the close back. A row opened with a value asks nothing until the user
+    // changes something.
+    let rewardClose = $state.raw<{key: string; suggestion: RewardValueSuggestion | null} | null>(null);
+    /** The value the form put in the field, and the asset and day it is the close of. */
+    let rewardFilled = $state.raw<{key: string; code: string; amount: string} | null>(null);
+    let rewardAskedKey = '';
+    let rewardOpenedWith = '';
+    let rewardKey = $derived(draft.type === 'REWARD' && draft.asset_id != null && draft.date ? `${draft.asset_id}|${draft.date}` : '');
+    const rewardStateOf = (key: string) => `${key}|${draft.cost_basis_override?.code ?? ''}|${draft.cost_basis_override?.amount ?? ''}`;
+    // Each opening starts from nothing known: a value equal to the last form's suggestion is the row's own.
     $effect(() => {
-        if (isReadonly || draft.type !== 'REWARD' || draft.asset_id == null || !draft.date || draft.cost_basis_override?.amount?.trim()) return;
-        const assetId = draft.asset_id;
-        const date = draft.date;
-        const key = `${assetId}|${date}`;
-        if (key === rewardSuggestionKey) return;
-        rewardSuggestionKey = key;
-        void fetchRewardValue(assetId, date).then((suggestion) => {
-            if (!suggestion || draft.type !== 'REWARD' || draft.asset_id !== assetId || draft.date !== date || draft.cost_basis_override?.amount?.trim()) return;
-            rewardSuggestion = suggestion;
-            draft = {...draft, cost_basis_override: {code: suggestion.code, amount: suggestion.amount}};
+        if (!open) return;
+        void openKey;
+        void mode;
+        void items;
+        untrack(() => {
+            rewardClose = null;
+            rewardFilled = null;
+            rewardAskedKey = '';
+            rewardOpenedWith = draft.cost_basis_override?.amount?.trim() ? rewardStateOf(rewardKey) : '';
         });
     });
-    let rewardValueDate = $derived(rewardSuggestion && draft.type === 'REWARD' && draft.cost_basis_override?.code === rewardSuggestion.code && draft.cost_basis_override?.amount === rewardSuggestion.amount ? rewardSuggestion.priceDate : null);
+    function fillRewardValue(key: string, suggestion: RewardValueSuggestion): void {
+        rewardFilled = {key, code: suggestion.code, amount: suggestion.amount};
+        draft = {...draft, cost_basis_override: {code: suggestion.code, amount: suggestion.amount}};
+    }
+    $effect(() => {
+        const key = rewardKey;
+        if (!open || isReadonly || !key) return;
+        if (rewardFilled && rewardFilled.key !== key) {
+            const untouched = sameRewardValue(draft.cost_basis_override, rewardFilled);
+            untrack(() => {
+                rewardFilled = null;
+                if (untouched) draft = {...draft, cost_basis_override: null};
+            });
+            return;
+        }
+        if (key === rewardAskedKey || rewardOpenedWith === rewardStateOf(key)) return;
+        rewardAskedKey = key;
+        void fetchRewardValue(
+            untrack(() => draft.asset_id!),
+            untrack(() => draft.date),
+        ).then((suggestion) => {
+            if (rewardKey !== key) return;
+            rewardClose = {key, suggestion};
+            if (suggestion && !draft.cost_basis_override?.amount?.trim()) fillRewardValue(key, suggestion);
+        });
+    });
+    /** The day's close, once read for the asset and day on screen. */
+    let rewardDayClose = $derived(!isReadonly && rewardKey !== '' && rewardClose?.key === rewardKey ? rewardClose.suggestion : null);
+    let rewardValueDate = $derived(rewardDayClose && sameRewardValue(draft.cost_basis_override, rewardDayClose) ? rewardDayClose.priceDate : null);
+    let rewardCloseDate = $derived(rewardDayClose && rewardValueDate === null ? rewardDayClose.priceDate : null);
+    function useRewardClose(): void {
+        if (rewardDayClose) fillRewardValue(rewardKey, rewardDayClose);
+    }
 
     // Pair partner chip (only when editing an existing linked tx — non-dual mode).
     let pairPartnerId = $derived(pairLayout ? null : (mainRow?.related_transaction_id ?? null));
@@ -1882,6 +1921,8 @@
                     {rule}
                     {showCostBasisField}
                     {rewardValueDate}
+                    {rewardCloseDate}
+                    onUseRewardClose={useRewardClose}
                     {typeImmutable}
                     {wacAvailableCurrencies}
                     {handleSyncFx}
