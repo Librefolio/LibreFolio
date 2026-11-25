@@ -13,6 +13,7 @@ import {canonicalPair, type ExposureDimension, type SourceProvenance} from './so
 import {PAC_PLANNER_PROFILE, type PlannerProfile} from './profile';
 import type {DraftLimits, LimitSide} from './limits';
 import type {PlannerStep} from './types';
+import {DEFAULT_CONVERSION_MODE} from '$lib/features/brokers/profile/brokerOperatingProfile';
 
 export type {ExposureDimension};
 
@@ -555,7 +556,7 @@ export class PlannerDraft {
             stamp: null,
             enteredAt,
             modes: [],
-            conversionMode: 'manual',
+            conversionMode: DEFAULT_CONVERSION_MODE,
             copiedModes: null,
             copiedConversionMode: null,
             funding: [],
@@ -657,7 +658,7 @@ export class PlannerDraft {
             stamp: null,
             enteredAt: nowTimestamp(),
             modes: this.defaultModes([]),
-            conversionMode: 'manual',
+            conversionMode: DEFAULT_CONVERSION_MODE,
             copiedModes: null,
             copiedConversionMode: null,
             funding: [],

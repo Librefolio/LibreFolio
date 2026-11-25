@@ -559,6 +559,8 @@ describe('buildRequest: limits on the target entries (F2)', () => {
         vi.useFakeTimers({toFake: ['Date'], now: NOW});
         try {
             const {draft} = twoAssetScenario();
+            // The capture predates TL-6 of project 67, when a new Broker read «Converti tu»: set it, the bytes stay the capture's.
+            for (const broker of draft.data.brokers) broker.conversionMode = 'manual';
             expect(JSON.stringify(build(draft).request)).toBe(BEFORE_LIMITS);
         } finally {
             vi.useRealTimers();

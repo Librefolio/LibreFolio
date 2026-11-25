@@ -400,11 +400,15 @@ async function buildPacDraftSteps(page: Page, ids: PacIds): Promise<PacDraft> {
     }
     await expect(brokerCard(page, keys.degiro).locator('[data-testid="pac-planner-broker-mode"][data-currency="EUR"]'), 'DEGIRO has no EUR order mode').toBeVisible();
 
-    // Interactive Brokers: by units (the default), a fixed fee in USD; you convert before buying (the default).
+    // Interactive Brokers: by units (the default), a fixed fee in USD; you convert before buying — chosen: since TL-6 of
+    // project 67 a Broker that said nothing converts by itself.
     await editBroker(page, keys.ib, async (editor) => {
         const usd = editor.locator('[data-testid="pac-planner-mode"][data-currency="USD"]');
         await expect(usd).toHaveAttribute('data-kind', 'whole_quantity');
         await typeValue(usd.getByTestId('pac-planner-mode-fee-fixed'), s.ibUsdFixedFee);
+        const manual = editor.locator('[data-testid="pac-planner-conversion-mode"][data-mode="manual"]');
+        await manual.click();
+        await expect(manual).toHaveAttribute('data-selected', 'true');
     });
 
     // DEGIRO, the Broker of the shot: orders in EUR only — the seed's USD share transfers gave it a USD mode too, which goes —

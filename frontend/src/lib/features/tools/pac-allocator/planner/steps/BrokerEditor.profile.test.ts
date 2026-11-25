@@ -30,7 +30,10 @@ vi.mock('$lib/api', () => ({
     ),
     axiosInstance: {get: vi.fn(), post: vi.fn()},
 }));
-vi.mock('$lib/stores/reference/currencyStore', () => ({
+vi.mock('$lib/stores/reference/currencyStore', async () => ({
+    // The box writes an amount's currency beside its increment (TL-6 of project 67), through the shared formatter.
+    currencyStoreVersion: (await import('svelte/store')).writable(0),
+    getCurrencyInfo: (code: string) => ({code, name: `${code} fixture`, symbol: code, flag_emoji: '', country_codes: [], country_names: []}),
     ensureCurrenciesLoaded: vi.fn(async () => undefined),
     getAllCurrencies: () => ['EUR', 'USD', 'CHF', 'GBP'].map((code) => ({code, name: `${code} fixture`, symbol: code, flag_emoji: '', country_codes: [], country_names: []})),
     suggestCurrency: vi.fn(async () => ({canonical: true, suggestion: null, candidates: []})),
