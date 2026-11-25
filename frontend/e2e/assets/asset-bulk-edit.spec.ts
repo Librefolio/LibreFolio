@@ -337,14 +337,17 @@ test.describe('Asset bulk edit', () => {
 
     // 81 U45 (testlist 9.3): the first segment of Active and Benchmark said «Leave as is» and was cut («Lascia c…»). It says the
     // state in one short word now; read in the browser, in the four languages, on a phone and wide: no segment is cut.
-    test('the segments of Active and Benchmark are not cut, in the four languages, at 390 px and wide', async ({page}) => {
-        const owned: Owned = {assetIds: [], brokerIds: []};
-        const token = uniqueToken(6);
-        try {
-            await createAssets(page, owned, token, ['A', 'B', 'C']);
-            // Every cut is collected and said at the end: the report is the table the width is chosen from.
-            const cuts: string[] = [];
-            for (const language of ['en', 'it', 'fr', 'es'] as const) {
+    // One test per language (81, triage of the merge check of 24/11): the four in one body took 26 s of the 30 s a test has (two opens of the window and a
+    // language switch each), so a machine under load, or one extra request on the page, ended it inside its cleanup. Each
+    // language now has its own 30 s (about 7 s used), and the four run side by side.
+    for (const language of ['en', 'it', 'fr', 'es'] as const) {
+        test(`the segments of Active and Benchmark are not cut in ${language}, at 390 px and wide`, async ({page}) => {
+            const owned: Owned = {assetIds: [], brokerIds: []};
+            const token = uniqueToken(6);
+            try {
+                await createAssets(page, owned, token, ['A', 'B', 'C']);
+                // Every cut is collected and said at the end: the report is the table the width is chosen from.
+                const cuts: string[] = [];
                 await setLanguage(page, language);
                 for (const width of [390, 1280]) {
                     await page.setViewportSize({width, height: 900});
@@ -359,12 +362,12 @@ test.describe('Asset bulk edit', () => {
                     await page.keyboard.press('Escape');
                     await expect(page.getByTestId('asset-bulk-edit')).toHaveCount(0);
                 }
+                expect(cuts, `segments cut by this many pixels: ${cuts.join(' · ')}`).toEqual([]);
+            } finally {
+                await deleteOwned(page, owned);
             }
-            expect(cuts, `segments cut by this many pixels: ${cuts.join(' · ')}`).toEqual([]);
-        } finally {
-            await deleteOwned(page, owned);
-        }
-    });
+        });
+    }
 
     // 81 U44 (testlist of 23/11, the developer's photo): the icon block — the label, the round «pick» button, «Remove icon» and its
     // «Now» line — is centred: on a wide window vertically against the two fields beside it (User URL and Type), on every width
