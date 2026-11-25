@@ -83,6 +83,25 @@ function omittedColumns(content: string): string[] {
         .flatMap((line) => line.slice('omitted_null_columns='.length).split(','));
 }
 
+/** The values of `RETURN_CASES` in `test_ai_export_market_context_columns.py`, and the text the prompt prints for each. */
+const PRINTED_RETURNS: readonly (readonly [number, string])[] = [
+    [0.015, '1.5%'],
+    [-0.07388575235824245, '-7.3886%'],
+    [0.018975848919556927, '1.8976%'],
+    [-0.009675473086634528, '-0.9675%'],
+    // A plain -8% (the float division printed -8.000000000000007%), and an exact half of the fourth digit: -5.21875%
+    [-0.08, '-8%'],
+    [-0.0521875, '-5.2188%'],
+];
+
+describe('78 L6 S2b: the returns of a market row as the prompt prints them', () => {
+    it.each(PRINTED_RETURNS)('%s is printed %s', (value, printed) => {
+        const row = {entity_id: 'asset:1', value_unit: 'EUR', observation_count: 3, return_1m_ratio: value};
+        const content = render('portfolio.asset_market_context', 2, {policy_code: 'portfolio_asset_snapshot_v2', entities: [row]});
+        expect(content).toContain(`|${printed}|`);
+    });
+});
+
 describe('78 L6 S2b: the timing context on the one volatility definition', () => {
     it('fx.timing_context v2 prints the daily return volatility, not as YAML', () => {
         const content = render('fx.timing_context', 2, {base_currency: 'EUR', quote_currency: 'USD', observed_returns: {daily_return_volatility_ratio: 0.0123}}, {kind: 'fx', base_currency: 'EUR', quote_currency: 'USD'});

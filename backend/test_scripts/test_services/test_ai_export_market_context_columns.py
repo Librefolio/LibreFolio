@@ -11,6 +11,9 @@ component has its own row, and a column it does not report is not in its payload
 - MC-03: a declared column that cannot be computed stays in the row as `None` (really unavailable, and the prompt still
   says so): `ema_200` with three closes, `ema_20` of the asset with no signal.
 - MC-04: every row prints its columns in the one column order (inheritance would put a row's own columns last).
+- MC-05: the returns of the row are the one `price_return` (78 L6 S2b), and the four components that print them are
+  over their 1.3.0 version, so their figures may change. The texts the prompt prints for these values are pinned in
+  `snapshotDataRendererL6.test.ts`, on the same cases.
 
 Isolation: PURE (no database, no server, no network): models and the row builder only.
 
@@ -134,3 +137,34 @@ def test_mc04_every_row_prints_its_columns_in_the_one_order(row_model):
 
     keys = list(row.model_dump(mode="json"))
     assert keys == [name for name in MARKET_CONTEXT_COLUMN_ORDER if name in row_model.model_fields]
+
+
+#: The versions of 1.3.0 of the components that print `_return_ratio`; each is over it, so its figures may change.
+RELEASED_IN_1_3_0 = dict.fromkeys(EXPECTED_COLUMNS, 1)
+
+
+@pytest.mark.parametrize("component_id", sorted(RELEASED_IN_1_3_0))
+def test_mc05_every_component_that_prints_the_return_is_over_its_1_3_0_version(component_id):
+    assert _spec(component_id).version > RELEASED_IN_1_3_0[component_id]
+
+
+#: Two values, and `price_return` of the second over the first: the same cases as `snapshotDataRendererL6.test.ts`.
+RETURN_CASES = [
+    (100.00, 101.50, 0.015),
+    (285.17, 264.10, -0.07388575235824245),
+    (1.1014, 1.1223, 0.018975848919556927),
+    (59137.16, 58564.98, -0.009675473086634528),
+    (4.50, 4.14, -0.08),
+    (288.00, 272.97, -0.0521875),
+]
+
+
+@pytest.mark.parametrize(("start", "end", "expected"), RETURN_CASES)
+def test_mc05_the_return_of_a_row_is_the_one_price_return(start, end, expected):
+    points = ((date(2026, 9, 1), start), (date(2026, 9, 2), end))
+    assert technical_context._return_ratio(points, date(2026, 9, 1)) == expected
+
+
+def test_mc05_a_zero_start_gives_no_return():
+    points = ((date(2026, 9, 1), 0.0), (date(2026, 9, 2), 5.0))
+    assert technical_context._return_ratio(points, date(2026, 9, 1)) is None

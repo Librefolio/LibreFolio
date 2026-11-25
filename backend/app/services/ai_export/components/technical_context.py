@@ -421,9 +421,11 @@ def _return_ratio(points: Sequence[tuple[date, float]], target: date) -> float |
         return None
     start = _value_on_or_before(points, target)
     end = points[-1]
-    if start is None or start[1] == 0 or start[0] >= end[0]:
+    if start is None or start[0] >= end[0]:
         return None
-    return end[1] / start[1] - 1
+    # 78 L6 S2b: the one price return, on the values as stored; None from a zero start
+    change = price_return(Decimal(str(start[1])), Decimal(str(end[1])))
+    return float(change) if change is not None else None
 
 
 def _relation(left: float | None, right: float | None) -> str | None:
