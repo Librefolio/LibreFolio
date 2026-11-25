@@ -127,7 +127,6 @@
         <div class="relative" data-testid="{testId}-chart">
             <AllocationPieChart data={entries} mode={pieMode} colorRanks={ranks} legendPosition="bottom" currency={view.currency} height="320px" />
             <div class="pointer-events-none absolute left-1/2 -translate-x-1/2 -translate-y-1/2 text-center text-lf-primary [&_.emoji-flag]:hidden [&:has(.currency-symbol)_.currency-code]:hidden" style="top: {centerTop}" data-testid="{testId}-center">
-                <div class="text-[10px] uppercase tracking-wide text-lf-muted">{$_('allocation.pie.center')}</div>
                 <div class="text-xs font-semibold"><CurrencyAmount amount={parseFloat(view.base)} code={view.currency} options={PERSONAL} /></div>
             </div>
         </div>
