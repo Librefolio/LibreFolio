@@ -528,6 +528,10 @@ describe('Button — a disclosure and a menu: aria-expanded and the turning chev
         expect(chevron(button)?.classList.contains('rotate-180')).toBe(true);
     });
 
+    it('wrap and truncate together: mounting throws (C17)', () => {
+        expect(() => render(Button, {props: {label: 'Both', wrap: true, truncate: true}})).toThrow(/wrap/);
+    });
+
     it('menu and expanded together: mounting throws', () => {
         const menu = createRawSnippet(() => ({render: () => '<div>menu</div>'}));
         expect(() => render(Button, {props: {label: 'Both', menu, expanded: false}})).toThrow(/expanded/);
@@ -576,7 +580,7 @@ describe('Button — inside a ButtonGroup: a segment (BTN-2·0, C2)', () => {
         for (const id of ['probe-grid', 'probe-list']) {
             const segment = screen.getByTestId(id);
             expect(group.contains(segment)).toBe(true);
-            expect(segment.className).toBe(buttonClasses({segment: true, pressed: id === 'probe-list'}));
+            expect(segment.className).toBe(buttonClasses({segment: true, joined: true, pressed: id === 'probe-list'}));
             expect(segment.classList.contains('lf-btn-segment')).toBe(true);
         }
         expect(screen.getByTestId('probe-list')).toHaveAttribute('aria-pressed', 'true');
@@ -616,5 +620,44 @@ describe('Button — a cut word shows the name (BTN-2·0, C7)', () => {
         pointer(button, 'pointerenter', 'mouse');
         await advance(HOVER_DELAY_MS + 200);
         expect(tooltip()).toBeNull();
+    });
+});
+
+describe('Button — hideWord, compact and a segment alone (BTN-2d, C16)', () => {
+    const word = (button: HTMLElement) => button.querySelector('[data-lf-word]');
+
+    it('hideWord hides the word of display="auto" (the parent measured its room); the name stays', async () => {
+        const {button, rerender} = renderButton({label: 'Export', icon: Pencil, display: 'auto', hideWord: false});
+        expect(word(button)?.classList.contains('hidden')).toBe(false);
+        await rerender({label: 'Export', icon: Pencil, display: 'auto', hideWord: true, 'data-testid': 'probe-btn'});
+        const hidden = screen.getByTestId('probe-btn');
+        expect(word(hidden)?.classList.contains('hidden')).toBe(true);
+        expect(hidden).toHaveAttribute('aria-label', 'Export');
+    });
+
+    it('a hidden word leaves the name to the tooltip: a rest shows it', async () => {
+        const {button} = renderButton({label: 'Export', icon: Pencil, display: 'auto', hideWord: true});
+        pointer(button, 'pointerenter', 'mouse');
+        await advance(HOVER_DELAY_MS);
+        expect(tooltip()?.textContent?.trim()).toBe('Export');
+    });
+
+    it('hideWord does nothing to a word that is not auto', () => {
+        const {button} = renderButton({label: 'Export', icon: Pencil, display: 'icon-text', hideWord: true});
+        expect(word(button)?.classList.contains('hidden')).toBe(false);
+    });
+
+    it('compact is height, not the word: the recipe’s compact, the word still in view', () => {
+        const {button} = renderButton({label: 'Export', size: 'sm', compact: true, display: 'auto', icon: Pencil});
+        expect(button.className).toBe(buttonClasses({size: 'sm', compact: true}));
+        expect(button.className, 'one step lower than the plain one').not.toBe(buttonClasses({size: 'sm'}));
+        expect(word(button)?.classList.contains('hidden')).toBe(false);
+    });
+
+    it.each([true, false])('a segment alone, pressed %s: the recipe’s segment, not joined, a toggle', (pressed) => {
+        const {button} = renderButton({label: '1Y', size: 'sm', compact: true, segment: true, pressed});
+        expect(button.className).toBe(buttonClasses({size: 'sm', compact: true, segment: true, pressed}));
+        expect(button.classList.contains('lf-btn-segment'), 'only a group joins it').toBe(false);
+        expect(button).toHaveAttribute('aria-pressed', String(pressed));
     });
 });

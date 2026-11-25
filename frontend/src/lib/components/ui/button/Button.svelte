@@ -26,7 +26,7 @@
 <script lang="ts">
     import type {Component, Snippet} from 'svelte';
     import {ChevronDown, LoaderCircle} from 'lucide-svelte';
-    import {buttonClasses, ICON_PX, WORD_HIDDEN_BELOW, type ButtonDisplay, type ButtonSize, type ButtonTone, type ButtonVariant, type WordThreshold} from './buttonClasses';
+    import {buttonClasses, ICON_PX, WORD_HIDDEN_BELOW, type ButtonDisplay, type ButtonSize, type ButtonTint, type ButtonTone, type ButtonVariant, type WordThreshold} from './buttonClasses';
     import {insideButtonGroup} from './buttonGroup';
     import {pressable, type TipPosition} from './pressable.svelte';
 
@@ -40,25 +40,31 @@
         icon?: Component<any> | (new (...args: any[]) => any);
         /**
          * `text`, `icon-text` (default with an icon), `icon`, `auto` (the word hides below `hideWordBelow`, or while
-         * `compact`). `auto` never picks a width of its own and measures nothing: it carries the rule the button already
-         * had — the page toolbar's decision (`compact`) or the class it was written with (`hideWordBelow`). With neither,
+         * `hideWord`). `auto` never picks a width of its own and measures nothing: it carries the rule the button already
+         * had — the page toolbar's decision (`hideWord`) or the class it was written with (`hideWordBelow`). With neither,
          * the word always shows.
          */
         display?: ButtonDisplay;
         /** `display="auto"`: the class the button had, as a threshold: `sm` is `hidden sm:inline`, `@2xl` a container under 42rem. */
         hideWordBelow?: WordThreshold;
-        /** `display="auto"`: the parent decided the word hides — `compact={!showActionLabels}` of PageToolbar (`createResponsiveLayout`). */
+        /** `display="auto"`: the parent decided the word hides — `hideWord={!showActionLabels}` of PageToolbar (`createResponsiveLayout`). */
+        hideWord?: boolean;
+        /** One step less vertical padding (C16): `sm` → `py-1`, `md` → `py-1.5`. The height in view; `dense` is the finger's. */
         compact?: boolean;
+        /** A filled toggle without a border (C16): the presets of a period. Inside a `ButtonGroup` every button is one. */
+        segment?: boolean;
         variant?: ButtonVariant;
         size?: ButtonSize;
         /** A state's colour: `ghost` in it, the `chip` of a banner (mandatory there), the `pressed` fill. */
         tone?: ButtonTone;
         /** The button stands on a fill of that state (a toast, a banner): the fill's text, the hover a step down. */
-        tint?: ButtonTone;
+        tint?: ButtonTint;
         /** Fully rounded. */
         pill?: boolean;
         /** The word may cut; the name shows (long press, rest, Tab) while it is cut. */
         truncate?: boolean;
+        /** The word may break on lines (a narrow section head). Never with `truncate`. */
+        wrap?: boolean;
         /** Inside a field or beside a neighbour: the finger's target is 24 px, not 40. */
         dense?: boolean;
         /** In a line of text (the docs icon): a hair of padding, the line's text size; `size` picks only the icon. */
@@ -115,13 +121,16 @@
         icon: Icon,
         display,
         hideWordBelow,
+        hideWord = false,
         compact = false,
+        segment: segmentProp = false,
         variant = 'secondary',
         size = 'md',
         tone,
         tint,
         pill = false,
         truncate = false,
+        wrap = false,
         dense = false,
         inline = false,
         dashed = false,
@@ -150,14 +159,16 @@
         ...rest
     }: Props = $props();
 
-    /** Checked once, at mount: a caller passes either a menu or a disclosure, never both, and never switches. */
-    function assertMenuOrDisclosure(): void {
+    /** Checked once, at mount: the pairs that never go together (menu and disclosure, wrap and truncate). */
+    function assertProps(): void {
         if (menu && expanded !== undefined) throw new Error('Button: `expanded` and `menu` never go together — `menu` has its own aria-expanded');
+        if (wrap && truncate) throw new Error('Button: `wrap` and `truncate` never go together — a word breaks on lines or is cut');
     }
-    assertMenuOrDisclosure();
+    assertProps();
 
-    /** Inside a `ButtonGroup`: a segment. */
-    const segment = insideButtonGroup();
+    /** Inside a `ButtonGroup`: a joined segment; alone, a segment only when asked (`segment`). */
+    const joined = insideButtonGroup();
+    let segment = $derived(joined || segmentProp);
     let shown = $derived<ButtonDisplay>(display ?? (Icon || leading ? 'icon-text' : 'text'));
     /** Disabled with a reason: reachable, never natively disabled. */
     let offWithReason = $derived(!!reason);
@@ -168,13 +179,13 @@
     let nativeDisabled = $derived(disabled && !reachableOff);
     let word = $derived(busy && busyLabel ? busyLabel : (shortLabel ?? label));
     /** The word's own class: hidden for an icon, below the threshold for `auto`. */
-    let hideClass = $derived(shown === 'auto' ? (compact ? 'hidden' : hideWordBelow ? WORD_HIDDEN_BELOW[hideWordBelow] : '') : '');
+    let hideClass = $derived(shown === 'auto' ? (hideWord ? 'hidden' : hideWordBelow ? WORD_HIDDEN_BELOW[hideWordBelow] : '') : '');
     let wordClass = $derived(truncate ? `${hideClass} truncate`.trim() : hideClass);
     /** A rich word, unless the busy word takes its place. */
     let richWord = $derived(!!children && !(busy && busyLabel));
-    let hasWord = $derived(shown !== 'icon' && !(shown === 'auto' && compact));
+    let hasWord = $derived(shown !== 'icon' && !(shown === 'auto' && hideWord));
     let iconOnly = $derived(shown === 'icon');
-    let classes = $derived(`${buttonClasses({variant, size, shape: iconOnly ? 'icon' : 'default', pressed, tone, tint, segment, pill, truncate, dense, inline, dashed})} ${className}`.trim());
+    let classes = $derived(`${buttonClasses({variant, size, shape: iconOnly ? 'icon' : 'default', pressed, tone, tint, segment, joined, compact, pill, truncate, wrap, dense, inline, dashed})} ${className}`.trim());
     let px = $derived(ICON_PX[size]);
     /** The accessible name: given whenever the word in view is not the label, or may be hidden. */
     let ariaLabel = $derived(richWord ? label : shown === 'text' || shown === 'icon-text' ? (word === label ? undefined : label) : label);

@@ -8,7 +8,7 @@
     import {X} from 'lucide-svelte';
     import {_ as t} from '$lib/i18n';
     import Button from './Button.svelte';
-    import type {ButtonSize, ButtonTone} from './buttonClasses';
+    import type {ButtonSize, ButtonTint} from './buttonClasses';
     import type {TipPosition} from './pressable.svelte';
 
     interface Props {
@@ -18,7 +18,7 @@
         /** `ghost` on a page or a dialog, `bar-ghost` on the green sidebar. */
         variant?: 'ghost' | 'bar-ghost';
         /** The ✕ stands on a fill of this state (a toast, a banner). */
-        tint?: ButtonTone;
+        tint?: ButtonTint;
         disabled?: boolean;
         onclick?: (event: MouseEvent) => void;
         tipPosition?: TipPosition;
