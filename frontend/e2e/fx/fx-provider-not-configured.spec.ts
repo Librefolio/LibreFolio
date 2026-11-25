@@ -350,7 +350,8 @@ test.describe('FX pair dialog — a provider that is not configured', () => {
         const triangle = saved.getByTestId('fx-route-needs-setup');
         await expect(triangle, `${UNCONFIGURED} is not configured: the saved route says so`).toBeVisible({timeout: 10_000});
         await expect(triangle).toHaveAttribute('data-provider', UNCONFIGURED);
-        await expect(triangle).toHaveAttribute('title', /.+/);
+        // A standard Button (85 BTN-2c): the setup hint is its name, aria-label; no native title.
+        await expect(triangle).toHaveAttribute('aria-label', /.+/);
 
         await triangle.click();
         const modal = await expectWindow(page);
