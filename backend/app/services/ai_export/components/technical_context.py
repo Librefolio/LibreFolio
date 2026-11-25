@@ -34,6 +34,7 @@ from backend.app.services.ai_export.components.technical_shared import (
 from backend.app.services.ai_export.components.types import DetailLevel, Domain, PeriodBehavior
 from backend.app.services.ai_export.dependencies import BuildContext
 from backend.app.services.ai_export.temporal import ObservedPoint, uniform_observed_buckets
+from backend.app.services.financial_math.returns import price_return
 from backend.app.services.signals.registry import SignalPluginRegistry
 
 _ASSET_CONTEXT_EVENT_KEYS = frozenset(
@@ -726,7 +727,7 @@ def _history_rows(
             observed_date=bucket.representative.date,
             current_value=float(bucket.representative.value),
             normalized_index_base_100=(float(bucket.representative.value / first_value * Decimal(100)) if first_value else None),
-            return_from_first_ratio=(float(bucket.representative.value / first_value - Decimal(1)) if first_value else None),
+            return_from_first_ratio=(float(change) if (change := price_return(first_value, bucket.representative.value)) is not None else None),
         )
         for bucket in buckets
     )
