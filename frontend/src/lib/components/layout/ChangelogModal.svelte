@@ -366,14 +366,10 @@
             <!-- Version index -->
             <div class="flex gap-1.5 overflow-x-auto px-4 py-2 border-b border-lf-subtle shrink-0" data-testid="changelog-index">
                 {#each chapters as chapter, i (chapter.version + chapter.date)}
-                    <button
-                        type="button"
-                        class="px-2.5 py-1 text-xs font-mono font-medium rounded-full whitespace-nowrap transition-colors {isChapterOpen(i, chapter) ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-panel text-lf-secondary hover:bg-lf-neutral'}"
-                        onclick={() => jumpTo(i)}
-                        data-testid="changelog-index-{i}"
-                    >
-                        v{chapter.version}
-                    </button>
+                    <!-- A pill segment (C16): the open chapter is pressed; the version in its monospaced word. -->
+                    <Button label="v{chapter.version}" size="sm" compact segment pill pressed={isChapterOpen(i, chapter)} onclick={() => jumpTo(i)} data-testid="changelog-index-{i}">
+                        <span class="font-mono">v{chapter.version}</span>
+                    </Button>
                 {/each}
             </div>
 
