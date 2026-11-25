@@ -64,8 +64,10 @@ When you sell the units later, the gain or loss is measured against $v$, the val
 The value is per **single unit**, not the total: LibreFolio multiplies it by the quantity.
 
 - **In the transaction form**, LibreFolio suggests it from the asset's stored price history: the close of the reward's
-  own day, per unit, in the price's currency. It is never the close of another day. You can change it whenever the
-  platform shows another value.
+  own day, per unit, in the price's currency. It is never the close of another day: while you leave the suggestion as it
+  is, it follows the date and the asset, and a day with no stored price empties the field. You can change it whenever the
+  platform shows another value: your value stays, and the link **Use the close of …** under the field brings the close of
+  that day back.
 - **From an import**, the value comes from the file when the platform writes it (for example Coinbase's `Subtotal`,
   Crypto.com's `Native Amount`, Freetrade's price per share). When the file has no value (Bitvavo, CoinTracking, the
   Generic CSV), each reward waits for one: in the bulk workspace, **Fill from price history** writes the close of that
