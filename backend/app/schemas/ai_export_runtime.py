@@ -127,6 +127,12 @@ class AiExportAdditionalExportSuggestion(AiExportModel):
     necessity: AiExportAdditionalExportNecessity
 
 
+class AiExportToolSuggestion(AiExportModel):
+    """A LibreFolio tool an analysis sends the user to (78 L4a); the frontend writes its path from the tool's i18n keys."""
+
+    tool_code: str = Field(..., min_length=1, pattern=r"^[a-z][a-z0-9_]*$")
+
+
 class AiExportDatasetSelection(AiExportModel):
     kind: Literal["dataset"] = Field(json_schema_extra={"enum": ["dataset"]})
     id: SelectionId
@@ -250,6 +256,7 @@ class AiExportAnalysisCatalogEntry(AiExportModel):
     response_contract_version: PositiveInt
     supports_user_notes: bool = True
     additional_export_suggestions: tuple[AiExportAdditionalExportSuggestion, ...] = ()
+    suggested_tools: tuple[AiExportToolSuggestion, ...] = ()
 
     @model_validator(mode="after")
     def validate_entry(self) -> Self:

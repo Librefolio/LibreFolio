@@ -61,6 +61,7 @@ AI_EXPORT_PURE_TEST_PATHS = (
     "backend/test_scripts/test_services/test_ai_export_fx_payload_invariants.py",
     "backend/test_scripts/test_services/test_ai_export_fx_timing_invariants.py",
     "backend/test_scripts/test_services/test_ai_export_int_validation.py",
+    "backend/test_scripts/test_services/test_ai_export_suggested_tools.py",
     "backend/test_scripts/test_services/test_ai_export_technical_payload_invariants.py",
     "backend/test_scripts/test_services/test_ai_export_technical_shared_pure.py",
     "backend/test_scripts/test_services/test_ai_export_temporal_aggregator_invariants.py",

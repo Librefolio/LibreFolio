@@ -55,6 +55,7 @@ from backend.app.schemas.ai_export_runtime import (
     AiExportSnapshotStats,
     AiExportTargetReference,
     AiExportTechnicalSamplingManifest,
+    AiExportToolSuggestion,
 )
 from backend.app.services.ai_export.analyses.catalog import build_analysis_registry
 from backend.app.services.ai_export.analyses.spec import (
@@ -449,6 +450,7 @@ class AiExportSnapshotService:
                         )
                         for suggestion in analysis.additional_export_suggestions
                     ),
+                    suggested_tools=tuple(AiExportToolSuggestion(tool_code=tool.tool_code) for tool in analysis.suggested_tools),
                 )
             )
         return AiExportCatalogResponse(
