@@ -210,7 +210,7 @@ describe('AllocationPanel — view and tab restored from storage (S4, R21)', () 
     });
 });
 
-describe('AllocationPanel — the «Analyze →» link to the Allocation tab (lane 80, F5)', () => {
+describe('AllocationPanel — the «Analyze» badge to the Allocation tab (lane 80, F5)', () => {
     it('is not drawn when no one asks for it: another panel (the positions one) has no tab to open', () => {
         mountPanel();
         expect(screen.queryByTestId('allocation-analyze')).toBeNull();
