@@ -37,6 +37,8 @@
 
     interface Props {
         assetId: number;
+        /** The asset's type: which detail groups it shows (D-27). */
+        assetType?: string | null;
         /** The period chosen at the top of the page. */
         period: PagePeriod;
         /** The asset's identifiers, shown with the identity. */
@@ -60,7 +62,7 @@
         onconfigure?: () => void;
     }
 
-    let {assetId, period, isin, ticker, otherIdentifiers = [], softIdentifiers = [], refreshKey = 0, onedit, onhistory, enrichers = null, onrefresh, onconfigure}: Props = $props();
+    let {assetId, assetType = '', period, isin, ticker, otherIdentifiers = [], softIdentifiers = [], refreshKey = 0, onedit, onhistory, enrichers = null, onrefresh, onconfigure}: Props = $props();
 
     /** The asset whose «Aggiorna» is running: the button is busy for that asset only, never for the next one. */
     let refreshingFor = $state<number | null>(null);
@@ -122,7 +124,7 @@
 
     const cards = $derived(keyFigureCards(catalogue, voices));
     const voicesByKey = $derived(Object.fromEntries(catalogue.map((voice) => [voice.key, voice])));
-    const groups = $derived(detailGroups(catalogue, voices));
+    const groups = $derived(detailGroups(catalogue, voices, assetType ?? ''));
     const description = $derived.by((): ProfileCell | null => {
         const voice = catalogue.find((entry) => entry.key === 'description');
         return voice ? profileCell(voice, voices[voice.key]) : null;

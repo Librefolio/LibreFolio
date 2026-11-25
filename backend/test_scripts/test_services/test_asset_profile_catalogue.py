@@ -4,8 +4,8 @@ Asset profile catalogue (project 68, lot A1): ``backend/app/services/assets/prof
 The catalogue lists every voice of the asset profile and ``normalize_value`` turns a raw value into its stored form.
 Pure: no database, no server, no network.
 
-(a) The catalogue: exactly the 41 voices (the 37 of plan §3.6, ``management_fee`` of C2e, ``website``, ``revenue`` and
-    ``net_income`` of BI-PROF), in order, each with its shape, sign, unit, groups, flags, choices, map keys, topic and
+(a) The catalogue: exactly the 42 voices (the 37 of plan §3.6, ``management_fee`` of C2e, ``website``, ``revenue`` and
+    ``net_income`` of BI-PROF, ``crypto_categories`` of 82 CG-D), in order, each with its shape, sign, unit, groups, flags, choices, map keys, topic and
     period (``fiscal_year`` for the two figures of a fiscal year, None for every other voice); the structural invariants (numeric shapes carry a sign, only choice voices carry codes, only
     map voices carry map keys, charted implies key figure, the key figure and volatile sets).
 (b) ``get_voice`` returns the voice, and refuses an unknown key with ``ProfileValueError.key`` set.
@@ -74,6 +74,8 @@ TOPICS: dict[str, ProfileTopic] = {
     "website": T.ISSUER,
     "revenue": T.FINANCIALS,
     "net_income": T.FINANCIALS,
+    # 82 CG-D: the source's own words on a coin's kind, a topic of its own
+    "crypto_categories": T.CATEGORIES,
     "coupon_period_rate": T.COUPONS,
     "coupon_frequency": T.COUPONS,
     "coupon_type": T.COUPONS,
@@ -117,7 +119,7 @@ def _v(key, shape, *, sign=None, unit=None, groups=(), key_figure=False, charted
 
 KF = (G.KEY_FIGURES,)
 
-#: The 41 voices (plan §3.6, C2e, BI-PROF), in the catalogue's order.
+#: The 42 voices (plan §3.6, C2e, BI-PROF), in the catalogue's order.
 EXPECTED_VOICES: tuple[FAProfileVoice, ...] = (
     _v("geography", S.MAP, groups=(G.CLASSIFICATION,), map_keys=ProfileMapKeys.COUNTRY),
     _v("sector", S.MAP, groups=(G.CLASSIFICATION, G.COMPANY), map_keys=ProfileMapKeys.SECTOR),
@@ -136,15 +138,16 @@ EXPECTED_VOICES: tuple[FAProfileVoice, ...] = (
     _v("distribution_policy", S.CHOICE, groups=(G.FUND,)),
     _v("fund_domicile", S.COUNTRY, groups=(G.FUND,)),
     _v("fund_currency", S.CURRENCY, groups=(G.FUND,)),
-    _v("inception_date", S.DATE, groups=(G.FUND,)),
+    _v("inception_date", S.DATE, groups=(G.FUND, G.CRYPTO)),
     # C2e (developer, «voce sua»): the fund's management fee, only a part of the TER: a detail of the fund, not a key figure
     _v("management_fee", S.PERCENTAGE, sign=NN, groups=(G.FUND,)),
     _v("industry", S.TEXT, groups=(G.COMPANY,)),
     _v("issuer_country", S.COUNTRY, groups=(G.COMPANY,)),
     # BI-PROF: the company's site and the two headline figures of its last fiscal year, each dated by that year's end
-    _v("website", S.TEXT, groups=(G.COMPANY,)),
+    _v("website", S.TEXT, groups=(G.COMPANY, G.CRYPTO)),
     _v("revenue", S.AMOUNT, sign=NN, groups=(G.COMPANY,), period=ProfilePeriod.FISCAL_YEAR),
     _v("net_income", S.AMOUNT, sign=ProfileSign.ANY, groups=(G.COMPANY,), period=ProfilePeriod.FISCAL_YEAR),
+    _v("crypto_categories", S.TEXT, groups=(G.CRYPTO,)),
     _v("coupon_period_rate", S.PERCENTAGE, sign=NN, groups=(G.BOND,)),
     _v("coupon_frequency", S.CHOICE, groups=(G.BOND,)),
     _v("coupon_type", S.CHOICE, groups=(G.BOND,)),
@@ -198,10 +201,10 @@ def _keys_of_shape(shape: ProfileShape) -> list[str]:
 
 
 def test_expected_table_is_self_consistent():
-    """Guard on this file's own table: 41 distinct keys (37 of plan §3.6, ``management_fee`` of C2e, ``website``,
+    """Guard on this file's own table: 42 distinct keys (37 of plan §3.6, ``management_fee`` of C2e, ``website``,
     ``revenue`` and ``net_income`` of BI-PROF), the choice dict covers exactly the choice voices."""
-    assert len(EXPECTED_KEYS) == 41
-    assert len(set(EXPECTED_KEYS)) == 41
+    assert len(EXPECTED_KEYS) == 42
+    assert len(set(EXPECTED_KEYS)) == 42
     assert set(CHOICES) == set(_keys_of_shape(S.CHOICE))
 
 

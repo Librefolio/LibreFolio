@@ -7,6 +7,8 @@
  *   null value was emptied on purpose; no step: not available;
  * - the key figure cards, the detail groups and their order come from the catalogue (`groups`, `key_figure`, `charted`),
  *   never from a list here; a voice with no group has no cell;
+ * - the detail groups follow the type of the asset (D-27): the coin's group on a cryptocurrency only, a value saved
+ *   elsewhere stays visible, a voice of two groups is shown once; `voiceOffered` is the editor's side of the rule;
  * - the «dati al» of the classification: the days a composition changed in the period, newest first, and the
  *   composition of the day chosen;
  * - the company's sector is the sector map of one sector at 100 %; a map of several sectors is a fund's, shown in the
@@ -140,6 +142,73 @@ describe('the detail groups', () => {
                 .cells.find((cell) => cell.key === 'sector')!;
         expect(company({sector: [step('2026-01-01', '2026-11-17', {Technology: '1'})]}).state).toBe('value');
         expect(company({sector: [step('2026-01-01', '2026-11-17', {Technology: '0.6', Financials: '0.4'})]}).state).toBe('unavailable');
+    });
+});
+
+/** The catalogue above, with the voices of a coin: one only a coin has, two it shares with a company and a fund. */
+const COIN_CATALOGUE: ProfileVoice[] = [...CATALOGUE, voice('inception_date', 'date', {groups: ['fund', 'crypto']}), voice('website', 'text', {groups: ['company', 'crypto']}), voice('crypto_categories', 'text', {groups: ['crypto']})];
+const coinVoice = (key: string) => COIN_CATALOGUE.find((entry) => entry.key === key)!;
+const shownAs = (voices: ProfileVoices, assetType?: string) => tab.detailGroups(COIN_CATALOGUE, voices, assetType).map((group) => [group.group, group.cells.map((cell) => cell.key)]);
+
+describe('the detail groups follow the type of the asset (D-27)', () => {
+    it('are the coin and the identity on a cryptocurrency, every voice of them even without a value', () => {
+        expect(shownAs({}, 'CRYPTO')).toEqual([
+            ['crypto', ['inception_date', 'website', 'crypto_categories']],
+            ['identity', ['legal_form']],
+        ]);
+    });
+
+    it.each(['STOCK', 'ETF', 'BOND', 'OTHER', undefined])('leave the coin out on %s, where the shared voices stay with the fund and the company', (assetType) => {
+        const groups = Object.fromEntries(shownAs({}, assetType) as [string, string[]][]);
+        expect(Object.keys(groups)).toEqual(['fund', 'company', 'identity', 'bond']);
+        expect(groups.fund).toContain('inception_date');
+        expect(groups.company).toContain('website');
+    });
+
+    it('keep visible a category saved on another asset, alone in the coin group', () => {
+        const groups = shownAs({crypto_categories: [step('2026-01-01', '2026-11-17', 'Meme', 'user')]}, 'STOCK');
+        expect(groups.map(([group]) => group)).toEqual(['fund', 'company', 'identity', 'bond', 'crypto']);
+        expect(groups.at(-1)).toEqual(['crypto', ['crypto_categories']]);
+    });
+
+    it('keep visible on a cryptocurrency a fund voice saved there, without its empty neighbours', () => {
+        expect(shownAs({fund_provider: [step('2026-01-01', '2026-11-17', 'A provider', 'user')]}, 'CRYPTO')).toEqual([
+            ['crypto', ['inception_date', 'website', 'crypto_categories']],
+            ['identity', ['legal_form']],
+            ['fund', ['fund_provider']],
+        ]);
+    });
+
+    it.each(['CRYPTO', 'STOCK', undefined])('show a voice of two groups once, with a value, on %s', (assetType) => {
+        const voices: ProfileVoices = {website: [step('2026-01-01', '2026-11-17', 'https://x.example')], inception_date: [step('2026-01-01', '2026-11-17', '2009-01-03')]};
+        const keys = shownAs(voices, assetType).flatMap(([, cells]) => cells as string[]);
+        expect(keys.filter((key) => key === 'website')).toHaveLength(1);
+        expect(keys.filter((key) => key === 'inception_date')).toHaveLength(1);
+    });
+
+    it('do not show what was emptied on purpose outside the groups of the type', () => {
+        expect(shownAs({crypto_categories: [step('2026-01-01', '2026-11-17', null, 'user')]}, 'STOCK').map(([group]) => group)).not.toContain('crypto');
+    });
+});
+
+describe('a voice offered for a type of asset, in the list of the editor', () => {
+    it('offers the categories on a cryptocurrency, or where they are already saved', () => {
+        const categories = coinVoice('crypto_categories');
+        expect(tab.voiceOffered(categories, 'CRYPTO', false)).toBe(true);
+        expect(tab.voiceOffered(categories, 'STOCK', false)).toBe(false);
+        expect(tab.voiceOffered(categories, 'STOCK', true)).toBe(true);
+    });
+
+    it.each([null, undefined, ''])('filters nothing when the type is unknown (%s)', (assetType) => {
+        expect(tab.voiceOffered(coinVoice('crypto_categories'), assetType)).toBe(true);
+    });
+
+    it('leaves it out of an ETF on cryptocurrencies, which is no coin', () => {
+        expect(tab.voiceOffered(coinVoice('crypto_categories'), 'ETF_CRYPTO')).toBe(false);
+    });
+
+    it.each(['website', 'inception_date', 'legal_form', 'issuer_lei', 'ter', 'geography'])('offers %s on every type', (key) => {
+        for (const type of ['CRYPTO', 'STOCK', 'ETF', 'BOND']) expect(tab.voiceOffered(coinVoice(key), type, false)).toBe(true);
     });
 });
 

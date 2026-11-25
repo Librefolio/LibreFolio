@@ -1,6 +1,7 @@
 # 🔑 Get and Set the CoinGecko Key
 
-[CoinGecko](../assets/providers/coingecko.md) prices your crypto, and it needs an API key: a free one is enough. This
+[CoinGecko](../assets/providers/coingecko.md) prices your crypto and can fill its
+[profile](../assets/providers/coingecko.md#profile). It needs an API key: a free one is enough. This
 page takes you from no account to the first price, in five steps. Setting the key needs an **administrator** of your
 LibreFolio.
 
@@ -8,7 +9,8 @@ LibreFolio.
 
 Nothing. A CoinGecko account is free and asks for **no credit card**. Its **Demo** plan allows 10 000 calls a month and
 100 a minute ([CoinGecko's plans](https://www.coingecko.com/en/api/pricing)). With a usual portfolio and the default
-settings, LibreFolio uses about 2 700 a month: see the [credits table](../assets/providers/coingecko.md#credits).
+settings, LibreFolio uses about 2 700 a month for prices, plus 4–5 for each coin whose profile it reads: see
+[Credits](../assets/providers/coingecko.md#credits).
 
 ## 1️⃣ Create the Account {: #account }
 
@@ -77,11 +79,13 @@ When you create the asset, LibreFolio loads its history: the last year on the De
 
 - **One year of history** on the free plan: load the older prices with **Import CSV** in the asset's
   [Data Editor](../assets/detail/data-editor.md#import-from-csv).
-- **Self-hosted only**: CoinGecko is offered on instances you run yourself; a hosted service may switch it off.
+- **For self-hosted instances**: CoinGecko is meant for instances you run yourself; a hosted service may switch it off.
+  Whoever turns it on for a paid or hosted service answers for CoinGecko's terms
+  ([details](../assets/providers/coingecko.md#self-hosted)).
 - **The data are CoinGecko's**, under [its API terms](https://www.coingecko.com/en/api_terms): whoever creates the key
   accepts them. LibreFolio credits CoinGecko with «Powered by CoinGecko», as the terms ask
   ([where](../assets/providers/coingecko.md#attribution)).
-- **One key for the whole instance**: every user's CoinGecko assets spend the same account's credits.
+- **One key for the whole instance**: every user's CoinGecko assets, prices and profile, spend the same account's credits.
 
 ## 🔗 Related
 
