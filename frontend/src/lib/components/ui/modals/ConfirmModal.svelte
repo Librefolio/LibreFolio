@@ -7,13 +7,17 @@
   - Danger variant for destructive actions
   - Dark mode support
   - Uses ModalBase for consistent modal behavior
+  - The standard buttons (85 BTN-2a): the ✕ is `CloseButton` (named «Close» in the user's language, D12); the confirm
+    button publishes its tone in `data-tone` (`danger`, `warning`, `primary`), so a test reads the tone, never a class.
 -->
 <script lang="ts">
     import type {Snippet} from 'svelte';
     import {t} from '$lib/i18n';
-    import {AlertTriangle, Check, ChevronDown, ChevronUp, X, XCircle} from 'lucide-svelte';
+    import {AlertTriangle, Check, ChevronDown, ChevronUp, XCircle} from 'lucide-svelte';
     import {fade} from 'svelte/transition';
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
+    import Button from '$lib/components/ui/button/Button.svelte';
+    import CloseButton from '$lib/components/ui/button/CloseButton.svelte';
 
     interface Props {
         /** Whether modal is open */
@@ -69,6 +73,8 @@
     // Reactive: if items.length === 1, always show
     let shouldShowItems = $derived(items.length === 1 || showItems);
     let hasResults = $derived(results.length > 0);
+    /** The confirm button's tone: its look and, for the tests, `data-tone`. */
+    let tone = $derived<'danger' | 'warning' | 'primary'>(danger ? 'danger' : warning ? 'warning' : 'primary');
 </script>
 
 <ModalBase maxWidth="max-w-md" onRequestClose={onCancel} {open} {zIndex}>
@@ -80,9 +86,7 @@
             <AlertTriangle class="text-lf-warning" size={24} />
         {/if}
         <h2 class="modal-title">{title}</h2>
-        <button aria-label="Close" class="close-btn" onclick={onCancel} type="button">
-            <X size={20} />
-        </button>
+        <CloseButton onclick={onCancel} />
     </div>
 
     <!-- Body -->
@@ -119,7 +123,7 @@
             {#if items.length > 0}
                 <div class="items-section">
                     {#if items.length > 1}
-                        <button type="button" class="items-toggle" onclick={() => (showItems = !showItems)}>
+                        <button type="button" class="items-toggle" aria-expanded={shouldShowItems} onclick={() => (showItems = !showItems)}>
                             <span class="items-label">
                                 {itemsLabel || `${items.length} ${$t('table.items')}`}
                             </span>
@@ -146,16 +150,10 @@
     <!-- Footer -->
     <div class="modal-footer">
         {#if hasResults}
-            <button type="button" class="btn btn-primary" onclick={onCancel} data-testid="confirm-modal-close">
-                {$t('common.close')}
-            </button>
+            <Button label={$t('common.close')} variant="primary" onclick={onCancel} data-testid="confirm-modal-close" />
         {:else}
-            <button type="button" class="btn btn-secondary" onclick={onCancel} data-testid="confirm-modal-cancel">
-                {cancelText}
-            </button>
-            <button type="button" class="btn {danger ? 'btn-danger' : warning ? 'btn-warning' : 'btn-primary'}" onclick={onConfirm} data-testid="confirm-modal-confirm">
-                {confirmText}
-            </button>
+            <Button label={cancelText} variant="secondary" onclick={onCancel} data-testid="confirm-modal-cancel" />
+            <Button label={confirmText} variant={tone === 'danger' ? 'danger-solid' : tone === 'warning' ? 'warning' : 'primary'} onclick={onConfirm} data-testid="confirm-modal-confirm" data-tone={tone} />
         {/if}
     </div>
 </ModalBase>
@@ -178,25 +176,6 @@
         font-weight: 600;
         color: var(--lf-text-primary);
         margin: 0;
-    }
-
-    .close-btn {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        width: 32px;
-        height: 32px;
-        border: none;
-        border-radius: 6px;
-        background: transparent;
-        color: var(--lf-text-muted);
-        cursor: pointer;
-        transition: all 0.15s;
-    }
-
-    .close-btn:hover {
-        background: var(--lf-surface-hover);
-        color: var(--lf-text-primary);
     }
 
     .modal-body {
@@ -302,51 +281,5 @@
         gap: 0.75rem;
         padding: 1rem 1.25rem;
         border-top: 1px solid var(--lf-border-subtle);
-    }
-
-    .btn {
-        padding: 0.5rem 1rem;
-        font-size: 0.875rem;
-        font-weight: 500;
-        border-radius: 6px;
-        border: none;
-        cursor: pointer;
-        transition: all 0.15s;
-    }
-
-    .btn-secondary {
-        background: var(--lf-surface-panel);
-        color: var(--lf-text-secondary);
-    }
-
-    .btn-secondary:hover {
-        background: var(--lf-surface-neutral);
-    }
-
-    .btn-primary {
-        background: var(--lf-action);
-        color: var(--lf-on-action);
-    }
-
-    .btn-primary:hover {
-        background: var(--lf-action-hover);
-    }
-
-    .btn-danger {
-        background: var(--lf-danger-solid);
-        color: var(--lf-on-danger-solid);
-    }
-
-    .btn-danger:hover {
-        background: var(--lf-danger-hover);
-    }
-
-    .btn-warning {
-        background: var(--lf-warning);
-        color: var(--lf-on-status);
-    }
-
-    .btn-warning:hover {
-        background: var(--lf-warning-hover);
     }
 </style>

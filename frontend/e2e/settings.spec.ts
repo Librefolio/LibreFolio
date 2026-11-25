@@ -146,8 +146,8 @@ test.describe('Runes parity', () => {
                     const confirm = discard.getByTestId('confirm-modal-confirm');
                     await expect(confirm).toBeEnabled();
                     // Approved feature assertion, never a class-based selector.
-                    await expect(confirm).toHaveClass(/\bbtn-warning\b/);
-                    await expect(confirm).not.toHaveClass(/\bbtn-danger\b/);
+                    // ConfirmModal publishes its variant as data-tone (BTN-2a): warning, so not danger.
+                    await expect(confirm).toHaveAttribute('data-tone', 'warning');
                     await expect(field).toHaveValue(draft);
                     if (action === 'cancel') {
                         await discard.getByTestId('confirm-modal-cancel').click();

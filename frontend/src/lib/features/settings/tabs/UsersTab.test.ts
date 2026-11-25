@@ -49,8 +49,8 @@
  * 409 `PENDING_SETUP`: a row drawn before the server said it waits still offers «Demote», and the toast takes the wording
  * `accountErrors.ts` gives that code since A7b (UTAB-58, a guard: green today). The keys of the confirmation and of the
  * toast are sentences in the four catalogues, naming no value but the username. Four things the rest of this file leaves
- * alone are read there, each the subject of its case: the confirmation's danger, as `btn-danger` (ConfirmModal publishes
- * its variant only as that class, and `GlobalSettingsTab.test.ts` reads its amber one so); a toast's message, which
+ * alone are read there, each the subject of its case: the confirmation's danger, as `data-tone="danger"` (ConfirmModal
+ * publishes its variant so since BTN-2a, and `GlobalSettingsTab.test.ts` reads its amber one so); a toast's message, which
  * through the identity translator is the key the tab chose; the values that key was given, from the translator's own
  * calls (the identity translator is a spy for this alone); and the real catalogues. Red until A-43, every case marked
  * so; the two guards (UTAB-58, UTAB-59, the catalogue reader's positive control) are green today.
@@ -1298,7 +1298,7 @@ describe('UsersTab — cancelling the setup link of the waiting administrator (U
         const confirm = within(dialog).getByTestId('confirm-modal-confirm');
         expect(confirm).toHaveTextContent(CANCEL_SETUP.confirm);
         // A feature assertion of the contract, selection by test id: the danger is the subject, and ConfirmModal publishes it only so.
-        expect(confirm).toHaveClass('btn-danger');
+        expect(confirm).toHaveAttribute('data-tone', 'danger');
         expectNothingWritten();
     });
 
@@ -1559,7 +1559,9 @@ describe('UsersTab — who can sign up, from here (UTAB-63…72, N69c)', () => {
         await choose('open');
 
         const dialog = await confirmation();
-        expect(within(dialog).getByTestId('confirm-modal-confirm').className).not.toContain('btn-danger');
+        const confirmButton = within(dialog).getByTestId('confirm-modal-confirm');
+        expect(confirmButton, 'presence barrier: the confirmation publishes its tone').toHaveAttribute('data-tone');
+        expect(confirmButton).not.toHaveAttribute('data-tone', 'danger');
         expect(control()).toHaveAttribute('data-shown', 'open');
 
         await declineConfirmation();

@@ -355,9 +355,8 @@ describe('GlobalSettingsTab — closing the lock over pending edits', () => {
         expect(within(dialog).getByTestId('confirm-modal-cancel')).toHaveTextContent('common.cancel');
         expect(confirm).toHaveTextContent('common.discard');
         // Approved feature assertion: selection uses testid; amber is the subject.
-        expect(confirm).toHaveClass('btn-warning');
-        expect(confirm).not.toHaveClass('btn-danger');
-        expect(confirm).not.toHaveClass('btn-primary');
+        // ConfirmModal publishes its variant as data-tone (BTN-2a): one value, so warning excludes danger and primary.
+        expect(confirm).toHaveAttribute('data-tone', 'warning');
         expect(editedNumber()).toHaveValue(48);
         expect(uploadLimit).toHaveValue(20);
         expect(editedNumber()).toBeEnabled();
