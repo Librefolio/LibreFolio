@@ -41,7 +41,7 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from typing import Literal, Optional
+from typing import Literal, NamedTuple, Optional
 
 import structlog
 from sqlalchemy import select, update
@@ -352,10 +352,20 @@ async def _refusal(session: AsyncSession, record: AccountToken, user: Optional[U
 LinkCheck = Literal["ready", "signin", "other_account"]
 
 
-async def check_link(session: AsyncSession, token: str, *, acting_user_id: Optional[int], now: Optional[datetime] = None) -> LinkCheck:
+class LinkCheckResult(NamedTuple):
+    """What the page of a change link shows on opening: the ``status``, and — only with ``ready`` — the address the click
+    would confirm (81 U46, the double check of whoever confirms). Never for ``signin`` or ``other_account``: whoever is not
+    the account's own session is not told which address is waiting."""
+
+    status: LinkCheck
+    new_email: Optional[str] = None
+
+
+async def check_link(session: AsyncSession, token: str, *, acting_user_id: Optional[int], now: Optional[datetime] = None) -> LinkCheckResult:
     """What the link page shows on opening (lots E2, E3): read only, the link neither spent nor revoked, and nothing that names
     the account. A dead link: ``ProfileEmailChangeLinkInvalidError`` with its status, as its click would get. A live one:
-    its status — see ``EmailChangeCheckResponse``. The conditions read at the click (another account took the
+    its status — see ``EmailChangeCheckResponse`` — and, when it is ``ready`` (the account's own session, or the host's
+    link of the instance owner), the address the click would confirm. The conditions read at the click (another account took the
     address meanwhile) are not read here: the click still answers them."""
     inspection = await token_service.inspect_token(session, token, CHANGE, now=now or utcnow())
     record = inspection.record
@@ -363,12 +373,12 @@ async def check_link(session: AsyncSession, token: str, *, acting_user_id: Optio
         raise ProfileEmailChangeLinkInvalidError(inspection.status.value)
     if not (record.created_by_user_id is not None and record.created_by_user_id == record.user_id):
         # The host's link of the instance owner: no session needed.
-        return "ready"
+        return LinkCheckResult("ready", record.email)
     if acting_user_id is None:
-        return "signin"
+        return LinkCheckResult("signin")
     if acting_user_id != record.user_id:
-        return "other_account"
-    return "ready"
+        return LinkCheckResult("other_account")
+    return LinkCheckResult("ready", record.email)
 
 
 async def confirm_profile_change(session: AsyncSession, token: str, *, acting_user_id: Optional[int], now: Optional[datetime] = None) -> ConfirmedProfileChange:

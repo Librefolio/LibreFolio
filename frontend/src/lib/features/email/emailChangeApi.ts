@@ -23,9 +23,10 @@ export type EmailChangePageStatus = VerifyPageStatus | 'signin' | 'otheraccount'
 export type EmailChangeLinkCheck = 'ready' | 'signin' | 'otheraccount';
 
 /** Ask the server what the link's page shows, before any click: `POST /email/email-change/check`, which spends nothing. */
-export async function checkEmailChangeLink(token: string): Promise<EmailChangeLinkCheck> {
+export async function checkEmailChangeLink(token: string): Promise<{status: EmailChangeLinkCheck; newEmail: string | null}> {
     const answer = await zodiosApi.check_email_change_link_api_v1_email_email_change_check_post({token});
-    return answer.status === 'other_account' ? 'otheraccount' : answer.status;
+    // The address the click would confirm comes only with `ready` (81 U46): the page shows it as a double check.
+    return {status: answer.status === 'other_account' ? 'otheraccount' : answer.status, newEmail: answer.status === 'ready' ? (answer.new_email ?? null) : null};
 }
 
 /** Spend the link: the address of the account is the new one now. `sessionKept`: the browser that confirmed is still

@@ -600,7 +600,10 @@ async def test_the_confirming_session_stays_signed_in_and_only_the_others_end(pr
 async def test_the_check_tells_the_page_what_to_show_and_changes_nothing(private: _Private, world: World, monkeypatch: pytest.MonkeyPatch) -> None:
     """PEC-024 (lots E2, E3) — ``POST /email/email-change/check`` with the link's token, before any click: without a session
     ``signin``; with another account's ``other_account``; with the account's own ``ready``. None of the
-    answers names the account (no username, no address), and none spends the link: it still confirms afterwards."""
+    answers names the account (no username) and none spends the link: it still confirms afterwards. 81 U46: only ``ready``
+    carries ``new_email``, the address the click would confirm (the page's double check); ``signin`` and ``other_account``
+    answer ``{"status": …}`` alone, the field absent — never null — so whoever is not the account's own session is not told
+    which address is waiting."""
     print_section("PEC-024: the check of a live link")
     _email_on(monkeypatch)
     user, other = await _add_user(private.engine), await _add_user(private.engine)
@@ -617,9 +620,13 @@ async def test_the_check_tells_the_page_what_to_show_and_changes_nothing(private
 
     answers = [response.json() for response in (without, another, own)]
     assert [response.status_code for response in (without, another, own, again)] == [200, 200, 200, 200], [response.text for response in (without, another, own)]
-    assert answers == [{"status": "signin"}, {"status": "other_account"}, {"status": "ready"}]
-    leaked = [secret for secret in (user.username, user.email, NEW_EMAIL) for response in (without, another, own) if secret.casefold() in response.text.casefold()]
+    assert answers == [{"status": "signin"}, {"status": "other_account"}, {"status": "ready", "new_email": NEW_EMAIL}]
+    assert again.json() == {"status": "ready", "new_email": NEW_EMAIL}, "the second check of the same link answers the same"
+    # The account is never named; the address waiting is named only to its own session.
+    leaked = [secret for secret in (user.username, user.email) for response in (without, another, own) if secret.casefold() in response.text.casefold()]
     assert leaked == [], f"a check names the account: {leaked}"
+    shown_to_others = [response.text for response in (without, another) if NEW_EMAIL.casefold() in response.text.casefold() or "new_email" in response.text]
+    assert shown_to_others == [], f"the address waiting is told to a session that is not the account's: {shown_to_others}"
     assert confirmed.status_code == 200, f"the checks spent the link: {confirmed.text}"
     print_success("signin / other_account / ready, nothing named, the link still confirms")
 
@@ -647,6 +654,7 @@ async def test_the_check_of_a_dead_link_answers_as_the_click_would(private: _Pri
 
     expected = {"cancelled": "revoked", "consumed": "consumed", "unknown": "unknown"}[how]
     assert response.status_code == 400, response.text
+    assert NEW_EMAIL.casefold() not in response.text.casefold() and "new_email" not in response.text, f"a dead link names the address: {response.text}"
     assert response.json()["detail"]["error_code"] == "TOKEN_INVALID" and response.json()["detail"]["status"] == expected, response.text
     print_success(f"400 TOKEN_INVALID {expected}")
 

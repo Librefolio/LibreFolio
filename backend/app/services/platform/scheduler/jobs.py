@@ -23,6 +23,7 @@ from backend.app.schemas.common import DateRangeModel
 from backend.app.schemas.refresh import FARefreshItem, SyncStatus
 from backend.app.services.assets.manager import AssetSourceManager
 from backend.app.services.fx.sync import sync_pairs_bulk
+from backend.app.services.fx.sync_claims import claim_free_pairs, sync_pair_key
 from backend.app.services.platform.scheduler.joblog import (
     append_entry,
     build_current_price_entry,
@@ -238,9 +239,15 @@ async def run_history_sync(state: SchedulerState, horizon_days: int = 14) -> Non
             pairs_list = sorted(pairs_set)
             last_fx_dates = await _last_fx_dates(session, pairs_list)
             fx_starts = [_history_sync_start(today, horizon_days, last_fx_dates.get(pair)) for pair in pairs_list]
-            # One call for every pair: the providers fetch by currency, so a pair behind widens the days, not the requests.
-            fx_response = await sync_pairs_bulk(session, pairs_list, (min(fx_starts), today))
-            fx_results_list = list(fx_response.results)
+            # One sync per pair at a time (81 U35): a pair a reader's sync is running now is left to it, the others go.
+            with claim_free_pairs(pairs_list) as (free_pairs, busy_pairs):
+                if busy_pairs:
+                    logger.info("Scheduler: FX pairs skipped, a sync of each is already running", pairs=sorted(busy_pairs))
+                if free_pairs:
+                    free_starts = [start for pair, start in zip(pairs_list, fx_starts, strict=True) if sync_pair_key(pair) in free_pairs]
+                    # One call for every pair: the providers fetch by currency, so a pair behind widens the days, not the requests.
+                    fx_response = await sync_pairs_bulk(session, free_pairs, (min(free_starts), today))
+                    fx_results_list = list(fx_response.results)
 
     assets_behind = sum(1 for start in asset_starts.values() if start < horizon_start)
     fx_pairs_behind = sum(1 for start in fx_starts if start < horizon_start)

@@ -91,6 +91,7 @@
     import type {LayoutMode} from '$lib/utils/layout/responsiveLayout.svelte';
     import PageToolbar from '$lib/components/ui/toolbar/PageToolbar.svelte';
     import {ensureFxRangeLoaded, getFxStore} from '$lib/features/fx/fxStoreRegistry';
+    import {asFxSyncBusy, fxSyncBusyFor, fxSyncBusyText, guardedFxSync} from '$lib/features/fx/fxSyncGuard.svelte';
     import {getAssetPriceStore, invalidateAssetPriceStore, apiPricesToAssetPricePoints} from '$lib/stores/assetPriceStoreRegistry';
     import {firstDateOf, forgetFirstDate, rememberFirstDate} from '$lib/stores/firstSeriesDates';
     import {hasStoredPointInRange} from '$lib/utils/sync/syncHelpers';
@@ -2142,11 +2143,13 @@
         ]);
         const fxRequest =
             requiredFxSlugs.length > 0
-                ? zodiosApi.sync_rates_api_v1_fx_currencies_sync_post({
-                      pairs: requiredFxSlugs,
-                      start: requestedSyncRange.start,
-                      end: requestedSyncRange.end,
-                  })
+                ? guardedFxSync(requiredFxSlugs, () =>
+                      zodiosApi.sync_rates_api_v1_fx_currencies_sync_post({
+                          pairs: requiredFxSlugs,
+                          start: requestedSyncRange.start,
+                          end: requestedSyncRange.end,
+                      }),
+                  )
                 : Promise.resolve(null);
         const [assetOutcome, fxOutcome] = await Promise.allSettled([assetRequest, fxRequest]);
         // N64: a sync may have changed what a kept signal answer was computed from — this asset, a comparison peer, a
@@ -2258,7 +2261,10 @@
             }
         } else if (fxOutcome.status === 'rejected' && !silent) {
             const reason = fxOutcome.reason;
-            toasts.error(`FX sync failed: ${reason instanceof Error ? reason.message : String(reason ?? 'unknown')}`);
+            // One sync per pair at a time (81 U35): a pair already syncing is said as that, not as a failure.
+            const busy = asFxSyncBusy(reason);
+            if (busy) toasts.warning(fxSyncBusyText(tr, busy));
+            else toasts.error(`FX sync failed: ${reason instanceof Error ? reason.message : String(reason ?? 'unknown')}`);
         }
 
         if (!current() || (!assetSyncAccepted && !fxSyncAccepted)) return;
@@ -2285,6 +2291,13 @@
     }
 
     async function handleSyncPair(slug: string) {
+        // One sync per pair at a time (81 U35): asked before the generation below is bumped, so a refused press never takes the
+        // ownership of the sync that is running; the reader is told, nothing is sent.
+        const busyNow = fxSyncBusyFor([slug]);
+        if (busyNow) {
+            toasts.warning(fxSyncBusyText(get(t), busyNow));
+            return;
+        }
         const pageAssetId = data.assetId;
         const sessionGeneration = getClientSessionGeneration();
         const requestGeneration = (fxSyncRequestGenerations.get(slug) ?? 0) + 1;
@@ -2310,11 +2323,13 @@
             signalDataContextFingerprint(signals) === requestedSignalDataFingerprint;
         fxSyncing = true;
         try {
-            const syncResponse = await zodiosApi.sync_rates_api_v1_fx_currencies_sync_post({
-                pairs: [slug],
-                start: requestedStart,
-                end: requestedEnd,
-            });
+            const syncResponse = await guardedFxSync([slug], () =>
+                zodiosApi.sync_rates_api_v1_fx_currencies_sync_post({
+                    pairs: [slug],
+                    start: requestedStart,
+                    end: requestedEnd,
+                }),
+            );
             // N64: the rates may have changed under a converted answer, even when this one finds the page moved on.
             clearAssetPageAnswers();
             if (!current()) return;
@@ -2348,7 +2363,12 @@
                 overlayDataVersion++;
             }
         } catch (e: any) {
-            if (current()) toasts.error('FX sync failed: ' + (e?.message || 'unknown'));
+            const busy = asFxSyncBusy(e);
+            // One sync per pair at a time (81 U35): a pair already syncing is said as that, not as a failure.
+            if (current()) {
+                if (busy) toasts.warning(fxSyncBusyText(get(t), busy));
+                else toasts.error('FX sync failed: ' + (e?.message || 'unknown'));
+            }
         } finally {
             if (requestGeneration === activeFxSyncRequests.get(slug)) {
                 activeFxSyncRequests.delete(slug);

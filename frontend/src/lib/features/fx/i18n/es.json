@@ -46,7 +46,8 @@
       "requestTimedOut": "La solicitud agotó el tiempo tras {seconds} s. Aumenta el tiempo de espera y vuelve a intentarlo.",
       "failed": "Error de sincronización",
       "retryFailed": "{n, plural, one {Reintentar el fallido} other {Reintentar los # fallidos}}",
-      "overwriteWarning": "{existing, plural, one {# de {total} ya tiene} other {# de {total} ya tienen}} datos guardados en este intervalo: la sincronización los reemplaza con los valores del proveedor, incluidas las ediciones manuales."
+      "overwriteWarning": "{existing, plural, one {# de {total} ya tiene} other {# de {total} ya tienen}} datos guardados en este intervalo: la sincronización los reemplaza con los valores del proveedor, incluidas las ediciones manuales.",
+      "alreadyRunning": "Ya hay una sincronización de {pairs} en curso: espera a que termine."
     },
     "route": {
       "title": "Rutas de Conversión",

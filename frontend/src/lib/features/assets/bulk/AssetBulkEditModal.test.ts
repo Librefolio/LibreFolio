@@ -103,6 +103,19 @@ describe('AssetBulkEditModal — at rest', () => {
         expect(screen.queryByTestId('asset-bulk-selected-more')).toBeNull();
     });
 
+    // 81 U45: «Leave as is» was too long for a segment of a three-state control (it read «Leave a…»): the segment says the state, one
+    // short word (the SEL consultant: «Unchanged»), while the long sentence stays on the placeholders of the text fields.
+    it('the «leave» segment of Active and Benchmark says «Unchanged», not the long sentence the text fields keep as their placeholder', () => {
+        mount();
+        const t = get(_);
+        for (const field of ['active', 'is_benchmark']) {
+            const segment = screen.getByTestId(`asset-bulk-${field}-leave`);
+            expect(segment.textContent?.trim(), `${field}: the segment`).toBe(t('assets.bulkEdit.triLeave'));
+            expect(segment.textContent?.trim(), `${field}: not the long sentence`).not.toBe(t('assets.bulkEdit.leave'));
+        }
+        expect(t('assets.bulkEdit.triLeave').length, 'the short word is short').toBeLessThanOrEqual(11);
+    });
+
     it('every field starts on «leave»', () => {
         mount();
         expect(screen.getByTestId('asset-bulk-active')).toHaveAttribute('data-state', 'leave');

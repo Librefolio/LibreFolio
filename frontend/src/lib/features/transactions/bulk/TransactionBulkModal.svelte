@@ -27,6 +27,7 @@
     import {todayIso} from '$lib/utils/dateOnly';
     import {onDestroy, tick, untrack} from 'svelte';
     import {_ as t} from '$lib/i18n';
+    import {asFxSyncBusy, fxSyncBusyText, guardedFxSync} from '$lib/features/fx/fxSyncGuard.svelte';
     import {currentLanguage} from '$lib/stores/app/language';
     import {X, Plus, Pencil, Copy, Trash2, Check, Undo2, Save, Unlink, Link2, Lightbulb, Upload, ChevronDown, ChevronRight} from 'lucide-svelte';
 
@@ -1945,11 +1946,14 @@
         const pairs = allPairs.map((p) => p.replace('/', '-'));
         syncFxLoading = true;
         try {
-            await zodiosApi.post('/api/v1/fx/currencies/sync', {pairs, start, end});
+            await guardedFxSync(pairs, () => zodiosApi.post('/api/v1/fx/currencies/sync', {pairs, start, end}));
             toasts.success($t('transactions.wac.syncSuccess') || 'FX rates synced');
             scheduler.trigger('change');
-        } catch {
-            toasts.error($t('transactions.wac.syncFailed') || 'Failed to sync FX rates');
+        } catch (error) {
+            // One sync per pair at a time (81 U35): a pair already syncing is said as that, not as a failure.
+            const busy = asFxSyncBusy(error);
+            if (busy) toasts.warning(fxSyncBusyText($t, busy));
+            else toasts.error($t('transactions.wac.syncFailed') || 'Failed to sync FX rates');
         } finally {
             syncFxLoading = false;
         }

@@ -77,10 +77,12 @@ export interface PluginMenuItem {
 
 /** The menu: «All», «To configure» (when something is, or when it is the entry selected), then each family that has
  * entries, or is the entry selected, in `FAMILY_ORDER`, with its dot. Which entries are listed, and the dots, go by
- * every entry; the counts by `shown`, the entries the search shows (S2b, the developer's C: they stay, with 0). */
+ * every entry; the counts by `shown`, the entries the search shows (S2b, the developer's C: they stay, with 0).
+ * «All» counts the plugins, never the shared groups: a group is the settings several plugins read, not a plugin, and has
+ * its own filter (81 U37). */
 export function pluginMenu(entries: readonly PluginSettingsEntry[], selected: PluginMenuId = 'all', shown: readonly PluginSettingsEntry[] = entries): PluginMenuItem[] {
     const unconfigured = entries.filter((entry) => !entry.configured).length;
-    const items: PluginMenuItem[] = [{id: 'all', count: shown.length, dot: false}];
+    const items: PluginMenuItem[] = [{id: 'all', count: shown.filter((entry) => entry.family !== 'group').length, dot: false}];
     if (unconfigured > 0 || selected === 'unconfigured') items.push({id: 'unconfigured', count: shown.filter((entry) => !entry.configured).length, dot: false});
     for (const family of FAMILY_ORDER) {
         const own = entries.filter((entry) => entry.family === family);
@@ -143,9 +145,10 @@ export function entryMatches(entry: PluginSettingsEntry, words: readonly string[
     return words.every((word) => text.includes(word));
 }
 
-/** The entries the menu's selection shows, in the answer's order. */
+/** The entries the menu's selection shows, in the answer's order. «All» is every plugin, each once, in its family: the shared
+ * groups are left out (81 U37, the SEL consultant) — they are in «Shared», and each plugin that reads one links to it. */
 export function filterByMenu(entries: readonly PluginSettingsEntry[], selected: PluginMenuId): PluginSettingsEntry[] {
-    if (selected === 'all') return [...entries];
+    if (selected === 'all') return entries.filter((entry) => entry.family !== 'group');
     if (selected === 'unconfigured') return entries.filter((entry) => !entry.configured);
     return entries.filter((entry) => entry.family === selected);
 }

@@ -155,18 +155,18 @@
     },
     "emailChange": {
       "page": {
-        "ready": "Confirma la **nueva dirección de correo** de tu cuenta.\nA partir de ahora iniciarás sesión y recibirás los correos con ella.",
+        "ready": "Confirma la **nueva dirección de correo**: la usarás para iniciar sesión y recibir los correos.",
         "checking": "Comprobando el enlace…",
         "expired": "Este enlace ha **caducado**.\nSi pediste el cambio desde tu perfil, **vuelve a pedir el cambio** desde allí.\nSi la dirección la cambió quien aloja la instancia, pídele un enlace nuevo.",
         "consumed": "Este enlace **ya se ha usado**.\nSi tu dirección se cambió, inicia sesión con la nueva.",
-        "revoked": "Este enlace **ya no funciona**: la solicitud se canceló o se sustituyó, o la dirección ya es de otra cuenta.\n**No ha cambiado nada.**\n**Vuelve a pedir el cambio**, o pregunta a quien aloja la instancia.",
+        "revoked": "Este enlace **ya no funciona**: la solicitud se canceló o se sustituyó, o la dirección ya es de otra cuenta.",
         "unknown": "Este enlace **no es válido**.\nÁbrelo de nuevo, entero, desde el correo.\nSi sigue fallando, **vuelve a pedir el cambio** o pregunta a quien aloja la instancia.",
         "blocked": "Esta instancia está **bloqueada** por quien la aloja, así que el enlace no se puede comprobar ahora.\nÁbrelo de nuevo cuando se desbloquee.",
         "missing": "Este enlace está **incompleto**.\nÁbrelo de nuevo desde el correo.",
         "error": "No se pudo comprobar el enlace.\nInténtalo de nuevo.",
         "confirm": "Confirmar la nueva dirección",
         "notExpected": "Si no esperabas este cambio, cierra esta página: **no pasa nada**.",
-        "signin": "Para confirmar la nueva dirección, **inicia sesión con la cuenta que pidió el cambio**, no con otra cuenta que uses.\nSi en este navegador hay otra cuenta abierta, primero se cierra su sesión.\nDespués vuelves aquí, y basta **un clic**.",
+        "signin": "Para confirmar la nueva dirección, **inicia sesión con la cuenta que pidió el cambio**.",
         "signinAction": "Iniciar sesión con esa cuenta para confirmar",
         "otherAccount": "Este enlace pertenece a **otra cuenta**, no a la que tiene la sesión abierta en este navegador.\n**No ha cambiado nada.**\nCierra la sesión y luego inicia sesión con la cuenta que pidió el cambio.",
         "otherAccountAction": "Cerrar sesión e iniciarla con la cuenta correcta"

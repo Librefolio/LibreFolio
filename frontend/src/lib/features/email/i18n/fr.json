@@ -155,18 +155,18 @@
     },
     "emailChange": {
       "page": {
-        "ready": "Confirmez la **nouvelle adresse e-mail** de votre compte.\nDésormais, vous vous connecterez et recevrez les e-mails avec cette adresse.",
+        "ready": "Confirmez la **nouvelle adresse e-mail** : elle servira à vous connecter et à recevoir les e-mails.",
         "checking": "Vérification du lien…",
         "expired": "Ce lien a **expiré**.\nSi vous avez demandé le changement depuis votre profil, **demandez à nouveau le changement** depuis celui-ci.\nSi c'est l'hébergeur de l'instance qui a changé l'adresse, demandez-lui un nouveau lien.",
         "consumed": "Ce lien a **déjà été utilisé**.\nSi votre adresse a été changée, connectez-vous avec la nouvelle.",
-        "revoked": "Ce lien **ne fonctionne plus** : la demande a été annulée ou remplacée, ou l'adresse appartient déjà à un autre compte.\n**Rien n'a changé.**\n**Demandez à nouveau le changement**, ou demandez à l'hébergeur de l'instance.",
+        "revoked": "Ce lien **ne fonctionne plus** : la demande a été annulée ou remplacée, ou l'adresse appartient déjà à un autre compte.",
         "unknown": "Ce lien **n'est pas valide**.\nOuvrez-le à nouveau, en entier, depuis l'e-mail.\nS'il échoue encore, **demandez à nouveau le changement** ou demandez à l'hébergeur de l'instance.",
         "blocked": "Cette instance est **bloquée** par son hébergeur : le lien ne peut pas être vérifié maintenant.\nRouvrez-le une fois l'instance débloquée.",
         "missing": "Ce lien est **incomplet**.\nOuvrez-le à nouveau depuis l'e-mail.",
         "error": "Le lien n'a pas pu être vérifié.\nRéessayez.",
         "confirm": "Confirmer la nouvelle adresse",
         "notExpected": "Si vous n'attendiez pas ce changement, fermez cette page : **il ne se passe rien**.",
-        "signin": "Pour confirmer la nouvelle adresse, **connectez-vous avec le compte qui a demandé le changement**, et non avec un autre compte que vous utilisez.\nSi un autre compte est connecté dans ce navigateur, il est d'abord déconnecté.\nVous revenez ensuite ici, et **un clic** suffit.",
+        "signin": "Pour confirmer la nouvelle adresse, **connectez-vous avec le compte qui a demandé le changement**.",
         "signinAction": "Se connecter avec ce compte pour confirmer",
         "otherAccount": "Ce lien appartient à **un autre compte**, pas à celui connecté dans ce navigateur.\n**Rien n'a changé.**\nDéconnectez-vous, puis connectez-vous avec le compte qui a demandé le changement.",
         "otherAccountAction": "Se déconnecter et se connecter avec le bon compte"

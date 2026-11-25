@@ -510,7 +510,8 @@
       "removeUrl": "Quitar la URL",
       "toBeRemoved": "Por quitar",
       "urlNone": "ninguna URL",
-      "alreadyWithout": "{already} ya sin"
+      "alreadyWithout": "{already} ya sin",
+      "triLeave": "Sin cambios"
     },
     "docsHelp": {
       "list": "Todos los activos que sigue LibreFolio, con la fuente de sus precios, su último precio y su variación. Abre uno para ver su gráfico, eventos y datos."

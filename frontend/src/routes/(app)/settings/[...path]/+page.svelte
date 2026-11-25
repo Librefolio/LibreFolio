@@ -146,7 +146,9 @@
     </h1>
 
     <!-- Tabs Navigation -->
-    <div class="bg-lf-card rounded-xl shadow-sm shadow-lf-shadow-card border border-lf-subtle overflow-hidden">
+    <!-- overflow-clip, not -hidden: it cuts the corners the same way but is no scroll container, so what is `sticky` inside (the filter
+         menu of the tab, 81 U38) sticks to the window, not to this card -->
+    <div class="bg-lf-card rounded-xl shadow-sm shadow-lf-shadow-card border border-lf-subtle overflow-clip">
         <TabBar tabs={topTabs} activeTab={activeEntry ? entryId(activeEntry) : ''} onchange={selectTop} hideLabelOnMobile={true} scrollable />
 
         {#if members.length > 0}

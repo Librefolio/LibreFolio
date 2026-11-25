@@ -2788,6 +2788,14 @@ def services_fx_sync(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "FX sync service tests", verbose=verbose)
 
 
+def services_fx_sync_single_flight(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the one-sync-per-FX-pair guard: the registry, the 409 of POST /fx/currencies/sync, the weekly job (81 U35)."""
+    print_section("Services: FX Sync, one per pair at a time")
+    print_info("Testing: backend/app/services/fx/sync_claims.py, POST /fx/currencies/sync (in process, no server)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_fx_sync_single_flight.py", test_names)
+    return run_command(cmd, "FX sync single-flight tests", verbose=verbose)
+
+
 def services_provider_registry_misc(verbose: bool = False, test_names: list = None) -> bool:
     """Test provider registry helper branches not covered by contract tests."""
     print_section("Services: Provider Registry Helpers")
@@ -5287,6 +5295,15 @@ Note: No backend server required.
         name="FX Sync Orchestration",
         desc="_is_date_within_sync_range (N83: an old rate is kept too, no 1900-01-01 floor; D2: no rate after the sync's end, weekend kept), _process_route/_compute_multi_step",
         exclusive_because="an autouse fixture truncates fx_rates and fx_conversion_routes before every test, so any concurrent unit reading rates or routes loses them mid-test",
+    )
+    add_test(
+        cat,
+        "fx-sync-single-flight",
+        services_fx_sync_single_flight,
+        name="FX Sync, One Per Pair (81 U35)",
+        desc="The registry of the pairs being synced (alphabetical keys, atomic claim, released on any end), POST /fx/currencies/sync refusing a second sync of a pair with 409 fx_sync_in_progress (pair and started_at) and never starting it, two different pairs syncing at once, USD-EUR and EUR-USD one pair, a request over several pairs refused whole claiming none, a refused date range and a failed sync holding nothing; the weekly job's claim_free_pairs. The route is mounted on a private app served in process; sync_pairs_bulk is a double behind a gate the test opens",
+        # PURE: no lane database, no server, no network; the registry is cleared around every test.
+        isolation="pure",
     )
     add_test(cat, "provider-registry-misc", services_provider_registry_misc, name="Provider Registry Helpers", desc="auto_discover, register, get_provider_instance, BRIM plugin detection")
     add_test(cat, "scheduler-joblog-misc", services_scheduler_joblog_misc, name="Scheduler Job Log Helpers", desc="read_entries, _rotate_if_needed")

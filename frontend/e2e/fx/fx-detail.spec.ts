@@ -1409,46 +1409,41 @@ test.describe('FX Detail Page', () => {
         const initialComparisonRequests = fixture.stats.comparisonRequests.length;
         const initialGbpRefills = fixture.stats.fxRefillsBySlug.get(gbpPeer.slug) ?? 0;
 
-        // A1 remains pending while A2 for the same slug completes. A2 then
-        // relinquishes active ownership before A3 starts: deriving A3 from the
-        // active map would reuse A1's token and recreate the classic ABA hole.
-        const oldPlan = fixture.enqueueSync('asset-aba-old', gbpPeer.slug, 'ok', true);
+        // 81 U35 — one sync per pair at a time. This test used to start three syncs of one slug on top of each other (an old one
+        // held, a middle one, a current one) to prove that a late answer never takes the slug back from a newer one. The guard
+        // makes that scenario unreachable: while A1 is in flight a second press on the same pair is refused in the browser — no
+        // request, the reader is told — so A1 stays the only owner of the slug, publishes once when it ends, and the next sync of
+        // the pair starts clean. The independent slugs below still run together.
+        const oldPlan = fixture.enqueueSync('asset-guard-old', gbpPeer.slug, 'ok', true);
         const oldResponsePromise = waitForTaggedResponse(page, '/api/v1/fx/currencies/sync', oldPlan.id);
         await activateByKeyboard(gbpSync);
         await oldPlan.entered.wait;
         assertFxSyncRequest(oldPlan.requestBody, gbpPeer.slug, fixture.range);
+        const sentWithOld = fixture.stats.syncRequests.length;
 
-        fixture.conversionFailures.delete(gbpPeer.slug);
-        const middlePlan = fixture.enqueueSync('asset-aba-middle', gbpPeer.slug, 'ok');
-        const middleResponsePromise = waitForTaggedResponse(page, '/api/v1/fx/currencies/sync', middlePlan.id);
-        const middleComparisonResponsePromise = page.waitForResponse(isComparisonResponse, {timeout: 10_000});
+        // The second press on the pair: refused here, nothing sent, the reader is told (a warning, the sync did not fail).
         await activateByKeyboard(gbpSync);
-        await middlePlan.entered.wait;
-        assertFxSyncRequest(middlePlan.requestBody, gbpPeer.slug, fixture.range);
-        const middleResponse = await middleResponsePromise;
-        expect(middleResponse.status()).toBe(200);
-        expect(await middleResponse.finished()).toBeNull();
-        expect(await middleResponse.json()).toEqual({
-            results: [
-                {
-                    pair: gbpPeer.slug,
-                    status: 'ok',
-                    points_fetched: 2,
-                    points_changed: 2,
-                    provider_used: 'MOCKFX',
-                    message: null,
-                    errors: [],
-                },
-            ],
+        await expect(page.getByTestId('toast-warning')).toHaveCount(1);
+        await dismissOwnedToast(page, 'warning');
+        expect(fixture.stats.syncRequests.length, 'a second sync of the pair went out while the first was running').toBe(sentWithOld);
+        expect(fixture.stats.unplannedSyncRequests, 'a sync nobody planned reached the backend').toBe(0);
+
+        // A1 ends and publishes once.
+        fixture.conversionFailures.delete(gbpPeer.slug);
+        const oldComparisonResponsePromise = page.waitForResponse(isComparisonResponse, {timeout: 10_000});
+        oldPlan.hold?.release();
+        const oldResponse = await oldResponsePromise;
+        expect(oldResponse.status()).toBe(200);
+        expect(await oldResponse.finished()).toBeNull();
+        expect(await oldResponse.json()).toMatchObject({
             success_count: 1,
-            date_range: fixture.range,
-            total_points_changed: 2,
+            results: [{pair: gbpPeer.slug, status: 'ok'}],
         });
         await dismissOwnedToast(page, 'success');
-        const middleComparisonResponse = await middleComparisonResponsePromise;
-        expect(middleComparisonResponse.status()).toBe(200);
-        expect(await middleComparisonResponse.finished()).toBeNull();
-        assertComparisonRequest(middleComparisonResponse.request().postDataJSON(), comparisonPeerIds, fixture.range, fixture.asset.currency);
+        const oldComparisonResponse = await oldComparisonResponsePromise;
+        expect(oldComparisonResponse.status()).toBe(200);
+        expect(await oldComparisonResponse.finished()).toBeNull();
+        assertComparisonRequest(oldComparisonResponse.request().postDataJSON(), comparisonPeerIds, fixture.range, fixture.asset.currency);
         await expect(gbpDetail).toBeVisible();
         await expect(gbpSync).toHaveCount(0);
         expect(fixture.stats.fxRefillsBySlug.get(gbpPeer.slug) ?? 0).toBe(initialGbpRefills + 1);
@@ -1480,23 +1475,6 @@ test.describe('FX Detail Page', () => {
         await activateByKeyboard(gbpSync);
         await currentPlan.entered.wait;
         assertFxSyncRequest(currentPlan.requestBody, gbpPeer.slug, fixture.range);
-
-        oldPlan.hold?.release();
-        const oldResponse = await oldResponsePromise;
-        expect(oldResponse.status()).toBe(200);
-        expect(await oldResponse.finished()).toBeNull();
-        expect(await oldResponse.json()).toMatchObject({
-            success_count: 1,
-            results: [{pair: gbpPeer.slug, status: 'ok'}],
-        });
-        // The close/open round trip is a browser-task barrier after A1's
-        // response. If A1 regains ownership, its toast and first refill are
-        // necessarily observable before this later interaction completes.
-        await cycleSignalsPanel(signalsToggle, signalsPanel);
-        await expectNoSyncToasts(page);
-        expect(fixture.stats.fxRefillsBySlug.get(gbpPeer.slug) ?? 0).toBe(beforeOldCompletion.gbpRefills);
-        expect(fixture.stats.mainPriceRequests.length).toBe(beforeOldCompletion.mainPriceRequests);
-        expect(fixture.stats.comparisonRequests.length).toBe(beforeOldCompletion.comparisonRequests);
 
         const currentComparisonResponsePromise = page.waitForResponse(isComparisonResponse, {timeout: 10_000});
         currentPlan.hold?.release();

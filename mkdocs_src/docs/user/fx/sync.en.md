@@ -42,6 +42,12 @@ schedule.
 
 ---
 
+## ⏳ One sync per pair at a time
+
+A pair is synced by one request at a time. While a pair is syncing, every **Sync** of it is off — on its card, in its table row, on its page, and **Start** in the sync window when the window covers it — and says **A sync of EUR/USD is already running: wait for it to finish.** Nothing is queued: when the sync ends, the buttons come back and you can start the next one. **Sync All** counts as a sync of every pair it covers, so a shorter sync of one pair cannot start under it.
+
+The same holds across browser tabs and users: the server refuses a second sync of a pair that is syncing, and the app says it in the same words. The automatic weekly sync leaves a pair you are syncing to your sync and takes the others.
+
 ## ⚠️ What a sync changes
 
 - Dates of the period that are already stored take the provider's value; missing dates are added.

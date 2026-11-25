@@ -7,6 +7,7 @@
     import PrivacyToggle from '$lib/components/ui/PrivacyToggle.svelte';
     import HelpMenu from '$lib/components/layout/HelpMenu.svelte';
     import {getDocumentScrollY} from '$lib/utils/layout/headerScroll';
+    import {clearHeaderOffset, publishHeaderOffset} from '$lib/utils/layout/headerOffset';
     import {guideAnchor} from '$lib/features/onboarding/guideAnchors.svelte';
     import {connectionSecurity} from '$lib/stores/app/connectionSecurityStore';
     import {auth} from '$lib/stores/app/auth';
@@ -212,6 +213,7 @@
         document.addEventListener('focusout', handleFocusOut, true);
 
         return () => {
+            clearHeaderOffset();
             window.removeEventListener('scroll', handleScroll);
             window.removeEventListener('resize', syncScrollContext);
             document.removeEventListener('focusin', handleFocusIn, true);
@@ -221,6 +223,12 @@
             cancelScrollFrame();
             cancelFocusRecheckFrame();
         };
+    });
+
+    // What the header takes of the window, for the boxes that stick under it (the settings filter menu, 81 U38): its height
+    // while it shows or is pinned, 0 while it is hidden. They move with the header, in the same 200 ms.
+    $effect(() => {
+        publishHeaderOffset(headerHeight, scrollState === 'hidden');
     });
 
     $effect(() => {

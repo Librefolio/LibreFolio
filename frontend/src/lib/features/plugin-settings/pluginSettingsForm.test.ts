@@ -267,9 +267,9 @@ describe("pluginMenu, filterByMenu — the menu of the Plugins tab (76 S1b, the 
     const TODO_GROUP = entry([], {family: 'group', plugin_code: 'coingecko', configured: false});
     const ANSWER = frozen([TODO_GROUP, OK_FX, TODO_ASSET, OK_ASSET]);
 
-    it('lists «All», «To configure» and each family present, in FAMILY_ORDER, with its count and a dot where something is to configure', () => {
+    it('lists «All», «To configure» and each family present, in FAMILY_ORDER, with its count and a dot where something is to configure; «All» counts the plugins, never the shared groups (81 U37)', () => {
         expect(pluginMenu(ANSWER)).toStrictEqual([
-            {id: 'all', count: 4, dot: false},
+            {id: 'all', count: 3, dot: false},
             {id: 'unconfigured', count: 2, dot: false},
             {id: 'asset', count: 2, dot: true},
             {id: 'fx', count: 1, dot: false},
@@ -297,8 +297,9 @@ describe("pluginMenu, filterByMenu — the menu of the Plugins tab (76 S1b, the 
         ]);
     });
 
-    it('filters: «All» everything, «To configure» the entries not configured, a family its own; the input untouched', () => {
-        expect(filterByMenu(ANSWER, 'all')).toStrictEqual([TODO_GROUP, OK_FX, TODO_ASSET, OK_ASSET]);
+    it('filters: «All» every plugin once, in its family, and no shared group (81 U37); «To configure» the entries not configured, groups included; a family its own; the input untouched', () => {
+        expect(filterByMenu(ANSWER, 'all')).toStrictEqual([OK_FX, TODO_ASSET, OK_ASSET]);
+        expect(filterByMenu(ANSWER, 'group'), 'the shared groups stay in their own filter').toStrictEqual([TODO_GROUP]);
         expect(filterByMenu(ANSWER, 'unconfigured')).toStrictEqual([TODO_GROUP, TODO_ASSET]);
         expect(filterByMenu(ANSWER, 'asset')).toStrictEqual([TODO_ASSET, OK_ASSET]);
         expect(filterByMenu(ANSWER, 'tool')).toStrictEqual([]);
@@ -389,7 +390,7 @@ describe("searchWords, entryMatches — the search of the Plugins tab (76 S2b, t
         const OK_FX = entry([], {family: 'fx', plugin_code: 'ecb', configured: true});
         const all = frozen([READER, GROUP, OK_FX]);
         expect(pluginMenu(all, 'all', [GROUP])).toStrictEqual([
-            {id: 'all', count: 1, dot: false},
+            {id: 'all', count: 0, dot: false},
             {id: 'unconfigured', count: 1, dot: false},
             {id: 'asset', count: 0, dot: true},
             {id: 'fx', count: 0, dot: false},

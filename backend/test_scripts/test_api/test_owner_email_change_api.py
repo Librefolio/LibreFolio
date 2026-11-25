@@ -60,6 +60,7 @@ from backend.app.utils.runtime.rate_window import SlidingWindowLimiter
 from backend.test_scripts.test_utils import print_section
 
 CONFIRM = f"{API_V1_PREFIX}/email/email-change/confirm"
+CHECK = f"{API_V1_PREFIX}/email/email-change/check"
 LOGIN = f"{API_V1_PREFIX}/auth/login"
 PROFILE = f"{API_V1_PREFIX}/auth/profile"
 ME = f"{API_V1_PREFIX}/auth/me"
@@ -288,6 +289,24 @@ async def test_the_click_changes_the_address_and_ends_the_sessions(private: _Pri
     async with _browser(private) as fresh:
         assert (await fresh.post(LOGIN, json={"username": OLD_EMAIL, "password": PASSWORD})).status_code == 401, "the old address no longer signs in"
         assert (await fresh.post(LOGIN, json={"username": NEW_EMAIL, "password": PASSWORD})).status_code == 200, "the new one does, with the same password"
+
+
+@pytest.mark.asyncio
+async def test_the_check_of_the_hosts_link_is_ready_and_names_the_address_it_would_confirm(private: _Private) -> None:
+    """OWNAPI-011b (81 U46): the host's link of the instance owner needs no session, so its check is ``ready`` for anyone who
+    holds it, and says the address the click would confirm — the double check of the page — and nothing else (not the
+    username, not the old address); the check spends nothing, the click still works afterwards."""
+    print_section("OWNAPI-011b: the check of the host's link")
+    owner = await _owner(private.engine)
+    issued = await _link(private.engine, owner)
+
+    async with _browser(private) as anonymous:
+        checked = await anonymous.post(CHECK, json={"token": issued.token})
+
+    assert checked.status_code == 200, checked.text
+    assert checked.json() == {"status": "ready", "new_email": NEW_EMAIL}, "ready, the address, and no other key: the account is not named"
+    assert OWNER.casefold() not in checked.text.casefold(), "the check names the username"
+    assert (await _confirm(private, issued.token)).status_code == 200, "the check spent the link"
 
 
 @pytest.mark.asyncio

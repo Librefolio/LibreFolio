@@ -63,6 +63,7 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/features/files/urlFilters.test.ts",
             "src/lib/utils/__tests__/trySave.test.ts",
             "src/lib/utils/layout/headerScroll.test.ts",
+            "src/lib/utils/layout/headerOffset.test.ts",
             "src/lib/utils/security/connectionSecurity.test.ts",
             "src/lib/features/signals/__tests__/loadComparisonData.test.ts",
             "src/lib/components/charts/signalLabel.test.ts",
@@ -443,6 +444,7 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/components/ui/input/ExactQuantityInput.test.ts",
             "src/lib/components/ui/input/TagInput.test.ts",
             "src/lib/components/ui/input/PasswordInput.test.ts",
+            "src/lib/components/ui/input/passwordFields.gate.test.ts",
             "src/lib/components/ui/input/PasswordStrength.test.ts",
             "src/lib/components/ui/input/Switch.test.ts",
             "src/lib/features/allocation/allocationFilters.test.ts",
@@ -550,6 +552,7 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/features/fx/FxMissingRate.test.ts",
             "src/lib/features/fx/FxPriceSummary.test.ts",
             "src/lib/features/fx/FxCard.test.ts",
+            "src/lib/features/fx/fxSyncGuard.test.ts",
             "src/lib/features/fx/FxCard.primaryView.test.ts",
             "src/lib/components/charts/PriceChartCompact.test.ts",
             "src/lib/features/fx/FxTable.test.ts",
@@ -1521,6 +1524,30 @@ def front_backup(verbose: bool = False, ui: bool = False, headed: bool = False, 
     return _run_playwright("settings/backup.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_settings_filter_menu(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the filter-menu E2E of the settings pages: the column and the phone box follow the window (81 U38)."""
+    print_section("Frontend Settings Filter Menu Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("settings/settings-filter-menu.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
+def front_plugin_calls_layout(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the «Calls» boxes layout E2E: label and count never overlap at 1440, 768 and 390 px (81 U47)."""
+    print_section("Frontend Plugin Calls Layout Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("settings/plugin-calls-layout.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_plugin_settings(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run the Settings › Plugins and «Configure» E2E (workstream X, lot CP11c) on desktop: the tab read only, mockprov's settings through the asset dialog, the search's «to configure» row."""
     print_section("Frontend Plugin Settings Tests")
@@ -2036,6 +2063,24 @@ def populate_registry(registry: dict) -> None:
         desc="Settings › Administration › Backup (lot B5a), desktop: a regular user has no Backup tab and ?tab=backup opens the first tab, an administrator has it and it opens the card idle; from ?tab=backup a backup started and followed to done (backup.created with its 32-hex job id), the card naming the archive, a link to that job's file, the download a zip as large as the job reports under librefolio-backup-YYYYMMDD-HHMMSS.zip (backup.download.started); the delete back to idle (backup.deleted, GET of the job 404 backup_job_not_found); a reload picks the finished job up again without a second backup.created. Serial (one backup at a time per instance); every job deleted and the followed job id cleared after each test",
         prereq="Admin user + populated DB",
         tests="settings/backup.spec.ts",
+    )
+    add_test(
+        cat,
+        "settings-filter-menu",
+        front_settings_filter_menu,
+        name="Settings Filter Menu Follows The Window",
+        desc="The filter menu of Plugins, Preferences and Global settings follows the window (81 U38), read only: at 1280×720 the Plugins column (plugin-settings-category-nav) scrolled to 2500 px stays 16 px from the top edge while the header is hidden (--lf-header-offset 0px) and 16 px under it after a scroll up (offset = the header's height), always whole in the window, the page's tab bar being out of it as the control; at 768×220 the column is taller than the window leaves it, header shown or hidden and scrolls on its own; choosing a filter from 3000 px brings the list start back to 16 px under the header; Global settings as an administrator keeps its column (global-settings-category-nav) at 16 px; at 430 px the phone box (plugin-settings-mobile-category-box) is stuck at the top of the window with data-stuck true and its label (…-mobile-category-label) scrolled away, the header does NOT come back by itself over four frames and the page does not move (the layout-shift correction), a scroll up slides the box under the header, the open list is whole in the window, a choice from 3000 px brings the list start back under the header, and Global settings box (global-settings-mobile-category-box) is stuck as well",
+        prereq="Populated DB + test users (e2e_test_user, e2e_test_admin)",
+        tests="settings/settings-filter-menu.spec.ts",
+    )
+    add_test(
+        cat,
+        "plugin-calls-layout",
+        front_plugin_calls_layout,
+        name="Plugin Calls Boxes Fit",
+        desc="The five «Calls» boxes of every plugin card in Settings › Plugins (81 U47), read only, at 1440, 768 and 390 px, as a member (count and «no limit» as text) and as an administrator (count and an input), in English, Italian, French and Spanish: in each box the rectangle of the label's text and the rectangle of the count's text do not intersect, each is on one line and neither ends past its box (rectangles of the text, from a Range, not of the element); a label and a count hung on the same spot must come back as an overlap (presence control); the language is the browser context's localStorage only and goes back to English",
+        prereq="Populated DB + test users (e2e_test_user, e2e_test_admin)",
+        tests="settings/plugin-calls-layout.spec.ts",
     )
     add_test(
         cat,
