@@ -312,6 +312,18 @@ def front_tx_bulk_charges_link(verbose: bool = False, ui: bool = False, headed: 
     return _run_playwright("transactions/tx-bulk-charges-link.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_tx_bulk_charges_unlink(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """A checkbox on the charges under their parent and «Scollega» on the Bulk's selection bar (project 66, TL-4)."""
+    print_section("Frontend TX Bulk Charges Unlink Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("transactions/tx-bulk-charges-unlink.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_tx_clone_charges(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """«Clona» carries the linked-charges structure: a parent's charges copied under its copy, a charge's copy linked to the same parent (project 66, TL-3)."""
     print_section("Frontend TX Clone Charges Tests")
@@ -1009,6 +1021,14 @@ def populate_registry(registry: dict) -> None:
         name="TX Bulk Charges Link Tests",
         desc="Project 66 F7-d: in the Bulk, «Link» a new BUY + new FEE and a saved BUY + saved free FEE (also by tap on a phone), saved and read back by id; «Open» from a FEE's form to its parent absent from the Bulk adds the parent",
         tests="transactions/tx-bulk-charges-link.spec.ts",
+    )
+    add_test(
+        cat,
+        "tx-bulk-charges-unlink",
+        front_tx_bulk_charges_unlink,
+        name="TX Bulk Charges Unlink Tests",
+        desc="Project 66 TL-4: in the Bulk, a charge under its parent ticked → «Scollega» (saved, read back by id); P-19 «Delete selected» keeps a «del» charge «del»; select-all with an open and a closed group; long press on a phone; «Reset selected» after «Scollega»",
+        tests="transactions/tx-bulk-charges-unlink.spec.ts",
     )
     add_test(
         cat,
