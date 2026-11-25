@@ -31,6 +31,7 @@
     import type {Component, Snippet} from 'svelte';
     import {CalendarClock, DollarSign, Info, RotateCw} from 'lucide-svelte';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
+    import Button from '$lib/components/ui/button/Button.svelte';
     import {_ as t} from '$lib/i18n';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
     import {writeExportToClipboard} from '$lib/utils/clipboard';
@@ -52,7 +53,7 @@
         /** Widest label the identity block may take before truncating. */
         identityWidth?: string;
         /**
-         * Hover text on the status icon / retry button.
+         * Hover text on the status icon; the help of the retry button.
          *
          * FX rows use it for the per-leg breakdown of a chain, which has no
          * equivalent on an asset. A parameter rather than a fork: the caller is
@@ -81,7 +82,7 @@
     /** Everything that went wrong, for the tooltip. */
     const fullError = $derived(result.errors && result.errors.length ? result.errors.join('; ') : (result.message ?? ''));
     /** The one line that fits on screen. */
-    const shortError = $derived(result.errors?.[0] ?? result.message ?? $t('prices.sync.failedDefault') ?? 'Failed');
+    const shortError = $derived(result.errors?.[0] ?? result.message ?? $t('prices.sync.failedDefault'));
 
     /** The source has no prices before this day, and the range asked started earlier (project 76, P2b). It is no
      * error: shown whatever the status, on a line of its own, so the user knows from which day to import by hand. */
@@ -102,29 +103,9 @@
 
 <div class="flex items-center gap-2 text-xs text-lf-secondary group {historyStarts ? 'flex-wrap' : ''}" data-row-id={result.id} data-status={result.status} data-testid="sync-result-row">
     {#if retryable && !syncing}
-        {#if statusTooltip}
-            <Tooltip text={statusTooltip} position="top">
-                <button
-                    class="shrink-0 p-0.5 rounded transition-colors
-                        {result.status === 'failed' ? 'hover:bg-lf-danger-soft text-lf-danger' : 'hover:bg-lf-warning-soft text-lf-warning'}"
-                    data-testid="sync-retry-row"
-                    onclick={() => onRetry(result.id)}
-                    type="button"
-                >
-                    <RotateCw size={13} />
-                </button>
-            </Tooltip>
-        {:else}
-            <button
-                class="shrink-0 p-0.5 rounded transition-colors
-                    {result.status === 'failed' ? 'hover:bg-lf-danger-soft text-lf-danger' : 'hover:bg-lf-warning-soft text-lf-warning'}"
-                data-testid="sync-retry-row"
-                onclick={() => onRetry(result.id)}
-                type="button"
-            >
-                <RotateCw size={13} />
-            </button>
-        {/if}
+        <!-- The retry stands where the status icon would: red when the row failed, amber when it is partial (C5). Its
+             name is «Retry»; the status line the caller gives (an FX chain's legs) is its help. -->
+        <Button variant="ghost" tone={result.status === 'failed' ? 'danger' : 'warning'} size="xs" dense icon={RotateCw} display="icon" label={$t('common.retry')} help={statusTooltip} tipPosition="top" onclick={() => onRetry(result.id)} data-testid="sync-retry-row" />
     {:else if statusTooltip}
         <Tooltip text={statusTooltip} position="top">
             <StatusIcon size={14} class="{STATUS_TONES.syncIcon[result.status] ?? STATUS_TONES.syncIcon.unknown} shrink-0 cursor-help" />
