@@ -1,0 +1,84 @@
+{
+  "recorded": "2026-11-25, public endpoint, no key; reduced by hand to the fields the CoinGecko enricher reads (82 CG-B)",
+  "request": {
+    "endpoint": "/coins/usd-coin",
+    "localization": false,
+    "tickers": false,
+    "market_data": true,
+    "community_data": false,
+    "developer_data": false,
+    "sparkline": false
+  },
+  "status": 200,
+  "body": {
+    "id": "usd-coin",
+    "symbol": "usdc",
+    "name": "USDC",
+    "categories": [
+      "Stablecoins",
+      "USD Stablecoin",
+      "Solana Ecosystem",
+      "Avalanche Ecosystem",
+      "Polygon Ecosystem",
+      "Near Protocol Ecosystem",
+      "Arbitrum Ecosystem",
+      "Celo Ecosystem",
+      "Ethereum Ecosystem",
+      "XDC Ecosystem",
+      "Cronos Ecosystem",
+      "Algorand Ecosystem",
+      "Optimism Ecosystem",
+      "Aptos Ecosystem",
+      "ZkSync Ecosystem",
+      "Sui Ecosystem",
+      "Base Ecosystem",
+      "Injective Ecosystem",
+      "Starknet Ecosystem",
+      "Hedera Ecosystem",
+      "Stellar Ecosystem",
+      "XRP Ledger Ecosystem",
+      "X Layer Ecosystem",
+      "Hyperliquid Ecosystem",
+      "Sonic Ecosystem",
+      "Fiat-backed Stablecoin",
+      "Sei Network Ecosystem",
+      "World Chain Ecosystem",
+      "Morph L2 Ecosystem",
+      "World Liberty Financial Portfolio",
+      "Ink Ecosystem",
+      "Made in USA",
+      "Unichain Ecosystem",
+      "HyperEVM Ecosystem",
+      "Plume Network Ecosystem",
+      "Plasma Ecosystem",
+      "Monad Ecosystem",
+      "Base Native",
+      "MiCA-Compliant Stablecoin",
+      "Arc Ecosystem",
+      "GENIUS Act Compliant Stablecoin",
+      "Pharos Ecosystem",
+      "Elysium (Kinetiq) Ecosystem"
+    ],
+    "description": {
+      "en": "USDC is a fully collateralized US dollar stablecoin. USDC is the bridge between dollars and trading on cryptocurrency exchanges. The technology behind CENTRE makes it possible to exchange value between people, businesses and financial institutions just like email between mail services and texts between SMS providers. We believe by removing artificial economic borders, we can create a more inclusive global economy."
+    },
+    "links": {
+      "homepage": [
+        "https://www.circle.com/en/usdc"
+      ]
+    },
+    "genesis_date": null,
+    "market_data": {
+      "market_cap": {
+        "eur": 62963966773,
+        "usd": 68923733046,
+        "chf": 57207732284
+      },
+      "circulating_supply": 68957817002.63118,
+      "max_supply": null,
+      "max_supply_infinite": true,
+      "last_updated": "2026-11-25T13:52:50.000Z"
+    },
+    "last_updated": "2026-11-25T13:52:50.000Z"
+  }
+}

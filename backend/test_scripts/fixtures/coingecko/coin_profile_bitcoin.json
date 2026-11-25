@@ -1,0 +1,49 @@
+{
+  "recorded": "2026-11-10, public endpoint, no key (project 68 trial); reduced by hand to the fields the CoinGecko enricher reads (82 CG-B)",
+  "request": {
+    "endpoint": "/coins/bitcoin",
+    "localization": false,
+    "tickers": false,
+    "market_data": true,
+    "community_data": false,
+    "developer_data": false,
+    "sparkline": false
+  },
+  "status": 200,
+  "body": {
+    "id": "bitcoin",
+    "symbol": "btc",
+    "name": "Bitcoin",
+    "categories": [
+      "Smart Contract Platform",
+      "Layer 1 (L1)",
+      "FTX Holdings",
+      "Proof of Work (PoW)",
+      "Bitcoin Ecosystem",
+      "GMCI 30 Index",
+      "GMCI Index",
+      "Coinbase 50 Index"
+    ],
+    "description": {
+      "en": "Bitcoin is the world's first decentralized cryptocurrency, created in 2009 by the pseudonymous Satoshi Nakamoto. It enables peer-to-peer electronic cash transactions without intermediaries like banks or governments, operating on a blockchain secured by Proof of Work mining and the SHA-256 cryptographic algorithm. \n\nWith a fixed supply cap of 21 million coins and programmatic halvings every four years that reduce miner rewards, Bitcoin is designed as a deflationary digital asset often called \"digital gold.\" Its value stems from solving the double-spending problem without trusted intermediaries, creating the first truly scarce digital asset with censorship resistance and permissionless access that no government, corporation, or individual can control.\n\nBitcoin operates as a decentralized peer-to-peer network where transactions are recorded on a public ledger called the blockchain, distributed across thousands of computers globally. Transactions are grouped into blocks added approximately every 10 minutes through mining, where specialized computers compete to solve complex mathematical puzzles. \n\nBitcoin has achieved mainstream adoption through multiple vectors. The January 2024 SEC approval of 11 spot Bitcoin ETFs opened Bitcoin investment to traditional finance participants, and corporations like Strategy (formerly MicroStrategy) are using Bitcoin as a treasury reserve asset to protect against currency debasement, offering MSTR holders amplified exposure to Bitcoin. \n\nThe Bitcoin ecosystem continues to evolve with innovations like Ordinals, which emerged in January 2023 to enable NFT-like functionality directly on Bitcoin, and BRC-20 tokens, an experimental standard for creating fungible tokens using Ordinal inscriptions. BTCFi (Bitcoin Finance) represents emerging financial applications extending beyond Bitcoin's traditional role, with protocols like Babylon allowing Bitcoin holders to stake BTC to secure Proof of Stake chains. "
+    },
+    "links": {
+      "homepage": [
+        "http://www.bitcoin.org"
+      ]
+    },
+    "genesis_date": "2009-01-03",
+    "market_data": {
+      "market_cap": {
+        "eur": 1319697636284,
+        "usd": 1472339488026,
+        "chf": 1216676569967
+      },
+      "circulating_supply": 20110225.0,
+      "max_supply": 21000000.0,
+      "max_supply_infinite": false,
+      "last_updated": "2026-11-10T16:05:52.000Z"
+    },
+    "last_updated": "2026-11-10T16:05:52.000Z"
+  }
+}
