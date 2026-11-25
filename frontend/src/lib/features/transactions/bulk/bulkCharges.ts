@@ -381,6 +381,15 @@ export function rowsWithLinkedCharges(ops: readonly PendingOp[], get: StoreGet):
     return result;
 }
 
+/** TL-4, P-19: a charge linked under its parent, the parent selected too and going «del» (a saved one not «del» yet) or
+ *  leaving (a new one) in the same delete. */
+function ownerLeavesWith(op: PendingOp, ops: readonly PendingOp[], selected: ReadonlySet<string>): boolean {
+    if (op.chargeOf === undefined || op.parentUnlink || !selected.has(op.chargeOf)) return false;
+    const owner = ownerOf(op, ops);
+    if (!owner || !isUnderParent(op, ops)) return false;
+    return owner.op === 'create' || !owner.markedDelete;
+}
+
 /**
  * The plan of a delete on these selected rows (a single «Delete» is a selection of one). A saved row flips; a new one
  * leaves; a saved row going «del» whose charges are not read (`unread`) waits or is skipped; a parent going «del» with
@@ -402,6 +411,9 @@ export function planBulkDelete(ops: readonly PendingOp[], selectedTempIds: reado
             continue;
         }
         const deleted = !op.markedDelete;
+        // TL-4, P-19 (the developer: «sì, ovviamente deve restare del»): a charge already «del» ticked together with its
+        // parent, which goes «del» (or leaves) in this same action, stays «del» — the toggle would restore it.
+        if (!deleted && ownerLeavesWith(op, ops, selected)) continue;
         if (deleted) {
             const state = unread(op);
             if (state === 'loading') {
@@ -514,7 +526,8 @@ export type BulkLinkSelection = {kind: 'hidden'} | {kind: 'disabled'; reason: Bu
 
 /**
  * «Link» on the selected rows of the Bulk, by the page's rules (`linkSelection`) read on mirror rows:
- *   - the values are the operation's (broker, asset, type, date); a create has a negative synthetic id;
+ *   - the values are the operation's (broker, asset, type, date); a create has a synthetic id, positive and far
+ *     above any saved one (TL-4: a charge under a new parent is linked to it);
  *   - the parent is the one in the Bulk (`chargeOf`), or `parentLinkId`, or the saved one — none after `parentUnlink`
  *     (an unlink already done here: «unlink first» is satisfied);
  *   - a pair is the Bulk's (`pairedWith`), as the payload sends it: a new pair counts, a saved pair split here does not
@@ -524,7 +537,9 @@ export type BulkLinkSelection = {kind: 'hidden'} | {kind: 'disabled'; reason: Bu
  */
 export function bulkLinkSelection(rows: readonly PendingOp[], ops: readonly PendingOp[], get: StoreGet, opts: LinkOptions, typeOf: (op: PendingOp) => string = (op) => op.fields.type): BulkLinkSelection {
     const synthetic = new Map<string, number>();
-    for (const op of [...ops, ...rows]) if (!synthetic.has(op.tempId)) synthetic.set(op.tempId, -(synthetic.size + 1));
+    // TL-4: positive, far above any saved id — `linkSelection` reads a parent id only when > 0, so a negative id made a
+    // charge under a NEW parent look free (its «Link» offered again, or another parent accepted).
+    for (const op of [...ops, ...rows]) if (!synthetic.has(op.tempId)) synthetic.set(op.tempId, Number.MAX_SAFE_INTEGER - synthetic.size);
     const mirrorId = (op: PendingOp): number => (op.op === 'edit' ? op.txId : synthetic.get(op.tempId)!);
     const parentIdOf = (op: PendingOp): number | null => {
         if (op.parentUnlink) return null;
@@ -576,6 +591,43 @@ export function bulkLinkSelection(rows: readonly PendingOp[], ops: readonly Pend
 export function linkInBulk(ops: readonly PendingOp[], parent: PendingOp, charges: readonly PendingOp[]): PendingOp[] {
     const ids = new Set(charges.map((c) => c.tempId));
     return ops.map((op) => (ids.has(op.tempId) && op !== parent ? {...without(op, 'parentUnlink', 'parentLinkId', 'byParentChoice', 'clonedFields'), chargeOf: parent.tempId} : op));
+}
+
+// ---------------------------------------------------------------------------
+// TL-4 — «Scollega» on the Bulk's selection (P-2 = C)
+// ---------------------------------------------------------------------------
+
+/**
+ * The ticked rows «Scollega» takes, in their order: the charges still linked under their parent (`isUnderParent`, no
+ * `parentUnlink`), one marked «del» too. A parent is not a charge and brings none of its own; a charge already
+ * «scollega», a free one, one under a leg of a pair (rule 8) is not taken.
+ */
+export function unlinkableCharges(rows: readonly PendingOp[], ops: readonly PendingOp[]): PendingOp[] {
+    return rows.filter((row) => {
+        const op = ops.find((o) => o.tempId === row.tempId) ?? row;
+        return op.chargeOf !== undefined && !op.parentUnlink && isUnderParent(op, ops);
+    });
+}
+
+/**
+ * «Scollega» on the selection: each of `tempIds` that `unlinkableCharges` takes is unlinked as its form does
+ * (`unlinkCharge`); a «del» one is no longer «del» and no longer the parent's choice (the step Del → Scollega of the
+ * 16/11 diagram: restoring the parent later does not link it back). Every other operation keeps its reference.
+ */
+export function unlinkSelectedCharges(ops: readonly PendingOp[], tempIds: readonly string[], get: StoreGet): PendingOp[] {
+    const ids = new Set(tempIds);
+    const taken = new Set(
+        unlinkableCharges(
+            ops.filter((op) => ids.has(op.tempId)),
+            ops,
+        ).map((op) => op.tempId),
+    );
+    if (taken.size === 0) return [...ops];
+    return ops.map((op) => {
+        if (!taken.has(op.tempId)) return op;
+        const live = op.op === 'edit' && op.markedDelete ? ({...without(op, 'byParentChoice'), markedDelete: false} as PendingOp) : without(op, 'byParentChoice');
+        return unlinkCharge(live, ops, get);
+    });
 }
 
 // ---------------------------------------------------------------------------
