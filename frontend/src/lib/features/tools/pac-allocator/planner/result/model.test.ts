@@ -60,7 +60,7 @@ import {setPrivacyEnabled} from '$lib/stores/app/privacyStore.svelte';
 import {PRIVACY_PLACEHOLDER} from '$lib/utils/privacy/maskable';
 import {catalogCurrencyDigits, formatPlannerMoneyPlain} from '../format';
 import type {PlannerExactNumber, PlannerLedgerRow, PlannerProof, PlannerReadyResult} from '../types';
-import {allocationRows, hasPlanSteps, LEDGER_FIELDS, ledgerFieldList, ledgerFields, ledgerHelpKey, ledgerLabelKey, limitedEntries, notesBesideLimitsBanner, planSteps, proofStatusHelpKey, resultBadges, type LimitedEntry, type ResultBadge} from './model';
+import {allocationRows, hasPlanSteps, LEDGER_FIELDS, planStepCount, ledgerFieldList, ledgerFields, ledgerHelpKey, ledgerLabelKey, limitedEntries, notesBesideLimitsBanner, planSteps, proofStatusHelpKey, resultBadges, type LimitedEntry, type ResultBadge} from './model';
 import type {RebalancerSolution} from '../types';
 import browser from './__fixtures__/rebalancer-browser.json';
 import type {PlannerResolvedRequest} from '../types';
@@ -429,5 +429,34 @@ describe('resultBadges — «local optimum» and its margin (lot MG)', () => {
         } finally {
             setPrivacyEnabled(false);
         }
+    });
+});
+
+/**
+ * TL-8 of project 67 (the developer's answer of 23/11): «Operational plan» counts every numbered step and every order, the
+ * same rule in both Tools; an exchange the Broker makes by itself is no step. Built from the lists alone: `planSteps` reads
+ * a step's `sequence` and an exchange's `mode`.
+ */
+describe('planStepCount — the steps of the plan, in both Tools (TL-8)', () => {
+    const deposit = (sequence: number) => ({action_id: `deposit:${sequence}`, sequence}) as unknown as RebalancerSolution['funding_actions'][number];
+    const exchange = (mode: 'manual' | 'automatic', sequence: number | null) => ({conversion_id: `fx:${mode}`, mode, sequence, broker_id: 'broker:1'}) as unknown as RebalancerSolution['conversions'][number];
+    const orders = (count: number) => Array.from({length: count}, (_, index) => ({order_id: `order:${index}`, sequence: 10 + index}));
+
+    it('a PAC plan of cash only, two deposits: 2', () => {
+        expect(planStepCount({funding_actions: [deposit(1), deposit(2)], conversions: [], order_rows: []})).toBe(2);
+    });
+
+    it('a PAC plan with two deposits and five orders: 7, where it showed the orders alone', () => {
+        expect(planStepCount({funding_actions: [deposit(1), deposit(2)], conversions: [], order_rows: orders(5)})).toBe(7);
+    });
+
+    it('an exchange you make counts, one the Broker makes when it buys does not', () => {
+        expect(planStepCount({funding_actions: [], conversions: [exchange('manual', 1), exchange('automatic', null)], order_rows: orders(1)})).toBe(2);
+    });
+
+    it('the Rebalancer: unchanged — deposits, exchanges, transfers and orders', () => {
+        const solution = browser.result.primary_solution as unknown as RebalancerSolution;
+        const manual = solution.conversions.filter((action) => action.mode === 'manual').length;
+        expect(planStepCount(solution)).toBe(solution.funding_actions.length + manual + solution.transfers.length + solution.order_rows.length);
     });
 });
