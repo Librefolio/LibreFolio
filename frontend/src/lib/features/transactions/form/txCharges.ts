@@ -47,6 +47,18 @@ export interface ChargeDraft {
 
 export type ChargeState = 'linked' | 'unlink' | 'delete';
 
+/** A charge's parent that is a new row of the Bulk (66 TL-11): its key (`op-<tempId>`), its name there («row 3»), its values. */
+export interface HandedNewParent {
+    key: string;
+    ref: string;
+    row: TXReadItem;
+}
+
+/** The Bulk's row behind a key `op-<tempId>`; `null` for a saved row or one typed in the form. */
+export function bulkRowOf(key: string): string | null {
+    return key.startsWith('op-') ? key.slice(3) : null;
+}
+
 /** What a new charge takes from its parent: the broker and the asset (rules 2 and 3), and the date it starts from. */
 export interface ChargesParent {
     broker_id: number;
