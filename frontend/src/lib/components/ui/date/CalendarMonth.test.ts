@@ -28,6 +28,8 @@
 import {beforeAll, describe, expect, it, vi} from 'vitest';
 import {fireEvent, render, screen, setupI18n} from '$test/component';
 import CalendarMonth from './CalendarMonth.svelte';
+import {get} from 'svelte/store';
+import {_} from 'svelte-i18n';
 // The component reads today from the user's calendar (`todayIso`), so the test
 // must ask the same question the same way. `toISOString().slice(0, 10)` was here
 // before and answered in UTC: it agreed for 22 hours a day and turned this file
@@ -467,5 +469,33 @@ describe('CalendarMonth — the year before the first day (W5-11)', () => {
         expect(first).not.toBeDisabled();
         const outside = cells.filter((cell) => (cell.getAttribute('data-iso') ?? '') < '0001-01-01');
         for (const cell of outside) expect(cell).toBeDisabled();
+    });
+});
+
+/**
+ * The month's navigation are standard icon Buttons (85 BTN-2a): each named from the catalogue (`datePicker.previousMonth`,
+ * `nextMonth`, `today`) in its aria-label — the name the tooltip shows on a rest or a long press —, with no native title.
+ */
+describe('CalendarMonth — the navigation buttons are named (85 BTN-2a)', () => {
+    beforeAll(async () => {
+        await setupI18n();
+    });
+
+    it.each([
+        ['calendar-prev-month', 'datePicker.previousMonth'],
+        ['calendar-next-month', 'datePicker.nextMonth'],
+        ['calendar-go-today', 'datePicker.today'],
+    ])('%s is named %s, never the raw key, with no title', (testId, key) => {
+        render(CalendarMonth, baseProps({onGoToToday: vi.fn()}));
+        const button = screen.getByTestId(testId);
+        const name = get(_)(key);
+        expect(name, `the key ${key} exists in the catalogue`).not.toBe(key);
+        expect(button).toHaveAttribute('aria-label', name);
+        expect(button.hasAttribute('title')).toBe(false);
+    });
+
+    it('the two arrows have different names', () => {
+        render(CalendarMonth, baseProps());
+        expect(screen.getByTestId('calendar-prev-month').getAttribute('aria-label')).not.toBe(screen.getByTestId('calendar-next-month').getAttribute('aria-label'));
     });
 });
