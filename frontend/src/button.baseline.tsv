@@ -78,6 +78,7 @@ lib/features/assets/detail/AssetDetailToolbarActions.svelte	4
 lib/features/assets/detail/AssetProfileTab.svelte	3
 lib/features/assets/enrichers/AssetEnrichersModal.svelte	5
 lib/features/assets/enrichers/EnricherChosenRow.svelte	5
+lib/features/assets/enrichers/EnricherOnlineSearch.svelte	4	82 ENR-3 reached dev before the button gate; BTN-5 converts it
 lib/features/assets/profile/ProfileChangesPanel.svelte	1
 lib/features/assets/profile/ProfileDetails.svelte	1
 lib/features/assets/profile/ProfileEditModal.svelte	5
@@ -152,7 +153,7 @@ lib/features/onboarding/components/WelcomePage.svelte	1
 lib/features/plugin-settings/PluginNotConfiguredModal.svelte	2
 lib/features/plugin-settings/PluginSettingsForm.svelte	10
 lib/features/plugin-settings/PluginSettingsModal.svelte	1
-lib/features/plugin-settings/PluginSettingsTab.svelte	1
+lib/features/plugin-settings/PluginSettingsTab.svelte	2	81 U37 reached dev before the button gate; BTN-6 converts it
 lib/features/portfolio-view/BrokerFilterSelect.svelte	4
 lib/features/portfolio-view/PortfolioAllocationTab.svelte	2
 lib/features/portfolio-view/PortfolioToolbar.svelte	1
