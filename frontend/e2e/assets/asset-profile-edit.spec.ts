@@ -191,7 +191,7 @@ for (const width of [1440, 390]) {
                         if (toolbar.contains(button)) continue;
                         const o = button.getBoundingClientRect();
                         if (o.left < b.right - 1 && o.right > b.left + 1 && o.top < b.bottom && o.bottom > b.top) found.push(`${button.dataset.testid} under the bar`);
-                        if (o.right > h.right + 1) found.push(`${button.dataset.testid} outside the head`);
+                        if (o.right > h.right + 1) found.push(`${button.dataset.testid} outside the head by ${Math.round(o.right - h.right)} px (head ${Math.round(h.width)} px, bar ${Math.round(b.width)} px, button ${Math.round(o.width)} px)`);
                     }
                     return found.join(', ');
                 });

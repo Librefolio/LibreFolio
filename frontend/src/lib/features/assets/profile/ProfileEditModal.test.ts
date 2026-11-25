@@ -212,7 +212,7 @@ describe('ProfileEditModal — the sources and the units (E10c3)', () => {
 
     it('the panels ask «the source», not «the provider»', () => {
         mount();
-        expect(screen.getByTestId('distribution-ask-provider-sector')).toHaveAttribute('title', get(_)('assets.profile.edit.askSource'));
+        expect(screen.getByTestId('distribution-ask-provider-sector')).toHaveAttribute('aria-label', get(_)('assets.profile.edit.askSource'));
     });
 
     it('the comparison window is «compare with the sources»', async () => {
