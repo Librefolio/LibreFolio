@@ -331,6 +331,9 @@ function renderSnapshotData(
  * step. Every label of the tool is the tool's own i18n key, quoted; the AI Export writes only the sentences around them.
  * Null when the analysis suggests no tool.
  */
+/** The way to the tool, the first points of the list: open LibreFolio, the sidebar's Tools, the tool's card. */
+const TOOL_PATH_STEPS = 3;
+
 function renderLibreFolioTool(entry: AiExportAnalysisCatalogEntry, translate: AiExportPromptTranslate = (key) => key): string | null {
     const tools = entry.suggested_tools ?? [];
     if (tools.length === 0) return null;
@@ -344,14 +347,14 @@ function renderLibreFolioTool(entry: AiExportAnalysisCatalogEntry, translate: Ai
             `### ${name}`,
             '',
             `- **${translate('aiExport.tool.when')}**: ${translate(guide.whenKey)}`,
-            `- **${translate('aiExport.tool.path')}**:`,
+            // 78 L4b: one numbered list, the way to the tool as its first three points (two lists lost the way in the trials)
+            `- **${translate('aiExport.tool.inputs')}**:`,
             `  1. ${translate('aiExport.additionalData.steps.openLibreFolio')}`,
             `  2. ${translate('aiExport.tool.steps.sidebar')}: "${translate(AI_EXPORT_TOOLS_NAV_KEY)}"`,
             `  3. ${translate('aiExport.tool.steps.card')}: "${name}"`,
-            `- **${translate('aiExport.tool.inputs')}**:`,
             ...guide.steps.map((step, index) => {
                 const values = Object.fromEntries(Object.entries(step.values ?? {}).map(([placeholder, key]) => [placeholder, `"${translate(key)}"`]));
-                return `  ${index + 1}. "${translate(step.labelKey)}": ${translate(step.explanationKey, values)}`;
+                return `  ${index + TOOL_PATH_STEPS + 1}. "${translate(step.labelKey)}": ${translate(step.explanationKey, values)}`;
             }),
             `- **${translate('aiExport.tool.returns')}**: ${translate(guide.returnsKey)}`,
         );

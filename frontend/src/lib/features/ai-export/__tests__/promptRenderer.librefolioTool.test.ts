@@ -1,5 +1,5 @@
 /**
- * «Calcolalo in LibreFolio» (plan 78, L4a): the PAC prompt sends the user to the PAC allocator, step by step.
+ * «Calcolalo in LibreFolio» (plan 78, L4a, L4b): the PAC and rebalancing prompts send the user to their tool, step by step.
  *
  * The backend declares only the tool's code (`suggested_tools`); the renderer writes the block in the interface
  * language, and every label of the tool is the tool's own i18n key, so a label that changes in the tool changes in the
@@ -20,7 +20,12 @@ import {AI_EXPORT_TOOL_GUIDES, AI_EXPORT_TOOLS_NAV_KEY} from '../templates/toolG
 import {backendCatalogFixture, compatibilityFixture, selectionFixture, snapshotFixture} from './runtimeFixtures';
 
 const PAC = selectionFixture('analysis', 'portfolio.pac_planning');
-const GUIDE = AI_EXPORT_TOOL_GUIDES.pac_allocator;
+const REBALANCING = selectionFixture('analysis', 'portfolio.rebalancing');
+/** Each analysis that suggests a tool, with its tool's guide. */
+const SUGGESTING = [
+    ['portfolio.pac_planning', PAC, AI_EXPORT_TOOL_GUIDES.pac_allocator],
+    ['portfolio.rebalancing', REBALANCING, AI_EXPORT_TOOL_GUIDES.portfolio_rebalancer],
+] as const;
 
 /** Every key comes back as itself; a message's values follow it, so the case can see which labels filled it. */
 const keys: AiExportPromptTranslate = (key, values) => (values ? `${key} ${Object.values(values).join(' ')}` : key);
@@ -43,13 +48,22 @@ describe('the PAC prompt', () => {
         expect(ids.indexOf('librefolio_tool')).toBeLessThan(ids.indexOf('domain_notes'));
     });
 
-    it("writes the tool's path and every step from the tool's own keys, quoted", () => {
-        const content = toolSection(PAC);
-        expect(content).toContain(`"${AI_EXPORT_TOOLS_NAV_KEY}"`);
-        expect(content).toContain(`### ${GUIDE.nameKey}`);
-        for (const step of GUIDE.steps) {
-            expect(content).toContain(`"${step.labelKey}": ${step.explanationKey}`);
+    it.each(SUGGESTING)("%s writes one numbered list: the way to the tool, then every step from the tool's own keys, quoted", (_id, selection, guide) => {
+        const content = toolSection(selection);
+        expect(content).toContain(`### ${guide.nameKey}`);
+        // 78 L4b: one list, the way to the tool as its first three points, the steps numbered after them
+        expect(content).toContain(`  1. aiExport.additionalData.steps.openLibreFolio\n  2. aiExport.tool.steps.sidebar: "${AI_EXPORT_TOOLS_NAV_KEY}"\n  3. aiExport.tool.steps.card: "${guide.nameKey}"`);
+        expect(content).not.toContain('aiExport.tool.path');
+        guide.steps.forEach((step, index) => {
+            expect(content).toContain(`  ${index + 4}. "${step.labelKey}": ${step.explanationKey}`);
             for (const valueKey of Object.values(step.values ?? {})) expect(content).toContain(`"${valueKey}"`);
+        });
+    });
+
+    it('the Liquidity step names its three buttons in both tools (78 L4b)', () => {
+        for (const [, selection] of SUGGESTING) {
+            const content = toolSection(selection);
+            for (const key of ['tools.pacAllocator.planner.liquidity.addContribution', 'tools.pacAllocator.planner.liquidity.copy', 'tools.pacAllocator.planner.liquidity.addManual']) expect(content).toContain(`"${key}"`);
         }
     });
 
@@ -61,7 +75,7 @@ describe('the PAC prompt', () => {
 });
 
 describe('only an analysis that suggests a tool has the block', () => {
-    const analyses = compatibilityFixture().selections.filter((selection) => selection.kind === 'analysis' && selection.id !== 'portfolio.pac_planning');
+    const analyses = compatibilityFixture().selections.filter((selection) => selection.kind === 'analysis' && !SUGGESTING.some(([id]) => id === selection.id));
 
     it.each(analyses.map((selection) => [selection.id, selection] as const))('%s has no tool block', (_id, selection) => {
         expect(render(selection).sections.map((section) => section.id)).not.toContain('librefolio_tool');
@@ -82,8 +96,9 @@ describe('a tool the frontend cannot write closes the catalog', () => {
 
 describe('every key of the block is in the four catalogues', () => {
     const CATALOGUES: Record<SupportedLocale, unknown> = {en, it: itCatalogue, fr, es};
-    const FIXED = ['aiExport.tool.heading', 'aiExport.tool.intro', 'aiExport.tool.when', 'aiExport.tool.path', 'aiExport.tool.inputs', 'aiExport.tool.returns', 'aiExport.tool.steps.sidebar', 'aiExport.tool.steps.card', 'aiExport.additionalData.steps.openLibreFolio'];
-    const ALL = [...FIXED, AI_EXPORT_TOOLS_NAV_KEY, GUIDE.nameKey, GUIDE.whenKey, GUIDE.returnsKey, ...GUIDE.steps.flatMap((step) => [step.labelKey, step.explanationKey, ...Object.values(step.values ?? {})])];
+    const FIXED = ['aiExport.tool.heading', 'aiExport.tool.intro', 'aiExport.tool.when', 'aiExport.tool.inputs', 'aiExport.tool.returns', 'aiExport.tool.steps.sidebar', 'aiExport.tool.steps.card', 'aiExport.additionalData.steps.openLibreFolio'];
+    const GUIDES = SUGGESTING.map(([, , guide]) => guide);
+    const ALL = [...FIXED, AI_EXPORT_TOOLS_NAV_KEY, ...GUIDES.flatMap((guide) => [guide.nameKey, guide.whenKey, guide.returnsKey, ...guide.steps.flatMap((step) => [step.labelKey, step.explanationKey, ...Object.values(step.values ?? {})])])];
 
     function leaf(catalogue: unknown, key: string): unknown {
         return key.split('.').reduce<unknown>((node, part) => (node !== null && typeof node === 'object' ? (node as Record<string, unknown>)[part] : undefined), catalogue);
@@ -93,7 +108,7 @@ describe('every key of the block is in the four catalogues', () => {
         const catalogue = CATALOGUES[locale];
         const missing = ALL.filter((key) => typeof leaf(catalogue, key) !== 'string');
         expect(missing, `${locale}.json lacks keys of the tool block`).toEqual([]);
-        for (const step of GUIDE.steps) {
+        for (const step of GUIDES.flatMap((guide) => guide.steps)) {
             const sentence = leaf(catalogue, step.explanationKey) as string;
             for (const placeholder of Object.keys(step.values ?? {})) expect(sentence, `${locale} ${step.explanationKey}`).toContain(`{${placeholder}}`);
         }

@@ -20,13 +20,13 @@ import {findAiExportAnalysisInstruction} from '../templates/sharedInstructions';
 import {compatibilityFixture, selectionFixture, snapshotFixture} from './runtimeFixtures';
 
 /** The analyses in the new shape: the two market-driver analyses (L1) and Protection Strategies (L3). */
-const NEW_SHAPE_IDS = ['portfolio.performance_market_drivers', 'broker.performance_market_drivers', 'portfolio.protection_strategies', 'portfolio.pac_planning'] as const satisfies readonly AiExportAnalysisId[];
+const NEW_SHAPE_IDS = ['portfolio.performance_market_drivers', 'broker.performance_market_drivers', 'portfolio.protection_strategies', 'portfolio.pac_planning', 'portfolio.rebalancing'] as const satisfies readonly AiExportAnalysisId[];
 const OLD_SHAPE_IDS = AI_EXPORT_ANALYSIS_IDS.filter((id) => !(NEW_SHAPE_IDS as readonly string[]).includes(id));
 
 const NEW_ORDER = ['task', 'rules_of_reasoning', 'how_to_answer', 'ground_rules', 'snapshot_metadata', 'snapshot_data', 'additional_librefolio_data', 'domain_notes', 'legal_notice', 'user_question', 'response_language'];
-/** 78 L4a: an analysis that suggests a LibreFolio tool carries its block right after Additional LibreFolio Data. */
+/** 78 L4a, L4b: an analysis that suggests a LibreFolio tool carries its block right after Additional LibreFolio Data. */
 function newOrder(id: AiExportAnalysisId): string[] {
-    if (id !== 'portfolio.pac_planning') return NEW_ORDER;
+    if (id !== 'portfolio.pac_planning' && id !== 'portfolio.rebalancing') return NEW_ORDER;
     const at = NEW_ORDER.indexOf('additional_librefolio_data') + 1;
     return [...NEW_ORDER.slice(0, at), 'librefolio_tool', ...NEW_ORDER.slice(at)];
 }

@@ -114,8 +114,8 @@ export function backendCatalogFixture(): AiExportBackendCatalogResponse {
                 response_contract_version: response.version,
                 supports_user_notes: true,
                 additional_export_suggestions: additionalSuggestions(id),
-                // 78 L4a: the PAC sends the user to the PAC allocator, as the backend catalog declares
-                suggested_tools: id === 'portfolio.pac_planning' ? [{tool_code: 'pac_allocator'}] : [],
+                // 78 L4a, L4b: the PAC and the rebalancing send the user to their tools, as the backend catalog declares
+                suggested_tools: id === 'portfolio.pac_planning' ? [{tool_code: 'pac_allocator'}] : id === 'portfolio.rebalancing' ? [{tool_code: 'portfolio_rebalancer'}] : [],
             };
         }),
     });

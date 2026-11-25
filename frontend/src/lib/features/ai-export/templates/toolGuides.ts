@@ -30,6 +30,10 @@ export interface AiExportToolGuide {
 export const AI_EXPORT_TOOLS_NAV_KEY = 'tools.title';
 
 const PAC = 'tools.pacAllocator.planner';
+const REB = 'tools.portfolioRebalancer.planner';
+
+/** The three buttons of the Liquidity step, the same in both Tools (78 L4b: the sentence names all three, not one). */
+const LIQUIDITY_SOURCES = {contribution: `${PAC}.liquidity.addContribution`, fromBrokers: `${PAC}.liquidity.copy`, external: `${PAC}.liquidity.addManual`} as const;
 
 /** The PAC allocator (`bozze-AIX.md` §4 bis): its nine steps, in the planner's order. */
 const PAC_ALLOCATOR_GUIDE: AiExportToolGuide = {
@@ -39,7 +43,7 @@ const PAC_ALLOCATOR_GUIDE: AiExportToolGuide = {
     returnsKey: 'aiExport.tool.pacAllocator.returns',
     steps: [
         {labelKey: `${PAC}.steps.scenario`, explanationKey: 'aiExport.tool.pacAllocator.steps.scenario', values: {currency: `${PAC}.scenario.currency`}},
-        {labelKey: `${PAC}.steps.liquidity`, explanationKey: 'aiExport.tool.pacAllocator.steps.liquidity', values: {contribution: `${PAC}.liquidity.addContribution`}},
+        {labelKey: `${PAC}.steps.liquidity`, explanationKey: 'aiExport.tool.pacAllocator.steps.liquidity', values: LIQUIDITY_SOURCES},
         {labelKey: `${PAC}.steps.brokers`, explanationKey: 'aiExport.tool.pacAllocator.steps.brokers'},
         {labelKey: `${PAC}.steps.assets`, explanationKey: 'aiExport.tool.pacAllocator.steps.assets', values: {auto: `${PAC}.mode.auto`}},
         {labelKey: `${PAC}.steps.routing`, explanationKey: 'aiExport.tool.pacAllocator.steps.routing', values: {allowAll: `${PAC}.routing.allowAll`}},
@@ -50,8 +54,43 @@ const PAC_ALLOCATOR_GUIDE: AiExportToolGuide = {
     ],
 };
 
+/**
+ * The Portfolio rebalancer (78 L4b, `bozze-AIX.md` §4 bis): the PAC's planner with its own profile, so the same nine steps
+ * and their shared names. Its labels are placeholders only where lane 67 no longer changes them; the Targets and Brokers
+ * steps and the custom fidelity value are described by their role.
+ */
+const PORTFOLIO_REBALANCER_GUIDE: AiExportToolGuide = {
+    toolCode: 'portfolio_rebalancer',
+    nameKey: 'tools.portfolioRebalancer.name',
+    whenKey: 'aiExport.tool.portfolioRebalancer.when',
+    returnsKey: 'aiExport.tool.portfolioRebalancer.returns',
+    steps: [
+        {labelKey: `${PAC}.steps.scenario`, explanationKey: 'aiExport.tool.portfolioRebalancer.steps.scenario', values: {currency: `${PAC}.scenario.currency`}},
+        {labelKey: `${PAC}.steps.liquidity`, explanationKey: 'aiExport.tool.portfolioRebalancer.steps.liquidity', values: LIQUIDITY_SOURCES},
+        {labelKey: `${PAC}.steps.brokers`, explanationKey: 'aiExport.tool.portfolioRebalancer.steps.brokers'},
+        {labelKey: `${PAC}.steps.assets`, explanationKey: 'aiExport.tool.portfolioRebalancer.steps.assets', values: {positions: `${REB}.positions.title`, auto: `${PAC}.mode.auto`}},
+        {labelKey: `${PAC}.steps.routing`, explanationKey: 'aiExport.tool.portfolioRebalancer.steps.routing', values: {allowAll: `${PAC}.routing.allowAll`}},
+        {labelKey: `${PAC}.steps.targets`, explanationKey: 'aiExport.tool.portfolioRebalancer.steps.targets'},
+        {labelKey: `${PAC}.steps.fx`, explanationKey: 'aiExport.tool.portfolioRebalancer.steps.fx', values: {auto: `${PAC}.mode.auto`}},
+        {
+            labelKey: `${PAC}.steps.strategy`,
+            explanationKey: 'aiExport.tool.portfolioRebalancer.steps.strategy',
+            values: {
+                investOnly: `${REB}.strategy.investOnly`,
+                fidelity: `${REB}.strategy.fidelityTitle`,
+                costAware: `${REB}.strategy.fidelity.costAware`,
+                balanced: `${REB}.strategy.fidelity.balanced`,
+                faithful: `${REB}.strategy.fidelity.faithful`,
+                targetFirst: `${REB}.strategy.fidelity.targetFirst`,
+            },
+        },
+        {labelKey: `${PAC}.steps.review`, explanationKey: 'aiExport.tool.portfolioRebalancer.steps.review', values: {calculate: `${PAC}.review.calculate`}},
+    ],
+};
+
 export const AI_EXPORT_TOOL_GUIDES: Readonly<Record<string, AiExportToolGuide>> = {
     pac_allocator: PAC_ALLOCATOR_GUIDE,
+    portfolio_rebalancer: PORTFOLIO_REBALANCER_GUIDE,
 };
 
 /** Whether the frontend can write the block of a tool the backend suggests; an unknown code closes the catalog. */
