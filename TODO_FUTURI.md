@@ -956,7 +956,7 @@ nell'immagine Docker, va tutto bene. Con più processi (`dev.py server --workers
   reale parallelismo ed evitare che se uno dei processi crasha, si perdono gli altri, cosa ne pensi?»
 - 25/11/2026, riferite dal coordinatore: «per ora B, in attesa che realizziamo il processo singleton che avevo
   pianificato, credo sia già in todo_futuri, se così non fosse fallo aggiungere all'agente progettista, ne avevo
-  parlato con lui»
+  parlato con lui» — superata lo stesso giorno: «facciamo quello che avevo scelto all'ora»
 
 **Cosa c'è già oggi.** Ogni calcolo gira in un processo suo, che finisce col calcolo. Se quel processo muore il
 server resta in piedi e l'utente vede un errore (`worker_crashed`). Ogni calcolo ha il suo tetto di memoria
@@ -975,8 +975,8 @@ Un processo unico che calcola dentro di sé perderebbe il tetto di memoria per c
 
 **Cosa sostituirebbe.**
 
-- **Il passaggio fra processi di «continua» e «va bene così»** (la strada B, sotto): ogni processo del server parla
-  con lo stesso gestore, quindi il comando arriva sempre.
+- **Il limite noto di «continua» e «va bene così»**: ogni processo del server parla con lo stesso gestore, quindi il
+  comando arriva sempre.
 - **I conti per processo:** una coda, i posti e «un piano alla volta» contati una volta sola per tutta la macchina.
 - **Il risolutore nei processi del server.** Questo si toglie anche senza il gestore, caricando il plugin più tardi.
 
@@ -992,10 +992,9 @@ supervisore esce dal server e diventa un processo.
 - **A chi serve:** solo a chi avvia più processi. L'immagine Docker ne avvia uno.
 - **Nessuna stima.**
 
-**Fino ad allora.** Vale la strada B, decisa dal developer il 25/11: «continua» resta una seconda richiesta; il
-processo che la riceve e non ha quel calcolo la passa a quello che lo ha, sulla stessa macchina; se non ci riesce,
-rifiuta, e la pagina tiene il piano mostrato. I conti restano per processo: è un limite noto, e questa è una lettura
-del consulente, non una frase del developer.
+**Fino ad allora.** Vale la scelta del developer del 21/11/2026, confermata il 25/11: «continua» è garantito solo con un
+processo del server, che è quello dell'immagine Docker; con più processi è un limite noto, scritto con una nota TODO nel
+codice, e nessun passaggio fra i processi viene costruito adesso («correggerlo subito era poco efficiente»).
 
 **Rapporto con «Cache Server Centralizzato per Multi-Worker Uvicorn»** (osservazione del consulente). Le due voci
 nascono dallo stesso fatto, più di un processo del server, e hanno la stessa forma: un processo per tutta la
@@ -1008,7 +1007,7 @@ avviare e trovare un servizio locale.
 definitivo; e un bisogno reale di più processi.
 
 **Dove sta il dettaglio**: `LibreFolio_developer_journal/Release_2/Phase_2/67_rebalancer/plan-phase02Step7SearchTime.prompt.md`,
-§3 punto 2 (le due risposte del developer e la strada B) e lotto PAUSA-2.
+§3 punto 2 (le risposte del developer) e lotto PAUSA-2.
 
 ## ⚡ Migrazione a ORJSONResponse per performance JSON
 
