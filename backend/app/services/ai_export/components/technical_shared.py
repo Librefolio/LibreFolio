@@ -107,6 +107,7 @@ from backend.app.services.assets.market_calendar import ensure_market_holidays
 from backend.app.services.financial_math.returns import price_return
 from backend.app.services.financial_math.weights import gross_weights
 from backend.app.services.fx.conversion import convert_bulk
+from backend.app.services.risk.metrics import sample_standard_deviation
 from backend.app.services.signals.planning import SignalExecutionPlan
 from backend.app.services.signals.registry import SignalPluginRegistry
 from backend.app.services.signals.service import SignalService
@@ -752,6 +753,27 @@ async def load_fx_technical_bundle(context: BuildContext) -> FxTechnicalBundle:
 # =============================================================================
 # Temporal engine bridging (price/rate OHLC, indicator series, events)
 # =============================================================================
+
+
+def observed_returns(observed: Sequence[tuple[date, Decimal]]) -> tuple[tuple[date, Decimal], ...]:
+    """The simple return of each observed value from the one before it (`price_return`), dated with the later one.
+
+    A zero value gives no return to the next one and is skipped. Observations are quote days: the standard count.
+    """
+    return tuple((day, change) for (_, previous), (day, current) in zip(observed, observed[1:], strict=False) if (change := price_return(previous, current)) is not None)
+
+
+def return_volatility(returns: Sequence[Decimal]) -> float | None:
+    """The sample volatility (ddof = 1) of a series of returns: `risk.metrics.sample_standard_deviation`, the Risk engine's own.
+
+    None under two returns. The one definition behind every volatility of returns AI Export prints (78 L6 S1, S2b).
+    """
+    return sample_standard_deviation([float(value) for value in returns]) if len(returns) >= 2 else None
+
+
+def daily_return_volatility(observed: Sequence[tuple[date, Decimal]]) -> float | None:
+    """The volatility of the returns between consecutive observed values of a period (`daily_return_volatility_ratio`)."""
+    return return_volatility([change for _, change in observed_returns(observed)])
 
 
 def observations_to_rate_points(
@@ -1569,6 +1591,7 @@ __all__ = [
     "build_price_buckets",
     "classify_reference_level_state",
     "compute_nav_weights",
+    "daily_return_volatility",
     "eligible_positions",
     "latest_point_value",
     "load_asset_price_results",
@@ -1577,10 +1600,12 @@ __all__ = [
     "load_portfolio_or_broker_report",
     "load_technical_universe_bundle",
     "observations_to_rate_points",
+    "observed_returns",
     "period_contributor_asset_count",
     "period_position_leg_count",
     "price_result_to_close_points",
     "price_series_gap",
+    "return_volatility",
     "select_technical_events",
     "signal_results_to_discrete_events",
 ]

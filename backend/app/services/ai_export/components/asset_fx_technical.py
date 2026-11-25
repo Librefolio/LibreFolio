@@ -31,8 +31,6 @@ see the plan's Phase 0 AI Export refinement, "shared technical wave" section.
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from decimal import Decimal
-from statistics import pstdev
 
 from backend.app.services.ai_export.components.envelope import SectionEnvelope
 from backend.app.services.ai_export.components.resources import FxRateSeriesResource
@@ -59,10 +57,12 @@ from backend.app.services.ai_export.components.technical_shared import (
     load_fx_technical_bundle,
     load_series_gaps,
     observations_to_rate_points,
+    observed_returns,
     price_result_to_close_points,
     price_series_gap,
     price_series_seed,
     rate_series_seed,
+    return_volatility,
     signal_results_to_discrete_events,
 )
 from backend.app.services.ai_export.components.types import Domain, PeriodBehavior
@@ -224,22 +224,16 @@ FX_RATE_OHLC_SPEC = ComponentSpec(
 
 def _daily_return_points(rate_series: FxRateSeriesResource, *, start, end) -> tuple[ContinuousMultiOutputPoint, ...]:
     """Return changes between genuine FX observations, excluding carry-forward."""
-    observations = tuple(observation for observation in rate_series.observations if (not observation.backward_filled and observation.actual_date == observation.requested_date))
-    points: list[ContinuousMultiOutputPoint] = []
-    for previous, current in zip(observations, observations[1:], strict=False):
-        if previous.rate == 0:
-            continue
-        pct_change = current.rate / previous.rate - Decimal(1)
-        points.append(ContinuousMultiOutputPoint(date=current.requested_date, values={"return": pct_change}))
-    return slice_to_requested_period(tuple(points), start, end)
+    observed = tuple((observation.requested_date, observation.rate) for observation in rate_series.observations if (not observation.backward_filled and observation.actual_date == observation.requested_date))
+    points = tuple(ContinuousMultiOutputPoint(date=day, values={"return": change}) for day, change in observed_returns(observed))
+    return slice_to_requested_period(points, start, end)
 
 
 def _build_return_volatility_buckets(points: Sequence[ContinuousMultiOutputPoint], plan: BucketPlan) -> tuple[ReturnVolatilityBucket, ...]:
     aggregates = aggregate_continuous_multi_output(points, plan)
     buckets: list[ReturnVolatilityBucket] = []
     for aggregate in aggregates:
-        bucket_returns = [float(point.values["return"]) for point in points if aggregate.bucket.contains(point.date)]
-        volatility = pstdev(bucket_returns) if len(bucket_returns) >= 2 else None
+        volatility = return_volatility([point.values["return"] for point in points if aggregate.bucket.contains(point.date)])
         buckets.append(
             ReturnVolatilityBucket(
                 start_date=aggregate.bucket.start_date,
@@ -272,7 +266,7 @@ async def _build_fx_returns_volatility(context: BuildContext, dependencies: Mapp
 
 FX_RETURNS_VOLATILITY_SPEC = ComponentSpec(
     component_id="fx.returns_volatility",
-    version=1,
+    version=2,
     domains=frozenset({Domain.FX}),
     output_model=FxReturnsVolatilityPayload,
     builder=_build_fx_returns_volatility,

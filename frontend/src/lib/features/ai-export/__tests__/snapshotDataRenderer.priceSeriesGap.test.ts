@@ -194,7 +194,7 @@ describe('price series gaps (E-AI503, E-23)', () => {
         return pricesSection(componentId, componentVersion, [coveredAsset(FIRST_ASSET_ID, 1)], componentVersion === 1 ? undefined : []);
     }
 
-    /** `fx.rate_ohlc` / `fx.returns_volatility`: the FX series, each with its own payload shape; E-23 gives `fx.rate_ohlc` a v2, `fx.returns_volatility` stays at v1. */
+    /** `fx.rate_ohlc` / `fx.returns_volatility`: the FX series, each with its own payload shape; E-23 gives `fx.rate_ohlc` a v2, 78 L6 S2b `fx.returns_volatility`. */
     function fxSection(componentId: 'fx.rate_ohlc' | 'fx.returns_volatility', componentVersion: number, schemaVersion = 1) {
         if (componentId === 'fx.rate_ohlc') {
             return section(componentId, componentVersion, {base_currency: 'USD', quote_currency: 'EUR', buckets: [priceBucket({first: {rate: 0.91}, minimum: {rate: 0.9}, maximum: {rate: 0.93}, last: {rate: 0.92}})], latest_rate: 0.92, latest_date: '2026/03/31'}, schemaVersion);
@@ -537,7 +537,7 @@ describe('price series gaps (E-AI503, E-23)', () => {
         ['asset.ohlc_returns v2 with schema 2', ohlcSection(2, gapOhlcPayload('no_stored_price'), 2)],
         ['fx.rate_ohlc v3, a version this lot does not add', fxSection('fx.rate_ohlc', 3)],
         ['fx.rate_ohlc v2 with schema 2', fxSection('fx.rate_ohlc', 2, 2)],
-        ['fx.returns_volatility v2, a version this lot does not add', fxSection('fx.returns_volatility', 2)],
+        ['fx.returns_volatility v3, a version this lot does not add', fxSection('fx.returns_volatility', 3)],
     ] as const)('PSG-09: still falls back to YAML for %s', (_label, yamlSection) => {
         const rendered = renderSnapshotDataText([yamlSection], targetOf(yamlSection.component_id, SECOND_ASSET_ID), directory).content;
 
