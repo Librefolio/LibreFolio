@@ -16,6 +16,7 @@
     import {untrack} from 'svelte';
     import {t} from '$lib/i18n';
     import {notify} from '$lib/stores/app/notify.svelte';
+    import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import type {PlannerDraft} from '../draft.svelte';
     import {formatPlannerMoneyPlain, formatPlannerPercentUnits} from '../format';
     import {parseLimit} from '../limits';
@@ -72,10 +73,6 @@
             seen = new Set(current.keys());
         });
     });
-
-    function escapeHtml(text: string): string {
-        return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-    }
 
     /** The toast says the line of the box, as plain text. */
     function toastText(problem: LimitProblem): string {
