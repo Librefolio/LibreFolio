@@ -72,3 +72,33 @@ describe('78 L6: the versions of S1 and S7 render compactly', () => {
         expect(content).toMatch(/cash_in_transit[^\n]*250/);
     });
 });
+
+/** The columns a market row of the portfolio does not report: before 78 L6 S2 they were null in every row. */
+const NOT_REPORTED_BY_PORTFOLIO = ['ema_20', 'atr_14', 'bollinger_lower', 'bollinger_middle', 'bollinger_upper', 'ppo_12_26_9_percent', 'roc_20_percent'];
+
+function omittedColumns(content: string): string[] {
+    return content
+        .split('\n')
+        .filter((line) => line.startsWith('omitted_null_columns=') && !line.includes(' '))
+        .flatMap((line) => line.slice('omitted_null_columns='.length).split(','));
+}
+
+describe('78 L6 S2: a column the component does not report is not «unavailable»', () => {
+    it('the portfolio row names only a declared column that could not be computed', () => {
+        // The payload as the backend writes it now: no key for a column the row does not declare; ema_200 declared, null
+        const row = {entity_id: 'asset:1', portfolio_weight_ratio: 0.5, value_unit: 'EUR', observation_count: 3, current_value: 100.5, ema_200: null, daily_return_volatility_ratio: 0.0123};
+        const content = render('portfolio.asset_market_context', 2, {policy_code: 'portfolio_asset_snapshot_v2', entities: [row]});
+        const omitted = omittedColumns(content);
+        expect(omitted).toContain('ema_200');
+        for (const column of NOT_REPORTED_BY_PORTFOLIO) expect(omitted).not.toContain(column);
+    });
+
+    it('asset.position_market_context v2 renders compactly, with the volatility and without PPO, ROC or a weight', () => {
+        const row = {entity_id: 'asset:1', value_unit: 'EUR', observation_count: 63, current_value: 100.5, ema_20: 99.1, atr_14: 1.2, daily_return_volatility_ratio: 0.0123};
+        const content = render('asset.position_market_context', 2, {policy_code: 'asset_position_context_v2', entities: [row]}, {kind: 'asset', asset_id: 1});
+        expect(content).not.toContain(FALLBACK);
+        expect(content).toContain('1.23%');
+        const omitted = omittedColumns(content);
+        for (const column of ['ppo_12_26_9_percent', 'roc_20_percent', 'portfolio_weight_percent']) expect(omitted).not.toContain(column);
+    });
+});
