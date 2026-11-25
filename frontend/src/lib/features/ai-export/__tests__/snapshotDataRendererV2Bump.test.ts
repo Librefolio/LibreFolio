@@ -59,7 +59,8 @@ const V2_SECTIONS: ReadonlyArray<[string, Record<string, unknown>]> = [
 
 /** The first version the renderer does not know: 3, except where a later bump moved the component on (78 L10b). */
 function nextUnknownVersion(componentId: string): number {
-    return componentId === 'broker.concentration_comparison' ? 4 : 3;
+    // 78 L10b: the comparison at v3; 78 L6 S7: the allocations with the cash per broker at v3
+    return componentId === 'broker.concentration_comparison' || componentId === 'portfolio.allocations_cash' ? 4 : 3;
 }
 
 describe('AI Export v2 bump — T-U9, MF-C2 and F-AI (b)', () => {
