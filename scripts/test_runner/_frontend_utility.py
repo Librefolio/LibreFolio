@@ -320,6 +320,7 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/i18n/catalogIcuLocale.test.ts",
             "src/lib/i18n/importWizardAssetsCount.test.ts",
             "src/lib/i18n/ownerEmailChangeChecks.test.ts",
+            "src/lib/i18n/rebalancerResultTranslations.test.ts",
             "src/lib/i18n/instanceKeyChecks.test.ts",
             "src/lib/i18n/transactionsEntryModeKeys.test.ts",
             "src/lib/i18n/transactionsWacPreviewEffectKeys.test.ts",

@@ -71,8 +71,10 @@ def limited_entries(scenario: ExactPlannerScenario) -> tuple[LimitEntry, ...]:
     return tuple(entry for entry, _, _ in entries_with_limits(scenario))
 
 
-def limit_reference(scenario: ExactPlannerScenario, accounting: ExactAccountingEvaluation) -> ExactRatio:
-    """The reference a share limit reads (specifica §15 n. 17): ``fixed_reference`` in the PAC, ``F`` in the Rebalancer."""
+def plan_reference(scenario: ExactPlannerScenario, accounting: ExactAccountingEvaluation) -> ExactRatio:
+    """``R``, the plan's reference: ``fixed_reference`` in the PAC (the cash its routes can bring to a purchase), ``F`` in the
+    Rebalancer. A share limit reads it (specifica §15 n. 17); so do the targets, the uninvested ``N`` and the scale of the
+    distance (lot SLIP of project 67, SLIP-0 §6.2). The money lost ``C = F − W`` does not: trapped cash is in both terms."""
     return accounting.initial_wealth if scenario.product == "rebalancer" else accounting.fixed_reference
 
 

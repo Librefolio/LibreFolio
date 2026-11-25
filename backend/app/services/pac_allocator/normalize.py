@@ -46,7 +46,7 @@ from backend.app.services.pac_allocator.issues import (
     normalizer_issue_definition,
     section_path,
 )
-from backend.app.services.pac_allocator.limits import check_maximum_below_current, check_minimum_above_maximum, check_minimums_exceed_reference, limit_reference_of, trapped_cash_by_cell
+from backend.app.services.pac_allocator.limits import check_maximum_below_current, check_minimum_above_maximum, check_minimums_exceed_reference, plan_reference_of, trapped_cash_by_cell
 from backend.app.services.pac_allocator.models import (
     FIDELITY_LEVEL_WEIGHTS,
     ExactAsset,
@@ -1233,7 +1233,7 @@ class _PlannerV2Normalizer:
         """
         if not entries_with_limits(scenario):
             return []
-        reference = limit_reference_of(scenario)
+        reference = plan_reference_of(scenario)
         problems = [
             *check_minimum_above_maximum(scenario, reference),
             *check_minimums_exceed_reference(scenario, reference, trapped_cash_by_cell(scenario)),

@@ -34,6 +34,7 @@ from backend.app.schemas.pac_allocator.request import PacPlannerRequest, Rebalan
 from backend.app.schemas.pac_allocator.results import PlannerResultSnapshot
 from backend.app.services.pac_allocator.evaluation.economics import initial_cash_by_cell
 from backend.app.services.pac_allocator.evaluation.evaluator import build_exact_policy_view, evaluate_do_nothing
+from backend.app.services.pac_allocator.evaluation.limits import plan_reference
 from backend.app.services.pac_allocator.evaluation.scenario import build_scenario_index, exact_scenario_fingerprint
 from backend.app.services.pac_allocator.models import FIDELITY_LEVEL_WEIGHTS, Checkpoint, ExactEvaluation, ExactPlannerScenario, check_budget
 from backend.app.services.pac_allocator.normalize import COUNTED_ANYWAY, PlannerV2NormalizationResult, normalize_pac_plan, normalize_rebalancer_plan
@@ -65,7 +66,7 @@ def preview_rebalancing(request: RebalancerPlannerRequest, *, checkpoint: Checkp
     if scenario is None:
         return _failure(normalized.availability, request.snapshot.snapshot_id, list(normalized.issues))
     evaluation = _do_nothing(scenario, checkpoint)
-    wealth = evaluation.accounting.initial_wealth
+    wealth = plan_reference(scenario, evaluation.accounting)
     levels = FidelityLevelWeights(**{level: ratio_to_exact_number(weight) for level, weight in FIDELITY_LEVEL_WEIGHTS.items()})
     return RebalancerPreviewReadyResult(**_ready_fields(scenario, normalized), total=ratio_to_money(wealth, scenario.valuation_currency), items=_items(scenario, evaluation, request), fidelity_level_weights=levels)
 
@@ -90,7 +91,7 @@ def _items(scenario: ExactPlannerScenario, evaluation: ExactEvaluation, request:
     entry of the request (one still at 0 % with no limit, which the scenario leaves out, included); and «other cash» (G5-2 of
     project 67): what of ``F`` no entry holds, the cash outside the entries and the contributions, zero when none is left.
     The items cover ``F`` whole."""
-    wealth = evaluation.accounting.initial_wealth
+    wealth = plan_reference(scenario, evaluation.accounting)
     currency = scenario.valuation_currency
     before = initial_cash_by_cell(build_scenario_index(scenario), evaluation.ledgers)
     items: list = [PreviewAssetItem(kind="asset", asset_id=row.asset_id, value=ratio_to_money(row.current_value, currency), weight=ratio_to_exact_number(row.current_value / wealth)) for row in evaluation.assets]

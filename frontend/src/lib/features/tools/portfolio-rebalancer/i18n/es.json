@@ -168,15 +168,15 @@
           },
           "ledger": {
             "fields": {
-              "transfer_in": "Transfers in",
-              "transfer_out": "Transfers out"
+              "transfer_in": "Transferencias entrantes",
+              "transfer_out": "Transferencias salientes"
             },
             "help": {
-              "transfer_in": "What arrives in this cash from another Broker of the plan.",
-              "transfer_out": "What leaves this cash for another Broker of the plan.",
-              "funding_in": "The deposits of your contributions into this cash.",
-              "funding_out": "Always 0 in the Rebalancer: money moves between Brokers as transfers, in their own columns.",
-              "alwaysZeroInvestOnly": "Always 0 with «Invest only»: the plan only buys."
+              "transfer_in": "Lo que llega a este efectivo desde otro bróker del plan.",
+              "transfer_out": "Lo que sale de este efectivo hacia otro bróker del plan.",
+              "funding_in": "Los depósitos de tus aportaciones en este efectivo.",
+              "funding_out": "Siempre 0 en el Reequilibrador: el dinero pasa de un bróker a otro con transferencias, en sus propias columnas.",
+              "alwaysZeroInvestOnly": "Siempre 0 con «Solo invertir»: el plan solo compra."
             }
           },
           "proof": {
@@ -199,21 +199,21 @@
             }
           },
           "exposure": {
-            "scope": "On the whole portfolio, cash included",
-            "legendNow": "grey: today",
-            "legendAfter": "coloured: after the plan",
-            "legendTarget": "your target",
-            "cash": "Cash",
-            "now": "Today",
-            "after": "After the plan",
-            "target": "Target",
-            "belowTarget": "After the plan: below the target",
-            "aboveTarget": "After the plan: above the target",
-            "onTarget": "After the plan: in line with the target",
-            "showAll": "Show all ({count})",
-            "showFewer": "Show fewer",
-            "title": "Exposures – today, after the plan, target",
-            "help": "How the whole portfolio, cash included, spreads by Asset type, sector and country: today, after the plan, and your target. The cash is the last row of each chart. The charts do not change the plan.",
+            "scope": "Sobre toda la cartera, efectivo incluido",
+            "legendNow": "gris: hoy",
+            "legendAfter": "en color: después del plan",
+            "legendTarget": "tu objetivo",
+            "cash": "Efectivo",
+            "now": "Hoy",
+            "after": "Después del plan",
+            "target": "Objetivo",
+            "belowTarget": "Después del plan: por debajo del objetivo",
+            "aboveTarget": "Después del plan: por encima del objetivo",
+            "onTarget": "Después del plan: en línea con el objetivo",
+            "showAll": "Mostrar todos ({count})",
+            "showFewer": "Mostrar menos",
+            "title": "Exposiciones – hoy, después del plan, objetivo",
+            "help": "Cómo se reparte toda la cartera, efectivo incluido, por tipo de Activo, sector y país: hoy, después del plan y tu objetivo. El efectivo es la última fila de cada gráfico. Los gráficos no cambian el plan.",
             "mapAbove": "Por encima del objetivo",
             "mapBelow": "Por debajo del objetivo",
             "mapEqual": "En línea con el objetivo"

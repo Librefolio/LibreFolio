@@ -104,6 +104,9 @@ class ObjectiveInputs:
     # The Rebalancer (B2 of project 67), from the same probe: F exactly, the target of every cash cell that has one, and the
     # fidelity. The PAC leaves them empty.
     initial_wealth: Fraction = Fraction(0)
+    # ``R`` (lot SLIP, ``evaluation.limits.plan_reference``): the targets' base, the uninvested ``N`` and the distance's scale.
+    # ``F`` in the Rebalancer; ``initial_wealth`` keeps ``F`` for the money lost ``C = F − W``.
+    reference: Fraction = Fraction(0)
     cash_target_by_cell: dict[tuple[str, str], float] = field(default_factory=dict)
     fidelity: ExactTargetFidelity | None = None
 
@@ -251,15 +254,18 @@ def _rebalancer_parts(model: Model, scenario: ExactPlannerScenario, facts: Scena
     ``r = residual / √F``, and the epigraph squares ``r``. Squared as a long sum, SCIP expanded the row into pairwise
     products of integer variables, and its cuts on them deduced a false bound at node 1. Over ``√F`` the squares are
     already euros of ``J``: the returned ``distance`` is ``D/F``, and the score is ``λ·D/F + C`` at scale 1.
+
+    Lot SLIP: ``N`` and the scale read ``R`` (``inputs.reference``), which is ``F`` in the Rebalancer; ``C`` keeps ``F``.
     """
     initial_wealth = float(inputs.initial_wealth)
+    reference = float(inputs.reference)
     asset_values = asset_final_value_exprs(scenario, facts, variables)
     cell_values = {key: sum(terms) * valuation_rate(facts, key[1]) for key, terms in cells.items()}
     targeted = {key: cell_values.get(key, 0.0) for key in inputs.cash_target_by_cell}
     residuals: list[tuple[str, LinearTerm]] = [(f"asset:{asset_id}", asset_values[asset_id] - inputs.target_value_by_asset[asset_id]) for asset_id in sorted(asset_values)]
     residuals += [(f"cash:{broker_id}:{currency}", targeted[(broker_id, currency)] - target) for (broker_id, currency), target in sorted(inputs.cash_target_by_cell.items())]
-    residuals.append(("uninvested", initial_wealth - sum(asset_values.values()) - sum(targeted.values())))
-    over_root = 1.0 / math.sqrt(initial_wealth) if initial_wealth > 0 else 1.0
+    residuals.append(("uninvested", reference - sum(asset_values.values()) - sum(targeted.values())))
+    over_root = 1.0 / math.sqrt(reference) if reference > 0 else 1.0
     distance: LinearTerm = 0.0
     for name, residual in residuals:
         scaled = model.addVar(vtype="C", lb=None, ub=None, name=f"distance_res:{name}")
@@ -302,7 +308,7 @@ def _rebalancer_cascade(model: Model, scenario: ExactPlannerScenario, facts: Sce
     if fidelity is not None and fidelity.kind == "target_first":
         stages = [
             # SCIP minimizes D/F (lot S1); the exact value of the stage is D.
-            ObjectiveStage(code="target_distance", expression=parts.distance, scale=_over(inputs.initial_wealth), band=parts.distance_rows * _QUADRATIC_ROW_TOLERANCE),
+            ObjectiveStage(code="target_distance", expression=parts.distance, scale=_over(inputs.reference), band=parts.distance_rows * _QUADRATIC_ROW_TOLERANCE),
             ObjectiveStage(code="wealth_loss", expression=parts.wealth_loss),
         ]
     else:
