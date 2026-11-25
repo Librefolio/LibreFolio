@@ -31,7 +31,6 @@ see the plan's Phase 0 AI Export refinement, "shared technical wave" section.
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from statistics import pstdev
 
 from backend.app.services.ai_export.components.envelope import SectionEnvelope
 from backend.app.services.ai_export.components.resources import FxRateSeriesResource
@@ -63,6 +62,7 @@ from backend.app.services.ai_export.components.technical_shared import (
     price_series_gap,
     price_series_seed,
     rate_series_seed,
+    return_volatility,
     signal_results_to_discrete_events,
 )
 from backend.app.services.ai_export.components.types import Domain, PeriodBehavior
@@ -233,8 +233,7 @@ def _build_return_volatility_buckets(points: Sequence[ContinuousMultiOutputPoint
     aggregates = aggregate_continuous_multi_output(points, plan)
     buckets: list[ReturnVolatilityBucket] = []
     for aggregate in aggregates:
-        bucket_returns = [float(point.values["return"]) for point in points if aggregate.bucket.contains(point.date)]
-        volatility = pstdev(bucket_returns) if len(bucket_returns) >= 2 else None
+        volatility = return_volatility([point.values["return"] for point in points if aggregate.bucket.contains(point.date)])
         buckets.append(
             ReturnVolatilityBucket(
                 start_date=aggregate.bucket.start_date,
@@ -267,7 +266,7 @@ async def _build_fx_returns_volatility(context: BuildContext, dependencies: Mapp
 
 FX_RETURNS_VOLATILITY_SPEC = ComponentSpec(
     component_id="fx.returns_volatility",
-    version=1,
+    version=2,
     domains=frozenset({Domain.FX}),
     output_model=FxReturnsVolatilityPayload,
     builder=_build_fx_returns_volatility,

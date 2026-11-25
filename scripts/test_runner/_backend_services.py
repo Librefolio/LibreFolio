@@ -59,6 +59,7 @@ AI_EXPORT_PURE_TEST_PATHS = (
     "backend/test_scripts/test_services/test_ai_export_broker_scope_contract.py",
     "backend/test_scripts/test_services/test_ai_export_build_failure_log.py",
     "backend/test_scripts/test_services/test_ai_export_components_drawdown_total_loss.py",
+    "backend/test_scripts/test_services/test_ai_export_fx_bucket_volatility.py",
     "backend/test_scripts/test_services/test_ai_export_fx_payload_invariants.py",
     "backend/test_scripts/test_services/test_ai_export_fx_timing_invariants.py",
     "backend/test_scripts/test_services/test_ai_export_int_validation.py",

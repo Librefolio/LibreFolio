@@ -148,7 +148,8 @@ and so does the FX summary (`fx.market_summary`, v2). Every row computes it the 
 (`risk.metrics.sample_standard_deviation`, ddof = 1, the Risk engine's). It is a daily figure, `None` under two
 returns; it gives a volatility to a close-only asset, which NATR (it needs highs and lows) cannot. Until v1 the FX
 summary and `fx.timing_context` (v2, 78 L6 S2b: the same pair and period now give one figure) used a population
-deviation; the per-bucket one of `fx.returns_volatility` still does.
+deviation, as `fx.returns_volatility` did for each bucket until v1 (v2: the sample one, 78 L6 S2b). The factor is
+√(n/(n−1)) for n returns, so small buckets move most: two returns +41%, five +12%.
 
 **Cash per broker (78 L6).** `portfolio.allocations_cash` (v3) lists `cash_by_broker`: each broker's cash in the
 report currency and its native balances, taken from the report's own `summary.by_broker` (the Dashboard's broker cards),

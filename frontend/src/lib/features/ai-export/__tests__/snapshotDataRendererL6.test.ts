@@ -130,3 +130,13 @@ describe('78 L6 S2: a column the component does not report is not Â«unavailableÂ
         for (const column of ['ppo_12_26_9_percent', 'roc_20_percent', 'portfolio_weight_percent']) expect(omitted).not.toContain(column);
     });
 });
+
+describe('78 L6 S2b: the volatility of each bucket of the FX returns', () => {
+    it('fx.returns_volatility v2 prints its buckets, not as YAML', () => {
+        const bucket = {start_date: '2026-03-01', end_date: '2026-03-15', calendar_days: 15, first: {return: 0.001}, minimum: {return: -0.002}, maximum: {return: 0.003}, last: {return: 0.001}, observation_count: 10, volatility: 0.004};
+        const content = render('fx.returns_volatility', 2, {base_currency: 'EUR', quote_currency: 'USD', buckets: [bucket]}, {kind: 'fx', base_currency: 'EUR', quote_currency: 'USD'});
+        expect(content).not.toContain(FALLBACK);
+        expect(content).toMatch(/\|volatility\|/);
+        expect(content).toContain('0.004');
+    });
+});

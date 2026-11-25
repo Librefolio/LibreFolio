@@ -1695,6 +1695,8 @@ const COMPACT_COMPONENT_VERSIONS: ReadonlyMap<string, ReadonlySet<number>> = new
     ['asset.position_market_context', new Set([1, 2])],
     // 78 L6 S2b: the timing context's volatility on the same definition as the FX summary's (sample)
     ['fx.timing_context', new Set([1, 2])],
+    // 78 L6 S2b: each bucket's volatility on the same definition (sample)
+    ['fx.returns_volatility', new Set([1, 2])],
     ['broker.concentration_context', new Set([1, 2])],
     // 78 L10b: the comparison's base is the user's owned brokers, whole; a broker not owned is unavailable.
     ['broker.concentration_comparison', new Set([1, 2, 3])],
