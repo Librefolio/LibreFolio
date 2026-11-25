@@ -316,6 +316,33 @@
     "replyInstructions": {
       "dataReceived": "Dati acquisiti, sono pronto per sentire le tue domande."
     },
-    "noOwnedBrokers": "Non possiedi nessun broker: questa selezione legge le tue posizioni e la tua liquidità, e quelle dei broker condivisi con te non sono incluse."
+    "noOwnedBrokers": "Non possiedi nessun broker: questa selezione legge le tue posizioni e la tua liquidità, e quelle dei broker condivisi con te non sono incluse.",
+    "tool": {
+      "heading": "Calcolalo in LibreFolio",
+      "intro": "Il numero di quote e gli ordini si calcolano con lo strumento di LibreFolio, che usa un motore matematico di ottimizzazione e tiene conto insieme di commissioni, ordini minimi, cambi e arrotondamenti. Indica all’utente questo percorso, con i valori del tuo piano al posto delle descrizioni. Un calcolo fatto in chat è sconsigliato: fallo solo se l’utente lo chiede, dicendolo.",
+      "when": "Quando usarlo",
+      "path": "Percorso LibreFolio",
+      "steps": {
+        "sidebar": "Barra laterale",
+        "card": "Scheda"
+      },
+      "inputs": "Che cosa inserire, passo per passo",
+      "returns": "Che cosa restituisce",
+      "pacAllocator": {
+        "when": "per dividere denaro nuovo fra più asset. Parte da un portafoglio vuoto: ciò che l’utente possiede già non viene contato.",
+        "steps": {
+          "scenario": "la {currency}, in cui gli importi sono confrontati e riassunti.",
+          "liquidity": "da dove arriva il denaro: {contribution} con l’importo della rata, la cassa già sui broker, oppure un conto esterno. Le fonti si possono combinare.",
+          "brokers": "i broker su cui il piano può comprare, con le loro commissioni e modalità d’ordine. LibreFolio non le registra: le inserisce l’utente.",
+          "assets": "gli asset che il piano può comprare. Il prezzo {auto} è l’ultimo prezzo salvato in LibreFolio.",
+          "routing": "quale broker può comprare quale asset (di solito {allowAll}).",
+          "targets": "la percentuale di questo versamento per ogni asset. Il totale deve fare 100%.",
+          "fx": "compare solo se servono tassi di cambio. Ogni tasso resta di solito su {auto}, l’ultimo salvato in LibreFolio. Se un broker può pagare un asset con cassa in un’altra valuta, c’è anche lo spread di conversione: una percentuale di ogni importo convertito, che parte da 0.",
+          "strategy": "{proportional}: solo acquisti, non vende niente.",
+          "review": "un ultimo controllo, poi {calculate}."
+        },
+        "returns": "gli ordini da inserire, broker per broker (in quote o in importo), i costi, il denaro che resta non investito e, per ogni asset, il peso raggiunto accanto all’obiettivo. È una simulazione: non invia ordini."
+      }
+    }
   }
 }

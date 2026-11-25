@@ -190,15 +190,17 @@ function loadLocale(locale: ProbeLocale): Record<string, unknown> {
     return translations;
 }
 
-export function probeTranslation(locale: ProbeLocale): (key: string) => string {
+export function probeTranslation(locale: ProbeLocale): (key: string, values?: Readonly<Record<string, string>>) => string {
     const translations = loadLocale(locale);
-    return (key: string): string => {
+    return (key: string, values?: Readonly<Record<string, string>>): string => {
         let current: unknown = translations;
         for (const segment of key.split('.')) {
             if (!isRecord(current) || !(segment in current)) return key;
             current = current[segment];
         }
-        return typeof current === 'string' ? current : key;
+        if (typeof current !== 'string') return key;
+        // 78 L4a: the plain `{name}` placeholders the AI Export's own messages use (the panel fills them through svelte-i18n)
+        return values ? current.replace(/\{(\w+)\}/g, (match, name: string) => values[name] ?? match) : current;
     };
 }
 

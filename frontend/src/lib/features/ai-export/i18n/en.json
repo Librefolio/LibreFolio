@@ -316,6 +316,33 @@
     "replyInstructions": {
       "dataReceived": "Data received, I'm ready for your questions."
     },
-    "noOwnedBrokers": "You own no broker: this selection reads your positions and cash, and those in brokers shared with you are not included."
+    "noOwnedBrokers": "You own no broker: this selection reads your positions and cash, and those in brokers shared with you are not included.",
+    "tool": {
+      "heading": "Calculate it in LibreFolio",
+      "intro": "The number of units and the orders are calculated with LibreFolio's tool, which uses a mathematical optimization engine and weighs fees, minimum orders, currency conversions and rounding together. Give the user this path, with the values of your plan in place of the descriptions. A calculation done in the chat is discouraged: do it only if the user asks, and say so.",
+      "when": "When to use it",
+      "path": "LibreFolio path",
+      "steps": {
+        "sidebar": "Sidebar",
+        "card": "Card"
+      },
+      "inputs": "What to enter, step by step",
+      "returns": "What it returns",
+      "pacAllocator": {
+        "when": "to split new money among several Assets. It starts from an empty portfolio: what the user already holds is not counted.",
+        "steps": {
+          "scenario": "the {currency}, in which amounts are compared and summarized.",
+          "liquidity": "where the money comes from: {contribution} with the instalment amount, the cash already on the Brokers, or an external account. The sources can be combined.",
+          "brokers": "the Brokers where the plan may buy, with their fees and order modes. LibreFolio does not record them: the user enters them.",
+          "assets": "the Assets the plan may buy. The {auto} price is the latest price stored in LibreFolio.",
+          "routing": "which Broker may buy which Asset (usually {allowAll}).",
+          "targets": "the percentage of this contribution for each Asset. The total must be 100%.",
+          "fx": "it appears only when exchange rates are needed. Each rate usually stays on {auto}, the latest one stored in LibreFolio. When a Broker can pay for an Asset with cash in another currency, there is also the conversion spread: a percentage of every converted amount, which starts at 0.",
+          "strategy": "{proportional}: purchases only, it sells nothing.",
+          "review": "a last check, then {calculate}."
+        },
+        "returns": "the orders to enter, Broker by Broker (in units or as an amount), the costs, the money left not invested and, for each Asset, the weight reached next to its target. It is a simulation: no order is sent."
+      }
+    }
   }
 }

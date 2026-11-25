@@ -100,7 +100,7 @@
     }
 
     function handleAiExport(options: AiExportOptionsSelection): Promise<PreparedAiExport> {
-        return prepareAiExport({context: aiExport.context(), options, compatibility: aiExportCompatibility, translate: (key) => $_(key)});
+        return prepareAiExport({context: aiExport.context(), options, compatibility: aiExportCompatibility, translate: (key, values) => $_(key, values ? {values} : undefined)});
     }
 
     function handleAiExportCopied(result: PreparedAiExport) {

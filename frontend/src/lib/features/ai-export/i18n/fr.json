@@ -316,6 +316,33 @@
     "replyInstructions": {
       "dataReceived": "Données reçues, je suis prêt à entendre vos questions."
     },
-    "noOwnedBrokers": "Vous ne possédez aucun courtier : cette sélection lit vos positions et vos liquidités, et celles des courtiers partagés avec vous ne sont pas incluses."
+    "noOwnedBrokers": "Vous ne possédez aucun courtier : cette sélection lit vos positions et vos liquidités, et celles des courtiers partagés avec vous ne sont pas incluses.",
+    "tool": {
+      "heading": "Calculez-le dans LibreFolio",
+      "intro": "Le nombre d’unités et les ordres se calculent avec l’outil de LibreFolio, qui utilise un moteur mathématique d’optimisation et tient compte à la fois des frais, des ordres minimaux, des conversions de devises et des arrondis. Indiquez ce parcours à l’utilisateur, avec les valeurs de votre plan à la place des descriptions. Un calcul fait dans la conversation est déconseillé : ne le faites que si l’utilisateur le demande, en le précisant.",
+      "when": "Quand l’utiliser",
+      "path": "Parcours LibreFolio",
+      "steps": {
+        "sidebar": "Barre latérale",
+        "card": "Carte"
+      },
+      "inputs": "Ce qu’il faut saisir, étape par étape",
+      "returns": "Ce qu’il renvoie",
+      "pacAllocator": {
+        "when": "pour répartir de l’argent nouveau entre plusieurs actifs. Il part d’un portefeuille vide : ce que l’utilisateur détient déjà n’est pas compté.",
+        "steps": {
+          "scenario": "la {currency}, dans laquelle les montants sont comparés et résumés.",
+          "liquidity": "d’où vient l’argent : {contribution} avec le montant de la mensualité, les liquidités déjà présentes chez les courtiers, ou un compte externe. Les sources peuvent se combiner.",
+          "brokers": "les courtiers chez lesquels le plan peut acheter, avec leurs frais et leurs modes d’ordre. LibreFolio ne les enregistre pas : c’est l’utilisateur qui les saisit.",
+          "assets": "les actifs que le plan peut acheter. Le prix {auto} est le dernier prix enregistré dans LibreFolio.",
+          "routing": "quel courtier peut acheter quel actif (en général {allowAll}).",
+          "targets": "le pourcentage de ce versement pour chaque actif. Le total doit faire 100 %.",
+          "fx": "n’apparaît que si des taux de change sont nécessaires. Chaque taux reste en général sur {auto}, le dernier enregistré dans LibreFolio. Quand un courtier peut payer un actif avec des liquidités dans une autre devise, il y a aussi le spread de conversion : un pourcentage de chaque montant converti, qui part de 0.",
+          "strategy": "{proportional} : achats uniquement, elle ne vend rien.",
+          "review": "une dernière vérification, puis {calculate}."
+        },
+        "returns": "les ordres à saisir, courtier par courtier (en unités ou en montant), les coûts, l’argent qui reste non investi et, pour chaque actif, le poids atteint à côté de sa cible. C’est une simulation : aucun ordre n’est envoyé."
+      }
+    }
   }
 }

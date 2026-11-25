@@ -20,10 +20,16 @@ import {findAiExportAnalysisInstruction} from '../templates/sharedInstructions';
 import {compatibilityFixture, selectionFixture, snapshotFixture} from './runtimeFixtures';
 
 /** The analyses in the new shape: the two market-driver analyses (L1) and Protection Strategies (L3). */
-const NEW_SHAPE_IDS = ['portfolio.performance_market_drivers', 'broker.performance_market_drivers', 'portfolio.protection_strategies'] as const satisfies readonly AiExportAnalysisId[];
+const NEW_SHAPE_IDS = ['portfolio.performance_market_drivers', 'broker.performance_market_drivers', 'portfolio.protection_strategies', 'portfolio.pac_planning'] as const satisfies readonly AiExportAnalysisId[];
 const OLD_SHAPE_IDS = AI_EXPORT_ANALYSIS_IDS.filter((id) => !(NEW_SHAPE_IDS as readonly string[]).includes(id));
 
 const NEW_ORDER = ['task', 'rules_of_reasoning', 'how_to_answer', 'ground_rules', 'snapshot_metadata', 'snapshot_data', 'additional_librefolio_data', 'domain_notes', 'legal_notice', 'user_question', 'response_language'];
+/** 78 L4a: an analysis that suggests a LibreFolio tool carries its block right after Additional LibreFolio Data. */
+function newOrder(id: AiExportAnalysisId): string[] {
+    if (id !== 'portfolio.pac_planning') return NEW_ORDER;
+    const at = NEW_ORDER.indexOf('additional_librefolio_data') + 1;
+    return [...NEW_ORDER.slice(0, at), 'librefolio_tool', ...NEW_ORDER.slice(at)];
+}
 const OLD_ORDER = ['analysis_objective', 'shared_verification_instructions', 'response_contract', 'snapshot_metadata', 'snapshot_data', 'additional_librefolio_data', 'domain_notes', 'user_question', 'answer_focus', 'legal_notice', 'response_language'];
 
 /** The trusted sections of the new shape, each with the heading it opens with. */
@@ -59,10 +65,10 @@ function onlySection(diagnostics: AiExportPromptDiagnostics, id: string): string
 describe('AI Export prompt renderer — the new shape (78 L1)', () => {
     it.each(NEW_SHAPE_IDS)('%s renders the new order, with the user question at the end only when written', (id) => {
         const selection = selectionFixture('analysis', id);
-        expect(ids(render(selection, QUESTION))).toEqual(NEW_ORDER);
-        expect(ids(render(selection))).toEqual(NEW_ORDER.filter((section) => section !== 'user_question'));
+        expect(ids(render(selection, QUESTION))).toEqual(newOrder(id));
+        expect(ids(render(selection))).toEqual(newOrder(id).filter((section) => section !== 'user_question'));
         // A question of blanks only is no question, as today's notes
-        expect(ids(render(selection, '  \n\t '))).toEqual(NEW_ORDER.filter((section) => section !== 'user_question'));
+        expect(ids(render(selection, '  \n\t '))).toEqual(newOrder(id).filter((section) => section !== 'user_question'));
     });
 
     it.each(NEW_SHAPE_IDS)('%s renders each trusted section once, under its own heading, outside any fence', (id) => {

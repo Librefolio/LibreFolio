@@ -48,6 +48,9 @@ const PERFORMANCE_MARKET_DRIVER_FOLLOW_UPS =
 const PROTECTION_STRATEGIES_FOLLOW_UPS =
     "Usual follow-ups for this analysis: the risk measures holding by holding; the hedging instruments the user's brokers offer, with the capital each needs and its costs; what a hedge of a given size would cost and avoid here; what funding a hedge by selling holdings really amounts to; the tax side of each option under the user's regime; the signals to watch so as to decide earlier next time; the detail of one holding.";
 
+/** The PAC's usual follow-ups (78 L4a): version 4 of `78_aiExportPrompts/bozze-AIX.md` §4, copied as written. */
+const PAC_PLANNING_FOLLOW_UPS = "Usual follow-ups for this analysis: each alternative plan in detail; investing at once compared with investing in stages; what the plan does to the concentration of the whole portfolio; the brokers' fees and minimum orders; the detail of one holding.";
+
 const facts = section('Key Facts', 'Cite only the supplied facts your conclusions rely on, briefly, with their units, currencies, signs, dates, periods, scope, coverage, and data-quality limits where they matter. Do not restate or summarize the rest of the Snapshot Data.');
 const evidence = section('Evidence and Interpretation', 'Connect conclusions to supplied evidence. Separate observation, calculation, interpretation, assumption, and uncertainty; never invent missing evidence.');
 const limits = section('Assumptions, Limits, and Questions', 'List material data gaps, assumptions, unresolved user inputs, and interpretation limits. Ask only questions that could change the result.');
@@ -99,25 +102,7 @@ const fiscalSections = [
 ] as const;
 
 export const AI_EXPORT_RESPONSE_CONTRACTS: Readonly<Record<AiExportAnalysisId, AiExportResponseContractTemplate>> = {
-    'portfolio.pac_planning': contract('portfolio.pac_planning', [
-        facts,
-        section(
-            'Decision Inputs Still Needed',
-            'Ask only for missing inputs that materially distinguish plausible PAC scenarios: immediate and recurring capital, cadence, liquidity reserve, objective, horizon, targets or tolerances, risk and drawdown tolerance, exclusions, usable brokers, tradable minimums, whether sales are allowed, and tax or cost constraints.',
-            'Separate indispensable answers from optional refinements. Never ask for facts already supplied or infer user preferences from portfolio measurements.',
-        ),
-        section(
-            'PAC Timing Gate',
-            'Compare immediate and staged deployment.',
-            'Include conditional waiting only when supplied evidence shows a broad, persistent decline across the portfolio, not isolated Asset weakness or a single indicator. State the evidence, horizon, trigger, and invalidation conditions.',
-            'Ask which timing preference the user wants before choosing a concrete path: immediate, staged, or—only when the gate is met—conditional waiting.',
-        ),
-        scenarioThesis,
-        section('PAC Scenarios', 'Present two or three conditional recurring-contribution scenarios when feasible, including allocation logic, cadence, liquidity protection, concentration effects, operational feasibility, and trade-offs.'),
-        drawdownContext,
-        evidence,
-        limits,
-    ]),
+    'portfolio.pac_planning': followUps('portfolio.pac_planning', PAC_PLANNING_FOLLOW_UPS),
     'portfolio.rebalancing': contract('portfolio.rebalancing', [
         facts,
         section('Targets and Measured Gaps', 'Quantify drift only against user-supplied targets, tolerance bands, exclusions, or priorities. Identify missing targets rather than inventing them.'),
