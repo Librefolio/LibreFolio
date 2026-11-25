@@ -630,6 +630,14 @@ def services_enricher_call_limits(verbose: bool = False, test_names: list = None
     return run_command(cmd, "Enricher call limit tests", verbose=verbose)
 
 
+def services_enricher_shared_calls(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the calls an enricher makes outside its reads, counted on the credit-sharing group it reads (lane 82, lot CG-C)."""
+    print_section("Services: Enricher Shared Calls")
+    print_info("Testing: backend/app/services/enrichers/admission.py (recognize, search, the search and test routes)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_enricher_shared_calls.py", test_names)
+    return run_command(cmd, "Enricher Shared Calls tests", verbose=verbose)
+
+
 def services_coingecko_prices(verbose: bool = False, test_names: list = None) -> bool:
     """Test the CoinGecko provider's prices (project 76, P2): current, in bulk, the daily history, freshness."""
     print_section("Services: CoinGecko Prices")
@@ -673,7 +681,7 @@ def services_refresh_history_starts(verbose: bool = False, test_names: list = No
 def services_coingecko_provider(verbose: bool = False, test_names: list = None) -> bool:
     """Test the CoinGecko provider (project 76, P1): its shared group, its settings and parameters, the SDK's door."""
     print_section("Services: CoinGecko Provider")
-    print_info("Testing: asset_source_providers/coingecko (plugin, _sdk, _currencies), plugin_settings/groups/coingecko.py")
+    print_info("Testing: asset_source_providers/coingecko/plugin.py, services/coingecko (sdk, currencies), plugin_settings/groups/coingecko.py")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_coingecko_provider.py", test_names)
     return run_command(cmd, "CoinGecko provider tests", verbose=verbose)
 
@@ -2339,6 +2347,14 @@ def services_enricher_esma(verbose: bool = False, test_names: list = None) -> bo
     return run_command(cmd, "Enricher ESMA tests", verbose=verbose)
 
 
+def services_enricher_coingecko(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the CoinGecko enricher: declarations, recognize, read (description, website, genesis day, market cap, categories), search, the pace, no key, the cascade seed (lane 82, lot CG-B)."""
+    print_section("Services: Enricher CoinGecko")
+    print_info("Testing: backend/app/services/enricher_providers/coingecko/plugin.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_enricher_coingecko.py", test_names)
+    return run_command(cmd, "Enricher CoinGecko tests", verbose=verbose)
+
+
 def services_enricher_yahoo(verbose: bool = False, test_names: list = None) -> bool:
     """Test the Yahoo Finance enricher: declarations, info and fund data to stored forms, not found, recognize, read (plan 68, lot C3)."""
     print_section("Services: Enricher Yahoo Finance")
@@ -3344,6 +3360,16 @@ Note: No backend server required.
         # under tmp_path built by create_all; call_counter._utc on a test clock; test enrichers (and one asset plugin)
         # put in the registries' storage with monkeypatch.setitem, test groups released at teardown, a private Cooldowns,
         # the enricher_read cache cleared around each test.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "enricher-shared-calls",
+        services_enricher_shared_calls,
+        name="Enricher Shared Calls",
+        desc="Lane 82 CG-C: count_shared_call counts a recognize (cascade), a search (search_enrichers), the {code}/search and {code}/test routes on the credit-sharing group's row, one each and before the plugin runs (a search across two enrichers counts two); a full ceiling or a limit of 0 refuses before the plugin runs (cascade error, search rate_limited with the wait rounded up, routes 429 RATE_LIMITED with Retry-After); an enricher without a group, with a group that shares nothing, or with calls_external_service False counts nothing; a failing counter lets the call go; an identifier-only enricher asked with a non-identifier text counts nothing; the price provider's calls on the group are seen by the enricher's refusal",
+        # PURE: private SQLite under tmp_path behind the counter and the settings reads, a test clock, lab enrichers in the
+        # registry's storage, a test group released at teardown; no server, no network.
         isolation="pure",
     )
     add_test(
@@ -4811,6 +4837,15 @@ Note: No backend server required.
         desc="Plan 68 C4b: EsmaEnricher on esma-registers (FIRDS by ISIN): declarations (esma, OPEN, ISIN, degree 30 for STOCK, BOND, FUND, COMMODITY and the ETF family, None for the rest; no params, no search, no page); the CFI code to legal_form (ES share, DB bond, EY etc_etn, no UCITS guess for C), a bond's coupon_type (F/V/Z), issuer_type (T sovereign, C supranational), maturity and the coupon rate only for a fixed rate (BTP Italia's period coupon never), a fund's distribution policy (G/I); the LEI for every instrument and as recognize's identifier; recorded answers (Enel, BTP 2072, BTP Italia, a corporate bond, SWDA, an ETC, a fund the register lacks) replayed through the library's real reduction; not found; a refusal RATE_LIMITED with its retry_after and for the rest without a call; one module-level pace",
         # PURE: the plugin's find_instrument is the library's real one on a fake transport that fails the test on any
         # ISIN not offered; no database, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "enricher-coingecko",
+        services_enricher_coingecko,
+        name="Enricher CoinGecko",
+        desc="Lane 82 CG-B: CoinGeckoEnricher on CoinGecko's SDK (shared door services/coingecko/sdk.py) over a fake transport: declarations (coingecko, SELF_HOSTED, COINGECKO_ID, group coingecko, CRYPTO only at 10, five voices, search on); recognize (found with name and page, a 404 not found, a non-id or another type asks nothing, a 429 with retry_after, another 5xx a source error, the key in no text); read (one request per coin with market_data=true, plain-text description, first http(s) website, ISO genesis day, market cap in the currency of the binding with its UTC day, all the categories as one text, malformed or absent voices left out, a 429 refuses the rest with one request, another failure isolated, stored forms); search (rank order, Name (SYMBOL), bad ids dropped, cap 20, 429 EnricherRateLimited); one pace before every request; no key NOT_CONFIGURED and no request; the plan picks the root; default_order(CRYPTO) and the price assignment as a cascade seed (the declared vs_currency kept, an undeclared parameter dropped)",
+        # PURE: the real SDK on an httpx.MockTransport over recorded bodies; no database, no server, no network.
         isolation="pure",
     )
     add_test(
