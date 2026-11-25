@@ -477,6 +477,7 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/components/ui/data-editor/ErasableNumberCell.test.ts",
             "src/lib/components/ui/media/AssetPickerModal.test.ts",
             "src/lib/components/ui/media/ImageEditModal.test.ts",
+            "src/lib/components/ui/media/ImageCropper.test.ts",
             "src/lib/components/ui/modals/SyncModalBase.test.ts",
             "src/lib/components/ui/modals/ModalBase.test.ts",
             "src/lib/components/ui/modals/ModalBase.escapeLayers.test.ts",

@@ -31,11 +31,7 @@ lib/components/ui/input/DistributionEditor.svelte	3
 lib/components/ui/input/PasswordInput.svelte	1
 lib/components/ui/input/Switch.svelte	1
 lib/components/ui/input/TagInput.svelte	2
-lib/components/ui/media/AssetPickerModal.svelte	10
-lib/components/ui/media/FileEditModal.svelte	6
-lib/components/ui/media/FileUploader.svelte	6
-lib/components/ui/media/ImageCropper.svelte	6
-lib/components/ui/media/ImageEditModal.svelte	11
+lib/components/ui/media/AssetPickerModal.svelte	2
 lib/components/ui/modals/ConfirmModal.svelte	1
 lib/components/ui/modals/SyncModalBase.svelte	4
 lib/components/ui/modals/SyncResultRow.svelte	2
