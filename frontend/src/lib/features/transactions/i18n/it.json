@@ -516,6 +516,10 @@
       "allAfter": "non resta nessuna delle {n} righe",
       "all": "Elimina tutto ({n})",
       "loadFailed": "Impossibile leggere le spese di questa transazione"
+    },
+    "chargesUnlink": {
+      "failed": "Lo scollegamento delle spese non è riuscito",
+      "target": "{n, plural, one {# spesa non più collegata: resta come transazione a sé} other {# spese non più collegate: ognuna resta come transazione a sé}}"
     }
   }
 }

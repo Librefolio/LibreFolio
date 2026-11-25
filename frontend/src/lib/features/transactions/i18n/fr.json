@@ -516,6 +516,10 @@
       "allAfter": "aucune des {n} lignes ne reste",
       "all": "Tout supprimer ({n})",
       "loadFailed": "Impossible de lire les frais de cette transaction"
+    },
+    "chargesUnlink": {
+      "failed": "La suppression du lien des frais a échoué",
+      "target": "{n, plural, one {# frais qui n'est plus lié : il reste une transaction à part} other {# frais qui ne sont plus liés : chacun reste une transaction à part}}"
     }
   }
 }
