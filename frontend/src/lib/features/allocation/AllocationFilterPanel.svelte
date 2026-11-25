@@ -4,7 +4,8 @@
   - **Classes**: the classes the scope holds, each a switch with its amount; the count at the right says how many are on.
   - **Outside the 100 %**: the buckets the dimension has (`applicable_buckets`, the backend's: the panel never copies that
     rule), each a switch that takes it out of the base. Hidden when the dimension has none.
-  - **Included assets**: the assets of the classes switched on, each a switch (off = excluded whole); a search box above 10.
+  - **Included assets**: the assets of the classes switched on, each a switch (off = excluded whole); a search box above 10. A
+    name that does not fit scrolls by itself.
 
   Controlled: it shows `filters` and calls `onchange(next)`; the page remembers them and asks again. Amounts are personal
   money (masked by the privacy toggle). A saved choice that the scope does not hold today is kept untouched.
@@ -18,10 +19,12 @@
     import FoldPanel from '$lib/components/ui/display/FoldPanel.svelte';
     import Switch from '$lib/components/ui/input/Switch.svelte';
     import CurrencyAmount from '$lib/components/ui/display/CurrencyAmount.svelte';
+    import {scrollOnOverflow} from '$lib/actions/scrollOnOverflow';
+    import {overflowScrollTextClass} from '$lib/utils/overflowScroll';
     import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
     import {hasFilters, isClassOn, setAssetExcluded, setBucketExcluded, setClass, type AllocationFilters, type ExcludableBucket} from './allocationFilters';
     import type {AllocationResponse} from './allocationQuery';
-    import {bucketHint, bucketLabel, classHint, classLabel, COMPACT_MONEY, type Translate} from './allocationLabels';
+    import {bucketHint, bucketLabel, classLabel, COMPACT_MONEY, type Translate} from './allocationLabels';
 
     interface Props {
         view: AllocationResponse;
@@ -65,14 +68,11 @@
         <ul class="divide-y divide-lf-subtle">
             {#each view.classes as item (item.asset_class)}
                 {@const on = isClassOn(filters, item.asset_class)}
-                {@const hint = classHint(t, item.asset_class)}
                 <li class={row} data-testid="{testId}-class-{item.asset_class}" data-on={on ? 'true' : 'false'}>
-                    <span class="flex min-w-0 items-center gap-2">
+                    <span class="flex min-w-0 flex-1 items-center gap-2">
                         <img src={getAssetTypeIconUrl(item.asset_class)} alt="" class="h-4 w-4 shrink-0 object-contain" />
-                        <span class="min-w-0">
-                            <span class="block text-sm text-lf-primary"
-                                >{classLabel(t, item.asset_class)}{#if hint}<span class="ml-1 text-lf-muted">({hint})</span>{/if}</span
-                            >
+                        <span class="min-w-0 flex-1">
+                            <span class="block text-sm text-lf-primary">{classLabel(t, item.asset_class)}</span>
                             <span class="block text-xs text-lf-muted"><CurrencyAmount amount={parseFloat(item.amount)} code={view.currency} options={PERSONAL} /></span>
                         </span>
                     </span>
@@ -89,7 +89,7 @@
                     {@const amount = bucketAmount(bucket)}
                     {@const out = filters.excludeBuckets.includes(bucket)}
                     <li class={row} data-testid="{testId}-bucket-{bucket}" data-on={out ? 'true' : 'false'}>
-                        <span class="min-w-0">
+                        <span class="min-w-0 flex-1">
                             <span class="block text-sm text-lf-primary">{bucketLabel(t, bucket)}</span>
                             <span class="block text-xs text-lf-muted">
                                 {#if amount !== null}<CurrencyAmount amount={parseFloat(amount)} code={view.currency} options={PERSONAL} />{:else}{bucketHint(t, bucket)}{/if}
@@ -122,10 +122,10 @@
                 {#each shownAssets as asset (asset.asset_id)}
                     {@const included = !filters.excludeAssetIds.includes(asset.asset_id)}
                     <li class={row} data-testid="{testId}-asset-{asset.asset_id}" data-on={included ? 'true' : 'false'}>
-                        <span class="flex min-w-0 items-center gap-2">
+                        <span class="flex min-w-0 flex-1 items-center gap-2">
                             <img src={asset.icon_url || getAssetTypeIconUrl(asset.asset_type)} alt="" class="h-4 w-4 shrink-0 object-contain" />
-                            <span class="min-w-0">
-                                <span class="block truncate text-sm text-lf-primary"
+                            <span class="min-w-0 flex-1">
+                                <span use:scrollOnOverflow class="{overflowScrollTextClass} text-sm text-lf-primary" title={asset.ticker ? `${asset.name} · ${asset.ticker}` : asset.name} data-testid="{testId}-asset-{asset.asset_id}-name"
                                     >{asset.name}{#if asset.ticker}<span class="text-lf-muted"> · {asset.ticker}</span>{/if}</span
                                 >
                                 <span class="block text-xs text-lf-muted"><CurrencyAmount amount={parseFloat(asset.amount)} code={view.currency} options={PERSONAL} /></span>
