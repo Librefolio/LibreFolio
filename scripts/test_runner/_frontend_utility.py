@@ -63,6 +63,7 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/features/files/urlFilters.test.ts",
             "src/lib/utils/__tests__/trySave.test.ts",
             "src/lib/utils/layout/headerScroll.test.ts",
+            "src/lib/utils/layout/labelShrink.test.ts",
             "src/lib/utils/security/connectionSecurity.test.ts",
             "src/lib/features/signals/__tests__/loadComparisonData.test.ts",
             "src/lib/components/charts/signalLabel.test.ts",
