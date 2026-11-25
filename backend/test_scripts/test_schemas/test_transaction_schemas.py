@@ -1803,3 +1803,25 @@ class TestRules5To11VisibleMessages:
         returned = [(error.type, error.message_template, error.message(), error.context) for error in errors]
         expected = [("cashNonzero", "{type} requires cash.amount != 0", "CASH_TRANSFER requires cash.amount != 0", {"type": "CASH_TRANSFER"})]
         assert returned == expected, f"W-B36b (P6 case 4): a CASH_TRANSFER whose update changes its cash to 0 must get exactly cashNonzero, with the template, the rendered message and the params the user reads: expected {expected}, got {returned}"
+
+
+class TestTransactionTypeOrder:
+    """The order of ``TransactionType`` is the order every type list of the UI shows (86, A7)."""
+
+    def test_the_lists_open_with_cash_then_trades_then_income_then_costs(self):
+        """TX-S-111: the enum is the one place of the order (OpenAPI → the client's ``TX_TYPES``)."""
+        assert [tx_type.value for tx_type in TransactionType] == [
+            "DEPOSIT",
+            "WITHDRAWAL",
+            "BUY",
+            "SELL",
+            "DIVIDEND",
+            "INTEREST",
+            "REWARD",
+            "FEE",
+            "TAX",
+            "ADJUSTMENT",
+            "TRANSFER",
+            "FX_CONVERSION",
+            "CASH_TRANSFER",
+        ]

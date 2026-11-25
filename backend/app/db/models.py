@@ -319,19 +319,20 @@ class TransactionType(StrEnum):
     - All calculations based on the trade date: the day the operation was made (B-52)
     """
 
+    # The order is the one every type list of the UI shows (86): OpenAPI carries it to the client's TX_TYPES.
+    DEPOSIT = "DEPOSIT"
+    WITHDRAWAL = "WITHDRAWAL"
     BUY = "BUY"
     SELL = "SELL"
     DIVIDEND = "DIVIDEND"
     INTEREST = "INTEREST"
-    DEPOSIT = "DEPOSIT"
-    WITHDRAWAL = "WITHDRAWAL"
+    REWARD = "REWARD"
     FEE = "FEE"
     TAX = "TAX"
     ADJUSTMENT = "ADJUSTMENT"
     TRANSFER = "TRANSFER"
     FX_CONVERSION = "FX_CONVERSION"
     CASH_TRANSFER = "CASH_TRANSFER"
-    REWARD = "REWARD"
 
 
 class UserRole(StrEnum):
