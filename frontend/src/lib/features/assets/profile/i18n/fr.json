@@ -42,7 +42,8 @@
         "reference_price_date": "Date du prix de référence",
         "website": "Site web",
         "revenue": "Chiffre d'affaires",
-        "net_income": "Résultat net"
+        "net_income": "Résultat net",
+        "crypto_categories": "Catégories"
       },
       "choices": {
         "replication": {
@@ -102,6 +103,7 @@
         "fund": "Le fonds",
         "company": "La société",
         "bond": "L'obligation",
+        "crypto": "La cryptomonnaie",
         "identity": "Identité",
         "other": "Autres données"
       },
@@ -122,6 +124,7 @@
         "size": "taille",
         "legal_form": "forme juridique",
         "issuer": "émetteur",
+        "categories": "catégories",
         "description": "description",
         "financials": "résultats financiers"
       },

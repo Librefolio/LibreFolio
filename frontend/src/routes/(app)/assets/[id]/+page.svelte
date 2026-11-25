@@ -2953,6 +2953,7 @@
         {#if assetInfo}
             <AssetProfileTab
                 assetId={data.assetId}
+                assetType={assetInfo.asset_type}
                 period={{start: dateStart, end: dateEnd, all: activePreset === 'MAX'}}
                 isin={assetInfo.identifier_isin ?? null}
                 ticker={assetInfo.identifier_ticker ?? null}
