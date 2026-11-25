@@ -217,7 +217,12 @@ STAGE_OUTPUTS = {
     "pybuilder": "the Python packages: the interpreter running this test stands in for them",
     "frontend": "the checked frontend build: static files that no command started here reads",
     "docs": "the documentation site: static files that no command started here reads",
+    "avatars-webp": "the default avatars as WebP: images that no command started here reads",
 }
+
+#: The stages whose output the tree rebuilds from the build context: the context directory each copies. ``backend-src`` is
+#: ``backend/`` without the PNG avatars (the Dockerfile's ``find … -delete``), which no command started here reads.
+STAGE_CONTEXTS = {"backend-src": "backend"}
 
 COPY_FLAGS = ("--from=", "--chown=", "--chmod=", "--link")
 
@@ -488,6 +493,9 @@ def build_image_tree(app: Path) -> list[str]:
     app.mkdir(parents=True)
     left_out = []
     for copy in copies:
+        if copy.stage in STAGE_CONTEXTS:
+            place(STAGE_CONTEXTS[copy.stage], app / posixpath.relpath(copy.dest, workdir), copy.into_dir, ignore)
+            continue
         if copy.stage is not None:
             if copy.stage not in STAGE_OUTPUTS:
                 raise AssertionError(f"the final stage copies {copy.dest} from stage {copy.stage!r}, which this test neither rebuilds nor knows to be irrelevant: reproduce it, or add it to STAGE_OUTPUTS with the reason")
