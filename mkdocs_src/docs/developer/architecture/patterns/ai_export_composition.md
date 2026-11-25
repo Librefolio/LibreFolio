@@ -140,6 +140,26 @@ Semantic Composition V2 adds backend-owned projection components:
 - task-specific evidence: dated income, broker concentration, broker
   cost/turnover, and non-predictive FX conversion timing.
 
+**Daily return volatility, one definition (78 L6).** The market rows of the Portfolio and Broker overviews
+(`portfolio.asset_market_context`, `broker.asset_market_context`, v2) carry each asset's `daily_return_volatility_ratio`,
+and so does the FX summary (`fx.market_summary`, v2). Every row computes it the same way, in `technical_context.py`
+(`_daily_return_volatility`): the simple returns between consecutive observed values of the period
+(`financial_math.returns.price_return`; no carried-forward day), and their sample standard deviation
+(`risk.metrics.sample_standard_deviation`, ddof = 1, the Risk engine's). It is a daily figure, `None` under two
+returns; it gives a volatility to a close-only asset, which NATR (it needs highs and lows) cannot. Until v1 the FX
+summary used a population deviation; two other AI Export statistics still do (`fx_timing_context.py`,
+`asset_fx_technical.py`) and wait for the consolidation lot.
+
+**Cash per broker (78 L6).** `portfolio.allocations_cash` (v3) lists `cash_by_broker`: each broker's cash in the
+report currency and its native balances, taken from the report's own `summary.by_broker` (the Dashboard's broker cards),
+never recomputed. The rows add up to `cash_total`, an owner's share applied as everywhere in the portfolio.
+`cash_by_broker_basis` names that basis (`user_ownership_share`), because «Export Data» has no domain notes: for a
+co-owned broker the figure is the user's part, while the PAC allocator's «From your Brokers» shows the whole account.
+`cash_in_transit` is the cash sent between brokers that has not arrived on the as-of day, read from the engine's step of
+the report history (`series_steps.value_at`), not derived by difference: it is in no broker's row nor in `cash_total`,
+and the Liquidity slice of `by_type` is `cash_total` plus it. The history omits a zero amount, so the component writes
+an explicit zero; it is null only when the history has no step on that day.
+
 Projection builders read the same request-scoped price/rate/Signal resources as
 the complete components. They do not filter rendered payloads and do not repeat
 I/O or Signal calculation. Signal/output allowlists, limited-history depth, and
