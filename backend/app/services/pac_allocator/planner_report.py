@@ -54,7 +54,7 @@ from backend.app.schemas.pac_allocator.rows import (
     WholeQuantityInstruction,
 )
 from backend.app.services.pac_allocator.evaluation.economics import final_cash_by_cell
-from backend.app.services.pac_allocator.evaluation.limits import limit_reference, resolve_scenario_limits
+from backend.app.services.pac_allocator.evaluation.limits import plan_reference, resolve_scenario_limits
 from backend.app.services.pac_allocator.evaluation.scenario import build_scenario_index, exact_scenario_fingerprint
 from backend.app.services.pac_allocator.models import (
     ExactAsset,
@@ -449,7 +449,7 @@ def build_asset_rows(scenario: ExactPlannerScenario, evaluation: ExactEvaluation
     currency = scenario.valuation_currency
     final_invested = accounting.final_invested
     zero_denominator = final_invested == _EXACT_ZERO
-    bounds = resolve_scenario_limits(scenario, limit_reference(scenario, accounting)).assets()
+    bounds = resolve_scenario_limits(scenario, plan_reference(scenario, accounting)).assets()
     rows: list[PacAssetPlanRow] = []
     for row in evaluation.assets:
         limit = bounds.get(row.asset_id)
@@ -479,7 +479,7 @@ def build_cash_rows(scenario: ExactPlannerScenario, evaluation: ExactEvaluation)
     accounting = _require_accounting(evaluation)
     currency = scenario.valuation_currency
     index = build_scenario_index(scenario)
-    bounds = resolve_scenario_limits(scenario, limit_reference(scenario, accounting)).cash()
+    bounds = resolve_scenario_limits(scenario, plan_reference(scenario, accounting)).cash()
     final_by_cell = final_cash_by_cell(index, evaluation.ledgers)
     return [
         PacCashEntryRow(

@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from backend.app.services.pac_allocator.evaluation.economics import EconomicState, final_cash_by_cell
 from backend.app.services.pac_allocator.evaluation.errors import ExactPolicyContractError
 from backend.app.services.pac_allocator.evaluation.keys import asset_broker_key, exact_decision_id, is_quantum_multiple
-from backend.app.services.pac_allocator.evaluation.limits import limit_reference, resolve_scenario_limits
+from backend.app.services.pac_allocator.evaluation.limits import plan_reference, resolve_scenario_limits
 from backend.app.services.pac_allocator.evaluation.reachability import fx_decision_specs, fx_relay_groups, transfer_relay_groups
 from backend.app.services.pac_allocator.evaluation.references import ledger_keys
 from backend.app.services.pac_allocator.evaluation.scenario import ScenarioIndex, fx_rate, order_prices, source_broker, valuation_rate_of
@@ -260,7 +260,7 @@ def _limit_constraint_facts(
     cell already says how much may be left in it.
     """
     facts: dict[str, _ConstraintFact] = {}
-    resolved = resolve_scenario_limits(scenario, limit_reference(scenario, state.accounting))
+    resolved = resolve_scenario_limits(scenario, plan_reference(scenario, state.accounting))
     final_value = {item.asset_id: item.final_value for item in state.assets}
     final_cash = final_cash_by_cell(index, state.ledgers)
     for entry, bounds in resolved.by_entry.items():
@@ -578,6 +578,8 @@ def rebalancer_score(
     assets: tuple[ExactAssetEvaluation, ...],
     cash_targets: tuple[ExactCashTargetEvaluation, ...],
     accounting: ExactAccountingEvaluation,
+    *,
+    reference: ExactRatio,
 ) -> dict[ExactObjectiveCode, ExactRatio]:
     """The Rebalancer's objectives (specifica §6), in exact arithmetic: the one place they are computed, read by the replay's
     objectives and by the report's score (B3 of project 67).
@@ -586,9 +588,11 @@ def rebalancer_score(
     target, and the uninvested ``N`` (target zero): the money lost stays inside ``N``, so wasting it never shortens ``D``.
     ``C = F − W``, the money lost. ``J = λ·D/F + C`` for a weighted fidelity. A scenario worth nothing (``F = 0``) has no
     distance to scale: ``J = C``, and ``REBALANCER_NONEMPTY`` refuses the plan anyway.
+
+    Lot SLIP: ``D`` is scaled by ``reference``, ``R`` (``limits.plan_reference``), which is ``F`` in the Rebalancer.
     """
     residuals = tuple(item.residual for item in (*assets, *cash_targets))
-    return rebalancer_score_of(fidelity, residuals, uninvested=accounting.uninvested, wealth_loss=accounting.wealth_loss, initial_wealth=accounting.initial_wealth)
+    return rebalancer_score_of(fidelity, residuals, uninvested=accounting.uninvested, wealth_loss=accounting.wealth_loss, reference=reference)
 
 
 def rebalancer_score_of(
@@ -597,14 +601,14 @@ def rebalancer_score_of(
     *,
     uninvested: ExactRatio,
     wealth_loss: ExactRatio,
-    initial_wealth: ExactRatio,
+    reference: ExactRatio,
 ) -> dict[ExactObjectiveCode, ExactRatio]:
-    """``rebalancer_score``'s formula on its plain parts: the residuals of the items, ``N``, ``F − W`` and ``F``. Also read by
+    """``rebalancer_score``'s formula on its plain parts: the residuals of the items, ``N``, ``F − W`` and ``R``. Also read by
     the value «as the solver sees it» (``evaluation.solver_view``, row 6 of lot CR), on the same parts with continuous cash."""
     distance = sum((item.square() for item in residuals), _EXACT_ZERO) + uninvested.square()
     score = wealth_loss
-    if fidelity is not None and fidelity.kind == "weighted" and initial_wealth > _EXACT_ZERO:
-        score += fidelity.distance_weight * distance / initial_wealth
+    if fidelity is not None and fidelity.kind == "weighted" and reference > _EXACT_ZERO:
+        score += fidelity.distance_weight * distance / reference
     return {"target_distance": distance, "wealth_loss": wealth_loss, "plan_score": score}
 
 
@@ -681,7 +685,7 @@ def objective_value_map(
         "route_priority": ExactRatio(route_priority),
     }
     if scenario.product == "rebalancer":
-        values |= rebalancer_score(scenario.target_fidelity, state.assets, state.cash_targets, state.accounting)
+        values |= rebalancer_score(scenario.target_fidelity, state.assets, state.cash_targets, state.accounting, reference=plan_reference(scenario, state.accounting))
         values["operation_count"] = _operation_count(view, quanta, state)
     expected = {item.code for item in view.objectives}
     if not expected.issubset(values):

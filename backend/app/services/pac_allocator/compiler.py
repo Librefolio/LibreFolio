@@ -63,7 +63,7 @@ from backend.app.services.pac_allocator.constraints import (
 )
 from backend.app.services.pac_allocator.constraints.pool import create_pool_variables
 from backend.app.services.pac_allocator.evaluation.evaluator import evaluate_exact_candidate
-from backend.app.services.pac_allocator.evaluation.limits import limit_reference, resolve_scenario_limits
+from backend.app.services.pac_allocator.evaluation.limits import plan_reference, resolve_scenario_limits
 from backend.app.services.pac_allocator.models import (
     CandidateActionVector,
     CandidateDecision,
@@ -147,7 +147,7 @@ def _probe_objective_inputs(scenario: ExactPlannerScenario, view: ExactPolicyVie
     if evaluation.accounting is None:
         raise PolicyProgramContractError("compiler.py's internal probe candidate was rejected; the policy view is not well-formed")
     target_value_by_asset = {asset.asset_id: as_float(asset.target_value) for asset in evaluation.assets}
-    reference = limit_reference(scenario, evaluation.accounting)
+    reference = plan_reference(scenario, evaluation.accounting)
     if scenario.product != "rebalancer":
         return compute_objective_inputs(target_value_by_asset, as_float(evaluation.accounting.fixed_reference)), reference
     initial_wealth = evaluation.accounting.initial_wealth
@@ -156,6 +156,7 @@ def _probe_objective_inputs(scenario: ExactPlannerScenario, view: ExactPolicyVie
             target_value_by_asset,
             as_float(evaluation.accounting.fixed_reference),
             initial_wealth=Fraction(initial_wealth.numerator, initial_wealth.denominator),
+            reference=Fraction(reference.numerator, reference.denominator),
             cash_target_by_cell={(row.broker_id, row.currency): as_float(row.target_value) for row in evaluation.cash_targets},
             fidelity=scenario.target_fidelity,
         ),

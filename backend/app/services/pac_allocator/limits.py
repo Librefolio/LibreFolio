@@ -22,7 +22,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 from backend.app.services.pac_allocator.evaluation.evaluator import build_exact_policy_view, evaluate_exact_candidate
-from backend.app.services.pac_allocator.evaluation.limits import LimitEntry, ResolvedBounds, ResolvedLimits, entries_with_limits, limit_reference, limited_entries, resolve_limit, resolve_scenario_limits
+from backend.app.services.pac_allocator.evaluation.limits import LimitEntry, ResolvedBounds, ResolvedLimits, entries_with_limits, limited_entries, plan_reference, resolve_limit, resolve_scenario_limits
 from backend.app.services.pac_allocator.evaluation.scenario import ScenarioIndex, build_scenario_index, to_valuation
 from backend.app.services.pac_allocator.models import CandidateActionVector, CandidateDecision, ExactEvaluation, ExactPlannerScenario
 from backend.app.services.pac_allocator.numeric import ExactRatio
@@ -36,8 +36,8 @@ __all__ = [
     "check_minimum_above_maximum",
     "check_minimums_exceed_reference",
     "fixed_reference_of",
-    "limit_reference_of",
     "limited_entries",
+    "plan_reference_of",
     "resolve_limit",
     "resolve_scenario_limits",
     "trapped_cash_by_cell",
@@ -73,10 +73,10 @@ def _zero_plan(scenario: ExactPlannerScenario) -> ExactEvaluation:
     return evaluation
 
 
-def limit_reference_of(scenario: ExactPlannerScenario) -> ExactRatio:
+def plan_reference_of(scenario: ExactPlannerScenario) -> ExactRatio:
     """The reference share limits read (specifica §15 n. 17), off the do-nothing plan: ``fixed_reference`` in the PAC, ``F``
     in the Rebalancer. Neither depends on any decision."""
-    return limit_reference(scenario, _zero_plan(scenario).accounting)
+    return plan_reference(scenario, _zero_plan(scenario).accounting)
 
 
 def fixed_reference_of(scenario: ExactPlannerScenario) -> ExactRatio:
