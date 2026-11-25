@@ -13,6 +13,8 @@
  *
  *   linkSelection(rows: TXReadItem[], opts: {roleOf: (type: string) => LinkRole; canEdit: (brokerId: number) => boolean}): LinkSelection
  *   linkCommit(parent: TXReadItem, charges: TXReadItem[]): {updates: {id: number; parent_transaction_id: number}[]}
+ *   isUnlinkable(row: TXReadItem, canEdit: (brokerId: number) => boolean): boolean                                   (66 TL-9)
+ *   unlinkCommit(charges: TXReadItem[]): {updates: {id: number; parent_transaction_id: number}[]}                    (66 TL-9)
  *   deletePlan(selected: TXReadItem[], chargesByParent: Map<number, TXReadItem[]>): {parent: TXReadItem; charges: TXReadItem[]}[]
  *   deleteIntent(selectedIds: number[], plan: {parent: TXReadItem; charges: TXReadItem[]}[], choice: 'all' | 'keep'): {txIds: number[]; unlinkIds: number[]; chargeIds: number[]}
  *       66 F7-d (contract 66-F7 §20.2): `chargeIds` = the plan's charges that are not selected, with both choices — the
@@ -29,8 +31,8 @@
  *
  * Fixtures: small factories, ids in the 910000s so they cannot be mistaken for a count or an index.
  */
-import {describe, expect, it} from 'vitest';
-import {deleteIntent, deletePlan, linkCommit, linkSelection} from './chargeLinkRules';
+import {describe, expect, it, vi} from 'vitest';
+import {deleteIntent, deletePlan, isUnlinkable as rowIsUnlinkable, linkCommit, linkSelection, unlinkCommit} from './chargeLinkRules';
 import type {TXReadItem} from './types';
 
 // ─── fixtures ────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -300,6 +302,76 @@ describe('linkCommit', () => {
         const buy = parent('BUY');
         const fee = charge('FEE');
         expect(linkCommit(buy, [fee]).updates.map((u) => u.id)).not.toContain(buy.id);
+    });
+});
+
+// ─── isUnlinkable / unlinkCommit (66 TL-9) ────────────────────────────────────────────────────────────────────────
+
+/**
+ * «Unlink the charges» from the selection bar (TL-9). One predicate decides the number on the button, the panel and the
+ * payload: the row has a saved parent (`parent_transaction_id > 0`) and the user edits its broker. The type is not asked:
+ * the flow must not need the type rules (the broker page's cold path).
+ */
+describe('isUnlinkable (66 TL-9)', () => {
+    const PARENT_ID = 919_901;
+    const isUnlinkable = (row: TXReadItem, editable: (brokerId: number) => boolean = canEdit) => rowIsUnlinkable(row, editable);
+
+    it('a FEE linked to a parent, on a broker the user edits: yes', () => {
+        expect(isUnlinkable(charge('FEE', {parent_transaction_id: PARENT_ID}))).toBe(true);
+    });
+
+    it('a TAX linked to a parent, on a broker the user edits: yes', () => {
+        expect(isUnlinkable(charge('TAX', {parent_transaction_id: PARENT_ID}))).toBe(true);
+    });
+
+    it('a charge with no parent (null, absent, 0): no', () => {
+        const {parent_transaction_id: _left, ...absent} = charge('FEE');
+        expect(isUnlinkable(charge('FEE', {parent_transaction_id: null})), 'null').toBe(false);
+        expect(isUnlinkable(absent), 'absent').toBe(false);
+        expect(isUnlinkable(charge('FEE', {parent_transaction_id: 0})), '0').toBe(false);
+    });
+
+    it('a parent BUY with charges: no (it has no parent of its own)', () => {
+        expect(isUnlinkable(parent('BUY', {charges_count: 2}))).toBe(false);
+    });
+
+    it('a linked charge on a broker the user cannot edit: no', () => {
+        expect(isUnlinkable(charge('FEE', {parent_transaction_id: PARENT_ID, broker_id: READ_ONLY_BROKER}))).toBe(false);
+    });
+
+    it('the broker asked about is the row’s own', () => {
+        const editable = vi.fn<(brokerId: number) => boolean>(() => true);
+        expect(isUnlinkable(charge('FEE', {parent_transaction_id: PARENT_ID, broker_id: OTHER_BROKER}), editable)).toBe(true);
+        expect(editable).toHaveBeenCalledWith(OTHER_BROKER);
+    });
+
+    it('the type is not looked at: a row that is no charge type, with a parent, is unlinkable', () => {
+        expect(isUnlinkable(tx('ADJUSTMENT', {parent_transaction_id: PARENT_ID}))).toBe(true);
+    });
+});
+
+describe('unlinkCommit (66 TL-9)', () => {
+    it('one update per charge with parent 0, in order, and nothing else (one batch: all or none)', () => {
+        const taxCharge = charge('TAX', {parent_transaction_id: 919_901});
+        const fee = charge('FEE', {parent_transaction_id: 919_902});
+        expect(unlinkCommit([taxCharge, fee])).toEqual({
+            updates: [
+                {id: taxCharge.id, parent_transaction_id: 0},
+                {id: fee.id, parent_transaction_id: 0},
+            ],
+        });
+    });
+
+    it('a single charge: one update', () => {
+        const fee = charge('FEE', {parent_transaction_id: 919_901});
+        expect(unlinkCommit([fee])).toEqual({updates: [{id: fee.id, parent_transaction_id: 0}]});
+    });
+
+    it('the rows handed in are left as they are', () => {
+        const fee = charge('FEE', {parent_transaction_id: 919_901});
+        const before = structuredClone(fee);
+        unlinkCommit([fee]);
+        expect(fee).toEqual(before);
     });
 });
 

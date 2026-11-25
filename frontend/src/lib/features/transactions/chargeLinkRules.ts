@@ -1,6 +1,6 @@
 /**
- * The rules behind «link the charges» from the table's selection bar and «delete a parent that has charges» (project 66,
- * lot F6), as pure functions.
+ * The rules behind «link the charges» and «unlink the charges» (66 TL-9) from the table's selection bar, and «delete a
+ * parent that has charges» (project 66, lot F6), as pure functions.
  *
  * The backend checks the same rules on the batch (`backend/app/services/transactions/charges.py`, rules 1–8): here
  * they only decide whether the selection bar offers «Link», and why it is off. A charge is a FEE or a TAX, a parent one
@@ -74,6 +74,20 @@ export function linkSelection(rows: TXReadItem[], {roleOf, canEdit}: LinkOptions
 /** The batch that links the charges to the parent: one update per charge, all pass or none. */
 export function linkCommit(parent: TXReadItem, charges: TXReadItem[]): {updates: {id: number; parent_transaction_id: number}[]} {
     return {updates: charges.map((c) => ({id: c.id, parent_transaction_id: parent.id}))};
+}
+
+/**
+ * Whether «Unlink» takes this row (66 TL-9): it has a saved parent and the user edits its broker. The one predicate of the
+ * button's number, the panel and the payload. The type is not asked: only a charge has a parent, and the broker's page
+ * has no type rules to read (its cold path).
+ */
+export function isUnlinkable(row: TXReadItem, canEdit: (brokerId: number) => boolean): boolean {
+    return parentOf(row) !== null && canEdit(row.broker_id);
+}
+
+/** The batch that unlinks the charges (`0`: no parent): one update per charge, all pass or none. */
+export function unlinkCommit(charges: TXReadItem[]): {updates: {id: number; parent_transaction_id: number}[]} {
+    return {updates: charges.map((c) => ({id: c.id, parent_transaction_id: 0}))};
 }
 
 /**

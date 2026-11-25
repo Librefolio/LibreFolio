@@ -516,6 +516,10 @@
       "allAfter": "none of the {n} rows stays",
       "all": "Delete all ({n})",
       "loadFailed": "Could not read the charges of this transaction"
+    },
+    "chargesUnlink": {
+      "failed": "Unlinking the charges failed",
+      "target": "{n, plural, one {# charge no longer linked: it stays as a transaction of its own} other {# charges no longer linked: each stays as a transaction of its own}}"
     }
   }
 }

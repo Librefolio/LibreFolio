@@ -60,6 +60,7 @@ A **Fee** or a **Tax** can be linked to the transaction it was paid for, and sta
 
 - **In the list** — while the table is not sorted and not filtered on the type, a transaction's charges fold under it. The badge **N charges** (or the 🔗 next to it) opens and closes them; each charge shows `↳`, and its 🔗 takes you to its transaction. Sort the table, or filter it on the type, and every charge is a row of its own again, still marked `↳`.
 - **Link** — tick one transaction and the charges that belong to it, then click **Link** in the selection bar. A window shows the rows and what they become; **Link** saves at once. When the selection cannot be linked — another broker, another asset, half of a pair, a charge already linked elsewhere, two transactions — **Link** is greyed out: tap it, or reach it with the keyboard, to read why.
+- **Unlink** — tick the charges to separate, on this page or on a broker's **Transactions** tab, and click **Unlink** in the selection bar: its number says how many of the ticked rows are linked charges, and a ticked transaction does not bring its charges along. A window shows each charge and the transaction it is linked to; **Unlink** saves at once, and each charge stays as a transaction of its own.
 - **Delete** — when you delete a transaction whose charges are not all in your selection, from this page or from a broker's **Transactions** tab, a window asks first:
     - **Keep the charges** — they stay, as transactions of their own, no longer linked;
     - **Delete all (N)** — the charges go with it.

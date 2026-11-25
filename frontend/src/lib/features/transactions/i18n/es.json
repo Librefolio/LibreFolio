@@ -516,6 +516,10 @@
       "allAfter": "no queda ninguna de las {n} filas",
       "all": "Eliminar todo ({n})",
       "loadFailed": "No se pudieron leer los gastos de esta transacción"
+    },
+    "chargesUnlink": {
+      "failed": "No se pudieron desenlazar los gastos",
+      "target": "{n, plural, one {# gasto ya no enlazado: queda como transacción propia} other {# gastos ya no enlazados: cada uno queda como transacción propia}}"
     }
   }
 }

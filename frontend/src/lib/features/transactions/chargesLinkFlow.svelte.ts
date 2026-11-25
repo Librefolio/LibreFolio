@@ -53,8 +53,8 @@ export interface ChargesLinkFlow {
     cancel(): void;
 }
 
-/** The refusal's context from the reference stores (the broker's tab: `PortfolioView` loads both). */
-function storeIssueContext(): ResolverContext {
+/** The refusal's context from the reference stores (the broker's tab: `PortfolioView` loads both). Shared with `chargesUnlinkFlow`. */
+export function storeIssueContext(): ResolverContext {
     const brokers = getAllBrokers() as unknown as Array<{id: number; name: string}>;
     return {
         brokers,
