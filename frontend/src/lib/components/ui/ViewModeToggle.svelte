@@ -79,6 +79,7 @@
             display={showLabels ? 'auto' : 'icon'}
             hideWordBelow="sm"
             size={compact ? 'sm' : 'md'}
+            {compact}
             pressed={mode === item.value}
             tipPosition="bottom"
             onclick={(event) => {

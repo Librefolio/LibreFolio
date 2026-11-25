@@ -184,9 +184,16 @@ describe('buttonClasses — segment, bar, shape options (C1, C2, C3, C7, C9)', (
         expect(buttonClasses({segment: true, pressed: false, tone})).toBe(buttonClasses({segment: true, pressed: false}));
     });
 
-    it('the segment’s colours on and off are the presets’', () => {
+    it('a lone segment’s colours on and off are the presets’', () => {
         expect(tokens(buttonClasses({segment: true, pressed: true}))).toEqual(expect.arrayContaining(['bg-lf-checked', 'text-lf-on-checked']));
         expect(tokens(buttonClasses({segment: true, pressed: false}))).toEqual(expect.arrayContaining(['bg-lf-panel', 'text-lf-secondary', `${GUARD}bg-lf-neutral`]));
+    });
+
+    it('a segment joined in a group is on the card and muted at rest, like the groups it replaces (C18); pressed it is the same', () => {
+        const off = tokens(buttonClasses({segment: true, joined: true, pressed: false}));
+        expect(off).toEqual(expect.arrayContaining(['bg-lf-card', 'text-lf-muted', `${GUARD}bg-lf-hover`]));
+        for (const absent of ['bg-lf-panel', 'text-lf-secondary']) expect(off, absent).not.toContain(absent);
+        expect(tokens(buttonClasses({segment: true, joined: true, pressed: true}))).toEqual(expect.arrayContaining(['bg-lf-checked', 'text-lf-on-checked']));
     });
 
     it.each(['bar-ghost', 'bar-solid', 'bar-link'] as const)('%s carries the bar’s focus (outline-lf-bar-focus, inside) and lf-btn-bar', (variant) => {

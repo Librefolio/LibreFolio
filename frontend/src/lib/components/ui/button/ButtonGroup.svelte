@@ -1,8 +1,8 @@
 <!--
   A group of buttons joined into segments (85 BTN-2·0, the consultant's C2): the view toggles, the period presets.
-  Only a thin wrapper: `role="group"` with its name, the outer border, the rounded clip. Its `Button`s draw as segments
-  (`buttonClasses({segment: true})`: no border or radius of their own, the focus inside, the presets' colours) and
-  stay toggles with `aria-pressed` — not radios.
+  Only a thin wrapper: `role="group"` with its name, the outer border, the dividers, the rounded clip. Its `Button`s draw
+  as joined segments (`buttonClasses({segment: true, joined: true})`: no border or radius of their own, the focus inside,
+  on the card: C18) and stay toggles with `aria-pressed` — not radios.
 -->
 <script lang="ts">
     import type {Snippet} from 'svelte';
@@ -22,6 +22,6 @@
     provideButtonGroup();
 </script>
 
-<div role="group" aria-label={label} class="inline-flex overflow-hidden rounded-lg border border-lf-input {className}" {...rest}>
+<div role="group" aria-label={label} class="inline-flex divide-x divide-lf-subtle overflow-hidden rounded-lg border border-lf-subtle {className}" {...rest}>
     {@render children()}
 </div>

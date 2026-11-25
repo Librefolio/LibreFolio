@@ -11,7 +11,7 @@ import {flushSync} from 'svelte';
 
 import {cleanup, fireEvent, render, screen, setupI18n} from '$test/component';
 import {HOVER_DELAY_MS} from '$lib/components/ui/button/pressable.svelte';
-import {WORD_HIDDEN_BELOW} from '$lib/components/ui/button/buttonClasses';
+import {buttonClasses, WORD_HIDDEN_BELOW} from '$lib/components/ui/button/buttonClasses';
 import ViewModeToggle from './ViewModeToggle.svelte';
 
 vi.mock('$lib/utils/storage', () => ({getUserStorage: (_key: string, fallback: unknown) => fallback, setUserStorage: vi.fn()}));
@@ -62,6 +62,12 @@ describe('ViewModeToggle', () => {
         expect(name.trim()).not.toBe('');
         expect(RAW_KEY.test(name), `the group's name is a rendered text, not the key "${name}"`).toBe(false);
         for (const mode of ['grid', 'list']) expect(screen.getByTestId(`view-mode-${mode}`).classList.contains('lf-btn-segment'), mode).toBe(true);
+    });
+
+    it('compact takes the small button’s lower box (C18), so a row of tables does not move', () => {
+        render(ViewModeToggle, {props: {mode: 'grid', storageKey: 'probeViewMode', compact: true, showLabels: true}});
+        const button = screen.getByTestId('view-mode-grid');
+        expect(button.className).toBe(buttonClasses({size: 'sm', compact: true, segment: true, joined: true, pressed: true}));
     });
 
     it('a click stays the button’s own: it never reaches a clickable parent around the toggle', async () => {

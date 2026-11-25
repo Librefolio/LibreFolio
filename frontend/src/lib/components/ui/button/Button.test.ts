@@ -576,6 +576,9 @@ describe('Button — inside a ButtonGroup: a segment (BTN-2·0, C2)', () => {
         const group = screen.getByTestId('probe-group');
         expect(group).toHaveAttribute('role', 'group');
         expect(group).toHaveAttribute('aria-label', 'View');
+        // C18: the group bounds its segments with the quiet border and divides them; a field's border is a field's.
+        for (const name of ['border', 'border-lf-subtle', 'divide-x', 'divide-lf-subtle']) expect(group.classList.contains(name), name).toBe(true);
+        expect(group.classList.contains('border-lf-input')).toBe(false);
         for (const id of ['probe-grid', 'probe-list']) {
             const segment = screen.getByTestId(id);
             expect(group.contains(segment)).toBe(true);

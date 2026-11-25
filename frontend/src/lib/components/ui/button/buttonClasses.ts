@@ -47,12 +47,13 @@ export interface ButtonClassOptions {
     /** A button standing on a fill of that state (the ✕ of a toast or a banner): the fill's text, the hover a step down. */
     tint?: ButtonTint;
     /**
-     * A segment (C2, C16): a filled toggle with no border — `panel` at rest, `neutral` on hover, `checked` pressed (a
-     * `tone` wins when pressed) — and the focus inside. Alone it is `rounded-lg` (`rounded-full` with `pill`); `joined`
-     * (inside a `ButtonGroup`) it has no radius and its finger target grows in height only.
+     * A segment (C2, C16, C18): a filled toggle with no border, `checked` pressed (a `tone` wins when pressed), and the
+     * focus inside. Alone it has nothing around it, so it shows by its own fill: `panel` at rest, `neutral` on hover,
+     * `rounded-lg` (`rounded-full` with `pill`). `joined` (inside a `ButtonGroup`) the group bounds it: `card` and muted
+     * at rest, `hover` on hover, no radius, and its finger target grows in height only.
      */
     segment?: boolean;
-    /** The segment stands joined to its neighbours in a `ButtonGroup`: no radius, the target grows in height only. */
+    /** The segment stands joined to its neighbours in a `ButtonGroup`: no radius, on the card, the target grows in height only. */
     joined?: boolean;
     /** One step less vertical padding (C16): `sm` → `py-1`, `md` → `py-1.5`; `xs`, `lg` and icons unchanged. */
     compact?: boolean;
@@ -114,9 +115,11 @@ const VARIANTS: Record<Exclude<ButtonVariant, 'chip'>, string> = {
 const PRESSED_ON = 'border border-lf-checked bg-lf-checked text-lf-on-checked';
 const PRESSED_OFF = 'border border-lf-input bg-lf-card text-lf-muted not-disabled:not-aria-disabled:hover:bg-lf-hover not-disabled:not-aria-disabled:hover:text-lf-secondary';
 
-/** A segment (C2): the colours of today's presets, no border, so the width never moves when it is pressed. */
+/** A segment (C2): no border, so the width never moves when it is pressed. Alone, the colours of the presets; joined in a
+ *  group, those of the groups the app had (C18, the developer, 25/11/2026). */
 const SEGMENT_ON = 'bg-lf-checked text-lf-on-checked';
 const SEGMENT_OFF = 'bg-lf-panel text-lf-secondary not-disabled:not-aria-disabled:hover:bg-lf-neutral';
+const SEGMENT_JOINED_OFF = 'bg-lf-card text-lf-muted not-disabled:not-aria-disabled:hover:bg-lf-hover';
 
 /** Padding, gap and text size; the radius is apart (`pill`, `segment`). */
 /** `compact` (C16): the same sizes one step lower — `text-xs py-1`, `text-sm py-1.5`, frequent in the app. */
@@ -180,9 +183,10 @@ function isLink(variant: ButtonVariant): boolean {
     return variant === 'link' || variant === 'bar-link';
 }
 
-function colours({variant = 'secondary', pressed, tone, tint, segment}: ButtonClassOptions): string {
+function colours({variant = 'secondary', pressed, tone, tint, segment, joined}: ButtonClassOptions): string {
     if (tint) return BUTTON_TONES.tint[tint];
-    if (segment) return pressed ? (tone ? BUTTON_TONES.segmentPressed[tone] : SEGMENT_ON) : SEGMENT_OFF;
+    if (segment && !pressed) return joined ? SEGMENT_JOINED_OFF : SEGMENT_OFF;
+    if (segment) return tone ? BUTTON_TONES.segmentPressed[tone] : SEGMENT_ON;
     if (pressed !== undefined) {
         if (!pressed) return PRESSED_OFF;
         return tone ? BUTTON_TONES.pressed[tone] : PRESSED_ON;
