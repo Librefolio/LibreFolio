@@ -63,7 +63,7 @@
         onclick?.(event);
         if (!event.defaultPrevented) onchange?.(!checked, event);
     }}
-    class="relative inline-flex items-center rounded-full transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lf-focus {size === 'sm' ? 'h-5 w-9' : 'h-6 w-11'} {checked ? 'bg-lf-checked' : 'bg-lf-switch-off'} {disabled
+    class="relative inline-flex shrink-0 items-center rounded-full transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lf-focus {size === 'sm' ? 'h-5 w-9' : 'h-6 w-11'} {checked ? 'bg-lf-checked' : 'bg-lf-switch-off'} {disabled
         ? dim
             ? 'cursor-not-allowed opacity-50'
             : 'cursor-not-allowed'

@@ -49,6 +49,26 @@ describe('classes', () => {
     });
 });
 
+describe('rows (86, A2–A4)', () => {
+    it('a class says its name and its amount, nothing between brackets', () => {
+        mount();
+        expect(screen.getByTestId('f-class-STOCK').textContent).not.toMatch(/[()]/);
+    });
+
+    it('the text takes the room left by the switch, in the three panels', () => {
+        mount(makeView({applicable_buckets: ['Unknown', 'Other']}));
+        for (const id of ['f-class-STOCK', 'f-bucket-Unknown', 'f-asset-1']) expect(screen.getByTestId(id).firstElementChild, id).toHaveClass('min-w-0', 'flex-1');
+    });
+
+    it('an asset name scrolls when it does not fit, never cut by dots', () => {
+        mount();
+        const name = screen.getByTestId('f-asset-1-name');
+        expect(name).toHaveClass('overflow-scroll-marquee');
+        expect(name).not.toHaveClass('truncate');
+        expect(name.getAttribute('title')).toBeTruthy();
+    });
+});
+
 describe('outside the 100 %', () => {
     it('lists only the buckets the backend says apply, and excludes one on a click', async () => {
         const {onchange} = mount(makeView({applicable_buckets: ['Unknown', 'Other']}));

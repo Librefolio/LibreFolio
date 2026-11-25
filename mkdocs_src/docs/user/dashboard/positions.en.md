@@ -213,7 +213,7 @@ Every lot with its figures, following the panel's filter and selection.
 - **Click** a row to select it, **double-click** to find it in the timeline; the row colour is the opening broker.
 - **The ⋮ menu** offers **View lot detail**, **Go to lot in Gantt**, **Go to opening transaction** and **Copy lot identifier** — a stable reference, handy for support.
 - **More columns**, such as **Opening Value**, wait behind the eye icon.
-- **Rewards** gathered in one row: when two or more lots at a broker were opened by [Rewards](../../financial-theory/instruments/transaction-types/reward.md), they show as one row, **N rewards**, with the first and last date and the sums of their figures; its return is the sum of their P&L over the sum of their cost. Click it to open or close it: open, its lots follow one by one, right under it, whatever the sort. Its checkbox selects all its lots for the charts, and shows a mixed state when only some are selected. With **Rewards in lots** only the rewards that kept a lot of their own are gathered.
+- **Rewards** gathered in one row: when two or more lots at a broker were opened by [Rewards](../../financial-theory/instruments/transaction-types/reward.md), they show as one row, **N rewards**, with the first and last date and the sums of their figures; its return is the sum of their P&L over the sum of their cost. Click it to open or close it: open, its lots follow one by one, right under it, whatever the sort. Its checkbox selects all its lots for the charts, and shows a mixed state when only some are selected. With **Rewards in lots** only the rewards that kept a lot of their own are gathered. Every lot a Reward opened, gathered or alone, shows a **Reward** tag beside its date.
 
 ### 💰 4. Value / Return Comparison
 

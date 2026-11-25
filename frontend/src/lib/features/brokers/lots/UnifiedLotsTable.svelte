@@ -5,7 +5,7 @@
     import {schemas} from '$lib/api';
     import DataTable from '$lib/components/table/DataTable.svelte';
     import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
-    import type {ColumnDef, EnumOption, FooterCellContent, HtmlCell, RowAction} from '$lib/components/table/types';
+    import type {CellContent, ColumnDef, EnumOption, FooterCellContent, HtmlCell, RowAction} from '$lib/components/table/types';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
     import {getBrokerColor, type BrokerLike} from '$lib/utils/broker/brokerColors';
     import {getBrokerIconCandidates, getBrokerIconHtmlById} from '$lib/utils/broker/brokerHelpers';
@@ -160,6 +160,17 @@
             type: 'html',
             html: `<span class="inline-flex items-start gap-1.5" data-testid="reward-group-head" data-group-id="${escapeHtml(row.rowId)}" data-state="${open ? 'open' : 'closed'}" aria-expanded="${open}" title="${escapeHtml(toggle)}"><span class="w-3 text-lf-secondary" aria-hidden="true">${open ? '▾' : '▸'}</span><span class="reward-group-dot mt-1.5 inline-block size-2 shrink-0 rounded-full" aria-hidden="true"></span><span class="flex flex-col"><span class="font-semibold text-lf-primary">${escapeHtml(title)}</span><span class="text-xs text-lf-muted tabular-nums">${escapeHtml(dates)}</span></span></span>`,
             onClick: () => toggleGroup(row.rowId),
+        };
+    }
+
+    /** The date of a lot a REWARD opened, with the reward tag beside it (the mockup of STK-2c); every other lot keeps the plain date cell. */
+    function openingDateCell(row: DisplayRow): CellContent {
+        if (row.lot.opening_kind !== 'REWARD') return {type: 'date', value: row.openingDate, format: 'date'};
+        const day = formatCellDate(row.openingDate, 'date', {today: $_('date.today') || 'Today', yesterday: $_('date.yesterday') || 'Yesterday'});
+        const tag = label('transactions.types.REWARD', 'Reward');
+        return {
+            type: 'html',
+            html: `<span class="inline-flex max-w-full flex-wrap items-center gap-x-1.5"><span>${escapeHtml(day)}</span><span class="rounded bg-lf-cat-index-soft px-1 text-[11px] font-medium text-lf-cat-index-on-soft" data-testid="reward-lot-tag">${escapeHtml(tag)}</span></span>`,
         };
     }
 
@@ -559,9 +570,10 @@
         {
             id: 'opening-date',
             header: () => label('brokers.lots.openingDate', 'Opening Date'),
-            cell: (row) => (row.groupHead ? groupHeadCell(row) : {type: 'date', value: row.openingDate, format: 'date'}),
+            cell: (row) => (row.groupHead ? groupHeadCell(row) : openingDateCell(row)),
             type: 'date',
-            width: 140,
+            // Room for the reward tag beside the date, inside the indent of a group; narrower, it goes under the date.
+            width: rows.some((row) => row.lot.opening_kind === 'REWARD') ? 190 : 140,
             minWidth: 130,
             sortable: true,
             getValue: (row) => row.openingDate,
@@ -843,12 +855,14 @@
     <div class="flex flex-wrap items-center justify-between gap-3 border-b border-lf-subtle/80 px-4 py-3">
         <div class="flex min-w-0 items-center gap-3">
             <div>
-                <div class="text-base font-semibold text-lf-primary">{label('brokers.lots.unifiedLots', 'Lots')}</div>
+                <div class="flex items-center gap-2">
+                    <div class="text-base font-semibold text-lf-primary" data-testid="unified-lots-title">{label('brokers.lots.unifiedLots', 'Lots')}</div>
+                    <span class="inline-flex min-w-7 items-center justify-center rounded-full bg-lf-neutral px-2 py-0.5 text-xs font-semibold tabular-nums text-lf-secondary" data-testid="unified-lots-count">
+                        {lots.length}
+                    </span>
+                </div>
                 <div class="text-xs text-lf-muted">{translateOr((key) => $_(key, {values: {method: matchingMethod}}), 'brokers.lots.unifiedLotsHint', `Unified lots view (${matchingMethod}) with multi-selection and custody drill-down.`)}</div>
             </div>
-            <span class="inline-flex min-w-7 items-center justify-center rounded-full bg-lf-neutral px-2 py-0.5 text-xs font-semibold tabular-nums text-lf-secondary">
-                {lots.length}
-            </span>
         </div>
         <div class="flex flex-wrap items-center gap-2">
             <ColumnVisibilityToggle {tableRef} />

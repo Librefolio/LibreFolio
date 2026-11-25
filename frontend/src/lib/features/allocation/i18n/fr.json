@@ -83,9 +83,6 @@
       "captionBefore": "Couleurs sur la sélection : 100 % =",
       "captionAfter": "du portefeuille"
     },
-    "pie": {
-      "center": "Base"
-    },
     "history": {
       "empty": "Aucun historique pour cette sélection sur la période.",
       "loading": "Chargement de l'historique…"

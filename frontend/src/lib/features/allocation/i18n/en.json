@@ -83,9 +83,6 @@
       "captionBefore": "Colours on the selection: 100% =",
       "captionAfter": "of the portfolio"
     },
-    "pie": {
-      "center": "Base"
-    },
     "history": {
       "empty": "No history for this selection in the period.",
       "loading": "Loading the history…"

@@ -133,6 +133,9 @@
     // back to one would leave the two ring series of the old option on screen. Only that
     // transition asks ECharts to replace the series; every other rebuild merges as before.
     let lastRings = false;
+    // The mode of the last full build. One mounted pie changes its mode (the «Allocazione» tab): nothing the old mode
+    // drew may survive it, so the new mode's whole option replaces the old one.
+    let lastMode: Props['mode'] | null = null;
     /** The colour ranks the last full build painted the asset pie with: new ranks rebuild in full. */
     let lastRanksKey = '';
     let needsInitialLayoutStabilityPass = false;
@@ -334,7 +337,8 @@
         // the label formatters were built for the previous language (M-18). So does a new list of
         // sector emoji: the names carry them.
         const locale = uiLocale();
-        if (chartFullyInitialized && lastDark === isDark && lastLocale === locale && lastEmojiVersion === emojiVersion && sameTypeSet) {
+        const modeSwitched = lastMode !== null && lastMode !== mode;
+        if (chartFullyInitialized && !modeSwitched && lastDark === isDark && lastLocale === locale && lastEmojiVersion === emojiVersion && sameTypeSet) {
             // Bugfix: preserve the FULL data item (not just {name, value}) — formatters
             // (tooltip especially) read params.data.rawName/amount, and stripping them
             // here silently broke the fallback path for any type whose translated name
@@ -647,9 +651,12 @@
 
         // Replace the series only when the layout switches between one ring and two:
         // merged by index, the old ring series would otherwise stay on screen.
+        // A change of mode replaces everything: merged, the outer ring of Type, the hidden legend of Asset and the
+        // formatters that read type icons would stay under the new slices.
         const layoutSwitched = mode === 'type' && rings !== lastRings;
-        chartInstance.setOption(option, layoutSwitched ? {notMerge: false, replaceMerge: ['series']} : {notMerge: false});
+        chartInstance.setOption(option, modeSwitched ? {notMerge: true} : layoutSwitched ? {notMerge: false, replaceMerge: ['series']} : {notMerge: false});
         lastRings = mode === 'type' ? rings : false;
+        lastMode = mode;
         chartFullyInitialized = true;
         lastDark = isDark;
         lastLocale = locale;

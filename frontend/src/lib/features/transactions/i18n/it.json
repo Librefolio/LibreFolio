@@ -217,7 +217,8 @@
       "rewardLabel": "Valore alla ricezione",
       "rewardTooltip": "Quanto valevano queste unità il giorno in cui le hai ricevute: è sia il reddito del premio sia il costo del lotto che apre.",
       "warningReward": "Il valore alla ricezione è vuoto: senza, il premio non si può salvare. Inserisci quanto valevano queste unità il giorno in cui le hai ricevute, oppure 0 per contarle a costo zero.",
-      "rewardFromHistory": "Dallo storico prezzi: la chiusura del {date}. Cambialo se la piattaforma mostra un altro valore."
+      "rewardFromHistory": "Dallo storico prezzi: la chiusura del {date}. Cambialo se la piattaforma mostra un altro valore.",
+      "rewardUseClose": "Usa la chiusura del {date}"
     },
     "wacPreview": {
       "calculating": "Calcolo in corso...",

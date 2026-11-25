@@ -694,6 +694,68 @@ test.describe('«Allocazione» tab (lane 80, #89)', () => {
         }
     });
 
+    test('from Type to Asset and Sector the pie keeps nothing of the rings; the switches of the filters share one width and one right edge', async ({page}) => {
+        test.setTimeout(120_000);
+        const calls = recordAllocations(page);
+        await login(page, TEST_USER);
+        const keys = await userStorageKeys(page);
+        await forgetStored(page, [keys.dashboard]);
+        try {
+            // The mock portfolio holds no subtype, and Type draws its outer ring only for one: the largest typed slice becomes one.
+            await page.route(`**${ALLOCATION_PATH}`, async (route) => {
+                if ((route.request().postDataJSON() as AllocationBody).dimension !== 'type') return route.fallback();
+                const response = await route.fetch();
+                const answer = (await response.json()) as AllocationAnswer;
+                const slice = answer.slices.find(({key}) => key !== 'Liquidity' && key !== 'Unknown');
+                if (slice) slice.key = 'ETF_STOCK';
+                await route.fulfill({response, json: answer});
+            });
+            const tab = await openDashboardTab(page);
+            await answeredAfter(calls, 0, isFirstOpening, 'the tab never asked the first-opening question');
+            /** What ECharts itself holds: the option on screen, whatever was merged into it. */
+            const drawn = () =>
+                page.getByTestId(`${DASH}-results-chart`).evaluate((root) => {
+                    const host = [...root.querySelectorAll('div')].find((el) => '__lfChart' in el) as (HTMLElement & {__lfChart: {getOption: () => {series: Array<{id?: string; center: unknown}>; legend: Array<{show: boolean}>}}}) | undefined;
+                    const option = host?.__lfChart.getOption();
+                    return option ? {ids: option.series.map((series) => series.id ?? ''), legend: option.legend[0]?.show ?? false} : null;
+                });
+            const go = async (dimension: 'type' | 'asset' | 'sector') => {
+                const since = calls.length;
+                await chooseDimension(page, DASH, dimension);
+                await answeredAfter(calls, since, (body) => body.dimension === dimension, `choosing ${dimension} never asked for it`);
+                await expect(page.getByTestId(`${DASH}-results`)).toHaveAttribute('data-dimension', dimension);
+                await waitForSettled(tab, PAGE_TIMEOUT);
+            };
+
+            await go('type');
+            await expect.poll(async () => (await drawn())?.ids ?? [], {message: 'premise: with a subtype, Type draws two rings'}).toEqual(['alloc-base', 'alloc-outer']);
+            await go('asset');
+            await expect.poll(async () => ((await drawn())?.ids ?? ['none']).filter((id) => id.startsWith('alloc-')).length).toBe(0);
+            await expect.poll(async () => (await drawn())?.ids.length).toBe(1);
+            await go('sector');
+            await expect.poll(async () => (await drawn())?.ids.length).toBe(1);
+            expect((await drawn())?.legend, 'the legend the asset pie hides is back').toBe(true);
+
+            const button = page.getByTestId(`${DASH}-filters-button`);
+            if (await button.count()) await button.click();
+            await page.getByTestId(`${DASH}-filters-assets-toggle`).click();
+            const switches = page.getByTestId(`${DASH}-filters`).getByRole('switch');
+            await expect(switches.first()).toBeVisible();
+            const boxes = await switches.evaluateAll((nodes) => nodes.map((node) => node.getBoundingClientRect()).map(({width, right}) => ({width, right: Math.round(right)})));
+            expect(
+                boxes.map(({width}) => width),
+                'a switch beside a long name shrinks',
+            ).toEqual(boxes.map(() => 44));
+            const classEdges = await page
+                .getByTestId(`${DASH}-filters-classes`)
+                .getByRole('switch')
+                .evaluateAll((nodes) => nodes.map((node) => Math.round(node.getBoundingClientRect().right)));
+            expect(new Set(classEdges).size).toBe(1);
+        } finally {
+            await cleanUp(page, [keys.dashboard]);
+        }
+    });
+
     test('the broker page asks for its own broker, whole, and keeps its filters apart from the Dashboard’s', async ({page}) => {
         test.setTimeout(150_000);
         const calls = recordAllocations(page);

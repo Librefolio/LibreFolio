@@ -73,6 +73,9 @@
         /** The day of the close the shown value on receipt comes from, while it is the price history's suggestion (a
          *  REWARD, project 79); null once the user changes it or when there is none. */
         rewardValueDate?: string | null;
+        /** The day whose close the link under the value brings back: set while the user's own value differs from it (86). */
+        rewardCloseDate?: string | null;
+        onUseRewardClose?: () => void;
         typeImmutable: boolean;
         wacAvailableCurrencies: string[];
         handleSyncFx: () => Promise<void>;
@@ -126,6 +129,8 @@
         rule,
         showCostBasisField,
         rewardValueDate = null,
+        rewardCloseDate = null,
+        onUseRewardClose,
         typeImmutable,
         wacAvailableCurrencies,
         handleSyncFx,
@@ -410,9 +415,14 @@
                     {/if}
                 </p>
             {:else if draft.type === 'REWARD' && rewardValueDate}
-                <p class="text-xs text-lf-muted mt-1" data-testid="tx-form-reward-value-from-history">
+                <p class="text-xs text-lf-muted mt-1" data-testid="tx-form-reward-value-from-history" data-date={rewardValueDate}>
                     {$t('transactions.costBasisOverride.rewardFromHistory', {values: {date: rewardValueDate}}) || `From the price history: the close of ${rewardValueDate}. Change it if the platform shows another value.`}
                 </p>
+            {/if}
+            {#if rewardCloseDate}
+                <button type="button" class="mt-1 text-xs text-lf-link underline hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lf-focus" onclick={onUseRewardClose} data-testid="tx-form-reward-use-close" data-date={rewardCloseDate}>
+                    {$t('transactions.costBasisOverride.rewardUseClose', {values: {date: rewardCloseDate}})}
+                </button>
             {/if}
         </div>
     {/if}

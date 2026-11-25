@@ -36,6 +36,11 @@ describe('Switch', () => {
         expect(lever()).toHaveAttribute('aria-checked', 'true');
     });
 
+    it.each(['sm', 'md'] as const)('%s: never shrinks beside a long label (86, A2)', (size) => {
+        render(Switch, {checked: true, testId: 'sw', size});
+        expect(lever()).toHaveClass('shrink-0');
+    });
+
     it('has two sizes, and the knob sits at the other end when on', () => {
         const md = render(Switch, {checked: false, testId: 'sw'});
         expect(lever()).toHaveClass('h-6', 'w-11');
