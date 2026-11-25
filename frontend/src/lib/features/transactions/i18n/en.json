@@ -205,7 +205,8 @@
         "failed": "The prices could not be read: no value was filled. Try again."
       },
       "cloneChargesReadFailed": "Could not read the linked charges of {ids}: the copy was made without them.",
-      "cloneChargeFree": "{reason, select, deleted {The copy of the charge is not linked: its parent is marked for deletion.} paired {The copy of the charge is not linked: its parent is half of a pair.} other {The copy of the charge is not linked: it cannot be linked to the same transaction.}}"
+      "cloneChargeFree": "{reason, select, deleted {The copy of the charge is not linked: its parent is marked for deletion.} paired {The copy of the charge is not linked: its parent is half of a pair.} other {The copy of the charge is not linked: it cannot be linked to the same transaction.}}",
+      "unlinkSelected": "Unlink the charges"
     },
     "commit": {
       "serverError": "Save failed — server error"
