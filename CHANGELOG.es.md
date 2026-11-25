@@ -171,6 +171,10 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 - **AI Export: «Notas para la IA» pasa a ser «Tu pregunta».** Lo que escribes ahí es la pregunta que la IA responde primero, en cada análisis.
 - **AI Export cuenta solo los brókeres que posees.** Las exportaciones de activo y de divisa, y una exportación sin filtro de brókeres, leen los brókeres que posees, cada uno a tu cuota, como el Dashboard; los brókeres compartidos contigo quedan fuera. La comparación de un bróker lo mide frente a tus propios brókeres. Si no posees ningún bróker, los análisis que leen posiciones o exposición lo dicen, y los de solo mercado siguen disponibles.
 - **Asignador PAC, el resultado**: bajo «No invertido» una línea por divisa muestra el efectivo al inicio → al final; «Costes» ahora se llama «Costes y comisiones»; las exposiciones se disponen como en el Reequilibrador, tipos y sectores lado a lado, y luego los países con sus dos mapas primero.
+- Configuración › Plugins: **Todos** ahora lista cada plugin una sola vez, bajo su familia; las fichas de ajustes compartidos (como la cuenta de CoinGecko) están en **Compartidos** y se llega a ellas desde el plugin que las lee. Una búsqueda que solo encuentra una ficha compartida ofrece «n resultados en Compartidos».
+- Configuración: el menú de filtros (Plugins, Preferencias, Configuración Global) se mantiene a la vista mientras te desplazas; elegir un filtro te lleva de nuevo al principio de la lista.
+- Cambio de correo: la página de confirmación muestra la dirección que vas a confirmar y sus mensajes son más cortos.
+- API: `POST /email/email-change/check` responde también `new_email` cuando el enlace está `ready`.
 
 ### 🐛 Corregido
 
@@ -227,6 +231,9 @@ y este proyecto se adhiere al [Versionado Semántico](https://semver.org/spec/v2
 - Un dividendo o un interés cobrado y gastado en una compra el mismo día (por ejemplo la reinversión automática de un bróker) ahora cuenta como rendimiento reinvertido, no como capital nuevo, en las compras del gráfico de Crecimiento y en la división de la liquidez entre el dinero aportado y el dinero generado por la cartera. El patrimonio, el P&L y los ingresos no cambian.
 - **AI Export: la caída máxima de la cartera sigue los brókeres del export**: contaba todos los brókeres que puedes ver, incluidos los solo compartidos contigo y los quitados por el filtro del Panel.
 - Sitio de la documentación: las versiones en otros idiomas de cada página (`hreflang`) apuntan a la página correcta dentro del sitio; antes perdían la carpeta del sitio.
+- FX: un par ya no puede sincronizarse dos veces a la vez. Mientras un par se sincroniza, sus botones **Sincronizar** están desactivados y lo indican, **Sinc. Todo** cuenta cada par que abarca, y el servidor rechaza una segunda solicitud para el mismo par (409) en lugar de iniciarla. La sincronización semanal deja a la tuya un par que estás sincronizando.
+- API: `POST /fx/currencies/sync` responde **409** `fx_sync_in_progress` (con los pares ocupados y cuándo empezó su sincronización) cuando un par de la solicitud ya se está sincronizando.
+- Configuración › Plugins: escribir una clave de API o un token ya no hace que el navegador ofrezca guardar una contraseña (los campos de clave son campos de texto enmascarados, no campos de contraseña).
 
 ### ⚠️ Cambios incompatibles
 

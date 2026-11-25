@@ -171,6 +171,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **AI Export: «Notes for the AI» becomes «Your question».** What you write there is the question the AI answers first, in every analysis.
 - **AI Export counts only the brokers you own.** Asset and currency exports, and an export with no broker filter, read the brokers you own, each at your share, as the Dashboard does; brokers shared with you are left out. The broker comparison measures a broker against your own brokers. If you own no broker, the analyses that read positions or exposure say so, and the market-only ones stay available.
 - **PAC allocator, the result**: under «Not invested» one line per currency shows the cash at the start → at the end; «Costs» is now «Costs and fees»; the exposures are laid out as in the Rebalancer, types and sectors side by side, then the countries with their two maps first.
+- Settings › Plugins: **All** now lists each plugin once, under its family; the shared settings cards (such as the CoinGecko account) are under **Shared** and are reached from the plugin that reads them. A search that finds only a shared card offers «n results in Shared».
+- Settings: the filter menu (Plugins, Preferences, Global settings) stays in view while you scroll; choosing a filter brings you back to the top of the list.
+- Email change: the confirmation page shows the address you are about to confirm, and its messages are shorter.
+- API: `POST /email/email-change/check` also answers `new_email` when the link is `ready`.
 
 ### 🐛 Fixed
 
@@ -227,6 +231,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A dividend or interest paid and spent on a purchase the same day (for example a broker's automatic reinvestment) now counts as reinvested returns, not as new capital, in the Growth chart's purchases and in the split of your cash between money you deposited and money the portfolio generated. Net worth, P&L and income do not change.
 - **AI Export: the portfolio drawdown follows the brokers of the export**: it counted every broker you can see, including brokers only shared with you and those left out by the Dashboard's filter.
 - Documentation site: the language alternates of each page (`hreflang`) point to the right page inside the site; before, they lost the site's folder.
+- FX: a pair can no longer be synced twice at once. While a pair syncs, its **Sync** buttons are off and say so, **Sync All** counts for every pair it covers, and the server refuses a second request for the same pair (409) instead of starting it. The weekly sync leaves a pair you are syncing to your sync.
+- API: `POST /fx/currencies/sync` answers **409** `fx_sync_in_progress` (with the busy pairs and when their sync began) when a pair of the request is already syncing.
+- Settings › Plugins: typing an API key or a token no longer makes the browser offer to save a password (the key fields are masked text fields, not password fields).
 
 ### ⚠️ Breaking changes
 

@@ -171,6 +171,10 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 - **AI Export: «Note per l'AI» diventa «La tua domanda».** Quello che scrivi lì è la domanda a cui l'AI risponde per prima, in ogni analisi.
 - **L'AI Export conta solo i broker che possiedi.** Gli export di asset e cambi, e un export senza filtro sui broker, leggono i broker che possiedi, ciascuno alla tua quota, come la Dashboard; i broker condivisi con te restano fuori. Il confronto di un broker lo misura sui tuoi broker. Se non possiedi nessun broker, le analisi che leggono posizioni o esposizione lo dicono, e quelle di solo mercato restano disponibili.
 - **Allocatore PAC, il risultato**: sotto «Non investito» una riga per valuta mostra la cassa all'inizio → alla fine; «Costi» ora si chiama «Costi e commissioni»; le esposizioni sono disposte come nel Ribilanciatore, tipi e settori affiancati, poi i paesi con prima le due mappe.
+- Impostazioni › Plugin: **Tutti** ora elenca ogni plugin una sola volta, sotto la sua famiglia; le schede delle impostazioni condivise (come l'account CoinGecko) stanno sotto **Condivise** e si raggiungono dal plugin che le legge. Una ricerca che trova solo una scheda condivisa propone «n risultati in Condivise».
+- Impostazioni: il menu dei filtri (Plugin, Preferenze, Impostazioni Globali) resta in vista mentre scorri; scegliere un filtro ti riporta all'inizio dell'elenco.
+- Cambio email: la pagina di conferma mostra l'indirizzo che stai per confermare e i suoi messaggi sono più brevi.
+- API: `POST /email/email-change/check` risponde anche `new_email` quando il link è `ready`.
 
 ### 🐛 Corretto
 
@@ -227,6 +231,9 @@ e questo progetto aderisce al [Semantic Versioning](https://semver.org/spec/v2.0
 - Un dividendo o un interesse pagato e speso in un acquisto lo stesso giorno (per esempio il reinvestimento automatico di un broker) ora conta come rendimento reinvestito, non come capitale nuovo, negli acquisti del grafico della Crescita e nella divisione della liquidità fra soldi versati e soldi generati dal portafoglio. Patrimonio, P&L e reddito non cambiano.
 - **AI Export: il calo massimo del portafoglio segue i broker dell'export**: contava tutti i broker che puoi vedere, anche quelli solo condivisi con te e quelli tolti dal filtro della Dashboard.
 - Sito della documentazione: le versioni nelle altre lingue di ogni pagina (`hreflang`) puntano alla pagina giusta dentro il sito; prima perdevano la cartella del sito.
+- FX: una coppia non può più essere sincronizzata due volte nello stesso momento. Finché una coppia si sincronizza, i suoi pulsanti **Sincronizza** sono disattivati e lo dicono, **Sinc. Tutto** conta ogni coppia che copre, e il server rifiuta una seconda richiesta per la stessa coppia (409) invece di avviarla. La sincronizzazione settimanale lascia alla tua una coppia che stai sincronizzando.
+- API: `POST /fx/currencies/sync` risponde **409** `fx_sync_in_progress` (con le coppie occupate e da quando è iniziata la loro sincronizzazione) quando una coppia della richiesta è già in sincronizzazione.
+- Impostazioni › Plugin: scrivere una chiave API o un token non fa più proporre al browser di salvare una password (i campi delle chiavi sono campi di testo mascherati, non campi password).
 
 ### ⚠️ Modifiche incompatibili
 

@@ -171,6 +171,10 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 - **AI Export : « Notes pour l'IA » devient « Votre question ».** Ce que vous y écrivez est la question à laquelle l'IA répond en premier, dans chaque analyse.
 - **L'AI Export ne compte que les courtiers que vous possédez.** Les exports d'actif et de devise, et un export sans filtre de courtiers, lisent les courtiers que vous possédez, chacun à votre part, comme le tableau de bord ; les courtiers partagés avec vous sont laissés de côté. La comparaison d'un courtier le mesure à vos propres courtiers. Si vous ne possédez aucun courtier, les analyses qui lisent des positions ou une exposition le disent, et celles de marché seul restent disponibles.
 - **Allocateur PAC, le résultat** : sous « Non investi », une ligne par devise montre les liquidités au début → à la fin ; « Frais » s'appelle maintenant « Frais et commissions » ; les expositions sont disposées comme dans le Rééquilibreur, types et secteurs côte à côte, puis les pays avec d'abord leurs deux cartes.
+- Paramètres › Plugins : **Tous** liste désormais chaque plugin une seule fois, sous sa famille ; les fiches de paramètres partagés (comme le compte CoinGecko) sont sous **Partagés** et s'ouvrent depuis le plugin qui les lit. Une recherche qui ne trouve qu'une fiche partagée propose « n résultats dans Partagés ».
+- Paramètres : le menu des filtres (Plugins, Préférences, Paramètres Globaux) reste visible pendant le défilement ; choisir un filtre vous ramène en haut de la liste.
+- Changement d'e-mail : la page de confirmation affiche l'adresse que vous allez confirmer, et ses messages sont plus courts.
+- API : `POST /email/email-change/check` répond aussi `new_email` lorsque le lien est `ready`.
 
 ### 🐛 Corrections
 
@@ -227,6 +231,9 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 - Un dividende ou un intérêt versé et dépensé dans un achat le même jour (par exemple le réinvestissement automatique d'un courtier) compte maintenant comme rendement réinvesti, et non comme capital nouveau, dans les achats du graphique de Croissance et dans la répartition de la trésorerie entre l'argent versé et l'argent généré par le portefeuille. Le patrimoine, le P&L et le revenu ne changent pas.
 - **AI Export : la baisse maximale du portefeuille suit les courtiers de l'export** : elle comptait tous les courtiers que vous pouvez voir, y compris ceux seulement partagés avec vous et ceux retirés par le filtre du Tableau de bord.
 - Site de la documentation : les versions dans les autres langues de chaque page (`hreflang`) pointent vers la bonne page dans le site ; avant, elles perdaient le dossier du site.
+- FX : une paire ne peut plus être synchronisée deux fois en même temps. Tant qu'une paire se synchronise, ses boutons **Synchroniser** sont désactivés et l'indiquent, **Sync. Tout** compte chaque paire qu'il couvre, et le serveur refuse une seconde demande pour la même paire (409) au lieu de la lancer. La synchronisation hebdomadaire laisse à la vôtre une paire que vous synchronisez.
+- API : `POST /fx/currencies/sync` répond **409** `fx_sync_in_progress` (avec les paires occupées et le début de leur synchronisation) lorsqu'une paire de la requête est déjà en cours de synchronisation.
+- Paramètres › Plugins : saisir une clé d'API ou un jeton ne fait plus proposer au navigateur d'enregistrer un mot de passe (les champs de clé sont des champs de texte masqués, pas des champs de mot de passe).
 
 ### ⚠️ Changements incompatibles
 
