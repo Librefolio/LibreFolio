@@ -23,6 +23,7 @@ The cases:
 - AV-02: the broker export gives the same figure for the same asset (one definition, one value).
 - AV-03: with a single close in the period the volatility is None.
 - AV-04: `fx.market_summary` uses the same definition on the seeded rates (no population deviation).
+- AV-06: `fx.market_summary` and `fx.timing_context` give one figure for the same pair and period (78 L6 S2b).
 - AV-05: the asset's own export gives the portfolio row's figure for that asset (78 L6 S2: its row never got it).
 - BC-01: `cash_by_broker` has B1 and B2, their cash adds up to `cash_total`, and the list says its basis (the user's
   share); with nothing in flight the cash in transit is zero.
@@ -299,6 +300,18 @@ async def test_av05_the_asset_export_gives_the_portfolio_rows_figure(book):
     expected = _definition(_observed(SERIES["CLOSE_ONLY"]))
     assert _volatility(asset, asset_id) == pytest.approx(expected, abs=TOLERANCE)
     assert _volatility(asset, asset_id) == pytest.approx(_volatility(portfolio, asset_id), abs=TOLERANCE)
+
+
+@pytest.mark.asyncio
+async def test_av06_the_fx_summary_and_the_timing_context_give_one_figure(book):
+    scope = _scope(book, Domain.FX, base_currency="EUR", quote_currency="USD")
+    summary = await _resolve(book, scope, "fx.market_summary")
+    timing = await _resolve(book, scope, "fx.timing_context")
+
+    figure = timing["observed_returns"]["daily_return_volatility_ratio"]
+    assert figure is not None and figure > 0, "premise: the seeded rates move"
+    assert figure == pytest.approx(_definition(_observed(RATES)), abs=TOLERANCE)
+    assert figure == pytest.approx(summary["entities"][0]["daily_return_volatility_ratio"], abs=TOLERANCE)
 
 
 # =============================================================================

@@ -187,7 +187,7 @@ _FX_COMPONENTS: tuple[ComponentSpec, ...] = (
     _component(Domain.FX, "market_summary", "Focused FX market context", version=2, period_behavior=PeriodBehavior.WINDOWED),
     _component(Domain.FX, "exposure_base_quote", "Direct base/quote exposures", period_behavior=PeriodBehavior.WINDOWED),
     _component(Domain.FX, "exposure_provenance", "Conversion provenance for exposures", dependencies=("fx.exposure_base_quote",), period_behavior=PeriodBehavior.NONE),
-    _component(Domain.FX, "timing_context", "FX conversion timing context", dependencies=("fx.current_rate", "fx.conversion_provenance"), period_behavior=PeriodBehavior.WINDOWED),
+    _component(Domain.FX, "timing_context", "FX conversion timing context", version=2, dependencies=("fx.current_rate", "fx.conversion_provenance"), period_behavior=PeriodBehavior.WINDOWED),
 )
 
 ALL_FOUNDATION_COMPONENTS: tuple[ComponentSpec, ...] = _PORTFOLIO_COMPONENTS + _BROKER_COMPONENTS + _ASSET_COMPONENTS + _FX_COMPONENTS

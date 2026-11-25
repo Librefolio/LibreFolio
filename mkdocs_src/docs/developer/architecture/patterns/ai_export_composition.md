@@ -142,13 +142,13 @@ Semantic Composition V2 adds backend-owned projection components:
 
 **Daily return volatility, one definition (78 L6).** The market rows of the Portfolio and Broker overviews
 (`portfolio.asset_market_context`, `broker.asset_market_context`, v2) carry each asset's `daily_return_volatility_ratio`,
-and so does the FX summary (`fx.market_summary`, v2). Every row computes it the same way, in `technical_context.py`
-(`_daily_return_volatility`): the simple returns between consecutive observed values of the period
+and so does the FX summary (`fx.market_summary`, v2). Every row computes it the same way, in `technical_shared.py`
+(`daily_return_volatility`): the simple returns between consecutive observed values of the period
 (`financial_math.returns.price_return`; no carried-forward day), and their sample standard deviation
 (`risk.metrics.sample_standard_deviation`, ddof = 1, the Risk engine's). It is a daily figure, `None` under two
 returns; it gives a volatility to a close-only asset, which NATR (it needs highs and lows) cannot. Until v1 the FX
-summary used a population deviation; two other AI Export statistics still do (`fx_timing_context.py`,
-`asset_fx_technical.py`) and wait for the consolidation lot.
+summary and `fx.timing_context` (v2, 78 L6 S2b: the same pair and period now give one figure) used a population
+deviation; the per-bucket one of `fx.returns_volatility` still does.
 
 **Cash per broker (78 L6).** `portfolio.allocations_cash` (v3) lists `cash_by_broker`: each broker's cash in the
 report currency and its native balances, taken from the report's own `summary.by_broker` (the Dashboard's broker cards),

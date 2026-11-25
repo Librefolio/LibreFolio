@@ -46,7 +46,6 @@ from collections.abc import Mapping, Sequence
 from datetime import date, timedelta
 from decimal import Decimal
 from enum import StrEnum
-from statistics import pstdev
 from typing import Self
 
 from pydantic import Field, field_validator, model_validator
@@ -56,7 +55,7 @@ from backend.app.services.ai_export.components.envelope import SectionEnvelope
 from backend.app.services.ai_export.components.fx_payloads import FxConversionProvenancePayload, FxCurrentRatePayload, validate_finite_positive_decimal
 from backend.app.services.ai_export.components.resources import FxRateSeriesResource
 from backend.app.services.ai_export.components.spec import ComponentSpec
-from backend.app.services.ai_export.components.technical_shared import load_fx_rate_series
+from backend.app.services.ai_export.components.technical_shared import daily_return_volatility, load_fx_rate_series
 from backend.app.services.ai_export.components.types import BuildScope, Domain, PeriodBehavior, normalize_currency_code
 from backend.app.services.ai_export.dependencies import BuildContext, BuildContextScopeError
 from backend.app.services.financial_math.returns import price_return
@@ -177,9 +176,9 @@ class FxObservedReturns(StrictModel):
     """Trailing observed returns and realized dispersion (never a forecast).
 
     Every value is ``None`` when insufficient genuine observations exist to
-    compute it honestly. ``daily_return_volatility_ratio`` is the population
-    standard deviation of consecutive genuine daily returns - a purely
-    historical dispersion figure, never scaled into a predictive band.
+    compute it honestly. ``daily_return_volatility_ratio`` is the sample
+    standard deviation (ddof = 1) of consecutive genuine daily returns, the figure
+    `fx.market_summary` gives for the same period - a purely historical dispersion figure, never scaled into a predictive band.
     """
 
     return_30d_ratio: float | None = None
@@ -330,13 +329,6 @@ def _period_return(points: Sequence[tuple[date, Decimal]]) -> float | None:
     return float(change) if change is not None else None
 
 
-def _daily_return_volatility(points: Sequence[tuple[date, Decimal]]) -> float | None:
-    returns = [float(change) for previous, current in zip(points, points[1:], strict=False) if (change := price_return(previous[1], current[1])) is not None]
-    if len(returns) < 2:
-        return None
-    return pstdev(returns)
-
-
 def _build_observed_range(points: Sequence[tuple[date, Decimal]], *, current_rate: Decimal) -> FxObservedRangePosition:
     if not points:
         return FxObservedRangePosition(range_position_unavailable_reason=REASON_NO_OBSERVED_RATES)
@@ -426,7 +418,7 @@ async def _build_fx_timing_context(context: BuildContext, dependencies: Mapping[
         return_30d_ratio=_trailing_return(points, as_of=scope.snapshot_as_of, days=_RETURN_30D_DAYS),
         return_91d_ratio=_trailing_return(points, as_of=scope.snapshot_as_of, days=_RETURN_91D_DAYS),
         return_period_ratio=_period_return(points),
-        daily_return_volatility_ratio=_daily_return_volatility(points),
+        daily_return_volatility_ratio=daily_return_volatility(points),
     )
     source_history = _build_source_history(series, scope=scope)
 
@@ -465,7 +457,7 @@ async def _build_fx_timing_context(context: BuildContext, dependencies: Mapping[
 
 FX_TIMING_CONTEXT_SPEC = ComponentSpec(
     component_id="fx.timing_context",
-    version=1,
+    version=2,
     domains=frozenset({Domain.FX}),
     output_model=FxTimingContextPayload,
     builder=_build_fx_timing_context,

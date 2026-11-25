@@ -1693,6 +1693,8 @@ const COMPACT_COMPONENT_VERSIONS: ReadonlyMap<string, ReadonlySet<number>> = new
     ['fx.market_summary', new Set([1, 2])],
     // 78 L6 S2: the asset's position row declares only what it reports (no PPO, ROC or weight) and gains the volatility
     ['asset.position_market_context', new Set([1, 2])],
+    // 78 L6 S2b: the timing context's volatility on the same definition as the FX summary's (sample)
+    ['fx.timing_context', new Set([1, 2])],
     ['broker.concentration_context', new Set([1, 2])],
     // 78 L10b: the comparison's base is the user's owned brokers, whole; a broker not owned is unavailable.
     ['broker.concentration_comparison', new Set([1, 2, 3])],

@@ -25,6 +25,7 @@ from backend.app.services.ai_export.components.technical_shared import (
     TechnicalUniverseBundle,
     classify_reference_level_state,
     coherent_price_currency,
+    daily_return_volatility,
     load_asset_price_results,
     load_fx_technical_bundle,
     load_technical_universe_bundle,
@@ -33,8 +34,6 @@ from backend.app.services.ai_export.components.technical_shared import (
 from backend.app.services.ai_export.components.types import DetailLevel, Domain, PeriodBehavior
 from backend.app.services.ai_export.dependencies import BuildContext
 from backend.app.services.ai_export.temporal import ObservedPoint, uniform_observed_buckets
-from backend.app.services.financial_math.returns import price_return
-from backend.app.services.risk.metrics import sample_standard_deviation
 from backend.app.services.signals.registry import SignalPluginRegistry
 
 _ASSET_CONTEXT_EVENT_KEYS = frozenset(
@@ -409,17 +408,6 @@ def _observed_fx_rates(series: FxRateSeriesResource, *, start: date, end: date) 
 
 def _observed_fx_points(series: FxRateSeriesResource, *, start: date, end: date) -> tuple[tuple[date, float], ...]:
     return tuple((day, float(rate)) for day, rate in _observed_fx_rates(series, start=start, end=end))
-
-
-def _daily_return_volatility(observed: Sequence[tuple[date, Decimal]]) -> float | None:
-    """The sample volatility (ddof = 1) of the simple returns between consecutive observed values; None under two returns.
-
-    One definition for every row that writes `daily_return_volatility_ratio` (78 L6 S1): the return from
-    `financial_math.returns.price_return`, the deviation from `risk.metrics.sample_standard_deviation`, the Risk engine's own.
-    A zero value gives no return and is skipped. Observations are quote days: the standard count.
-    """
-    returns = [float(change) for (_, previous), (_, current) in zip(observed, observed[1:], strict=False) if (change := price_return(previous, current)) is not None]
-    return sample_standard_deviation(returns) if len(returns) >= 2 else None
 
 
 def _value_on_or_before(points: Sequence[tuple[date, float]], target: date) -> tuple[date, float] | None:
@@ -815,7 +803,7 @@ async def _build_universe_market_context(context: BuildContext, *, universe_kwar
                 period_end=scope.period_end,
                 portfolio_weight_ratio=float(universe.weights.get(asset_id, Decimal(0))),
                 # 78 L6 S1: the volatility a close-only ETF had none of (NATR needs highs and lows)
-                daily_return_volatility_ratio=_daily_return_volatility(closes),
+                daily_return_volatility_ratio=daily_return_volatility(closes),
             )
         )
         history.extend(
@@ -928,7 +916,7 @@ async def _build_asset_position_context(context: BuildContext, dependencies: Map
         period_start=scope.period_start,
         period_end=scope.period_end,
         # 78 L6 S2: the row declared it and never got it; the one definition of S1
-        daily_return_volatility_ratio=_daily_return_volatility(closes),
+        daily_return_volatility_ratio=daily_return_volatility(closes),
     )
     return AssetPositionMarketContextPayload(
         policy_code="asset_position_context_v2",
@@ -982,7 +970,7 @@ async def _build_fx_market_summary(context: BuildContext, dependencies: Mapping[
         period_start=scope.period_start,
         period_end=scope.period_end,
         # 78 L6: the same definition as the portfolio and broker rows (sample volatility; until v1 a population one)
-        daily_return_volatility_ratio=_daily_return_volatility(rates),
+        daily_return_volatility_ratio=daily_return_volatility(rates),
     )
     return FxMarketContextPayload(
         policy_code="fx_market_context_v2",

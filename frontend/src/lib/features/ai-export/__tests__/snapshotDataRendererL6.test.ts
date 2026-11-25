@@ -83,6 +83,15 @@ function omittedColumns(content: string): string[] {
         .flatMap((line) => line.slice('omitted_null_columns='.length).split(','));
 }
 
+describe('78 L6 S2b: the timing context on the one volatility definition', () => {
+    it('fx.timing_context v2 prints the daily return volatility, not as YAML', () => {
+        const content = render('fx.timing_context', 2, {base_currency: 'EUR', quote_currency: 'USD', observed_returns: {daily_return_volatility_ratio: 0.0123}}, {kind: 'fx', base_currency: 'EUR', quote_currency: 'USD'});
+        expect(content).not.toContain(FALLBACK);
+        expect(content).toContain('daily_return_volatility_percent');
+        expect(content).toContain('1.23%');
+    });
+});
+
 describe('78 L6 S2: a column the component does not report is not «unavailable»', () => {
     it('the portfolio row names only a declared column that could not be computed', () => {
         // The payload as the backend writes it now: no key for a column the row does not declare; ema_200 declared, null
