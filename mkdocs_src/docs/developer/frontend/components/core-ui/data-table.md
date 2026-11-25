@@ -196,6 +196,7 @@ The source of truth is the `Props` interface of `lib/components/table/DataTable.
 | `pageSizeOptions` | `number[]` | `[10, 25, 50, 100, 0]` | Choices of the page-size menu; `0` means "all" (shown as ∞). |
 | `alwaysShowPagination` | `boolean` | `false` | Show the bar whenever there is at least one row. |
 | `opensPage` | `(row: T) => boolean` | — | Whether a row may start a page. With it, a row that returns `false` joins the page of the row before it (see [Pagination](#pagination)). |
+| `selectionData` | `readonly T[]` | `data` | The rows a selected id is read from. Pass it when a ticked row can be out of `data` and must still count and reach the bulk actions (a closed group's charges in the transaction workspace). |
 
 `enableColumnVisibility` is accepted but not read: column visibility is driven from outside, through
 `ColumnVisibilityToggle` and the [public methods](#public-methods).
