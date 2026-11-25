@@ -131,6 +131,20 @@ test.describe('Dashboard charts and view matrix', () => {
         await expect(chart.locator('[data-chart-ready]')).toHaveAttribute('data-chart-ready', 'true', {timeout: 15_000});
     });
 
+    for (const width of [768, 1440]) {
+        test(`The rows of the Net Worth card start on the line of the period P&L card's, at ${width} px`, async ({page}) => {
+            await page.setViewportSize({width, height: 900});
+            await page.goto('/dashboard');
+            await expect(page.getByTestId('dashboard-page')).toHaveAttribute('data-busy', 'false', {timeout: 30_000});
+            await expect(page.getByTestId('kpi-pnl-delta-day'), 'premise: both cards show a line under their figure').toBeVisible({timeout: 15_000});
+            await expect(page.getByTestId('kpi-total-pnl-delta')).toBeVisible();
+
+            const top = async (card: string) => (await page.getByTestId(card).getByTestId('kpi-rows').boundingBox())!.y;
+            const tops = {pnl: await top('kpi-period-pnl'), returns: await top('kpi-returns'), netWorth: await top('kpi-net-worth')};
+            expect(Math.abs(tops.netWorth - tops.pnl), JSON.stringify(tops)).toBeLessThanOrEqual(1);
+        });
+    }
+
     test('Allocation panel toggles now/history and cycles the dimension tabs', async ({page}) => {
         await page.goto('/dashboard'); // default "panoramica" (overview) tab
         await expect(page.getByTestId('dashboard-page')).toBeVisible({timeout: 15_000});
@@ -434,9 +448,7 @@ test.describe('Dashboard charts and view matrix', () => {
         // No second page: same route, the positions stay; the section is below, and the view moves to its start.
         expect(new URL(page.url()).pathname, 'the lot detail is a section of the page, not another page').toBe(pathBefore);
         await expect(page.getByTestId('positions-panel')).toBeVisible();
-        await expect
-            .poll(() => lots.evaluate((el) => Math.round(el.getBoundingClientRect().top)), {message: 'the view scrolls to the start of the lot detail', timeout: 10_000})
-            .toBeLessThanOrEqual(120);
+        await expect.poll(() => lots.evaluate((el) => Math.round(el.getBoundingClientRect().top)), {message: 'the view scrolls to the start of the lot detail', timeout: 10_000}).toBeLessThanOrEqual(120);
         expect(await lots.evaluate((el) => el.getBoundingClientRect().top), 'the start of the section is not scrolled past').toBeGreaterThanOrEqual(-2);
     });
 
