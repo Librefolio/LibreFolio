@@ -1,5 +1,5 @@
-"""The shared group ``coingecko``: one CoinGecko account, read by the price provider (project 76) and, later, by an
-enricher of the same source (lane 68). The key and the plan are set once, here, and the plugins that read the group
+"""The shared group ``coingecko``: one CoinGecko account, read by the price provider (project 76) and by the
+enricher of the same source (82 CG-B). The key and the plan are set once, here, and the plugins that read the group
 spend one account's credits: their calls are counted, and limited, on the group (``shares_credits``, project 76 U2).
 
 The API key is required: without it every plugin that reads the group is «to configure» (N1) and answers its calls
