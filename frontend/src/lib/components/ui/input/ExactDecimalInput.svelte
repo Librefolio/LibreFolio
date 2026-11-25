@@ -171,7 +171,11 @@
     }
 
     let parsedValue = $derived(normalizedParts(value));
-    let locallyInvalid = $derived(!parsedValue.valid || externalInvalid);
+    // P-18 (66 TL-1d): a field the user cannot change shows none of the errors this input finds itself — there is nothing
+    // to correct (a read-only form shows an import's 12-decimal quantity as it is). An error the caller states
+    // (`externalInvalid`) still shows, and `onvaliditychange` still reports the value's validity.
+    let editable = $derived(!disabled && !readOnly);
+    let locallyInvalid = $derived(externalInvalid || (editable && !parsedValue.valid));
     // C-97b: a fraction past the budget is flagged (``digitsValid``) and said under the field, the value kept as typed. No
     // maxlength: a browser cut a longer paste down to it in silence, into a number that looked valid. Its trailing zeros
     // are not counted (W-B64).
@@ -391,12 +395,12 @@
     style={inlineStyle || undefined}
     class={`w-full rounded-lg border border-lf-input bg-lf-field px-3 py-2 font-mono text-lf-primary placeholder:text-lf-placeholder outline-none transition-colors hover:border-lf-input-hover focus:border-lf-focus focus:ring-1 focus:ring-lf-focus aria-invalid:border-lf-danger read-only:cursor-default disabled:cursor-not-allowed disabled:opacity-60 ${className}`}
 />
-{#if fractionOverflow}
+{#if fractionOverflow && editable}
     <p class="mt-1 text-xs text-lf-danger" data-testid={testid ? `${testid}-digits-error` : undefined} data-max={maxFractionDigits}>
         {$_('common.decimalPlacesExceeded', {values: {max: maxFractionDigits}})}
     </p>
 {/if}
-{#if exponentRefused}
+{#if exponentRefused && editable}
     <p class="mt-1 text-xs text-lf-danger" data-testid={testid ? `${testid}-exponent-error` : undefined} data-max={MAX_DECIMAL_EXPONENT}>
         {$_('common.decimalExponentOutOfRange', {values: {max: MAX_DECIMAL_EXPONENT}})}
     </p>

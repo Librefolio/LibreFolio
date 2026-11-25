@@ -1016,3 +1016,38 @@ describe('ExactDecimalInput — the digit budget counts no zero the backend drop
         expect(Object.keys(lastValidity(onvaliditychange) ?? {}).sort()).toEqual([...VALIDITY_FIELDS].sort());
     });
 });
+
+describe('ExactDecimalInput — a field the user cannot change shows none of its own errors (66 TL-1d, P-18)', () => {
+    // A read-only form shows an imported 12-decimal quantity as it is: there is nothing to correct, so no danger state and
+    // no message. What the caller states (`externalInvalid`) still shows, and the validity is still reported.
+    const OVER_BUDGET = '0.1234567'; // 7 decimals past maxFractionDigits=6
+
+    it.each([
+        ['disabled', {disabled: true}],
+        ['readonly', {readonly: true}],
+    ])('%s with a value past the decimal budget: shown whole, no aria-invalid, no digits error', async (_label, props) => {
+        const {input} = setup({maxFractionDigits: 6, value: OVER_BUDGET, ...props});
+        await waitFor(() => expect(input).toHaveValue(OVER_BUDGET));
+        expect(input).not.toHaveAttribute('aria-invalid', 'true');
+        expect(screen.queryByTestId(`${TID}-digits-error`)).toBeNull();
+    });
+
+    it('disabled still reports the value as invalid through onvaliditychange', async () => {
+        const {onvaliditychange} = setup({maxFractionDigits: 6, value: OVER_BUDGET, disabled: true});
+        await waitFor(() => expect(onvaliditychange).toHaveBeenCalled());
+        expect(onvaliditychange.mock.calls.at(-1)?.[0]).toMatchObject({digitsValid: false, valid: false});
+    });
+
+    it('disabled with externalInvalid from the caller: aria-invalid stays "true"', async () => {
+        const {input} = setup({value: '1.25', disabled: true, externalInvalid: true});
+        await waitFor(() => expect(input).toHaveValue('1.25'));
+        expect(input).toHaveAttribute('aria-invalid', 'true');
+    });
+
+    it('guard: enabled with a value past the decimal budget: aria-invalid and the digits error', async () => {
+        const {input} = setup({maxFractionDigits: 6, value: OVER_BUDGET});
+        await waitFor(() => expect(input).toHaveValue(OVER_BUDGET));
+        expect(input).toHaveAttribute('aria-invalid', 'true');
+        expect(screen.getByTestId(`${TID}-digits-error`)).toHaveAttribute('data-max', '6');
+    });
+});
