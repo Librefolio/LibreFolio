@@ -18,7 +18,8 @@
  *   }
  *
  * data-testid: `tx-charges-modal` (the dialog), `tx-charges-modal-table` (wraps the DataTable), `tx-charges-modal-cancel`,
- * `tx-charges-modal-confirm` (link only), `tx-charges-modal-keep` and `tx-charges-modal-all` (deleteParent only).
+ * `tx-charges-modal-confirm` (link and unlink), `tx-charges-modal-keep` and `tx-charges-modal-all` (deleteParent only).
+ * Mode `unlink` (66 TL-9: `parents` empty, the charges alone, a field row `parent`) has a block of its own.
  *
  * The table: a DataTable with one COLUMN per transaction, header `TX #<id>`, column ids positional (`c0`, `c1`, …, read
  * from DataTable's own `dt-header-<column id>` testids), parent first then its charges; selection and row actions off.
@@ -410,6 +411,135 @@ describe('TxChargesActionModal — deleteParent with new charges (66 F7-c2)', ()
     });
 });
 
+// ─── unlink mode (66 TL-9) ───────────────────────────────────────────────────────────────────────────────────────
+
+/*
+ * «Unlink the charges» from a table's selection bar: the panel gets the charges alone (`parents` is empty: a parent may
+ * not be in the page's list, and it is not read from the server). One column per charge, and a field row `parent` — in
+ * this mode only — naming each charge's own parent by its `#id`, taken from the charge itself.
+ *
+ * `mode: 'unlink'` is cast in `mountUnlink`: the component's union does not hold it until the mode exists.
+ */
+describe('TxChargesActionModal — unlink mode (66 TL-9)', () => {
+    function mountUnlink(over: Partial<Props> = {}) {
+        return mount({mode: 'unlink' as never, parents: [], charges: [structuredClone(TAX), structuredClone(FEE)], ...over});
+    }
+
+    /** The cell of field row `field` in the transaction column `columnId`, or null when the row is not drawn. */
+    function cell(field: string, columnId: string): HTMLElement | null {
+        return screen.getByTestId('tx-charges-modal-table').querySelector<HTMLElement>(`tbody tr[data-row-id="${field}"] td[data-column-id="${columnId}"]`);
+    }
+
+    /** The field rows drawn; ends with the five of every mode on screen (the barrier of an absence). */
+    async function fieldRows(): Promise<string[]> {
+        await headers();
+        const rows = Array.from(screen.getByTestId('tx-charges-modal-table').querySelectorAll<HTMLElement>('tbody tr[data-row-id]')).map((tr) => tr.getAttribute('data-row-id') ?? '');
+        expect(rows, 'premise: the five fields of every mode are drawn').toEqual(expect.arrayContaining(['date', 'type', 'cash', 'quantity', 'broker']));
+        return rows;
+    }
+
+    it('publishes data-mode="unlink"', async () => {
+        mountUnlink();
+        const dlg = await dialog();
+        expect(within(dlg).getByTestId('tx-charges-modal-content')).toHaveAttribute('data-mode', 'unlink');
+    });
+
+    it('one column per charge and no other transaction, in order, each header naming #<id>; column ids positional', async () => {
+        mountUnlink();
+        await dialog();
+        const {ids, columnIds} = await txColumns();
+        expect(ids).toEqual([TAX.id, FEE.id]);
+        expect(columnIds).toEqual(['c0', 'c1']);
+    });
+
+    it('the row «parent» names each charge’s own parent by its #id, read from the charge (two parents, none listed)', async () => {
+        mountUnlink({charges: [structuredClone(SELL_TAX), structuredClone(FEE)]});
+        await dialog();
+        expect(await fieldRows(), 'the field row «parent» is drawn in this mode').toContain('parent');
+        expect(cell('parent', 'c0')?.textContent ?? '', 'the SELL’s TAX').toMatch(new RegExp(`#${SELL.id}\\b`));
+        expect(cell('parent', 'c1')?.textContent ?? '', 'the BUY’s FEE').toMatch(new RegExp(`#${BUY.id}\\b`));
+    });
+
+    it('the row «parent» is a row of its own: the other five fields keep their cells, so the charge’s date is still there', async () => {
+        mountUnlink();
+        await dialog();
+        const rows = await fieldRows();
+        expect(rows).toHaveLength(6);
+        expect((cell('date', 'c0')?.textContent ?? '').trim()).toBe(TAX.date);
+    });
+
+    it('link mode has no row «parent»', async () => {
+        mount();
+        await dialog();
+        expect(await fieldRows()).not.toContain('parent');
+    });
+
+    it('deleteParent mode has no row «parent», although its charges have one', async () => {
+        mount({mode: 'deleteParent', parents: [structuredClone(BUY)], charges: [structuredClone(FEE), structuredClone(TAX)]});
+        await dialog();
+        expect(await fieldRows()).not.toContain('parent');
+    });
+
+    it('the outcome names the count of the charges: 2', async () => {
+        mountUnlink();
+        const dlg = await dialog();
+        const target = within(dlg).getByTestId('tx-charges-modal-target');
+        expect(holdsNumber(target.textContent, 2), `the target names 2, got: ${target.textContent}`).toBe(true);
+    });
+
+    it('the outcome names the count of the charges: 1', async () => {
+        mountUnlink({charges: [structuredClone(TAX)]});
+        const dlg = await dialog();
+        const target = within(dlg).getByTestId('tx-charges-modal-target');
+        expect(holdsNumber(target.textContent, 1), `the target names 1, got: ${target.textContent}`).toBe(true);
+    });
+
+    it('has cancel and confirm, and no keep / all', async () => {
+        mountUnlink();
+        const dlg = await dialog();
+        expect(within(dlg).getByTestId('tx-charges-modal-cancel')).toBeVisible();
+        expect(within(dlg).getByTestId('tx-charges-modal-confirm')).toBeVisible();
+        expect(within(dlg).queryByTestId('tx-charges-modal-keep')).toBeNull();
+        expect(within(dlg).queryByTestId('tx-charges-modal-all')).toBeNull();
+    });
+
+    it('confirm calls onConfirm once, and neither onChoose nor onCancel', async () => {
+        mountUnlink();
+        const dlg = await dialog();
+        const confirm = within(dlg).getByTestId('tx-charges-modal-confirm');
+        expect(confirm).toBeEnabled();
+        await fireEvent.click(confirm);
+        expect(onConfirm).toHaveBeenCalledTimes(1);
+        expect(onChoose).not.toHaveBeenCalled();
+        expect(onCancel).not.toHaveBeenCalled();
+    });
+
+    it('cancel calls onCancel, not onConfirm', async () => {
+        mountUnlink();
+        const dlg = await dialog();
+        await fireEvent.click(within(dlg).getByTestId('tx-charges-modal-cancel'));
+        expect(onCancel).toHaveBeenCalledTimes(1);
+        expect(onConfirm).not.toHaveBeenCalled();
+    });
+
+    it('while loading, confirm is disabled and a click does not confirm', async () => {
+        mountUnlink({loading: true});
+        const dlg = await dialog();
+        const confirm = within(dlg).getByTestId('tx-charges-modal-confirm');
+        expect(confirm).toBeDisabled();
+        await fireEvent.click(confirm);
+        expect(onConfirm).not.toHaveBeenCalled();
+    });
+
+    it('closed: nothing is drawn', async () => {
+        const {rerender} = mountUnlink();
+        // Presence barrier: the same panel, open, is drawn.
+        await dialog();
+        await rerender({open: false});
+        await waitFor(() => expect(screen.queryByTestId('tx-charges-modal-content')).toBeNull());
+    });
+});
+
 // ─── storage ─────────────────────────────────────────────────────────────────────────────────────────────────────
 
 describe('TxChargesActionModal — nothing tied to a transaction id reaches localStorage', () => {
@@ -466,6 +596,16 @@ describe('TxChargesActionModal — nothing tied to a transaction id reaches loca
     it('link mode: mount, click every header and the buttons', async () => {
         expect(globalThis.localStorage, 'precondition: the recording storage is the one the component sees').toBe(stub);
         mount();
+        const dlg = await dialog();
+        for (const th of await headers()) await fireEvent.click(th);
+        await fireEvent.click(within(dlg).getByTestId('tx-charges-modal-confirm'));
+        await fireEvent.click(within(dlg).getByTestId('tx-charges-modal-cancel'));
+        expectNoTxId();
+    });
+
+    it('unlink mode: mount, click every header and the buttons', async () => {
+        expect(globalThis.localStorage, 'precondition: the recording storage is the one the component sees').toBe(stub);
+        mount({mode: 'unlink' as never, parents: [], charges: [structuredClone(TAX), structuredClone(SELL_TAX)]});
         const dlg = await dialog();
         for (const th of await headers()) await fireEvent.click(th);
         await fireEvent.click(within(dlg).getByTestId('tx-charges-modal-confirm'));
