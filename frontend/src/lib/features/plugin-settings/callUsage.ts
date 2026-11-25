@@ -200,23 +200,25 @@ export function callTone(box: CallBox): Tone {
 
 /** A window's box, by the width of its «Calls» block (the developer, 19/11, project 76 S1c; container queries, the block
  * is the `@container`): narrow (a phone), the window, the count and the limit on one line; from 24rem, the count on the
- * window's line and the limit below it. */
+ * window's line and the limit below it. A flex row that WRAPS, not a grid (81 U47): the label never shrinks and is never
+ * broken, the count never breaks, and when the two do not fit a box's width (the member's «0 nessun limite» in a
+ * five-box row, an Italian «Settimana») the count goes to the next line, on the right, instead of over the label. */
 export const CALL_BOX_CLASSES: Record<Tone, string> = {
-    plain: 'grid min-w-0 grid-cols-[4.5rem_minmax(0,1fr)_8.5rem] items-center gap-2 rounded-md border border-lf-subtle px-2 py-1.5 @sm:grid-cols-[minmax(0,1fr)_auto] @sm:items-baseline @sm:gap-x-1.5 @sm:gap-y-1 @sm:py-2',
-    warning: 'grid min-w-0 grid-cols-[4.5rem_minmax(0,1fr)_8.5rem] items-center gap-2 rounded-md border border-lf-warning-line bg-lf-warning-soft px-2 py-1.5 @sm:grid-cols-[minmax(0,1fr)_auto] @sm:items-baseline @sm:gap-x-1.5 @sm:gap-y-1 @sm:py-2',
-    danger: 'grid min-w-0 grid-cols-[4.5rem_minmax(0,1fr)_8.5rem] items-center gap-2 rounded-md border border-lf-danger-line bg-lf-danger-soft px-2 py-1.5 @sm:grid-cols-[minmax(0,1fr)_auto] @sm:items-baseline @sm:gap-x-1.5 @sm:gap-y-1 @sm:py-2',
+    plain: 'flex min-w-0 flex-wrap items-baseline gap-x-1.5 gap-y-1 rounded-md border border-lf-subtle px-2 py-1.5 @sm:py-2',
+    warning: 'flex min-w-0 flex-wrap items-baseline gap-x-1.5 gap-y-1 rounded-md border border-lf-warning-line bg-lf-warning-soft px-2 py-1.5 @sm:py-2',
+    danger: 'flex min-w-0 flex-wrap items-baseline gap-x-1.5 gap-y-1 rounded-md border border-lf-danger-line bg-lf-danger-soft px-2 py-1.5 @sm:py-2',
 };
 
 export const CALL_LABEL_CLASSES: Record<Tone, string> = {
-    plain: 'text-xs text-lf-muted',
-    warning: 'text-xs text-lf-warning-on-soft',
-    danger: 'text-xs text-lf-danger-on-soft',
+    plain: 'shrink-0 whitespace-nowrap text-xs text-lf-muted',
+    warning: 'shrink-0 whitespace-nowrap text-xs text-lf-warning-on-soft',
+    danger: 'shrink-0 whitespace-nowrap text-xs text-lf-danger-on-soft',
 };
 
 export const CALL_COUNT_CLASSES: Record<Tone, string> = {
-    plain: 'text-sm font-semibold tabular-nums text-lf-primary @sm:text-right',
-    warning: 'text-sm font-semibold tabular-nums text-lf-warning-on-soft @sm:text-right',
-    danger: 'text-sm font-semibold tabular-nums text-lf-danger-on-soft @sm:text-right',
+    plain: 'whitespace-nowrap text-sm font-semibold tabular-nums text-lf-primary @sm:ml-auto @sm:text-right',
+    warning: 'whitespace-nowrap text-sm font-semibold tabular-nums text-lf-warning-on-soft @sm:ml-auto @sm:text-right',
+    danger: 'whitespace-nowrap text-sm font-semibold tabular-nums text-lf-danger-on-soft @sm:ml-auto @sm:text-right',
 };
 
 export const CALL_SMALL_CLASSES: Record<Tone, string> = {
@@ -227,12 +229,13 @@ export const CALL_SMALL_CLASSES: Record<Tone, string> = {
 
 /** The value a server variable sets, drawn like a field nobody can type in. */
 export const CALL_LOCKED_CLASSES: Record<Tone, string> = {
-    plain: 'flex min-h-7 items-center gap-1 rounded-md border border-lf-subtle bg-lf-panel px-2 py-1 text-xs tabular-nums text-lf-secondary',
-    warning: 'flex min-h-7 items-center gap-1 rounded-md border border-lf-warning-line bg-lf-card px-2 py-1 text-xs tabular-nums text-lf-warning-on-soft',
-    danger: 'flex min-h-7 items-center gap-1 rounded-md border border-lf-danger-line bg-lf-card px-2 py-1 text-xs tabular-nums text-lf-danger-on-soft',
+    plain: 'flex min-h-7 min-w-[8.5rem] flex-1 items-center gap-1 rounded-md border border-lf-subtle bg-lf-panel px-2 py-1 text-xs tabular-nums text-lf-secondary',
+    warning: 'flex min-h-7 min-w-[8.5rem] flex-1 items-center gap-1 rounded-md border border-lf-warning-line bg-lf-card px-2 py-1 text-xs tabular-nums text-lf-warning-on-soft',
+    danger: 'flex min-h-7 min-w-[8.5rem] flex-1 items-center gap-1 rounded-md border border-lf-danger-line bg-lf-card px-2 py-1 text-xs tabular-nums text-lf-danger-on-soft',
 };
 
 /** A limit's input: the card's input roles (`INPUT_CLASS`), compact and without the number spinner, so «No limit» and a
- * seven-digit limit fit a box of the five-column row. The third column on a narrow block, the whole line below otherwise. */
+ * seven-digit limit fit a box of the five-column row. Beside the label and the count on a narrow block (one box per line), the
+ * whole line below them otherwise. */
 export const CALL_INPUT_CLASS =
-    'col-span-1 w-full min-w-0 rounded-md border border-lf-input bg-lf-field px-2 py-1 text-xs tabular-nums text-lf-primary placeholder:text-lf-placeholder [appearance:textfield] hover:border-lf-input-hover focus:outline-none focus:ring-2 focus:ring-lf-focus disabled:cursor-not-allowed disabled:opacity-50 @sm:col-span-2 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none';
+    'min-w-[8.5rem] flex-1 rounded-md border border-lf-input bg-lf-field px-2 py-1 text-xs tabular-nums text-lf-primary placeholder:text-lf-placeholder [appearance:textfield] hover:border-lf-input-hover focus:outline-none focus:ring-2 focus:ring-lf-focus disabled:cursor-not-allowed disabled:opacity-50 @sm:min-w-0 @sm:flex-none @sm:basis-full [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none';

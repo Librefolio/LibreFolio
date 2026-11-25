@@ -104,13 +104,13 @@
                         value={shownText(field, form)}
                     />
                     {#if problem}
-                        <p class="col-span-3 text-xs text-lf-danger @sm:col-span-2" data-code={problem.code} data-testid="plugin-setting-problem">{$_(PROBLEM_KEYS[problem.code], {values: {limit: problem.limit ?? ''}})}</p>
+                        <p class="basis-full text-xs text-lf-danger" data-code={problem.code} data-testid="plugin-setting-problem">{$_(PROBLEM_KEYS[problem.code], {values: {limit: problem.limit ?? ''}})}</p>
                     {/if}
                     {#if refusal}
-                        <p class="col-span-3 text-xs text-lf-danger @sm:col-span-2" data-code={refusal} data-testid="plugin-setting-refusal" role="alert">{$_(refusalKey(refusal))}</p>
+                        <p class="basis-full text-xs text-lf-danger" data-code={refusal} data-testid="plugin-setting-refusal" role="alert">{$_(refusalKey(refusal))}</p>
                     {/if}
                 {:else if box.control === 'locked'}
-                    <div class="col-span-1 @sm:col-span-2 {CALL_LOCKED_CLASSES[tone]}" data-testid="plugin-settings-calls-locked">
+                    <div class="@sm:min-w-0 @sm:flex-none @sm:basis-full {CALL_LOCKED_CLASSES[tone]}" data-testid="plugin-settings-calls-locked">
                         <Lock aria-hidden="true" class="h-3 w-3 shrink-0" />
                         {#if box.state === 'invalid'}
                             <span data-testid="plugin-settings-calls-invalid">{$_('pluginSettings.calls.invalid')}</span>
