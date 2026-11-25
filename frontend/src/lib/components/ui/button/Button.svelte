@@ -63,6 +63,8 @@
         dense?: boolean;
         /** In a line of text (the docs icon): a hair of padding, the line's text size; `size` picks only the icon. */
         inline?: boolean;
+        /** A dashed edge: the row that adds something or shows more (`secondary` and `chip` only). */
+        dashed?: boolean;
         /** A disclosure: `aria-expanded` and a ▾ that turns while open. Never with `menu`, which has its own. */
         expanded?: boolean;
         /** What stands before the word instead of an icon: a logo, a flag (hidden from the reader: `label` names it). */
@@ -122,6 +124,7 @@
         truncate = false,
         dense = false,
         inline = false,
+        dashed = false,
         expanded,
         leading,
         children,
@@ -171,7 +174,7 @@
     let richWord = $derived(!!children && !(busy && busyLabel));
     let hasWord = $derived(shown !== 'icon' && !(shown === 'auto' && compact));
     let iconOnly = $derived(shown === 'icon');
-    let classes = $derived(`${buttonClasses({variant, size, shape: iconOnly ? 'icon' : 'default', pressed, tone, tint, segment, pill, truncate, dense, inline})} ${className}`.trim());
+    let classes = $derived(`${buttonClasses({variant, size, shape: iconOnly ? 'icon' : 'default', pressed, tone, tint, segment, pill, truncate, dense, inline, dashed})} ${className}`.trim());
     let px = $derived(ICON_PX[size]);
     /** The accessible name: given whenever the word in view is not the label, or may be hidden. */
     let ariaLabel = $derived(richWord ? label : shown === 'text' || shown === 'icon-text' ? (word === label ? undefined : label) : label);

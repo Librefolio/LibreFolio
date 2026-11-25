@@ -57,6 +57,11 @@ export interface ButtonClassOptions {
      * size of its own — a word inherits the line's. `size` then chooses only the icon.
      */
     inline?: boolean;
+    /**
+     * A dashed edge (C14): the row that adds something or shows more («Add route», «Show 3 more»). Only on the variants
+     * that have an edge, `secondary` and `chip`; elsewhere it changes nothing. Dashed means «add», never «off».
+     */
+    dashed?: boolean;
 }
 
 const BASE = 'lf-btn relative inline-flex items-center justify-center font-medium whitespace-nowrap transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-busy:cursor-progress';
@@ -168,12 +173,14 @@ function colours({variant = 'secondary', pressed, tone, tint, segment}: ButtonCl
 
 /** The classes of a standard button. */
 export function buttonClasses(options: ButtonClassOptions = {}): string {
-    const {variant = 'secondary', size = 'md', shape = 'default', pressed, segment = false, pill = false, truncate = false, dense = false, inline = false} = options;
+    const {variant = 'secondary', size = 'md', shape = 'default', pressed, segment = false, pill = false, truncate = false, dense = false, inline = false, dashed = false} = options;
     const link = isLink(variant) && pressed === undefined && !segment;
     const box = inline ? INLINE_BOX : link ? LINK_SIZES[size] : shape === 'icon' ? ICON_SIZES[size] : SIZES[size];
     const radius = segment ? 'rounded-none' : pill ? 'rounded-full' : link || inline ? 'rounded' : 'rounded-lg';
     const focus = isBar(variant) ? FOCUS.bar : segment ? FOCUS.pageInset : FOCUS.page;
     const flex = truncate ? 'min-w-0' : 'shrink-0';
     const marks = [segment ? 'lf-btn-segment' : '', dense || inline ? 'lf-btn-dense' : ''].filter(Boolean).join(' ');
-    return [BASE, flex, focus, box, radius, colours(options), marks].filter(Boolean).join(' ');
+    const edged = !options.tint && !segment && pressed === undefined && (variant === 'secondary' || variant === 'chip');
+    const edge = dashed && edged ? 'border-dashed' : '';
+    return [BASE, flex, focus, box, radius, colours(options), edge, marks].filter(Boolean).join(' ');
 }

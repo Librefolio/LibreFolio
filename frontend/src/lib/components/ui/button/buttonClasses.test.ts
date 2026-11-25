@@ -44,7 +44,9 @@ const throwsWithoutTone = (o: ButtonClassOptions) => o.variant === 'chip' && !o.
 
 function* combinations(): Generator<ButtonClassOptions> {
     for (const variant of VARIANTS)
-        for (const size of SIZES) for (const shape of SHAPES) for (const pressed of PRESSED) for (const tone of [undefined, ...TONES]) for (const tint of [undefined, 'warning'] as const) for (const segment of [false, true]) yield {variant, size, shape, pressed, tone, tint, segment};
+        for (const size of SIZES)
+            for (const shape of SHAPES)
+                for (const pressed of PRESSED) for (const tone of [undefined, ...TONES]) for (const tint of [undefined, 'warning'] as const) for (const segment of [false, true]) for (const dashed of [false, true]) yield {variant, size, shape, pressed, tone, tint, segment, dashed};
 }
 
 /** Every rule a combination must keep; the broken ones, described, for a red that says which. */
@@ -218,6 +220,29 @@ describe('buttonClasses — segment, bar, shape options (C1, C2, C3, C7, C9)', (
         expect(tokens(buttonClasses({size: 'xs'}))).toContain('text-[11px]');
         expect(tokens(buttonClasses({size: 'xs', shape: 'icon'}))).toContain('p-1');
         expect(ICON_PX.xs).toBe(12);
+    });
+});
+
+describe('buttonClasses — dashed (C14): the edge of a row that adds or shows more', () => {
+    it('border-dashed only on secondary and chip, never with tint, segment or pressed', () => {
+        const failures: string[] = [];
+        for (const options of combinations()) {
+            if (throwsWithoutTone(options) || !options.dashed) continue;
+            const has = tokens(buttonClasses(options)).includes('border-dashed');
+            const wanted = (options.variant === 'secondary' || options.variant === 'chip') && !options.tint && !options.segment && options.pressed === undefined;
+            if (has !== wanted) failures.push(`${JSON.stringify(options)}: border-dashed ${has}, wanted ${wanted}`);
+        }
+        expect(failures.slice(0, 10), `${failures.length} combinations`).toEqual([]);
+    });
+
+    it('without dashed nothing is dashed; with it, secondary keeps its border and only changes its style', () => {
+        for (const variant of VARIANTS) {
+            const plain = buttonClasses({variant, tone: variant === 'chip' ? 'info' : undefined});
+            expect(tokens(plain), variant).not.toContain('border-dashed');
+        }
+        const dashed = tokens(buttonClasses({variant: 'secondary', dashed: true}));
+        expect(dashed).toEqual(expect.arrayContaining(['border', 'border-lf-input', 'border-dashed']));
+        expect(buttonClasses({variant: 'primary', dashed: true}), 'a variant with no edge: unchanged').toBe(buttonClasses({variant: 'primary'}));
     });
 });
 
