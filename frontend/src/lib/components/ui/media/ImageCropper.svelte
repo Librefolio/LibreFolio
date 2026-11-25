@@ -3,6 +3,8 @@
 
   Uses cropperjs v2 (Web Components) for full-featured crop functionality.
   Supports zoom, rotation (live preview), flip, aspect ratio selection, free crop with handles.
+  The controls are standard buttons (85 BTN-2b): `secondary` (a card fill, readable on the dark scrim), the flips toggles
+  (`pressed`), the name to the left (the overlay hugs the right edge).
 -->
 <script lang="ts">
     import {createEventDispatcher, onDestroy, onMount, tick} from 'svelte';
@@ -10,6 +12,7 @@
     // Note: cropperjs v2 uses Web Components, CSS is built-in
     import {_} from '$lib/i18n';
     import {FlipHorizontal, FlipVertical, RotateCcw, RotateCw, ZoomIn, ZoomOut} from 'lucide-svelte';
+    import Button from '$lib/components/ui/button/Button.svelte';
 
     // Props
     export let imageSrc: string;
@@ -764,30 +767,18 @@
         {#if showZoomSlider || showRotateControls}
             <div class="controls-overlay">
                 {#if showZoomSlider}
-                    <button type="button" class="overlay-btn" on:click={zoomOut} title={$_('uploads.zoomOut') || 'Zoom out'} data-testid="cropper-zoom-out">
-                        <ZoomOut size={16} />
-                    </button>
-                    <button type="button" class="overlay-btn" on:click={zoomIn} title={$_('uploads.zoomIn') || 'Zoom in'} data-testid="cropper-zoom-in">
-                        <ZoomIn size={16} />
-                    </button>
+                    <Button label={$_('uploads.zoomOut')} icon={ZoomOut} display="icon" variant="secondary" dense tipPosition="left" onclick={zoomOut} data-testid="cropper-zoom-out" />
+                    <Button label={$_('uploads.zoomIn')} icon={ZoomIn} display="icon" variant="secondary" dense tipPosition="left" onclick={zoomIn} data-testid="cropper-zoom-in" />
                 {/if}
 
                 {#if showRotateControls}
-                    <button type="button" class="overlay-btn" on:click={rotateLeft} title="-15°" data-testid="cropper-rotate-left">
-                        <RotateCcw size={16} />
-                    </button>
-                    <button type="button" class="overlay-btn" on:click={rotateRight} title="+15°" data-testid="cropper-rotate-right">
-                        <RotateCw size={16} />
-                    </button>
+                    <Button label={$_('uploads.rotateLeft')} icon={RotateCcw} display="icon" variant="secondary" dense tipPosition="left" onclick={rotateLeft} data-testid="cropper-rotate-left" />
+                    <Button label={$_('uploads.rotateRight')} icon={RotateCw} display="icon" variant="secondary" dense tipPosition="left" onclick={rotateRight} data-testid="cropper-rotate-right" />
 
                     <div class="overlay-separator"></div>
 
-                    <button type="button" class="overlay-btn" class:active={scaleX === -1} on:click={flipH} title={$_('uploads.flipHorizontal') || 'Flip H'} data-testid="cropper-flip-h">
-                        <FlipHorizontal size={16} />
-                    </button>
-                    <button type="button" class="overlay-btn" class:active={scaleY === -1} on:click={flipV} title={$_('uploads.flipVertical') || 'Flip V'} data-testid="cropper-flip-v">
-                        <FlipVertical size={16} />
-                    </button>
+                    <Button label={$_('uploads.flipHorizontal')} icon={FlipHorizontal} display="icon" variant="secondary" pressed={scaleX === -1} dense tipPosition="left" onclick={flipH} data-testid="cropper-flip-h" />
+                    <Button label={$_('uploads.flipVertical')} icon={FlipVertical} display="icon" variant="secondary" pressed={scaleY === -1} dense tipPosition="left" onclick={flipV} data-testid="cropper-flip-v" />
                 {/if}
             </div>
         {/if}
@@ -822,34 +813,6 @@
         background: var(--lf-surface-overlay);
         padding: 0.25rem;
         border-radius: 0.375rem;
-    }
-
-    .overlay-btn {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        width: 32px;
-        height: 32px;
-        border: none;
-        border-radius: 0.25rem;
-        background: color-mix(in oklab, var(--lf-surface-card) 90%, transparent);
-        color: var(--lf-text-secondary);
-        cursor: pointer;
-        transition: all 0.15s;
-    }
-
-    .overlay-btn:hover {
-        background: var(--lf-surface-card);
-        color: var(--lf-link);
-    }
-
-    .overlay-btn.active {
-        background: color-mix(in oklab, var(--lf-checked) 90%, transparent);
-        color: var(--lf-on-checked);
-    }
-
-    .overlay-btn.active:hover {
-        background: var(--lf-checked);
     }
 
     .overlay-separator {
