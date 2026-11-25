@@ -49,6 +49,13 @@
         wrapperClass?: string;
         /** Child owns native interaction semantics (for example, a button or link). */
         interactiveChild?: boolean;
+        /**
+         * The trigger is a part of a larger control — a badge or an icon inside a row button, an option (85 BTN-0c,
+         * D16): the click belongs to that control. The wrapper is a plain `<span>` that opens on a mouse rest only: no
+         * pin on click, no `stopPropagation`, no tab stop, no touch handling. Without it, a click on the part stopped
+         * at the wrapper and the control never acted (a route of `FxProviderSelect` was not added).
+         */
+        insideControl?: boolean;
         /** Delay before a plain-hover open (T2). Click/tap/keyboard always open
          *  instantly. Pass 0 to restore the pre-T2 instant hover. */
         showDelayMs?: number;
@@ -65,14 +72,38 @@
          *  row menu goes against the whole menu). Beside it, right then left, level with the trigger; with no room on
          *  either side, above it, else below it: never over it. Absent: the trigger, as always. */
         anchor?: HTMLElement | null;
+        /** External-target mode (85 BTN-0, the standard button): the element the tooltip belongs to, owned by someone
+         *  else. No wrapper is rendered and no gesture is read here: `open` decides, the owner (`pressable`) reads the
+         *  gestures and closes it. Drawing, placement, portal and scroll-following stay the ones of the wrapper mode. */
+        trigger?: HTMLElement | null;
+        /** External-target mode: whether the tooltip shows. */
+        open?: boolean;
+        /** External-target mode: the pointer entered or left the tooltip body (the owner keeps it open meanwhile). */
+        onbodypointer?: (inside: boolean) => void;
         children?: Snippet;
     }
 
-    let {text = '', html = '', math = false, position = 'top', maxWidth = '400px', wrapperClass = '', interactiveChild = false, showDelayMs = 500, testId = '', openOnFocus = false, showIf, anchor = null, children}: Props = $props();
+    let {text = '', html = '', math = false, position = 'top', maxWidth = '400px', wrapperClass = '', interactiveChild = false, insideControl = false, showDelayMs = 500, testId = '', openOnFocus = false, showIf, anchor = null, trigger, open = false, onbodypointer, children}: Props = $props();
 
     let visible = $state(false);
     let tooltipElement: HTMLDivElement | undefined = $state(undefined);
-    let triggerElement: HTMLDivElement | undefined = $state(undefined);
+    let triggerElement: HTMLElement | undefined = $state(undefined);
+    /** The tooltip of an element owned by someone else (`trigger` given): no wrapper, `open` decides. */
+    let external = $derived(trigger !== undefined);
+
+    $effect(() => {
+        if (!external) return;
+        triggerElement = trigger ?? undefined;
+        visible = open && !!trigger;
+    });
+
+    // External mode: the content or the side can change while open (a reason replaced, the finger's side): place again.
+    $effect(() => {
+        if (!external || !visible) return;
+        void renderedContent;
+        void position;
+        schedulePositionUpdate();
+    });
 
     // Fixed position coordinates (viewport-relative)
     let fixedTop = $state(0);
@@ -421,15 +452,22 @@
     // Keep fixed coordinates aligned while nested panels or the page scroll.
     $effect(() => {
         if (visible) {
-            document.addEventListener('click', handleClickOutside);
-            document.addEventListener('touchstart', handleTouchOutside);
+            // External mode: the owner dismisses it; only the placement is followed here. `data-dismissable` stays true:
+            // the owner (`pressable`) attaches its outside and Escape listeners in the same call that sets `open`.
+            const dismissable = !external;
+            if (dismissable) {
+                document.addEventListener('click', handleClickOutside);
+                document.addEventListener('touchstart', handleTouchOutside);
+            }
             document.addEventListener('scroll', schedulePositionUpdate, {capture: true, passive: true});
             window.addEventListener('resize', schedulePositionUpdate);
             listenersAttached = true;
             return () => {
                 listenersAttached = false;
-                document.removeEventListener('click', handleClickOutside);
-                document.removeEventListener('touchstart', handleTouchOutside);
+                if (dismissable) {
+                    document.removeEventListener('click', handleClickOutside);
+                    document.removeEventListener('touchstart', handleTouchOutside);
+                }
                 document.removeEventListener('scroll', schedulePositionUpdate, true);
                 window.removeEventListener('resize', schedulePositionUpdate);
                 if (pendingPositionFrame !== null) {
@@ -447,7 +485,17 @@
     }
 </script>
 
-{#if interactiveChild}
+{#if external}
+    <!-- External-target mode: the trigger lives elsewhere (pressable); nothing to wrap. -->
+{:else if insideControl}
+    <!-- A part of a larger control: hover names it, every other gesture is the control's. -->
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <span bind:this={triggerElement} class="tooltip-wrapper inside-control {wrapperClass}" data-testid={testId || undefined} onmouseenter={handlePointerEnter} onmouseleave={handlePointerLeave}>
+        {#if children}
+            {@render children()}
+        {/if}
+    </span>
+{:else if interactiveChild}
     <!-- svelte-ignore a11y_click_events_have_key_events -->
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div
@@ -503,12 +551,13 @@
     <div
         bind:this={tooltipElement}
         class="tooltip-fixed"
+        class:compact={external}
         style="max-width: min({maxWidth}, calc(100vw - 20px)); top: {fixedTop}px; left: {fixedLeft}px;"
         role="tooltip"
         data-testid="tooltip-content"
         data-dismissable={listenersAttached ? 'true' : 'false'}
-        onmouseenter={handlePointerEnter}
-        onmouseleave={handlePointerLeave}
+        onmouseenter={() => (external ? onbodypointer?.(true) : handlePointerEnter())}
+        onmouseleave={() => (external ? onbodypointer?.(false) : handlePointerLeave())}
     >
         {#if math || html}
             {@html sanitizeHtml(renderedContent)}
@@ -523,6 +572,11 @@
         position: relative;
         display: inline-flex;
         cursor: help;
+    }
+
+    /* The part of a control takes the control's cursor: a click on it is the control's. */
+    .tooltip-wrapper.inside-control {
+        cursor: inherit;
     }
 
     /* Fixed-position tooltip: rendered relative to viewport, never clipped by overflow */
@@ -559,6 +613,14 @@
             font-size: 0.875rem;
             line-height: 1.35rem;
         }
+    }
+
+    /* External mode (85, the name of a standard button): a name is a word or two, so the box fits it. The minimum
+       width above serves the long help texts of the information tooltips on a phone; on a button's name it drew a
+       288 px box around «Edit». Two classes win over the phone rule whatever the order. */
+    .tooltip-fixed.compact {
+        min-width: 0;
+        padding: 0.375rem 0.625rem;
     }
 
     /* The inverted surface (Q10): dark in the light theme, light in the dark theme — the role follows the theme by

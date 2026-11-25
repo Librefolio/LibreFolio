@@ -180,11 +180,9 @@ function head(collapsible: boolean): {leader: HTMLElement; row: HTMLElement} {
     return {leader, row};
 }
 
-/** The manual's control as the frame places it: DocsLink's root, one level above its button. */
+/** The manual's control as the frame places it: DocsLink's root, its button itself since 85 BTN-2a (no Tooltip wrapper). */
 function docsControl(): HTMLElement {
-    const control = screen.getByTestId(`${TEST_ID}-docs`).parentElement;
-    if (control === null) throw new Error('the manual icon has no parent: the frame is not mounted');
-    return control;
+    return screen.getByTestId(`${TEST_ID}-docs`);
 }
 
 /** Whether `first` comes before `second` in document order, `second` not inside it. */
@@ -195,11 +193,12 @@ function precedes(first: Node, second: Node): boolean {
 /**
  * The header as a shape: every element's tag and testid (short of the frame's prefix), nested,
  * and nothing else — no class, no text. Three leaves are opaque: the body (`div[body]`), which
- * is not header; the manual's control (`docs`), which is DocsLink's own and wraps its button in
- * its Tooltip; and the chevron (`svg`), which is lucide's.
+ * is not header; the manual's control (`docs`), which is DocsLink's own — its button, the standard
+ * Button since 85 BTN-2a (until then a Tooltip wrapped it: the leaf was one level higher, the
+ * shapes below are the same); and the chevron (`svg`), which is lucide's.
  */
 function headerShape(section: Element): string {
-    const docs = section.querySelector(`[data-testid="${TEST_ID}-docs"]`)?.parentElement ?? null;
+    const docs = section.querySelector(`[data-testid="${TEST_ID}-docs"]`);
     const walk = (node: Element): string => {
         if (node === docs) return 'docs';
         const tag = node.tagName.toLowerCase();
@@ -236,17 +235,18 @@ describe('RiskLevelSection — the actions slot: the harness itself', () => {
         expect(clicks, 'a click on the probe is not counted').toHaveBeenCalledTimes(1);
     });
 
-    it("DocsLink is one element around its button — the shape's `docs` leaf", () => {
+    it("DocsLink is its button, one root — the shape's `docs` leaf (85 BTN-2a: no Tooltip wrapper any more)", () => {
         const {container} = render(DocsLink, {props: {path: DOCS_PATH, icon: 'book', testId: 'probe-docs'}});
         expect(container.children, 'DocsLink no longer renders one root: the `docs` leaf of the shape starts elsewhere').toHaveLength(1);
-        expect(screen.getByTestId('probe-docs').parentElement, 'DocsLink no longer wraps its button in exactly one element').toBe(container.firstElementChild);
+        expect(container.firstElementChild, 'DocsLink is no longer its button: the `docs` leaf moved').toBe(screen.getByTestId('probe-docs'));
+        expect(screen.getByTestId('probe-docs').tagName).toBe('BUTTON');
     });
 
     it('the shape sees a wrapper: one more element around the manual icon changes it', () => {
         const section = mountFrame({docsPath: DOCS_PATH});
         // On a detached copy: the frame's own DOM stays Svelte's.
         const copy = section.cloneNode(true) as HTMLElement;
-        const control = copy.querySelector(`[data-testid="${TEST_ID}-docs"]`)?.parentElement;
+        const control = copy.querySelector(`[data-testid="${TEST_ID}-docs"]`);
         if (!control) throw new Error('the copy has no manual icon');
         const wrapper = document.createElement('div');
         control.before(wrapper);

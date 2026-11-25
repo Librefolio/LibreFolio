@@ -1,0 +1,212 @@
+<!--
+  The Button Lab (project 85, BTN-0): every case of the standard button, to try with a finger on a real phone (iPhone
+  and Android) before the areas migrate. Debug builds only (`routes/button-lab`). What happened is written in the log at
+  the top, so a long press that did nothing is told from a tap that acted.
+
+  Texts in English on purpose: a developer's bench, never shown to a user.
+-->
+<script lang="ts">
+    import {Download, LayoutGrid, List, LogOut, Pencil, Plus, RefreshCw, RotateCcw, Sparkles, Star, Trash2} from 'lucide-svelte';
+    import Button from '$lib/components/ui/button/Button.svelte';
+    import ButtonGroup from '$lib/components/ui/button/ButtonGroup.svelte';
+    import CloseButton from '$lib/components/ui/button/CloseButton.svelte';
+    import DataTable from '$lib/components/table/DataTable.svelte';
+    import type {ColumnDef, RowAction} from '$lib/components/table/types';
+    import {createResponsiveLayout} from '$lib/utils/layout/responsiveLayout.svelte';
+
+    interface LogEntry {
+        id: number;
+        event: string;
+        at: string;
+    }
+
+    let log = $state<LogEntry[]>([]);
+    let nextId = 0;
+
+    function note(event: string) {
+        log = [{id: nextId++, event, at: new Date().toLocaleTimeString()}, ...log].slice(0, 8);
+    }
+
+    let width = $state(360);
+    /** The page toolbar's own mechanism (PageToolbar): one ResizeObserver, the words hide under `labelHideActions`. The
+     *  Button takes the decision through `compact`; it measures nothing itself. Only that threshold matters here. */
+    const AUTO_LABEL_HIDE_PX = 360;
+    const autoLayout = createResponsiveLayout({oneRow: 0, denseRow: 0, stackFilters: 0, oneColumn: 0, labelHideActions: AUTO_LABEL_HIDE_PX, labelHideTabs: 0});
+    let autoBox = $state<HTMLDivElement | null>(null);
+    $effect(() => {
+        const el = autoBox;
+        if (!el) return;
+        autoLayout.attach(el);
+        return () => autoLayout.detach();
+    });
+    let busy = $state(false);
+    let starred = $state(false);
+    let view = $state<'grid' | 'list'>('grid');
+    let manualDuration = $state(false);
+    let detailsOpen = $state(false);
+    let selection = $state<string[]>([]);
+
+    function startBusy() {
+        note('action: save (busy 2 s)');
+        busy = true;
+        setTimeout(() => {
+            busy = false;
+            note('save finished');
+        }, 2000);
+    }
+
+    interface LabRow {
+        id: string;
+        name: string;
+    }
+
+    const rows: LabRow[] = [
+        {id: 'r1', name: 'First row'},
+        {id: 'r2', name: 'Second row'},
+        {id: 'r3', name: 'Third row'},
+    ];
+
+    const columns: ColumnDef<LabRow>[] = [
+        {id: 'name', header: 'Name', type: 'text', cell: (row) => row.name},
+        {
+            id: 'open',
+            header: 'Open',
+            type: 'custom',
+            cell: (row) => ({
+                type: 'custom',
+                component: Button,
+                props: {label: `Open ${row.name}`, icon: Download, display: 'icon', size: 'sm', variant: 'ghost', onclick: () => note(`action: open ${row.id}`), 'data-testid': `lab-row-open-${row.id}`},
+            }),
+        },
+    ];
+
+    const rowActions: RowAction<LabRow>[] = [{id: 'menu-edit', icon: Pencil, label: 'Edit', onClick: (row) => note(`row menu: edit ${row.id}`)}];
+</script>
+
+<main class="min-h-screen bg-lf-page p-4 text-lf-primary" data-testid="button-lab">
+    <h1 class="mb-2 text-lg font-semibold">Button Lab</h1>
+    <p class="mb-3 text-sm text-lf-secondary">Tap = action. Long press (½ s) = the name, no action. Mouse rest = the name. Tab = the name.</p>
+
+    <section class="sticky top-0 z-10 mb-4 rounded-lg border border-lf-subtle bg-lf-card p-2 text-xs" aria-live="polite">
+        <div class="mb-1 flex items-center justify-between">
+            <strong>Log</strong>
+            <Button label="Clear the log" size="sm" variant="link" onclick={() => (log = [])} data-testid="lab-log-clear" />
+        </div>
+        <ol data-testid="lab-log">
+            {#each log as entry (entry.id)}
+                <li data-testid="lab-log-entry" data-event={entry.event}><span class="text-lf-muted">{entry.at}</span> {entry.event}</li>
+            {:else}
+                <li class="text-lf-muted">nothing yet</li>
+            {/each}
+        </ol>
+    </section>
+
+    <section class="mb-6">
+        <h2 class="mb-2 font-medium">Icons only: the name by long press</h2>
+        <div class="flex flex-wrap gap-2">
+            <Button label="Edit" icon={Pencil} display="icon" onclick={() => note('action: edit')} data-testid="lab-icon-edit" />
+            <Button label="Sync prices" icon={RefreshCw} display="icon" onclick={() => note('action: sync')} data-testid="lab-icon-sync" />
+            <Button label="Delete" icon={Trash2} display="icon" variant="danger" onclick={() => note('action: delete')} data-testid="lab-icon-delete" />
+            <CloseButton onclick={() => note('action: close')} data-testid="lab-close" />
+        </div>
+    </section>
+
+    <section class="mb-6">
+        <h2 class="mb-2 font-medium">Words that hide (the toolbar's showActionLabels, under {AUTO_LABEL_HIDE_PX}px)</h2>
+        <label class="mb-2 flex items-center gap-2 text-sm">
+            width <input type="range" min="240" max="900" bind:value={width} data-testid="lab-width" />
+            {width}px
+        </label>
+        <div bind:this={autoBox} class="rounded-lg border border-lf-subtle p-2" style="width: {width}px; max-width: 100%" data-testid="lab-auto-box" data-labels={autoLayout.showActionLabels ? 'shown' : 'hidden'}>
+            <div class="flex gap-2">
+                <Button label="Add goal" icon={Plus} display="auto" compact={!autoLayout.showActionLabels} variant="primary" onclick={() => note('action: add goal')} data-testid="lab-auto-add" />
+                <Button label="Suggest" icon={Sparkles} display="auto" compact={!autoLayout.showActionLabels} onclick={() => note('action: suggest')} data-testid="lab-auto-suggest" />
+                <Button label="Reset all" icon={RefreshCw} display="auto" compact={!autoLayout.showActionLabels} variant="danger" onclick={() => note('action: reset')} data-testid="lab-auto-reset" />
+            </div>
+        </div>
+        <p class="mt-3 mb-2 text-sm text-lf-muted">The other rule of today, a word hidden on a narrow screen (<code>hidden sm:inline</code>), is the same class: <code>hideWordBelow="sm"</code>.</p>
+        <Button label="Import" icon={Download} display="auto" hideWordBelow="sm" onclick={() => note('action: import')} data-testid="lab-auto-sm" />
+    </section>
+
+    <section class="mb-6">
+        <h2 class="mb-2 font-medium">States</h2>
+        <div class="flex flex-wrap gap-2">
+            <Button label="Delete selected" icon={Trash2} variant="danger" reason="Select at least one row first." reasonCode="no_selection" onclick={() => note('ERROR: a disabled action ran')} data-testid="lab-reason" />
+            <Button label="Disabled, no reason" disabled onclick={() => note('ERROR: a disabled action ran')} data-testid="lab-disabled" />
+            <Button label="Save" icon={Download} variant="primary" {busy} busyLabel="Saving…" onclick={startBusy} data-testid="lab-busy" />
+            <Button label="Favourite" icon={Star} pressed={starred} onclick={() => ((starred = !starred), note(`action: favourite ${starred ? 'on' : 'off'}`))} data-testid="lab-toggle" />
+            <Button label="Compare" help="Shows the two providers' prices side by side." onclick={() => note('action: compare')} data-testid="lab-help" />
+            <Button label="A link" href="#lab-anchor" variant="link" data-testid="lab-link" />
+        </div>
+    </section>
+
+    <section class="mb-6">
+        <h2 class="mb-2 font-medium">Inside a table row (long press on the row selects it; on the button, only the name)</h2>
+        <DataTable
+            data={rows}
+            {columns}
+            getRowId={(row) => row.id}
+            storageKey="button-lab"
+            enableSelection
+            enableTouchSelection
+            enableContextMenu
+            enableActions
+            {rowActions}
+            onSelectionChange={(ids) => {
+                selection = ids;
+                note(`selection: ${ids.join(', ') || 'none'}`);
+            }}
+        />
+        <p class="mt-1 text-xs text-lf-muted" data-testid="lab-selection">selected: {selection.join(', ') || 'none'}</p>
+    </section>
+
+    <section class="mb-6">
+        <h2 class="mb-2 font-medium">The shapes of BTN-2·0</h2>
+        <div class="flex flex-wrap items-center gap-2">
+            <Button label="Retry the partial sync" icon={RotateCcw} display="icon" variant="ghost" tone="warning" onclick={() => note('action: retry')} data-testid="lab-tone-ghost" />
+            <Button label="Fix the price" variant="chip" tone="info" size="xs" pill onclick={() => note('action: chip')} data-testid="lab-chip" />
+            <Button label="Manual duration" size="xs" tone="warning" pressed={manualDuration} onclick={() => (manualDuration = !manualDuration)} data-testid="lab-tone-pressed" />
+            <Button label="Details" size="sm" variant="ghost" expanded={detailsOpen} onclick={() => (detailsOpen = !detailsOpen)} data-testid="lab-expanded" />
+            <Button label="Italiano" size="sm" variant="ghost" onclick={() => note('action: language')} data-testid="lab-leading">
+                {#snippet leading()}<span class="emoji-flag text-base">🇮🇹</span>{/snippet}
+            </Button>
+            <Button label="EUR to USD" size="sm" onclick={() => note('action: pair')} data-testid="lab-children">
+                <span class="emoji-flag">🇪🇺</span> EUR → <span class="emoji-flag">🇺🇸</span> USD
+            </Button>
+        </div>
+        {#if detailsOpen}<p class="mt-2 text-xs text-lf-muted" data-testid="lab-details">The details a disclosure opens.</p>{/if}
+
+        <div class="mt-3 flex items-center gap-2">
+            <ButtonGroup label="View" data-testid="lab-group">
+                <Button label="Grid" icon={LayoutGrid} display="icon" pressed={view === 'grid'} onclick={() => (view = 'grid')} data-testid="lab-group-grid" />
+                <Button label="List" icon={List} display="icon" pressed={view === 'list'} onclick={() => (view = 'list')} data-testid="lab-group-list" />
+            </ButtonGroup>
+            <div class="relative w-48">
+                <input class="w-full rounded-lg border border-lf-input bg-lf-field py-1.5 pr-8 pl-2 text-sm text-lf-primary" value="2026-11-24" aria-label="Date" data-testid="lab-dense-field" />
+                <div class="absolute top-1/2 right-1 -translate-y-1/2">
+                    <Button label="Clear the date" icon={Trash2} display="icon" variant="ghost" size="xs" dense onclick={() => note('action: clear date')} data-testid="lab-dense" />
+                </div>
+            </div>
+        </div>
+
+        <div class="mt-3 w-40 rounded-lg border border-lf-subtle p-1" data-testid="lab-truncate-box">
+            <Button label="A very long asset name that never fits" size="sm" truncate class="w-full" onclick={() => note('action: long name')} data-testid="lab-truncate" />
+        </div>
+
+        <div class="mt-3 flex items-center gap-2 rounded-lg border border-lf-warning-line bg-lf-warning-soft p-2 text-sm text-lf-warning-on-soft" data-testid="lab-tint-banner">
+            <span class="flex-1">A banner on the warning fill.</span>
+            <CloseButton tint="warning" size="sm" onclick={() => note('action: close banner')} data-testid="lab-tint" />
+        </div>
+
+        <div class="mt-3 flex w-60 flex-col gap-2 rounded-lg bg-lf-bar p-2 text-lf-bar-text" data-testid="lab-bar">
+            <div class="flex items-center justify-between">
+                <Button label="Collapse" icon={LayoutGrid} display="icon" variant="bar-ghost" onclick={() => note('action: collapse')} data-testid="lab-bar-ghost" />
+                <CloseButton variant="bar-ghost" onclick={() => note('action: close bar')} data-testid="lab-bar-close" />
+            </div>
+            <Button label="Log out" icon={LogOut} variant="bar-solid" size="sm" class="w-full" onclick={() => note('action: log out')} data-testid="lab-bar-solid" />
+            <Button label="v1.4.0" variant="bar-link" size="xs" onclick={() => note('action: version')} data-testid="lab-bar-link" />
+        </div>
+    </section>
+
+    <p id="lab-anchor" class="text-xs text-lf-muted">The end.</p>
+</main>

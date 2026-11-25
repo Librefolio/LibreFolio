@@ -3,7 +3,8 @@
     import {isOutsideClick} from '$lib/utils/core/clickOutside';
     import {donationsVisible} from '$lib/features/support/donations.svelte';
     import {onMount} from 'svelte';
-    import {Book, Bug, ChevronDown, Coffee, Download, ExternalLink, HelpCircle, MessageCircle} from 'lucide-svelte';
+    import {Book, Bug, Coffee, Download, ExternalLink, HelpCircle, MessageCircle} from 'lucide-svelte';
+    import Button from '$lib/components/ui/button/Button.svelte';
 
     interface Props {
         onOpenChange?: (open: boolean) => void;
@@ -93,19 +94,9 @@
 </script>
 
 <div bind:this={menuRef} class="relative" data-menu-open={isOpen ? 'true' : 'false'} data-testid="help-menu">
-    <button
-        type="button"
-        class="flex items-center space-x-1 p-2 rounded-lg hover:bg-lf-hover transition-colors text-lf-secondary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lf-focus"
-        aria-haspopup="menu"
-        aria-expanded={isOpen}
-        aria-controls="help-menu-panel"
-        onclick={toggleMenu}
-        title={$_('help.helpAndSupport')}
-        data-testid="help-menu-button"
-    >
-        <HelpCircle size={20} />
-        <ChevronDown class="transition-transform {isOpen ? 'rotate-180' : ''}" size={14} />
-    </button>
+    <!-- The menu's trigger (85 BTN-2a): the standard icon button; `expanded` gives `aria-expanded` and the turning ▾, the
+         panel below stays this component's. Its name «Help and support» by long press, rest or Tab, no `title`. -->
+    <Button label={$_('help.helpAndSupport')} icon={HelpCircle} display="icon" variant="ghost-strong" size="lg" expanded={isOpen} aria-haspopup="menu" aria-controls="help-menu-panel" onclick={toggleMenu} data-testid="help-menu-button" />
 
     {#if isOpen}
         <div id="help-menu-panel" class="absolute right-0 mt-2 w-56 bg-lf-card rounded-lg shadow-lg shadow-lf-shadow border border-lf-raised py-1 z-50" role="menu" data-menu-open="true" data-testid="help-menu-panel">

@@ -1,0 +1,84 @@
+/*
+ * The standard button's rules that utility classes cannot say (project 85, BTN-0). Loaded by buttonClasses.ts, so
+ * every user of the recipe — Button.svelte, a button written as HTML, an <a> — gets them. Colours: roles only.
+ */
+
+/* A long press shows the button's name: never the browser's callout (iOS) or a text selection over it. */
+.lf-btn {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+}
+
+/* The finger's target is at least 40 px even when the drawing is smaller (WCAG 2.5.8 asks 24). */
+@media (pointer: coarse) {
+    .lf-btn::after {
+        content: '';
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: max(100%, 40px);
+        height: max(100%, 40px);
+        transform: translate(-50%, -50%);
+    }
+
+    /* Inside a field or beside a neighbour (`dense`, C9): 24 px, the floor of WCAG 2.5.8, never less. */
+    .lf-btn.lf-btn-dense::after {
+        width: max(100%, 24px);
+        height: max(100%, 24px);
+    }
+
+    /* A segment of a group (C2) grows in height only: two icon segments side by side never cover each other. */
+    .lf-btn.lf-btn-segment::after {
+        width: 100%;
+    }
+}
+
+/* The sign that a long press is coming: the focus outline grows in the 500 ms of the press (pressable adds the class
+   while a finger rests on the button). No vibration: iOS has none. */
+.lf-btn.lf-pressing {
+    outline: 0 solid var(--lf-focus);
+    outline-offset: 2px;
+    animation: lf-btn-press 500ms linear forwards;
+}
+
+/* The outline follows the button's focus (C1): the bar's colour on the green sidebar, inside the button for the bar
+   and for the segments of a group. */
+.lf-btn.lf-btn-bar.lf-pressing {
+    outline-color: var(--lf-bar-focus);
+}
+
+.lf-btn.lf-btn-inset.lf-pressing {
+    outline-offset: -2px;
+}
+
+@keyframes lf-btn-press {
+    to {
+        outline-width: 3px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .lf-btn.lf-pressing {
+        animation: none;
+        outline-width: 2px;
+    }
+}
+
+/* The busy icon turns in place: the button keeps its width. */
+.lf-btn .lf-btn-spin {
+    animation: lf-btn-spin 1s linear infinite;
+}
+
+@keyframes lf-btn-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .lf-btn .lf-btn-spin {
+        animation-duration: 3s;
+    }
+}

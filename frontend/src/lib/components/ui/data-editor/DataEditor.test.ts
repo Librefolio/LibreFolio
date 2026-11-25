@@ -1366,10 +1366,11 @@ describe('DataImportModal — the help and close buttons are named from the cata
         render(EventDataImportModal, {open: true, onclose});
         const buttons = within(await screen.findByTestId('data-import-modal-header')).getAllByRole('button');
         expect(buttons, 'premise: the header holds the help button and the close button').toHaveLength(2);
-        const help = buttons.find((button) => button.getAttribute('title') === marked('csvImport.helpTitle'));
-        if (!help) throw new Error(`control: no header button is titled ${marked('csvImport.helpTitle')}: the help button lost its title, or the marker locale is not live (titles: ${JSON.stringify(buttons.map((button) => button.getAttribute('title')))})`);
-        const close = buttons.find((button) => button !== help);
-        if (!close) throw new Error('premise: the header holds a second button besides the help button');
+        // BTN-2a: both are standard Buttons, found by test id; the name is the aria-label (no native title any more).
+        const help = screen.getByTestId('data-import-modal-help');
+        const close = screen.getByTestId('data-import-modal-close');
+        expect(buttons, 'premise: the two header buttons are the help and the close').toEqual(expect.arrayContaining([help, close]));
+        expect(help.hasAttribute('title'), 'one name, the standard tooltip: no native title').toBe(false);
         const said = {help: help.getAttribute('aria-label'), close: close.getAttribute('aria-label')};
 
         await fireEvent.click(close);

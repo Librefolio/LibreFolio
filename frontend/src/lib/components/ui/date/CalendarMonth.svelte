@@ -11,6 +11,7 @@
     import {CalendarCheck, ChevronLeft, ChevronRight} from 'lucide-svelte';
     import {_} from '$lib/i18n';
     import {SimpleSelect} from '$lib/components/ui/select';
+    import Button from '$lib/components/ui/button/Button.svelte';
 
     import {numericArrows} from '$lib/actions/numericArrows';
     // =========================================================================
@@ -214,9 +215,8 @@
 <div class="min-w-[240px] text-lf-primary" data-testid="calendar-month" data-year={year} data-month={month}>
     <!-- Month/Year navigation header -->
     <div class="flex items-center justify-between mb-2">
-        <button data-testid="calendar-prev-month" class="p-1 rounded hover:bg-lf-hover text-lf-muted" onclick={onPrevMonth} type="button">
-            <ChevronLeft size={16} />
-        </button>
+        <!-- The month's arrows had no name at all (85 BTN-2a): now «Previous month» / «Next month». -->
+        <Button label={$_('datePicker.previousMonth')} icon={ChevronLeft} display="icon" variant="ghost" size="sm" onclick={onPrevMonth} data-testid="calendar-prev-month" />
         <div class="flex items-center gap-1">
             <SimpleSelect class="inline-block w-auto" compact dropdownPosition="auto" onchange={(v) => onSetMonth(parseInt(v))} options={monthSelectOptions} showChevron={false} value={String(month)} />
             <input
@@ -234,13 +234,9 @@
         </div>
         <div class="flex items-center gap-0.5">
             {#if onGoToToday}
-                <button data-testid="calendar-go-today" type="button" class="p-1 rounded hover:bg-lf-hover text-lf-muted" title={$_('datePicker.today')} onclick={onGoToToday}>
-                    <CalendarCheck size={14} />
-                </button>
+                <Button label={$_('datePicker.today')} icon={CalendarCheck} display="icon" variant="ghost" size="sm" onclick={onGoToToday} data-testid="calendar-go-today" />
             {/if}
-            <button data-testid="calendar-next-month" class="p-1 rounded hover:bg-lf-hover text-lf-muted" onclick={onNextMonth} type="button">
-                <ChevronRight size={16} />
-            </button>
+            <Button label={$_('datePicker.nextMonth')} icon={ChevronRight} display="icon" variant="ghost" size="sm" onclick={onNextMonth} data-testid="calendar-next-month" />
         </div>
     </div>
 

@@ -11,6 +11,10 @@
   through every item (the blocked ones too), Enter and Space run, Escape and Tab close and give the focus back to the
   element that opened the menu. An item is never off without a reason: there is no `disabled` (SEL-M part 2).
 
+  `origin="finger"` (85 BTN-0): a menu opened by a long press goes to the left of the finger and above it, centred or
+  below only when the room is missing (`contextMenuPlacement.ts`); `data-placement` publishes where it went. The default,
+  `pointer`, is the mouse's placement: to the right of the point and below, flipped at the edges.
+
   Used by DataTable for row-level context menus. Can also be used standalone.
 -->
 <script lang="ts">
@@ -18,6 +22,7 @@
     import type {Component} from 'svelte';
     import {Info} from 'lucide-svelte';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
+    import {fingerMenuPosition, type FingerMenuPosition} from './contextMenuPlacement';
 
     export interface ContextMenuItem {
         type?: 'action' | 'separator';
@@ -41,9 +46,11 @@
         onAction: (id: string) => void;
         onClose: () => void;
         anchorEl?: HTMLElement | null;
+        /** What opened the menu at `{x, y}`: a mouse or a key (`pointer`, today's placement) or a finger's long press. */
+        origin?: 'pointer' | 'finger';
     }
 
-    let {x, y, items, onAction, onClose, anchorEl = null}: Props = $props();
+    let {x, y, items, onAction, onClose, anchorEl = null, origin = 'pointer'}: Props = $props();
 
     let menuEl: HTMLDivElement | undefined = $state();
     let measured = $state(false);
@@ -52,8 +59,11 @@
     let currentX = $state(0);
     let currentY = $state(0);
 
-    let adjustedX = $derived(flipX ? Math.max(0, currentX - (menuEl?.offsetWidth ?? 0)) : currentX);
-    let adjustedY = $derived(flipY ? Math.max(0, currentY - (menuEl?.offsetHeight ?? 0)) : currentY);
+    /** The finger's placement, once the menu has a size (`origin="finger"`). */
+    let fingerPlace = $state<FingerMenuPosition | null>(null);
+
+    let adjustedX = $derived(fingerPlace ? fingerPlace.left : flipX ? Math.max(0, currentX - (menuEl?.offsetWidth ?? 0)) : currentX);
+    let adjustedY = $derived(fingerPlace ? fingerPlace.top : flipY ? Math.max(0, currentY - (menuEl?.offsetHeight ?? 0)) : currentY);
 
     /** The element that had the focus when the menu opened: the ⋮, or what a right-click left focused. */
     let previousFocus: HTMLElement | null = null;
@@ -129,8 +139,12 @@
         function updateViewportPlacement(nextX = currentX, nextY = currentY) {
             if (!menuEl) return;
             const rect = menuEl.getBoundingClientRect();
-            flipX = nextX + rect.width > window.innerWidth;
-            flipY = nextY + rect.height > window.innerHeight;
+            if (origin === 'finger') {
+                fingerPlace = fingerMenuPosition({x: nextX, y: nextY}, {width: rect.width, height: rect.height}, {width: window.innerWidth, height: window.innerHeight});
+            } else {
+                flipX = nextX + rect.width > window.innerWidth;
+                flipY = nextY + rect.height > window.innerHeight;
+            }
             measured = true;
         }
 
@@ -219,7 +233,7 @@
 </script>
 
 <!-- svelte-ignore a11y_interactive_supports_focus -->
-<div bind:this={menuEl} role="menu" tabindex="-1" class="context-menu" style="left:{adjustedX}px;top:{adjustedY}px" data-testid="context-menu" onkeydown={handleMenuKeyDown}>
+<div bind:this={menuEl} role="menu" tabindex="-1" class="context-menu" style="left:{adjustedX}px;top:{adjustedY}px" data-testid="context-menu" data-origin={origin} data-placement={fingerPlace ? `${fingerPlace.horizontal}-${fingerPlace.vertical}` : undefined} onkeydown={handleMenuKeyDown}>
     {#each items as item, index}
         {#if item.type === 'separator'}
             <hr class="context-separator" />
@@ -245,7 +259,7 @@
                     tabindex="-1"
                     class="context-item {item.variant === 'danger' ? 'danger' : ''}"
                     data-testid={item.testid ?? `context-menu-action-${item.id}`}
-                    title={item.title}
+                    aria-describedby="{menuId}-hint-{index}"
                     onclick={(e) => {
                         e.stopPropagation();
                         if (item.id) {
@@ -261,6 +275,8 @@
                         <Icon size={16} class={item.iconClass ?? ''} />
                     {/if}
                     <span class={item.labelClass ?? ''}>{item.label ?? ''}</span>
+                    <!-- D13 (85 BTN-2·0): one hint, in the Tooltip; no `title` beside it. The reader gets it as the description. -->
+                    <span id="{menuId}-hint-{index}" class="sr-only">{item.title}</span>
                 </button>
             </Tooltip>
         {:else}

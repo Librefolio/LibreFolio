@@ -232,3 +232,46 @@ describe('FileEditModal — a refusal of the space limit is said in the dialog (
         expect(screen.getByText('Disk on fire')).toBeInTheDocument();
     });
 });
+
+/**
+ * The standard buttons (85 BTN-2b): the ✕ is `CloseButton`, named «Close» from the catalogue; confirm is busy while the
+ * upload runs (`aria-busy`, its busy word, a second click starting nothing) and cancel is natively off meanwhile.
+ */
+describe('FileEditModal — the standard buttons (85 BTN-2b)', () => {
+    beforeEach(async () => {
+        await setupI18n('en');
+    });
+
+    it('the ✕ is named «Close» from the catalogue, and cancels', async () => {
+        const cancel = vi.fn();
+        const file = new File(['%PDF-1.4'], 'statement.pdf', {type: 'application/pdf'});
+        render(FileEditModal, {props: {open: true, file}, events: {cancel: () => cancel()}});
+        const close = screen.getByTestId('file-edit-close');
+        const expected = enCatalogue.common.close;
+        expect(close).toHaveAttribute('aria-label', expected);
+        expect(close.hasAttribute('title')).toBe(false);
+        await fireEvent.click(close);
+        expect(cancel).toHaveBeenCalledTimes(1);
+    });
+
+    it('confirm is busy while the upload runs, and a second click starts nothing', async () => {
+        let finish: (url: string) => void = () => {};
+        uploads.uploadFile.mockReset().mockImplementation(() => new Promise<string>((resolve) => (finish = resolve)));
+        const complete = vi.fn();
+        const file = new File(['%PDF-1.4'], 'statement.pdf', {type: 'application/pdf'});
+        render(FileEditModal, {props: {open: true, file}, events: {complete: (event: CustomEvent) => complete(event)}});
+        const confirm = screen.getByTestId('file-edit-confirm');
+        expect(confirm.hasAttribute('aria-busy')).toBe(false);
+
+        await fireEvent.click(confirm);
+        await waitFor(() => expect(confirm).toHaveAttribute('aria-busy', 'true'));
+        expect(confirm).toHaveAttribute('aria-disabled', 'true');
+        expect(confirm.textContent).toContain(enCatalogue.common.uploading);
+        expect(screen.getByTestId('file-edit-cancel')).toHaveAttribute('disabled');
+        await fireEvent.click(confirm);
+        expect(uploads.uploadFile, 'nothing starts twice').toHaveBeenCalledTimes(1);
+
+        finish('/uploads/statement.pdf');
+        await waitFor(() => expect(complete).toHaveBeenCalledTimes(1));
+    });
+});
