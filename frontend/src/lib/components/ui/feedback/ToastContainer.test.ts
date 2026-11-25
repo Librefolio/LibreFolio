@@ -432,4 +432,16 @@ describe('H-18 — the dismiss button is named from the catalogues', () => {
         expect(dismiss).toHaveAttribute('aria-label', marked('common.close'));
         expect(dismiss).toHaveAccessibleName(marked('common.close'));
     });
+
+    // 85 BTN-2d: the ✕ is the standard CloseButton; in Italian it speaks Italian, with no native title beside the name.
+    it('in Italian the ✕ is named by the Italian catalogue, with no title', async () => {
+        const italian = leafOf(SHIPPED_CATALOGUES.it, 'common.close');
+        expect(italian, 'premise: the two languages differ').not.toBe(leafOf(SHIPPED_CATALOGUES.en, 'common.close'));
+        await setupI18n('it');
+        toasts.success('Owned italian notification', 0);
+        render(ToastContainer);
+        const dismiss = within(screen.getByTestId('toast-success')).getByTestId('toast-dismiss');
+        expect(dismiss).toHaveAttribute('aria-label', String(italian));
+        expect(dismiss.hasAttribute('title')).toBe(false);
+    });
 });

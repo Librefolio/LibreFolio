@@ -501,7 +501,7 @@ describe('BrokerSharingPanel — loading', () => {
         await loadFailed();
         expect(panelErrorKey()).toBe('brokers.sharing.loadFailedBlocking');
 
-        await fireEvent.click(within(screen.getByTestId('info-banner-error')).getByRole('button', {name: 'Dismiss'}));
+        await fireEvent.click(within(screen.getByTestId('info-banner-error')).getByTestId('info-banner-dismiss'));
 
         await waitFor(() => expect(screen.queryByTestId('info-banner-error')).not.toBeInTheDocument());
         expect(panelErrorKey()).toBeNull();
