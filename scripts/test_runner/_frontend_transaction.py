@@ -228,6 +228,18 @@ def front_tx_form_phone_width(verbose: bool = False, ui: bool = False, headed: b
     return _run_playwright("transactions/tx-form-phone-width.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_tx_form_mobile(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """The transaction form on an Android phone (lane 66, TL-1d): view values and fit, date field, charge row."""
+    print_section("Frontend TX Form Mobile Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("transactions/tx-form-mobile.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_tx_charges_table(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Linked charges folded under their parent in the transactions table (project 66, F5)."""
     print_section("Frontend TX Linked Charges Table Tests")
@@ -298,6 +310,18 @@ def front_tx_bulk_charges_link(verbose: bool = False, ui: bool = False, headed: 
     if not _ensure_test_users():
         return False
     return _run_playwright("transactions/tx-bulk-charges-link.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
+def front_tx_bulk_charges_unlink(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """A checkbox on the charges under their parent and «Scollega» on the Bulk's selection bar (project 66, TL-4)."""
+    print_section("Frontend TX Bulk Charges Unlink Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("transactions/tx-bulk-charges-unlink.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
 def front_tx_clone_charges(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
@@ -956,6 +980,14 @@ def populate_registry(registry: dict) -> None:
         desc="Testlist 3.9, at 375 px on a disposable account: a BUY and an asset TRANSFER pair of IWDA (long display name) opened in view mode then edit mode — tx-form-body and tx-form-modal-root do not scroll sideways, the view-mode pencil sits inside the screen",
         tests="transactions/tx-form-phone-width.spec.ts",
     )
+    add_test(
+        cat,
+        "tx-form-mobile",
+        front_tx_form_mobile,
+        name="TX Form Mobile Tests",
+        desc="Lane 66 TL-1d, on a disposable account: the view of a BUY of a long-named asset at 412/375 px fits sideways and shows the saved quantity and the amount's magnitude with no check fired; the date field shows the whole date at 320-640 px in the New and Edit forms; a new FEE's trash, and a saved FEE's Open/Unlink/trash in the Bulk edit form, sit on the charge's title line; guard at 1280 px",
+        tests="transactions/tx-form-mobile.spec.ts",
+    )
     add_test(cat, "tx-charges-table", front_tx_charges_table, name="TX Linked Charges Table Tests", desc="Project 66 F5: charges folded under the BUY, kept under a broker filter, on their own under types=FEE, flat under a sort", tests="transactions/tx-charges-table.spec.ts")
     add_test(cat, "tx-charges-link-delete", front_tx_charges_link_delete, name="TX Charges Link and Delete Tests", desc="Project 66 F6: link BUY+FEE+TAX from the bar, otherBroker off, delete with all/keep, no panel if all selected", tests="transactions/tx-charges-link-delete.spec.ts")
     add_test(
@@ -989,6 +1021,14 @@ def populate_registry(registry: dict) -> None:
         name="TX Bulk Charges Link Tests",
         desc="Project 66 F7-d: in the Bulk, «Link» a new BUY + new FEE and a saved BUY + saved free FEE (also by tap on a phone), saved and read back by id; «Open» from a FEE's form to its parent absent from the Bulk adds the parent",
         tests="transactions/tx-bulk-charges-link.spec.ts",
+    )
+    add_test(
+        cat,
+        "tx-bulk-charges-unlink",
+        front_tx_bulk_charges_unlink,
+        name="TX Bulk Charges Unlink Tests",
+        desc="Project 66 TL-4: in the Bulk, a charge under its parent ticked → «Scollega» (saved, read back by id); P-19 «Delete selected» keeps a «del» charge «del»; select-all with an open and a closed group; long press on a phone; «Reset selected» after «Scollega»",
+        tests="transactions/tx-bulk-charges-unlink.spec.ts",
     )
     add_test(
         cat,

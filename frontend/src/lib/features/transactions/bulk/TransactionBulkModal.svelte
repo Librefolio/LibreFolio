@@ -108,6 +108,8 @@
         planBulkDelete,
         withoutRows,
         bulkLinkSelection,
+        unlinkableCharges,
+        unlinkSelectedCharges,
         linkInBulk,
         rowsWithLinkedCharges,
         unlinkCharge,
@@ -3664,6 +3666,18 @@
             onClick: () => openLinkPanel(),
         },
         {
+            // 66 TL-4 (P-2 = C): the ticked charges still linked under their parent, unlinked as «Scollega» in their Form
+            // does; no panel (nothing is saved before «Save all»; «Reset» links back a saved charge); the selection empties.
+            id: 'unlink-charges',
+            testid: 'tx-bulk-unlink-charges',
+            icon: Unlink,
+            label: () => $t('transactions.bulk.unlinkSelected') || 'Unlink the charges',
+            shortLabel: () => $t('transactions.form.charges.unlink') || 'Unlink',
+            appliesTo: (row) => unlinkableCharges([row], ops).length > 0,
+            pointless: (rows) => unlinkableCharges(rows, ops).length === 0,
+            onClick: (rows) => unlinkSelectedRows(rows.map((row) => row.tempId)),
+        },
+        {
             id: 'delete-selected',
             testid: 'tx-bulk-delete-selected',
             icon: Trash2,
@@ -4311,27 +4325,27 @@
         return !indentedIds.has(row.tempId);
     }
 
-    /** 66 F7-c1 (§13.5): an indented row has no checkbox; the selection is of top-level rows. */
+    /** 66 TL-4 (P-2 = C, was F7-c1 §13.5): every drawn row has its checkbox, a charge under its parent too — ticking the
+     *  parent never ticks its charges, nor the reverse. Only the half a merge hides (`pairedWith`) is never selectable. */
     function isGridRowSelectable(row: PendingOp): boolean {
-        return !indentedIds.has(row.tempId);
+        return row.pairedWith === undefined;
     }
 
-    // 66 F7-c1 (§14.6): a selected top-level row that goes under its parent (a «Restore», a link in the parent's Form)
-    // leaves the selection. 66 C21: so does the half a merge hides (`pairedWith`): «Reset selected» would reset it alone and
-    // break the pair still waiting for the save.
+    // 66 C21: the half a merge hides (`pairedWith`) leaves the selection: «Reset selected» would reset it alone and break
+    // the pair still waiting for the save. 66 TL-4: a selected row that goes under its parent (a «Restore», a link in the
+    // parent's Form) keeps its tick (it was F7-c1 §14.6).
     let hiddenPairHalves = $derived(new Set(ops.filter((op) => op.pairedWith !== undefined).map((op) => op.tempId)));
     $effect(() => {
-        const indented = indentedIds;
         const hidden = hiddenPairHalves;
         untrack(() => {
-            for (const row of bulkTableSelectedRows) if (indented.has(row.tempId) || hidden.has(row.tempId)) tableRef?.toggleRowSelectionById(row.tempId);
+            for (const row of bulkTableSelectedRows) if (hidden.has(row.tempId)) tableRef?.toggleRowSelectionById(row.tempId);
         });
     });
 
     /**
      * 66 F7-c1: clicks the grid's HTML cells cannot handle themselves, caught in the capture phase before the row's own
-     * handlers: the chip of a parent toggles its group and nothing else (no selection, no menu, no Form); a double-click
-     * on an indented row opens its Form (the table ignores a double-click on a row that cannot be selected).
+     * handlers: the chip of a parent toggles its group and nothing else (no selection, no menu, no Form). A double-click
+     * on an indented row reaches the table's own handler (66 TL-4: the row is selectable), so the Form opens once.
      */
     function captureChargeChip(node: HTMLElement) {
         const onClick = (ev: MouseEvent) => {
@@ -4347,14 +4361,7 @@
             if (target?.closest?.('[data-tx-bulk-charges-toggle]')) {
                 ev.preventDefault();
                 ev.stopPropagation();
-                return;
             }
-            const rowId = (target?.closest?.('tbody tr[data-row-id]') as HTMLElement | null)?.getAttribute('data-row-id');
-            if (!rowId || !indentedIds.has(rowId)) return;
-            const row = ops.find((o) => o.tempId === rowId);
-            if (!row) return;
-            ev.stopPropagation();
-            handleEditRowClick(row);
         };
         node.addEventListener('click', onClick, true);
         node.addEventListener('dblclick', onDblClick, true);
@@ -4408,6 +4415,13 @@
         if (!parent || charges.length === 0) return;
         ops = linkInBulk(ops, parent, charges);
         openGroup(parent.tempId);
+        tableRef?.clearSelection();
+        bulkTableSelectedRows = [];
+    }
+
+    /** 66 TL-4: «Scollega» on the selection (`unlinkSelectedCharges`); the selection empties, as after «Link». */
+    function unlinkSelectedRows(tempIds: string[]) {
+        ops = unlinkSelectedCharges(ops, tempIds, txStoreGet);
         tableRef?.clearSelection();
         bulkTableSelectedRows = [];
     }
@@ -4498,6 +4512,7 @@
             <DataTable
                 bind:this={tableRef}
                 data={gridRows}
+                selectionData={visibleOps}
                 opensPage={opensGridPage}
                 isRowSelectable={isGridRowSelectable}
                 {columns}

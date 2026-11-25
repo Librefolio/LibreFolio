@@ -221,11 +221,12 @@ async function rowIdOf(row: Locator): Promise<string> {
     return id;
 }
 
-/** `row` sits under the parent row `parentRow`: its label names it (`data-charge-of`), and it has no checkbox. */
+/** `row` sits under the parent row `parentRow`: its label names it (`data-charge-of`), and it has its own checkbox (66 TL-4,
+ *  P-2 = C: was «no checkbox»). */
 async function expectUnder(row: Locator, parentRow: Locator, what: string): Promise<void> {
     const parentId = await rowIdOf(parentRow);
     await expect(row.getByTestId('tx-bulk-row-label'), `${what} is not under its parent`).toHaveAttribute('data-charge-of', parentId, {timeout: 10_000});
-    await expect(row.locator('[data-testid^="dt-row-checkbox-"]')).toHaveCount(0);
+    await expect(row.locator('[data-testid^="dt-row-checkbox-"]'), `TL-4: ${what}, under its parent, has its own checkbox`).toHaveCount(1);
 }
 
 /** `row` is a top-level row: its label names no parent, and it can be selected. */

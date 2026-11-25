@@ -585,3 +585,22 @@ describe('ExactQuantityInput — at most maxSignificantDigits significant digits
         expect(lastValidity(validities)).toMatchObject({digitsValid: true, valid: true});
     });
 });
+
+describe('ExactQuantityInput — a field the user cannot change shows none of its own sign errors (66 TL-1d, P-18)', () => {
+    it.each([
+        ['disabled', {disabled: true}],
+        ['readonly', {readonly: true}],
+    ])('%s with a negative value under signRule "positive": no aria-invalid, no sign border, validity still invalid', async (_label, props) => {
+        const {input, validities} = mountWithParentLoop({value: '-3', signRule: 'positive', ...props});
+        await waitFor(() => expect(input).toHaveValue('-3'));
+        expect(input).not.toHaveAttribute('aria-invalid', 'true');
+        expect(input.getAttribute('style') ?? '', 'no sign border colour').not.toContain('border-color');
+        await waitFor(() => expect(validities.at(-1)).toMatchObject({signState: 'bad', signValid: false, valid: false}));
+    });
+
+    it('guard: enabled with a negative value under signRule "positive": aria-invalid', async () => {
+        const {input} = mountWithParentLoop({value: '-3', signRule: 'positive'});
+        await waitFor(() => expect(input).toHaveValue('-3'));
+        expect(input).toHaveAttribute('aria-invalid', 'true');
+    });
+});

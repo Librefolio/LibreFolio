@@ -64,7 +64,7 @@
     import {assetStoreVersion, ensureAssetsLoaded, getAssetInfo, getAllAssets, refreshAllAssets} from '$lib/stores/reference/assetStore';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
     import {ensureBrokersLoaded, getEditableBrokers, brokerStoreVersion, refreshAllBrokers, getBrokerInfo, getBrokerRole, type BrokerInfo} from '$lib/stores/reference/brokerStore';
-    import {type TransactionTypeCode, type PairFormLayout, TX_TYPES, getTransactionTypeIconUrl, getTypeRule, getPairFormLayout, isDraftReadyForValidation, ensureTypesLoaded, getSwapGroup, typesVersion} from '$lib/features/transactions/transactionTypeStore';
+    import {type TransactionTypeCode, type PairFormLayout, TX_TYPES, getTransactionTypeIconUrl, getTypeRule, getPairFormLayout, isDraftReadyForValidation, ensureTypesLoaded, isTypesLoaded, getSwapGroup, typesVersion} from '$lib/features/transactions/transactionTypeStore';
     import {createValidateScheduler} from '$lib/features/transactions/useValidateScheduler.svelte';
     import {commitTransactions, validateTransactions} from '$lib/features/transactions/txCommitApi';
     import {resolveIssueMessage, type ResolverContext} from '$lib/features/transactions/resolveValidationMessage';
@@ -408,6 +408,7 @@
         // Read props — the $effect depends on open, openKey, mode, items.
         const m = mode;
         const row = items?.[0] ?? null;
+        const typesAtOpen = untrack(() => isTypesLoaded());
         untrack(() => {
             // Extract partner info from items[1]
             const injected = _injectedPartner;
@@ -549,6 +550,16 @@
         // Async hydration (brokers + currencies + asset cache for the picked asset).
         void (async () => {
             await Promise.all([ensureBrokersLoaded(), ensureCurrenciesLoaded($currentLanguage), ensureAssetsLoaded(), ensureTypesLoaded()]);
+            untrack(() => {
+                // P-18 (66 TL-1d): opened before the type rules arrived, `fromTx` read the permissive fallback, so a Buy's
+                // amount kept its minus. Rebuild the draft of a saved row standing alone, if nobody has touched it yet.
+                const stillShown = open && mode === m && items?.[0] === row;
+                const standalone = row != null && (row.related_transaction_id == null || row.related_transaction_id <= 0);
+                if (!typesAtOpen && stillShown && (m === 'edit' || m === 'view') && row && standalone && baselineKey() === initialDraftKey) {
+                    draft = fromTx(row);
+                    lastTypeForReset = draft.type;
+                }
+            });
             // After brokers loaded, backfill broker_id only if a single broker is
             // available (Bugfix-2 §C9) — otherwise leave it 0 so the user must
             // pick. `forcedBroker` (locked) and `defaultBrokerId` (soft) still win.

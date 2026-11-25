@@ -205,7 +205,8 @@
         "failed": "Non è stato possibile leggere i prezzi: nessun valore è stato riempito. Riprova."
       },
       "cloneChargesReadFailed": "Impossibile leggere le spese collegate di {ids}: la copia è stata fatta senza.",
-      "cloneChargeFree": "{reason, select, deleted {La copia della spesa non è collegata: la transazione a cui era collegata è segnata da eliminare.} paired {La copia della spesa non è collegata: la transazione a cui era collegata è metà di una coppia.} other {La copia della spesa non è collegata: non si può collegare alla stessa transazione.}}"
+      "cloneChargeFree": "{reason, select, deleted {La copia della spesa non è collegata: la transazione a cui era collegata è segnata da eliminare.} paired {La copia della spesa non è collegata: la transazione a cui era collegata è metà di una coppia.} other {La copia della spesa non è collegata: non si può collegare alla stessa transazione.}}",
+      "unlinkSelected": "Scollega le spese"
     },
     "commit": {
       "serverError": "Salvataggio impossibile — errore del server"

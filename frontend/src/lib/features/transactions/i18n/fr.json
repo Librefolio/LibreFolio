@@ -205,7 +205,8 @@
         "failed": "Les prix n’ont pas pu être lus : aucune valeur n’a été remplie. Réessayez."
       },
       "cloneChargesReadFailed": "Impossible de lire les frais liés de {ids} : la copie a été faite sans eux.",
-      "cloneChargeFree": "{reason, select, deleted {La copie du frais n'est pas liée : la transaction à laquelle il était lié est marquée pour suppression.} paired {La copie du frais n'est pas liée : la transaction à laquelle il était lié fait partie d'une paire.} other {La copie du frais n'est pas liée : elle ne peut pas être liée à la même transaction.}}"
+      "cloneChargeFree": "{reason, select, deleted {La copie du frais n'est pas liée : la transaction à laquelle il était lié est marquée pour suppression.} paired {La copie du frais n'est pas liée : la transaction à laquelle il était lié fait partie d'une paire.} other {La copie du frais n'est pas liée : elle ne peut pas être liée à la même transaction.}}",
+      "unlinkSelected": "Délier les frais"
     },
     "commit": {
       "serverError": "Sauvegarde impossible — erreur serveur"

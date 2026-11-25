@@ -96,20 +96,22 @@
             data-missing={missing ? 'true' : 'false'}
             data-highlighted={highlighted ? 'true' : 'false'}
         >
+            <!-- P-18 (66 TL-1d): below `sm` the title and the icons share the first line (the icons right), the amount takes
+                 the next; from `sm` up the three sit on one line, as before. -->
             <div class="flex flex-wrap items-center gap-2">
-                <span class="min-w-0 flex items-center gap-2 grow">
-                    <span class="font-medium">{$t(`transactions.types.${charge.type}`)}</span>
+                <span class="min-w-0 flex items-center gap-2 grow order-1">
+                    <span class="font-medium" data-testid="tx-form-charge-title">{$t(`transactions.types.${charge.type}`)}</span>
                     {#if charge.id !== null}
                         <span class="text-xs {highlighted ? 'text-lf-secondary' : 'text-lf-muted'}">#{charge.id}</span>
                     {:else}
                         <span class="text-[10px] px-1.5 py-px rounded-full bg-lf-info-soft text-lf-info-on-soft">{$t('transactions.form.charges.new')}</span>
                     {/if}
                 </span>
-                <span class="w-full sm:w-64 min-w-0">
+                <span class="w-full sm:w-64 min-w-0 order-3 sm:order-2">
                     <CompactCashCell value={charge.cash} onChange={(next) => update(charge.key, {cash: next})} signHint="negative" defaultCode={parentCash?.code} disabled={!editable} testid={`tx-form-charge-cash-${charge.key}`} maxSignificantDigits={REAL_SIGNIFICANT_DIGITS} />
                 </span>
                 {#if (onOpen && charge.id !== null) || editable}
-                    <span class="inline-flex gap-1.5">
+                    <span class="inline-flex gap-1.5 shrink-0 order-2 sm:order-3">
                         {#if onOpen && charge.id !== null}
                             <button
                                 type="button"

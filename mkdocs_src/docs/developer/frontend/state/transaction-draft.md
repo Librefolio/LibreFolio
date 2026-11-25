@@ -481,9 +481,10 @@ The title counts the top-level rows, as a pair already counts as one. The grid d
 - **The indented row.** It shows `↳` with `data-charge-of`, and keeps its `#id`. Its Status cell holds one chip: a
   charge «del» shows the row's «🔴 del», a charge «unlink» shows «Unlink» in place of «edit», a linked charge keeps
   the row's status with 🔗 beside it. The charge's state (`linked` / `unlink` / `del`) rides on a wrapper,
-  `tx-bulk-charge-state`, that draws nothing. It has no checkbox. Its menu offers «Edit row», «Delete» and
-  «Restore» (no clone, split, remove or reset), and keeps the ⋮ button, the only way to it on touch; a double-click
-  opens its own form too.
+  `tx-bulk-charge-state`, that draws nothing. It has its own checkbox (66 TL-4, as on the transactions page):
+  ticking the parent never ticks its charges, nor the reverse; only the half a merge hides is never selectable
+  (`isGridRowSelectable`). Its menu offers «Edit row», «Delete» and «Restore» (no clone, split, remove or reset), and
+  keeps the ⋮ button; a double-click, or a long press on touch, opens its own form, as on any row of the workspace.
 - **A charge unlinked from a parent that stays** is a top-level row, with the chip «Unlink».
 - **When a group opens by itself.** The parent is «del», the charges came in the intent with their parent, or a charge
   was created or linked in the parent's form, or a parent was picked after its charges were already rows; «Link» on
@@ -498,7 +499,20 @@ The title counts the top-level rows, as a pair already counts as one. The grid d
   half, and a parent, new or saved, takes along only the creates born in its Form that still follow it (`followsParent`)
   and the copies «Clone» brought with it that nobody changed (`isUntouchedClone`, below). Any other new charge stays, as a row of its own owned by nobody, as every saved charge does: one applied in its own Form,
   which drops `followsParent` (`applyChargePayload`), or one joined with «Link», which never followed (`linkInBulk`
-  leaves the flag as it is, and a charge under its parent has no checkbox to be selected).
+  leaves the flag as it is).
+- **The selection (66 TL-4).** A ticked charge keeps its tick when its group closes, as a row of another page does:
+  `DataTable` reads the selected rows from `selectionData` (`visibleOps`), not only from the rows drawn, so the bar
+  still counts it. A row that goes under its parent keeps its tick too; only a hidden half of a pair is dropped from the
+  selection. Select-all ticks the rows of the page as drawn: an open group's charges, not a closed one's.
+- **«Unlink» on the selection bar (66 TL-4, `tx-bulk-unlink-charges`).** It takes the ticked charges still linked under
+  their parent (`unlinkableCharges`) and says how many; without one it is not there. `unlinkSelectedCharges` unlinks each
+  as «Unlink» in its form does (`unlinkCharge`); one marked «del» is no longer «del», nor the parent's choice, so
+  restoring the parent later does not link it back. A ticked parent drags none of its charges. No panel: nothing is
+  saved before «Save all». «Reset» links back only a saved charge whose saved parent it was cut from; a new charge has no
+  reset, and a link made only here leaves nothing to reset: «Link» joins those again. The selection empties, as after
+  «Link».
+- **«Delete selected» on a parent and a charge of it already «del» (66 TL-4, P-19).** When the parent goes «del» (or a
+  new one leaves) in the same action, the charge stays «del»; ticked alone, it still toggles back.
 
 **An all-new group moves together (66 TL-3b, P-30).** A group is a parent and the charges still linked under it
 (`newGroupOf`, `bulk/bulkCharges.ts`: neither «unlink» nor a saved «del»). While every row of it is a create, its broker
@@ -594,7 +608,9 @@ calls `handleFormOpenTransaction(id)`:
 and its charges among the selected rows, new ones included. `bulkLinkSelection` (`bulk/bulkCharges.ts`) applies the
 page's rules, `linkSelection` of `chargeLinkRules.ts`, to mirror rows built from the operations:
 
-- each mirror takes the operation's broker, asset, type and date; a create gets a negative synthetic id;
+- each mirror takes the operation's broker, asset, type and date; a create gets a synthetic id, positive and far above
+  any saved one (66 TL-4: `linkSelection` reads a parent only when its id is above 0, so a negative id made a charge
+  under a new parent look free);
 - its parent is its owner in the workspace (`chargeOf`), else `parentLinkId`, else the saved one; none after
   `parentUnlink`, so a charge unlinked here is free to link;
 - a pair is read from the saved row's `related_transaction_id` (a new pair has no saved partner).

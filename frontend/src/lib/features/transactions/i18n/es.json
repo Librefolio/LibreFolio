@@ -205,7 +205,8 @@
         "failed": "No se pudieron leer los precios: no se rellenó ningún valor. Inténtalo de nuevo."
       },
       "cloneChargesReadFailed": "No se pudieron leer los gastos vinculados de {ids}: la copia se hizo sin ellos.",
-      "cloneChargeFree": "{reason, select, deleted {La copia del gasto no está vinculada: la transacción a la que estaba vinculado está marcada para eliminar.} paired {La copia del gasto no está vinculada: la transacción a la que estaba vinculado es parte de un par.} other {La copia del gasto no está vinculada: no se puede vincular a la misma transacción.}}"
+      "cloneChargeFree": "{reason, select, deleted {La copia del gasto no está vinculada: la transacción a la que estaba vinculado está marcada para eliminar.} paired {La copia del gasto no está vinculada: la transacción a la que estaba vinculado es parte de un par.} other {La copia del gasto no está vinculada: no se puede vincular a la misma transacción.}}",
+      "unlinkSelected": "Desenlazar los gastos"
     },
     "commit": {
       "serverError": "Guardado imposible — error del servidor"
