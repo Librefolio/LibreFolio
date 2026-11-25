@@ -142,11 +142,11 @@
             "partsAssets": "Asset",
             "partsCash": "Cassa",
             "valueAfter": "Varrà dopo",
-            "valueAfterHelp": "L’intero portafoglio dopo il piano: gli Asset e la cassa che resta. È il valore di oggi meno i soldi persi.",
+            "valueAfterHelp": "L’intero portafoglio dopo il piano: gli Asset e la cassa che resta. È il valore di oggi meno i costi e le commissioni.",
             "valueAfterHeld": "in {assets, plural, one {# Asset} other {# Asset}} e {cash, plural, one {# cassa} other {# casse}}",
             "moneyLost": "Costi e commissioni",
             "moneyLostHelp": "Quanto ti costa il piano: commissioni, spread dei cambi, margini sul prezzo, tasse e arrotondamenti. Il valore di oggi meno questo è il valore dopo.",
-            "noLoss": "Nessuna perdita",
+            "noLoss": "Nessun costo",
             "foreignWithholding": "Ritenuta estera",
             "largestDeviation": "Distanza massima dall’obiettivo",
             "largestDeviationHelp": "Quanto è lontana dal suo obiettivo la voce più lontana, dopo e prima del piano, in punti percentuali: lo scarto fra la sua quota e la quota obiettivo. Contano gli Asset e le casse con un obiettivo; il non investito no.",
@@ -161,10 +161,10 @@
           },
           "header": {
             "score": "Punteggio {value}",
-            "scoreHelp": "Il punteggio che il piano rende minimo: λ × distanza/F + soldi persi. Qui λ {lambda}, distanza/F {distance}, soldi persi {lost}.",
+            "scoreHelp": "Il punteggio che il piano rende minimo: λ × distanza/F + costi e commissioni. Qui λ {lambda}, distanza/F {distance}, costi e commissioni {lost}.",
             "distance": "Distanza/F {value}",
-            "distanceHelp": "Quanto il portafoglio finisce lontano dai suoi obiettivi, in denaro: gli scarti al quadrato di ogni voce sull’intero portafoglio. «Target prima di tutto» la rende più piccola possibile, poi i soldi persi.",
-            "moneyLost": "Soldi persi {value}"
+            "distanceHelp": "Quanto il portafoglio finisce lontano dai suoi obiettivi, in denaro: gli scarti al quadrato di ogni voce sull’intero portafoglio. «Target prima di tutto» la rende più piccola possibile, poi i costi e le commissioni.",
+            "moneyLost": "Costi e commissioni {value}"
           },
           "ledger": {
             "fields": {
@@ -190,7 +190,7 @@
           },
           "badges": {
             "help": {
-              "optimalProven": "The solver proved that no plan has a better score (with «Target first»: a smaller distance from the targets, then less money lost), and the exact check of the plan matches its numbers. The tie-breaks after it may have stopped earlier: they only choose among plans just as good. The proof holds within the solver's small calculation margin, which grows with the amounts."
+              "optimalProven": "The solver proved that no plan has a better score (with «Target first»: a smaller distance from the targets, then lower costs and fees), and the exact check of the plan matches its numbers. The tie-breaks after it may have stopped earlier: they only choose among plans just as good. The proof holds within the solver's small calculation margin, which grows with the amounts."
             }
           },
           "states": {

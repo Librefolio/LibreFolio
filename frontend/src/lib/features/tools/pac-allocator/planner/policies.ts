@@ -43,7 +43,7 @@ export const OBJECTIVE_FALLBACKS: Readonly<Record<string, string>> = {
     route_priority: 'Broker and source priority',
     plan_score: 'Score',
     target_distance: 'Distance from the targets',
-    wealth_loss: 'Money lost',
+    wealth_loss: 'Costs and fees',
     operation_count: 'Fewer operations',
 };
 

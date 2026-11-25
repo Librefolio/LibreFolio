@@ -142,11 +142,11 @@
             "partsAssets": "Assets",
             "partsCash": "Cash",
             "valueAfter": "Worth after",
-            "valueAfterHelp": "The whole portfolio after the plan: the Assets and the cash left. It is today’s value less the money lost.",
+            "valueAfterHelp": "The whole portfolio after the plan: the Assets and the cash left. It is today’s value less the costs and fees.",
             "valueAfterHeld": "in {assets, plural, one {# Asset} other {# Assets}} and {cash, plural, one {# cash} other {# cash entries}}",
             "moneyLost": "Costs and fees",
             "moneyLostHelp": "What the plan costs you: fees, currency exchange spreads, price margins, taxes and rounding. Today’s value less this is the value after.",
-            "noLoss": "Nothing lost",
+            "noLoss": "No costs",
             "foreignWithholding": "Foreign withholding tax",
             "largestDeviation": "Largest gap from target",
             "largestDeviationHelp": "How far the entry furthest from its target is, after and before the plan, in percentage points: the gap between its share and its target share. Assets and cash with a target count; the uninvested does not.",
@@ -161,10 +161,10 @@
           },
           "header": {
             "score": "Score {value}",
-            "scoreHelp": "The score the plan minimizes: λ × distance/F + money lost. Here λ {lambda}, distance/F {distance}, money lost {lost}.",
+            "scoreHelp": "The score the plan minimizes: λ × distance/F + costs and fees. Here λ {lambda}, distance/F {distance}, costs and fees {lost}.",
             "distance": "Distance/F {value}",
-            "distanceHelp": "How far the portfolio ends from its targets, in money: the squared gaps of every entry over the whole portfolio. «Target first» makes it as small as it can, then the money lost.",
-            "moneyLost": "Money lost {value}"
+            "distanceHelp": "How far the portfolio ends from its targets, in money: the squared gaps of every entry over the whole portfolio. «Target first» makes it as small as it can, then the costs and fees.",
+            "moneyLost": "Costs and fees {value}"
           },
           "ledger": {
             "fields": {
@@ -190,7 +190,7 @@
           },
           "badges": {
             "help": {
-              "optimalProven": "The solver proved that no plan has a better score (with «Target first»: a smaller distance from the targets, then less money lost), and the exact check of the plan matches its numbers. The tie-breaks after it may have stopped earlier: they only choose among plans just as good. The proof holds within the solver's small calculation margin, which grows with the amounts."
+              "optimalProven": "The solver proved that no plan has a better score (with «Target first»: a smaller distance from the targets, then lower costs and fees), and the exact check of the plan matches its numbers. The tie-breaks after it may have stopped earlier: they only choose among plans just as good. The proof holds within the solver's small calculation margin, which grows with the amounts."
             }
           },
           "states": {

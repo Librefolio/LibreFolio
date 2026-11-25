@@ -142,11 +142,11 @@
             "partsAssets": "Activos",
             "partsCash": "Efectivo",
             "valueAfter": "Valdrá después",
-            "valueAfterHelp": "Toda la cartera después del plan: los Activos y el efectivo que queda. Es el valor de hoy menos el dinero perdido.",
+            "valueAfterHelp": "Toda la cartera después del plan: los Activos y el efectivo que queda. Es el valor de hoy menos los costes y comisiones.",
             "valueAfterHeld": "en {assets, plural, one {# Activo} other {# Activos}} y {cash, plural, one {# efectivo} other {# efectivos}}",
             "moneyLost": "Costes y comisiones",
             "moneyLostHelp": "Lo que te cuesta el plan: comisiones, diferenciales de cambio, márgenes sobre el precio, impuestos y redondeos. El valor de hoy menos esto es el valor después.",
-            "noLoss": "Nada perdido",
+            "noLoss": "Sin costes",
             "foreignWithholding": "Retención extranjera",
             "largestDeviation": "Distancia máxima al objetivo",
             "largestDeviationHelp": "Lo lejos que está de su objetivo la partida más alejada, después y antes del plan, en puntos porcentuales: la diferencia entre su parte y su parte objetivo. Cuentan los Activos y el efectivo con un objetivo; lo no invertido no.",
@@ -161,10 +161,10 @@
           },
           "header": {
             "score": "Puntuación {value}",
-            "scoreHelp": "La puntuación que el plan minimiza: λ × distancia/F + dinero perdido. Aquí λ {lambda}, distancia/F {distance}, dinero perdido {lost}.",
+            "scoreHelp": "La puntuación que el plan minimiza: λ × distancia/F + costes y comisiones. Aquí λ {lambda}, distancia/F {distance}, costes y comisiones {lost}.",
             "distance": "Distancia/F {value}",
-            "distanceHelp": "Lo lejos que acaba la cartera de sus objetivos, en dinero: las diferencias al cuadrado de cada partida sobre toda la cartera. «El objetivo ante todo» la hace lo más pequeña posible, luego el dinero perdido.",
-            "moneyLost": "Dinero perdido {value}"
+            "distanceHelp": "Lo lejos que acaba la cartera de sus objetivos, en dinero: las diferencias al cuadrado de cada partida sobre toda la cartera. «El objetivo ante todo» la hace lo más pequeña posible, luego los costes y comisiones.",
+            "moneyLost": "Costes y comisiones {value}"
           },
           "ledger": {
             "fields": {
@@ -190,7 +190,7 @@
           },
           "badges": {
             "help": {
-              "optimalProven": "The solver proved that no plan has a better score (with «Target first»: a smaller distance from the targets, then less money lost), and the exact check of the plan matches its numbers. The tie-breaks after it may have stopped earlier: they only choose among plans just as good. The proof holds within the solver's small calculation margin, which grows with the amounts."
+              "optimalProven": "The solver proved that no plan has a better score (with «Target first»: a smaller distance from the targets, then lower costs and fees), and the exact check of the plan matches its numbers. The tie-breaks after it may have stopped earlier: they only choose among plans just as good. The proof holds within the solver's small calculation margin, which grows with the amounts."
             }
           },
           "states": {

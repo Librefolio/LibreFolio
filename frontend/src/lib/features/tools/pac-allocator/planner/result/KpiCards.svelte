@@ -5,7 +5,7 @@
   plan (infeasible, nothing found within the limits) only the box is shown.
 
   The Rebalancer (F4a of project 67, step 4; contract §6.1, X14) has its own six tiles, chosen by the Tool's profile:
-  «Worth today» (`F`), «Worth after» (`W`), «Money lost» (`F − W`, from the score) with its published entries, «Largest gap
+  «Worth today» (`F`), «Worth after» (`W`), «Costs and fees» (`F − W`, from the score) with its published entries, «Largest gap
   from target» after and before (points) with the item each one names (X14: the score's references, and the share and target
   of the row they point to), «Uninvested», «Orders». Every one is a published field: none is a sum, a difference or a
   maximum of others.

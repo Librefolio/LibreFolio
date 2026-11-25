@@ -142,11 +142,11 @@
             "partsAssets": "Actifs",
             "partsCash": "Liquidités",
             "valueAfter": "Vaudra après",
-            "valueAfterHelp": "Tout le portefeuille après le plan : les Actifs et les liquidités restantes. C’est la valeur d’aujourd’hui moins l’argent perdu.",
+            "valueAfterHelp": "Tout le portefeuille après le plan : les Actifs et les liquidités restantes. C’est la valeur d’aujourd’hui moins les frais et commissions.",
             "valueAfterHeld": "dans {assets, plural, one {# Actif} other {# Actifs}} et {cash, plural, one {# ligne de liquidités} other {# lignes de liquidités}}",
             "moneyLost": "Frais et commissions",
             "moneyLostHelp": "Ce que le plan vous coûte : frais, écarts de change, marges sur le prix, impôts et arrondis. La valeur d’aujourd’hui moins ce montant est la valeur après.",
-            "noLoss": "Rien de perdu",
+            "noLoss": "Aucun coût",
             "foreignWithholding": "Retenue à la source étrangère",
             "largestDeviation": "Écart maximal à l’objectif",
             "largestDeviationHelp": "L’éloignement de la ligne la plus éloignée de son objectif, après et avant le plan, en points de pourcentage : l’écart entre sa part et sa part cible. Comptent les Actifs et les liquidités avec un objectif ; le non investi non.",
@@ -161,10 +161,10 @@
           },
           "header": {
             "score": "Score {value}",
-            "scoreHelp": "Le score que le plan minimise : λ × distance/F + argent perdu. Ici λ {lambda}, distance/F {distance}, argent perdu {lost}.",
+            "scoreHelp": "Le score que le plan minimise : λ × distance/F + frais et commissions. Ici λ {lambda}, distance/F {distance}, frais et commissions {lost}.",
             "distance": "Distance/F {value}",
-            "distanceHelp": "L’éloignement du portefeuille de ses objectifs à la fin, en argent : les écarts au carré de chaque ligne sur tout le portefeuille. «La cible avant tout» la réduit au maximum, puis l’argent perdu.",
-            "moneyLost": "Argent perdu {value}"
+            "distanceHelp": "L’éloignement du portefeuille de ses objectifs à la fin, en argent : les écarts au carré de chaque ligne sur tout le portefeuille. «La cible avant tout» la réduit au maximum, puis les frais et commissions.",
+            "moneyLost": "Frais et commissions {value}"
           },
           "ledger": {
             "fields": {
@@ -190,7 +190,7 @@
           },
           "badges": {
             "help": {
-              "optimalProven": "The solver proved that no plan has a better score (with «Target first»: a smaller distance from the targets, then less money lost), and the exact check of the plan matches its numbers. The tie-breaks after it may have stopped earlier: they only choose among plans just as good. The proof holds within the solver's small calculation margin, which grows with the amounts."
+              "optimalProven": "The solver proved that no plan has a better score (with «Target first»: a smaller distance from the targets, then lower costs and fees), and the exact check of the plan matches its numbers. The tie-breaks after it may have stopped earlier: they only choose among plans just as good. The proof holds within the solver's small calculation margin, which grows with the amounts."
             }
           },
           "states": {

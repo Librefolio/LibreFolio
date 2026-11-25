@@ -66,7 +66,7 @@ const NOT_PROVEN_REASON_HELP: Record<string, BadgeHelp> = {
 };
 /** The Rebalancer's proven optimum: its objective, the tie-breaks apart (F4a of project 67, step 7). */
 const REBALANCER_OPTIMAL_PROVEN =
-    "The solver proved that no plan has a better score (with «Target first»: a smaller distance from the targets, then less money lost), and the exact check of the plan matches its numbers. The tie-breaks after it may have stopped earlier: they only choose among plans just as good. The proof holds within the solver's small calculation margin, which grows with the amounts.";
+    "The solver proved that no plan has a better score (with «Target first»: a smaller distance from the targets, then lower costs and fees), and the exact check of the plan matches its numbers. The tie-breaks after it may have stopped earlier: they only choose among plans just as good. The proof holds within the solver's small calculation margin, which grows with the amounts.";
 
 /** Lot MG of project 67: what the margin of a «local optimum» is. «Should»: the bound is the solver's, not a proof. */
 const MARGIN_HELP = "The best possible plan should be at most {margin} better than this one: the solver's own bounds say so, and they are not a proof.";
