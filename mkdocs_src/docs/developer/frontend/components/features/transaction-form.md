@@ -294,7 +294,7 @@ A FEE or a TAX can point at the transaction it belongs to (project 66; the backe
     - «Link to a transaction…», in the form of a FEE or TAX with no parent: the rows of the same broker whose type has
       `charge_role` `parent`, on the charge's asset and not paired. One row; it shows as pending, with «Undo», and «Apply»
       hands `_parent_link`.
-    - A failed fetch shows a toast and opens no picker. Changing the form's broker or asset drops what was picked.
+    - A failed fetch shows a toast and opens no picker. A change of broker or asset that would break a link not saved yet with a saved transaction (the saved charges picked or handed under a new parent, the saved parent of a new charge: `brokenSavedLinks`) goes through `changeContext`: `ConfirmModal` `tx-form-unlink-saved` names them (`tx-form-unlink-saved-item`); «Confirm» unlinks them as «Unlink» does and applies the change, «Cancel» writes nothing and redraws the selects (`revertSeq`, they keep a value of their own) (66 TL-12).
 - **«Open»** (`onOpenTransaction`): the host shows the other transaction in the same modal, in the same mode, and passes
   `highlightTxId` so the charge the user came from is highlighted in its parent's section. With unsaved changes the
   existing discard confirmation comes first. The transactions page and the portfolio views wire it in read-only; the
