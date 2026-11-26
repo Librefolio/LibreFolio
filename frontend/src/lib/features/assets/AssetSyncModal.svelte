@@ -1,8 +1,10 @@
 <!--
   AssetSyncModal — Thin wrapper around SyncModalBase for Asset price sync.
-  Builds a single SyncSection with Asset-specific doSyncFn and resultRow snippet.
+  Builds a single SyncSection with Asset-specific doSyncFn and resultRow snippet. Under it, when the caller hands
+  `profileAssets`, the «Profilo» section calls their enrichers together (87, A5), with a button of its own.
 -->
 <script lang="ts">
+    import {untrack} from 'svelte';
     import {zodiosApi} from '$lib/api';
     import SyncModalBase from '$lib/components/ui/modals/SyncModalBase.svelte';
     import SyncResultRow from '$lib/components/ui/modals/SyncResultRow.svelte';
@@ -14,6 +16,9 @@
     import {DEFAULT_PROVIDER_COLOR, ensureAssetProvidersCached, getAssetProviderIconUrl, PROVIDER_COLORS} from '$lib/utils/providerHelpers';
     import {clearTimer} from '$lib/utils/core/clearTimer';
     import {loadStoredPriceCounts, type StoredPriceCount} from '$lib/utils/sync/storedPriceCounts';
+
+    import ProfileBulkRefreshSection from './profile/ProfileBulkRefreshSection.svelte';
+    import {createProfileBulkRefresh} from './profile/profileBulkRefresh.svelte';
 
     interface AssetSyncItem {
         id: number;
@@ -28,11 +33,13 @@
         dateStart: string;
         dateEnd: string;
         assets: AssetSyncItem[];
+        /** The assets whose enrichers «Profilo» may call: an asset without a price provider may have some. Absent: no section. */
+        profileAssets?: AssetSyncItem[];
         onsynced: () => void;
         onclose: () => void;
     }
 
-    let {open = $bindable(), dateStart, dateEnd, assets, onsynced, onclose}: Props = $props();
+    let {open = $bindable(), dateStart, dateEnd, assets, profileAssets, onsynced, onclose}: Props = $props();
 
     let syncModalBase: SyncModalBase | undefined = $state(undefined);
     let longPressTimer: ReturnType<typeof setTimeout> | null = null;
@@ -43,6 +50,23 @@
     // Ensure asset provider icons are cached when modal opens
     $effect(() => {
         if (open) ensureAssetProvidersCached();
+    });
+
+    const profiles = createProfileBulkRefresh();
+    /** Every asset handed over so far: a read left going names its assets even if the window opens on others meanwhile. */
+    const seenAssets = new Map<number, AssetSyncItem>();
+    const profileAssetMap = $derived.by(() => {
+        for (const asset of profileAssets ?? []) seenAssets.set(asset.id, asset);
+        return new Map(seenAssets);
+    });
+    let wasOpen = false;
+    $effect(() => {
+        const isOpen = open;
+        const ids = (profileAssets ?? []).map((asset) => asset.id);
+        untrack(() => {
+            if (isOpen && !wasOpen && profileAssets) void profiles.open(ids);
+            wasOpen = isOpen;
+        });
     });
 
     async function doSyncFn(targetIds: string[], options: SyncRequestOptions): Promise<SyncResult[]> {
@@ -132,9 +156,15 @@
     {onclose}
     {onsynced}
     {sections}
+    startLabel={profileAssets ? $t('assets.sync.startPrices') : undefined}
+    below={profileAssets ? profileSection : undefined}
     testId="asset-sync-modal"
     title={$t('assets.sync.modalTitle') ?? 'Sync Asset Prices'}
 ></SyncModalBase>
+
+{#snippet profileSection()}
+    <ProfileBulkRefreshSection refresh={profiles} assets={profileAssetMap} />
+{/snippet}
 
 {#snippet resultRow(pr: SyncResult, syncing: boolean)}
     <SyncResultRow identityWidth="max-w-[120px]" onRetry={(id) => syncModalBase?.handleRetrySingle(id)} result={pr} {syncing} {identity} {provider} />
