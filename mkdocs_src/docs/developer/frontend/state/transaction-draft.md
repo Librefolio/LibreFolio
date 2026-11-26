@@ -525,8 +525,10 @@ before the patch, and after `applyChargePayload` `syncNewGroup` writes the one t
   onto rows whose type takes one.
 - A row the sync writes loses the import todos on the fields it wrote that its new values answer (`remainingTodos`), as the row of the Form does (a todo on another field stays): an
   imported group whose rows came without an asset is unblocked by the asset set on any one of them.
-- A group holding a saved row does not move: the batch's `chargeBrokerMismatch` / `chargeAssetMismatch` stay the guard,
-  and nothing changes in the payload.
+- A group holding a saved row does not move: a saved row cannot. Its Form asks before a change that would break such a
+  link (66 TL-12, `changeContext`), so after «Confirm» only new rows are left and they follow. The same window asks
+  before a new charge leaves its saved parent. The batch's `chargeBrokerMismatch` / `chargeAssetMismatch` stay the guard
+  for a new charge of a new parent changed in its own Form while a saved charge sits beside it.
 - A create that follows its parent (`followsParent`), applied in its own Form, loses the flag before the patch, so the
   broker, asset and date that Form gives it are kept (`syncFollowers` used to write the parent's back over them).
 - The Form of a row of such a group gets `groupSync`: a line under the broker says the group moves together.
@@ -603,6 +605,11 @@ calls `handleFormOpenTransaction(id)`:
   came from is passed as `highlightTxId` (`formHighlightTxId`, carried across that question);
 - a failed read gives the `tx.form.open.failed` toast; a late answer (the workspace or the Form closed, or the Form
   moved to another row) does nothing. The Form itself is open only while the workspace is (`open && formOpen`).
+
+On a new row, which has no id, the Form calls `handleFormOpenRow(tempId)` (66 TL-11): the row is in the workspace
+already, so nothing is read or added; a closed group opens, and the row the user came from is highlighted by its id, or
+by its key (`formHighlightKey`) when it is new too. `newParentOf` hands the Form of a charge its parent when that is a
+new row (`_newParent`); a saved parent keeps travelling as `parent_transaction_id` (`effectiveParentId`).
 
 **«Link» in the workspace (U3).** The toolbar's «Link» (`tx-bulk-link-charges` in `TxBulkToolbar`) joins one parent
 and its charges among the selected rows, new ones included. `bulkLinkSelection` (`bulk/bulkCharges.ts`) applies the

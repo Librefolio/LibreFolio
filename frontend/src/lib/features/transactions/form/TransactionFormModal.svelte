@@ -94,7 +94,8 @@
     import TxFormParentSection from './TxFormParentSection.svelte';
     import TransactionPickerModal from '../bulk/TransactionPickerModal.svelte';
     import {notify} from '$lib/stores/app/notify.svelte';
-    import {chargeCashDirection, chargeFromPicked, chargeRowsMissingAmount, chargesFromRows, chargesKey, linkedCharges, type ChargeDraft} from './txCharges';
+    import {brokenSavedLinks, bulkRowOf, chargeCashDirection, chargeFromPicked, chargeRowsMissingAmount, chargesFromRows, chargesKey, linkedCharges, type ChargeDraft, type HandedNewParent, type LinkContext} from './txCharges';
+    import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
 
     // =========================================================================
     // Types
@@ -163,8 +164,12 @@
         /** Project 66 (F3): open another transaction in this same modal, in the same mode («Open» on a charge or on the
          *  parent). Without it there is no «Open». */
         onOpenTransaction?: (id: number) => void;
-        /** Project 66 (F3): the charge the user came from, highlighted among the parent's charges. */
+        /** Project 66 (TL-11): the same for a new row of the Bulk, which has no id, by its `tempId`. */
+        onOpenRow?: (tempId: string) => void;
+        /** Project 66 (F3): the charge the user came from, highlighted among the parent's charges; a new one by its key
+         *  (`op-<tempId>`, TL-11). */
         highlightTxId?: number | null;
+        highlightKey?: string | null;
         /** Project 66 (TL-2): the host's own rows a picker may offer, read on the host's state (the Bulk). `rows` join the
          *  database's (a row in both is the host's), `exclude` drops database rows the host already marked or linked; `null`
          *  for a mode the host does not answer. A new row carries `_bulkKey` (`op-<tempId>`) and its name in `_rowRef`. */
@@ -197,7 +202,9 @@
         initialOptionalOpen = false,
         allowChargeEdits = false,
         onOpenTransaction,
+        onOpenRow,
         highlightTxId = null,
+        highlightKey = null,
         bulkCandidates,
         groupSync = false,
     }: Props = $props();
@@ -371,24 +378,22 @@
     let parentLoad = $state<'loading' | 'ready' | 'error'>('ready');
     let parentUnlinked = $state(false);
     let parentRequest = 0;
-    /** «Open» waiting for the discard confirmation: the transaction to show once the user confirms. */
-    let pendingOpenId = $state<number | null>(null);
+    /** «Open» waiting for the discard confirmation: what shows the other row once the user confirms. */
+    let pendingOpen = $state.raw<(() => void) | null>(null);
     /** F4: the transaction picked as this charge's parent, linked when the host saves. */
     let parentPending = $state<TXReadItem | null>(null);
     /** F4: the picker, for the charges of this parent or for the parent of this charge. */
     let pickerMode = $state<'charges' | 'parent' | null>(null);
     let pickerRows = $state<TXReadItem[]>([]);
-    /** F4: the broker and asset the picks were made for; changing either drops them (a link needs both equal). */
-    let pickedFor = $state<string | null>(null);
-    const linkContext = $derived(`${draft.broker_id ?? ''}|${draft.asset_id ?? ''}`);
-    $effect(() => {
-        if (pickedFor === null || linkContext === pickedFor) return;
-        untrack(() => {
-            parentPending = null;
-            charges = charges.filter((charge) => !charge.linkNew);
-            pickedFor = null;
-        });
-    });
+    /** 66 TL-11: the Bulk's new rows picked in this opening (`op-<tempId>`). */
+    let pickedKeys = $state.raw<ReadonlySet<string>>(new Set());
+    /** A transaction the window of TL-12 names. */
+    type UnlinkItem = {id: number; type: string | null; cash: {amount: string; code: string} | null; rest: string};
+    /** 66 TL-12: a change of broker or asset waiting for the confirmation, with the saved transactions it would unlink.
+     *  Nothing of it reaches the draft before «Confirm». */
+    let pendingChange = $state.raw<{apply: () => void; chargeKeys: string[]; parent: boolean; items: UnlinkItem[]} | null>(null);
+    /** Raised when a change is refused: the selects hold their own value, so they are drawn again on the draft's. */
+    let revertSeq = $state(0);
     /** Bug5-fix: broker_id of partner that the user cannot access.
      *  When set, the "To" side shows a locked placeholder instead of empty. */
     let inaccessiblePartnerBrokerId = $state<number | null>(null);
@@ -544,7 +549,7 @@
             lastTypeForReset = draft.type;
             startChargesLoad(row);
             startParentLoad(row);
-            pendingOpenId = null;
+            pendingOpen = null;
             initialDraftKey = baselineKey();
         });
         // Async hydration (brokers + currencies + asset cache for the picked asset).
@@ -696,6 +701,7 @@
      */
     function startChargesLoad(row: TXReadItem | null) {
         const request = ++chargesRequest;
+        pickedKeys = new Set();
         const handed = (row as unknown as {_charges?: unknown} | null)?._charges;
         if (Array.isArray(handed)) {
             charges = handed as ChargeDraft[];
@@ -731,7 +737,7 @@
         parentUnlinked = false;
         parentPending = null;
         pickerMode = null;
-        pickedFor = null;
+        pendingChange = null;
         const id = row?.parent_transaction_id ?? 0;
         if (!id || id <= 0) {
             parentLoad = 'ready';
@@ -793,10 +799,10 @@
     }
 
     function handlePicked(rows: TXReadItem[]) {
-        if (rows.length > 0) pickedFor = linkContext;
         if (pickerMode === 'charges') {
             const picked = rows.map(chargeFromPicked).filter((draftRow): draftRow is ChargeDraft => draftRow !== null);
             charges = [...charges, ...picked];
+            pickedKeys = new Set([...pickedKeys, ...picked.map((charge) => charge.key).filter((key) => bulkRowOf(key) !== null)]);
         } else if (pickerMode === 'parent' && rows.length === 1) {
             parentPending = rows[0];
         }
@@ -805,12 +811,21 @@
 
     /** «Open» (F3): show another transaction in this modal; with unsaved changes, after the discard confirmation. */
     function requestOpenTransaction(id: number) {
+        requestOpen(() => onOpenTransaction?.(id));
+    }
+
+    /** The same on a new row of the Bulk (66 TL-11). */
+    function requestOpenRow(tempId: string) {
+        requestOpen(() => onOpenRow?.(tempId));
+    }
+
+    function requestOpen(show: () => void) {
         if (hasUnsavedChanges()) {
-            pendingOpenId = id;
+            pendingOpen = show;
             confirmCloseOpen = true;
             return;
         }
-        onOpenTransaction?.(id);
+        show();
     }
 
     /** Detect unsaved changes vs. the snapshot taken at modal-open. */
@@ -830,10 +845,10 @@
 
     function confirmDiscardAndClose() {
         confirmCloseOpen = false;
-        if (pendingOpenId !== null) {
-            const id = pendingOpenId;
-            pendingOpenId = null;
-            onOpenTransaction?.(id);
+        if (pendingOpen !== null) {
+            const show = pendingOpen;
+            pendingOpen = null;
+            show();
             return;
         }
         onClose();
@@ -1123,8 +1138,10 @@
     let chargesEditable = $derived(!isReadonly && !commitOnSave && allowChargeEdits);
     let chargesMissing = $derived(chargesEditable ? chargeRowsMissingAmount(charges) : []);
     let hasSavedParent = $derived((mainRow?.parent_transaction_id ?? 0) > 0);
+    /** 66 TL-11: the charge's parent, when it is a new row of the Bulk (handed with the row). */
+    let newParent = $derived((mainRow as unknown as {_newParent?: HandedNewParent | null} | null)?._newParent ?? null);
     /** The charge's «Linked to»: with a saved parent always; without one only where it can be linked (F4). */
-    let showParent = $derived(!pairLayout && rule.chargeRole === 'charge' && (hasSavedParent || chargesEditable));
+    let showParent = $derived(!pairLayout && rule.chargeRole === 'charge' && (hasSavedParent || newParent !== null || chargesEditable));
     let showCharges = $derived(!pairLayout && rule.chargeRole === 'parent' && (chargesEditable || chargesLoad !== 'ready' || linkedCharges(charges).length > 0));
     let hasLocalErrors = $derived(formChecks.some((check) => check.kind === 'format') || (showCharges && chargesMissing.length > 0));
 
@@ -1545,7 +1562,8 @@
                 // Project 66: every charge draft, all states; the Bulk saves them with the parent (lot F7).
                 if (chargesEditable && showCharges) (payload as any)._charges = $state.snapshot(charges);
                 // F3: the charge unlinked from its parent in this form; the Bulk saves it (lot F7).
-                if (chargesEditable && showParent && parentUnlinked) (payload as any)._parent_unlink = true;
+                // 66 TL-12: an unlink confirmed by a change of type still goes, though the form no longer shows «Linked to».
+                if (chargesEditable && parentUnlinked) (payload as any)._parent_unlink = true;
                 // F4: the parent picked for a charge that has none; the Bulk saves it (lot F7).
                 if (chargesEditable && showParent && parentPending) (payload as any)._parent_link = parentPending.id;
                 onPushDraft?.(payload);
@@ -1590,11 +1608,54 @@
     // Field handlers
     // =========================================================================
 
+    /** 66 TL-12: every change of the broker or the asset goes through here. When it would break a link not saved yet whose
+     *  other end is saved (`brokenSavedLinks`), a window names those transactions and asks first; otherwise it applies. */
+    function changeContext(next: Partial<LinkContext>, apply: () => void) {
+        const current: LinkContext = {broker_id: draft.broker_id, asset_id: draft.asset_id ?? null};
+        const savedParentId = hasSavedParent && !parentUnlinked ? (mainRow?.parent_transaction_id ?? null) : null;
+        const parentId = parentPending?.id ?? savedParentId;
+        const parentShown = parentPending ?? parentRow;
+        const broken = pairLayout ? {charges: [], parent: null} : brokenSavedLinks(current, {...current, ...next}, showCharges ? charges : [], showParent ? parentId : null);
+        if (broken.charges.length === 0 && broken.parent === null) {
+            apply();
+            return;
+        }
+        const items: UnlinkItem[] = broken.charges.map((charge) => ({id: charge.id ?? 0, type: charge.type, cash: charge.cash, rest: charge.description}));
+        if (broken.parent !== null) items.push(parentShown?.id === broken.parent ? {id: broken.parent, type: parentShown.type, cash: parentShown.cash ?? null, rest: parentShown.date} : {id: broken.parent, type: null, cash: null, rest: ''});
+        pendingChange = {apply, chargeKeys: broken.charges.map((charge) => charge.key), parent: broken.parent !== null, items};
+    }
+
+    /** One transaction in the window, as the form's sections name it (the amount follows the privacy mode: read in the markup). */
+    function unlinkItemText(item: UnlinkItem): string {
+        const name = `${item.type ? `${$t(`transactions.types.${item.type}`)} ` : ''}#${item.id}`;
+        const amount = item.cash ? formatCurrencyAmountPlain(Number(item.cash.amount), item.cash.code, {sensitivity: 'personal'}) : '';
+        return [name, item.rest, amount].filter((part) => part).join(' · ');
+    }
+
+    /** «Confirm»: the links go as «Unlink» takes them, then the change applies. */
+    function confirmChange() {
+        const change = pendingChange;
+        pendingChange = null;
+        if (!change) return;
+        charges = charges.filter((charge) => !change.chargeKeys.includes(charge.key));
+        if (change.parent) {
+            if (parentPending) parentPending = null;
+            else parentUnlinked = true;
+        }
+        change.apply();
+    }
+
+    function cancelChange() {
+        pendingChange = null;
+        revertSeq++;
+    }
+
     function setType(v: string) {
-        draft = {...draft, type: v as TransactionTypeCode};
+        const next = v as TransactionTypeCode;
+        changeContext(getTypeRule(next).assetField === 'forbidden' ? {asset_id: null} : {}, () => (draft = {...draft, type: next}));
     }
     function setBroker(v: number) {
-        draft = {...draft, broker_id: v};
+        changeContext({broker_id: v}, () => (draft = {...draft, broker_id: v}));
     }
     function setBrokerTo(v: number) {
         dualTo = {...dualTo, broker_id: v};
@@ -1606,6 +1667,9 @@
         dualTo = {...dualTo, date: v};
     }
     function setAsset(v: number | null) {
+        changeContext({asset_id: v}, () => applyAsset(v));
+    }
+    function applyAsset(v: number | null) {
         draft = {...draft, asset_id: v};
         // If the new asset has a known native currency, seed cash code when empty.
         if (v != null && draft.cash == null) {
@@ -1733,12 +1797,12 @@
 
     function handleBrokerCreated(d: {id: number}) {
         // BrokerModal merges into brokerStore; just set the draft field
-        draft = {...draft, broker_id: d.id};
         createBrokerOpen = false;
+        changeContext({broker_id: d.id}, () => (draft = {...draft, broker_id: d.id}));
     }
     function handleAssetCreated(assetId: number) {
-        draft = {...draft, asset_id: assetId};
         createAssetOpen = false;
+        changeContext({asset_id: assetId}, () => (draft = {...draft, asset_id: assetId}));
         // Show info toast: remind user to sync prices after completing transactions
         const info = getAssetInfo(assetId);
         const name = info?.display_name || `#${assetId}`;
@@ -1897,6 +1961,7 @@
                     {brokerIdValue}
                     {rowSaved}
                     groupSync={groupSync && !isReadonly}
+                    {revertSeq}
                     {brokerImmutable}
                     {brokers}
                     {brokersForSelect}
@@ -1976,7 +2041,10 @@
                     loadState={chargesLoad}
                     missingKeys={chargesMissing}
                     onOpen={onOpenTransaction ? requestOpenTransaction : null}
+                    onOpenRow={onOpenRow ? requestOpenRow : null}
                     highlightId={highlightTxId}
+                    {highlightKey}
+                    {pickedKeys}
                     onLinkExisting={chargesEditable && mainRow?.related_transaction_id == null ? openChargesPicker : null}
                 />
             {/if}
@@ -1988,10 +2056,12 @@
                     parent={parentRow}
                     loadState={parentLoad}
                     unlinked={parentUnlinked}
+                    handed={newParent}
+                    onOpenHanded={onOpenRow && !parentUnlinked ? (key) => requestOpenRow(bulkRowOf(key) ?? key) : null}
                     onOpen={onOpenTransaction && !parentUnlinked ? requestOpenTransaction : null}
                     onUnlink={chargesEditable && !parentUnlinked ? () => (parentUnlinked = true) : null}
                     pending={parentPending}
-                    onLink={chargesEditable && !hasSavedParent && mainRow?.related_transaction_id == null ? openParentPicker : null}
+                    onLink={chargesEditable && !hasSavedParent && newParent === null && mainRow?.related_transaction_id == null ? openParentPicker : null}
                     onUndo={() => (parentPending = null)}
                 />
             {/if}
@@ -2075,10 +2145,33 @@
     onConfirm={confirmDiscardAndClose}
     onCancel={() => {
         confirmCloseOpen = false;
-        pendingOpenId = null;
+        pendingOpen = null;
     }}
     zIndex={70}
 />
+
+<!-- 66 TL-12: a change of broker or asset that would unlink transactions already saved: they are named, always in view. -->
+<ConfirmModal
+    open={pendingChange !== null}
+    title={$t('transactions.form.savedLinks.title', {values: {n: pendingChange?.items.length ?? 0}})}
+    message={$t('transactions.form.savedLinks.message', {values: {n: pendingChange?.items.length ?? 0}})}
+    confirmText={$t('transactions.form.savedLinks.confirm')}
+    cancelText={$t('common.cancel')}
+    warning
+    onConfirm={confirmChange}
+    onCancel={cancelChange}
+    zIndex={zIndex + 10}
+    testId="tx-form-unlink-saved"
+>
+    {#snippet details()}
+        <ul class="my-2 list-disc pl-5 space-y-1 text-sm text-lf-primary">
+            {#each pendingChange?.items ?? [] as item (item.id)}
+                <li data-testid="tx-form-unlink-saved-item" data-tx-id={item.id}>{unlinkItemText(item)}</li>
+            {/each}
+        </ul>
+        <p class="text-sm text-lf-secondary" data-testid="tx-form-unlink-saved-way-out">{$t('transactions.form.savedLinks.wayOut')}</p>
+    {/snippet}
+</ConfirmModal>
 
 <!-- F4: the picker of the charges of this parent, or of the parent of this charge -->
 <TransactionPickerModal

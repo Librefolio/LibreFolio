@@ -12,6 +12,7 @@
 import {describe, expect, it} from 'vitest';
 import type {TypeRule} from '../transactionTypeStore';
 import type {TXReadItem} from '../types';
+import * as txCharges from './txCharges';
 import {buildChargesBatch, chargeCashDirection, chargeFromPicked, chargeRowsMissingAmount, chargesFromRows, chargesKey, chargesTotal, newCharge, type ChargeDraft, type ChargesParent} from './txCharges';
 
 /** FEE and TAX as the backend declares them: cash out (negative), required; an asset is optional, no quantity; role «charge». */
@@ -395,5 +396,80 @@ describe('chargeFromPicked — a new row of the Bulk (TL-2)', () => {
             description: 'bank',
             original: {type: 'FEE', cash: {amount: '5', code: 'EUR'}, description: 'bank'},
         });
+    });
+});
+
+// ---------------------------------------------------------------------------------------------------------------
+//  TL-12 — the unsaved links to a SAVED transaction that a new broker or asset breaks: the saved charges linked here
+//  (`linkNew`) and the saved parent shown. The form asks before it undoes them. RED until `brokenSavedLinks` exists.
+// ---------------------------------------------------------------------------------------------------------------
+
+type LinkSide = {broker_id: number; asset_id: number | null};
+type BrokenSavedLinks = <T>(current: LinkSide, next: LinkSide, charges: readonly ChargeDraft[], parent: T | null) => {charges: ChargeDraft[]; parent: T | null};
+
+/** The helper, read at call time: a missing export fails these cases only. */
+function brokenSavedLinks<T>(current: LinkSide, next: LinkSide, charges: readonly ChargeDraft[], parent: T | null): {charges: ChargeDraft[]; parent: T | null} {
+    const helper = (txCharges as unknown as {brokenSavedLinks?: BrokenSavedLinks}).brokenSavedLinks;
+    expect(helper, '66 TL-12: txCharges exports no brokenSavedLinks').toBeTypeOf('function');
+    return helper!(current, next, charges, parent);
+}
+
+describe('brokenSavedLinks (TL-12)', () => {
+    const HERE: LinkSide = {broker_id: 1, asset_id: 7};
+    const OTHER_ASSET: LinkSide = {broker_id: 1, asset_id: 8};
+    const OTHER_BROKER: LinkSide = {broker_id: 2, asset_id: 7};
+    const NONE = {charges: [], parent: null};
+    const linkedHere = (id: number, over: Partial<ChargeDraft> = {}) => saved(id, {linkNew: true, ...over});
+
+    it('cell 1: new charges only (op-, new-) break nothing, whatever changes', () => {
+        const charges = [added(1), added(2, {key: 'op-n-fee'})];
+        expect(brokenSavedLinks(HERE, OTHER_ASSET, charges, null)).toEqual(NONE);
+        expect(brokenSavedLinks(HERE, OTHER_BROKER, charges, null)).toEqual(NONE);
+    });
+
+    it('cell 2: the saved charges linked here are named, in their order, on a new asset and on a new broker', () => {
+        const charges = [linkedHere(30), linkedHere(20, {type: 'TAX'})];
+        expect(brokenSavedLinks(HERE, OTHER_ASSET, charges, null)).toEqual({charges, parent: null});
+        expect(brokenSavedLinks(HERE, OTHER_BROKER, charges, null)).toEqual({charges, parent: null});
+    });
+
+    it('cell 2, mixed: only the saved ones among new charges', () => {
+        const savedOne = linkedHere(20);
+        expect(brokenSavedLinks(HERE, OTHER_ASSET, [added(1), savedOne, added(2, {key: 'op-n-fee'})], null)).toEqual({charges: [savedOne], parent: null});
+    });
+
+    it('cell 3: the saved parent shown is named, as it was given', () => {
+        const parent = {id: 10, note: 'a parent'};
+        expect(brokenSavedLinks(HERE, OTHER_ASSET, [], parent)).toEqual({charges: [], parent});
+        expect(brokenSavedLinks(HERE, OTHER_BROKER, [], parent).parent, 'the very value it was given').toBe(parent);
+    });
+
+    it('nothing when neither the broker nor the asset changes, no asset on both sides included', () => {
+        const nowhere: LinkSide = {broker_id: 1, asset_id: null};
+        expect(brokenSavedLinks(HERE, {...HERE}, [linkedHere(20)], {id: 10})).toEqual(NONE);
+        expect(brokenSavedLinks(nowhere, {...nowhere}, [linkedHere(20)], {id: 10})).toEqual(NONE);
+    });
+
+    it('no asset → an asset, and an asset → no asset, are both a change', () => {
+        const charges = [linkedHere(20)];
+        const nowhere: LinkSide = {broker_id: 1, asset_id: null};
+        expect(brokenSavedLinks(nowhere, HERE, charges, null)).toEqual({charges, parent: null});
+        expect(brokenSavedLinks(HERE, nowhere, charges, null)).toEqual({charges, parent: null});
+        expect(brokenSavedLinks(HERE, nowhere, [], {id: 10})).toEqual({charges: [], parent: {id: 10}});
+    });
+
+    it('a saved charge linked here but taken out of the section (unlink, delete) is not named', () => {
+        expect(brokenSavedLinks(HERE, OTHER_ASSET, [linkedHere(20, {state: 'unlink'}), linkedHere(21, {state: 'delete'})], null)).toEqual(NONE);
+    });
+
+    it('a saved charge without linkNew (really saved under this parent) is not named', () => {
+        expect(brokenSavedLinks(HERE, OTHER_ASSET, [saved(20), saved(21, {linkNew: false})], null)).toEqual(NONE);
+    });
+
+    it('does not touch the drafts it is given', () => {
+        const charges = [linkedHere(20), added(1)];
+        const before = structuredClone(charges);
+        brokenSavedLinks(HERE, OTHER_ASSET, charges, {id: 10});
+        expect(charges).toEqual(before);
     });
 });

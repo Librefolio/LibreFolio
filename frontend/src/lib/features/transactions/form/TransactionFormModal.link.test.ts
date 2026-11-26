@@ -389,7 +389,7 @@ describe('TransactionFormModal — the two pickers (66 F4)', () => {
     });
 
     // ---------------------------------------------------------------------------------------------------------------
-    //  F4b: a picked charge taken out again, and a pending parent dropped when its premise changes
+    //  F4b: a picked charge taken out again, and a pending parent whose premise changes (66 TL-12)
     // ---------------------------------------------------------------------------------------------------------------
 
     /** Parent 10 (broker 1, asset 5) with no charges, the picker offering charge 21; 21 picked and added to the section. */
@@ -454,7 +454,9 @@ describe('TransactionFormModal — the two pickers (66 F4)', () => {
         expect(onClose).toHaveBeenCalledTimes(1);
     });
 
-    it('charge side: a pending parent is dropped when the charge changes asset; Apply carries no _parent_link', async () => {
+    // 66 TL-12 reverses «a pending parent is dropped»: it is dropped only after the window that names it is confirmed.
+    // The window's other cases are in TransactionFormModal.savedLinks.test.ts.
+    it('charge side: a pending parent is not dropped in silence when the charge changes asset: the window names it; confirmed, Apply carries no _parent_link', async () => {
         resetAssetStore();
         mergeAssets([
             {id: 5, display_name: 'Link asset five', currency: 'EUR', quote_base_quantity: 1, active: true},
@@ -482,12 +484,24 @@ describe('TransactionFormModal — the two pickers (66 F4)', () => {
             await fireEvent.click(within(list).getByTestId('search-select-option-9'));
             await waitFor(() => expect(screen.queryByRole('listbox')).toBeNull());
 
+            await waitFor(() => expect(screen.queryByTestId('tx-form-unlink-saved'), '66 TL-12: no window before the pending parent is dropped').not.toBeNull());
+            expect(parentBox(), 'not dropped before the answer').toHaveAttribute('data-state', 'pending');
+            const dialog = screen.getByTestId('tx-form-unlink-saved').closest<HTMLElement>('[role="dialog"]')!;
+            expect(
+                within(dialog)
+                    .getAllByTestId('tx-form-unlink-saved-item')
+                    .map((item) => item.getAttribute('data-tx-id')),
+            ).toEqual(['10']);
+            await fireEvent.click(within(dialog).getByTestId('confirm-modal-confirm'));
+            await waitFor(() => expect(screen.queryByTestId('tx-form-unlink-saved')).toBeNull());
+
             await waitFor(() => expect(parentBox()).toHaveAttribute('data-state', 'empty'));
 
             await waitFor(() => expect(screen.getByTestId('tx-form-save')).toBeEnabled());
             await fireEvent.click(screen.getByTestId('tx-form-save'));
             expect(onPushDraft).toHaveBeenCalledTimes(1);
             expect(onPushDraft.mock.calls[0][0]).not.toHaveProperty('_parent_link');
+            expect(onPushDraft.mock.calls[0][0]).toMatchObject({asset_id: 9});
         } finally {
             resetAssetStore();
         }
@@ -666,5 +680,40 @@ describe('TransactionFormModal — the charges picker inside the Bulk (66 TL-2)'
         expect(onPushDraft).toHaveBeenCalledTimes(1);
         const drafts = (onPushDraft.mock.calls[0][0] as {_charges: Array<Record<string, unknown>>})._charges;
         expect(drafts.find((d) => d.id === 23)).toMatchObject({id: 23, linkNew: true, state: 'linked', description: 'Bulk note of 23', cash: {amount: '7', code: 'EUR'}});
+    });
+
+    // 66 TL-11: an op- row has «Unlink» now; one picked in this very opening was never the parent's, so «Unlink» only
+    // takes it back out — no draft left, and the picker offers it again (as a saved picked one, F4).
+    it('TL-11: a new Bulk row picked in this opening, then unlinked: out of the section and of Apply, and offered again', async () => {
+        answerPickers({withoutParent: () => []});
+        const handed = [{key: 'op-n-own', id: null, type: 'FEE', cash: {amount: '3', code: 'EUR'}, description: 'own', original: null, state: 'linked'}];
+        const bulkCandidates = vi.fn(() => ({rows: [bulkCharge(-7, 5, {_bulkKey: 'op-n-fee', _rowRef: 'row 4'})], exclude: []}));
+        const onPushDraft = vi.fn();
+        bulkHosted(onPushDraft, {...txRow({id: 10, broker_id: 1, asset_id: 5, type: 'BUY', charges_count: 0}), _charges: handed}, {bulkCandidates});
+        await waitFor(() => expect(rows().map((r) => r.getAttribute('data-charge-key'))).toEqual(['op-n-own']));
+        await fireEvent.click(await screen.findByTestId('tx-form-charges-link-existing'));
+        await waitForPickerIds([-7]);
+        await pickRow(-7);
+        await fireEvent.click(screen.getByTestId('tx-picker-add'));
+        await waitFor(() => expect(screen.queryByTestId('tx-picker-modal')).toBeNull());
+        await waitFor(() => expect(rows().map((r) => r.getAttribute('data-charge-key'))).toEqual(['op-n-own', 'op-n-fee']));
+
+        expect(screen.queryByTestId('tx-form-charge-unlink-op-n-fee'), '66 TL-11: no «Unlink» on a new charge of the Bulk').not.toBeNull();
+        await fireEvent.click(screen.getByTestId('tx-form-charge-unlink-op-n-fee'));
+
+        await waitFor(() => expect(rows().map((r) => r.getAttribute('data-charge-key'))).toEqual(['op-n-own']));
+        await fireEvent.click(screen.getByTestId('tx-form-charges-link-existing'));
+        await waitForPickerIds([-7]);
+        await fireEvent.click(screen.getByTestId('tx-picker-cancel'));
+        await waitFor(() => expect(screen.queryByTestId('tx-picker-modal')).toBeNull());
+
+        await waitFor(() => expect(screen.getByTestId('tx-form-save')).toBeEnabled());
+        await fireEvent.click(screen.getByTestId('tx-form-save'));
+        expect(onPushDraft).toHaveBeenCalledTimes(1);
+        const drafts = (onPushDraft.mock.calls[0][0] as {_charges: Array<Record<string, unknown>>})._charges;
+        expect(
+            drafts.map((d) => [d.key, d.state]),
+            'the picked one left no draft; the one handed stays linked',
+        ).toEqual([['op-n-own', 'linked']]);
     });
 });

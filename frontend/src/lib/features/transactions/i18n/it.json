@@ -138,7 +138,13 @@
       },
       "openFailed": "Non è stato possibile aprire la transazione",
       "candidatesFailed": "Non è stato possibile caricare le transazioni da collegare",
-      "groupSyncHint": "Finché le righe di questo gruppo (la transazione e le sue spese collegate) sono tutte nuove, hanno lo stesso broker e lo stesso asset: cambiarli qui li cambia su ogni riga del gruppo."
+      "groupSyncHint": "Finché le righe di questo gruppo (la transazione e le sue spese collegate) sono tutte nuove, hanno lo stesso broker e lo stesso asset: cambiarli qui li cambia su ogni riga del gruppo.",
+      "savedLinks": {
+        "title": "Scollegare {n, plural, one {una transazione salvata} other {# transazioni salvate}}?",
+        "message": "{n, plural, one {Questa transazione è già salvata e tiene il suo broker e il suo asset, quindi non può seguire la modifica: se continui, non è più collegata a quella che stai modificando.} other {Queste transazioni sono già salvate e tengono il loro broker e il loro asset, quindi non possono seguire la modifica: se continui, non sono più collegate a quella che stai modificando.}}",
+        "wayOut": "Per tenerle insieme: annulla, clonale con l'asset o il broker nuovo ed elimina gli originali.",
+        "confirm": "Scollega e cambia"
+      }
     },
     "bulk": {
       "resetRow": "Reimposta riga",

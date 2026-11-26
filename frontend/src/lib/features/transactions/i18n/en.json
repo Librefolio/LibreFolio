@@ -138,7 +138,13 @@
       },
       "openFailed": "The transaction could not be opened",
       "candidatesFailed": "The transactions to link could not be loaded",
-      "groupSyncHint": "While the rows of this group (the transaction and its linked charges) are all new, they share broker and asset: changing them here changes every row of the group."
+      "groupSyncHint": "While the rows of this group (the transaction and its linked charges) are all new, they share broker and asset: changing them here changes every row of the group.",
+      "savedLinks": {
+        "title": "Unlink {n, plural, one {a saved transaction} other {# saved transactions}}?",
+        "message": "{n, plural, one {This transaction is already saved and keeps its broker and asset, so it cannot follow the change: if you go on, it is no longer linked to the one you are editing.} other {These transactions are already saved and keep their broker and asset, so they cannot follow the change: if you go on, they are no longer linked to the one you are editing.}}",
+        "wayOut": "To keep them together: cancel, clone them with the new asset or broker, and delete the originals.",
+        "confirm": "Unlink and change"
+      }
     },
     "bulk": {
       "resetRow": "Reset row",

@@ -248,7 +248,7 @@ def populate_registry(registry: dict) -> None:
         "broker-tx-unlink-charges",
         front_broker_tx_unlink_charges,
         name="Broker Transactions Unlink Charges Tests",
-        desc="Project 66 TL-9: on the broker's Transactions tab, one linked charge ticked → «Unlink» → the panel → confirm: event tx.charges.unlinked, the tab reloads, the charge has no parent, read back by id; the transaction types are never asked for",
+        desc="Project 66 TL-9: on the broker's Transactions tab, one linked charge ticked → «Unlink» → the panel → confirm: event tx.charges.unlinked, the tab reloads, the charge has no parent, read back by id; the transaction types are never asked for; on a phone a BUY and the TAX of another BUY → «Link» off (linked) and «Unlink» (1) together, no sideways scroll, «Unlink» tapped",
         tests="brokers/broker-tx-unlink-charges.spec.ts",
     )
     add_test(

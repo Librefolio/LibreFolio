@@ -9,6 +9,9 @@
  *       `tx.charges.unlinked` names the TAX alone, the selection is empty, the TAX is a row of its own; and on the server
  *       the TAX has no parent, the FEE still has, the BUY counts one charge.
  *   (b) A BUY and a free FEE ticked: no «Unlink» (the bar is drawn and settled on «Link» for these two rows).
+ *   (c) On a phone (375 × 812, touch): a BUY and the TAX of ANOTHER BUY ticked → «Link» off (`linked`) and «Unlink» (1)
+ *       together in the bar; the page does not scroll sideways, «Unlink» is wholly on screen, its tap opens the panel in
+ *       unlink mode; cancel saves nothing (66 TL-11, from TL-9: the code was there, the phone was not proved).
  *
  * RED until TL-9: (a) stops where the bar must offer «Unlink». (b) is a guard, green before and after.
  *
@@ -25,7 +28,8 @@
 import {expect, test, type Locator, type Page} from '../fixtures/playwright';
 import {navigateTo} from '../fixtures/auth-helpers';
 import {eventSeq, waitForEvent, waitForSettled} from '../fixtures/app-events';
-import {cleanupOwnedAccount, emptyOwnedAccount} from '../fixtures/owned-pair';
+import {daysAgoIso} from '../fixtures/dates';
+import {cleanupOwnedAccount, commitCreates, emptyOwnedAccount} from '../fixtures/owned-pair';
 import {COMMIT_PATH, readByIds, seedBuyAndFreeFee, seedLinkedBuy} from '../fixtures/linked-charges';
 
 test.setTimeout(90_000);
@@ -178,5 +182,57 @@ test.describe('Transactions page — «Unlink the charges» from the selection b
         // The barrier: the bar has resolved its actions on these two rows, «Link» among them.
         await expect(bar.getByTestId('toolbar-action-link-charges')).toBeVisible({timeout: 5_000});
         await expect(bar.getByTestId('toolbar-action-unlink-charges')).toHaveCount(0);
+    });
+
+    // A context of its own (375 × 812, a touch screen), nested so it keeps this block's cleanup.
+    test.describe('on a phone', () => {
+        test.use({viewport: {width: 375, height: 812}, isMobile: true, hasTouch: true});
+        // Infrastructure, not data: both projects of playwright.config.ts run Chromium, so this never skips there.
+        test.skip(({browserName}) => browserName !== 'chromium', 'isMobile and the touch screen are Chromium emulation here');
+
+        test('(c) a BUY and the TAX of another BUY ticked: «Link» off and «Unlink» (1) share the bar, the page does not scroll sideways, «Unlink» is tapped; cancel saves nothing', async ({page, request}) => {
+            const s = await seedLinkedBuy(page, request, owned, committedIds, 'chgu3', 'ChgU');
+            const [otherBuyId] = await commitCreates(page, [{broker_id: s.broker.id, asset_id: s.assetId, type: 'BUY', date: daysAgoIso(4), quantity: '5', cash: {code: 'USD', amount: '-50'}, description: `Other buy ${s.marker}`}], 'commit another BUY');
+            committedIds.push(otherBuyId);
+            const commits: CommitPayload[] = [];
+            page.on('request', (req) => {
+                if (req.method() === 'POST' && new URL(req.url()).pathname === COMMIT_PATH) commits.push(req.postDataJSON() as CommitPayload);
+            });
+
+            await openTable(page);
+            const device = await page.evaluate(() => ({touchPoints: navigator.maxTouchPoints, phone: window.matchMedia('(max-width: 639px)').matches}));
+            expect(device.touchPoints, 'the page must see a touch screen (hasTouch)').toBeGreaterThan(0);
+            expect(device.phone, 'the page must be drawn at phone width, below 640 px').toBe(true);
+            await openGroup(page, s.buyId, [s.feeId, s.taxId]);
+            for (const id of [otherBuyId, s.taxId]) {
+                const checkbox = page.getByTestId('tx-table').getByTestId(`dt-row-checkbox-tx-${id}`);
+                await expect(checkbox).toHaveAttribute('data-state', 'unchecked', {timeout: 5_000});
+                await checkbox.tap();
+                await expect(checkbox, 'a tap on its checkbox ticks the row').toHaveAttribute('data-state', 'checked', {timeout: 5_000});
+            }
+
+            const bar = await expectSelection(page, 2);
+            const link = bar.getByTestId('toolbar-action-link-charges');
+            await expect(link, '«Link» is in the bar, off').toBeVisible({timeout: 5_000});
+            await expect(link).toHaveAttribute('data-disabled-reason', 'linked');
+            const unlink = await expectUnlink(bar, 1);
+
+            // The bar has no overflow control (DataTableToolbar): every action is drawn, so both must fit the screen.
+            const doc = await page.evaluate(() => ({scroll: document.documentElement.scrollWidth, client: document.documentElement.clientWidth}));
+            expect(doc.scroll, `the page scrolls sideways: scrollWidth ${doc.scroll}, clientWidth ${doc.client}`).toBeLessThanOrEqual(doc.client + 1);
+            for (const action of [link, unlink]) await expect(action, 'wholly on screen').toBeInViewport({ratio: 0.99});
+
+            await unlink.tap();
+            const content = await expectUnlinkPanel(page, s.taxId, s.buyId, [s.feeId, otherBuyId]);
+            const panelDoc = await page.evaluate(() => ({scroll: document.documentElement.scrollWidth, client: document.documentElement.clientWidth}));
+            expect(panelDoc.scroll, `with the panel open the page scrolls sideways: ${JSON.stringify(panelDoc)}`).toBeLessThanOrEqual(panelDoc.client + 1);
+
+            await content.getByTestId('tx-charges-modal-cancel').tap();
+            await expect(content).toBeHidden({timeout: 8_000});
+            expect(commits, 'cancelled: the page committed nothing').toEqual([]);
+            const kept = await readByIds(page, [s.feeId, s.taxId]);
+            expect([kept.get(s.feeId)?.parent_transaction_id ?? null, kept.get(s.taxId)?.parent_transaction_id ?? null], 'both charges still point at their BUY').toEqual([s.buyId, s.buyId]);
+            await expectSelection(page, 2);
+        });
     });
 });

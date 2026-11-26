@@ -465,3 +465,170 @@ describe('TransactionFormModal — linked charges (66 F2b)', () => {
         expect(rows()[0]).toHaveAttribute('data-charge-id', '11');
     });
 });
+
+// ---------------------------------------------------------------------------------------------------------------
+//  TL-11 — the new charges of the Bulk in their parent's form. A draft the Bulk hands keyed `op-<tempId>` is a row of
+//  its own there: «Open» (`onOpenRow('<tempId>')`), «Unlink» (state `unlink` in `_charges`) and the bin. A `new-<n>` row,
+//  written in this opening, has only the bin. `highlightKey` marks the row with that key (the charge the user came from).
+//  RED until then; the discard question's testids are the ConfirmModal's own.
+// ---------------------------------------------------------------------------------------------------------------
+
+/** A charge of the Bulk as its drafts hand it (`chargeDraftsFor`): a new one (`op-<tempId>`). */
+const opDraft = (tempId: string, description: string) => ({key: `op-${tempId}`, id: null, type: 'FEE', cash: {amount: '2', code: 'EUR'}, description, original: null, state: 'linked'});
+/** A saved one (`saved-<id>`). */
+const savedDraft = (id: number) => ({key: `saved-${id}`, id, type: 'TAX', cash: {amount: '5', code: 'EUR'}, description: 'saved tax', original: {type: 'TAX', cash: {amount: '5', code: 'EUR'}, description: 'saved tax'}, state: 'linked'});
+
+/** A new BUY in the form the Bulk hosts, its charges handed. */
+function newParentHosted(charges: unknown[], extra: Record<string, unknown> = {}) {
+    const onPushDraft = vi.fn();
+    const onOpenRow = vi.fn();
+    const onOpenTransaction = vi.fn();
+    return {onPushDraft, onOpenRow, onOpenTransaction, ...mount({mode: 'create', commitOnSave: false, allowChargeEdits: true, onPushDraft, onOpenRow, onOpenTransaction, items: [{...txRow({id: 0}), _charges: charges}], ...extra})};
+}
+
+const keys = () => rows().map((r) => r.getAttribute('data-charge-key'));
+const rowByKey = (key: string) => rows().find((r) => r.getAttribute('data-charge-key') === key);
+
+async function waitForKeys(expected: string[]) {
+    await waitFor(() => expect(keys()).toEqual(expected));
+}
+
+async function appliedCharges(onPushDraft: ReturnType<typeof vi.fn>): Promise<Array<Record<string, unknown>>> {
+    await waitFor(() => expect(screen.getByTestId('tx-form-save')).toBeEnabled());
+    await fireEvent.click(screen.getByTestId('tx-form-save'));
+    expect(onPushDraft).toHaveBeenCalledTimes(1);
+    return (onPushDraft.mock.calls[0][0] as {_charges: Array<Record<string, unknown>>})._charges;
+}
+
+describe('TransactionFormModal — the Bulk’s new charges in their parent’s form (66 TL-11)', () => {
+    beforeAll(async () => {
+        vi.mocked(zodiosApi.get_transaction_types_api_v1_transactions_types_get).mockResolvedValue(TYPES_WITH_CHARGE_ROLES);
+        await setupI18n();
+        await ensureTypesLoaded();
+    });
+
+    beforeEach(() => {
+        queryCharges().mockReset();
+        queryCharges().mockImplementation(async () => []);
+        guideAnchors.clear();
+    });
+
+    afterEach(() => {
+        cleanup();
+        guideAnchors.clear();
+    });
+
+    it('an op- row has «Open», «Unlink» and the bin', async () => {
+        newParentHosted([opDraft('n-fee', 'new fee')]);
+
+        await waitForKeys(['op-n-fee']);
+        expect(screen.getByTestId('tx-form-charge-remove-op-n-fee'), 'the bin stays').toBeInTheDocument();
+        expect(screen.queryByTestId('tx-form-charge-open-op-n-fee'), '66 TL-11: no «Open» on a new charge of the Bulk').not.toBeNull();
+        expect(screen.queryByTestId('tx-form-charge-unlink-op-n-fee'), '66 TL-11: no «Unlink» on a new charge of the Bulk').not.toBeNull();
+    });
+
+    it('«Open» on an op- row asks the host for that row (onOpenRow with its tempId), never for a saved id', async () => {
+        const {onOpenRow, onOpenTransaction, onClose} = newParentHosted([opDraft('n-fee', 'new fee')]);
+        await waitForKeys(['op-n-fee']);
+
+        await fireEvent.click(screen.getByTestId('tx-form-charge-open-op-n-fee'));
+
+        expect(onOpenRow).toHaveBeenCalledTimes(1);
+        expect(onOpenRow.mock.calls[0][0]).toBe('n-fee');
+        expect(onOpenTransaction).not.toHaveBeenCalled();
+        expect(onClose).not.toHaveBeenCalled();
+    });
+
+    it('without onOpenRow an op- row has no «Open» (a saved one keeps its own), but keeps «Unlink»', async () => {
+        newParentHosted([opDraft('n-fee', 'new fee'), savedDraft(12)], {onOpenRow: undefined});
+
+        await waitForKeys(['op-n-fee', 'saved-12']);
+        expect(screen.getByTestId('tx-form-charge-open-saved-12')).toBeInTheDocument();
+        expect(screen.queryByTestId('tx-form-charge-open-op-n-fee')).toBeNull();
+        expect(screen.queryByTestId('tx-form-charge-unlink-op-n-fee'), '66 TL-11: no «Unlink» on a new charge of the Bulk').not.toBeNull();
+    });
+
+    it('«Unlink» on an op- row handed by the Bulk: out of the section, the form dirty, Apply’s _charges holds it with the state unlink', async () => {
+        const {onPushDraft, onClose} = newParentHosted([opDraft('n-fee', 'new fee'), opDraft('n-fee2', 'new fee 2')]);
+        await waitForKeys(['op-n-fee', 'op-n-fee2']);
+
+        await fireEvent.click(screen.getByTestId('tx-form-charge-unlink-op-n-fee'));
+
+        await waitForKeys(['op-n-fee2']);
+        await fireEvent.click(screen.getByTestId('tx-form-cancel'));
+        await screen.findByTestId('confirm-modal-confirm');
+        expect(onClose, 'a change not applied: closing asks').not.toHaveBeenCalled();
+        await fireEvent.click(screen.getByTestId('confirm-modal-cancel'));
+        await waitFor(() => expect(screen.queryByTestId('confirm-modal-confirm')).toBeNull());
+
+        const drafts = await appliedCharges(onPushDraft);
+        expect(drafts).toHaveLength(2);
+        expect(drafts.find((d) => d.key === 'op-n-fee')).toMatchObject({id: null, type: 'FEE', description: 'new fee', cash: {amount: '2', code: 'EUR'}, state: 'unlink'});
+        expect(drafts.find((d) => d.key === 'op-n-fee2')).toMatchObject({state: 'linked'});
+    });
+
+    it('highlightKey marks the row with that key and no other', async () => {
+        newParentHosted([opDraft('n-fee', 'new fee'), opDraft('n-fee2', 'new fee 2'), savedDraft(12)], {highlightKey: 'op-n-fee2'});
+
+        await waitForKeys(['op-n-fee', 'op-n-fee2', 'saved-12']);
+        expect(rowByKey('op-n-fee2'), '66 TL-11: the charge the user came from is not highlighted').toHaveAttribute('data-highlighted', 'true');
+        expect(rowByKey('op-n-fee')).toHaveAttribute('data-highlighted', 'false');
+        expect(rowByKey('saved-12')).toHaveAttribute('data-highlighted', 'false');
+    });
+
+    it('unsaved changes: «Open» on an op- row asks to discard first; Cancel keeps everything, confirming navigates', async () => {
+        const {onOpenRow, onClose} = newParentHosted([opDraft('n-fee', 'new fee')]);
+        await waitForKeys(['op-n-fee']);
+        await fireEvent.click(screen.getByTestId('tx-form-charges-add-TAX'));
+        await waitFor(() => expect(rows()).toHaveLength(2));
+        const typed = keys();
+
+        await fireEvent.click(screen.getByTestId('tx-form-charge-open-op-n-fee'));
+        await screen.findByTestId('confirm-modal-confirm');
+        expect(onOpenRow).not.toHaveBeenCalled();
+        await fireEvent.click(screen.getByTestId('confirm-modal-cancel'));
+        await waitFor(() => expect(screen.queryByTestId('confirm-modal-confirm')).toBeNull());
+        expect(onOpenRow).not.toHaveBeenCalled();
+        expect(onClose).not.toHaveBeenCalled();
+        expect(keys(), 'everything typed is kept').toEqual(typed);
+
+        await fireEvent.click(screen.getByTestId('tx-form-charge-open-op-n-fee'));
+        await fireEvent.click(await screen.findByTestId('confirm-modal-confirm'));
+        expect(onOpenRow).toHaveBeenCalledTimes(1);
+        expect(onOpenRow.mock.calls[0][0]).toBe('n-fee');
+        expect(onClose).not.toHaveBeenCalled();
+    });
+
+    // --- guards, green before and after ---
+
+    it('guard: a new-<n> row, written in this opening, has only the bin', async () => {
+        newParentHosted([]);
+        await screen.findByTestId('tx-form-charges-add-FEE');
+        await fireEvent.click(screen.getByTestId('tx-form-charges-add-FEE'));
+        await waitFor(() => expect(rows()).toHaveLength(1));
+        const key = keys()[0] ?? '';
+        expect(key.startsWith('new-'), `premise: ${key}`).toBe(true);
+
+        expect(screen.getByTestId(`tx-form-charge-remove-${key}`)).toBeInTheDocument();
+        expect(screen.queryByTestId(`tx-form-charge-open-${key}`)).toBeNull();
+        expect(screen.queryByTestId(`tx-form-charge-unlink-${key}`)).toBeNull();
+    });
+
+    it('guard: the bin on an op- row takes it out of the section and of Apply’s _charges', async () => {
+        const {onPushDraft} = newParentHosted([opDraft('n-fee', 'new fee'), opDraft('n-fee2', 'new fee 2')]);
+        await waitForKeys(['op-n-fee', 'op-n-fee2']);
+
+        await fireEvent.click(screen.getByTestId('tx-form-charge-remove-op-n-fee'));
+
+        await waitForKeys(['op-n-fee2']);
+        expect((await appliedCharges(onPushDraft)).map((d) => d.key)).toEqual(['op-n-fee2']);
+    });
+
+    it('guard: not editable — an op- row has neither «Unlink» nor the bin', async () => {
+        newParentHosted([opDraft('n-fee', 'new fee')], {allowChargeEdits: false});
+
+        await waitForKeys(['op-n-fee']);
+        expect(screen.queryByTestId('tx-form-charge-unlink-op-n-fee')).toBeNull();
+        expect(screen.queryByTestId('tx-form-charge-remove-op-n-fee')).toBeNull();
+    });
+});

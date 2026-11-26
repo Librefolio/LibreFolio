@@ -19,9 +19,10 @@
  *       linked one is copied.
  *   (8) Bulk (📌 consultant, to confirm visually), trash on the parent copy → its untouched charge copies leave with it;
  *       a copy whose amount was changed first stays, a free row.
- *   (9) Page, a linked FEE cloned alone, the copy's asset changed in its Form (row 5 of the lot's table) → the Form keeps
- *       the link (rule 3 is the backend's); the Bulk's validation flags `chargeAssetMismatch`; «Save all» is refused
- *       whole (`committed: false`, the issue on the copy), the Bulk stays open with the refusal, nothing is saved.
+ *   (9) Page, a linked FEE cloned alone, the copy's asset changed in its Form (row 5 of the lot's table) → 66 TL-12: the
+ *       BUY is saved and keeps its asset, so the window names it first; «Cancel» keeps the copy linked on the BUY's asset;
+ *       «Confirm» unlinks the copy, which «Save all» saves free on the other asset. Was (TL-3): the link kept, flagged,
+ *       «Save all» refused.
  *  (10) Page, a BUY cloned with its two charges, the BUY copy's asset changed in its Form → TL-3b: the BUY copy and its
  *       charge copies are an all-new group, so the charge copies take the new asset too (they stay under it, each on
  *       its own date); «Save all» passes, the originals unchanged (their asset included). Reverses TL-3's «no magic».
@@ -329,32 +330,8 @@ async function applyForm(form: Locator): Promise<void> {
     await expect(form).toBeHidden({timeout: 8_000});
 }
 
-/** `banner` (the pre-save warning `tx-bulk-issues-header` or the refusal `tx-bulk-error`) lists `n` issues, every one
- *  `chargeAssetMismatch`: the Bulk holds only this test's rows, so the count is the test's. */
-async function expectIssues(banner: Locator, n: number, what: string): Promise<void> {
-    await expect(banner, `${what} is shown`).toBeVisible({timeout: 20_000});
-    await expect(banner.locator('[data-testid="tx-bulk-issue"][data-code="chargeAssetMismatch"]'), `${what}: the asset rule`).toHaveCount(n, {timeout: 20_000});
-    await expect(banner.getByTestId('tx-bulk-issue'), `${what}: nothing else`).toHaveCount(n);
-}
-
 type SentCreate = {type?: string; description?: string; asset_id?: number | null; parent_transaction_id?: number; parent_ref?: string; ref?: string};
 type RefusedIssue = {operation?: string; index?: number; code?: string; params?: {assetId?: number; parentAssetId?: number}};
-
-/** «Save all» that the server refuses: the batch goes out, comes back `committed: false`, and the Bulk stays open. */
-async function saveRefused(page: Page, bulk: Locator): Promise<{payload: {creates?: SentCreate[]}; body: {committed?: boolean; issues?: RefusedIssue[]}}> {
-    await waitForSettled(bulk.getByTestId('tx-bulk-modal-root'), 20_000);
-    const commit = bulk.getByTestId('tx-bulk-commit');
-    await expect(commit, 'the issues do not lock «Save all»').toBeEnabled({timeout: 10_000});
-    const requestPromise = page.waitForRequest((req) => req.url().includes('/transactions/commit') && req.method() === 'POST', {timeout: 15_000});
-    const responsePromise = page.waitForResponse((resp) => resp.url().includes('/transactions/commit') && resp.request().method() === 'POST', {timeout: 15_000});
-    await commit.click();
-    const payload = (await requestPromise).postDataJSON() as {creates?: SentCreate[]};
-    const body = (await (await responsePromise).json()) as {committed?: boolean; issues?: RefusedIssue[]};
-    expect(body.committed, `the batch was saved: ${JSON.stringify(body)} — payload ${JSON.stringify(payload)}`).toBe(false);
-    await waitForSettled(bulk.getByTestId('tx-bulk-modal-root'), 20_000);
-    await expect(bulk, 'a refused save keeps the Bulk open').toBeVisible();
-    return {payload, body};
-}
 
 /** «Save all», the batch and the answer captured as they are: the caller asserts what was sent before whether it was
  *  saved, so a refusal reads as the field that broke it. */
@@ -651,9 +628,9 @@ test.describe('«Clona» carries the linked charges (TL-3)', () => {
         await expect(body.locator(`tr[data-row-id="${buyCopyId}"]`), 'the BUY copy left').toHaveCount(0);
         await expect(body.locator(`tr[data-row-id="${taxCopyId}"]`), 'the untouched TAX copy left with it').toHaveCount(0);
     });
-    // Row 5 of the lot's table: a cloned charge whose copy gets another asset. Rule 3 (a charge has its parent's asset) is
-    // the backend's: the Form keeps the link, the Bulk's validation names the row, and «Save all» is refused whole.
-    test('(9) page «Clona» on a linked FEE, the copy’s asset changed in its Form: the link stays; flagged chargeAssetMismatch, «Save all» refused, nothing saved', async ({page, request}) => {
+    // Row 5 of the lot's table: a cloned charge whose copy gets another asset. 66 TL-12 (D-26, the lane's reading of the new
+    // charge under a saved parent): the BUY is saved and cannot follow, so the window asks first. Was: flagged, refused.
+    test('(9) page «Clona» on a linked FEE, the copy’s asset changed in its Form: the window names the BUY; Cancel keeps the link, Confirm unlinks; «Save all» saves the copy free on the other asset', async ({page, request}) => {
         const s = (seeded = await seedBuyWithCharges(page, request, owned, 'tl3c9', TWO_CHARGES));
         const {fee} = s.charges;
         const otherAssetId = await seededAssetId(page, OTHER_ASSET.ticker);
@@ -667,33 +644,39 @@ test.describe('«Clona» carries the linked charges (TL-3)', () => {
         await expect(form, 'a single row cloned opens its Form').toBeVisible({timeout: 8_000});
         const parent = form.getByTestId('tx-form-parent');
         await expect(parent, 'premise: the copy is linked to the BUY').toHaveAttribute('data-parent-id', String(s.buyId), {timeout: 8_000});
+        const trigger = form.getByTestId('tx-form-asset-trigger');
+        const assetBefore = ((await trigger.textContent()) ?? '').trim();
+
+        const unlinkWindow = page.getByTestId('tx-form-unlink-saved');
+        const dialog = page.getByRole('dialog').filter({has: unlinkWindow}).last();
+        const answer = async (button: 'confirm' | 'cancel') => {
+            await expect(unlinkWindow, '66 TL-12: no window before the saved BUY is unlinked').toBeVisible({timeout: 8_000});
+            await expect(dialog.getByTestId('tx-form-unlink-saved-item')).toHaveCount(1);
+            await expect(dialog.locator(`[data-testid="tx-form-unlink-saved-item"][data-tx-id="${s.buyId}"]`), 'the BUY is named').toBeVisible();
+            await dialog.getByTestId(`confirm-modal-${button}`).click();
+            await expect(unlinkWindow).toBeHidden({timeout: 8_000});
+        };
 
         await pickAsset(page, form, otherAssetId);
-        // The Form neither drops nor blocks the link: still «Linked to» the BUY, and «Apply» stays on.
-        await expect(parent, 'the Form keeps the link after the asset changes').toHaveAttribute('data-parent-id', String(s.buyId));
-        await expect(parent).toHaveAttribute('data-state', 'ready');
+        await answer('cancel');
+        await expect(trigger, 'the refused asset is not left on screen').toHaveText(assetBefore);
+        await expect(parent, 'still linked to the BUY').toHaveAttribute('data-state', 'ready');
+
+        await pickAsset(page, form, otherAssetId);
+        await answer('confirm');
+        await expect(parent, 'unlinked').toHaveAttribute('data-state', 'unlinked');
         await applyForm(form);
 
         const copy = copyRows(bulk, fee.description);
         await expect(copy).toHaveCount(1, {timeout: 10_000});
-        // The Bulk's own validation (run on the change, no click) flags the copy: one issue, the asset rule.
-        await expectIssues(bulk.getByTestId('tx-bulk-issues-header'), 1, 'the pre-save warning');
-
-        const {payload, body} = await saveRefused(page, bulk);
-        const dump = `payload ${JSON.stringify(payload)} — answer ${JSON.stringify(body)}`;
+        const payload = (await saveAll(page, bulk)) as {creates?: SentCreate[]};
+        const dump = `payload ${JSON.stringify(payload)}`;
         expect(payload.creates, dump).toHaveLength(1);
         const sent = payload.creates?.[0];
-        expect([sent?.type, sent?.asset_id, sent?.parent_transaction_id], `the copy is sent linked to the BUY, with the other asset: ${dump}`).toEqual(['FEE', otherAssetId, s.buyId]);
-        expect(
-            (body.issues ?? []).map((issue) => [issue.operation, issue.index, issue.code, issue.params?.assetId, issue.params?.parentAssetId]),
-            `the server names the copy and the asset rule: ${dump}`,
-        ).toEqual([['create', 0, 'chargeAssetMismatch', otherAssetId, s.assetId]]);
-
-        // The refusal is shown, with the issue, and the Bulk keeps the copy for the user to fix.
-        await expectIssues(bulk.getByTestId('tx-bulk-error'), 1, 'the refusal');
-        await expect(copy).toHaveCount(1);
-        // Nothing saved: no new row on the broker, the originals as seeded.
-        expect(await newRowsOnBroker(page, s), dump).toEqual([]);
+        expect([sent?.type, sent?.asset_id, sent?.parent_transaction_id ?? null, sent?.parent_ref ?? null], `the copy is sent free, with the other asset: ${dump}`).toEqual(['FEE', otherAssetId, null, null]);
+        const fresh = await newRowsOnBroker(page, s);
+        const saved = only(fresh, 'FEE', fee.description, `${dump} — new rows ${JSON.stringify(fresh)}`);
+        expect([saved.asset_id, saved.parent_transaction_id ?? null], dump).toEqual([otherAssetId, null]);
         await expectOriginalsUnchanged(page, s);
     });
 

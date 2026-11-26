@@ -138,7 +138,13 @@
       },
       "openFailed": "La transaction n'a pas pu être ouverte",
       "candidatesFailed": "Les transactions à lier n'ont pas pu être chargées",
-      "groupSyncHint": "Tant que les lignes de ce groupe (la transaction et ses frais liés) sont toutes nouvelles, elles partagent courtier et actif : les changer ici les change sur chaque ligne du groupe."
+      "groupSyncHint": "Tant que les lignes de ce groupe (la transaction et ses frais liés) sont toutes nouvelles, elles partagent courtier et actif : les changer ici les change sur chaque ligne du groupe.",
+      "savedLinks": {
+        "title": "Délier {n, plural, one {une transaction enregistrée} other {# transactions enregistrées}} ?",
+        "message": "{n, plural, one {Cette transaction est déjà enregistrée et garde son courtier et son actif : elle ne peut pas suivre la modification. Si vous continuez, elle n'est plus liée à celle que vous modifiez.} other {Ces transactions sont déjà enregistrées et gardent leur courtier et leur actif : elles ne peuvent pas suivre la modification. Si vous continuez, elles ne sont plus liées à celle que vous modifiez.}}",
+        "wayOut": "Pour les garder ensemble : annulez, clonez-les avec le nouvel actif ou le nouveau courtier, puis supprimez les originaux.",
+        "confirm": "Délier et modifier"
+      }
     },
     "bulk": {
       "resetRow": "Réinitialiser la ligne",

@@ -41,6 +41,8 @@
         autocompleteNonce: string;
         brokerIdValue: number | null;
         rowSaved: boolean;
+        /** 66 TL-12: raised when a change was refused: the selects keep a value of their own, so they are drawn again. */
+        revertSeq?: number;
         /** Project 66 (TL-3b): the row is in an all-new group of the Bulk — broker and asset change on every row of it. */
         groupSync?: boolean;
         brokerImmutable: boolean;
@@ -105,6 +107,7 @@
         autocompleteNonce,
         brokerIdValue,
         rowSaved,
+        revertSeq = 0,
         groupSync = false,
         brokerImmutable,
         brokers,
@@ -203,7 +206,9 @@
                     <span class="font-medium">{$t(`transactions.types.${draft.type}`) || draft.type}</span>
                 </div>
             {:else}
-                <TransactionTypeSearchSelect value={draft.type} onchange={(v) => setType(v)} disabled={isReadonly} types={allowedTypes} compact testid="tx-form-type" />
+                {#key revertSeq}
+                    <TransactionTypeSearchSelect value={draft.type} onchange={(v) => setType(v)} disabled={isReadonly} types={allowedTypes} compact testid="tx-form-type" />
+                {/key}
             {/if}
         </div>
     </div>
@@ -356,7 +361,9 @@
                 >{$t('common.asset')}{rule.assetField === 'required' ? ' *' : ''}{#if rule.assetField === 'optional'}
                     <span class="text-lf-muted italic">({$t('common.optional')})</span>{/if}</span
             >
-            <TxCellMark cell="asset" marks={markedCells}><TxFormAssetField value={draft.asset_id} disabled={isReadonly || rowSaved} onchange={setAsset} onCreateNew={isReadonly || rowSaved ? undefined : () => (createAssetOpen = true)} /></TxCellMark>
+            {#key revertSeq}
+                <TxCellMark cell="asset" marks={markedCells}><TxFormAssetField value={draft.asset_id} disabled={isReadonly || rowSaved} onchange={setAsset} onCreateNew={isReadonly || rowSaved ? undefined : () => (createAssetOpen = true)} /></TxCellMark>
+            {/key}
         </div>
     {/if}
 
@@ -372,7 +379,9 @@
                 <span class="font-medium">{b?.name ?? `#${draft.broker_id}`}</span>
             </div>
         {:else}
-            <TxCellMark cell="broker" marks={markedCells}><BrokerSearchSelect brokers={brokersForSelect} value={brokerIdValue} onchange={(id) => setBroker(id ?? 0)} createLabel={$t('common.createNew') || 'Create new'} onCreateNew={() => (createBrokerOpen = true)} /></TxCellMark>
+            {#key revertSeq}
+                <TxCellMark cell="broker" marks={markedCells}><BrokerSearchSelect brokers={brokersForSelect} value={brokerIdValue} onchange={(id) => setBroker(id ?? 0)} createLabel={$t('common.createNew') || 'Create new'} onCreateNew={() => (createBrokerOpen = true)} /></TxCellMark>
+            {/key}
         {/if}
         {#if groupSync}
             <span class="text-[11px] text-lf-muted italic" data-testid="tx-form-group-sync-hint">💡 {$t('transactions.form.groupSyncHint')}</span>
