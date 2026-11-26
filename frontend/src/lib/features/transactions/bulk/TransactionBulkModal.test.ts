@@ -4418,6 +4418,111 @@ describe('TransactionBulkModal — 66 F7-c1: the charges grouped under their par
                 onlyCreateOf(body, 'BUY');
                 expect(updatesOf(body, FREE.id), 'the saved FEE sends nothing').toEqual([]);
             });
+
+            // --- 66 TL-12: what the Form hands back after its window («unlink the saved ones») is confirmed. The window is
+            // the Form's (TransactionFormModal.savedLinks.test.ts); the Bulk's half already exists: guards. ---
+
+            /** A saved FREE, as the Form picks it. */
+            function pickedFree(): ChargeDraft {
+                const original: NonNullable<ChargeDraft['original']> = {type: 'FEE', cash: {amount: '1.500000', code: 'EUR'}, description: FREE.description ?? ''};
+                return {key: `saved-${FREE.id}`, id: FREE.id, type: 'FEE', cash: original.cash, description: original.description, original, state: 'linked', linkNew: true};
+            }
+
+            /** FREE is as saved: top level, untouched, and the batch says nothing about it. */
+            function expectFreeUntouched(): void {
+                expect(chargeOfCell(gridRow(FREE.id)), 'top level').toBeNull();
+                expect(chargeState(gridRow(FREE.id)), 'no badge: there was no saved link to cut').toBeNull();
+                expect(rowStatus(gridRow(FREE.id)), 'back as saved').toBe('original');
+            }
+
+            for (const [field, value] of [
+                ['asset_id', 102],
+                ['broker_id', 88],
+            ] as const) {
+                for (const sibling of ['born in the BUY’s Form (it follows it)', 'a row of the Bulk linked there'] as const) {
+                    it(`66 TL-12 guard: a new ${field} without the saved FEE’s draft: the FEE is free, nothing sent for it; the new sibling, ${sibling}, takes it`, async () => {
+                        mergeBrokers([{id: 88, name: 'TL12 other broker', user_role: 'OWNER'}]);
+                        await openEditor([DEP.id, FREE.id]);
+                        if (sibling === 'born in the BUY’s Form (it follows it)') {
+                            await addRow(buyPayload({description: NEW_BUY, _charges: [pickedFree(), newDraft('FEE', '2', NEW_FEE)]}));
+                        } else {
+                            await addRow(chargePayload('FEE', NEW_FEE, {date: BUY.date}));
+                            const op: ChargeDraft = {...newDraft('FEE', '2', NEW_FEE), key: `op-${tempIdOf(NEW_FEE)}`};
+                            await addRow(buyPayload({description: NEW_BUY, _charges: [pickedFree(), op]}));
+                        }
+                        const buyId = tempIdOf(NEW_BUY);
+                        expect([chargeOfCell(gridRow(FREE.id)), chargeOfCell(gridRowDescribed(NEW_FEE))], 'premise: a mixed group').toEqual([buyId, buyId]);
+                        await editRow(gridRowDescribed(NEW_BUY));
+
+                        await push(buyPayload({description: NEW_BUY, [field]: value, _charges: handedDrafts().filter((draft) => draft.id === null)}));
+
+                        expectFreeUntouched();
+                        expect(chargeOfCell(gridRowDescribed(NEW_FEE)), 'the new sibling is still under the BUY').toBe(buyId);
+                        const body = await saveAll();
+                        const buy = onlyCreateOf(body, 'BUY');
+                        const fee = onlyCreateOf(body, 'FEE');
+                        expect(buy).toMatchObject({[field]: value});
+                        expect(fee, 'it took the change').toMatchObject({[field]: value, description: NEW_FEE});
+                        expect(fee.parent_ref, 'sent under the BUY').toBe(buy.ref);
+                        expect(updatesOf(body, FREE.id), 'the saved FEE sends nothing').toEqual([]);
+                        expect((body.deletes ?? []) as unknown[], 'nor is it deleted').not.toContain(FREE.id);
+                    });
+                }
+            }
+
+            for (const born of ['in the saved BUY’s Form (it follows it)', 'a row of its own, linked to it'] as const) {
+                it(`66 TL-12 guard: cell 3, a new FEE ${born}: _parent_unlink with a new asset leaves it a row of its own ON THAT asset, sent with no parent`, async () => {
+                    await openEditor([DEP.id, BUY_L.id]);
+                    if (born === 'in the saved BUY’s Form (it follows it)') {
+                        await openRowForm(BUY_L.id);
+                        await push(buyPayload({description: BUY_L.description, _charges: [newDraft('FEE', '2', NEW_FEE)]}));
+                    } else {
+                        await addRow(chargePayload('FEE', NEW_FEE, {date: BUY.date, _parent_link: BUY_L.id}));
+                    }
+                    expect(chargeOfCell(gridRowDescribed(NEW_FEE)), 'premise: under the saved BUY').toBe(rowIdOf(gridRow(BUY_L.id)));
+                    await editRow(gridRowDescribed(NEW_FEE));
+                    expect(formRow()?.parent_transaction_id, 'premise: the Form is handed its saved parent').toBe(BUY_L.id);
+
+                    await push(shown({asset_id: 102, _parent_unlink: true}));
+
+                    expect(chargeOfCell(gridRowDescribed(NEW_FEE)), 'top level').toBeNull();
+                    const fee = onlyCreateOf(await saveAll(), 'FEE');
+                    expect(fee, 'the asset the user chose, not the parent’s').toMatchObject({asset_id: 102, broker_id: BUY.broker_id, description: NEW_FEE});
+                    expect(fee).not.toHaveProperty('parent_ref');
+                    expect(fee).not.toHaveProperty('parent_transaction_id');
+                });
+            }
+
+            // Lane, after the code (no red). The Form's Confirm on a change of type sends `_parent_unlink` with the new type.
+            it('66 TL-12 guard: a new FEE under a saved BUY turned into a DEPOSIT, with _parent_unlink: a row of its own, sent with no parent', async () => {
+                await openEditor([DEP.id, BUY_L.id]);
+                await openRowForm(BUY_L.id);
+                await push(buyPayload({description: BUY_L.description, _charges: [newDraft('FEE', '2', NEW_FEE)]}));
+                await editRow(gridRowDescribed(NEW_FEE));
+
+                await push(shown({type: 'DEPOSIT', asset_id: null, quantity: '0', cash: {code: 'EUR', amount: '2.000000'}, _parent_unlink: true}));
+
+                expect(chargeOfCell(gridRowDescribed(NEW_FEE)), 'top level').toBeNull();
+                const deposits = ((await saveAll()).creates ?? []).filter((create) => create.type === 'DEPOSIT' && create.description === NEW_FEE);
+                expect(deposits).toHaveLength(1);
+                expect(deposits[0]).not.toHaveProperty('parent_ref');
+                expect(deposits[0]).not.toHaveProperty('parent_transaction_id');
+            });
+
+            // Outside D-26's words (the lane's note): a type change that ends the charge role but keeps the asset asks
+            // nothing; the Bulk still names the parent, and the backend answers chargeNotACharge, a flag, never a silent unlink.
+            it('66 TL-12 guard: a new FEE with no asset under a saved DEPOSIT, turned into a DEPOSIT without unlinking: still sent with its parent', async () => {
+                await openEditor([DEP.id, BUY_L.id]);
+                await openRowForm(DEP.id);
+                await push(shown({_charges: [newDraft('FEE', '2', NEW_FEE)]}));
+                await editRow(gridRowDescribed(NEW_FEE));
+
+                await push(shown({type: 'DEPOSIT', quantity: '0', cash: {code: 'EUR', amount: '2.000000'}}));
+
+                const deposits = ((await validateNow()).creates ?? []).filter((create) => create.type === 'DEPOSIT' && create.description === NEW_FEE);
+                expect(deposits).toHaveLength(1);
+                expect(deposits[0].parent_transaction_id, 'the parent is still named: the backend flags it').toBe(DEP.id);
+            });
         });
 
         // -------------------------------------------------------------------
