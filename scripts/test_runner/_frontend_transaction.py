@@ -1083,7 +1083,7 @@ def populate_registry(registry: dict) -> None:
         "tx-bulk-group-sync",
         front_tx_bulk_group_sync,
         name="TX Bulk Group Sync Tests",
-        desc="Project 66 TL-3b: in the Bulk, an all-new group (a BUY copy from «Clona» and its charge copies) keeps broker and asset in step — the asset changed in a charge copy's Form moves the parent and the sibling (help line shown), a FEE born in the parent's Form keeps the asset of its own Form and moves the group; guard: a new BUY with a saved FEE linked under it is not synced (no help line, chargeAssetMismatch, «Save all» refused) — read back from the server",
+        desc="Project 66 TL-3b: in the Bulk, an all-new group (a BUY copy from «Clona» and its charge copies) keeps broker and asset in step — the asset changed in a charge copy's Form moves the parent and the sibling (help line shown), a FEE born in the parent's Form keeps the asset of its own Form and moves the group; a new BUY with a saved FEE linked under it (no help line): its asset changed in a reopened Form (TL-12) asks first, naming the FEE — «Cancel» keeps everything, «Confirm» leaves the FEE free on its asset and «Save all» passes; the same with the FEE picked in the same opening, beside a new FEE that follows — read back from the server",
         tests="transactions/tx-bulk-group-sync.spec.ts",
     )
     add_test(
