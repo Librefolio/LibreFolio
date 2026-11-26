@@ -445,7 +445,10 @@ describe('AssetSyncModal — the profiles', () => {
         await waitFor(() => expect(section()).toHaveAttribute('data-status', 'ready'));
         await fireEvent.click(screen.getByTestId('asset-sync-profile-start'));
         expect(section()).toHaveAttribute('data-run', 'running');
-        expect(screen.getByTestId('asset-sync-profile-start')).toBeDisabled();
+        // The standard button (85): busy, a second click does nothing
+        expect(screen.getByTestId('asset-sync-profile-start')).toHaveAttribute('aria-busy', 'true');
+        await fireEvent.click(screen.getByTestId('asset-sync-profile-start'));
+        expect(refresh).toHaveBeenCalledTimes(1);
         expect(section().querySelector('[role="progressbar"]')).toBeNull();
 
         await rerender({open: false});

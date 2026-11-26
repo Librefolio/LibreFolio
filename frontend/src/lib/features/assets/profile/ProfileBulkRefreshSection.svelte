@@ -12,6 +12,7 @@
 -->
 <script lang="ts">
     import {IdCard, RefreshCw} from 'lucide-svelte';
+    import Button from '$lib/components/ui/button/Button.svelte';
     import {_ as t} from '$lib/i18n';
     import {STATUS_ICONS, type SyncStatus} from '$lib/utils/sync/syncHelpers';
     import {STATUS_TONES} from '$lib/theme/toneClasses';
@@ -64,16 +65,8 @@
             {$t('assets.profile.bulk.title')}
         </h3>
         {#if refresh.status === 'ready' && refresh.assetIds.length}
-            <button
-                type="button"
-                class="inline-flex items-center gap-1.5 rounded-lg border border-lf-input bg-lf-card px-3 py-1.5 text-sm font-medium text-lf-primary hover:bg-lf-hover focus-visible:outline-2 focus-visible:outline-lf-focus disabled:cursor-wait disabled:opacity-60"
-                disabled={running}
-                data-testid="asset-sync-profile-start"
-                onclick={() => void refresh.start((key, values) => $t(key, {values}))}
-            >
-                <RefreshCw size={14} class={running ? 'animate-spin' : ''} aria-hidden="true" />
-                {$t('assets.profile.bulk.start')}
-            </button>
+            <!-- The standard button (85): while the read runs it is busy, its icon the spinner, and a second click does nothing -->
+            <Button label={$t('assets.profile.bulk.start')} icon={RefreshCw} variant="secondary" size="sm" busy={running} data-testid="asset-sync-profile-start" onclick={() => void refresh.start((key, values) => $t(key, {values}))} />
         {/if}
     </div>
 
