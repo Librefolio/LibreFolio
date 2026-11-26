@@ -11,6 +11,8 @@ import {
     AI_EXPORT_EXPORT_SCOPE_INSTRUCTIONS,
     AI_EXPORT_GROUND_RULES,
     AI_EXPORT_HOW_TO_ANSWER,
+    AI_EXPORT_LEGAL_NOTICE,
+    AI_EXPORT_LEGAL_NOTICE_TITLE,
     AI_EXPORT_SHARED_VERIFICATION_INSTRUCTIONS,
     AI_EXPORT_USER_QUESTION_INTRO,
     aiExportReplyInstructions,
@@ -455,13 +457,12 @@ function renderExportScope(snapshot: AiExportSnapshotResponse): string | null {
 }
 
 /**
- * The instance's legal notice (F09, workstream A), in the interface language: local, allow-listed copy under its own
+ * The instance's legal notice (F09, workstream A), in fixed English (D-23): local, allow-listed copy under its own
  * heading — never a fenced data block, never a URL or anything the instance or the snapshot provides — so the UI and
- * the probe, which translate from the same catalogue, render the same bytes.
+ * the probe render the same bytes in every interface language.
  */
-function renderLegalNotice(input: RenderAiExportPromptInput): string {
-    const translate = input.translate ?? ((key: string) => key);
-    return [`## ${translate('legal.title')}`, '', translate('legal.disclaimer')].join('\n');
+function renderLegalNotice(): string {
+    return [`## ${AI_EXPORT_LEGAL_NOTICE_TITLE}`, '', AI_EXPORT_LEGAL_NOTICE].join('\n');
 }
 
 /** Request Analysis' closing instruction (E-24): answer the question from the data, never restate the data. Fixed English. */
@@ -472,7 +473,7 @@ function renderAnswerFocus(): string {
 /**
  * Export Data's last word (E-24): data only, already seen in LibreFolio, so the assistant answers only a question the
  * user adds, and otherwise replies with the catalogue's sentence (`AI_EXPORT_DATA_RECEIVED_KEY`), in the interface
- * language through the caller's `translate`, as the legal notice. Fixed English around that one sentence.
+ * language through the caller's `translate` (the legal notice is fixed English, D-23). Fixed English around that one sentence.
  */
 function renderReplyInstructions(input: RenderAiExportPromptInput): string {
     const translate = input.translate ?? ((key: string) => key);
@@ -521,7 +522,7 @@ function buildAiExportPrompt(input: RenderAiExportPromptInput, diagnostics: bool
             const tool = renderLibreFolioTool(entry, input.translate);
             if (tool !== null) sections.push({id: 'librefolio_tool', content: tool});
             sections.push({id: 'domain_notes', content: renderDomainNotes(input.snapshot)});
-            sections.push({id: 'legal_notice', content: renderLegalNotice(input)});
+            sections.push({id: 'legal_notice', content: renderLegalNotice()});
             if (notes) sections.push({id: 'user_question', content: renderUserQuestion(notes)});
             sections.push(language);
         } else {
@@ -538,13 +539,13 @@ function buildAiExportPrompt(input: RenderAiExportPromptInput, diagnostics: bool
             // The trusted closing, after the untrusted user question: the answer focus (E-24), the legal notice, then the response
             // language, the prompt's last word (J, A9)
             sections.push({id: 'answer_focus', content: renderAnswerFocus()});
-            sections.push({id: 'legal_notice', content: renderLegalNotice(input)});
+            sections.push({id: 'legal_notice', content: renderLegalNotice()});
             sections.push(language);
         }
     } else {
         sections.push({id: 'snapshot_metadata', content: snapshotMetadata.content});
         sections.push({id: 'snapshot_data', content: snapshotData.content});
-        sections.push({id: 'legal_notice', content: renderLegalNotice(input)});
+        sections.push({id: 'legal_notice', content: renderLegalNotice()});
         // Export Data's last word: how to reply, never a restatement of the data (E-24)
         sections.push({id: 'reply_instructions', content: renderReplyInstructions(input)});
     }
