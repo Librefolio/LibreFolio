@@ -23,9 +23,11 @@
  * BUY lot with the reward lots; the group keeps them together.
  */
 import {afterEach, beforeAll, describe, expect, it, vi} from 'vitest';
+import {get} from 'svelte/store';
 import type {z} from 'zod';
 import {cleanup, fireEvent, render, screen, setupI18n, waitFor} from '$test/component';
 import {schemas} from '$lib/api';
+import {_} from '$lib/i18n';
 import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
 import UnifiedLotsTable from './UnifiedLotsTable.svelte';
 
@@ -371,5 +373,44 @@ describe('UnifiedLotsTable — the reward lots group: navigation', () => {
         (component as unknown as {navigateToRowId: (id: string) => void}).navigateToRowId('12');
         await waitFor(() => expect(head()).toHaveAttribute('data-state', 'open'));
         await waitFor(() => expect(rowOf('12')).toHaveAttribute('data-highlighted', 'true'));
+    });
+});
+
+describe('UnifiedLotsTable — the reward tag (86, A9)', () => {
+    const tags = () => screen.queryAllByTestId('reward-lot-tag').map((el) => el.closest('tr')?.getAttribute('data-row-id'));
+
+    it('every reward lot of an open group wears it; the group row and the BUY lot do not', async () => {
+        mount();
+        expect(tags()).toEqual([]);
+        await openGroup();
+        expect(tags()).toEqual(['11', '12', '13']);
+    });
+
+    it('a lone reward lot wears it too', () => {
+        mount([BUY_1, REWARD_11]);
+        expect(tags()).toEqual(['11']);
+    });
+
+    it('takes the rewards colour as a measured pair, and names the type as the app does', async () => {
+        mount([REWARD_11]);
+        const tag = screen.getByTestId('reward-lot-tag');
+        expect(tag).toHaveClass('bg-lf-cat-index-soft', 'text-lf-cat-index-on-soft');
+        expect(tag.textContent).toBe(get(_)('transactions.types.REWARD'));
+    });
+
+    it('a lot without a reward keeps the date cell it had', () => {
+        mount([BUY_1]);
+        expect(tags()).toEqual([]);
+        expect(screen.queryByTestId('reward-lot-tag')).toBeNull();
+    });
+});
+
+describe('UnifiedLotsTable — the number of lots (86, A10)', () => {
+    it('stands beside the title, not after the line under it', () => {
+        mount();
+        const count = screen.getByTestId('unified-lots-count');
+        expect(count.textContent?.trim()).toBe('4');
+        expect(count.parentElement?.firstElementChild).toBe(screen.getByTestId('unified-lots-title'));
+        expect(count.parentElement?.children).toHaveLength(2);
     });
 });

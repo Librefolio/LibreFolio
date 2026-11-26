@@ -48,6 +48,8 @@ import {createRawSnippet, type Snippet} from 'svelte';
 import {cleanup, fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
 import {reactiveBox} from '$test/runes.svelte';
 import TreeSelect from './TreeSelect.svelte';
+import {get} from 'svelte/store';
+import {_} from 'svelte-i18n';
 import type {TreeSelectGroup, TreeSelectItem} from './treeSelect';
 
 const TEST_ID = 'probe-picker';
@@ -610,5 +612,61 @@ describe('TreeSelect — no deferred work survives destroy (K step 16, round 1)'
         expect(scrollIntoView).toHaveBeenLastCalledWith({block: 'nearest'});
         expect(scrollIntoView.mock.contexts.at(-1), 'the last scroll must go to the active row').toBe(active);
         expect(globalLookups, 'the active row was looked up through the global document').toEqual([]);
+    });
+});
+
+/**
+ * The search's clear is a standard Button inside the combobox (85 BTN-2c, `{testId}-search-clear`). B-TS1: an Enter on
+ * it used to reach the combobox's keydown, which chose the highlighted row instead of clearing. The combobox now leaves
+ * Enter and Space coming from a control inside it alone; Escape still closes from there. In a browser an Enter on a
+ * button is followed by its click: the test sends both, as the browser does.
+ */
+describe('TreeSelect — the search’s clear (85 BTN-2c, B-TS1)', () => {
+    beforeAll(async () => {
+        await setupI18n();
+    });
+
+    async function openWithQuery() {
+        const mounted = mount();
+        const input = await openByClick(mounted.trigger);
+        await fireEvent.input(input, {target: {value: 'a'}});
+        const clear = await waitFor(() => screen.getByTestId(`${TEST_ID}-search-clear`));
+        // Barrier: a row is highlighted, so a wrongly routed Enter would choose it.
+        await waitFor(() => expect(mounted.trigger.getAttribute('aria-activedescendant')).toBeTruthy());
+        return {...mounted, input, clear};
+    }
+
+    it('the clear is named common.clear', async () => {
+        const {clear} = await openWithQuery();
+        expect(clear.tagName).toBe('BUTTON');
+        expect(clear).toHaveAttribute('aria-label', get(_)('common.clear'));
+        expect(clear.hasAttribute('title')).toBe(false);
+    });
+
+    it('Enter on the clear empties the query and chooses nothing', async () => {
+        const {clear, input, onchange, trigger} = await openWithQuery();
+        await fireEvent.keyDown(clear, {key: 'Enter'});
+        await fireEvent.click(clear);
+        expect(onchange, 'B-TS1: the Enter chose the highlighted row').not.toHaveBeenCalled();
+        expect(input.value).toBe('');
+        expect(trigger).toHaveAttribute('aria-expanded', 'true');
+    });
+
+    it('Space on the clear chooses nothing either', async () => {
+        const {clear, onchange} = await openWithQuery();
+        await fireEvent.keyDown(clear, {key: ' '});
+        expect(onchange).not.toHaveBeenCalled();
+    });
+
+    it('positive control: Enter in the search box still chooses the highlighted row', async () => {
+        const {input, onchange} = await openWithQuery();
+        await fireEvent.keyDown(input, {key: 'Enter'});
+        expect(onchange).toHaveBeenCalledTimes(1);
+    });
+
+    it('Escape from the clear still closes the dropdown', async () => {
+        const {clear, trigger} = await openWithQuery();
+        await fireEvent.keyDown(clear, {key: 'Escape'});
+        await waitFor(() => expect(trigger).toHaveAttribute('aria-expanded', 'false'));
     });
 });

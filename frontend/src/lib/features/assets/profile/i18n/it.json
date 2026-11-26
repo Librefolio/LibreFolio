@@ -42,7 +42,8 @@
         "reference_price_date": "Data del prezzo di riferimento",
         "website": "Sito web",
         "revenue": "Fatturato",
-        "net_income": "Utile netto"
+        "net_income": "Utile netto",
+        "crypto_categories": "Categorie"
       },
       "choices": {
         "replication": {
@@ -102,6 +103,7 @@
         "fund": "Il fondo",
         "company": "La società",
         "bond": "L'obbligazione",
+        "crypto": "La moneta",
         "identity": "Identità",
         "other": "Altri dati"
       },
@@ -122,6 +124,7 @@
         "size": "dimensione",
         "legal_form": "forma giuridica",
         "issuer": "emittente",
+        "categories": "categorie",
         "description": "descrizione",
         "financials": "risultati di bilancio"
       },

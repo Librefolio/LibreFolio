@@ -16,6 +16,7 @@
     import {UNIT_PRICE_DECIMALS, type TradeAmountDriver} from '$lib/features/transactions/form/txTradeAmount';
     import TxCellMark from '$lib/features/transactions/form/TxCellMark.svelte';
     import type {TxFormCell, TxFormCheckKind} from '$lib/features/transactions/form/txFormChecks';
+    import Button from '$lib/components/ui/button/Button.svelte';
     import CompactCashCell from '$lib/features/transactions/form/CompactCashCell.svelte';
     import TransactionTypeSearchSelect from '../TransactionTypeSearchSelect.svelte';
     import WacPreviewSection from '../wac/WacPreviewSection.svelte';
@@ -73,6 +74,9 @@
         /** The day of the close the shown value on receipt comes from, while it is the price history's suggestion (a
          *  REWARD, project 79); null once the user changes it or when there is none. */
         rewardValueDate?: string | null;
+        /** The day whose close the link under the value brings back: set while the user's own value differs from it (86). */
+        rewardCloseDate?: string | null;
+        onUseRewardClose?: () => void;
         typeImmutable: boolean;
         wacAvailableCurrencies: string[];
         handleSyncFx: () => Promise<void>;
@@ -126,6 +130,8 @@
         rule,
         showCostBasisField,
         rewardValueDate = null,
+        rewardCloseDate = null,
+        onUseRewardClose,
         typeImmutable,
         wacAvailableCurrencies,
         handleSyncFx,
@@ -410,9 +416,12 @@
                     {/if}
                 </p>
             {:else if draft.type === 'REWARD' && rewardValueDate}
-                <p class="text-xs text-lf-muted mt-1" data-testid="tx-form-reward-value-from-history">
+                <p class="text-xs text-lf-muted mt-1" data-testid="tx-form-reward-value-from-history" data-date={rewardValueDate}>
                     {$t('transactions.costBasisOverride.rewardFromHistory', {values: {date: rewardValueDate}}) || `From the price history: the close of ${rewardValueDate}. Change it if the platform shows another value.`}
                 </p>
+            {/if}
+            {#if rewardCloseDate}
+                <Button label={$t('transactions.costBasisOverride.rewardUseClose', {values: {date: rewardCloseDate}})} variant="link" size="sm" class="mt-1" onclick={onUseRewardClose} data-testid="tx-form-reward-use-close" data-date={rewardCloseDate} />
             {/if}
         </div>
     {/if}

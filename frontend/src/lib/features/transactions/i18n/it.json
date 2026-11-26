@@ -217,7 +217,8 @@
       "rewardLabel": "Valore alla ricezione",
       "rewardTooltip": "Quanto valevano queste unità il giorno in cui le hai ricevute: è sia il reddito del premio sia il costo del lotto che apre.",
       "warningReward": "Il valore alla ricezione è vuoto: senza, il premio non si può salvare. Inserisci quanto valevano queste unità il giorno in cui le hai ricevute, oppure 0 per contarle a costo zero.",
-      "rewardFromHistory": "Dallo storico prezzi: la chiusura del {date}. Cambialo se la piattaforma mostra un altro valore."
+      "rewardFromHistory": "Dallo storico prezzi: la chiusura del {date}. Cambialo se la piattaforma mostra un altro valore.",
+      "rewardUseClose": "Usa la chiusura del {date}"
     },
     "wacPreview": {
       "calculating": "Calcolo in corso...",
@@ -516,6 +517,10 @@
       "allAfter": "non resta nessuna delle {n} righe",
       "all": "Elimina tutto ({n})",
       "loadFailed": "Impossibile leggere le spese di questa transazione"
+    },
+    "chargesUnlink": {
+      "failed": "Lo scollegamento delle spese non è riuscito",
+      "target": "{n, plural, one {# spesa non più collegata: resta come transazione a sé} other {# spese non più collegate: ognuna resta come transazione a sé}}"
     }
   }
 }

@@ -8,8 +8,9 @@
  *   (no step). A value that changes at every read and was last confirmed more than 30 days ago is «non aggiornato»: the
  *   backend says so on the last step (D1d), `staleSince` gives the day.
  * - **Where a voice goes** comes from the catalogue, never from a list here: `key_figure` makes a card, `charted` gives
- *   it a chart of its steps, `groups` place it in the details (the fund, the company, the identity, the bond). A voice
- *   with no group has no cell (the issuer's LEI, the voices other lanes read).
+ *   it a chart of its steps, `groups` place it in the details (the fund, the company, the coin, the identity, the bond). A
+ *   voice with no group has no cell (the issuer's LEI, the voices other lanes read). The details an asset shows follow
+ *   its type (`detailGroupsOf`, D-27): the coin's group on a cryptocurrency only.
  * - **The classification** shows the composition of one day: «dati al» lists the days a composition changed in the
  *   period, newest first.
  * - **The company's sector** is the sector map of a share: one sector at 100 %. A map of several sectors is a fund's,
@@ -135,12 +136,33 @@ export function keyFigureCards(catalogue: readonly ProfileVoice[], voices: Profi
 // =============================================================================
 
 /** The groups of the details, in the order the tab shows them. */
-export const DETAIL_GROUPS = ['fund', 'company', 'identity', 'bond'] as const;
+export const DETAIL_GROUPS = ['fund', 'company', 'crypto', 'identity', 'bond'] as const;
 export type DetailGroupId = (typeof DETAIL_GROUPS)[number];
 
 export interface DetailGroup {
     group: DetailGroupId;
     cells: ProfileCell[];
+}
+
+/** The groups an asset's type shows always, in order: a cryptocurrency its coin and its identity (D-27, «La moneta» only
+ *  there), any other the fund, the company, the identity and the bond, as before. */
+export function detailGroupsOf(assetType: string): DetailGroupId[] {
+    return assetType === 'CRYPTO' ? ['crypto', 'identity'] : ['fund', 'company', 'identity', 'bond'];
+}
+
+/** A voice that only a cryptocurrency has: every detail group it is in is the coin's. */
+function cryptoOnly(voice: ProfileVoice): boolean {
+    const groups = (voice.groups as readonly string[]).filter((group) => (DETAIL_GROUPS as readonly string[]).includes(group));
+    return groups.length > 0 && groups.every((group) => group === 'crypto');
+}
+
+/**
+ * Whether a voice is offered for an asset of this type (for the profile editor's list, D-27): a voice only a
+ * cryptocurrency has (its categories) is not, on another asset, unless a value is already there. An unknown type (none
+ * given) filters nothing; every other voice is offered on every type, as before.
+ */
+export function voiceOffered(voice: ProfileVoice, assetType: string | null | undefined, hasValue = false): boolean {
+    return hasValue || !assetType || assetType === 'CRYPTO' || !cryptoOnly(voice);
 }
 
 /** A map in the details (the company's sector): shown only when it is one key at 100 %. */
@@ -150,17 +172,33 @@ function oneKeyMapCell(cell: ProfileCell): ProfileCell {
     return keys.length === 1 ? cell : {...cell, state: 'unavailable'};
 }
 
-/** The detail groups: each with the voices the catalogue places in it, in catalogue order. */
-export function detailGroups(catalogue: readonly ProfileVoice[], voices: ProfileVoices): DetailGroup[] {
-    return DETAIL_GROUPS.map((group) => ({
-        group,
-        cells: catalogue
-            .filter((voice) => (voice.groups as readonly string[]).includes(group))
-            .map((voice) => {
-                const cell = profileCell(voice, voices[voice.key]);
-                return voice.shape === 'map' ? oneKeyMapCell(cell) : cell;
-            }),
-    }));
+/** The cells of one group: the voices the catalogue places in it, in catalogue order. */
+function groupCells(group: DetailGroupId, catalogue: readonly ProfileVoice[], voices: ProfileVoices): ProfileCell[] {
+    return catalogue
+        .filter((voice) => (voice.groups as readonly string[]).includes(group))
+        .map((voice) => {
+            const cell = profileCell(voice, voices[voice.key]);
+            return voice.shape === 'map' ? oneKeyMapCell(cell) : cell;
+        });
+}
+
+/**
+ * The detail groups of an asset of `assetType`: the ones its type shows always, each with every voice of it, then, for
+ * what is saved outside them, the other groups with only the cells that hold a value and are not shown yet (a value saved
+ * on an asset of another type stays visible). A voice is in one place at most.
+ */
+export function detailGroups(catalogue: readonly ProfileVoice[], voices: ProfileVoices, assetType = ''): DetailGroup[] {
+    const own = detailGroupsOf(assetType);
+    const shown = own.map((group) => ({group, cells: groupCells(group, catalogue, voices)}));
+    const seen = new Set(shown.flatMap((entry) => entry.cells.map((cell) => cell.key)));
+    for (const group of DETAIL_GROUPS) {
+        if (own.includes(group)) continue;
+        const cells = groupCells(group, catalogue, voices).filter((cell) => cell.state === 'value' && !seen.has(cell.key));
+        if (!cells.length) continue;
+        cells.forEach((cell) => seen.add(cell.key));
+        shown.push({group, cells});
+    }
+    return shown;
 }
 
 // =============================================================================

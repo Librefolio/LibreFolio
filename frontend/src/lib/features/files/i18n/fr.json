@@ -96,7 +96,15 @@
     "docsHelp": "Les fichiers que vous avez déposés : les relevés de courtiers à importer et les images que LibreFolio utilise, avec la place qu'ils occupent.",
     "confirmBulkDownload": {
       "message": "Télécharger {n} fichier(s) ?"
-    }
+    },
+    "rotateLeft": "Pivoter à gauche (15°)",
+    "rotateRight": "Pivoter à droite (15°)",
+    "qualityDown": "Baisser la qualité",
+    "qualityUp": "Augmenter la qualité",
+    "quality": "Qualité",
+    "ellipsePreview": "Aperçu rond",
+    "aspectFree": "Libre",
+    "editorNotReady": "L'image est encore en préparation : un instant"
   },
   "files": {
     "deleteFailed": "Échec de la suppression du fichier"

@@ -11,7 +11,8 @@ holding only its docstring (see [Plugin Folder and Translations](#plugin-folder)
 An enricher is a family of its own, separate from the price providers of the
 [Asset Plugin Guide](asset_plugin_guide.md). A price provider answers «what is it worth today»; an enricher answers
 «what is it»: the TER of a fund, the coupon of a bond, the sector of a share. The two may read the same site (justETF,
-Yahoo Finance and Borsa Italiana exist in both families), but they are separate plugins that share no code.
+Yahoo Finance, Borsa Italiana and CoinGecko exist in both families), but they are separate plugins, and neither imports
+the other. Where both read one account, what they share is in the core ([the CoinGecko case study](#coingecko)).
 
 !!! info "Import from the defining module"
 
@@ -119,7 +120,8 @@ These four rules are the contract of the family (plan 68). A plugin that breaks 
    `normalize_country_to_iso3` (`backend/app/utils/asset/geo.py`), `validate_sector` and `normalize_sector`
    (`backend/app/utils/asset/sector.py`), `rate_limited_from_exception` and `rate_limited_from_response` (`backend/app/services/assets/base.py`), or a
    calculation of `backend/app/services/financial_math/` (Borsa Italiana's `annual_coupon_rate`). A helper only this
-   plugin uses sits beside `plugin.py` as `_*.py`.
+   plugin uses sits beside `plugin.py` as `_*.py`. The one exception is code that knows a source and serves two plugins
+   of **one account**: it lives in the core, never in one of the two ([CoinGecko](#coingecko)).
 4. **The call queue and the pause between calls live inside `read`.** The core never paces an enricher: it hands a
    list of bindings to `read` and takes the items as they come. The plugin waits between two calls to its source, and
    its queue must also cover **two requests arriving together** — for example a user's «Refresh» while the weekly
@@ -135,7 +137,7 @@ These four rules are the contract of the family (plan 68). A plugin that breaks 
     Use the core's `Pacer` (`backend/app/utils/runtime/pacing.py`): one instance at module level, with the interval
     this plugin picks, and `_PACER.wait()` right before each call to the site — in `recognize`, `read` and `search`
     alike. It counts with `SlidingWindowLimiter` and sleeps in the worker thread, never on the event loop. justETF
-    (1 s), Yahoo Finance (0.5 s) and Borsa Italiana (1 s) all do so (plan 68, C5); Borsa Italiana's library also paces
+    (1 s), Yahoo Finance (0.5 s), Borsa Italiana (1 s) and CoinGecko (1 s) all do so (plan 68, C5); Borsa Italiana's library also paces
     the requests inside one session.
 
 ---
@@ -164,14 +166,15 @@ a worker thread, so the wait never blocks the event loop. Never add `asyncio.to_
 |---|---|---|
 | `code` | ✅ | The enricher's code, a lowercase identifier (`justetf`, `borsa_italiana`). The key of its bindings in `asset_enrichers.config` |
 | `name` | ✅ | Display name (`"justETF"`) |
-| `terms` | ✅ | An `EnricherTerms`, the class of the source's terms of use, shown to the user (never a legal opinion): `OPEN` (open or official data), `PRICE_SOURCE` (a source already read for prices), `SELF_HOSTED` (personal use only, never on a hosted service), `PERSONAL_FILE` (a public file for personal use, off until the user turns it on) |
+| `terms` | ✅ | An `EnricherTerms`, the class of the source's terms of use (never a legal opinion), given by `GET /assets/enrichers`: a declaration only, nothing in the core acts on it ([an example](#coingecko)). `OPEN` (open or official data), `PRICE_SOURCE` (a source already read for prices), `SELF_HOSTED` (personal use only, meant for self-hosted instances, not for a hosted service), `PERSONAL_FILE` (a public file for personal use, off until the user turns it on) |
 | `accepted_identifier_types` | ✅ | A non-empty tuple of upper-case identifier types the source reads by: `("ISIN",)`, `("TICKER",)`, `("ISIN", "BI_FUND_CODE")` |
 | `voices` | ✅ | Per `AssetType`, the `frozenset` of profile voices it can fill: [catalogue](#voices) keys only. A type it does not cover is absent |
 | `default_priority` | ✅ | A degree for **every** `AssetType`, a whole number ≥ 0, lower first; `None` written out for a type it does not cover. The default order of an asset's enrichers follows it |
 | `icon` | — | Icon URL (the shipped enrichers use the site's favicon) |
 | `help_url` | — | A page that explains the source |
-| `calls_external_service` | — | `True` by default: each binding read is counted against the instance's call limits ([Call Limits](plugin_settings.md#call-limits)). `False` only for an enricher that computes its answers with no network, such as the test double |
+| `calls_external_service` | — | `True` by default: each binding read is counted against the instance's call limits ([Call Limits](plugin_settings.md#call-limits)), and so is each recognize, search and test of an enricher that [shares an account](#shared-calls). `False` only for an enricher that computes its answers with no network, such as the test double |
 | `settings_fields` | — | The values the enricher needs from the instance (an API key): see [Settings](#settings). None of the shipped enrichers declares any |
+| `settings_groups` | — | The names of the shared settings groups the enricher reads, such as `("coingecko",)`: the key of an account it shares with another plugin ([Settings](#settings), [Shared Groups](plugin_settings.md#groups)) |
 | `test_only` | — | `True` for a plugin that exists for the tests (`mockenrich`). Outside test mode the registry does not serve it: no catalogue, route, cascade or read reaches it (`_withheld()` in `backend/app/services/platform/provider_registry.py`). In test mode it is served and listed like any other, which is how the API tests drive the core ([Test-Only Plugins](plugin_settings.md#test-only) describes the rule for the other families) |
 
 `covers(asset_type)` (inherited) is `True` when `default_priority` gives the type a degree: the cascade and the
@@ -286,8 +289,15 @@ stored form. A source text the plugin cannot translate into a choice code leaves
 is never guessed.
 
 Each voice also declares a **topic** (`ProfileTopic`: costs, structure, manager, countries, sectors, coupons, maturity,
-yield, duration, size, financials, legal form, issuer, description). The enrichers window shows what an enricher fills by
+yield, duration, size, financials, legal form, issuer, categories, description). The enrichers window shows what an enricher fills by
 the topics of the voices it declares for the asset's type, not by the voices' names.
+
+It declares the **groups** of the «Profile» tab that show it too (`groups`, a `ProfileGroup`): classification, key
+figures, fund, company, bond, crypto, identity. The details follow the asset's type (`detailGroupsOf()` in
+`frontend/src/lib/features/assets/profile/profileTabState.ts`): the group `crypto` («The coin») and the identity on a
+crypto asset only; the fund, the company, the identity and the bond on any other. A group that is not the type's still
+shows the voices that hold a saved value there (`detailGroups()`). `website` and `inception_date` belong to two groups, the
+coin's being the second, and are shown once; `crypto_categories` is the coin's alone.
 
 A voice that is the figure of a period declares it (`period`): `fiscal_year` for a company's `revenue` and
 `net_income`, the figures of the fiscal year that ends on the value's **source date**. The enricher gives that end date
@@ -333,7 +343,8 @@ graph LR
   internal code, which lets the cascade go on to justETF.
 - **Any exception** from `recognize` (a site down, a refusal) gives an `error` answer, logged, and stops that enricher:
   it gets no further call for the next identifiers. The shipped plugins raise `AssetRateLimitedError` there for a
-  refusal. A clean «not found» is `EnricherRecognition(found=False)`.
+  refusal. A clean «not found» is `EnricherRecognition(found=False)`. A full limit of a [shared account](#shared-calls)
+  is such an `error` too, before your `recognize` is called.
 - The recognize route (`_recognize_events()` in `backend/app/api/v1/assets/enrichers.py`) hands the cascade only
   served and configured enrichers: one with a required setting left empty is left out, with no error.
 
@@ -371,6 +382,25 @@ Around your `read`, the core:
 The default order of an asset's enrichers (`default_order()` in `bindings.py`) is by `default_priority` (lower first),
 then the enricher with the same code as the asset's price provider, then the order in which «Recognize» answered
 «found», then by code. The user may reorder it; the saved order wins.
+
+### 🧮 Calls on a Shared Account {: #shared-calls }
+
+A read is counted binding by binding ([above](#core)). **Recognize**, **search** and **test** reach the source too. For an
+enricher whose settings group has `shares_credits` (one account, spent by several plugins) and that calls outside
+(`calls_external_service`), the core counts each of them on the group, **before** the call leaves:
+`count_shared_call()` (`backend/app/services/enrichers/admission.py`). A full limit refuses the call, uncounted, with
+`EnricherRateLimited` and the wait until its window starts again; a limit of 0 always does.
+
+| Door | Where it counts | When a limit is full |
+|---|---|---|
+| The cascade (`recognize`) | `_Cascade._call()` in `recognize.py`, one per identifier asked | That enricher's answer is `error`, and it is asked no more; the others go on |
+| Search online, across enrichers | `_ready()` in `search.py`, one per enricher that will call out: one that searches, or one asked by an identifier the text has the shape of | That enricher's outcome is `rate_limited`, with `retry_after` |
+| `GET /enrichers/{code}/search` | The route, before `search` | 429 `RATE_LIMITED`, with `Retry-After` |
+| `POST /enrichers/{code}/test` | The route, before `recognize` | 429 `RATE_LIMITED`, with `Retry-After` |
+
+Nothing is counted there for an enricher that reads no such group, or that calls nothing out: the limits an administrator
+set for it are about its reads. A counter that fails lets the call go. The price provider of the same account counts on
+the same row, so a limit it fills refuses the enricher, and the other way round.
 
 ### 🚦 Too Many Requests {: #too-many-requests }
 
@@ -446,8 +476,8 @@ window with `enrichersOnOpen`: the enrichers' window on top, for that opening on
 | `GET /enrichers` | The catalogue: every served enricher with what it declares, `configured` and `missing_settings`, and the default order per asset type | Class attributes only, no call |
 | `POST /enrichers/recognize` | The cascade as Server-Sent Events: `enricher_result`, `identifier_learned`, then `done` (`found_order`, `default_order`, `identifiers`) | `recognize` |
 | `GET /enrichers/search?q=…&codes=…&asset_type=…` | «Search online» (ENR-3): one text on several enrichers at once, as Server-Sent Events, one `enricher_results` per enricher (`status`: `ok`, `identifier_only`, `rate_limited`, `not_configured`, `off`, `not_covering`, `error`) then `done`; one probe for the whole search | `search`; for an enricher without one, `recognize` when the text has the form of an identifier it accepts (an ISIN or a LEI, check digits included), else `identifier_only` |
-| `GET /enrichers/{code}/search?q=…` | One enricher's search; 400 for an enricher that does not search; 429 `RATE_LIMITED` with `Retry-After` when the source refused (`EnricherRateLimited`) | `search` |
-| `POST /enrichers/{code}/test` | `recognize` one binding; writes nothing | `recognize` |
+| `GET /enrichers/{code}/search?q=…` | One enricher's search; 400 for an enricher that does not search; 429 `RATE_LIMITED` with `Retry-After` when the source refused (`EnricherRateLimited`) or a limit of the [shared account](#shared-calls) is full | `search` |
+| `POST /enrichers/{code}/test` | `recognize` one binding; writes nothing; 429 `RATE_LIMITED` with `Retry-After` when a limit of the shared account is full (a refusal of the source itself is an `error` answer) | `recognize` |
 
 - `{code}/search` and `{code}/test` answer **404** when the enricher is not served (not installed, test-only outside test
   mode, turned off by `LIBREFOLIO_ENRICHERS_ENABLED`), and **422** with `error_code: "NOT_CONFIGURED"` when a required
@@ -455,8 +485,8 @@ window with `enrichersOnOpen`: the enrichers' window on top, for that opening on
 - `recognize` skips an enricher that is not configured, with no error.
 - `recognize`, `search` (one enricher or several: one count per search), `test` and `POST /assets/profile/ask` count on
   the per-user probe limit (`enforce_probe_limit()`): past it, 429 `PROBE_RATE_LIMITED` before any call. «Refresh» is
-  not counted.
-- In `GET /enrichers/search`, a source's refusal is `rate_limited` with the same wait as the 429 of
+  not counted. That count is per user, and apart from the [shared account's](#shared-calls).
+- In `GET /enrichers/search`, a source's refusal, or a full limit of a shared account, is `rate_limited` with the same wait as the 429 of
   `{code}/search` (`refusal_wait()` in `backend/app/services/enrichers/search.py`); any other failure is `error` with
   the code `SOURCE_ERROR`, its cause in the server log; a client that closes the stream stops the waiting.
 - The bindings are written and read with the asset (`POST`/`PATCH /assets`, field `enrichers`; `GET /assets`).
@@ -598,6 +628,7 @@ The real plugins are the best reference:
 | `backend/app/services/enricher_providers/yahoo_finance/plugin.py` (code `yfinance`) | Shares first, funds second, by ticker | `keys` used to skip a call; no ISIN returned by `recognize`; a search with `yf.Search`, each result bound by the symbol with the market's suffix (`SWDA.MI`) |
 | `backend/app/services/enricher_providers/borsa_italiana/plugin.py` | Bonds, funds, Milan shares, by ISIN or internal fund code | `params_schema` with `x-i18n-key` labels; the binding's `language`; one library session per read; `management_fee`, not `ter`; `annual_coupon_rate` from `financial_math`; a share's second page (the company profile: `description`, `issuer_country`, `website`, and `revenue` / `net_income` of the last fiscal year, scaled by the table's unit and dated by the fiscal year's end, voices with `period: fiscal_year`) read only when `keys` asks for its voices, its voices declared only when the installed library has the reader |
 | `backend/app/services/enricher_providers/esma/plugin.py` | Every instrument a European market trades, by ISIN, after the sources of each type | Our library `esma-registers` (ESMA's FIRDS register, one call per ISIN); the CFI code read as `legal_form`, a bond's `coupon_type` and `issuer_type`, a fund's `distribution_policy`; the LEI handed to the cascade; a register's «fixed rate» written as `coupon_rate` only when the CFI says fixed |
+| `backend/app/services/enricher_providers/coingecko/plugin.py` | Cryptocurrencies, by CoinGecko id | One account shared with the price provider, one asset type, an amount in the currency of a binding parameter, words copied whole: the [case study](#coingecko) |
 | `backend/app/services/enricher_providers/mockenrich/plugin.py` | Test only | Fixed answers for every outcome (`MOCK_NOT_FOUND`, `MOCK_ERROR`, `MOCK_RATE_LIMITED`), no network |
 
 ---
@@ -631,7 +662,8 @@ empty is not sent.
 
 The caption is the translation of `x-i18n-key`, else `label`, else the raw `key`. The translations live in the plugin's
 own `i18n/` folder, one file per language; Borsa Italiana's `language`, `mic`, `platform` and `codice_fondo` are under
-`enrichers.borsa_italiana.params.<key>` in `backend/app/services/enricher_providers/borsa_italiana/i18n/`. Add keys with
+`enrichers.borsa_italiana.params.<key>` in `backend/app/services/enricher_providers/borsa_italiana/i18n/`, CoinGecko's
+`vs_currency` under `enrichers.coingecko.params`. Add keys with
 `./dev.py i18n add … --into enricher_providers/<folder>` ([Labels and Translations](plugin_settings.md#translations)).
 
 ---
@@ -643,6 +675,11 @@ An enricher that needs an API key or another value declares it in `settings_fiel
 weekly read serves every user ([Scopes and Families](plugin_settings.md#scopes)). Read them with `self.settings` inside
 the methods, never in `__init__`.
 
+A value that belongs to an account other plugins read too, such as CoinGecko's key, is not declared in `settings_fields`:
+it lives in a shared group ([Shared Groups](plugin_settings.md#groups)), which the enricher names in `settings_groups` and
+reads with `self.settings.group(name)`. A required field of the group left empty makes the enricher «to configure», as
+one of its own would.
+
 Before any call the core binds the values and checks the required ones (`configured_enricher()` and `usable_codes()` in
 `backend/app/services/enrichers/usable.py`, through `plugins_readiness()`). An enricher with a required setting left
 empty is `configured: false` in `GET /assets/enrichers`, refused with `NOT_CONFIGURED` by `{code}/search` and
@@ -651,7 +688,71 @@ with an `ERROR` outcome whose `error_code` is `NOT_CONFIGURED` by «Ask».
 
 ---
 
-## 🔌 Turning Enrichers Off
+## 🦎 Case Study: CoinGecko, a Shared Account {: #coingecko }
+
+`backend/app/services/enricher_providers/coingecko/plugin.py` reads the profile of a cryptocurrency beside the
+[CoinGecko price provider](../../backend/assets/provider_coingecko.md), on the same account. It is the reference for an
+enricher whose source is **one account, one asset type and one API key**.
+
+```mermaid
+flowchart LR
+    P["Price provider<br/><small>asset_source_providers/coingecko</small>"] --> S["services/coingecko<br/><small>sdk, currencies</small>"]
+    E["Enricher<br/><small>enricher_providers/coingecko</small>"] --> S
+    P --> G["Group coingecko<br/><small>key, plan, call limits</small>"]
+    E --> G
+    S --> C["CoinGecko"]
+
+    style P fill:#e3f2fd,color:#1b1b1b,stroke:#1565c0
+    style E fill:#e3f2fd,color:#1b1b1b,stroke:#1565c0
+    style S fill:#e8f5e9,color:#1b1b1b,stroke:#2e7d32
+    style G fill:#fff3e0,color:#1b1b1b,stroke:#e65100
+    style C fill:#f3e5f5,color:#1b1b1b,stroke:#7b1fa2
+```
+
+- **The account is a settings group.** Both plugins declare `settings_groups = ("coingecko",)`
+  (`backend/app/services/plugin_settings/groups/coingecko.py`): one key, one plan, and `shares_credits`, so every call of
+  either is counted and limited on the group's row, the reads and the recognizes alike
+  ([Calls on a Shared Account](#shared-calls)).
+- **The shared code is in the core**, `backend/app/services/coingecko/`: `sdk.py`, the one door to CoinGecko's SDK (no
+  retry, the plan's root, the errors translated, the key in no message), and `currencies.py`. A plugin never imports
+  another, so neither could hold it for the other.
+    - It cannot sit in `plugin_settings/groups/`: that package imports only the fields, because the contract of the
+      plugin families imports the groups. The SDK's errors are the asset family's (`AssetSourceError`,
+      `AssetRateLimitedError`), and `backend/app/services/assets/base.py` imports that contract: the import would be a
+      circle.
+- **One asset type.** `voices` has `AssetType.CRYPTO` alone, and `default_priority` gives it 10 and `None` to every other
+  type: the registry wants each type named. No other enricher covers it today.
+- **A value in a currency is a binding parameter.** `/coins/{id}` gives the capitalisation in every currency at once, so
+  `vs_currency` (a `select` of `VS_CURRENCIES`, EUR by default) picks one from the answer; a value that is none of
+  CoinGecko's leaves the voice out. The parameter has the name of the price provider's, so the cascade's seed, the
+  asset's price assignment, hands it along: the cascade keeps of a seed's parameters only the ones the enricher declares
+  in `params_schema` (`_seed_binding()` in `recognize.py`).
+- **`source_dates`**: the capitalisation carries the UTC day of `market_data.last_updated`; the other voices have no day.
+- **What it gives, and what it does not.** The voices are `description` (CoinGecko's English text, markup removed),
+  `website` (the first `http(s)` home page), `inception_date` (the genesis day), `market_cap` (a 0 means «not known»: the
+  voice is absent) and `crypto_categories`. Never the legal form (CoinGecko lists every kind of token, so «crypto» would
+  be a deduction), the supply or a price.
+    - The categories are **copied whole**: all of them, in the source's words and order, joined by `; `. They mix
+      kinds with ecosystems, holdings and indices: choosing or translating some would be our reading of them.
+- **The outcomes.** A 404 is `NOT_FOUND` (`EnricherRecognition(found=False)`, `NOT_FOUND` item): CoinGecko does not know
+  the coin. A 429 is an `ERROR` item `RATE_LIMITED` in `read`, with the rest of the list refused and no call made; in
+  `search` it is `EnricherRateLimited`, in `recognize` `AssetRateLimitedError`. Another failure is that coin's
+  `SOURCE_ERROR`.
+- **The pace.** A module-level `Pacer(1.0)` waits before each call of the plugin: one per coin read (`/coins/{id}`, with
+  the market data), one per recognize (the same, without it), one per search (`/search`, up to 20 coins, the most
+  capitalised first, each bound by its id, since many coins share a symbol).
+- **`terms = EnricherTerms.SELF_HOSTED` is a declaration only.** Nothing in the code enforces it: an operator who does not
+  want the source leaves it out of the instance's list (`LIBREFOLIO_ENRICHERS_ENABLED`, [below](#turning-off)), and the
+  price provider out of `LIBREFOLIO_ASSET_PROVIDERS_ENABLED`. Whoever enables it in a paid or hosted service takes the
+  responsibility for CoinGecko's terms.
+- **The attribution** («Powered by CoinGecko») is the price provider's, on its card in Settings › Plugins and on the user
+  manual page; the enricher declares none, and the «Profile» tab shows none.
+
+📖 **User guide**: [CoinGecko — User Manual](../../../user/assets/providers/coingecko.md#profile)
+
+---
+
+## 🔌 Turning Enrichers Off {: #turning-off }
 
 `LIBREFOLIO_ENRICHERS_ENABLED` (`enrichers_enabled()` in `backend/app/config/plugins.py`) lists the enrichers active on
 the instance, by code, separated by commas. Unset or blank, every enricher is active; set, only the listed ones exist for
@@ -671,9 +772,10 @@ sets the variable until the administrator lists it.
 | `./dev.py test services enricher-refresh` | Read, cache, merge and save; unanswered bindings, `RATE_LIMITED`; the `confirmed` map |
 | `./dev.py test services asset-profile-freshness` | «Now» not up to date: the confirmation, the 30 days, the voices that never age |
 | `./dev.py test services scheduler-profile-read` | The weekly job: its round, the held voices, the one retry |
-| `./dev.py test services enricher-justetf`, `enricher-borsa-italiana`, `enricher-yahoo`, `enricher-esma` | Each shipped plugin against recorded pages (fixtures under `backend/test_scripts/test_services/fixtures/`), no network |
+| `./dev.py test services enricher-justetf`, `enricher-borsa-italiana`, `enricher-yahoo`, `enricher-esma`, `enricher-coingecko` | Each shipped plugin against recorded pages (fixtures under `backend/test_scripts/test_services/fixtures/`; CoinGecko's in `backend/test_scripts/fixtures/coingecko/`), no network |
 | `./dev.py test services enricher-enabled` | `LIBREFOLIO_ENRICHERS_ENABLED` |
 | `./dev.py test services enricher-call-limits` | The call limits at the read boundary |
+| `./dev.py test services enricher-shared-calls` | The [calls on a shared account](#shared-calls): recognize, search and test counted on the group, a full limit refused at each door |
 | `./dev.py test api assets-enrichers` | The routes, driven by `mockenrich` |
 | `./dev.py test external enrichers` | Every real enricher against its real source (network) |
 

@@ -32,6 +32,7 @@ def front_broker_unit(verbose: bool = False, ui: bool = False, headed: bool = Fa
         "src/lib/features/brokers/lots/LotDataQualityBanner.test.ts",
         "src/lib/features/brokers/lots/LotsAnalysisPanel.rewardAllocation.test.ts",
         "src/lib/features/brokers/lots/UnifiedLotsTable.rewardGroup.test.ts",
+        "src/lib/features/brokers/lots/UnifiedLotsTable.rewardEntries.test.ts",
     ]
     print(f"\n{Colors.BLUE}Running: Broker Vitest unit tests{Colors.NC}")
     print(f"Command:\n└─▶ $ cd frontend && {' '.join(cmd)}")
@@ -100,6 +101,18 @@ def front_broker_tx_link_charges(verbose: bool = False, ui: bool = False, headed
     if not _ensure_test_users():
         return False
     return _run_playwright("brokers/broker-tx-link-charges.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
+def front_broker_tx_unlink_charges(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """«Unlink the charges» from the broker's Transactions tab, as on the Transactions page (project 66, TL-9)."""
+    print_section("Frontend Broker Transactions Unlink Charges Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("brokers/broker-tx-unlink-charges.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
 def front_broker_tx_view_edit(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
@@ -229,6 +242,14 @@ def populate_registry(registry: dict) -> None:
         name="Broker Transactions Link Charges Tests",
         desc="Project 66 TL-5: on the broker's Transactions tab, a BUY and a free FEE ticked → «Link» → the panel → confirm: event tx.charges.linked and the FEE points at the BUY, read back by id; a BUY with an asset and a FEE without one → «Link» off with the reason noAsset",
         tests="brokers/broker-tx-link-charges.spec.ts",
+    )
+    add_test(
+        cat,
+        "broker-tx-unlink-charges",
+        front_broker_tx_unlink_charges,
+        name="Broker Transactions Unlink Charges Tests",
+        desc="Project 66 TL-9: on the broker's Transactions tab, one linked charge ticked → «Unlink» → the panel → confirm: event tx.charges.unlinked, the tab reloads, the charge has no parent, read back by id; the transaction types are never asked for",
+        tests="brokers/broker-tx-unlink-charges.spec.ts",
     )
     add_test(
         cat,

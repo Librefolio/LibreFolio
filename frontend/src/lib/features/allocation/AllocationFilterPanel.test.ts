@@ -39,13 +39,108 @@ describe('classes', () => {
     it('turning one off asks for the others', async () => {
         const {onchange} = mount();
         await fireEvent.click(screen.getByTestId('f-class-BOND-switch'));
-        expect(onchange).toHaveBeenCalledWith({classes: ['STOCK', 'Liquidity'], excludeBuckets: [], excludeAssetIds: []});
+        expect(onchange).toHaveBeenCalledWith({classes: ['STOCK', 'Liquidity'], types: [], excludeBuckets: [], excludeAssetIds: []});
     });
 
     it('shows a subset as it is', () => {
-        mount(makeView(), {classes: ['STOCK'], excludeBuckets: [], excludeAssetIds: []});
+        mount(makeView(), {classes: ['STOCK'], types: [], excludeBuckets: [], excludeAssetIds: []});
         expect(['STOCK', 'BOND', 'Liquidity'].map((c) => on(`f-class-${c}`))).toEqual(['true', 'false', 'false']);
         expect(screen.getByTestId('f-classes-count')).toHaveTextContent(/1.*3/);
+    });
+});
+
+describe('two levels (86, D-13)', () => {
+    const PART: AllocationFilters = {classes: ['BOND', 'Liquidity'], types: ['ETF_STOCK'], excludeBuckets: [], excludeAssetIds: []};
+    const state = (id: string) => screen.getByTestId(id).getAttribute('data-state');
+
+    it('a class of several types opens on them, each with its amount; a class of one does not open', async () => {
+        mount();
+        expect(screen.queryByTestId('f-type-ETF_STOCK')).toBeNull();
+        expect(screen.queryByTestId('f-class-BOND-toggle')).toBeNull();
+        const toggle = screen.getByTestId('f-class-STOCK-toggle');
+        expect(toggle).toHaveAttribute('aria-expanded', 'false');
+        await fireEvent.click(toggle);
+        expect(toggle).toHaveAttribute('aria-expanded', 'true');
+        expect(screen.getByTestId('f-class-STOCK').textContent).toMatch(/41[.,]?000/);
+        expect(screen.getByTestId('f-type-ETF_STOCK').textContent).toMatch(/37[.,]?000/);
+        expect(screen.getByTestId('f-type-STOCK').textContent).toMatch(/4[.,]?000/);
+        await fireEvent.click(toggle);
+        expect(screen.queryByTestId('f-type-ETF_STOCK')).toBeNull();
+    });
+
+    it('a type turned off asks for the others on their own', async () => {
+        const {onchange} = mount();
+        await fireEvent.click(screen.getByTestId('f-class-STOCK-toggle'));
+        await fireEvent.click(screen.getByTestId('f-type-STOCK-switch'));
+        expect(onchange).toHaveBeenCalledWith(PART);
+    });
+
+    it('a class in part starts open, is mixed, and one click turns all of it on', async () => {
+        const {onchange} = mount(makeView(), PART);
+        expect(state('f-class-STOCK')).toBe('mixed');
+        expect([on('f-type-ETF_STOCK'), on('f-type-STOCK')]).toEqual(['true', 'false']);
+        const lever = screen.getByTestId('f-class-STOCK-switch');
+        expect(lever).toHaveAttribute('role', 'checkbox');
+        expect(lever).toHaveAttribute('aria-checked', 'mixed');
+        await fireEvent.click(lever);
+        expect(onchange).toHaveBeenCalledWith(emptyFilters());
+    });
+
+    it('the switch of the title: on, off and mixed', async () => {
+        const first = mount();
+        expect(screen.getByTestId('f-classes-all')).toHaveAttribute('aria-checked', 'true');
+        await fireEvent.click(screen.getByTestId('f-classes-all'));
+        expect(first.onchange).toHaveBeenLastCalledWith({classes: [], types: [], excludeBuckets: [], excludeAssetIds: []});
+        cleanup();
+        const part = mount(makeView(), PART);
+        expect(screen.getByTestId('f-classes-all')).toHaveAttribute('aria-checked', 'mixed');
+        expect(screen.getByTestId('f-classes-count'), 'a class in part is kept').toHaveTextContent(/3.*3/);
+        await fireEvent.click(screen.getByTestId('f-classes-all'));
+        expect(part.onchange).toHaveBeenLastCalledWith(emptyFilters());
+    });
+
+    it('lists the assets of the types switched on, and the title switch acts on them', async () => {
+        const {onchange} = mount(makeView(), PART);
+        expect(screen.getByTestId('f-asset-1'), 'a stock ETF').toBeInTheDocument();
+        expect(screen.queryByTestId('f-asset-2'), 'a share: its type is off').toBeNull();
+        await fireEvent.click(screen.getByTestId('f-assets-all'));
+        expect(onchange.mock.calls[0][0].excludeAssetIds).toEqual([1, 3]);
+    });
+
+    it('the assets’ title switch acts on the rows the search shows', async () => {
+        const many = Array.from({length: 12}, (_, index) => ({asset_id: 100 + index, asset_class: 'STOCK', amount: '10.00', name: `Name ${index}`, ticker: index === 3 ? 'FIND' : null, asset_type: 'STOCK', icon_url: null}));
+        const {onchange} = mount(makeView({assets: many}));
+        await fireEvent.input(screen.getByTestId('f-assets-search'), {target: {value: 'find'}});
+        await fireEvent.click(screen.getByTestId('f-assets-all'));
+        expect(onchange.mock.calls[0][0].excludeAssetIds).toEqual([103]);
+    });
+
+    it('a class and its first type never share a name', async () => {
+        mount();
+        await fireEvent.click(screen.getByTestId('f-class-STOCK-toggle'));
+        const className = screen.getByTestId('f-class-STOCK-switch').getAttribute('aria-label');
+        expect(className).not.toBe(screen.getByTestId('f-type-STOCK-switch').getAttribute('aria-label'));
+    });
+});
+
+describe('rows (86, A2–A4)', () => {
+    it('a class says its name and its amount, nothing between brackets', () => {
+        mount();
+        expect(screen.getByTestId('f-class-STOCK').textContent).not.toMatch(/[()]/);
+    });
+
+    it('the text takes the room left by the switch, in the three panels', () => {
+        mount(makeView({applicable_buckets: ['Unknown', 'Other']}));
+        for (const id of ['f-bucket-Unknown', 'f-asset-1']) expect(screen.getByTestId(id).firstElementChild, id).toHaveClass('min-w-0', 'flex-1');
+        expect(screen.getByTestId('f-class-STOCK-toggle'), 'a class: the line that opens it').toHaveClass('min-w-0', 'flex-1');
+    });
+
+    it('an asset name scrolls when it does not fit, never cut by dots', () => {
+        mount();
+        const name = screen.getByTestId('f-asset-1-name');
+        expect(name).toHaveClass('overflow-scroll-marquee');
+        expect(name).not.toHaveClass('truncate');
+        expect(name.getAttribute('title')).toBeTruthy();
     });
 });
 
@@ -55,7 +150,7 @@ describe('outside the 100 %', () => {
         expect(screen.getByTestId('f-bucket-Unknown')).toBeInTheDocument();
         expect(screen.getByTestId('f-bucket-Other')).toBeInTheDocument();
         await fireEvent.click(screen.getByTestId('f-bucket-Other-switch'));
-        expect(onchange).toHaveBeenCalledWith({classes: null, excludeBuckets: ['Other'], excludeAssetIds: []});
+        expect(onchange).toHaveBeenCalledWith({classes: null, types: [], excludeBuckets: ['Other'], excludeAssetIds: []});
     });
 
     it('is not drawn when the dimension has no bucket to take out', () => {
@@ -63,28 +158,44 @@ describe('outside the 100 %', () => {
         expect(screen.queryByTestId('f-excluded')).toBeNull();
     });
 
-    it('shows a bucket excluded, and counts it', () => {
-        mount(makeView(), {classes: null, excludeBuckets: ['Unknown'], excludeAssetIds: []});
-        expect(on('f-bucket-Unknown')).toBe('true');
-        expect(screen.getByTestId('f-excluded-count')).toHaveTextContent('1');
+    it('all on at first, counted; one taken out is off', () => {
+        mount(makeView({applicable_buckets: ['Unknown', 'Other']}));
+        expect([on('f-bucket-Unknown'), on('f-bucket-Other')]).toEqual(['true', 'true']);
+        expect(screen.getByTestId('f-excluded-count')).toHaveTextContent(/2.*2/);
+        cleanup();
+        mount(makeView({applicable_buckets: ['Unknown', 'Other']}), {classes: null, types: [], excludeBuckets: ['Unknown'], excludeAssetIds: []});
+        expect([on('f-bucket-Unknown'), on('f-bucket-Other')]).toEqual(['false', 'true']);
+        expect(screen.getByTestId('f-excluded-count')).toHaveTextContent(/1.*2/);
+    });
+
+    it('the switch of its title: mixed, then everything on; from all on, everything out', async () => {
+        const view = makeView({applicable_buckets: ['Unknown', 'Other']});
+        const {onchange} = mount(view, {classes: null, types: [], excludeBuckets: ['Unknown'], excludeAssetIds: []});
+        expect(screen.getByTestId('f-excluded-all')).toHaveAttribute('aria-checked', 'mixed');
+        await fireEvent.click(screen.getByTestId('f-excluded-all'));
+        expect(onchange).toHaveBeenLastCalledWith(emptyFilters());
+        cleanup();
+        const all = mount(view);
+        await fireEvent.click(screen.getByTestId('f-excluded-all'));
+        expect(all.onchange.mock.calls[0][0].excludeBuckets.sort()).toEqual(['Other', 'Unknown']);
     });
 });
 
 describe('assets', () => {
     it('lists the assets of the classes switched on, and excludes one on a click', async () => {
-        const {onchange} = mount(makeView(), {classes: ['STOCK'], excludeBuckets: [], excludeAssetIds: []});
+        const {onchange} = mount(makeView(), {classes: ['STOCK'], types: [], excludeBuckets: [], excludeAssetIds: []});
         expect(screen.getByTestId('f-asset-1')).toBeInTheDocument();
         expect(screen.getByTestId('f-asset-2')).toBeInTheDocument();
         expect(screen.queryByTestId('f-asset-3'), 'a bond is not in the selection').toBeNull();
         await fireEvent.click(screen.getByTestId('f-asset-2-switch'));
-        expect(onchange).toHaveBeenCalledWith({classes: ['STOCK'], excludeBuckets: [], excludeAssetIds: [2]});
+        expect(onchange).toHaveBeenCalledWith({classes: ['STOCK'], types: [], excludeBuckets: [], excludeAssetIds: [2]});
     });
 
     it('shows an excluded asset off, and turning it on takes it out of the list of exclusions', async () => {
-        const {onchange} = mount(makeView(), {classes: null, excludeBuckets: [], excludeAssetIds: [2, 99]});
+        const {onchange} = mount(makeView(), {classes: null, types: [], excludeBuckets: [], excludeAssetIds: [2, 99]});
         expect(on('f-asset-2')).toBe('false');
         await fireEvent.click(screen.getByTestId('f-asset-2-switch'));
-        expect(onchange, 'the saved asset 99, absent today, is kept').toHaveBeenCalledWith({classes: null, excludeBuckets: [], excludeAssetIds: [99]});
+        expect(onchange, 'the saved asset 99, absent today, is kept').toHaveBeenCalledWith({classes: null, types: [], excludeBuckets: [], excludeAssetIds: [99]});
     });
 
     it('has a search box only above ten assets', async () => {
@@ -109,7 +220,7 @@ describe('remove filters', () => {
         expect(screen.queryByTestId('f-clear')).toBeNull();
         cleanup();
 
-        const {onchange} = mount(makeView(), {classes: ['STOCK'], excludeBuckets: [], excludeAssetIds: []});
+        const {onchange} = mount(makeView(), {classes: ['STOCK'], types: [], excludeBuckets: [], excludeAssetIds: []});
         await fireEvent.click(screen.getByTestId('f-clear'));
         expect(onchange).toHaveBeenCalledWith(emptyFilters());
     });

@@ -175,3 +175,89 @@ describe('FileUploader — the size of a picked file in the UI language, in a le
         expect(shownSize(), `en → fr in place — French notation and unit, ${spelled(expectedSize('fr'))}`).toBe(expectedSize('fr'));
     });
 });
+
+/**
+ * The row buttons are standard Buttons (85 BTN-2b), inside the drop zone — itself a `role="button"` that opens the
+ * file dialog on a click or on Enter. A row button acts alone: its click stops at it, and (B-FU1) Enter on it no longer
+ * reaches the zone, which used to open the file dialog as well. The file dialog is observed where it starts, the hidden
+ * input's `click`; the zone itself still opens it, by click and by Enter (the positive controls).
+ */
+describe('FileUploader — the row buttons act alone (85 BTN-2b, B-FU1)', () => {
+    const IMAGE = 'portrait.png';
+    const PDF = 'statement.pdf';
+
+    async function mountWithTwo() {
+        const editImage = vi.fn();
+        const editFile = vi.fn();
+        const change = vi.fn();
+        const view = render(FileUploader, {props: {multiple: true}, events: {editImage: (e: CustomEvent) => editImage(e), editFile: (e: CustomEvent) => editFile(e), change: (e: CustomEvent) => change(e)}});
+        const files = [new File(['png'], IMAGE, {type: 'image/png'}), new File(['%PDF'], PDF, {type: 'application/pdf'})];
+        await fireEvent.change(screen.getByTestId('file-input'), {target: {files}});
+        await settle();
+        const dialog = vi.spyOn(screen.getByTestId('file-input') as HTMLInputElement, 'click').mockImplementation(() => {});
+        return {editImage, editFile, change, dialog, view};
+    }
+
+    /** A row button of the file named `name`: the row is the file name's parent. */
+    function rowButton(name: string, testId: string): HTMLElement {
+        const row = screen.getByText(name).parentElement;
+        if (!row) throw new Error(`no row for ${name}`);
+        const button = row.querySelector<HTMLElement>(`[data-testid="${testId}"]`);
+        if (!button) throw new Error(`no ${testId} in the row of ${name}`);
+        return button;
+    }
+
+    it('positive controls: a click and Enter on the zone itself open the file dialog', async () => {
+        const {dialog} = await mountWithTwo();
+        const zone = screen.getByTestId('file-drop-zone');
+        await fireEvent.click(zone);
+        expect(dialog).toHaveBeenCalledTimes(1);
+        await fireEvent.keyDown(zone, {key: 'Enter'});
+        expect(dialog).toHaveBeenCalledTimes(2);
+    });
+
+    it('edit (an image) and rename (a file) act without opening the file dialog', async () => {
+        const {editImage, editFile, dialog} = await mountWithTwo();
+        await fireEvent.click(rowButton(IMAGE, 'file-edit-btn'));
+        expect(editImage).toHaveBeenCalledTimes(1);
+        expect(editImage.mock.calls[0][0].detail.file.name).toBe(IMAGE);
+        await fireEvent.click(rowButton(PDF, 'file-edit-btn'));
+        expect(editFile).toHaveBeenCalledTimes(1);
+        expect(editFile.mock.calls[0][0].detail.file.name).toBe(PDF);
+        expect(dialog, 'the zone did not see the clicks').not.toHaveBeenCalled();
+    });
+
+    it('remove takes the file out without opening the file dialog', async () => {
+        const {change, dialog} = await mountWithTwo();
+        await fireEvent.click(rowButton(PDF, 'file-remove-btn'));
+        await settle();
+        expect(screen.queryByText(PDF)).toBeNull();
+        expect(screen.getByText(IMAGE)).toBeInTheDocument();
+        expect(change.mock.calls.at(-1)?.[0].detail.files.map((f: File) => f.name)).toEqual([IMAGE]);
+        expect(dialog).not.toHaveBeenCalled();
+    });
+
+    it('restore puts the original back without opening the file dialog', async () => {
+        const {dialog, view} = await mountWithTwo();
+        (view.component as unknown as {replaceFile: (index: number, file: File) => void}).replaceFile(0, new File(['edited'], 'portrait-edited.png', {type: 'image/png'}));
+        await settle();
+        const restore = rowButton('portrait-edited.png', 'file-restore-btn');
+        await fireEvent.click(restore);
+        await settle();
+        expect(screen.getByText(IMAGE)).toBeInTheDocument();
+        expect(screen.queryByTestId('file-restore-btn')).toBeNull();
+        expect(dialog).not.toHaveBeenCalled();
+    });
+
+    it('B-FU1: Enter on a row button does not open the file dialog', async () => {
+        const {dialog} = await mountWithTwo();
+        for (const [name, testId] of [
+            [IMAGE, 'file-edit-btn'],
+            [PDF, 'file-edit-btn'],
+            [PDF, 'file-remove-btn'],
+        ]) {
+            await fireEvent.keyDown(rowButton(name, testId), {key: 'Enter'});
+        }
+        expect(dialog, 'Enter on a row button reached the zone').not.toHaveBeenCalled();
+    });
+});

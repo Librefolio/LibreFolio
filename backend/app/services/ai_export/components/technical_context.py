@@ -7,8 +7,9 @@ import math
 from collections.abc import Mapping, Sequence
 from datetime import date, timedelta
 from decimal import Decimal
+from typing import Any
 
-from pydantic import Field
+from pydantic import Field, SerializerFunctionWrapHandler, model_serializer
 
 from backend.app.schemas.common import StrictModel
 from backend.app.schemas.prices import FAPriceQueryResult
@@ -24,6 +25,7 @@ from backend.app.services.ai_export.components.technical_shared import (
     TechnicalUniverseBundle,
     classify_reference_level_state,
     coherent_price_currency,
+    daily_return_volatility,
     load_asset_price_results,
     load_fx_technical_bundle,
     load_technical_universe_bundle,
@@ -33,7 +35,6 @@ from backend.app.services.ai_export.components.types import DetailLevel, Domain,
 from backend.app.services.ai_export.dependencies import BuildContext
 from backend.app.services.ai_export.temporal import ObservedPoint, uniform_observed_buckets
 from backend.app.services.financial_math.returns import price_return
-from backend.app.services.risk.metrics import sample_standard_deviation
 from backend.app.services.signals.registry import SignalPluginRegistry
 
 _ASSET_CONTEXT_EVENT_KEYS = frozenset(
@@ -201,9 +202,53 @@ class TechnicalSingleEntityCoveragePayload(StrictModel):
     signals: tuple[SignalCoverageAggregate, ...]
 
 
-class TechnicalMarketContextRow(StrictModel):
+#: The one column order of every market row (78 L6 S2): each row declares a subset, and prints it in this order.
+MARKET_CONTEXT_COLUMN_ORDER: tuple[str, ...] = (
+    "entity_id",
+    "portfolio_weight_ratio",
+    "value_unit",
+    "observation_count",
+    "available_start",
+    "available_end",
+    "current_value",
+    "current_date",
+    "return_1m_ratio",
+    "return_3m_ratio",
+    "return_period_ratio",
+    "minimum_value",
+    "minimum_date",
+    "maximum_value",
+    "maximum_date",
+    "ema_20",
+    "ema_50",
+    "ema_200",
+    "kama_20",
+    "rsi_14",
+    "rsi_14_state",
+    "natr_14_percent",
+    "atr_14",
+    "daily_return_volatility_ratio",
+    "bollinger_lower",
+    "bollinger_middle",
+    "bollinger_upper",
+    "ppo_12_26_9_percent",
+    "roc_20_percent",
+    "current_vs_ema_50",
+    "current_vs_ema_200",
+    "ema_50_vs_ema_200",
+)
+
+
+class MarketContextRowBase(StrictModel):
+    """The columns every market row reports, whatever its entity.
+
+    78 L6 S2: a row declares only the columns its component reports, so a column it does not report is not in the
+    payload, and the prompt never calls it «unavailable» (its signal may well be computed, for the breadth or the
+    events). A declared column stays `None` when it cannot be computed (too few observations): that one is really
+    unavailable. Each component's row extends this one.
+    """
+
     entity_id: str
-    portfolio_weight_ratio: float | None = None
     value_unit: str
     observation_count: int = Field(..., ge=0)
     available_start: date | None = None
@@ -217,23 +262,50 @@ class TechnicalMarketContextRow(StrictModel):
     minimum_date: date | None = None
     maximum_value: float | None = None
     maximum_date: date | None = None
-    ema_20: float | None = None
     ema_50: float | None = None
     ema_200: float | None = None
     kama_20: float | None = None
     rsi_14: float | None = None
     rsi_14_state: str | None = None
-    natr_14_percent: float | None = None
-    atr_14: float | None = None
     daily_return_volatility_ratio: float | None = None
-    bollinger_lower: float | None = None
-    bollinger_middle: float | None = None
-    bollinger_upper: float | None = None
-    ppo_12_26_9_percent: float | None = None
-    roc_20_percent: float | None = None
     current_vs_ema_50: str | None = None
     current_vs_ema_200: str | None = None
     ema_50_vs_ema_200: str | None = None
+
+    @model_serializer(mode="wrap")
+    def _in_column_order(self, handler: SerializerFunctionWrapHandler) -> dict[str, Any]:
+        """Inheritance appends a row's own columns at the end; the prompt's tables keep the one column order."""
+        data = handler(self)
+        return {name: data[name] for name in MARKET_CONTEXT_COLUMN_ORDER if name in data}
+
+
+class TechnicalMarketContextRow(MarketContextRowBase):
+    """The portfolio and broker row: each asset's weight in the scope and its NATR besides the common columns."""
+
+    portfolio_weight_ratio: float | None = None
+    natr_14_percent: float | None = None
+
+
+class AssetPositionMarketContextRow(MarketContextRowBase):
+    """The asset's position row: the short trend and the position's volatility bands besides the common columns."""
+
+    ema_20: float | None = None
+    natr_14_percent: float | None = None
+    atr_14: float | None = None
+    bollinger_lower: float | None = None
+    bollinger_middle: float | None = None
+    bollinger_upper: float | None = None
+
+
+class FxMarketContextRow(MarketContextRowBase):
+    """The FX pair's row: the short trend and the pair's momentum besides the common columns.
+
+    No NATR: an FX rate has no highs and lows, so the pair's signals never ask for it.
+    """
+
+    ema_20: float | None = None
+    ppo_12_26_9_percent: float | None = None
+    roc_20_percent: float | None = None
 
 
 class TechnicalContextHistoryRow(StrictModel):
@@ -259,8 +331,30 @@ class TechnicalContextEvent(StrictModel):
 
 
 class TechnicalMarketContextPayload(StrictModel):
+    """The portfolio and broker market context: one common row per asset."""
+
     policy_code: str
     entities: tuple[TechnicalMarketContextRow, ...]
+    history: tuple[TechnicalContextHistoryRow, ...] = ()
+    events: tuple[TechnicalContextEvent, ...] = ()
+    latest_events: tuple[TechnicalContextEvent, ...] = ()
+
+
+class AssetPositionMarketContextPayload(StrictModel):
+    """The asset's position market context (78 L6 S2: its own row)."""
+
+    policy_code: str
+    entities: tuple[AssetPositionMarketContextRow, ...]
+    history: tuple[TechnicalContextHistoryRow, ...] = ()
+    events: tuple[TechnicalContextEvent, ...] = ()
+    latest_events: tuple[TechnicalContextEvent, ...] = ()
+
+
+class FxMarketContextPayload(StrictModel):
+    """The FX pair's market summary (78 L6 S2: its own row)."""
+
+    policy_code: str
+    entities: tuple[FxMarketContextRow, ...]
     history: tuple[TechnicalContextHistoryRow, ...] = ()
     events: tuple[TechnicalContextEvent, ...] = ()
     latest_events: tuple[TechnicalContextEvent, ...] = ()
@@ -317,17 +411,6 @@ def _observed_fx_points(series: FxRateSeriesResource, *, start: date, end: date)
     return tuple((day, float(rate)) for day, rate in _observed_fx_rates(series, start=start, end=end))
 
 
-def _daily_return_volatility(observed: Sequence[tuple[date, Decimal]]) -> float | None:
-    """The sample volatility (ddof = 1) of the simple returns between consecutive observed values; None under two returns.
-
-    One definition for every row that writes `daily_return_volatility_ratio` (78 L6 S1): the return from
-    `financial_math.returns.price_return`, the deviation from `risk.metrics.sample_standard_deviation`, the Risk engine's own.
-    A zero value gives no return and is skipped. Observations are quote days: the standard count.
-    """
-    returns = [float(change) for (_, previous), (_, current) in zip(observed, observed[1:], strict=False) if (change := price_return(previous, current)) is not None]
-    return sample_standard_deviation(returns) if len(returns) >= 2 else None
-
-
 def _value_on_or_before(points: Sequence[tuple[date, float]], target: date) -> tuple[date, float] | None:
     candidates = [point for point in points if point[0] <= target]
     return candidates[-1] if candidates else None
@@ -338,9 +421,11 @@ def _return_ratio(points: Sequence[tuple[date, float]], target: date) -> float |
         return None
     start = _value_on_or_before(points, target)
     end = points[-1]
-    if start is None or start[1] == 0 or start[0] >= end[0]:
+    if start is None or start[0] >= end[0]:
         return None
-    return end[1] / start[1] - 1
+    # 78 L6 S2b: the one price return, on the values as stored; None from a zero start
+    change = price_return(Decimal(str(start[1])), Decimal(str(end[1])))
+    return float(change) if change is not None else None
 
 
 def _relation(left: float | None, right: float | None) -> str | None:
@@ -549,7 +634,8 @@ def _latest_category_events(events, *, allowed_keys: frozenset[str]) -> tuple[Te
     return tuple(rows)
 
 
-def _market_context_row(
+def _market_context_row[RowT: MarketContextRowBase](
+    row_model: type[RowT],
     *,
     entity_id: str,
     value_unit: str,
@@ -559,10 +645,12 @@ def _market_context_row(
     period_end: date,
     portfolio_weight_ratio: float | None = None,
     daily_return_volatility_ratio: float | None = None,
-    include_short_trend: bool = False,
-    include_position_volatility: bool = False,
-    include_fx_momentum: bool = False,
-) -> TechnicalMarketContextRow:
+) -> RowT:
+    """The market row of one entity, of the class its component declares (78 L6 S2).
+
+    The extension columns are read once here; a row gets only those its class declares, so a column its component never
+    asks for is never in the payload.
+    """
     signal_by_instance = _signal_map(results)
     latest = points[-1] if points else None
     minimum = min(points, key=lambda item: (item[1], item[0])) if points else None
@@ -582,9 +670,19 @@ def _market_context_row(
     ema_50_value = ema_50[1] if ema_50 else None
     ema_200_value = ema_200[1] if ema_200 else None
     rsi_state = classify_reference_level_state(rsi_14[1], rsi_series.reference_levels) if rsi_14 and rsi_series else None
-    return TechnicalMarketContextRow(
+    extensions = {
+        "portfolio_weight_ratio": portfolio_weight_ratio,
+        "ema_20": ema_20[1] if ema_20 else None,
+        "natr_14_percent": natr_14[1] if natr_14 else None,
+        "atr_14": atr_14[1] if atr_14 else None,
+        "bollinger_lower": bands[1] if bands else None,
+        "bollinger_middle": bands[2] if bands else None,
+        "bollinger_upper": bands[3] if bands else None,
+        "ppo_12_26_9_percent": ppo[1] if ppo else None,
+        "roc_20_percent": roc[1] if roc else None,
+    }
+    return row_model(
         entity_id=entity_id,
-        portfolio_weight_ratio=portfolio_weight_ratio,
         value_unit=value_unit,
         observation_count=len(points),
         available_start=points[0][0] if points else None,
@@ -598,23 +696,16 @@ def _market_context_row(
         minimum_date=minimum[0] if minimum else None,
         maximum_value=maximum[1] if maximum else None,
         maximum_date=maximum[0] if maximum else None,
-        ema_20=ema_20[1] if include_short_trend and ema_20 else None,
         ema_50=ema_50_value,
         ema_200=ema_200_value,
         kama_20=kama_20[1] if kama_20 else None,
         rsi_14=rsi_14[1] if rsi_14 else None,
         rsi_14_state=rsi_state,
-        natr_14_percent=natr_14[1] if natr_14 else None,
-        atr_14=atr_14[1] if include_position_volatility and atr_14 else None,
         daily_return_volatility_ratio=daily_return_volatility_ratio,
-        bollinger_lower=bands[1] if include_position_volatility and bands else None,
-        bollinger_middle=bands[2] if include_position_volatility and bands else None,
-        bollinger_upper=bands[3] if include_position_volatility and bands else None,
-        ppo_12_26_9_percent=ppo[1] if include_fx_momentum and ppo else None,
-        roc_20_percent=roc[1] if include_fx_momentum and roc else None,
         current_vs_ema_50=_relation(current_value, ema_50_value),
         current_vs_ema_200=_relation(current_value, ema_200_value),
         ema_50_vs_ema_200=_relation(ema_50_value, ema_200_value),
+        **{name: value for name, value in extensions.items() if name in row_model.model_fields},
     )
 
 
@@ -638,7 +729,7 @@ def _history_rows(
             observed_date=bucket.representative.date,
             current_value=float(bucket.representative.value),
             normalized_index_base_100=(float(bucket.representative.value / first_value * Decimal(100)) if first_value else None),
-            return_from_first_ratio=(float(bucket.representative.value / first_value - Decimal(1)) if first_value else None),
+            return_from_first_ratio=(float(change) if (change := price_return(first_value, bucket.representative.value)) is not None else None),
         )
         for bucket in buckets
     )
@@ -706,6 +797,7 @@ async def _build_universe_market_context(context: BuildContext, *, universe_kwar
         detected.extend(signal_results_to_discrete_events(signals, entity_id=f"asset:{asset_id}", asset_id=asset_id))
         rows.append(
             _market_context_row(
+                TechnicalMarketContextRow,
                 entity_id=f"asset:{asset_id}",
                 value_unit=coherent_price_currency(result) or "unavailable",
                 points=points,
@@ -714,7 +806,7 @@ async def _build_universe_market_context(context: BuildContext, *, universe_kwar
                 period_end=scope.period_end,
                 portfolio_weight_ratio=float(universe.weights.get(asset_id, Decimal(0))),
                 # 78 L6 S1: the volatility a close-only ETF had none of (NATR needs highs and lows)
-                daily_return_volatility_ratio=_daily_return_volatility(closes),
+                daily_return_volatility_ratio=daily_return_volatility(closes),
             )
         )
         history.extend(
@@ -803,12 +895,13 @@ async def _build_asset_coverage(context: BuildContext, dependencies: Mapping[str
     )
 
 
-async def _build_asset_position_context(context: BuildContext, dependencies: Mapping[str, SectionEnvelope]) -> TechnicalMarketContextPayload:
+async def _build_asset_position_context(context: BuildContext, dependencies: Mapping[str, SectionEnvelope]) -> AssetPositionMarketContextPayload:
     scope = context.scope
     assert scope is not None and scope.asset_id is not None
     price_results = await load_asset_price_results(context)
     result = price_results.by_asset_id.get(scope.asset_id)
-    points = _observed_asset_points(result, start=scope.period_start, end=scope.period_end)
+    closes = _observed_asset_closes(result, start=scope.period_start, end=scope.period_end)
+    points = tuple((day, float(close)) for day, close in closes)
     signals = tuple(result.signals) if result is not None else ()
     discrete = signal_results_to_discrete_events(signals, entity_id=f"asset:{scope.asset_id}", asset_id=scope.asset_id)
     events = _event_rows(
@@ -818,16 +911,17 @@ async def _build_asset_position_context(context: BuildContext, dependencies: Map
     )
     latest_events = _latest_category_events(discrete, allowed_keys=_ASSET_CONTEXT_EVENT_KEYS)
     row = _market_context_row(
+        AssetPositionMarketContextRow,
         entity_id=f"asset:{scope.asset_id}",
         value_unit=coherent_price_currency(result) or "unavailable",
         points=points,
         results=signals,
         period_start=scope.period_start,
         period_end=scope.period_end,
-        include_short_trend=True,
-        include_position_volatility=True,
+        # 78 L6 S2: the row declared it and never got it; the one definition of S1
+        daily_return_volatility_ratio=daily_return_volatility(closes),
     )
-    return TechnicalMarketContextPayload(
+    return AssetPositionMarketContextPayload(
         policy_code="asset_position_context_v2",
         entities=(row,),
         history=_history_rows(
@@ -856,7 +950,7 @@ async def _build_fx_coverage(context: BuildContext, dependencies: Mapping[str, S
     )
 
 
-async def _build_fx_market_summary(context: BuildContext, dependencies: Mapping[str, SectionEnvelope]) -> TechnicalMarketContextPayload:
+async def _build_fx_market_summary(context: BuildContext, dependencies: Mapping[str, SectionEnvelope]) -> FxMarketContextPayload:
     scope = context.scope
     assert scope is not None and scope.base_currency is not None and scope.quote_currency is not None
     bundle = await load_fx_technical_bundle(context)
@@ -871,6 +965,7 @@ async def _build_fx_market_summary(context: BuildContext, dependencies: Mapping[
     )
     latest_events = _latest_category_events(discrete, allowed_keys=_FX_CONTEXT_EVENT_KEYS)
     row = _market_context_row(
+        FxMarketContextRow,
         entity_id=entity_id,
         value_unit=f"{scope.quote_currency}_per_{scope.base_currency}",
         points=points,
@@ -878,11 +973,9 @@ async def _build_fx_market_summary(context: BuildContext, dependencies: Mapping[
         period_start=scope.period_start,
         period_end=scope.period_end,
         # 78 L6: the same definition as the portfolio and broker rows (sample volatility; until v1 a population one)
-        daily_return_volatility_ratio=_daily_return_volatility(rates),
-        include_short_trend=True,
-        include_fx_momentum=True,
+        daily_return_volatility_ratio=daily_return_volatility(rates),
     )
-    return TechnicalMarketContextPayload(
+    return FxMarketContextPayload(
         policy_code="fx_market_context_v2",
         entities=(row,),
         history=_history_rows(
@@ -934,12 +1027,12 @@ BROKER_TECHNICAL_CONTEXT_COMPONENTS: tuple[ComponentSpec, ...] = (
 
 ASSET_TECHNICAL_CONTEXT_COMPONENTS: tuple[ComponentSpec, ...] = (
     ComponentSpec("asset.technical_coverage", 1, frozenset({Domain.ASSET}), TechnicalSingleEntityCoveragePayload, _build_asset_coverage, period_behavior=PeriodBehavior.WINDOWED),
-    ComponentSpec("asset.position_market_context", 1, frozenset({Domain.ASSET}), TechnicalMarketContextPayload, _build_asset_position_context, period_behavior=PeriodBehavior.WINDOWED),
+    ComponentSpec("asset.position_market_context", 2, frozenset({Domain.ASSET}), AssetPositionMarketContextPayload, _build_asset_position_context, period_behavior=PeriodBehavior.WINDOWED),
 )
 
 FX_TECHNICAL_CONTEXT_COMPONENTS: tuple[ComponentSpec, ...] = (
     ComponentSpec("fx.technical_coverage", 1, frozenset({Domain.FX}), TechnicalSingleEntityCoveragePayload, _build_fx_coverage, period_behavior=PeriodBehavior.WINDOWED),
-    ComponentSpec("fx.market_summary", 2, frozenset({Domain.FX}), TechnicalMarketContextPayload, _build_fx_market_summary, period_behavior=PeriodBehavior.WINDOWED),
+    ComponentSpec("fx.market_summary", 2, frozenset({Domain.FX}), FxMarketContextPayload, _build_fx_market_summary, period_behavior=PeriodBehavior.WINDOWED),
 )
 
 TECHNICAL_CONTEXT_COMPONENTS: tuple[ComponentSpec, ...] = (
@@ -953,8 +1046,14 @@ __all__ = [
     "ASSET_TECHNICAL_CONTEXT_COMPONENTS",
     "BROKER_TECHNICAL_CONTEXT_COMPONENTS",
     "FX_TECHNICAL_CONTEXT_COMPONENTS",
+    "MARKET_CONTEXT_COLUMN_ORDER",
     "PORTFOLIO_TECHNICAL_CONTEXT_COMPONENTS",
     "TECHNICAL_CONTEXT_COMPONENTS",
+    "AssetPositionMarketContextPayload",
+    "AssetPositionMarketContextRow",
+    "FxMarketContextPayload",
+    "FxMarketContextRow",
+    "MarketContextRowBase",
     "SignalCoverageAggregate",
     "TechnicalContextEvent",
     "TechnicalContextEventsPayload",

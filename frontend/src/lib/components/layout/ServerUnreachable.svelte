@@ -6,6 +6,7 @@
      */
     import {_} from '$lib/i18n';
     import {ServerCrash} from 'lucide-svelte';
+    import Button from '$lib/components/ui/button/Button.svelte';
 
     interface Props {
         /** A check is in flight: Retry would only overtake it. */
@@ -21,8 +22,7 @@
         <ServerCrash size={40} class="mx-auto text-lf-link" aria-hidden="true" />
         <h1 class="text-xl font-semibold text-lf-primary">{$_('auth.serverUnreachable.title')}</h1>
         <p class="text-sm text-lf-secondary">{$_('auth.serverUnreachable.body')}</p>
-        <button type="button" class="px-4 py-2 text-sm font-medium text-lf-on-action bg-lf-action rounded-lg hover:bg-lf-action-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed" disabled={busy} onclick={onretry} data-testid="server-unreachable-retry">
-            {$_('common.retry')}
-        </button>
+        <!-- Busy while a check is in flight: it keeps the focus and turns, and a second Retry never overtakes it (85). -->
+        <Button label={$_('common.retry')} variant="primary" {busy} onclick={onretry} data-testid="server-unreachable-retry" />
     </div>
 </div>

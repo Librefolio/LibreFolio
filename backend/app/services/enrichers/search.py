@@ -28,6 +28,7 @@ from enum import StrEnum
 
 from backend.app.db.models import AssetType
 from backend.app.logging_config import get_logger
+from backend.app.services.enrichers.admission import count_shared_call
 from backend.app.services.enrichers.base import EnricherBinding, EnricherPlugin, EnricherSearchResult
 from backend.app.services.enrichers.bindings import default_order, installed_enrichers
 from backend.app.services.enrichers.usable import configured_enricher
@@ -115,23 +116,36 @@ def asked_codes(codes: Sequence[str] | None, asset_type: AssetType | None) -> li
     return [plugin.code for plugin in installed_enrichers()]
 
 
+async def _ready(code: str, text: str, asset_type: AssetType | None) -> EnricherPlugin | SearchOutcome:
+    """The enricher of ``code`` ready to be asked, or its answer when it is not asked: off, not covering, not configured,
+    or the limit of the account it shares is full (82 CG-C)."""
+    plugin, missing = await configured_enricher(code)
+    if plugin is None:
+        return SearchOutcome(code=code, status=SearchStatus.OFF)
+    accepted = tuple(plugin.accepted_identifier_types)
+    if asset_type is not None and not plugin.covers(asset_type):
+        return SearchOutcome(code=code, status=SearchStatus.NOT_COVERING, accepted_identifier_types=accepted)
+    if missing:
+        return SearchOutcome(code=code, status=SearchStatus.NOT_CONFIGURED, accepted_identifier_types=accepted)
+    if plugin.supports_search or _shaped_type(plugin, text) is not None:  # it will call out
+        try:
+            await count_shared_call(plugin)
+        except RateLimitedError as refused:
+            logger.warning("Enricher search refused: shared call limit reached", enricher=code, retry_after=refused.retry_after)
+            return SearchOutcome(code=code, status=SearchStatus.RATE_LIMITED, accepted_identifier_types=accepted, retry_after=refusal_wait(refused))
+    return plugin
+
+
 async def search_enrichers(text: str, codes: Sequence[str], *, asset_type: AssetType | None = None) -> AsyncIterator[SearchOutcome]:
     """Search ``text`` on the enrichers of ``codes``: their answers as they arrive (see the module docstring)."""
     tasks: dict[asyncio.Task, str] = {}
     try:
         for code in codes:
-            plugin, missing = await configured_enricher(code)
-            if plugin is None:
-                yield SearchOutcome(code=code, status=SearchStatus.OFF)
+            ready = await _ready(code, text, asset_type)
+            if isinstance(ready, SearchOutcome):
+                yield ready
                 continue
-            accepted = tuple(plugin.accepted_identifier_types)
-            if asset_type is not None and not plugin.covers(asset_type):
-                yield SearchOutcome(code=code, status=SearchStatus.NOT_COVERING, accepted_identifier_types=accepted)
-                continue
-            if missing:
-                yield SearchOutcome(code=code, status=SearchStatus.NOT_CONFIGURED, accepted_identifier_types=accepted)
-                continue
-            tasks[asyncio.create_task(asyncio.to_thread(search_one, plugin, text))] = code
+            tasks[asyncio.create_task(asyncio.to_thread(search_one, ready, text))] = code
         pending = set(tasks)
         while pending:
             done, pending = await asyncio.wait(pending, return_when=asyncio.FIRST_COMPLETED)

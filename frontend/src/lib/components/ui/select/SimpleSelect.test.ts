@@ -660,7 +660,7 @@ describe('SimpleSelect — an option that needs setting up first (76 N3b)', () =
         const {trigger} = mountProviders();
         await fireEvent.click(trigger);
         const keyed = option('keyed');
-        expect(keyed).not.toBeDisabled();
+        expect(keyed).not.toHaveAttribute('disabled');
         expect(keyed).toHaveAttribute('aria-disabled', 'true');
         expect(keyed).toHaveAttribute('data-needs-setup', 'true');
         expect(keyed).toHaveAttribute('title', 'Keyed needs configuring');

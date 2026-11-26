@@ -74,6 +74,12 @@ describe('Sector, Type, Asset', () => {
         expect(screen.getByTestId('r-center')).toHaveStyle({top: dimension === 'asset' ? '50%' : '40%'});
     });
 
+    it('the middle of the pie holds the amount and nothing else (86, A5)', () => {
+        mount();
+        expect(screen.getByTestId('r-center').children).toHaveLength(1);
+        expect(screen.getByTestId('r-center').firstElementChild).toHaveClass('font-semibold');
+    });
+
     it('masks the base in the middle and shows it again, in place', async () => {
         mount();
         expect(screen.getByTestId('r-center').textContent).not.toContain(PRIVACY_PLACEHOLDER);

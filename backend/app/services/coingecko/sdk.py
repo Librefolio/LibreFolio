@@ -1,5 +1,5 @@
-"""CoinGecko's official SDK behind one door (project 76): the client built with the rules of the P0 trial, and its errors
-translated into the provider's own.
+"""CoinGecko's official SDK behind one door (project 76; shared by the price provider and the enricher, 82 CG-A): the
+client built with the rules of the P0 trial, and its errors translated into the plugins' own.
 
 The rules (journal ``76_cryptoPrices/prove/README.md``):
 
@@ -18,11 +18,31 @@ The SDK is imported when a client is built, never when the provider is discovere
 
 from __future__ import annotations
 
+import json
+import re
+from collections.abc import Callable
+from decimal import Decimal
 from typing import Any
 
 from backend.app.services.assets.base import AssetRateLimitedError, AssetSourceError
 from backend.app.services.plugin_settings.groups.coingecko import PLAN_PRO
 from backend.app.utils.runtime.cooldown import retry_after_seconds
+
+#: What a CoinGecko id looks like («bitcoin», «usd-coin», «pepe»): letters, digits, dots, dashes and underscores, never a
+#: path or a query. Anything else is no coin of CoinGecko's and asks nothing.
+_COIN_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
+
+
+def coin_id(identifier: str) -> str | None:
+    """``identifier`` as a CoinGecko id, or None when it is not one (it then asks nothing)."""
+    coin = (identifier or "").strip()
+    return coin if _COIN_ID.fullmatch(coin) and ".." not in coin else None
+
+
+def decimal_json(text: str) -> Any:
+    """A response's JSON with its decimals as ``Decimal``: the digits CoinGecko wrote, never a float's."""
+    return json.loads(text, parse_float=Decimal)
+
 
 #: How long one request may take, in seconds: below the core's shortest price call (``price_query``, 10 s), so the
 #: request ends as CoinGecko's own TIMEOUT before the core cuts the thread. CoinGecko answered in 0.2 s in the trial.
@@ -50,6 +70,25 @@ def build_client(api_key: str, plan: str, *, http_client: Any = None) -> Any:
     if plan == PLAN_PRO:
         return Coingecko(pro_api_key=api_key, environment="pro", max_retries=0, timeout=REQUEST_TIMEOUT_SECONDS, http_client=http_client)
     return Coingecko(demo_api_key=api_key, environment="demo", max_retries=0, timeout=REQUEST_TIMEOUT_SECONDS, http_client=http_client)
+
+
+def call[T](api_key: str, plan: str, request: Callable[[Any], T], *, http_client: Any = None) -> T:
+    """Run ``request`` on a client for ``api_key`` on the root of ``plan``; the SDK's errors translated.
+
+    Blocking: a plugin calls it in its own worker thread. A client built here is closed after the call, error or not;
+    ``http_client``, the tests' fake transport, is theirs.
+    """
+    client = build_client(api_key, plan, http_client=http_client)
+    try:
+        return request(client)
+    except Exception as error:  # noqa: BLE001 — every failure of the SDK becomes the plugin's own error, its cause kept
+        translated = translate(error, secret=api_key)
+        if translated is error:
+            raise
+        raise translated from error
+    finally:
+        if http_client is None:
+            client.close()
 
 
 def coingecko_error_code(body: object) -> int | None:

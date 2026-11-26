@@ -32,6 +32,8 @@ import {fireEvent, render, screen, setupI18n, waitFor, within} from '$test/compo
 import type {ChainStep, ProviderInfo} from '$lib/utils/currency/currencyGraph';
 import {findConversionPaths, getCachedFxProviders, refreshFxProviderReadiness} from '$lib/stores/currencyGraphStore';
 import FxProviderSelect from './FxProviderSelect.svelte';
+import {get} from 'svelte/store';
+import {_} from 'svelte-i18n';
 
 vi.mock('$lib/stores/currencyGraphStore', async () => {
     const {writable} = await import('svelte/store');
@@ -485,6 +487,8 @@ describe('FxProviderSelect', () => {
             expect(within(picker).getByTestId('fx-route-chain-toggle-2')).toHaveTextContent('250');
             const more = within(picker).getByTestId('fx-route-chain-more-2');
             expect(more).toHaveAttribute('data-hidden', '50');
+            // «Show more» adds rows: the dashed edge of the standard button (85 BTN-2c, C14).
+            expect(more.classList.contains('border-dashed')).toBe(true);
             // Today's order is kept: the first drawn is the first of the sorted list, the 201st is not drawn.
             expect(chainButtons(picker)[0]).toHaveAttribute('data-route-key', keyOf(0));
             expect(picker.querySelector(`[data-route-key="${keyOf(200)}"]`)).toBeNull();
@@ -569,7 +573,7 @@ describe('FxProviderSelect — a route through a provider to configure (76 N3c)'
         });
         expect(chain).toHaveAttribute('data-needs-setup', 'true');
         expect(chain).toHaveAttribute('aria-disabled', 'true');
-        expect(chain).not.toBeDisabled();
+        expect(chain).not.toHaveAttribute('disabled');
         expect(within(picker).getByTestId('fx-route-direct-ECB')).toHaveAttribute('data-needs-setup', 'false');
 
         await fireEvent.click(chain);
@@ -607,7 +611,9 @@ describe('FxProviderSelect — a route through a provider to configure (76 N3c)'
 
         const row = await waitFor(() => selectedRow(CHAIN_KEY));
         const triangle = within(row).getByTestId('fx-route-needs-setup');
-        expect(triangle.getAttribute('title')).toBeTruthy();
+        // A standard Button (85 BTN-2c): the hint is its name, aria-label, shown by the standard tooltip; no native title.
+        expect(triangle.getAttribute('aria-label')).toBeTruthy();
+        expect(triangle.hasAttribute('title')).toBe(false);
         expect(within(selectedRow(DIRECT_KEY)).queryByTestId('fx-route-needs-setup'), 'a route through configured providers only has none').toBeNull();
 
         await fireEvent.click(triangle);
@@ -661,5 +667,185 @@ describe('FxProviderSelect — a route through a provider to configure (76 N3c)'
         const picker = await openPicker();
         expect(within(picker).getByTestId('fx-route-direct-FED')).toBeInTheDocument();
         expect(within(picker).queryByTestId('fx-route-direct-ECB'), 'the stale pair EUR→GBP must not be drawn').toBeNull();
+    });
+});
+
+// =========================================================================
+// 85 BTN-0c, D16 — a click on a part of a route row is the row's click
+// =========================================================================
+
+/**
+ * The provider badges and the ⚠ of a route row, and the ⓘ of a chain group's header, carry a tooltip that is only a
+ * hover (`Tooltip insideControl`). Before, their wrapper stopped the click: a click on the badge did not add the
+ * route, a click on the ⓘ did not open the group. Each case clicks the part and reads the row's own effect. The badge
+ * is found by its provider mark, an `<img alt="{code}">` (the providers carry an icon here).
+ */
+describe('FxProviderSelect — a click on a part of a row acts as the row (85 BTN-0c, D16)', () => {
+    const WITH_ICONS = (overrides: Partial<ProviderInfo> = {}): ProviderInfo[] => [{...ECB, icon_url: 'https://cdn.test/ecb.png', warning_i18n: {en: 'Published once a day'}, ...overrides}, {...FED, icon_url: 'https://cdn.test/fed.png'}, BOE, MANUAL];
+
+    function badge(row: HTMLElement, code: string): HTMLElement {
+        const mark = row.querySelector<HTMLElement>(`img[alt="${code}"]`);
+        if (!mark) throw new Error(`no ${code} badge in the row ${row.getAttribute('data-testid')}`);
+        return mark;
+    }
+
+    beforeEach(() => {
+        vi.clearAllMocks();
+        graphReturns([DIRECT, CHAIN], WITH_ICONS());
+    });
+
+    it('a click on the provider badge of a direct route adds the route', async () => {
+        await setupI18n();
+        const {onSelectionChange} = mount();
+        await settled();
+        const picker = await openPicker();
+        await fireEvent.click(badge(within(picker).getByTestId('fx-route-direct-ECB'), 'ECB'));
+        expect(onSelectionChange).toHaveBeenCalledWith([DIRECT]);
+        expect(selectedRow(DIRECT_KEY)).toBeInTheDocument();
+    });
+
+    it('a click on the ⚠ of a direct route adds the route', async () => {
+        await setupI18n();
+        const {onSelectionChange} = mount();
+        await settled();
+        const picker = await openPicker();
+        const row = within(picker).getByTestId('fx-route-direct-ECB');
+        expect(row, 'barrier: the route carries a note').toHaveAttribute('data-warnings', '1');
+        await fireEvent.click(within(row).getByTestId('fx-route-note-icon'));
+        expect(onSelectionChange).toHaveBeenCalledWith([DIRECT]);
+    });
+
+    it('a click on a provider badge of a chain route adds the chain', async () => {
+        await setupI18n();
+        const {onSelectionChange} = mount();
+        await settled();
+        const picker = await openPicker();
+        await fireEvent.click(within(picker).getByTestId('fx-route-chain-toggle-2'));
+        const chain = within(picker).getByTestId('fx-route-chain-2step-ECB-FED');
+        await fireEvent.click(badge(chain, 'FED'));
+        expect(onSelectionChange).toHaveBeenCalledWith([CHAIN]);
+        expect(selectedRow(CHAIN_KEY)).toBeInTheDocument();
+    });
+
+    it('a click on the ⓘ of a chain group’s header opens and closes the group', async () => {
+        await setupI18n();
+        mount();
+        await settled();
+        const picker = await openPicker();
+        const toggle = within(picker).getByTestId('fx-route-chain-toggle-2');
+        expect(toggle, 'shut while a direct route exists').toHaveAttribute('data-expanded', 'false');
+        // The ⓘ is the header's last part: the hover-only tooltip around the icon, after the count.
+        const info = toggle.lastElementChild as HTMLElement;
+        expect(info.querySelector('svg'), 'barrier: the last part is the ⓘ icon').not.toBeNull();
+        expect(info.textContent?.trim(), 'barrier: not the count badge').toBe('');
+        await fireEvent.click(info.querySelector('svg')!);
+        expect(toggle).toHaveAttribute('data-expanded', 'true');
+        await fireEvent.click(info.querySelector('svg')!);
+        expect(toggle).toHaveAttribute('data-expanded', 'false');
+    });
+
+    it('a click on the badge of a route that needs setup asks the parent to explain (76 N3c), and adds nothing', async () => {
+        await setupI18n();
+        graphReturns([DIRECT, CHAIN], [{...ECB, icon_url: 'https://cdn.test/ecb.png'}, {...FED, icon_url: 'https://cdn.test/fed.png', configured: false, missing_settings: ['api_key'], missing_reason: 'missing_fields', invalid_variables: []}, BOE, MANUAL]);
+        const onneedssetup = vi.fn();
+        const {onSelectionChange} = mount({onneedssetup});
+        await settled();
+        const picker = await openPicker();
+        await fireEvent.click(within(picker).getByTestId('fx-route-chain-toggle-2'));
+        const chain = await waitFor(() => {
+            const row = picker.querySelector<HTMLElement>(`[data-route-key="${CHAIN_KEY}"]`);
+            if (!row) throw new Error('the chain is not drawn yet');
+            return row;
+        });
+        expect(chain).toHaveAttribute('data-needs-setup', 'true');
+        await fireEvent.click(badge(chain, 'FED'));
+        expect(onneedssetup).toHaveBeenCalledTimes(1);
+        expect(onneedssetup.mock.calls[0][0]).toMatchObject({code: 'FED'});
+        expect(onSelectionChange).not.toHaveBeenCalled();
+    });
+});
+
+// =========================================================================
+// 85 BTN-2c — the standard buttons of the route picker
+// =========================================================================
+
+/**
+ * The ⚠ of a route through a provider to configure, remove, the picker toggle and the chain headers (85 BTN-2c):
+ * - the ⚠ is a standard icon Button named by the setup hint (no native title), and a click asks the parent to explain
+ *   (76 N3c): never off, never a route added;
+ * - remove is named `common.remove` (the English title is gone) and removes;
+ * - the picker toggle and the chain-group headers are disclosures: `aria-expanded` false ↔ true; the toggle adds rows,
+ *   so it carries the dashed edge (C14).
+ */
+describe('FxProviderSelect — the standard buttons (85 BTN-2c)', () => {
+    const FED_OFF: ProviderInfo = {...FED, configured: false, missing_settings: ['api_key'], missing_reason: 'missing_fields', invalid_variables: []};
+
+    beforeEach(() => {
+        vi.clearAllMocks();
+    });
+
+    it('the ⚠ is named by the setup hint, has no title, and a click asks the parent to explain, adding nothing', async () => {
+        await setupI18n();
+        graphReturns([DIRECT, CHAIN], [ECB, FED_OFF, BOE, MANUAL]);
+        const onneedssetup = vi.fn();
+        const {onSelectionChange} = mount({selectedRoutes: [DIRECT, CHAIN], savedProviderCodes: ['ECB', 'FED'], onneedssetup});
+        await settled();
+        const triangle = await waitFor(() => within(selectedRow(CHAIN_KEY)).getByTestId('fx-route-needs-setup'));
+        const hint = get(_)('pluginSettings.notConfigured.tooltip', {values: {provider: FED.name}});
+        expect(hint, 'the hint key is in the catalogue').not.toBe('pluginSettings.notConfigured.tooltip');
+        expect(triangle).toHaveAttribute('aria-label', hint);
+        expect(triangle.hasAttribute('title')).toBe(false);
+        expect(triangle, 'never off: the click is what explains').not.toHaveAttribute('aria-disabled');
+        expect(triangle).toHaveAttribute('data-provider', 'FED');
+
+        await fireEvent.click(triangle);
+        expect(onneedssetup).toHaveBeenCalledTimes(1);
+        expect(onneedssetup.mock.calls[0][0]).toMatchObject({code: 'FED'});
+        expect(onSelectionChange, 'the click explains; it changes no route').not.toHaveBeenCalled();
+    });
+
+    it('remove is named common.remove, and removes the route', async () => {
+        await setupI18n();
+        graphReturns([DIRECT, CHAIN]);
+        const {onSelectionChange} = mount({selectedRoutes: [DIRECT]});
+        await settled();
+        const remove = within(selectedRow(DIRECT_KEY)).getByTestId('fx-route-remove');
+        expect(remove).toHaveAttribute('aria-label', get(_)('common.remove'));
+        expect(remove.hasAttribute('title')).toBe(false);
+        await fireEvent.click(remove);
+        expect(onSelectionChange).toHaveBeenCalledWith([]);
+    });
+
+    it('the picker toggle is a dashed disclosure: aria-expanded and data-open follow it', async () => {
+        await setupI18n();
+        graphReturns([DIRECT, CHAIN]);
+        mount();
+        await settled();
+        const toggle = await screen.findByTestId('fx-route-picker-toggle');
+        expect(toggle.classList.contains('border-dashed')).toBe(true);
+        expect(toggle).toHaveAttribute('aria-expanded', 'false');
+        expect(toggle).toHaveAttribute('data-open', 'false');
+        await fireEvent.click(toggle);
+        expect(toggle).toHaveAttribute('aria-expanded', 'true');
+        expect(toggle).toHaveAttribute('data-open', 'true');
+        expect(screen.getByTestId('fx-route-picker')).toBeInTheDocument();
+        await fireEvent.click(toggle);
+        expect(toggle).toHaveAttribute('aria-expanded', 'false');
+        expect(screen.queryByTestId('fx-route-picker')).toBeNull();
+    });
+
+    it('a chain group’s header says whether it is open', async () => {
+        await setupI18n();
+        graphReturns([DIRECT, CHAIN]);
+        mount();
+        await settled();
+        const picker = await openPicker();
+        const header = within(picker).getByTestId('fx-route-chain-toggle-2');
+        expect(header).toHaveAttribute('aria-expanded', 'false');
+        await fireEvent.click(header);
+        expect(header).toHaveAttribute('aria-expanded', 'true');
+        expect(header).toHaveAttribute('data-expanded', 'true');
+        await fireEvent.click(header);
+        expect(header).toHaveAttribute('aria-expanded', 'false');
     });
 });

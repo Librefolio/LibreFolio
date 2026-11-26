@@ -442,4 +442,132 @@ describe('TransactionFormModal — a REWARD states its value on receipt (79 STK-
         await waitFor(() => expect(amountInput()).toHaveValue('12'));
         expect(screen.getByTestId('tx-form-reward-value-from-history')).toBeInTheDocument();
     });
+
+    // -------------------------------------------------------------------------------------------------------
+    //  86 A8: the suggestion follows the day while the user has not changed it; changed, a link brings the close back
+    // -------------------------------------------------------------------------------------------------------
+
+    const NEXT = '2024-03-12';
+    const useClose = () => screen.queryByTestId('tx-form-reward-use-close');
+
+    it('an untouched suggestion follows the date: the new day is asked once, its close replaces the old one, the note names the new day', async () => {
+        rewardQuery().mockResolvedValue(rewardAnswer('61.25', 'USD'));
+        mountReward();
+        await waitFor(() => expect(amountInput()).toHaveValue('61.25'));
+        expect(screen.getByTestId('tx-form-reward-value-from-history')).toHaveAttribute('data-date', DAY);
+
+        rewardQuery().mockResolvedValue(rewardAnswer('70.5', 'USD', NEXT));
+        await setFormDate(NEXT);
+        await waitFor(() => expect(amountInput()).toHaveValue('70.5'));
+        expect(rewardQuery()).toHaveBeenCalledTimes(2);
+        expect(screen.getByTestId('tx-form-reward-value-from-history')).toHaveAttribute('data-date', NEXT);
+        expect(useClose()).toBeNull();
+    });
+
+    it('an untouched suggestion on a day without a close leaves the field empty: the close of another day is never kept', async () => {
+        rewardQuery().mockResolvedValue(rewardAnswer('61.25', 'USD'));
+        mountReward();
+        await waitFor(() => expect(amountInput()).toHaveValue('61.25'));
+
+        rewardQuery().mockResolvedValue(noValueAnswer('NO_PRICE_THAT_DAY', NEXT));
+        await setFormDate(NEXT);
+        await waitFor(() => expect(rewardQuery()).toHaveBeenCalledTimes(2));
+        await settleSuggestion();
+        expect(amountInput()).toHaveValue('');
+        expect(screen.getByTestId('tx-form-cost-basis-warning')).toBeInTheDocument();
+        expect(screen.queryByTestId('tx-form-reward-value-from-history')).toBeNull();
+        expect(useClose()).toBeNull();
+    });
+
+    it('a value the user changed shows the link of that day; the link restores the close, with no new query', async () => {
+        rewardQuery().mockResolvedValue(rewardAnswer('61.25', 'USD'));
+        mountReward();
+        await waitFor(() => expect(amountInput()).toHaveValue('61.25'));
+        expect(useClose()).toBeNull();
+
+        await typeAmount('70');
+        await waitFor(() => expect(useClose()).not.toBeNull());
+        expect(useClose()).toHaveAttribute('data-date', DAY);
+
+        await fireEvent.click(useClose()!);
+        await waitFor(() => expect(amountInput()).toHaveValue('61.25'));
+        expect(useClose()).toBeNull();
+        expect(screen.getByTestId('tx-form-reward-value-from-history')).toBeInTheDocument();
+        expect(rewardQuery()).toHaveBeenCalledTimes(1);
+    });
+
+    it('restored by the link, the value follows the date again', async () => {
+        rewardQuery().mockResolvedValue(rewardAnswer('61.25', 'USD'));
+        mountReward();
+        await waitFor(() => expect(amountInput()).toHaveValue('61.25'));
+        await typeAmount('70');
+        await waitFor(() => expect(useClose()).not.toBeNull());
+        await fireEvent.click(useClose()!);
+        await waitFor(() => expect(amountInput()).toHaveValue('61.25'));
+
+        rewardQuery().mockResolvedValue(rewardAnswer('72', 'USD', NEXT));
+        await setFormDate(NEXT);
+        await waitFor(() => expect(amountInput()).toHaveValue('72'));
+    });
+
+    it('a value the user changed is kept when the date changes; the link offers the new day', async () => {
+        rewardQuery().mockResolvedValue(rewardAnswer('61.25', 'USD'));
+        mountReward();
+        await waitFor(() => expect(amountInput()).toHaveValue('61.25'));
+        await typeAmount('70');
+
+        rewardQuery().mockResolvedValue(rewardAnswer('80', 'USD', NEXT));
+        await setFormDate(NEXT);
+        await waitFor(() => expect(useClose()).toHaveAttribute('data-date', NEXT));
+        expect(amountInput()).toHaveValue('70');
+        await fireEvent.click(useClose()!);
+        await waitFor(() => expect(amountInput()).toHaveValue('80'));
+    });
+
+    it('a field the user emptied is not filled again by itself: the warning and the link are there', async () => {
+        rewardQuery().mockResolvedValue(rewardAnswer('61.25', 'USD'));
+        mountReward();
+        await waitFor(() => expect(amountInput()).toHaveValue('61.25'));
+        await typeAmount('');
+        await settleSuggestion();
+        expect(amountInput()).toHaveValue('');
+        expect(screen.getByTestId('tx-form-cost-basis-warning')).toBeInTheDocument();
+        expect(useClose()).toHaveAttribute('data-date', DAY);
+    });
+
+    it('a REWARD opened with a value asks when its date changes, keeps its value and offers the close of the new day', async () => {
+        mountReward({cost_basis_mode: 'manual', cost_basis_override: {code: 'USD', amount: '5'}});
+        await waitFor(() => expect(amountInput()).toHaveValue('5'));
+        await settleSuggestion();
+        expect(rewardQuery()).not.toHaveBeenCalled();
+
+        rewardQuery().mockResolvedValue(rewardAnswer('80', 'USD', NEXT));
+        await setFormDate(NEXT);
+        await waitFor(() => expect(useClose()).toHaveAttribute('data-date', NEXT));
+        expect(amountInput()).toHaveValue('5');
+    });
+
+    it('a form opened again forgets the last suggestion: a row saved with that same value is the user’s, and does not follow the date', async () => {
+        rewardQuery().mockResolvedValue(rewardAnswer('61.25', 'USD'));
+        const view = mountReward();
+        await waitFor(() => expect(amountInput()).toHaveValue('61.25'));
+        await view.rerender({open: false});
+        await view.rerender({open: true, items: [txRow({cost_basis_mode: 'manual', cost_basis_override: {code: 'USD', amount: '61.25'}})]});
+        await waitFor(() => expect(amountInput()).toHaveValue('61.25'));
+        expect(screen.queryByTestId('tx-form-reward-value-from-history')).toBeNull();
+
+        rewardQuery().mockResolvedValue(rewardAnswer('80', 'USD', NEXT));
+        await setFormDate(NEXT);
+        await waitFor(() => expect(useClose()).toHaveAttribute('data-date', NEXT));
+        expect(amountInput()).toHaveValue('61.25');
+    });
+
+    it('a form opened again on an empty reward of the same day fills it again', async () => {
+        rewardQuery().mockResolvedValue(rewardAnswer('61.25', 'USD'));
+        const view = mountReward();
+        await waitFor(() => expect(amountInput()).toHaveValue('61.25'));
+        await view.rerender({open: false});
+        await view.rerender({open: true, items: [txRow()]});
+        await waitFor(() => expect(amountInput()).toHaveValue('61.25'));
+    });
 });

@@ -32,17 +32,24 @@ describe('buildAllocationQuery', () => {
     });
 
     it('carries the filters: classes (also the empty list), buckets, assets, history', () => {
-        const body = buildAllocationQuery({scope: dashboard, dimension: 'geography', filters: {classes: [], excludeBuckets: ['Unknown'], excludeAssetIds: [3]}, includeHistory: true});
+        const body = buildAllocationQuery({scope: dashboard, dimension: 'geography', filters: {classes: [], types: [], excludeBuckets: ['Unknown'], excludeAssetIds: [3]}, includeHistory: true});
         expect(body).toMatchObject({dimension: 'geography', classes: [], exclude_buckets: ['Unknown'], exclude_asset_ids: [3], include_history: true});
-        expect(buildAllocationQuery({scope: dashboard, dimension: 'geography', filters: {classes: ['STOCK'], excludeBuckets: [], excludeAssetIds: []}}).classes).toEqual(['STOCK']);
+        expect(buildAllocationQuery({scope: dashboard, dimension: 'geography', filters: {classes: ['STOCK'], types: [], excludeBuckets: [], excludeAssetIds: []}}).classes).toEqual(['STOCK']);
+    });
+
+    it('carries the types kept on their own, only beside a list of classes', () => {
+        const ask = (filters: Parameters<typeof buildAllocationQuery>[0]['filters']) => buildAllocationQuery({scope: dashboard, dimension: 'sector', filters});
+        expect(ask({classes: ['BOND'], types: ['ETF_STOCK'], excludeBuckets: [], excludeAssetIds: []})).toMatchObject({classes: ['BOND'], types: ['ETF_STOCK']});
+        expect(ask({classes: ['BOND'], types: [], excludeBuckets: [], excludeAssetIds: []})).not.toHaveProperty('types');
+        expect(ask({classes: null, types: ['ETF_STOCK'], excludeBuckets: [], excludeAssetIds: []})).not.toHaveProperty('types');
     });
 
     it('does not share arrays with the filters it was given', () => {
-        const filters = {classes: ['STOCK'], excludeBuckets: [], excludeAssetIds: [1]};
+        const filters = {classes: ['STOCK'], types: [], excludeBuckets: [], excludeAssetIds: [1]};
         const body = buildAllocationQuery({scope: dashboard, dimension: 'sector', filters});
         (body.classes as string[]).push('BOND');
         (body.exclude_asset_ids as number[]).push(2);
-        expect(filters).toEqual({classes: ['STOCK'], excludeBuckets: [], excludeAssetIds: [1]});
+        expect(filters).toEqual({classes: ['STOCK'], types: [], excludeBuckets: [], excludeAssetIds: [1]});
     });
 });
 

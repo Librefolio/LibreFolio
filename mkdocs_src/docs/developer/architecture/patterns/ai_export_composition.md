@@ -142,13 +142,14 @@ Semantic Composition V2 adds backend-owned projection components:
 
 **Daily return volatility, one definition (78 L6).** The market rows of the Portfolio and Broker overviews
 (`portfolio.asset_market_context`, `broker.asset_market_context`, v2) carry each asset's `daily_return_volatility_ratio`,
-and so does the FX summary (`fx.market_summary`, v2). Every row computes it the same way, in `technical_context.py`
-(`_daily_return_volatility`): the simple returns between consecutive observed values of the period
+and so does the FX summary (`fx.market_summary`, v2). Every row computes it the same way, in `technical_shared.py`
+(`daily_return_volatility`): the simple returns between consecutive observed values of the period
 (`financial_math.returns.price_return`; no carried-forward day), and their sample standard deviation
 (`risk.metrics.sample_standard_deviation`, ddof = 1, the Risk engine's). It is a daily figure, `None` under two
 returns; it gives a volatility to a close-only asset, which NATR (it needs highs and lows) cannot. Until v1 the FX
-summary used a population deviation; two other AI Export statistics still do (`fx_timing_context.py`,
-`asset_fx_technical.py`) and wait for the consolidation lot.
+summary and `fx.timing_context` (v2, 78 L6 S2b: the same pair and period now give one figure) used a population
+deviation, as `fx.returns_volatility` did for each bucket until v1 (v2: the sample one, 78 L6 S2b). The factor is
+√(n/(n−1)) for n returns, so small buckets move most: two returns +41%, five +12%.
 
 **Cash per broker (78 L6).** `portfolio.allocations_cash` (v3) lists `cash_by_broker`: each broker's cash in the
 report currency and its native balances, taken from the report's own `summary.by_broker` (the Dashboard's broker cards),
@@ -159,6 +160,18 @@ co-owned broker the figure is the user's part, while the PAC allocator's «From 
 the report history (`series_steps.value_at`), not derived by difference: it is in no broker's row nor in `cash_total`,
 and the Liquidity slice of `by_type` is `cash_total` plus it. The history omits a zero amount, so the component writes
 an explicit zero; it is null only when the history has no step on that day.
+
+**Market rows declare what they report (78 L6 S2).** The four market-context components each have their own row in
+`technical_context.py`: `TechnicalMarketContextRow` for the Portfolio and Broker overviews (with each asset's
+`portfolio_weight_ratio` and NATR), `AssetPositionMarketContextRow` (`asset.position_market_context`, v2: EMA 20, NATR,
+ATR and the Bollinger bands) and `FxMarketContextRow` (`fx.market_summary`: EMA 20, PPO and ROC; no NATR, since a rate
+has no highs and lows), all on `MarketContextRowBase`.
+`_market_context_row` takes the row's class and fills only the columns it declares. A column a component does not report
+is therefore not in its payload, so the renderer never names it on `omitted_null_columns` («explicitly unavailable»),
+even when its signal is computed for the breadth or the events and the coverage table lists it as `ok`;
+a declared column that cannot be computed (an EMA 200 on a short history) stays `null` and is still named. Every row
+prints its columns in one order, `MARKET_CONTEXT_COLUMN_ORDER`. The asset's row also carries the daily return
+volatility, on the definition above.
 
 Projection builders read the same request-scoped price/rate/Signal resources as
 the complete components. They do not filter rendered payloads and do not repeat

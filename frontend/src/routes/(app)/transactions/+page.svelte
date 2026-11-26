@@ -27,6 +27,7 @@
     import TxChargesActionModal from '$lib/features/transactions/TxChargesActionModal.svelte';
     import {txRowRef} from '$lib/features/transactions/chargeLinkRules';
     import {createChargesLinkFlow} from '$lib/features/transactions/chargesLinkFlow.svelte';
+    import {createChargesUnlinkFlow} from '$lib/features/transactions/chargesUnlinkFlow.svelte';
     import {createChargesDeleteFlow} from '$lib/features/transactions/chargesDeleteFlow.svelte';
     import EventReconciliationModal from '$lib/features/transactions/EventReconciliationModal.svelte';
     import TransactionBulkModal from '$lib/features/transactions/bulk/TransactionBulkModal.svelte';
@@ -458,11 +459,21 @@
         issueContext: () => issueContext(),
     });
 
+    /** 66 TL-9 — «Unlink the charges» from the selection bar: the selected linked charges, saved after the confirmation. */
+    const chargesUnlink = createChargesUnlinkFlow({
+        onUnlinked: async () => {
+            clearSelection();
+            await pageBusy.track('tx-reload', () => reload({soft: true}));
+        },
+        issueContext: () => issueContext(),
+    });
+
     /**
      * 77 SEL-B: the bulk actions of the table's selection panel, through the rule of `resolveSelectionAction`. Edit and
      * Delete take the rows the user can edit (their number says how many); Clone takes every row. «Link as pair» and
      * «Link the charges» are decided by the whole selection, as before: hidden when it is not theirs, and off with
-     * their reason when the selection blocks them (66 C21: a row with charges; 66 F6).
+     * their reason when the selection blocks them (66 C21: a row with charges; 66 F6). «Unlink the charges» takes the
+     * linked charges among them, with their number (66 TL-9).
      */
     let selectionActions = $derived<BulkAction<TXReadItem>[]>([
         {id: 'edit', icon: Pencil, label: () => $_('common.edit') || 'Edit', primary: true, appliesTo: (row) => txStoreCanEdit(row.id), onClick: (rows) => onEditBulk(rows)},
@@ -477,6 +488,7 @@
             onClick: () => onPromotePair(),
         },
         chargesLink.action,
+        chargesUnlink.action,
         {id: 'delete', icon: Trash2, label: () => $_('common.delete') || 'Delete', variant: 'danger', appliesTo: (row) => txStoreCanEdit(row.id), onClick: (rows) => onBulkDelete(rows)},
     ]);
 
@@ -958,6 +970,7 @@
     }}
 />
 <TxChargesActionModal open={chargesLink.open} mode="link" parents={chargesLink.parent ? [chargesLink.parent] : []} charges={chargesLink.charges} loading={chargesLink.linking} onConfirm={chargesLink.confirm} onCancel={chargesLink.cancel} />
+<TxChargesActionModal open={chargesUnlink.open} mode="unlink" parents={[]} charges={chargesUnlink.charges} loading={chargesUnlink.unlinking} onConfirm={chargesUnlink.confirm} onCancel={chargesUnlink.cancel} />
 <TxChargesActionModal
     open={chargesDelete.panel != null}
     mode="deleteParent"

@@ -4,7 +4,7 @@
 (required) and its plan (Demo or Pro). Without the key the provider is «to configure» and every call answers
 NOT_CONFIGURED at the boundary. Its calls are counted, and limited, on the group: one account's credits.
 
-**The SDK** is CoinGecko's own (``coingecko-sdk``, pinned), behind ``_sdk.py``: no retry and no sleep on a 429, the
+**The SDK** is CoinGecko's own (``coingecko-sdk``, pinned), behind ``services/coingecko/sdk.py``: no retry and no sleep on a 429, the
 plan's API root, the errors translated, the key never in a message.
 
 **An asset** is priced by its CoinGecko id (``bitcoin``, ``pepe``: the assignment's identifier) in the currency of
@@ -23,7 +23,6 @@ Search and metadata are lot P3.
 from __future__ import annotations
 
 import json
-import re
 from collections.abc import Callable, Iterable
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
@@ -35,10 +34,10 @@ from backend.app.logging_config import get_logger
 from backend.app.schemas.assets.assets import FAAssetPatchItem
 from backend.app.schemas.prices import FACurrentValue, FACurrentValueRequest, FAHistoricalData, FAPricePoint
 from backend.app.schemas.provider import FAProviderAttribution
-from backend.app.services.asset_source_providers.coingecko import _sdk
-from backend.app.services.asset_source_providers.coingecko._currencies import DEFAULT_VS_CURRENCY, VS_CURRENCIES
 from backend.app.services.assets.base import AssetHistoryStartDate, AssetSourceError, AssetSourceProvider
 from backend.app.services.assets.registry import AssetProviderRegistry
+from backend.app.services.coingecko import sdk
+from backend.app.services.coingecko.currencies import DEFAULT_VS_CURRENCY, VS_CURRENCIES
 from backend.app.services.platform.provider_registry import register_provider
 from backend.app.services.plugin_settings.fields import PluginSettingField, SettingOption, SettingScope, SettingType
 from backend.app.services.plugin_settings.groups.coingecko import COINGECKO_GROUP_NAME, PLAN_DEMO
@@ -65,21 +64,11 @@ def _midnight(day: date) -> int:
     return int(datetime(day.year, day.month, day.day, tzinfo=UTC).timestamp())
 
 
-def _decimal_json(text: str) -> Any:
-    """A response's JSON with its decimals as ``Decimal``: the digits CoinGecko wrote, never a float's."""
-    return json.loads(text, parse_float=Decimal)
-
-
-#: What a CoinGecko id looks like («bitcoin», «usd-coin», «pepe»): letters, digits, dots, dashes and underscores, never a
-#: path or a query. Anything else is no coin of CoinGecko's and asks nothing.
-_COIN_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
-
-
 def _coin_id(identifier: str) -> str:
     """``identifier`` as a CoinGecko id, or NOT_FOUND without a request."""
-    coin = (identifier or "").strip()
-    if not _COIN_ID.fullmatch(coin) or ".." in coin:
-        raise AssetSourceError("Not a CoinGecko coin id", "NOT_FOUND", {"identifier": coin[:64]})
+    coin = sdk.coin_id(identifier)
+    if coin is None:
+        raise AssetSourceError("Not a CoinGecko coin id", "NOT_FOUND", {"identifier": (identifier or "").strip()[:64]})
     return coin
 
 
@@ -208,7 +197,7 @@ class CoinGeckoProvider(AssetSourceProvider):
     # =========================================================================
 
     def _call(self, request: Callable[[Any], T]) -> T:
-        """Run ``request`` on a client built from the group's key and plan; the SDK's errors translated (``_sdk``).
+        """Run ``request`` on a client built from the group's key and plan; the SDK's errors translated (``sdk``).
 
         Called in the provider's thread (``core.call_provider``): the SDK's sync calls are allowed there.
         """
@@ -217,18 +206,7 @@ class CoinGeckoProvider(AssetSourceProvider):
         if not api_key:
             # The boundary refuses an unconfigured provider first: this is a provider reached without it (a test)
             raise AssetSourceError("CoinGecko has no API key", "NOT_CONFIGURED")
-        client = _sdk.build_client(api_key, group.get("plan") or PLAN_DEMO, http_client=self._http_client)
-        try:
-            return request(client)
-        except Exception as error:  # noqa: BLE001 — every failure of the SDK becomes the provider's own error, its cause kept
-            translated = _sdk.translate(error, secret=api_key)
-            if translated is error:
-                raise
-            raise translated from error
-        finally:
-            # A client of its own per call: its connection pool closed with it. The tests' injected client is theirs.
-            if self._http_client is None:
-                client.close()
+        return sdk.call(api_key, group.get("plan") or PLAN_DEMO, request, http_client=self._http_client)
 
     # =========================================================================
     # Prices (lot P2)
@@ -261,7 +239,7 @@ class CoinGeckoProvider(AssetSourceProvider):
                 precision="full",
             )
         )
-        body = _decimal_json(raw.http_response.text)
+        body = sdk.decimal_json(raw.http_response.text)
         return body if isinstance(body, dict) else {}
 
     def _quote(self, body: dict, identifier: str, currency: str) -> FACurrentValue:
@@ -329,7 +307,7 @@ class CoinGeckoProvider(AssetSourceProvider):
                 precision="full",
             )
         )
-        body = _decimal_json(raw.http_response.text)
+        body = sdk.decimal_json(raw.http_response.text)
         points: dict[date, FAPricePoint] = {}
         for entry in (body.get("prices") if isinstance(body, dict) else None) or []:
             if not isinstance(entry, list) or len(entry) < 2 or entry[1] is None:

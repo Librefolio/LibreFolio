@@ -264,6 +264,18 @@ def front_tx_charges_link_delete(verbose: bool = False, ui: bool = False, headed
     return _run_playwright("transactions/tx-charges-link-delete.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_tx_charges_unlink(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """«Unlink the charges» from the Transactions page's selection bar, saved after a confirmation (project 66, TL-9)."""
+    print_section("Frontend TX Charges Unlink Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("transactions/tx-charges-unlink.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_tx_charges_write(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Write a parent's linked charges from the form the Bulk hosts: create, note, unlink, delete (project 66, F7-b)."""
     print_section("Frontend TX Charges Write Tests")
@@ -990,6 +1002,14 @@ def populate_registry(registry: dict) -> None:
     )
     add_test(cat, "tx-charges-table", front_tx_charges_table, name="TX Linked Charges Table Tests", desc="Project 66 F5: charges folded under the BUY, kept under a broker filter, on their own under types=FEE, flat under a sort", tests="transactions/tx-charges-table.spec.ts")
     add_test(cat, "tx-charges-link-delete", front_tx_charges_link_delete, name="TX Charges Link and Delete Tests", desc="Project 66 F6: link BUY+FEE+TAX from the bar, otherBroker off, delete with all/keep, no panel if all selected", tests="transactions/tx-charges-link-delete.spec.ts")
+    add_test(
+        cat,
+        "tx-charges-unlink",
+        front_tx_charges_unlink,
+        name="TX Charges Unlink Tests",
+        desc="Project 66 TL-9: on the Transactions page, a BUY and its TAX ticked → «Unlink» (count 1) → the panel; cancel saves nothing; confirm → event tx.charges.unlinked and the TAX has no parent, read back by id; a BUY and a free FEE → no «Unlink»",
+        tests="transactions/tx-charges-unlink.spec.ts",
+    )
     add_test(
         cat,
         "tx-charges-write",

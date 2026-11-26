@@ -1,0 +1,51 @@
+{
+  "recorded": "2026-11-25, public endpoint, no key; reduced by hand to the fields the CoinGecko enricher reads (82 CG-B)",
+  "request": {
+    "endpoint": "/coins/pepe",
+    "localization": false,
+    "tickers": false,
+    "market_data": true,
+    "community_data": false,
+    "developer_data": false,
+    "sparkline": false
+  },
+  "status": 200,
+  "body": {
+    "id": "pepe",
+    "symbol": "pepe",
+    "name": "Pepe",
+    "categories": [
+      "BNB Chain Ecosystem",
+      "Avalanche Ecosystem",
+      "Meme",
+      "Arbitrum Ecosystem",
+      "Ethereum Ecosystem",
+      "Frog-Themed",
+      "GMCI Meme Index",
+      "GMCI Index",
+      "The Boy’s Club",
+      "4chan-Themed"
+    ],
+    "description": {
+      "en": "What is the project about?\nPepe is a community based meme token surround the iconic meme Pepe the frog. Pepe aims to leverage the power of such an iconic meme to become the most memeable memecoin in existence. \n\nWhat makes your project unique?\nPepe is here to make memecoins great again. Ushering in a new paradigm for memecoins, Pepe represents the memecoin in it's purest simplicity. With zero taxes, liquidity locked forever, and contract immutable, Pepe is for the people, forever. Pepe is about culture, rallying together a community to have fun and enjoy memes, fueled purely by memetic power. \n\nHistory of your project.\nPepe was stealth launched on Friday, April 14th, 2023. \n\nWhat’s next for your project?\nPepe will focus on developing a tight-knit community around the token and building resources to enrich the communities knowledge and success in crypto through a token gated group, newsletter, and more tools. \n\nWhat can your token be used for?\nPepe can be used to speculate on the power of memes, and does not pretend to be anything more. \n"
+    },
+    "links": {
+      "homepage": [
+        "https://www.pepe.vip/"
+      ]
+    },
+    "genesis_date": null,
+    "market_data": {
+      "market_cap": {
+        "eur": 1273739708,
+        "usd": 1394303760,
+        "chf": 1157293036
+      },
+      "circulating_supply": 420690000000000.0,
+      "max_supply": 420690000000000.0,
+      "max_supply_infinite": false,
+      "last_updated": "2026-11-25T13:51:59.000Z"
+    },
+    "last_updated": "2026-11-25T13:51:59.000Z"
+  }
+}

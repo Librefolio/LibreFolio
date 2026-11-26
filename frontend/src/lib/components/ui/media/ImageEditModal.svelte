@@ -8,16 +8,22 @@
   - Editable output size with scale factor
   - Preview ellipse overlay for circular crops
   - Quality control for JPEG/WebP
+  - The standard buttons (85 BTN-2b): the ✕ is `CloseButton`; the presets, the ratios and the round preview are toggles
+    (`pressed`); while the editor is not ready (`editReady`) the controls say why they are off (`reason`), the confirm
+    stays natively disabled; the confirm is `busy` while it uploads
 -->
 <script lang="ts">
     import {createEventDispatcher} from 'svelte';
     import {_} from '$lib/i18n';
-    import {Eye, EyeOff, Loader2, Lock, RefreshCw, Upload, X} from 'lucide-svelte';
+    import {Eye, EyeOff, Loader2, Lock, Minus, Plus, RefreshCw, Upload} from 'lucide-svelte';
     import {uploadFile} from '$lib/utils/files/upload';
     import StorageLimitRefusal from '$lib/components/ui/feedback/StorageLimitRefusal.svelte';
     import {storageLimitNumbersOfError, type StorageLimitNumbers} from '$lib/utils/files/storageLimit';
     import ImageCropper from './ImageCropper.svelte';
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
+    import Button from '$lib/components/ui/button/Button.svelte';
+    import ButtonGroup from '$lib/components/ui/button/ButtonGroup.svelte';
+    import CloseButton from '$lib/components/ui/button/CloseButton.svelte';
     import {blobToFile, getCroppedImageFromCropper, IMAGE_PRESETS, type PresetName} from '$lib/utils/files/imageCrop';
     import type {UploadScope} from '$lib/types';
 
@@ -46,12 +52,13 @@
         {value: 'custom', labelKey: 'common.custom'},
     ];
 
-    const aspectOptions: Array<{value: number; label: string}> = [
-        {value: 1, label: '1:1'},
-        {value: 16 / 9, label: '16:9'},
-        {value: 4 / 3, label: '4:3'},
-        {value: 3 / 4, label: '3:4'},
-        {value: 0, label: 'Free'},
+    /** A ratio is written as numbers (no translation); the free one has a word: `labelKey`. `id` is its test id. */
+    const aspectOptions: Array<{value: number; id: string; label?: string; labelKey?: string}> = [
+        {value: 1, id: '1x1', label: '1:1'},
+        {value: 16 / 9, id: '16x9', label: '16:9'},
+        {value: 4 / 3, id: '4x3', label: '4:3'},
+        {value: 3 / 4, id: '3x4', label: '3:4'},
+        {value: 0, id: 'free', labelKey: 'uploads.aspectFree'},
     ];
 
     // Internal state
@@ -297,7 +304,7 @@
         if (!imageSrc || !file) return;
         const cropperInstance = cropper?.getCropper?.();
         if (!cropperInstance) {
-            error = 'Cropper not ready';
+            error = $_('uploads.editorNotReady');
             return;
         }
 
@@ -321,7 +328,7 @@
             dispatch('complete', {url: uploadedUrl, file: croppedFile});
         } catch (err) {
             console.error('Upload failed:', err);
-            error = err instanceof Error ? err.message : 'Upload failed';
+            error = err instanceof Error ? err.message : $_('uploads.uploadFailed');
             refusal = storageLimitNumbersOfError(err);
             dispatch('error', {message: error});
         } finally {
@@ -329,7 +336,9 @@
         }
     }
 
-    $: modalTitle = $_(config.titleKey) || $_('uploads.editImage') || 'Edit Image';
+    $: modalTitle = $_(config.titleKey);
+    /** Why the controls are off while the editor gets ready (D5): said at the first tap, click or keyboard focus. */
+    $: notReadyReason = editReady ? undefined : $_('uploads.editorNotReady');
 </script>
 
 <ModalBase maxWidth="800px" noTransition={false} onRequestClose={requestClose} open={open && !!imageSrc} {zIndex}>
@@ -339,13 +348,9 @@
             <h2 class="modal-title" id="modal-title">{modalTitle}</h2>
             <div class="header-actions">
                 {#if hasChanges}
-                    <button type="button" class="header-btn reset" disabled={!editReady} on:click={() => cropper?.resetAll?.()} title={$_('common.resetAllChanges') || 'Reset All'} data-testid="image-edit-reset">
-                        <RefreshCw size={16} />
-                    </button>
+                    <Button label={$_('common.resetAllChanges')} icon={RefreshCw} display="icon" variant="ghost" tone="warning" reason={notReadyReason} reasonCode="edit-not-ready" onclick={() => cropper?.resetAll?.()} data-testid="image-edit-reset" />
                 {/if}
-                <button class="header-btn" data-testid="image-edit-close" on:click={requestClose} title={$_('common.close') || 'Close'} type="button">
-                    <X size={20} />
-                </button>
+                <CloseButton onclick={requestClose} data-testid="image-edit-close" />
             </div>
         </div>
 
@@ -362,24 +367,31 @@
                     </select>
                 </div>
                 {#if outputFormat !== 'png'}
-                    <div class="quality-spinner" data-testid="image-edit-quality">
-                        <button type="button" class="spin-btn" disabled={!editReady} on:click={decrementQuality}>−</button>
+                    <ButtonGroup label={$_('uploads.quality')} class="shrink-0 items-center" data-testid="image-edit-quality">
+                        <Button label={$_('uploads.qualityDown')} icon={Minus} display="icon" size="sm" reason={notReadyReason} reasonCode="edit-not-ready" onclick={decrementQuality} data-testid="image-edit-quality-down" />
                         <span class="quality-value">{outputQuality}%</span>
-                        <button type="button" class="spin-btn" disabled={!editReady} on:click={incrementQuality}>+</button>
-                    </div>
+                        <Button label={$_('uploads.qualityUp')} icon={Plus} display="icon" size="sm" reason={notReadyReason} reasonCode="edit-not-ready" onclick={incrementQuality} data-testid="image-edit-quality-up" />
+                    </ButtonGroup>
                 {/if}
             </div>
 
             <!-- Cropper with ellipse preview toggle on left -->
             <div class="cropper-section">
                 <!-- Ellipse toggle - LEFT side -->
-                <button class="ellipse-toggle" class:active={showEllipsePreview} data-testid="image-edit-ellipse-toggle" disabled={!editReady} on:click={() => (showEllipsePreview = !showEllipsePreview)} title={showEllipsePreview ? 'Hide preview' : 'Show preview'} type="button">
-                    {#if showEllipsePreview}
-                        <Eye size={16} />
-                    {:else}
-                        <EyeOff size={16} />
-                    {/if}
-                </button>
+                <div class="ellipse-toggle-slot">
+                    <Button
+                        label={$_('uploads.ellipsePreview')}
+                        icon={showEllipsePreview ? Eye : EyeOff}
+                        display="icon"
+                        variant="secondary"
+                        pressed={showEllipsePreview}
+                        reason={notReadyReason}
+                        reasonCode="edit-not-ready"
+                        tipPosition="right"
+                        onclick={() => (showEllipsePreview = !showEllipsePreview)}
+                        data-testid="image-edit-ellipse-toggle"
+                    />
+                </div>
 
                 <ImageCropper aspectRatio={config.aspectRatio} bind:this={cropper} imageSrc={imageSrc || ''} on:change={handleCropperChange} showPreviewEllipse={showEllipsePreview} showRotateControls={true} showZoomSlider={true} />
 
@@ -402,16 +414,16 @@
                 <!-- Left column: Info (Input/Selection) + Output/Scale -->
                 <div class="panel-col">
                     <div class="panel-row info-row">
-                        <span class="panel-label">{$_('uploads.inputSize') || 'Input'}:</span>
+                        <span class="panel-label">{$_('uploads.inputSize')}:</span>
                         <span class="info-value">{imageWidth} × {imageHeight} px</span>
                     </div>
                     <div class="panel-row info-row">
-                        <span class="panel-label">{$_('uploads.selectionSize') || 'Selection'}:</span>
+                        <span class="panel-label">{$_('uploads.selectionSize')}:</span>
                         <span class="info-value">{selectionWidth} × {selectionHeight} px</span>
                     </div>
 
                     <div class="panel-row">
-                        <span class="panel-label">{$_('uploads.outputSize') || 'Output'}:</span>
+                        <span class="panel-label">{$_('uploads.outputSize')}:</span>
                         <div class="dimensions-group">
                             <input class="dim-input" disabled={!editReady} max={selectionWidth || 9999} min="1" on:input={handleOutputWidthInput} type="number" use:numericArrows value={effectiveOutputWidth} />
                             <span class="dim-sep">×</span>
@@ -422,7 +434,7 @@
                     </div>
 
                     <div class="panel-row">
-                        <span class="panel-label">{$_('uploads.scale') || 'Scale'}:</span>
+                        <span class="panel-label">{$_('uploads.scale')}:</span>
                         <div class="scale-group">
                             <!-- Spacer to align with the Y (second) dim-input -->
                             <span class="scale-spacer"></span>
@@ -436,12 +448,10 @@
                 <div class="panel-col">
                     {#if allowPresetChange}
                         <div class="panel-row">
-                            <span class="panel-label">{$_('uploads.outputPreset') || 'Preset'}:</span>
+                            <span class="panel-label">{$_('uploads.outputPreset')}:</span>
                             <div class="preset-buttons" data-testid="image-edit-preset-row">
                                 {#each presetOptions as opt}
-                                    <button type="button" class="preset-btn" class:active={currentPreset === opt.value} disabled={!editReady} on:click={() => selectPreset(opt.value)}>
-                                        {$_(opt.labelKey) || opt.value}
-                                    </button>
+                                    <Button label={$_(opt.labelKey)} size="xs" dense pressed={currentPreset === opt.value} reason={notReadyReason} reasonCode="edit-not-ready" onclick={() => selectPreset(opt.value)} data-testid="image-edit-preset-{opt.value}" />
                                 {/each}
                             </div>
                         </div>
@@ -449,12 +459,10 @@
 
                     {#if currentPreset === 'custom'}
                         <div class="panel-row">
-                            <span class="panel-label">{$_('uploads.aspectRatio') || 'Ratio'}:</span>
+                            <span class="panel-label">{$_('uploads.aspectRatio')}:</span>
                             <div class="aspect-buttons" data-testid="image-edit-aspect-row">
                                 {#each aspectOptions as opt}
-                                    <button type="button" class="aspect-btn" class:active={currentAspect === opt.value} disabled={!editReady} on:click={() => selectAspectRatio(opt.value)}>
-                                        {opt.label}
-                                    </button>
+                                    <Button label={opt.labelKey ? $_(opt.labelKey) : (opt.label ?? '')} size="xs" dense pressed={currentAspect === opt.value} reason={notReadyReason} reasonCode="edit-not-ready" onclick={() => selectAspectRatio(opt.value)} data-testid="image-edit-aspect-{opt.id}" />
                                 {/each}
                             </div>
                         </div>
@@ -471,22 +479,8 @@
 
         <!-- Footer -->
         <div class="modal-footer">
-            <button class="btn btn-secondary" data-testid="image-edit-cancel" disabled={isUploading} on:click={requestClose} type="button">
-                {$_('common.cancel') || 'Cancel'}
-            </button>
-            <button class="btn btn-primary" data-testid="image-edit-confirm" disabled={isUploading || !editReady} on:click={handleUpload} type="button">
-                {#if isUploading}
-                    <Loader2 size={16} class="animate-spin" />
-                    {$_('common.uploading') || 'Uploading...'}
-                {:else}
-                    <Upload size={16} />
-                    {#if uploadOnComplete}
-                        {$_('uploads.cropAndUpload') || 'Crop & Upload'}
-                    {:else}
-                        {$_('uploads.crop') || 'Crop'}
-                    {/if}
-                {/if}
-            </button>
+            <Button label={$_('common.cancel')} variant="secondary" disabled={isUploading} onclick={requestClose} data-testid="image-edit-cancel" />
+            <Button label={$_(uploadOnComplete ? 'uploads.cropAndUpload' : 'uploads.crop')} icon={Upload} variant="primary" disabled={!editReady} busy={isUploading} busyLabel={$_('common.uploading')} onclick={handleUpload} data-testid="image-edit-confirm" />
         </div>
     </div>
 </ModalBase>
@@ -496,18 +490,14 @@
     <div class="confirm-dialog" data-testid="image-edit-confirm-dialog">
         <div class="confirm-header">
             <span class="confirm-icon">⚠️</span>
-            <h3>{$_('common.discardChanges') || 'Discard changes?'}</h3>
+            <h3>{$_('common.discardChanges')}</h3>
         </div>
         <p class="confirm-message">
-            {$_('common.discardChangesMessage') || 'You have unsaved changes. Are you sure you want to close?'}
+            {$_('common.discardChangesMessage')}
         </p>
         <div class="confirm-actions">
-            <button class="btn btn-secondary" on:click={cancelClose}>
-                {$_('common.cancel') || 'Cancel'}
-            </button>
-            <button class="btn btn-warning" on:click={confirmClose}>
-                {$_('common.discardAndClose') || 'Discard & Close'}
-            </button>
+            <Button label={$_('common.cancel')} variant="secondary" onclick={cancelClose} data-testid="image-edit-discard-cancel" />
+            <Button label={$_('common.discardAndClose')} variant="warning" onclick={confirmClose} data-testid="image-edit-discard-confirm" />
         </div>
     </div>
 </ModalBase>
@@ -542,35 +532,6 @@
         display: flex;
         align-items: center;
         gap: 0.25rem;
-    }
-
-    .header-btn {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        width: 30px;
-        height: 30px;
-        border-radius: 0.375rem;
-        border: none;
-        background: transparent;
-        color: var(--lf-text-muted);
-        cursor: pointer;
-        transition: all 0.15s;
-    }
-
-    .header-btn:hover {
-        background: var(--lf-surface-hover);
-        color: var(--lf-text-secondary);
-    }
-
-    .header-btn.reset {
-        background: var(--lf-warning-soft);
-        color: var(--lf-warning);
-    }
-
-    .header-btn.reset:hover {
-        background: var(--lf-warning-line);
-        color: var(--lf-warning-on-soft);
     }
 
     /* Body */
@@ -632,35 +593,7 @@
         border-color: var(--lf-focus);
     }
 
-    /* Quality spinner (inline with filename) */
-    .quality-spinner {
-        display: flex;
-        align-items: center;
-        border: 1px solid var(--lf-border-input);
-        border-radius: 0.375rem;
-        overflow: hidden;
-        flex-shrink: 0;
-    }
-
-    .spin-btn {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        width: 26px;
-        height: 26px;
-        border: none;
-        background: var(--lf-surface-panel);
-        color: var(--lf-text-secondary);
-        cursor: pointer;
-        font-size: 0.8125rem;
-        font-weight: 600;
-        transition: all 0.1s;
-    }
-
-    .spin-btn:hover {
-        background: var(--lf-surface-neutral);
-    }
-
+    /* Quality stepper (inline with filename): a ButtonGroup, the value between its two segments */
     .quality-value {
         padding: 0 0.375rem;
         font-size: 0.6875rem;
@@ -691,42 +624,17 @@
     .filename-input:disabled,
     .format-select:disabled,
     .dim-input:disabled,
-    .scale-input:disabled,
-    .spin-btn:disabled,
-    .preset-btn:disabled,
-    .aspect-btn:disabled,
-    .ellipse-toggle:disabled,
-    .header-btn:disabled {
+    .scale-input:disabled {
         cursor: not-allowed;
         opacity: 0.5;
     }
 
-    .ellipse-toggle {
+    /* The round-preview toggle, placed over the cropper's top-left corner (the position is the wrapper's, never the button's) */
+    .ellipse-toggle-slot {
         position: absolute;
         top: 0.5rem;
         left: 0.5rem;
         z-index: 10;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        width: 30px;
-        height: 30px;
-        border: none;
-        border-radius: 0.25rem;
-        background: color-mix(in oklab, var(--lf-surface-overlay) 80%, transparent);
-        color: color-mix(in oklab, var(--lf-on-overlay) 70%, transparent);
-        cursor: pointer;
-        transition: all 0.15s;
-    }
-
-    .ellipse-toggle:hover {
-        background: var(--lf-surface-overlay);
-        color: var(--lf-on-overlay);
-    }
-
-    .ellipse-toggle.active {
-        background: color-mix(in oklab, var(--lf-checked) 80%, transparent);
-        color: var(--lf-on-checked);
     }
 
     /* ========= BOTTOM PANEL (2 columns) ========= */
@@ -765,32 +673,6 @@
         display: flex;
         gap: 0.25rem;
         flex-wrap: wrap;
-    }
-
-    .preset-btn,
-    .aspect-btn {
-        padding: 0.1875rem 0.5rem;
-        font-size: 0.625rem;
-        font-weight: 500;
-        border: 1px solid var(--lf-border-input);
-        border-radius: 0.25rem;
-        background: var(--lf-surface-card);
-        color: var(--lf-text-secondary);
-        cursor: pointer;
-        transition: all 0.15s;
-    }
-
-    .preset-btn:hover,
-    .aspect-btn:hover {
-        border-color: var(--lf-focus);
-        color: var(--lf-link);
-    }
-
-    .preset-btn.active,
-    .aspect-btn.active {
-        background: var(--lf-checked);
-        border-color: var(--lf-checked);
-        color: var(--lf-on-checked);
     }
 
     /* Dimensions */
@@ -898,44 +780,6 @@
         flex-shrink: 0;
     }
 
-    .btn {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.375rem;
-        padding: 0.375rem 0.875rem;
-        font-size: 0.8125rem;
-        font-weight: 500;
-        border-radius: 0.375rem;
-        border: none;
-        cursor: pointer;
-        transition: all 0.15s;
-    }
-
-    .btn:disabled {
-        opacity: 0.5;
-        cursor: not-allowed;
-    }
-
-    .btn-primary {
-        background: var(--lf-action);
-        color: var(--lf-on-action);
-    }
-
-    .btn-primary:hover:not(:disabled) {
-        background: var(--lf-action-hover);
-    }
-
-    .btn-secondary {
-        background: var(--lf-surface-card);
-        color: var(--lf-text-secondary);
-        box-shadow: inset 0 0 0 1px var(--lf-border-subtle);
-    }
-
-    .btn-secondary:hover:not(:disabled) {
-        background: var(--lf-surface-hover);
-        color: var(--lf-text-primary);
-    }
-
     :global(.animate-spin) {
         animation: spin 1s linear infinite;
     }
@@ -985,16 +829,6 @@
         display: flex;
         justify-content: flex-end;
         gap: 0.75rem;
-    }
-
-    .btn-warning {
-        background: var(--lf-warning);
-        color: var(--lf-on-status);
-        border: none;
-    }
-
-    .btn-warning:hover {
-        background: var(--lf-warning-hover);
     }
 
     /* Mobile: single column */

@@ -72,3 +72,71 @@ describe('78 L6: the versions of S1 and S7 render compactly', () => {
         expect(content).toMatch(/cash_in_transit[^\n]*250/);
     });
 });
+
+/** The columns a market row of the portfolio does not report: before 78 L6 S2 they were null in every row. */
+const NOT_REPORTED_BY_PORTFOLIO = ['ema_20', 'atr_14', 'bollinger_lower', 'bollinger_middle', 'bollinger_upper', 'ppo_12_26_9_percent', 'roc_20_percent'];
+
+function omittedColumns(content: string): string[] {
+    return content
+        .split('\n')
+        .filter((line) => line.startsWith('omitted_null_columns=') && !line.includes(' '))
+        .flatMap((line) => line.slice('omitted_null_columns='.length).split(','));
+}
+
+/** The values of `RETURN_CASES` in `test_ai_export_market_context_columns.py`, and the text the prompt prints for each. */
+const PRINTED_RETURNS: readonly (readonly [number, string])[] = [
+    [0.015, '1.5%'],
+    [-0.07388575235824245, '-7.3886%'],
+    [0.018975848919556927, '1.8976%'],
+    [-0.009675473086634528, '-0.9675%'],
+    // A plain -8% (the float division printed -8.000000000000007%), and an exact half of the fourth digit: -5.21875%
+    [-0.08, '-8%'],
+    [-0.0521875, '-5.2188%'],
+];
+
+describe('78 L6 S2b: the returns of a market row as the prompt prints them', () => {
+    it.each(PRINTED_RETURNS)('%s is printed %s', (value, printed) => {
+        const row = {entity_id: 'asset:1', value_unit: 'EUR', observation_count: 3, return_1m_ratio: value};
+        const content = render('portfolio.asset_market_context', 2, {policy_code: 'portfolio_asset_snapshot_v2', entities: [row]});
+        expect(content).toContain(`|${printed}|`);
+    });
+});
+
+describe('78 L6 S2b: the timing context on the one volatility definition', () => {
+    it('fx.timing_context v2 prints the daily return volatility, not as YAML', () => {
+        const content = render('fx.timing_context', 2, {base_currency: 'EUR', quote_currency: 'USD', observed_returns: {daily_return_volatility_ratio: 0.0123}}, {kind: 'fx', base_currency: 'EUR', quote_currency: 'USD'});
+        expect(content).not.toContain(FALLBACK);
+        expect(content).toContain('daily_return_volatility_percent');
+        expect(content).toContain('1.23%');
+    });
+});
+
+describe('78 L6 S2: a column the component does not report is not «unavailable»', () => {
+    it('the portfolio row names only a declared column that could not be computed', () => {
+        // The payload as the backend writes it now: no key for a column the row does not declare; ema_200 declared, null
+        const row = {entity_id: 'asset:1', portfolio_weight_ratio: 0.5, value_unit: 'EUR', observation_count: 3, current_value: 100.5, ema_200: null, daily_return_volatility_ratio: 0.0123};
+        const content = render('portfolio.asset_market_context', 2, {policy_code: 'portfolio_asset_snapshot_v2', entities: [row]});
+        const omitted = omittedColumns(content);
+        expect(omitted).toContain('ema_200');
+        for (const column of NOT_REPORTED_BY_PORTFOLIO) expect(omitted).not.toContain(column);
+    });
+
+    it('asset.position_market_context v2 renders compactly, with the volatility and without PPO, ROC or a weight', () => {
+        const row = {entity_id: 'asset:1', value_unit: 'EUR', observation_count: 63, current_value: 100.5, ema_20: 99.1, atr_14: 1.2, daily_return_volatility_ratio: 0.0123};
+        const content = render('asset.position_market_context', 2, {policy_code: 'asset_position_context_v2', entities: [row]}, {kind: 'asset', asset_id: 1});
+        expect(content).not.toContain(FALLBACK);
+        expect(content).toContain('1.23%');
+        const omitted = omittedColumns(content);
+        for (const column of ['ppo_12_26_9_percent', 'roc_20_percent', 'portfolio_weight_percent']) expect(omitted).not.toContain(column);
+    });
+});
+
+describe('78 L6 S2b: the volatility of each bucket of the FX returns', () => {
+    it('fx.returns_volatility v2 prints its buckets, not as YAML', () => {
+        const bucket = {start_date: '2026-03-01', end_date: '2026-03-15', calendar_days: 15, first: {return: 0.001}, minimum: {return: -0.002}, maximum: {return: 0.003}, last: {return: 0.001}, observation_count: 10, volatility: 0.004};
+        const content = render('fx.returns_volatility', 2, {base_currency: 'EUR', quote_currency: 'USD', buckets: [bucket]}, {kind: 'fx', base_currency: 'EUR', quote_currency: 'USD'});
+        expect(content).not.toContain(FALLBACK);
+        expect(content).toMatch(/\|volatility\|/);
+        expect(content).toContain('0.004');
+    });
+});

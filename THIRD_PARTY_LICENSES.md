@@ -203,7 +203,6 @@ The most prominent ones:
 | SQLModel | MIT | <https://github.com/fastapi/sqlmodel> |
 | Alembic | MIT | <https://github.com/sqlalchemy/alembic> |
 | httpx | BSD-3-Clause | <https://github.com/encode/httpx> |
-| APScheduler | MIT | <https://github.com/agronholm/apscheduler> |
 | structlog | Apache-2.0 / MIT | <https://github.com/hynek/structlog> |
 | yfinance | Apache-2.0 | <https://github.com/ranaroussi/yfinance> |
 | Beautiful Soup | MIT | <https://www.crummy.com/software/BeautifulSoup/> |

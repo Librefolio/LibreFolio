@@ -24,7 +24,34 @@
  *     import {render, screen, setupI18n} from '$test/component';
  */
 import '@testing-library/jest-dom/vitest';
+import * as jestDomMatchers from '@testing-library/jest-dom/matchers';
+import {expect} from 'vitest';
 import {init, waitLocale} from 'svelte-i18n';
+
+/**
+ * `toBeDisabled` / `toBeEnabled` count `aria-disabled="true"` too (project 85, BTN-0), as Playwright's already do.
+ *
+ * The standard button keeps three kinds of «off» reachable, so they hold the focus and show a name or a reason at the
+ * first tap: disabled with a reason, an icon-only button that is off, a busy button. They carry `aria-disabled`, never
+ * the native attribute. jest-dom reads only the native one, so `toBeDisabled()` would fail on them and — worse —
+ * `toBeEnabled()` and `not.toBeDisabled()` would pass in silence on a button the user cannot use. Redefined here, after
+ * jest-dom, every existing assertion keeps its meaning without being rewritten. Only the element's own attribute
+ * counts, not an ancestor's.
+ */
+function ariaDisabled(element: unknown): boolean {
+    return typeof Element !== 'undefined' && element instanceof Element && element.getAttribute('aria-disabled') === 'true';
+}
+
+expect.extend({
+    toBeDisabled(this: unknown, element: Element) {
+        if (ariaDisabled(element)) return {pass: true, message: () => `expected the element not to be disabled, but it has aria-disabled="true"`};
+        return (jestDomMatchers.toBeDisabled as (this: unknown, element: Element) => {pass: boolean; message: () => string}).call(this, element);
+    },
+    toBeEnabled(this: unknown, element: Element) {
+        if (ariaDisabled(element)) return {pass: false, message: () => `expected the element to be enabled, but it has aria-disabled="true"`};
+        return (jestDomMatchers.toBeEnabled as (this: unknown, element: Element) => {pass: boolean; message: () => string}).call(this, element);
+    },
+});
 
 /**
  * jsdom implements the DOM, not the layout engine, so anything that scrolls is

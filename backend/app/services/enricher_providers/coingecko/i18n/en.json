@@ -1,0 +1,9 @@
+{
+  "enrichers": {
+    "coingecko": {
+      "params": {
+        "vs_currency": "Market capitalisation currency"
+      }
+    }
+  }
+}

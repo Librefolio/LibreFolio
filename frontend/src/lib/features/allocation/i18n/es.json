@@ -28,28 +28,20 @@
     "filters": {
       "button": "Filtros",
       "classes": "Clases",
-      "excluded": "Fuera del 100 %",
+      "excluded": "Sin clasificar",
       "assets": "Activos incluidos",
       "countOf": "{on} de {total}",
-      "countActive": "{n, plural, one {# activo} other {# activos}}",
       "clear": "Quitar filtros",
       "remembered": "Recordado para esta página",
       "searchAssets": "Buscar activos",
       "noMatch": "Ningún activo coincide.",
-      "noAssets": "Ningún activo en las clases activadas."
-    },
-    "classHint": {
-      "STOCK": "también los ETF de acciones",
-      "BOND": "también los ETF de bonos",
-      "COMMODITY": "también los ETC y ETF de materias primas",
-      "REAL_ESTATE": "también los ETF inmobiliarios",
-      "CRYPTO": "también los ETF de cripto"
+      "noAssets": "Ningún activo en los tipos activados."
     },
     "bucket": {
-      "Unknown": "Sin clasificar",
-      "UnknownHint": "la parte sin sector, país o tipo declarado",
+      "Unknown": "Sin dato",
+      "UnknownHint": "la fuente no dice el sector, el país o el tipo",
       "Other": "Otro",
-      "OtherHint": "el sector «Otro» de las fuentes"
+      "OtherHint": "la fuente indica «Otro»"
     },
     "chip": {
       "without": "Sin {name}",
@@ -83,9 +75,6 @@
       "captionBefore": "Colores sobre la selección: 100 % =",
       "captionAfter": "de la cartera"
     },
-    "pie": {
-      "center": "Base"
-    },
     "history": {
       "empty": "No hay histórico para esta selección en el periodo.",
       "loading": "Cargando el histórico…"
@@ -97,6 +86,21 @@
       "unattributed": "Fuera de las columnas:",
       "cell": "{class}, {bucket}: {share}",
       "cellEmpty": "{class}, {bucket}: nada"
+    },
+    "classes": {
+      "STOCK": "Acciones",
+      "ETF": "ETF",
+      "BOND": "Bonos",
+      "CRYPTO": "Criptomonedas",
+      "FUND": "Fondos",
+      "CROWDFUND": "Proyectos de crowdfunding",
+      "HOLD": "Bienes en posesión",
+      "COMMODITY": "Materias primas",
+      "REAL_ESTATE": "Inmuebles",
+      "INDEX": "Índices",
+      "ETF_MONETARY": "ETF monetarios",
+      "OTHER": "Otros",
+      "LIQUIDITY": "Liquidez"
     }
   }
 }

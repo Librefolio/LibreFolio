@@ -240,7 +240,10 @@ class PortfolioSummary(StrictModel):
         description="period_unrealized_gain_loss_delta split by asset currency into the assets' own change and the exchange-rate effect on their historical cost; the rows add up to it exactly",
     )
     period_realized_gain_loss: Optional[Currency] = Field(None, description="Realized G/L in period (WAC-based): sales, and outgoing adjustments with a cost basis at the value they hand over")
-    period_income: Optional[Currency] = Field(None, description="DIVIDEND + INTEREST in period, signed — a legacy negative correction reduces this value rather than being folded into the reconciliation residual")
+    period_income: Optional[Currency] = Field(None, description="DIVIDEND + INTEREST + REWARD in period (a REWARD at its value on receipt), signed — a legacy negative correction reduces this value rather than being folded into the reconciliation residual")
+    period_dividends: Optional[Currency] = Field(None, description="DIVIDEND only in period, signed; with period_interest and period_rewards adds up to period_income")
+    period_interest: Optional[Currency] = Field(None, description="INTEREST only in period, signed")
+    period_rewards: Optional[Currency] = Field(None, description="REWARD only in period: the value on receipt of the units received")
     period_fees_taxes: Optional[Currency] = Field(None, description="FEE + TAX in period (positive value, shown negative in UI)")
     period_fees: Optional[Currency] = Field(None, description="FEE only in period (commissions)")
     period_taxes: Optional[Currency] = Field(None, description="TAX only in period")

@@ -145,7 +145,9 @@
       "tooManyItems": "Nothing was saved: the server takes at most {max, number} values in one save, and this one held {count, number}. Save them in smaller parts."
     },
     "errorWithRequestId": "{message} (code: {requestId})",
-    "selectionActions": "Actions on the selection"
+    "selectionActions": "Actions on the selection",
+    "moveUp": "Move up",
+    "moveDown": "Move down"
   },
   "csvImport": {
     "title": "Import CSV Data",
@@ -284,7 +286,9 @@
     "resolvingStart": "Finding…",
     "openCalendar": "Open the calendar",
     "formatHint": "Type the date or pick it from the calendar. Accepted: 2026-08-07, 2026/8/7, 7-8-2026, 7.8.2026 — the year must be written in full.",
-    "invalidDate": "Enter a valid available date."
+    "invalidDate": "Enter a valid available date.",
+    "previousMonth": "Previous month",
+    "nextMonth": "Next month"
   },
   "error": {
     "pageNotFound": "Page Not Found",
@@ -348,7 +352,7 @@
     "Telecommunication": "Telecommunication",
     "Utilities": "Utilities",
     "Other": "Other",
-    "Unknown": "Unknown",
+    "Unknown": "No data",
     "Liquidity": "Liquidity",
     "CorporateBonds": "Corporate Bonds",
     "GovernmentBonds": "Government Bonds"
@@ -380,7 +384,13 @@
     "confirmBulkAction": "Are you sure you want to perform this action on",
     "filterLabel": "Filter",
     "resetLayout": "Reset layout",
-    "selectionHint": "Select one or more rows to act on them together."
+    "selectionHint": "Select one or more rows to act on them together.",
+    "copyCell": "Copy cell",
+    "copyRow": "Copy row",
+    "cellCopied": "Cell copied",
+    "rowCopied": "Row copied",
+    "copyFailed": "Could not copy to the clipboard",
+    "showSelectedOnly": "Show selected only"
   },
   "date": {
     "today": "Today",

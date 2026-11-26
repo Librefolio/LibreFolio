@@ -4,6 +4,10 @@
   Dropdown select with search: a substring match on value, label, searchText and emoji icon,
   best matches first (see optionFilter.ts). Supports keyboard navigation and custom item
   rendering via snippets.
+
+  The search's clear is the standard `Button` (85 BTN-2c; it had no name and no `type`). The «create new» footer stays a
+  hand-written `<button>` on the recipe (`buttonClasses`): a full-width row whose word cuts and sits left, which
+  `Button` (centred) cannot draw.
 -->
 <script lang="ts">
     import {untrack, type Snippet} from 'svelte';
@@ -11,6 +15,8 @@
     import {filterOptions, firstSelectable as firstSelectableIn, isSelectable, stepSelectable} from './optionFilter';
     import {ChevronDown, Search, X, Plus} from 'lucide-svelte';
     import {_} from '$lib/i18n';
+    import Button from '$lib/components/ui/button/Button.svelte';
+    import {buttonClasses} from '$lib/components/ui/button/buttonClasses';
 
     interface Props {
         /** Currently selected value */
@@ -505,9 +511,9 @@
                             data-testid={testId ? `${testId}-search` : undefined}
                         />
                         {#if searchQuery}
-                            <button onclick={() => (searchQuery = '')} class="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-lf-muted hover:text-lf-secondary" data-testid={testId ? `${testId}-search-clear` : undefined}>
-                                <X size={14} />
-                            </button>
+                            <div class="absolute right-2 top-1/2 -translate-y-1/2">
+                                <Button label={$_('common.clear')} icon={X} display="icon" variant="ghost" size="xs" dense onclick={() => (searchQuery = '')} data-testid={testId ? `${testId}-search-clear` : undefined} />
+                            </div>
                         {/if}
                     </div>
                 </div>
@@ -571,20 +577,24 @@
             <!-- W43/W44: Sticky "Create new" footer -->
             {#if createLabel && onCreateNew}
                 {@const typed = searchQuery.trim()}
-                <button
-                    type="button"
-                    class="w-full flex items-center gap-2 px-4 py-2.5 text-left text-sm text-lf-link hover:bg-lf-selected border-t border-lf-subtle transition-colors"
-                    onclick={(e) => {
-                        e.stopPropagation();
-                        const query = searchQuery.trim();
-                        closeDropdown();
-                        onCreateNew?.(query);
-                    }}
-                    data-testid="search-select-create-new"
-                >
-                    <Plus size={14} class="shrink-0" />
-                    <span class="font-medium truncate">{typed !== '' && createLabelFor ? createLabelFor(typed) : createLabel}</span>
-                </button>
+                <!-- On the recipe, not `Button` (85 BTN-2c): `Button` centres its word, and this row's word sits left and cuts.
+                     The word takes the free width (`flex-1`), so no `justify-*` fights the recipe's. -->
+                <div class="border-t border-lf-subtle">
+                    <button
+                        type="button"
+                        class="{buttonClasses({variant: 'link', truncate: true})} w-full px-4 py-2.5"
+                        onclick={(e) => {
+                            e.stopPropagation();
+                            const query = searchQuery.trim();
+                            closeDropdown();
+                            onCreateNew?.(query);
+                        }}
+                        data-testid="search-select-create-new"
+                    >
+                        <Plus size={14} class="shrink-0" aria-hidden="true" />
+                        <span class="min-w-0 flex-1 truncate text-left">{typed !== '' && createLabelFor ? createLabelFor(typed) : createLabel}</span>
+                    </button>
+                </div>
             {/if}
         </div>
     {/if}

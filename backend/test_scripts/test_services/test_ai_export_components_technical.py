@@ -1672,6 +1672,17 @@ class TestFxNoVolume:
         assert populated
         assert any(bucket["volatility"] is not None for bucket in populated)
 
+    def test_fx_daily_returns_are_the_one_price_return(self):
+        """78 L6 S2b: each return is `price_return` of two consecutive rates, unrounded (the resource refuses a zero rate)."""
+        rates = [Decimal("1"), Decimal("1.1"), Decimal("1.1003"), Decimal("0.9"), Decimal("0.7")]
+        start = date(2026, 1, 5)
+        series = FxRateSeriesResource.from_observations(tuple(FxRateObservation(requested_date=start + timedelta(days=index), actual_date=start + timedelta(days=index), rate=rate, backward_filled=False) for index, rate in enumerate(rates)))
+        points = asset_fx_technical._daily_return_points(series, start=start, end=start + timedelta(days=len(rates) - 1))
+
+        assert [point.date for point in points] == [start + timedelta(days=day) for day in range(1, len(rates))]
+        # The same Decimals as the hand-written `current / previous - 1` gave
+        assert [point.values["return"] for point in points] == [later / earlier - Decimal(1) for earlier, later in zip(rates, rates[1:], strict=False)]
+
     def test_fx_carry_forward_is_excluded_from_returns_and_volatility(self):
         start = date(2026, 1, 2)
         series = FxRateSeriesResource.from_observations(

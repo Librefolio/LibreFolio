@@ -9,7 +9,8 @@ A profile's weights sum to exactly 1 (``BaseDistribution`` renormalizes them), s
 last digit of the Decimal context: a long converted amount times a weight is rounded part by part.
 
 - **base** — the slices of the selection, the 100 % of the chart;
-- **outside** — what the class filter leaves out: every asset whose class is off, and the cash when Liquidity is off;
+- **outside** — what the class filter leaves out: every asset whose class is off (unless its type is kept on its own,
+  ``types``), and the cash when Liquidity is off;
 - **excluded** — two kinds of rows:
   - the user's: an asset taken out whole (``exclude_asset_ids``), or an asset's part in the bucket ``Unknown`` or
     ``Other`` (``exclude_buckets``), only in the dimensions where that bucket exists (sector: both; geography and
@@ -28,8 +29,9 @@ the split, so an amount can differ from the state's in the last digit of the Dec
 broker it is the same Decimal).
 
 The matrix (class × dimension) shows the whole portfolio, whatever the filters: a Liquidity row where the cash has a
-bucket (sector, type), and its ``unattributed`` amounts (the cash in the geography, the securities in transit) bring
-its sum to the NAV. The asset dimension has no matrix: an asset sits in one class only.
+bucket (sector), and its ``unattributed`` amounts (the cash in the geography, the securities in transit) bring
+its sum to the NAV. The type and the asset dimensions have
+no matrix: a type, or an asset, sits in one class only (D-15).
 
 Shares only through ``weights.slice_percents`` (of the base: all None when the base is at or below zero, MF-C2) and
 ``weights.percent_of`` (of the NAV), rounded to 0.01. Amounts are never rounded.
@@ -71,6 +73,10 @@ class AllocationDimension(StrEnum):
     ASSET = "asset"
 
 
+#: The dimensions with a class × dimension matrix: elsewhere every bucket sits in one class, and a matrix would say nothing.
+MATRIX_DIMENSIONS: frozenset[AllocationDimension] = frozenset({AllocationDimension.SECTOR, AllocationDimension.GEOGRAPHY})
+
+
 class UnattributableReason(StrEnum):
     """Why an amount of the NAV has no bucket in the dimension."""
 
@@ -91,9 +97,11 @@ BUCKETS_BY_DIMENSION: Mapping[AllocationDimension, frozenset[str]] = {
 
 @dataclass(frozen=True)
 class AllocationFilters:
-    """The user's choices. ``classes`` None = every class; an empty set = none."""
+    """The user's choices. ``classes`` None = every class; an empty set = none. ``types`` adds single asset types to the
+    classes kept (a class kept in part): a whole class takes every type it holds, today's and the ones to come."""
 
     classes: frozenset[str] | None = None
+    types: frozenset[str] = frozenset()
     exclude_buckets: frozenset[str] = frozenset()
     exclude_asset_ids: frozenset[int] = frozenset()
 
@@ -101,6 +109,10 @@ class AllocationFilters:
         unknown = set(self.exclude_buckets) - EXCLUDABLE_BUCKETS
         if unknown:
             raise ValueError(f"not an excludable bucket: {sorted(unknown)} (only {sorted(EXCLUDABLE_BUCKETS)})")
+
+    def keeps(self, asset_type: str, asset_class: str) -> bool:
+        """Whether an asset of this type and class is in the selection."""
+        return self.classes is None or asset_class in self.classes or asset_type in self.types
 
 
 @dataclass(frozen=True)
@@ -133,6 +145,21 @@ class ClassAmount:
 
 
 @dataclass(frozen=True)
+class TypeAmount:
+    asset_type: str
+    amount: Decimal
+
+
+@dataclass(frozen=True)
+class ScopeClass:
+    """A class of the scope, its value on the view's day, and the asset types that make it up (the cash has none)."""
+
+    asset_class: str
+    amount: Decimal
+    types: tuple[TypeAmount, ...] = ()
+
+
+@dataclass(frozen=True)
 class BucketAmount:
     key: str
     amount: Decimal
@@ -152,7 +179,7 @@ class UnattributableAmount:
 
 @dataclass(frozen=True)
 class OutsideAmounts:
-    """What the class filter leaves out, by class."""
+    """What the class filter leaves out, by class (of a class kept in part, the part left out)."""
 
     amount: Decimal
     by_class: tuple[ClassAmount, ...]
@@ -213,7 +240,7 @@ class AllocationView:
     slices: tuple[AllocationSlice, ...]
     outside: OutsideAmounts
     excluded: ExcludedAmounts
-    classes: tuple[ClassAmount, ...]
+    classes: tuple[ScopeClass, ...]
     assets: tuple[ScopeAsset, ...]
     matrix: AllocationMatrix | None
     history: list[dict] = field(default_factory=list)
@@ -291,7 +318,7 @@ def _split(
     for asset_id, value in state.by_asset.items():
         asset_type = asset_types.get(asset_id, UNKNOWN)
         asset_class = asset_type_content(asset_type)
-        if filters.classes is not None and asset_class not in filters.classes:
+        if not filters.keeps(asset_type, asset_class):
             _add(split.outside, asset_class, value)
             continue
         if asset_id in filters.exclude_asset_ids:
@@ -358,8 +385,8 @@ def _matrix(
     asset_types: Mapping[int, str],
     asset_classifications: Mapping[int, AssetClassification | None],
 ) -> AllocationMatrix | None:
-    """Class × dimension of the whole portfolio (no filter), with what has no column."""
-    if dimension is AllocationDimension.ASSET:
+    """Class × dimension of the whole portfolio (no filter), with what has no column; None outside :data:`MATRIX_DIMENSIONS`."""
+    if dimension not in MATRIX_DIMENSIONS:
         return None
     cells: dict[tuple[str, str], Decimal] = {}
     for asset_id, value in state.by_asset.items():
@@ -400,20 +427,32 @@ def _scope(
     state: DailyPortfolioState,
     date_from: date_type | None,
     asset_types: Mapping[int, str],
-) -> tuple[tuple[ClassAmount, ...], tuple[ScopeAsset, ...]]:
-    """The classes and assets held on some day of the window, with the view's day's amounts, largest first."""
+) -> tuple[tuple[ScopeClass, ...], tuple[ScopeAsset, ...]]:
+    """The classes (with their types) and assets held on some day of the window, with the view's day's amounts, largest first."""
     asset_ids = builder.allocation_asset_ids(date_from) | set(state.by_asset)
     assets = sorted(
         (ScopeAsset(asset_id=asset_id, asset_class=asset_type_content(asset_types.get(asset_id, UNKNOWN)), amount=state.by_asset.get(asset_id, _ZERO)) for asset_id in asset_ids),
         key=lambda asset: (-asset.amount, asset.asset_id),
     )
     class_amounts: dict[str, Decimal] = {}
+    type_amounts: dict[str, dict[str, Decimal]] = {}
     for asset in assets:
         _add(class_amounts, asset.asset_class, asset.amount)
+        _add(type_amounts.setdefault(asset.asset_class, {}), asset_types.get(asset.asset_id, UNKNOWN), asset.amount)
     cash = _cash(state)
     if cash or builder.allocation_has_cash(date_from):
         _add(class_amounts, LIQUIDITY, cash)
-    classes = sorted((ClassAmount(asset_class=name, amount=amount) for name, amount in class_amounts.items()), key=lambda item: (-item.amount, item.asset_class))
+    classes = sorted(
+        (
+            ScopeClass(
+                asset_class=name,
+                amount=amount,
+                types=tuple(sorted((TypeAmount(asset_type=asset_type, amount=part) for asset_type, part in type_amounts.get(name, {}).items()), key=lambda item: (-item.amount, item.asset_type))),
+            )
+            for name, amount in class_amounts.items()
+        ),
+        key=lambda item: (-item.amount, item.asset_class),
+    )
     return tuple(classes), tuple(assets)
 
 
@@ -487,7 +526,7 @@ def build_allocation_view(
             excluded=ExcludedAmounts(amount=_ZERO, by_bucket=(), by_asset=(), unattributable=()),
             classes=(),
             assets=(),
-            matrix=None if dimension is AllocationDimension.ASSET else AllocationMatrix(rows=(), columns=(), cells=(), unattributed=()),
+            matrix=None if dimension not in MATRIX_DIMENSIONS else AllocationMatrix(rows=(), columns=(), cells=(), unattributed=()),
         )
     state = daily_states[-1]
     day = state.date

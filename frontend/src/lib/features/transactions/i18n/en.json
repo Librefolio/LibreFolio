@@ -217,7 +217,8 @@
       "rewardLabel": "Value on receipt",
       "rewardTooltip": "What these units were worth on the day you received them: it is both the income of the reward and the cost of the lot it opens.",
       "warningReward": "The value on receipt is empty: the reward can't be saved without it. Enter what these units were worth on the day you received them, or 0 to count them at no cost.",
-      "rewardFromHistory": "From the price history: the close of {date}. Change it if the platform shows another value."
+      "rewardFromHistory": "From the price history: the close of {date}. Change it if the platform shows another value.",
+      "rewardUseClose": "Use the close of {date}"
     },
     "wacPreview": {
       "calculating": "Calculating...",
@@ -516,6 +517,10 @@
       "allAfter": "none of the {n} rows stays",
       "all": "Delete all ({n})",
       "loadFailed": "Could not read the charges of this transaction"
+    },
+    "chargesUnlink": {
+      "failed": "Unlinking the charges failed",
+      "target": "{n, plural, one {# charge no longer linked: it stays as a transaction of its own} other {# charges no longer linked: each stays as a transaction of its own}}"
     }
   }
 }

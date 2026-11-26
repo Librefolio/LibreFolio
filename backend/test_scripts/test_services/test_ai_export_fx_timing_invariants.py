@@ -5,7 +5,7 @@ Two things live in `components/fx_timing_context.py` and both are covered here:
 1. the payload models, whose `model_validator`s are the last checkpoint before a
    timing claim reaches a prompt, and
 2. the observed-only math helpers (`_trailing_return`, `_period_return`,
-   `_daily_return_volatility`, `_build_observed_range`, `_build_source_history`),
+   `daily_return_volatility`, `_build_observed_range`, `_build_source_history`),
    which are pure functions over a genuine observation series.
 
 The module's stated design rule is that this component is *observed-only and
@@ -29,6 +29,7 @@ import pytest
 from pydantic import ValidationError
 
 from backend.app.services.ai_export.components import fx_timing_context as ftc
+from backend.app.services.ai_export.components import technical_shared
 from backend.app.services.ai_export.components.fx_timing_context import (
     ALL_NEUTRAL_SCENARIO_INPUTS,
     INDISPENSABLE_SCENARIO_INPUTS,
@@ -362,7 +363,7 @@ def test_genuine_points_keep_only_in_window_first_hand_observations():
 
 
 # ---------------------------------------------------------------------------
-# 6. _trailing_return / _period_return / _daily_return_volatility
+# 6. _trailing_return / _period_return / daily_return_volatility
 # ---------------------------------------------------------------------------
 
 
@@ -398,18 +399,24 @@ def test_period_return_spans_the_first_and_last_observation():
 
 
 def test_daily_return_volatility_needs_at_least_two_returns():
-    assert ftc._daily_return_volatility(((D2, Decimal("1.00")), (D3, Decimal("1.10")))) is None
+    assert ftc.daily_return_volatility(((D2, Decimal("1.00")), (D3, Decimal("1.10")))) is None
 
 
 def test_daily_return_volatility_is_zero_for_a_constant_series():
     points = tuple((PERIOD_START + timedelta(days=index), Decimal("1.00")) for index in range(4))
-    assert ftc._daily_return_volatility(points) == pytest.approx(0.0)
+    assert ftc.daily_return_volatility(points) == pytest.approx(0.0)
 
 
-def test_daily_return_volatility_is_the_population_stdev_of_daily_returns():
+def test_daily_return_volatility_is_the_sample_stdev_of_daily_returns():
     points = ((D1, Decimal("1.00")), (D2, Decimal("1.10")), (D3, Decimal("1.10")))
-    # Returns are [0.10, 0.0]; population stdev of two values is half their gap.
-    assert ftc._daily_return_volatility(points) == pytest.approx(0.05)
+    # Returns are [0.10, 0.0]; the sample stdev (ddof = 1) of two values is their gap over the square root of two.
+    assert ftc.daily_return_volatility(points) == pytest.approx(0.10 / 2**0.5)
+
+
+def test_observed_returns_skips_the_return_from_a_zero_value():
+    points = ((D1, Decimal("1.00")), (D2, Decimal("0")), (D3, Decimal("1.10")))
+    # 1 -> 0 is -100%; 0 -> 1.10 has no return, and is not invented
+    assert technical_shared.observed_returns(points) == ((D2, Decimal(-1)),)
 
 
 # ---------------------------------------------------------------------------

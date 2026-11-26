@@ -293,4 +293,53 @@ test.describe('REWARD through the transaction form (79 STK-2a)', () => {
         const reward = await expectCommittedReward(page, createdIds, asset, '5');
         expect(Number(reward.cost_basis_override?.amount), 'the value the user typed').toBe(4.2);
     });
+
+    test('the suggested value follows the date; a changed one stays, and the link brings back the close of that day', async ({page}) => {
+        const asset = await createOwnedAsset(page, ownedAssetIds);
+        const first = daysAgoIso(12);
+        const second = daysAgoIso(10);
+        const noClose = daysAgoIso(8);
+        await storeCloses(page, asset.id, [
+            {date: first, close: '40'},
+            {date: second, close: '61.25'},
+        ]);
+
+        await goToTransactions(page);
+        await openCreateFlow(page);
+        await selectType(page, 'REWARD');
+        await pickBroker(page, BROKER_NAME);
+        await setFormDate(page, first);
+        await pickAsset(page, asset);
+        await fillQuantity(page, '3');
+
+        const amount = page.getByTestId('tx-form-cost-basis-input-amount');
+        const note = page.getByTestId('tx-form-reward-value-from-history');
+        const useClose = page.getByTestId('tx-form-reward-use-close');
+        await expect(amount).toHaveValue('40', {timeout: 10_000});
+        await expect(note).toHaveAttribute('data-date', first);
+        await expect(useClose).toHaveCount(0);
+
+        // Untouched, it follows the day; a day without a close leaves the field empty.
+        await setFormDate(page, second);
+        await expect(amount).toHaveValue('61.25', {timeout: 10_000});
+        await expect(note).toHaveAttribute('data-date', second);
+        await setFormDate(page, noClose);
+        await expect(amount).toHaveValue('');
+        await expect(page.getByTestId('tx-form-cost-basis-warning')).toBeVisible();
+        await expect(useClose, 'no close that day, nothing to bring back').toHaveCount(0);
+
+        // Changed, it stays; the link names the day and restores its close.
+        await setFormDate(page, second);
+        await expect(amount).toHaveValue('61.25', {timeout: 10_000});
+        await amount.fill('70');
+        await amount.press('Tab');
+        await expect(useClose).toHaveAttribute('data-date', second);
+        await setFormDate(page, first);
+        await expect(useClose).toHaveAttribute('data-date', first, {timeout: 10_000});
+        await expect(amount).toHaveValue('70');
+        await useClose.click();
+        await expect(amount).toHaveValue('40');
+        await expect(note).toHaveAttribute('data-date', first);
+        await expect(useClose).toHaveCount(0);
+    });
 });

@@ -10,6 +10,8 @@
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
     import {Download} from 'lucide-svelte';
     import {t} from '$lib/i18n';
+    import Button from '$lib/components/ui/button/Button.svelte';
+    import CloseButton from '$lib/components/ui/button/CloseButton.svelte';
     import type {BackupFormat} from '$lib/api/backupDownload';
     import {extractErrorMessage} from '$lib/utils/trySave';
 
@@ -57,7 +59,7 @@
 <ModalBase maxWidth="md" onRequestClose={() => onclose?.()} {open} testId="data-export-modal">
     <div class="flex items-center justify-between p-4 border-b border-lf-subtle">
         <h2 class="text-lg font-semibold text-lf-primary">{title}</h2>
-        <button aria-label={$t('common.close')} class="p-1 text-lf-muted hover:text-lf-secondary rounded" data-testid="data-export-close" onclick={() => onclose?.()} type="button">✕</button>
+        <CloseButton size="sm" onclick={() => onclose?.()} data-testid="data-export-close" />
     </div>
 
     <div class="p-4 space-y-3">
@@ -76,10 +78,7 @@
     </div>
 
     <div class="flex items-center justify-end gap-2 p-4 border-t border-lf-subtle">
-        <button class="px-4 py-2 text-sm bg-lf-panel text-lf-secondary rounded-lg hover:bg-lf-neutral transition-colors" data-testid="data-export-cancel" onclick={() => onclose?.()} type="button">{$t('common.cancel')}</button>
-        <button class="flex items-center gap-1.5 px-4 py-2 text-sm bg-lf-action text-lf-on-action rounded-lg hover:bg-lf-action-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors" data-testid="data-export-confirm" disabled={busy} onclick={confirm} type="button">
-            <Download size={14} />
-            {$t('dataEditor.exportAction')}
-        </button>
+        <Button label={$t('common.cancel')} variant="secondary" onclick={() => onclose?.()} data-testid="data-export-cancel" />
+        <Button label={$t('dataEditor.exportAction')} icon={Download} variant="primary" {busy} onclick={confirm} data-testid="data-export-confirm" />
     </div>
 </ModalBase>

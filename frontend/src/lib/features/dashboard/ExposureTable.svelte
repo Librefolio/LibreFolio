@@ -12,9 +12,8 @@
 <script lang="ts">
     import {_} from '$lib/i18n';
     import {onMount, untrack} from 'svelte';
-    import {goto} from '$app/navigation';
-    import {ExternalLink, Layers} from 'lucide-svelte';
-    import type {ColumnDef, RowAction} from '$lib/components/table/types';
+    import {assetRowActions} from './assetActions';
+    import type {ColumnDef} from '$lib/components/table/types';
     import DataTable from '$lib/components/table/DataTable.svelte';
     import BrokerBadge from '$lib/components/ui/display/BrokerBadge.svelte';
     import YieldOnCostCell from './YieldOnCostCell.svelte';
@@ -530,10 +529,6 @@
 
     let tableEmptyMessage = $derived($_('dashboard.noPositions') || 'No holdings at the selected date');
 
-    function goToAssetDetail(row: DisplayRow) {
-        void goto(`/assets/${row.assetId}`);
-    }
-
     // Row selection (Y5-2). `appliedKeys` is what the table holds; `syncingSelection` mutes the
     // callback while the parent's `selectedKeys` are pushed in, so a sync never echoes back.
     // Both are plain variables on purpose: the sync effect must not re-run because of them.
@@ -569,20 +564,7 @@
         appliedKeys = validKeys;
     });
 
-    const rowActions: RowAction<DisplayRow>[] = [
-        {
-            id: 'view-asset',
-            icon: ExternalLink,
-            label: () => $_('brokers.lots.viewAsset') || 'View Asset',
-            onClick: (row) => goToAssetDetail(row),
-        },
-        {
-            id: 'analyze-lots',
-            icon: Layers,
-            label: () => $_('brokers.lots.analyze') || 'Analyze Lots',
-            onClick: (row) => onAnalyze?.(row.assetId),
-        },
-    ];
+    const rowActions = assetRowActions<DisplayRow>({t: (key) => $_(key), assetIdOf: (row) => row.assetId, onAnalyze: () => onAnalyze});
 </script>
 
 <div data-testid="exposure-table" bind:this={tableWrapperEl}>

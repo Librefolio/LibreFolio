@@ -42,7 +42,8 @@
         "reference_price_date": "Fecha del precio de referencia",
         "website": "Sitio web",
         "revenue": "Ingresos",
-        "net_income": "Beneficio neto"
+        "net_income": "Beneficio neto",
+        "crypto_categories": "Categorías"
       },
       "choices": {
         "replication": {
@@ -102,6 +103,7 @@
         "fund": "El fondo",
         "company": "La empresa",
         "bond": "El bono",
+        "crypto": "La moneda",
         "identity": "Identidad",
         "other": "Otros datos"
       },
@@ -122,6 +124,7 @@
         "size": "tamaño",
         "legal_form": "forma jurídica",
         "issuer": "emisor",
+        "categories": "categorías",
         "description": "descripción",
         "financials": "resultados financieros"
       },

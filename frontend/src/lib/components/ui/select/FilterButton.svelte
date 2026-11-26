@@ -7,6 +7,10 @@
 
   Test ids: `testId` on the button. It carries `aria-expanded` (`expanded`), and takes any other attribute
   (`aria-controls`, `aria-haspopup`, `data-*`…) through to the `<button>`.
+
+  Hand-written on purpose (85 BTN-2c, gap G2): the standard `Button` has no soft info tint for «a filter is on»
+  (`tone="info"` is the info text as a ghost, or the solid fill with `pressed`), and it must never carry `aria-pressed`:
+  CheckMenu's options are found by `[aria-pressed]` under the same test-id prefix.
 -->
 <script lang="ts">
     import {ChevronDown} from 'lucide-svelte';

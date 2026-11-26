@@ -42,7 +42,8 @@
         "reference_price_date": "Reference price date",
         "website": "Website",
         "revenue": "Revenue",
-        "net_income": "Net income"
+        "net_income": "Net income",
+        "crypto_categories": "Categories"
       },
       "choices": {
         "replication": {
@@ -102,6 +103,7 @@
         "fund": "The fund",
         "company": "The company",
         "bond": "The bond",
+        "crypto": "The coin",
         "identity": "Identity",
         "other": "Other data"
       },
@@ -122,6 +124,7 @@
         "size": "size",
         "legal_form": "legal form",
         "issuer": "issuer",
+        "categories": "categories",
         "description": "description",
         "financials": "financial results"
       },

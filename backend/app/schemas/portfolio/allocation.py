@@ -35,6 +35,11 @@ class PortfolioAllocationQuery(StrictModel):
         max_length=64,
         description="The classes in the selection: an asset's class is the type of what it holds (ETF_STOCK → STOCK; ETF_MONETARY and ETF stay themselves), the cash is «Liquidity». None = every class; [] = none.",
     )
+    types: List[AllocationClassName] = Field(
+        default_factory=list,
+        max_length=64,
+        description="Asset types (as stored: ETF_STOCK) kept on their own, beside `classes`: a class kept in part lists the types kept here and is not in `classes`. No effect when `classes` is None.",
+    )
     exclude_buckets: List[ExcludableBucket] = Field(default_factory=list, description="Buckets taken out of the base where they exist: sector Unknown and Other, geography and type Unknown. Elsewhere no effect.")
     exclude_asset_ids: List[int] = Field(default_factory=list, max_length=1000, description="Assets taken out of the base whole.")
     include_history: bool = Field(False, description="Include the selection's slices in steps over the period.")
@@ -60,6 +65,17 @@ class AllocationViewSlice(StrictModel):
 class AllocationClassAmount(StrictModel):
     asset_class: str
     amount: SafeDecimal
+
+
+class AllocationTypeAmount(StrictModel):
+    asset_type: str
+    amount: SafeDecimal
+
+
+class AllocationScopeClass(AllocationClassAmount):
+    """A class the scope holds, and the asset types that make it up."""
+
+    types: List[AllocationTypeAmount] = Field(default_factory=list, description="Its asset types as stored, largest first; their amounts add up to the class's. Empty for Liquidity")
 
 
 class AllocationBucketAmount(StrictModel):
@@ -141,7 +157,7 @@ class PortfolioAllocationResponse(StrictModel):
     slices: List[AllocationViewSlice] = Field(default_factory=list, description="Largest first")
     outside: AllocationOutside
     excluded: AllocationExcluded
-    classes: List[AllocationClassAmount] = Field(default_factory=list, description="Classes held on some day of the period, with the view's day's amount, largest first")
+    classes: List[AllocationScopeClass] = Field(default_factory=list, description="Classes held on some day of the period, with the view's day's amount and their types, largest first")
     assets: List[AllocationScopeAsset] = Field(default_factory=list, description="Assets held on some day of the period, largest first")
-    matrix: Optional[AllocationMatrix] = Field(None, description="None in the asset dimension")
+    matrix: Optional[AllocationMatrix] = Field(None, description="None in the type and asset dimensions")
     history: Optional[List[AllocationViewHistoryStep]] = Field(None, description="None unless include_history")

@@ -145,7 +145,9 @@
       "tooManyItems": "No se ha guardado nada: el servidor acepta como máximo {max, number} valores por guardado, y este contenía {count, number}. Guárdalos en varias partes."
     },
     "errorWithRequestId": "{message} (código: {requestId})",
-    "selectionActions": "Acciones sobre la selección"
+    "selectionActions": "Acciones sobre la selección",
+    "moveUp": "Subir",
+    "moveDown": "Bajar"
   },
   "csvImport": {
     "title": "Importar datos CSV",
@@ -284,7 +286,9 @@
     "resolvingStart": "Buscando…",
     "openCalendar": "Abrir el calendario",
     "formatHint": "Escribe la fecha o elígela en el calendario. Formatos aceptados: 2026-08-07, 2026/8/7, 7-8-2026, 7.8.2026 — el año debe escribirse completo.",
-    "invalidDate": "Introduce una fecha válida y disponible."
+    "invalidDate": "Introduce una fecha válida y disponible.",
+    "previousMonth": "Mes anterior",
+    "nextMonth": "Mes siguiente"
   },
   "error": {
     "pageNotFound": "Página No Encontrada",
@@ -348,7 +352,7 @@
     "Telecommunication": "Telecomunicaciones",
     "Utilities": "Servicios públicos",
     "Other": "Otro",
-    "Unknown": "Sin clasificar",
+    "Unknown": "Sin dato",
     "Liquidity": "Liquidez",
     "CorporateBonds": "Bonos corporativos",
     "GovernmentBonds": "Bonos del Estado"
@@ -380,7 +384,13 @@
     "confirmBulkAction": "¿Estás seguro de querer realizar esta acción en",
     "filterLabel": "Filtro",
     "resetLayout": "Restablecer disposición",
-    "selectionHint": "Selecciona una o varias filas para actuar sobre todas a la vez."
+    "selectionHint": "Selecciona una o varias filas para actuar sobre todas a la vez.",
+    "copyCell": "Copiar celda",
+    "copyRow": "Copiar fila",
+    "cellCopied": "Celda copiada",
+    "rowCopied": "Fila copiada",
+    "copyFailed": "No se pudo copiar al portapapeles",
+    "showSelectedOnly": "Mostrar solo los seleccionados"
   },
   "date": {
     "today": "Hoy",

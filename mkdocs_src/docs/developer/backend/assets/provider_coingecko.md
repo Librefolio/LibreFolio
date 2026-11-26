@@ -11,9 +11,17 @@ The code lives in `backend/app/services/asset_source_providers/coingecko/`:
 | File | What it holds |
 |---|---|
 | `plugin.py` | The provider: settings, identifiers, prices, history, search, metadata, page, attribution |
-| `_sdk.py` | The one door to the SDK: the client's rules and the translation of its errors |
-| `_currencies.py` | The 45 `vs_currency` values (`VS_CURRENCIES`) and the default (`EUR`) |
 | `i18n/` | The plugin's own interface texts |
+
+What it shares with the CoinGecko enricher lives in the core, in `backend/app/services/coingecko/`, because a plugin
+never imports another:
+
+| File | What it holds |
+|---|---|
+| `sdk.py` | The one door to the SDK: the client's rules, the call, the translation of its errors, the coin id |
+| `currencies.py` | The 45 `vs_currency` values (`VS_CURRENCIES`) and the default (`EUR`) |
+
+🪪 **The enricher** that reads a coin's profile on the same account: [CoinGecko, a Shared Account](../../architecture/patterns/enricher_plugin_guide.md#coingecko).
 
 ---
 
@@ -40,7 +48,7 @@ The code lives in `backend/app/services/asset_source_providers/coingecko/`:
   active ISO 4217 codes; no crypto, no metal).
     - It **must be the asset's currency**: the core discards a point in another currency.
 
-## 🚪 The SDK's Door (`_sdk.py`)
+## 🚪 The SDK's Door (`services/coingecko/sdk.py`)
 
 The P0 trial (journal `76_cryptoPrices/prove/`) fixed four rules:
 
@@ -142,7 +150,7 @@ CoinGecko's terms ask for its data to be shown with «Powered by CoinGecko», li
 it as a constant `FAProviderAttribution`. `GET /assets/provider` exposes it.
 
 Where it is shown is the developer's decision (TL42, 23/11/2026): on CoinGecko's own pages only, its card in Settings ›
-Plugins (`ProviderAttributionNote`) and its user-guide page. The screens that show its prices (the asset page, the asset
+Plugins (`ProviderAttributionNote`) and its user-guide page. The screens that show its prices or its profile (the asset page, its Profile tab, the asset
 list, the Dashboard positions, the search, «Provider Data Comparison») carry no line: the asset shows CoinGecko's icon,
 and its page links to the coin on coingecko.com.
 

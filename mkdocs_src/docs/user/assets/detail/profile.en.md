@@ -24,9 +24,17 @@ The profile is the asset's descriptive data, as opposed to its prices:
       distributing), domicile, fund currency, inception date, management fee;
     - **The company** — sector, industry, issuer's country, website, and the revenue and net income of the last fiscal
       year, with that year beside them (for example *78,057,000,000 € (fiscal year 2025)*);
+    - **The coin** — inception date (the day of the first block), website, categories; on a cryptocurrency only
+      (the note below);
     - **Identity** — legal form and issuer type, beside the asset's ISIN, ticker and other identifiers (the free ones, with no kind, are one row of chips);
     - **The bond** — coupon per period, coupon frequency and type, day count, net yield, accrued interest, issuer,
       minimum lot, interest start date, loyalty bonus, coupon schedule, payout terms.
+
+!!! info "🪙 The coin"
+
+    A cryptocurrency shows **The coin** and **Identity**; **The fund**, **The company** and **The bond** are not for it, and
+    appear there only if they hold a saved value. On any other asset it is the other way round: **The coin** is not shown,
+    unless a value of it is already saved on that asset, and that value stays visible.
 
 Each item has a **history**. A value holds from a given day until another one replaces it, and LibreFolio remembers who
 gave it: a source, or a person who wrote it by hand. A new value is saved only when it differs from the current one,
@@ -39,7 +47,7 @@ The profile also feeds other parts of LibreFolio: the Dashboard's allocation cha
 
 ## 🔌 Enrichers: where the data comes from {: #enrichers }
 
-An **enricher** is a source that reads an asset's profile from a website or a public register. LibreFolio ships four:
+An **enricher** is a source that reads an asset's profile from a website or a public register. LibreFolio ships five:
 
 | Enricher | Typically reads |
 |---|---|
@@ -47,6 +55,7 @@ An **enricher** is a source that reads an asset's profile from a website or a pu
 | [Yahoo Finance](../providers/yahoo-finance.md) | Shares: description, sector, industry, country, market capitalisation. Funds: description, annual cost, management company, inception date, sectors |
 | [Borsa Italiana](../providers/borsa-italiana.md) | Bonds: coupons, maturity, yields, modified duration, issuer, description, countries, sectors. Shares: sector, and from the company's profile page its description, country, website, and the revenue and net income of the last fiscal year. Funds: currency, inception date, management fee |
 | ESMA (FIRDS) | Any instrument traded on a European market, from the official register of the European Securities and Markets Authority: the issuer's LEI and the legal form; for a bond its maturity, the type of coupon, a fixed coupon and whether a State guarantees it; for a fund whether it accumulates or distributes. It comes after the other sources, filling what they leave empty |
+| [CoinGecko](../providers/coingecko.md#profile) | Cryptocurrencies only: description, website, inception date (the day of the first block), market capitalisation, categories. It needs the instance's CoinGecko API key |
 
 An asset can have several enrichers, **in order**: the order is their priority. For each item, the first enricher in
 the list that gives a value wins it; if that source does not answer, the item goes to the next one.
@@ -263,5 +272,5 @@ To write a new value, close the window and use **Edit data**.
 
 - 🗂️ **[Classification](classification.md)** — The sector and geographic distribution in detail
 - ➕ **[Create & Edit](../create-edit.md)** — The asset form, where the enrichers are chosen
-- 🔌 **[Providers](../providers/index.md)** — justETF, Yahoo Finance, Borsa Italiana and the other sources
+- 🔌 **[Providers](../providers/index.md)** — justETF, Yahoo Finance, Borsa Italiana, CoinGecko and the other sources
 - 🕐 **[Market Data Scheduler](../../../admin/settings.md#market-data-scheduler)** — For administrators: the day and time of the weekly read
