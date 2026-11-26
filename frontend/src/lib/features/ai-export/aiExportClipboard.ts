@@ -1,3 +1,5 @@
+import {writeTextToClipboard} from '$lib/utils/clipboard';
+
 import type {AiExportSnapshotRequestInput, AiExportSnapshotTransport} from './aiExportClient';
 import {fetchAiExportSnapshot} from './aiExportClient';
 import {findCompatibleAiExportSelection, type AiExportCatalogCompatibilityResult} from './catalog/compatibility';
@@ -58,8 +60,13 @@ export interface PreparedAiExport {
 
 export type AiExportClipboardWriter = (text: string) => void | Promise<void>;
 
+/** What the client is really doing: the server computes the snapshot, the prompt is written, the text goes to the clipboard. */
+export type AiExportStep = 'request' | 'render' | 'copy';
+
 export interface PrepareAiExportDependencies {
     readonly transport?: AiExportSnapshotTransport;
+    /** Told when a step begins; the copy is the caller's, so `prepareAiExport` reports only the first two. */
+    readonly onstep?: (step: AiExportStep) => void;
 }
 
 export class AiExportChoiceUnavailableError extends Error {
@@ -74,10 +81,17 @@ export class AiExportChoiceUnavailableError extends Error {
     }
 }
 
+/** Why the text did not reach the clipboard: the window was not the active one, or the browser has no way or refused. */
+export type AiExportClipboardRefusal = 'not_focused' | 'refused';
+
 export class AiExportClipboardUnavailableError extends Error {
     readonly kind = 'clipboard_unavailable';
 
-    constructor(message = 'Clipboard writing is unavailable', options?: ErrorOptions) {
+    constructor(
+        message = 'Clipboard writing is unavailable',
+        options?: ErrorOptions,
+        readonly reason: AiExportClipboardRefusal = 'refused',
+    ) {
         super(message, options);
         this.name = 'AiExportClipboardUnavailableError';
     }
@@ -131,7 +145,13 @@ export async function prepareAiExport(input: PrepareAiExportInput, dependencies:
         userNotes: normalizeAiExportUserNotes(selection.kind, input.options.userNotes),
     };
     const request = buildAiExportSnapshotRequest(input.context, options, selection);
+    dependencies.onstep?.('request');
     const snapshot = await fetchAiExportSnapshot(request, selection, dependencies.transport);
+    if (dependencies.onstep) {
+        dependencies.onstep('render');
+        // The rendering is synchronous: give the page one turn to show the step before it starts.
+        await new Promise((resolve) => setTimeout(resolve, 0));
+    }
     const renderedPrompt = renderAiExportPrompt({
         selection,
         compatibility: input.compatibility,
@@ -152,27 +172,18 @@ export async function prepareAiExport(input: PrepareAiExportInput, dependencies:
     };
 }
 
+/**
+ * The shared writer (`$lib/utils/clipboard`): the secure API, then the legacy copy when it is missing or refuses. A refusal is
+ * the typed error the export UI reports, and says whether this window simply was not the active one: the prompt is ready
+ * then, and a press of the user's copies it.
+ */
 export async function defaultAiExportClipboardWriter(text: string): Promise<void> {
-    if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText && (typeof window === 'undefined' || window.isSecureContext !== false)) {
-        try {
-            await navigator.clipboard.writeText(text);
-        } catch (error) {
-            throw new AiExportClipboardUnavailableError('Clipboard permission denied', {cause: error});
-        }
-        return;
-    }
-    if (typeof document === 'undefined' || typeof document.execCommand !== 'function') throw new AiExportClipboardUnavailableError();
-    const textarea = document.createElement('textarea');
-    textarea.value = text;
-    textarea.style.position = 'fixed';
-    textarea.style.left = '-9999px';
-    document.body.appendChild(textarea);
     try {
-        textarea.focus();
-        textarea.select();
-        if (!document.execCommand('copy')) throw new AiExportClipboardUnavailableError('Clipboard fallback failed');
-    } finally {
-        textarea.remove();
+        if (typeof navigator === 'undefined' || typeof document === 'undefined') throw new Error('No clipboard here');
+        await writeTextToClipboard(text);
+    } catch (error) {
+        const unfocused = typeof document !== 'undefined' && !document.hasFocus();
+        throw new AiExportClipboardUnavailableError(unfocused ? 'The window is not active' : 'Clipboard permission denied', {cause: error}, unfocused ? 'not_focused' : 'refused');
     }
 }
 

@@ -357,6 +357,14 @@
         },
         "returns": "every Asset and cash item before the plan, at its target and after, as an amount and as a percentage; the steps in the order to execute them; the money the plan loses, item by item. It is a simulation: no order is sent."
       }
+    },
+    "copyReady": "Copy the ready text",
+    "clipboardNotFocused": "The text is ready, but the browser did not copy it because this window was not active. Press «Copy the ready text».",
+    "progress": "Export in progress",
+    "step": {
+      "request": "Computing the data on the server…",
+      "render": "Writing the text…",
+      "copy": "Copying to the clipboard…"
     }
   }
 }

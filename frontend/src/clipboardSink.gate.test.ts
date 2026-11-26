@@ -73,14 +73,8 @@ interface ReviewedTransport {
     why: string;
 }
 
-const AI_EXPORT =
-    "AI Export's own writer (defaultAiExportClipboardWriter): it turns every clipboard failure into the typed AiExportClipboardUnavailableError the export UI reports, its tests inject a writer in its place, and where the secure API is missing it falls back to its own readonly textarea + execCommand('copy').";
-
-/** Files that keep a transport of their own, each with the reason. */
-const REVIEWED_TRANSPORTS: readonly ReviewedTransport[] = [
-    {file: 'src/lib/features/ai-export/aiExportClipboard.ts', form: CLIPBOARD, why: AI_EXPORT},
-    {file: 'src/lib/features/ai-export/aiExportClipboard.ts', form: EXEC_COPY, why: AI_EXPORT},
-];
+/** Files that keep a transport of their own, each with the reason. None since AI Export writes through the shared one (TL 25/11). */
+const REVIEWED_TRANSPORTS: readonly ReviewedTransport[] = [];
 
 interface Hit {
     file: string;

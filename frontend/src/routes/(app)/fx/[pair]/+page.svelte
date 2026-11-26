@@ -89,7 +89,7 @@
     import {collectConfigurableSecondaryAxes} from '$lib/components/charts/chartCoreHelpers';
     import {exchangeRateAxisLabel, percentageAxisLabel, secondaryAxisLabel} from '$lib/components/charts/axisLabelHelpers';
     import AiExportMenu from '$lib/features/ai-export/AiExportMenu.svelte';
-    import {prepareAiExport, type PreparedAiExport} from '$lib/features/ai-export/aiExportClipboard';
+    import {prepareAiExport, type AiExportStep, type PreparedAiExport} from '$lib/features/ai-export/aiExportClipboard';
     import type {AiExportOptionsSelection} from '$lib/features/ai-export/aiExportOptions';
     import {aiExportCatalogLoader, emptyAiExportCompatibility, type AiExportCatalogCompatibilityResult} from '$lib/features/ai-export/catalog/compatibility';
     import {buildAiExportMenuLabels, getAiExportErrorMessage, getAiExportSuccessMessages} from '$lib/features/ai-export/ui';
@@ -1350,19 +1350,22 @@
         }
     }
 
-    function handleFxAiExport(options: AiExportOptionsSelection): Promise<PreparedAiExport> {
-        return prepareAiExport({
-            context: {
-                domain: 'fx',
-                baseCurrency: data.canonicalBase,
-                quoteCurrency: data.canonicalQuote,
-                snapshotAsOf: dateEnd,
-                targetCurrency: fxAiExportTargetCurrency,
+    function handleFxAiExport(options: AiExportOptionsSelection, onstep: (step: AiExportStep) => void): Promise<PreparedAiExport> {
+        return prepareAiExport(
+            {
+                context: {
+                    domain: 'fx',
+                    baseCurrency: data.canonicalBase,
+                    quoteCurrency: data.canonicalQuote,
+                    snapshotAsOf: dateEnd,
+                    targetCurrency: fxAiExportTargetCurrency,
+                },
+                options,
+                compatibility: fxAiExportCompatibility,
+                translate: (key) => $t(key),
             },
-            options,
-            compatibility: fxAiExportCompatibility,
-            translate: (key) => $t(key),
-        });
+            {onstep},
+        );
     }
 
     function handleFxAiExportCopied(result: PreparedAiExport) {

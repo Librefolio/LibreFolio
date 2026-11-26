@@ -831,6 +831,7 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/components/ui/PreferenceSourceBadge.test.ts",
             "src/lib/components/ui/modals/ConfirmModal.test.ts",
             "src/lib/features/ai-export/__tests__/AiExportMenu.escape.test.ts",
+            "src/lib/features/ai-export/__tests__/AiExportMenu.clipboard.test.ts",
             "src/lib/features/brokers/lots/waitForStableRect.test.ts",
             *(["-t", "|".join(test_names)] if test_names else []),
         ],

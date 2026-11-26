@@ -357,6 +357,14 @@
         },
         "returns": "ogni asset e ogni cassa prima del piano, all’obiettivo e dopo, in importo e in percentuale; i passi nell’ordine in cui eseguirli; il denaro che il piano perde, voce per voce. È una simulazione: non invia ordini."
       }
+    },
+    "copyReady": "Copia il testo pronto",
+    "clipboardNotFocused": "Il testo è pronto, ma il browser non l'ha copiato perché la finestra non era attiva. Premi «Copia il testo pronto».",
+    "progress": "Esportazione in corso",
+    "step": {
+      "request": "Calcolo dei dati sul server…",
+      "render": "Scrittura del testo…",
+      "copy": "Copia negli appunti…"
     }
   }
 }

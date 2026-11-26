@@ -508,6 +508,38 @@ test.describe('Asset Detail Risk tab — the levels on one asset (RN-17)', () =>
     });
 
     /**
+     * Testlist of 25/11: on a phone a period picker pushed its box out of the page, in the simulation's history (a fieldset is
+     * as wide as its content by default) and in the replay (so is a flex item). Measured, not looked at, at 375 px, with the
+     * three tools of L4 open.
+     */
+    test('the periods of L4 stay inside their boxes on a phone (TL 25/11)', async ({page}) => {
+        await page.setViewportSize({width: 375, height: 812});
+        await installRiskMocks(page);
+        await answerEligibility(page);
+        const subject = await marketSubject(page);
+        const panel = await openAssetRiskTab(page, subject.id);
+        const level4 = await openLevel4(panel);
+        const history = level4.getByTestId('risk-simulation-history');
+        await history.getByTestId('risk-simulation-history-chosen').click();
+        const period = history.getByTestId('risk-simulation-history-period');
+        await expect(period, 'the period picker did not appear').toBeVisible({timeout: 8_000});
+
+        // The fieldset is as wide as its parent, and nothing in it spills out
+        const sizes = await history.evaluate((fieldset) => {
+            const parent = fieldset.parentElement!;
+            const style = getComputedStyle(parent);
+            const inner = parent.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+            return {fieldset: fieldset.getBoundingClientRect().width, inner, spill: fieldset.scrollWidth - fieldset.clientWidth, page: document.documentElement.scrollWidth - document.documentElement.clientWidth};
+        });
+        expect(sizes.fieldset, 'the fieldset is wider than its box').toBeLessThanOrEqual(sizes.inner + 1);
+        expect(sizes.spill, 'the period sticks out of the fieldset').toBeLessThanOrEqual(1);
+        expect(sizes.page, 'the page scrolls sideways').toBeLessThanOrEqual(0);
+        const replay = level4.getByTestId('risk-replay-period');
+        const replaySizes = await replay.evaluate((box) => ({width: box.getBoundingClientRect().width, inner: box.parentElement!.clientWidth}));
+        expect(replaySizes.width, 'the replay’s period is wider than its box').toBeLessThanOrEqual(replaySizes.inner + 1);
+    });
+
+    /**
      * The pin of input 1 (header). The flow walks Assets page → Asset Detail → Risk tab, and both pages poll the
      * current price. This compares what the page sent — every request to the poll's path, seen by the browser — with
      * what the hold held:
