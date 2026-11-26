@@ -138,7 +138,13 @@
       },
       "openFailed": "No se pudo abrir la transacción",
       "candidatesFailed": "No se pudieron cargar las transacciones para enlazar",
-      "groupSyncHint": "Mientras las filas de este grupo (la transacción y sus gastos vinculados) son todas nuevas, comparten bróker y activo: cambiarlos aquí los cambia en cada fila del grupo."
+      "groupSyncHint": "Mientras las filas de este grupo (la transacción y sus gastos vinculados) son todas nuevas, comparten bróker y activo: cambiarlos aquí los cambia en cada fila del grupo.",
+      "savedLinks": {
+        "title": "¿Desenlazar {n, plural, one {una transacción guardada} other {# transacciones guardadas}}?",
+        "message": "{n, plural, one {Esta transacción ya está guardada y conserva su bróker y su activo, así que no puede seguir el cambio: si continúas, deja de estar vinculada a la que estás editando.} other {Estas transacciones ya están guardadas y conservan su bróker y su activo, así que no pueden seguir el cambio: si continúas, dejan de estar vinculadas a la que estás editando.}}",
+        "wayOut": "Para mantenerlas juntas: cancela, clónalas con el nuevo activo o bróker y elimina los originales.",
+        "confirm": "Desenlazar y cambiar"
+      }
     },
     "bulk": {
       "resetRow": "Restablecer fila",
