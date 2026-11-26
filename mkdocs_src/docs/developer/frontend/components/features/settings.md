@@ -1160,10 +1160,10 @@ of `GET /system/instance`
   without links, and the links appear in place when it lands.
 - The keys `legal.title`, `legal.disclaimer`, `legal.disclaimerShort`, `legal.terms` and
   `legal.privacy` belong to the `app` i18n subsystem (`frontend/src/lib/i18n/app/`, prefix `legal`).
-- AI Export renders `legal.title` and `legal.disclaimer` too, without the components and without
-  links, as the `legal_notice` section of every prompt
-  ([Exact Prompt Order](../../../architecture/patterns/ai_export_composition.md)): a change to
-  either text changes every exported prompt.
+- AI Export carries the English texts of `legal.title` and `legal.disclaimer` as the `legal_notice`
+  section of every prompt, whatever the interface's language, without the components and without links
+  ([Exact Prompt Order](../../../architecture/patterns/ai_export_composition.md)): a test keeps its two
+  constants equal to the English catalogue, so a change to either text changes every exported prompt.
 - Colour roles only, as everywhere: no palette class and no `dark:` variant, which the tests check in
   each place.
 - Tests: `./dev.py test front-utility component-unit` runs `LegalNotice.test.ts`,

@@ -648,16 +648,17 @@ for unknown component versions. The User Question remains safely serialized untr
 The Legal Notice (section `legal_notice`, `renderLegalNotice()` in `promptRenderer.ts`)
 is the instance's disclaimer, the one the app shows in Settings › About
 ([The legal notice](../../frontend/components/features/settings.md#legal-notice)):
-a `##` heading with `legal.title`, a blank line, then `legal.disclaimer`, both from the
-caller's `translate`, so in the interface language (the probe translates from the same
-catalogue, `probeTranslation`). It is local, allow-listed copy: never inside a fenced
+a `##` heading, a blank line, then the disclaimer, in **fixed English** (D-23: like the rest of
+the prompt; the answer's language stays the user's): `AI_EXPORT_LEGAL_NOTICE_TITLE` and
+`AI_EXPORT_LEGAL_NOTICE`, kept equal to the English catalogue's `legal.title` and
+`legal.disclaimer` by a test. It is local, allow-listed copy: never inside a fenced
 block, no URL (the instance's terms and privacy links stay out), nothing from the
 snapshot. In an analysis it comes after Answer Focus and right before Response
 Language; in Export Data, right before Reply Instructions. Either way the app's
 trusted instruction stays the prompt's last word. `promptRenderer.test.ts`
 (`./dev.py test front-ai-export unit`) pins both places, with and without a user question,
-and renders the section once, under its own heading, with no fence and no URL in any
-of the four languages.
+and renders the section once, under its own heading, in fixed English whatever the
+interface's language, with no fence and no URL.
 
 Answer Focus and Reply Instructions keep the receiving AI from restating the export,
 whose figures the user has already seen in LibreFolio. Both are trusted local copy in
@@ -1024,7 +1025,8 @@ Frontend flow:
 2. submit selected V1 IDs and versions;
 3. validate snapshot identity and analysis contract;
 4. render safe deterministic text;
-5. write through Clipboard API, with textarea fallback where required.
+5. write through the shared writer (`writeTextToClipboard`, `lib/utils/clipboard.ts`): the Clipboard API, then the
+   textarea copy when the API is missing or refuses.
 
 Clipboard transport changes only how the same final prompt is copied. It never
 switches builders, serializers, financial logic, sampling, or contract versions.
@@ -1058,6 +1060,15 @@ The options panel decides what is requested and when the copy happens
   the panel shows the final size with **Use Compact** (hidden on Compact) and
   **Copy Anyway**. Copy Anyway stores the options fingerprint, so the same options
   copy without asking while the draft lives.
+- **A refused copy** (testlist of 25/11): the browser may refuse to write, most often because the window is no longer
+  the active one when the answer arrives. The prepared text and its context stay, and the panel offers **Copy the ready
+  text** (`ai-export-copy-ready`), whatever the size: it copies that text, with no new request. The error
+  (`AiExportClipboardUnavailableError`) carries a `reason`: `not_focused` (the document had no focus) gets its own
+  message, `refused` keeps the permission one. A change of the options drops the ready text.
+- **Progress**: while it prepares, the panel shows the client's real steps as text, with a bar that only moves
+  (`prefers-reduced-motion`: it stands): `request` (the server computes the snapshot), `render` (the prompt is written),
+  `copy`. `prepareAiExport` reports the first two through `onstep`; the copy is the menu's. The server reports no finer
+  step, so none is invented and no percentage is shown.
 - **Draft memory**: options, the notes draft, and that fingerprint are kept per
   memory key (`portfolio`, `broker:<id>`, `asset:<id>`, `fx:<slug>`) in an in-memory
   cache mirrored to `sessionStorage` (`lf_<userId>_ai_export_session_<key>`) for 10
