@@ -144,7 +144,7 @@
     import {buildAssetDetailIssues, buildRequiredFxPairs, type AssetDetailIssuesInput, type RequiredFxPairInfo, type RequiredFxPairsInput} from '$lib/features/assets/detail/assetDetailFxRequirements';
     import {displayCurrencyAfterFxPairCreated, fxPairCreateDefaults} from '$lib/features/assets/detail/assetDetailFxPair';
     import {CALENDAR_RETURN_PRESETS, DEFAULT_CALENDAR_RETURN_WINDOW, calendarReturnRangeDays, calendarReturnWindowDays, type CalendarReturnPresetKey, type CalendarReturnWindowSelection, type CalendarReturnWindowUnit} from '$lib/components/charts/calendarReturnWindow';
-    import {prepareAiExport, type PreparedAiExport} from '$lib/features/ai-export/aiExportClipboard';
+    import {prepareAiExport, type AiExportStep, type PreparedAiExport} from '$lib/features/ai-export/aiExportClipboard';
     import type {AiExportOptionsSelection} from '$lib/features/ai-export/aiExportOptions';
     import {aiExportCatalogLoader, emptyAiExportCompatibility, type AiExportCatalogCompatibilityResult} from '$lib/features/ai-export/catalog/compatibility';
     import {buildAiExportMenuLabels, getAiExportSuccessMessages} from '$lib/features/ai-export/ui';
@@ -1817,19 +1817,22 @@
         }
     }
 
-    function handleAssetAiExport(options: AiExportOptionsSelection): Promise<PreparedAiExport> {
+    function handleAssetAiExport(options: AiExportOptionsSelection, onstep: (step: AiExportStep) => void): Promise<PreparedAiExport> {
         if (!assetInfo) return Promise.reject(new Error('Asset is not loaded'));
-        return prepareAiExport({
-            context: {
-                domain: 'asset',
-                assetId: data.assetId,
-                snapshotAsOf: dateEnd,
-                targetCurrency: displayCurrency || assetInfo.currency,
+        return prepareAiExport(
+            {
+                context: {
+                    domain: 'asset',
+                    assetId: data.assetId,
+                    snapshotAsOf: dateEnd,
+                    targetCurrency: displayCurrency || assetInfo.currency,
+                },
+                options,
+                compatibility: assetAiExportCompatibility,
+                translate: (key) => $t(key),
             },
-            options,
-            compatibility: assetAiExportCompatibility,
-            translate: (key) => $t(key),
-        });
+            {onstep},
+        );
     }
 
     function handleAssetAiExportCopied(result: PreparedAiExport) {

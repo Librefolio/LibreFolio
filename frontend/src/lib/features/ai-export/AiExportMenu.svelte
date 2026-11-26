@@ -8,7 +8,7 @@
     import {getFixedDropdownPosition} from '$lib/utils/layout/dropdownPosition';
 
     import AiExportOptionsPanel from './AiExportOptionsPanel.svelte';
-    import {writePreparedAiExport, type PreparedAiExport} from './aiExportClipboard';
+    import {AiExportClipboardUnavailableError, writePreparedAiExport, type AiExportStep, type PreparedAiExport} from './aiExportClipboard';
     import {loadAiExportMemory, saveAiExportMemory, type AiExportMemoryKey} from './aiExportMemory';
     import {aiExportOptionsFingerprint, areAiExportOptionsEqual, estimateAiExportTokenSeverity, type AiExportOptionsPanelLabels, type AiExportOptionsSelection} from './aiExportOptions';
     import type {AiExportCatalogCompatibilityResult} from './catalog/compatibility';
@@ -31,7 +31,8 @@
         labels: AiExportMenuLabels;
         align?: 'start' | 'end';
         showLabel?: boolean;
-        onprepare: (options: AiExportOptionsSelection) => Promise<PreparedAiExport>;
+        /** `onstep` is told when a step of the preparation begins, for the progress the menu shows. */
+        onprepare: (options: AiExportOptionsSelection, onstep: (step: AiExportStep) => void) => Promise<PreparedAiExport>;
         oncopied: (result: PreparedAiExport) => void;
         onerror: (error: unknown) => void;
     }
@@ -73,6 +74,9 @@
     let copyAnywayFingerprint = $state<string | undefined>(memory.copyAnywayFingerprint);
     let pending = $state<PreparedAiExport | undefined>(undefined);
     let pendingContext = $state<PreparationContext | undefined>(undefined);
+    /** The browser refused to copy `pending`: it waits for the user's press («Copy the ready text»), with no new request. */
+    let copyRefused = $state(false);
+    let step = $state<AiExportStep | undefined>(undefined);
     let catalogSignature = $state('');
     let draftRevision = $state(0);
     let contextEpoch = 0;
@@ -98,6 +102,8 @@
         copyAnywayFingerprint = loaded.copyAnywayFingerprint;
         pending = undefined;
         pendingContext = undefined;
+        copyRefused = false;
+        step = undefined;
         draftRevision += 1;
     }
 
@@ -118,6 +124,8 @@
             loading = false;
             pending = undefined;
             pendingContext = undefined;
+            copyRefused = false;
+            step = undefined;
         }
     }
 
@@ -141,6 +149,8 @@
         open = false;
         pending = undefined;
         pendingContext = undefined;
+        copyRefused = false;
+        step = undefined;
         triggerEl?.focus();
     }
 
@@ -170,7 +180,15 @@
 
     async function copyPrepared(result: PreparedAiExport, rememberOverride: boolean, context: PreparationContext) {
         if (!isPreparationContextCurrent(context)) return;
-        await writePreparedAiExport(result);
+        step = 'copy';
+        copyRefused = false;
+        try {
+            await writePreparedAiExport(result);
+        } catch (error) {
+            // The text stays ready: a press of the user's copies it, and nothing is computed again
+            if (error instanceof AiExportClipboardUnavailableError && isPreparationContextCurrent(context)) copyRefused = true;
+            throw error;
+        }
         if (!isPreparationContextCurrent(context)) return;
         saveDraft(result.options, rememberOverride ? result.optionsFingerprint : copyAnywayFingerprint);
         oncopied(result);
@@ -182,21 +200,27 @@
         loading = true;
         pending = undefined;
         pendingContext = undefined;
+        copyRefused = false;
+        step = undefined;
         saveDraft(options);
         const context = capturePreparationContext({...options, responseLanguage});
         pendingContext = context;
         try {
-            const result = await onprepare({...options, responseLanguage});
+            const result = await onprepare({...options, responseLanguage}, (current) => {
+                if (isPreparationContextCurrent(context)) step = current;
+            });
             if (!isPreparationContextCurrent(context)) return;
             pending = result;
             const severity = estimateAiExportTokenSeverity(result.stats.finalPrompt.estimatedTokens);
             if (severity === 'normal' || copyAnywayFingerprint === result.optionsFingerprint) await copyPrepared(result, false, context);
         } catch (error) {
             if (isPreparationContextCurrent(context)) onerror(error);
-            if (context.operationId === activeOperationId) pendingContext = undefined;
+            // A refused copy keeps the prepared text and its context (TL 25/11): «Copy the ready text» needs both
+            if (context.operationId === activeOperationId && !copyRefused) pendingContext = undefined;
         } finally {
             if (context.operationId === activeOperationId) {
                 loading = false;
+                step = undefined;
                 if (pendingContext?.operationId !== context.operationId) activeOperationId = undefined;
             }
         }
@@ -208,11 +232,15 @@
         if (!isPreparationContextCurrent(context)) return;
         loading = true;
         try {
-            await copyPrepared(pending, true, context);
+            // «Copy anyway» remembers the choice for these options; «Copy the ready text» of a normal-size text has nothing to remember
+            await copyPrepared(pending, estimateAiExportTokenSeverity(pending.stats.finalPrompt.estimatedTokens) !== 'normal', context);
         } catch (error) {
             if (isPreparationContextCurrent(context)) onerror(error);
         } finally {
-            if (context.operationId === activeOperationId) loading = false;
+            if (context.operationId === activeOperationId) {
+                loading = false;
+                step = undefined;
+            }
         }
     }
 
@@ -328,6 +356,8 @@
                 initialUserNotes={draftUserNotes}
                 {responseLanguage}
                 {pending}
+                {copyRefused}
+                {step}
                 {disabled}
                 {loading}
                 labels={labels.options}

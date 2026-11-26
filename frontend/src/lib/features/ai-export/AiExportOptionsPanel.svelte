@@ -6,7 +6,7 @@
     import SimpleSelect from '$lib/components/ui/select/SimpleSelect.svelte';
     import type {SelectOption} from '$lib/components/ui/select/types';
 
-    import type {PreparedAiExport} from './aiExportClipboard';
+    import type {AiExportStep, PreparedAiExport} from './aiExportClipboard';
     import {findCompatibleAiExportSelection, selectionsForDomain, type AiExportCatalogCompatibilityResult} from './catalog/compatibility';
     import type {AiExportDetailLevel, AiExportDomain, AiExportSelectionId, AiExportSelectionKind} from './catalog/shared';
     import {AI_EXPORT_DETAIL_LEVELS, resolveDefaultDetailLevel} from './catalog/shared';
@@ -34,6 +34,10 @@
         initialUserNotes?: string;
         responseLanguage: AiExportOptionsSelection['responseLanguage'];
         pending?: PreparedAiExport;
+        /** The copy was refused and the text of `pending` waits for the user's press. */
+        copyRefused?: boolean;
+        /** What the client is doing while it prepares; none: the button alone says so. */
+        step?: AiExportStep;
         disabled?: boolean;
         loading?: boolean;
         locale: string;
@@ -44,7 +48,7 @@
         ondraftchange?: (options: AiExportOptionsSelection, userNotesDraft: string) => void;
     }
 
-    let {domain, compatibility, initialOptions, initialUserNotes, responseLanguage, pending, disabled = false, loading = false, locale, labels, onprepare, oncopyanyway, onusecompact, ondraftchange}: Props = $props();
+    let {domain, compatibility, initialOptions, initialUserNotes, responseLanguage, pending, copyRefused = false, step, disabled = false, loading = false, locale, labels, onprepare, oncopyanyway, onusecompact, ondraftchange}: Props = $props();
 
     const componentId = $props.id();
     const selectionKinds = ['dataset', 'analysis'] as const;
@@ -304,7 +308,9 @@
                 <span class="whitespace-nowrap">(<span aria-hidden="true">💾</span> {formatAiExportByteSize(pending.stats.finalPrompt.byteCountUtf8, locale)})</span>
             </p>
             <p class="mt-2 rounded-md px-2 py-1 text-xs font-medium {severityClasses(severity)}" data-testid="ai-export-token-severity">{labels.tokenSeverityLabels[severity]}</p>
-            {#if warningVisible}
+            {#if copyRefused}
+                <button type="button" class="mt-2 w-full rounded-md bg-lf-ai px-2 py-1.5 text-xs font-semibold text-lf-on-ai disabled:opacity-50" disabled={controlsDisabled} onclick={oncopyanyway} data-testid="ai-export-copy-ready">{labels.copyReadyLabel}</button>
+            {:else if warningVisible}
                 <div class="mt-2 flex gap-2">
                     {#if currentOptions.detailLevel !== 'compact'}
                         <button type="button" class="flex-1 rounded-md border px-2 py-1.5 text-xs font-semibold" onclick={() => onusecompact({...currentOptions, detailLevel: 'compact'})} data-testid="ai-export-use-compact">{labels.useCompactLabel}</button>
@@ -315,6 +321,16 @@
         </section>
     {/if}
 
+    {#if loading && step}
+        <!-- The client's real steps as text (TL 25/11); the server reports none finer, so the bar only moves: no percentage. -->
+        <div class="flex flex-col gap-1" data-testid="ai-export-progress" data-step={step}>
+            <p class="text-xs text-lf-muted" role="status">{labels.stepLabels[step]}</p>
+            <div class="h-1.5 w-full overflow-hidden rounded-full bg-lf-neutral" role="progressbar" aria-label={labels.progressLabel}>
+                <div class="ai-export-bar h-full rounded-full bg-lf-ai"></div>
+            </div>
+        </div>
+    {/if}
+
     <!-- While the export is prepared the button says so and turns: the menu icon already did (D2, 07/11/2026); `aria-busy` is the signal a
          test and a screen reader read, the spinner is for the eye. -->
     <button type="submit" disabled={controlsDisabled || !selected} aria-busy={loading} class="flex items-center justify-center gap-2 rounded-lg bg-lf-ai px-4 py-2 text-sm font-semibold text-lf-on-ai disabled:opacity-50" data-testid="ai-export-copy-button">
@@ -322,3 +338,23 @@
         {loading ? labels.preparingLabel : labels.prepareLabel}
     </button>
 </form>
+
+<style>
+    /* The client reports steps, never a share of the work: a segment slides along the track; still when motion is reduced. */
+    @keyframes ai-export-bar-slide {
+        from {
+            transform: translateX(-100%);
+        }
+        to {
+            transform: translateX(250%);
+        }
+    }
+    .ai-export-bar {
+        width: 40%;
+    }
+    @media (prefers-reduced-motion: no-preference) {
+        .ai-export-bar {
+            animation: ai-export-bar-slide 1.4s ease-in-out infinite;
+        }
+    }
+</style>

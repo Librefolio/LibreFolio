@@ -357,6 +357,14 @@
         },
         "returns": "chaque actif et chaque poste de liquidités avant le plan, à sa cible et après, en montant et en pourcentage ; les étapes dans l’ordre où les exécuter ; l’argent que le plan perd, poste par poste. C’est une simulation : aucun ordre n’est envoyé."
       }
+    },
+    "copyReady": "Copier le texte prêt",
+    "clipboardNotFocused": "Le texte est prêt, mais le navigateur ne l'a pas copié car la fenêtre n'était pas active. Appuyez sur « Copier le texte prêt ».",
+    "progress": "Exportation en cours",
+    "step": {
+      "request": "Calcul des données sur le serveur…",
+      "render": "Rédaction du texte…",
+      "copy": "Copie dans le presse-papiers…"
     }
   }
 }
