@@ -31,7 +31,7 @@ lib/components/ui/select/FxProviderSelect.svelte	3
 lib/components/ui/select/SearchSelect.svelte	2
 lib/components/ui/select/TreeSelect.svelte	1
 lib/features/ai-export/AiExportMenu.svelte	1
-lib/features/ai-export/AiExportOptionsPanel.svelte	9
+lib/features/ai-export/AiExportOptionsPanel.svelte	10	AI-coloured actions wait for an ai variant of Button (AI Export area lot); 78 TL-A added «Copy the ready text» beside them
 lib/features/allocation/AllocationChips.svelte	1
 lib/features/allocation/AllocationDimensionSelect.svelte	1
 lib/features/allocation/AllocationFilterPanel.svelte	1
