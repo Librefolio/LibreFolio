@@ -564,6 +564,7 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/features/transactions/form/TransactionFormModal.charges.test.ts",
             "src/lib/features/transactions/form/TransactionFormModal.parent.test.ts",
             "src/lib/features/transactions/form/TransactionFormModal.link.test.ts",
+            "src/lib/features/transactions/form/TransactionFormModal.savedLinks.test.ts",
             "src/lib/features/transactions/form/TransactionFormModal.reward.test.ts",
             "src/lib/features/transactions/form/TransactionFormModal.groupSync.test.ts",
             "src/lib/features/transactions/form/TransactionFormModal.viewTypes.test.ts",

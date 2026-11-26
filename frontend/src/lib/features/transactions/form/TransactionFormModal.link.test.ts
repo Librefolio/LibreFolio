@@ -389,7 +389,7 @@ describe('TransactionFormModal — the two pickers (66 F4)', () => {
     });
 
     // ---------------------------------------------------------------------------------------------------------------
-    //  F4b: a picked charge taken out again, and a pending parent dropped when its premise changes
+    //  F4b: a picked charge taken out again, and a pending parent whose premise changes (66 TL-12)
     // ---------------------------------------------------------------------------------------------------------------
 
     /** Parent 10 (broker 1, asset 5) with no charges, the picker offering charge 21; 21 picked and added to the section. */
@@ -454,7 +454,9 @@ describe('TransactionFormModal — the two pickers (66 F4)', () => {
         expect(onClose).toHaveBeenCalledTimes(1);
     });
 
-    it('charge side: a pending parent is dropped when the charge changes asset; Apply carries no _parent_link', async () => {
+    // 66 TL-12 reverses «a pending parent is dropped»: it is dropped only after the window that names it is confirmed.
+    // The window's other cases are in TransactionFormModal.savedLinks.test.ts.
+    it('charge side: a pending parent is not dropped in silence when the charge changes asset: the window names it; confirmed, Apply carries no _parent_link', async () => {
         resetAssetStore();
         mergeAssets([
             {id: 5, display_name: 'Link asset five', currency: 'EUR', quote_base_quantity: 1, active: true},
@@ -482,12 +484,24 @@ describe('TransactionFormModal — the two pickers (66 F4)', () => {
             await fireEvent.click(within(list).getByTestId('search-select-option-9'));
             await waitFor(() => expect(screen.queryByRole('listbox')).toBeNull());
 
+            await waitFor(() => expect(screen.queryByTestId('tx-form-unlink-saved'), '66 TL-12: no window before the pending parent is dropped').not.toBeNull());
+            expect(parentBox(), 'not dropped before the answer').toHaveAttribute('data-state', 'pending');
+            const dialog = screen.getByTestId('tx-form-unlink-saved').closest<HTMLElement>('[role="dialog"]')!;
+            expect(
+                within(dialog)
+                    .getAllByTestId('tx-form-unlink-saved-item')
+                    .map((item) => item.getAttribute('data-tx-id')),
+            ).toEqual(['10']);
+            await fireEvent.click(within(dialog).getByTestId('confirm-modal-confirm'));
+            await waitFor(() => expect(screen.queryByTestId('tx-form-unlink-saved')).toBeNull());
+
             await waitFor(() => expect(parentBox()).toHaveAttribute('data-state', 'empty'));
 
             await waitFor(() => expect(screen.getByTestId('tx-form-save')).toBeEnabled());
             await fireEvent.click(screen.getByTestId('tx-form-save'));
             expect(onPushDraft).toHaveBeenCalledTimes(1);
             expect(onPushDraft.mock.calls[0][0]).not.toHaveProperty('_parent_link');
+            expect(onPushDraft.mock.calls[0][0]).toMatchObject({asset_id: 9});
         } finally {
             resetAssetStore();
         }
