@@ -241,7 +241,8 @@
     </fieldset>
 
     <!-- RSK-SIM1: the period the days are drawn from, a row of its own above the parameters (their row is lane 81's). -->
-    <fieldset class="space-y-1.5 text-xs text-lf-muted" data-testid="risk-simulation-history" data-chosen={historyChosen}>
+    <!-- min-w-0: a fieldset is as wide as its content by default, and the period picker would push it out of its box on a phone (TL 25/11). -->
+    <fieldset class="min-w-0 space-y-1.5 text-xs text-lf-muted" data-testid="risk-simulation-history" data-chosen={historyChosen}>
         <legend class="mb-1 text-xs font-medium text-lf-secondary">{$t('risk.simulation.history.label')}</legend>
         <div class="flex flex-wrap items-center gap-2">
             <!-- The same look as the mode options above: a bordered choice, the selected one tinted. -->
