@@ -32,7 +32,7 @@
  */
 import {describe, expect, it, vi} from 'vitest';
 import type {ComponentProps} from 'svelte';
-import {fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
+import {cleanup, fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
 import {longPress, touch} from '$test/longPress';
 import type {SelectOption} from './types';
 import SearchSelect from './SearchSelect.svelte';
@@ -149,6 +149,17 @@ describe('SearchSelect', () => {
             await fireEvent.mouseEnter(option('GBP'));
             await waitFor(() => expect(option('GBP')).toHaveAttribute('data-highlighted', 'false'));
         });
+    });
+
+    // 87 A4: a missing choice is the trigger's border and `aria-invalid`, with the reason where the caller says.
+    it('marks a missing choice on the trigger, and names its reason to a screen reader', async () => {
+        await setupI18n();
+        const {trigger} = mount({value: '', invalid: true, describedBy: 'why', ariaLabel: 'Voice'});
+        expect(trigger).toHaveAttribute('aria-invalid', 'true');
+        expect(trigger).toHaveAttribute('aria-describedby', 'why');
+        expect(trigger).toHaveAttribute('aria-label', 'Voice');
+        cleanup();
+        expect(mount({value: 'EUR'}).trigger).not.toHaveAttribute('aria-invalid');
     });
 
     describe('search', () => {

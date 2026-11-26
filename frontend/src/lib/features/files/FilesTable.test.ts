@@ -25,6 +25,7 @@ import type {BrimFile, FileData, UploadedFile} from '$lib/types';
 import type {FilterValue} from '$lib/components/table/types';
 import {clientSessionUserId, getClientSessionUserId, transitionClientSession} from '$lib/stores/app/clientSession';
 import FilesTable from './FilesTable.svelte';
+import {initialAvatarDataUrl, SYSTEM_AVATAR_SEED} from '$lib/utils/files/initialAvatar';
 import en from '$lib/i18n/en.json';
 
 const boundary = vi.hoisted(() => ({
@@ -707,6 +708,9 @@ describe.each(['static', 'brim'] as const)('FilesTable %s: the files the install
         expect(system).toHaveTextContent((en as unknown as {uploads: {systemUploader: string}}).uploads.systemUploader);
         expect(system).not.toHaveTextContent('#0');
         expect(uploaderCell(table, 'unknown'), 'an unknown account keeps its number').toHaveTextContent('#8080');
+        // 87 A2: the disc the asset profile draws for the system too
+        const label = (en as unknown as {uploads: {systemUploader: string}}).uploads.systemUploader;
+        expect(system.querySelector('img')?.getAttribute('src')).toBe(initialAvatarDataUrl(label, SYSTEM_AVATAR_SEED));
     });
 });
 

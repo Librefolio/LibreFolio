@@ -106,14 +106,15 @@
     "sync": {
       "toastOk": "{name} sincronizado\n{fetched}↓ {changed}Δ",
       "toastFailed": "Error de sincronización para {name}",
-      "modalTitle": "Sincronizar Precios",
+      "modalTitle": "Sincronizar activos",
       "modalDescription": "Sincronice los precios de los proveedores configurados para el rango de fechas seleccionado.",
       "assetsCount": "activos",
       "confirmTitle": "¿Sincronizar {name}?",
       "confirmMessage": "{stored, plural, one {# precio guardado} other {# precios guardados}} en este intervalo {stored, plural, one {se reemplazará} other {se reemplazarán}} con los valores del proveedor.",
       "confirmManual": "{manual, plural, one {# se introdujo a mano y se reemplazará} other {# se introdujeron a mano y se reemplazarán}} también.",
       "confirmAction": "Sincronizar",
-      "overwriteManual": "{manual, plural, one {# se introdujo a mano} other {# se introdujeron a mano}}."
+      "overwriteManual": "{manual, plural, one {# se introdujo a mano} other {# se introdujeron a mano}}.",
+      "startPrices": "Sincronizar los precios"
     },
     "delete": {
       "confirmQuestion": "¿Eliminar \"{name}\"?",

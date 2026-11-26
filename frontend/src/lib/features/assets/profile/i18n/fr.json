@@ -210,7 +210,9 @@
           "when": "Quand",
           "voice": "Donnée",
           "what": "Ce qui a changé",
-          "who": "Qui"
+          "who": "Qui",
+          "before": "Avant",
+          "after": "Après"
         },
         "forget": "Oublier",
         "forgetSelected": "{count, plural, one {Oublier # modification} other {Oublier # modifications}}",
@@ -226,19 +228,16 @@
           "deletedUser": "un utilisateur supprimé",
           "system": "Système"
         },
-        "what": {
-          "first": "Première valeur lue : {to}.",
-          "firstByHand": "Saisi à la main : {to}.",
-          "firstLegacy": "Repris de LibreFolio 1.3 : {to}.",
-          "emptied": "Laissé vide exprès.",
-          "emptiedBySource": "La source ne le donne plus.",
-          "byHand": "Corrigé à la main : de {from} à {to}.",
-          "backFromHand": "Revenu à {to} : le {date}, {name} l’avait corrigé à la main à {from}, mais {source} indique {to}.",
-          "newSourceDate": "Ce sont maintenant les données du {date} (avant, du {previousDate}).",
-          "up": "En hausse de {from} à {to}.",
-          "down": "En baisse de {from} à {to}.",
-          "changed": "Modifié de {from} à {to}.",
-          "refilled": "Valeur à nouveau donnée : {to}."
+        "note": {
+          "first": "Première valeur lue",
+          "firstByHand": "Écrit à la main",
+          "firstLegacy": "Repris de LibreFolio 1.3",
+          "emptied": "Laissé vide exprès",
+          "emptiedBySource": "La source ne la donne plus",
+          "byHand": "Corrigé à la main",
+          "backFromHand": "Revenu à la valeur de {source} : le {date}, {name} l’avait corrigée à la main",
+          "newSourceDate": "Données du {date} (avant, du {previousDate})",
+          "refilled": "Valeur de nouveau présente"
         }
       },
       "history": {
@@ -256,6 +255,22 @@
         "partial": "{count, plural, one {# source n'a pas répondu} other {# sources n'ont pas répondu}} ; {written, plural, one {# donnée mise à jour} other {# données mises à jour}}. La lecture hebdomadaire réessaiera.",
         "failed": "Impossible de lire les enrichisseurs. Réessayez plus tard.",
         "noneActive": "Aucun enrichisseur actif : rien n'a été lu. Les enrichisseurs de cet actif sont désactivés ou non configurés sur cette instance."
+      },
+      "bulk": {
+        "title": "Profil",
+        "start": "Réaligner les profils",
+        "description": "{count, plural, one {Lit les enrichisseurs de # actif et enregistre ce qui a changé} many {Lit les enrichisseurs de # actifs et enregistre ce qui a changé} other {Lit les enrichisseurs de # actifs et enregistre ce qui a changé}}. Chaque source est lue lentement : cela peut durer quelques minutes et continue si vous fermez la fenêtre.",
+        "noAssets": "Aucun de ces actifs n’a d’enrichisseurs : ils se choisissent dans la fenêtre de l’actif, avec « Enrichisseurs ».",
+        "unknown": "Impossible de savoir quels actifs ont des enrichisseurs.",
+        "running": "Lecture des enrichisseurs en cours…",
+        "stillRunning": "Le serveur lit encore les enrichisseurs : les profils se mettent à jour tout seuls à la fin.",
+        "rowUnchanged": "rien n’a changé",
+        "rowNone": "aucun enrichisseur actif",
+        "rowFailed": "non lu",
+        "rowUnanswered": "pas de réponse de {sources}",
+        "noneActive": "Aucun enrichisseur actif : rien n’a été lu.",
+        "done": "{read, plural, one {Profil de # actif lu} many {Profils de # actifs lus} other {Profils de # actifs lus}} : {written, plural, =0 {rien n’a changé} one {# donnée mise à jour} many {# données mises à jour} other {# données mises à jour}}",
+        "partial": "{read, plural, one {Profil de # actif lu} many {Profils de # actifs lus} other {Profils de # actifs lus}} : {written, plural, =0 {rien n’a changé} one {# donnée mise à jour} many {# données mises à jour} other {# données mises à jour}} ; {sources, plural, =0 {toutes les sources ont répondu} one {# source n’a pas répondu} many {# sources n’ont pas répondu} other {# sources n’ont pas répondu}}{failed, plural, =0 {} one {, # actif non lu} many {, # actifs non lus} other {, # actifs non lus}}."
       }
     }
   }

@@ -210,7 +210,9 @@
           "when": "Cuándo",
           "voice": "Dato",
           "what": "Qué cambió",
-          "who": "Quién"
+          "who": "Quién",
+          "before": "Antes",
+          "after": "Después"
         },
         "forget": "Olvidar",
         "forgetSelected": "{count, plural, one {Olvidar # cambio} other {Olvidar # cambios}}",
@@ -226,19 +228,16 @@
           "deletedUser": "un usuario eliminado",
           "system": "Sistema"
         },
-        "what": {
-          "first": "Primer valor leído: {to}.",
-          "firstByHand": "Escrito a mano: {to}.",
-          "firstLegacy": "Recuperado de LibreFolio 1.3: {to}.",
-          "emptied": "Dejado vacío a propósito.",
-          "emptiedBySource": "La fuente ya no lo da.",
-          "byHand": "Corregido a mano: de {from} a {to}.",
-          "backFromHand": "Vuelve a {to}: el {date} {name} lo había corregido a mano a {from}, pero {source} dice {to}.",
-          "newSourceDate": "Ahora son los datos del {date} (antes, del {previousDate}).",
-          "up": "Sube de {from} a {to}.",
-          "down": "Baja de {from} a {to}.",
-          "changed": "Cambiado de {from} a {to}.",
-          "refilled": "Valor dado de nuevo: {to}."
+        "note": {
+          "first": "Primer valor leído",
+          "firstByHand": "Escrito a mano",
+          "firstLegacy": "Recuperado de LibreFolio 1.3",
+          "emptied": "Dejado vacío a propósito",
+          "emptiedBySource": "La fuente ya no lo da",
+          "byHand": "Corregido a mano",
+          "backFromHand": "Vuelto al valor de {source}: el {date} {name} lo había corregido a mano",
+          "newSourceDate": "Datos del {date} (antes, del {previousDate})",
+          "refilled": "Valor presente de nuevo"
         }
       },
       "history": {
@@ -256,6 +255,22 @@
         "partial": "{count, plural, one {# fuente no respondió} other {# fuentes no respondieron}}; {written, plural, one {# dato actualizado} other {# datos actualizados}}. La lectura semanal lo volverá a intentar.",
         "failed": "No se pudieron leer los enriquecedores. Inténtelo más tarde.",
         "noneActive": "Ningún enriquecedor activo: no se ha leído nada. Los enriquecedores de este activo están desactivados o sin configurar en esta instancia."
+      },
+      "bulk": {
+        "title": "Perfil",
+        "start": "Realinear los perfiles",
+        "description": "{count, plural, one {Lee los enriquecedores de # activo y guarda lo que ha cambiado} other {Lee los enriquecedores de # activos y guarda lo que ha cambiado}}. Cada fuente se lee despacio: puede durar unos minutos y continúa aunque cierres la ventana.",
+        "noAssets": "Ninguno de estos activos tiene enriquecedores: se eligen en la ventana del activo, con «Enriquecedores».",
+        "unknown": "No se pudo saber qué activos tienen enriquecedores.",
+        "running": "Leyendo los enriquecedores…",
+        "stillRunning": "El servidor sigue leyendo los enriquecedores: los perfiles se actualizan solos cuando termina.",
+        "rowUnchanged": "nada ha cambiado",
+        "rowNone": "ningún enriquecedor activo",
+        "rowFailed": "no leído",
+        "rowUnanswered": "sin respuesta de {sources}",
+        "noneActive": "Ningún enriquecedor activo: no se ha leído nada.",
+        "done": "{read, plural, one {Perfil de # activo leído} other {Perfiles de # activos leídos}}: {written, plural, =0 {nada ha cambiado} one {# dato actualizado} other {# datos actualizados}}",
+        "partial": "{read, plural, one {Perfil de # activo leído} other {Perfiles de # activos leídos}}: {written, plural, =0 {nada ha cambiado} one {# dato actualizado} other {# datos actualizados}}; {sources, plural, =0 {todas las fuentes han respondido} one {# fuente no ha respondido} other {# fuentes no han respondido}}{failed, plural, =0 {} one {, # activo no leído} other {, # activos no leídos}}."
       }
     }
   }

@@ -12,7 +12,7 @@
   Uses Svelte 5 runes.
 -->
 <script lang="ts">
-    import {onDestroy} from 'svelte';
+    import {onDestroy, type Snippet} from 'svelte';
     import {Clock, Info, RefreshCw, SkipForward, Timer, X} from 'lucide-svelte';
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
     import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
@@ -45,9 +45,31 @@
         maxWidth?: string;
         /** Why starting is off right now (a pair of the sync is already syncing, 81 U35): the Start button is off and says it. */
         startBlockedReason?: string | null;
+        /** The word of the Start button, where the window holds more than this sync (87, A5: the assets' profiles). */
+        startLabel?: string;
+        /** A section of the caller's own under the sync's: it is no `SyncSection`, and starts by itself (87, A5). */
+        below?: Snippet;
     }
 
-    let {open = $bindable(), dateStart, dateEnd, title, description, testId, headerIcon: HeaderIcon = RefreshCw, headerIconBg = 'bg-lf-warning-soft', headerIconColor = 'text-lf-warning', sections, onsynced, onclose, zIndex = 50, maxWidth = 'max-w-md', startBlockedReason = null}: Props = $props();
+    let {
+        open = $bindable(),
+        dateStart,
+        dateEnd,
+        title,
+        description,
+        testId,
+        headerIcon: HeaderIcon = RefreshCw,
+        headerIconBg = 'bg-lf-warning-soft',
+        headerIconColor = 'text-lf-warning',
+        sections,
+        onsynced,
+        onclose,
+        zIndex = 50,
+        maxWidth = 'max-w-md',
+        startBlockedReason = null,
+        startLabel,
+        below,
+    }: Props = $props();
 
     // =========================================================================
     // State
@@ -504,6 +526,8 @@
                 </InfoBanner>
             </div>
         {/if}
+
+        {@render below?.()}
     </div>
 
     <!-- Footer -->
@@ -528,7 +552,7 @@
                 {:else if syncing}
                     {$t('common.syncing') ?? 'Syncing...'}
                 {:else}
-                    {$t('fx.sync.start') ?? 'Start Sync'}
+                    {startLabel ?? $t('fx.sync.start') ?? 'Start Sync'}
                 {/if}
             </button>
         {/if}

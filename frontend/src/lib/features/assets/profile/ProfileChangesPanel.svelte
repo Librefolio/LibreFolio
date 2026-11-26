@@ -7,7 +7,7 @@
   - «Dimentica» sends back the `as_of` of the read that showed the rows: a row written after it is never forgotten by
     this page. Then it tells the tab (`onchanged`: the cards read again) and reads its page again; a page left empty
     falls back to the one before. A refusal of the server (`newer`, `not_found`) reads again too, and says so.
-  - The source names are the enrichers' declared ones (`profileSources`).
+  - The sources are named and drawn as the enrichers declare them (`profileSources`).
 
   Pattern: Svelte 5 Runes, colour roles only.
 -->
@@ -16,7 +16,7 @@
     import {_ as t} from '$lib/i18n';
     import ProfileChangesTable from './ProfileChangesTable.svelte';
     import type {ProfileChange} from './profileChanges';
-    import {loadEnricherNames} from './profileSources';
+    import {loadProfileSources, type ProfileSource} from './profileSources';
     import {forgetChanges} from './profileForget';
     import {readAssetProfile, type ProfileVoice} from './profileStore';
 
@@ -40,7 +40,7 @@
     let total = $state(0);
     /** The `as_of` of the read the table shows: «Dimentica» sends it back. */
     let asOf = $state('');
-    let sourceNames = $state<Record<string, string>>({});
+    let sources = $state<Record<string, ProfileSource>>({});
     /** Bumped to read the same page again (after a forget). */
     let again = $state(0);
     /** The read whose answer the panel still waits for: an older one that arrives later is dropped. */
@@ -53,7 +53,7 @@
 
     $effect(() => {
         if (!open) return;
-        void loadEnricherNames().then((names) => (sourceNames = names));
+        void loadProfileSources().then((known) => (sources = known));
     });
 
     $effect(() => {
@@ -109,7 +109,7 @@
             {#if status === 'failed'}
                 <p class="text-sm text-lf-warning-on-soft" role="status" data-testid="profile-changes-failed">{$t('assets.profile.changes.loadFailed')}</p>
             {:else}
-                <ProfileChangesTable {rows} {voices} {total} {page} {sourceNames} showVoice busy={status === 'loading'} storageKey="profileChangesPanel" onforget={forget} onpage={(next) => (page = next)} />
+                <ProfileChangesTable {rows} {voices} {total} {page} {sources} showVoice busy={status === 'loading'} storageKey="profileChangesPanel" onforget={forget} onpage={(next) => (page = next)} />
             {/if}
         </div>
     {/if}

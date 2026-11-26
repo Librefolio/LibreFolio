@@ -38,9 +38,12 @@ test.describe('Profile data from the asset window (plan 68, E8b2)', () => {
 
             // A row for the TER, typed in percent: 0.19 % is the fraction 0.0019
             await window.getByTestId('profile-edit-add-row').click();
-            await window.getByTestId('profile-row-voice-row-1-button').click();
-            // The voice menu opens at the end of the page, outside the window: its option is looked up on the page
-            await page.getByTestId('profile-row-voice-row-1-option-ter').click();
+            const voice = window.getByTestId('profile-row-voice-row-1');
+            await expect(voice.getByTestId('profile-row-voice-row-1-trigger')).toHaveAttribute('aria-invalid', 'true');
+            await voice.getByTestId('profile-row-voice-row-1-trigger').click();
+            // The search box is the selector's own, and its list is too: the search box on top draws the same options
+            await voice.getByTestId('search-select-option-ter').click();
+            await expect(voice.getByTestId('profile-row-voice-row-1-trigger')).not.toHaveAttribute('aria-invalid');
             const value = window.locator('tr[data-row-id="row-1"] td[data-column-id="value"] input');
             await value.fill('0.19');
             await value.blur();
@@ -102,8 +105,23 @@ test.describe('Profile data from the asset window (plan 68, E8b2)', () => {
 
             // A row for the TER, typed in percent: 0.19 % is the fraction 0.0019
             await window.getByTestId('profile-edit-add-row').click();
-            await window.getByTestId('profile-row-voice-row-1-button').click();
-            await page.getByTestId('profile-row-voice-row-1-option-ter').click();
+            // The empty selector is as large as its cell, never larger (87 A4)
+            const trigger = window.getByTestId('profile-row-voice-row-1-trigger');
+            const sizes = await trigger.evaluate((el) => {
+                const cell = el.closest('td')?.getBoundingClientRect();
+                const own = el.getBoundingClientRect();
+                return cell ? {left: own.left - cell.left, right: cell.right - own.right, height: cell.height - own.height} : null;
+            });
+            expect(sizes, 'the selector sits in a table cell').not.toBeNull();
+            expect(Math.min(sizes?.left ?? -1, sizes?.right ?? -1, sizes?.height ?? -1), `the selector inside its cell: ${JSON.stringify(sizes)}`).toBeGreaterThanOrEqual(0);
+            await trigger.click();
+            await window.getByTestId('profile-row-voice-row-1').getByTestId('search-select-option-ter').click();
+
+            // The countries and the sectors are one below the other, at the same left edge (87 A1)
+            const panels = await window.getByTestId('profile-edit-panels').evaluate((root) => [...root.children].map((child) => child.getBoundingClientRect()).map(({left, top, bottom}) => ({left, top, bottom})));
+            expect(panels.length, 'both breakdowns').toBe(2);
+            expect(panels[1].top, `one below the other: ${JSON.stringify(panels)}`).toBeGreaterThanOrEqual(panels[0].bottom);
+            expect(panels[1].left).toBe(panels[0].left);
             const value = window.locator('tr[data-row-id="row-1"] td[data-column-id="value"] input');
             await value.fill('0.19');
             await value.blur();
@@ -135,16 +153,17 @@ test.describe('Profile data from the asset window (plan 68, E8b2)', () => {
 });
 
 /**
- * The selection bar in a narrow section head (plan 77, SEL-D2). In the profile window the sectors and the countries sit
- * side by side, and their heads are about 450 px wide at 1440 (280 px at 390): the whole bar («2 sélectionnés ×»,
- * «Équilibrer 2», «Supprimer 2») does not fit beside the title and the section's buttons. So the bar takes its compact
- * form («2 ×», each action an icon with its number), the title gives it its place while rows are ticked (visually hidden,
- * kept for screen readers), and the head keeps its height. A bar never covers a control of the head: the check reads
- * the boxes, in a long language (French), at 1440 and 390. The compact form is a container query on the head: only a
- * browser measures it. The keyboard reaches each icon's name: its tooltip opens on focus.
+ * The selection bar in a section head (plan 77, SEL-D2). In the profile window the sectors and the countries sit one
+ * below the other (87 A1), and their heads are as wide as the window at 1440 and 280 px at 390. Wide, the whole bar
+ * («2 sélectionnés ×», «Équilibrer 2», «Supprimer 2») fits. Narrow, it does not, so it takes its compact form («2 ×», each
+ * action an icon with its number), the title gives it its place while rows are ticked (visually hidden, kept for screen
+ * readers), and the keyboard reaches each icon's name: its tooltip opens on focus. Either way the head keeps its height
+ * and a bar never covers a control of the head: the check reads the boxes, in a long language (French). The compact form
+ * is a container query on the head: only a browser measures it.
  */
 for (const width of [1440, 390]) {
-    test.describe(`The selection bar in a narrow section head, French, ${width} px (77 SEL-D2)`, () => {
+    const compact = width === 390;
+    test.describe(`The selection bar in a section head, French, ${width} px (77 SEL-D2)`, () => {
         test.use({viewport: {width, height: 900}, isMobile: false, hasTouch: false});
 
         test.beforeEach(async ({page}) => {
@@ -158,7 +177,7 @@ for (const width of [1440, 390]) {
             await login(page, TEST_USER);
         });
 
-        test('ticking two sectors keeps the head’s height: the bar is compact, and its icons name themselves on focus', async ({page}) => {
+        test(`ticking two sectors keeps the head’s height: the bar is ${compact ? 'compact, and its icons name themselves on focus' : 'whole, with its words'}`, async ({page}) => {
             test.setTimeout(60_000);
             const name = `E2E profile head ${uniqueToken(8)}`;
             const created = await page.request.post(`${API_BASE}/assets`, {data: [{display_name: name, currency: 'EUR', asset_type: 'ETF'}]});
@@ -191,7 +210,7 @@ for (const width of [1440, 390]) {
                 await expect(bar).toHaveAttribute('data-in-head', 'true');
                 await expect(page.locator('html')).toHaveAttribute('lang', 'fr');
                 await expect(bar.getByTestId('toolbar-action-balance-count')).toHaveText('2');
-                await expect(bar.getByTestId('toolbar-action-balance-label')).toBeHidden();
+                await expect(bar.getByTestId('toolbar-action-balance-label')).toBeVisible({visible: !compact});
                 expect(await heightOf(), 'the head keeps its height with the bar').toBe(before);
                 // A height alone can hide a bar drawn over the section's buttons: none of them meets the bar, all stay inside
                 const clash = await head.evaluate((el) => {
@@ -210,6 +229,7 @@ for (const width of [1440, 390]) {
                 });
                 expect(clash, 'the bar covers none of the section’s buttons').toBe('');
 
+                if (!compact) return;
                 // An icon names itself: the accessible name carries the number, and the tooltip opens on keyboard focus
                 const balance = bar.getByTestId('toolbar-action-balance');
                 await expect(balance).toHaveAttribute('aria-label', /, 2$/);

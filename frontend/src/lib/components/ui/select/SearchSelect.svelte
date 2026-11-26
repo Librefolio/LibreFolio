@@ -50,6 +50,12 @@
         onchange?: (value: string) => void;
         /** Compact mode: smaller trigger padding to match standard inputs */
         compact?: boolean;
+        /** A choice is missing or refused: the trigger takes the danger border and `aria-invalid`. */
+        invalid?: boolean;
+        /** The id of the text that says why (`aria-describedby` of the trigger). */
+        describedBy?: string;
+        /** The accessible name of the trigger, when no visible label gives it one. */
+        ariaLabel?: string;
         /** W43/W44: Label for the "Create new" sticky footer action.
          *  When set (non-empty), a persistent footer row is rendered at the
          *  bottom of the dropdown. Clicking it fires `onCreateNew`. */
@@ -82,6 +88,9 @@
         selectedItem,
         onchange,
         compact = false,
+        invalid = false,
+        describedBy,
+        ariaLabel,
         createLabel = '',
         createLabelFor,
         onCreateNew,
@@ -425,10 +434,13 @@
         aria-disabled={disabled}
         aria-expanded={isOpen}
         aria-haspopup="listbox"
+        aria-invalid={invalid ? 'true' : undefined}
+        aria-describedby={describedBy}
+        aria-label={ariaLabel}
         class="w-full flex items-center justify-between {compact ? 'px-3 py-2 text-sm' : 'px-3 py-2'} border rounded-lg
                transition-all text-left gap-2
                {disabled ? 'bg-lf-panel text-lf-muted cursor-not-allowed opacity-60' : 'bg-lf-field text-lf-primary cursor-pointer'}
-               {isOpen ? 'ring-2 ring-lf-focus border-lf-focus' : disabled ? 'border-lf-subtle' : 'border-lf-input hover:border-lf-input-hover'}"
+               {isOpen ? 'ring-2 ring-lf-focus border-lf-focus' : invalid ? 'border-lf-danger' : disabled ? 'border-lf-subtle' : 'border-lf-input hover:border-lf-input-hover'}"
         onclick={() => toggleDropdown()}
         onfocus={() => {
             triggerFocusedAt = Date.now();

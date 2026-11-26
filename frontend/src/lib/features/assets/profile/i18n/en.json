@@ -210,7 +210,9 @@
           "when": "When",
           "voice": "Data",
           "what": "What changed",
-          "who": "Who"
+          "who": "Who",
+          "before": "Before",
+          "after": "After"
         },
         "forget": "Forget",
         "forgetSelected": "{count, plural, one {Forget # change} other {Forget # changes}}",
@@ -226,19 +228,16 @@
           "deletedUser": "a deleted user",
           "system": "System"
         },
-        "what": {
-          "first": "First value read: {to}.",
-          "firstByHand": "Written by hand: {to}.",
-          "firstLegacy": "Carried over from LibreFolio 1.3: {to}.",
-          "emptied": "Left empty on purpose.",
-          "emptiedBySource": "The source no longer gives it.",
-          "byHand": "Corrected by hand: from {from} to {to}.",
-          "backFromHand": "Back to {to}: on {date} {name} had corrected it by hand to {from}, but {source} says {to}.",
-          "newSourceDate": "Now the data of {date} (before, of {previousDate}).",
-          "up": "Up from {from} to {to}.",
-          "down": "Down from {from} to {to}.",
-          "changed": "Changed from {from} to {to}.",
-          "refilled": "Value given again: {to}."
+        "note": {
+          "first": "First value read",
+          "firstByHand": "Written by hand",
+          "firstLegacy": "Carried over from LibreFolio 1.3",
+          "emptied": "Left empty on purpose",
+          "emptiedBySource": "The source no longer gives it",
+          "byHand": "Corrected by hand",
+          "backFromHand": "Back to the value of {source}: on {date} {name} had corrected it by hand",
+          "newSourceDate": "Data of {date} (before, of {previousDate})",
+          "refilled": "Value given again"
         }
       },
       "history": {
@@ -256,6 +255,22 @@
         "partial": "{count, plural, one {# source did not answer} other {# sources did not answer}}; {written, plural, one {# data item updated} other {# data items updated}}. The weekly read will try again.",
         "failed": "The enrichers could not be read. Try again later.",
         "noneActive": "No active enricher: nothing was read. The enrichers of this asset are turned off or not configured on this instance."
+      },
+      "bulk": {
+        "title": "Profile",
+        "start": "Realign the profiles",
+        "description": "{count, plural, one {Reads the enrichers of # asset and saves what changed} other {Reads the enrichers of # assets and saves what changed}}. Each source is read slowly: it can take a few minutes, and it goes on if you close this window.",
+        "noAssets": "None of these assets has enrichers: you choose them in the asset window, with «Enrichers».",
+        "unknown": "The assets with enrichers could not be read.",
+        "running": "Reading the enrichers…",
+        "stillRunning": "The server is still reading the enrichers: the profiles update by themselves when it ends.",
+        "rowUnchanged": "nothing changed",
+        "rowNone": "no active enricher",
+        "rowFailed": "not read",
+        "rowUnanswered": "no answer from {sources}",
+        "noneActive": "No active enricher: nothing was read.",
+        "done": "{read, plural, one {Profile of # asset read} other {Profiles of # assets read}}: {written, plural, =0 {nothing changed} one {# data item updated} other {# data items updated}}",
+        "partial": "{read, plural, one {Profile of # asset read} other {Profiles of # assets read}}: {written, plural, =0 {nothing changed} one {# data item updated} other {# data items updated}}; {sources, plural, =0 {every source answered} one {# source did not answer} other {# sources did not answer}}{failed, plural, =0 {} one {, # asset not read} other {, # assets not read}}."
       }
     }
   }

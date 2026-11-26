@@ -52,8 +52,23 @@ test.describe('«Ultime variazioni» on the Profilo tab (plan 68, E6a)', () => {
             await expect(panel).toHaveAttribute('data-status', 'ready', {timeout: 10_000});
             await expect(page.getByTestId(`profile-change-what-${latest.id}`)).toHaveAttribute('data-kind', 'byHand');
             await expect(page.getByTestId(`profile-change-what-${first.id}`)).toHaveAttribute('data-kind', 'firstByHand');
+            // «Prima» and «Dopo» in two columns (87 A3): the value before of the latest is the value after of the first
+            await expect(page.getByTestId(`profile-change-before-${first.id}`)).toHaveAttribute('data-empty', 'true');
+            const firstValue = ((await page.getByTestId(`profile-change-after-${first.id}`).textContent()) ?? '').trim();
+            expect(firstValue).not.toBe('');
+            await expect(page.getByTestId(`profile-change-before-${latest.id}`)).toHaveText(firstValue);
             const who = page.getByTestId(`profile-change-who-${latest.id}`);
             await expect(who).toHaveAttribute('data-source', 'user');
+            // «Chi» stays in sight beside the two values: the columns fit the table, nothing scrolls sideways (87 A3)
+            const hidden = await page
+                .getByTestId('profile-changes-table')
+                .locator('table')
+                .evaluate((table) => {
+                    let scroller: HTMLElement | null = table.parentElement;
+                    while (scroller && !/auto|scroll/.test(getComputedStyle(scroller).overflowX)) scroller = scroller.parentElement;
+                    return scroller ? scroller.scrollWidth - scroller.clientWidth : 0;
+                });
+            expect(hidden, 'the table scrolls sideways').toBeLessThanOrEqual(1);
             await expect(who).toContainText(TEST_USER.username);
 
             // «Dimentica» on the latest row: it asks first
@@ -98,7 +113,7 @@ test.describe('«Ultime variazioni» on the Profilo tab (plan 68, E6a)', () => {
             const panel = page.getByTestId('profile-changes-panel');
             await expect(panel).toHaveAttribute('data-status', 'ready', {timeout: 10_000});
             await expect(panel.locator('[data-testid^="profile-change-what-"]')).toHaveCount(3);
-            // On a phone the sentence carries its day and its author under it (one column, the mock's shot 14)
+            // On a phone the values carry their day and their author under them (one column, the mock's shot 14)
             await expect(panel.locator('[data-testid^="profile-change-detail-"]')).toHaveCount(3);
             await panel.scrollIntoViewIfNeeded();
 
@@ -204,6 +219,11 @@ test.describe('«Ultime variazioni» on the Profilo tab (plan 68, E6a)', () => {
                 await expect(history).toHaveAttribute('data-voice', voice);
                 await expect(page.getByTestId('profile-history-chart'), 'a map or a text has no chart').toHaveCount(0);
                 await expect(history.locator('[data-testid^="profile-change-what-"]')).toHaveCount(1);
+                if (voice === 'description') {
+                    // Two columns wide enough to read (87 A3): the text is not squeezed into a strip
+                    const columns = await history.evaluate((root) => ['before', 'after'].map((id) => root.querySelector(`[data-testid="dt-header-${id}"]`)?.getBoundingClientRect().width ?? 0));
+                    expect(Math.min(...columns), `«Prima» and «Dopo» of a text: ${JSON.stringify(columns)}`).toBeGreaterThanOrEqual(280);
+                }
                 await page.getByTestId('profile-history-close').click();
                 await expect(history).toHaveCount(0);
             }

@@ -6,18 +6,20 @@
  * - the call failing, or the asset unknown → error;
  * - E6c2 (PROF 19/11): no enricher read (`enrichers_read` 0: every one bound is off, not installed or not configured) →
  *   a warning that nothing was read, never «nothing changed».
+ * 87 A5, «Riallinea i profili»: one call for many assets, one toast for all of them; a wait that ends before the answer is
+ * «the server goes on», never «failed».
  * Each outcome is also the event the tests read: `asset.profile.refreshed` (with the voices written and the sources that
  * failed) or `asset.profile.refreshFailed`.
  */
 import {beforeEach, describe, expect, it, vi} from 'vitest';
 import type {NotifyOptions} from '$lib/stores/app/notify.svelte';
 
-const mocks = vi.hoisted(() => ({refreshAssetProfile: vi.fn()}));
-vi.mock('./profileStore', () => ({refreshAssetProfile: mocks.refreshAssetProfile}));
+const mocks = vi.hoisted(() => ({refreshAssetProfile: vi.fn(), refreshAssetProfiles: vi.fn()}));
+vi.mock('./profileStore', () => ({refreshAssetProfile: mocks.refreshAssetProfile, refreshAssetProfiles: mocks.refreshAssetProfiles}));
 vi.mock('$lib/stores/app/notify.svelte', () => ({notify: vi.fn()}));
 
 import {notify} from '$lib/stores/app/notify.svelte';
-import {refreshProfile} from './profileRefresh';
+import {refreshProfile, refreshProfiles} from './profileRefresh';
 
 const translate = (key: string, values?: Record<string, string | number>) => (values ? `${key} ${JSON.stringify(values)}` : key);
 
@@ -79,5 +81,55 @@ describe('refreshProfile', () => {
         const [event] = events();
         expect(event.name).toBe('asset.profile.refreshFailed');
         expect(event.toast?.variant).toBe('error');
+    });
+});
+
+describe('refreshProfiles (87 A5)', () => {
+    const asset = (id: number, fields: Record<string, unknown> = {}) => ({asset_id: id, written: [], outcomes: [outcome('justetf', 'ok')], error: null, enrichers_read: 1, ...fields});
+
+    it('asks every asset in one call and says with one toast what came of it', async () => {
+        const results = [asset(1, {written: ['ter', 'fund_size']}), asset(2)];
+        mocks.refreshAssetProfiles.mockResolvedValue(results);
+
+        await expect(refreshProfiles([1, 2], translate)).resolves.toEqual({kind: 'done', results});
+        expect(mocks.refreshAssetProfiles).toHaveBeenCalledTimes(1);
+        expect(mocks.refreshAssetProfiles).toHaveBeenCalledWith([1, 2]);
+        expect(events()).toEqual([{name: 'asset.profiles.refreshed', detail: {assets: 2, read: 2, written: 2, sources_failed: 0, failed: 0}, toast: {variant: 'success', message: 'assets.profile.bulk.done {"read":2,"written":2}'}}]);
+    });
+
+    it('warns once for a source that failed on many assets, and for an asset not read', async () => {
+        const down = [outcome('yahoo', 'error', 'RATE_LIMITED')];
+        mocks.refreshAssetProfiles.mockResolvedValue([asset(1, {outcomes: down}), asset(2, {outcomes: down}), asset(3, {error: 'Asset not found', enrichers_read: 0, outcomes: []})]);
+
+        await refreshProfiles([1, 2, 3], translate);
+        const [event] = events();
+        expect(event.detail).toEqual({assets: 3, read: 2, written: 0, sources_failed: 1, failed: 1});
+        expect(event.toast?.variant).toBe('warning');
+    });
+
+    it('never says «nothing changed» when no enricher could be read', async () => {
+        mocks.refreshAssetProfiles.mockResolvedValue([asset(1, {outcomes: [], enrichers_read: 0})]);
+
+        await refreshProfiles([1], translate);
+        expect(events()[0].toast).toEqual({variant: 'warning', message: 'assets.profile.bulk.noneActive'});
+    });
+
+    it.each([
+        ['the browser stops waiting', {code: 'ECONNABORTED'}],
+        ['a proxy stops waiting', {code: 'ERR_BAD_RESPONSE', response: {status: 504}}],
+    ])('says the server goes on when %s', async (_case, error) => {
+        mocks.refreshAssetProfiles.mockRejectedValue(error);
+
+        await expect(refreshProfiles([1], translate)).resolves.toEqual({kind: 'running'});
+        const [event] = events();
+        expect(event.name).toBe('asset.profiles.refreshRunning');
+        expect(event.toast).toEqual({variant: 'info', message: 'assets.profile.bulk.stillRunning'});
+    });
+
+    it('reports an error when the call is refused', async () => {
+        mocks.refreshAssetProfiles.mockRejectedValue({code: 'ERR_BAD_RESPONSE', response: {status: 500}});
+
+        await expect(refreshProfiles([1], translate)).resolves.toEqual({kind: 'failed'});
+        expect(events()[0]).toMatchObject({name: 'asset.profiles.refreshFailed', toast: {variant: 'error'}});
     });
 });

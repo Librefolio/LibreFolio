@@ -11,7 +11,7 @@
  *   written after it (409 `PROFILE_UPDATES_NEWER`) or not of that asset (404 `PROFILE_UPDATES_NOT_FOUND`). Those two
  *   are typed results, never a throw, so the page can say «reload» and read again.
  * - «Aggiorna» (`POST /assets/profile/refresh`, E6c) reads the asset's enrichers again and saves what changed; the
- *   asset's reads are forgotten either way.
+ *   asset's reads are forgotten either way. «Riallinea i profili» (87, A5) asks it for many assets in one call.
  *
  * Plain module, no runes: nothing here is reactive; a component keeps what it reads in its own state.
  */
@@ -159,5 +159,23 @@ export async function refreshAssetProfile(assetId: number): Promise<ProfileRefre
         return result ?? {asset_id: assetId, written: [], outcomes: [], error: 'missing', enrichers_read: 0};
     } finally {
         invalidateAssetProfile(assetId);
+    }
+}
+
+/**
+ * How long «Riallinea i profili» waits for its one answer. A source is read slowly, about one call a second, so many assets
+ * take minutes. Never split into smaller calls: a source that refused for too many requests stops for the rest of its
+ * own call only, and the next call would ask it again.
+ */
+export const PROFILE_BULK_REFRESH_TIMEOUT_MS = 15 * 60_000;
+
+/** «Riallinea i profili» (87, A5): as `refreshAssetProfile`, for many assets in one call, one result per asset asked. */
+export async function refreshAssetProfiles(assetIds: number[]): Promise<ProfileRefreshResult[]> {
+    try {
+        const response = await zodiosApi.refresh_profile_api_v1_assets_profile_refresh_post(assetIds, {timeout: PROFILE_BULK_REFRESH_TIMEOUT_MS});
+        const byId = new Map(response.results.map((item) => [item.asset_id, item]));
+        return assetIds.map((id) => byId.get(id) ?? {asset_id: id, written: [], outcomes: [], error: 'missing', enrichers_read: 0});
+    } finally {
+        for (const id of assetIds) invalidateAssetProfile(id);
     }
 }

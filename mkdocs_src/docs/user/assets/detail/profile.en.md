@@ -147,7 +147,8 @@ the **Enrichers** window asks once, as for an asset that exists.
   The administrator sets the day and the time
   ([Market Data Scheduler](../../../admin/settings.md#market-data-scheduler)).
 - **Right after a save** that creates an asset with enrichers, or changes an asset's enrichers.
-- **When you ask**, with [Refresh](#refresh) in the **Profile** tab.
+- **When you ask**, with [Refresh](#refresh) in the **Profile** tab, or for many assets together with
+  [**Realign the profiles**](#refresh-all) in the **Sync All** window of the Assets page.
 
 Prices are not part of this: they stay with the toolbar's **Sync**.
 
@@ -189,6 +190,18 @@ A notice tells you how it went:
 
 **Refresh** shows only when the asset has at least one enricher.
 
+#### 🔁 All the profiles together {: #refresh-all }
+
+On the [Assets page](../index.md), the **Sync All** window has a **Profile** section under the prices: **Realign the
+profiles** reads the enrichers of every asset that has some, also of an asset without a price provider, and saves what
+changed. The enrichers are still chosen asset by asset.
+
+- Each source is read slowly, so it can take a few minutes. There is no percentage to show: while it reads, the section
+  says so. You can close the window: the read goes on, and a notice tells you when it ends.
+- At the end each asset has its line: how many data items were updated, *nothing changed*, or which source gave no
+  answer.
+- The prices are apart: **Sync the prices**, at the bottom of the window, starts them.
+
 ### 🧭 No enricher configured {: #no-enricher }
 
 An asset without enrichers shows, at the top of the tab, the box **No enricher configured**: the data on the tab was
@@ -199,7 +212,8 @@ the asset form with the **Asset enrichers** window already on top ([Choose the e
 
 **Edit data** opens the **Profile data** window, to write the profile by hand:
 
-- **Find a data item and add it**, then write its value, or choose **Leave empty** to empty it on purpose.
+- **Find a data item and add it**, then write its value, or choose **Leave empty** to empty it on purpose. **Add row**
+  adds a row to choose its item in, with a search: its box is outlined in red until you choose one.
 - The sectors and the countries each have their own editor: see
   **Set the description, sectors and countries** in [Create & Edit](../create-edit.md).
 - **Ask** (on a row) and **Ask all** ask the asset's enrichers without saving: an empty item is filled *from the
@@ -207,7 +221,7 @@ the asset form with the **Asset enrichers** window already on top ([Choose the e
   from a source is saved in that source's name, not yours.
 - **Save all** saves everything at once.
 
-The same window opens from the **Profile data** row of the asset form; there **Keep the changes** hands them to the
+The same window opens from the **Profile data** row of the asset form, right under the description; there **Keep the changes** hands them to the
 form, which saves them with the asset.
 
 ### 📜 Latest changes {: #latest-changes }
@@ -217,9 +231,11 @@ asset's latest changes, newest first, twenty per page (the pages are in the bar 
 
 - **When** — the day of the change;
 - **Data** — the item;
-- **What changed** — a sentence, such as *Written by hand: …*, *Corrected by hand: from … to …*, *First value read:
-  …*, *Up from … to …*, *Left empty on purpose*;
-- **Who** — the person who wrote it by hand, or the source that gave it; a value that was already there before the profile existed reads **System**.
+- **Before** and **After** — the two values, side by side; a dash when there is none. A short note under **After** says
+  what the two values do not: *First value read*, *Written by hand*, *Corrected by hand*, *Left empty on purpose*, *Back to
+  the value of …*, *Data of … (before, of …)*;
+- **Who** — the person who wrote it by hand, or the source that gave it, with its icon; a value that was already there
+  before the profile existed reads **System**.
 
 The values that change at every read (fund size, market capitalisation, gross and net yield, modified duration,
 accrued interest) appear here only when written by hand, and with the read that replaced them: their other steps are in
