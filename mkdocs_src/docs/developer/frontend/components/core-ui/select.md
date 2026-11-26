@@ -97,6 +97,8 @@ are **ranked**, best match first.
   list.
 - `loading` shows a loading row; the `item` and `selectedItem` snippets customise the rows and the
   trigger.
+- `invalid` gives the trigger the danger border and `aria-invalid` (a choice missing or refused); `describedBy` names the
+  text that says why, `ariaLabel` the trigger when no visible label does.
 - `createLabel` + `onCreateNew` add a sticky **Create new** footer that receives the typed query;
   `createLabelFor(query)` lets the footer name what it will create.
 - Keyboard: ↑/↓ skip titles and disabled rows and stop at the ends (no wrap-around), Enter picks the
