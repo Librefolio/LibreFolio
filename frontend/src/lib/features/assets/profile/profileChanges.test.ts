@@ -1,13 +1,13 @@
 /**
- * profileChanges — «Cosa è cambiato» of one change of the asset profile (plan 68, E6a; the mock of round 39, approved in
- * round 41): which kind of sentence a change gets, and the values the sentence names.
+ * profileChanges — one change of the asset profile as the tables show it (plan 68, E6a; 87, A3): its kind, the value
+ * before, the value after, and the note the two values do not say.
  *
- * The kind is a pure function of the change (`FAProfileChange`) and its voice; the tests assert the kind and the values
- * handed to the translation, never a translated text.
+ * The kind is a pure function of the change (`FAProfileChange`) and its voice; the tests assert the kind, the two values
+ * and what the translation is handed, never a translated text.
  */
 import {describe, expect, it} from 'vitest';
 import type {ProfileVoice} from './profileStore';
-import {changeKind, changeSentence, type ProfileChange} from './profileChanges';
+import {changeKind, changeParts, type ProfileChange} from './profileChanges';
 
 function voice(key: string, shape: string, extra: Partial<ProfileVoice> = {}): ProfileVoice {
     return {key, shape, groups: ['other'], volatile: false, ...extra} as unknown as ProfileVoice;
@@ -77,7 +77,7 @@ describe('changeKind', () => {
     });
 });
 
-describe('changeSentence', () => {
+describe('changeParts', () => {
     const asked: Array<{key: string; values: Record<string, string>}> = [];
     const translate = (key: string, values: Record<string, string> = {}) => {
         asked.push({key, values});
@@ -86,32 +86,42 @@ describe('changeSentence', () => {
     const format = (_voice: ProfileVoice, value: unknown) => `«${typeof value === 'object' ? JSON.stringify(value) : String(value)}»`;
     const day = (iso: string) => `[${iso}]`;
     const source = (code: string) => `<${code}>`;
+    const parts = (fields: Partial<ProfileChange>, of: ProfileVoice | null = TER) => changeParts(change(fields), of ?? undefined, {translate, format, day, source});
 
-    it('hands the translation the key of its kind and the values it names', () => {
+    it('gives the value before and the value after apart, and no note when they say it all', () => {
         asked.length = 0;
-        const back = change({has_previous: true, previous: '0.0012', value: '0.0014', previous_source: 'user', previous_user_name: 'anna', previous_read_on: '2026-11-02'});
-        const sentence = changeSentence(back, TER, {translate, format, day, source});
+        expect(parts({key: 'yield_gross', has_previous: true, previous: '0.034', value: '0.0361', previous_source: 'borsa_italiana'}, YIELD)).toEqual({kind: 'up', before: '«0.034»', after: '«0.0361»', note: ''});
+        expect(parts({key: 'description', has_previous: true, previous: 'A fund.', value: 'An ETF.', previous_source: 'justetf'}, DESCRIPTION)).toEqual({kind: 'changed', before: '«A fund.»', after: '«An ETF.»', note: ''});
+        expect(asked, 'nothing asked of the translation').toEqual([]);
+    });
 
-        expect(sentence).toEqual({kind: 'backFromHand', text: 'assets.profile.changes.what.backFromHand'});
-        expect(asked.at(-1)?.values).toEqual({to: '«0.0014»', from: '«0.0012»', date: '[2026-11-02]', name: 'anna', source: '<justetf>'});
+    it('leaves a side empty where there is no value: the first one, and one left empty', () => {
+        expect(parts({})).toMatchObject({kind: 'first', before: '', after: '«0.0014»', note: 'assets.profile.changes.note.first'});
+        expect(parts({value: null, has_previous: true, previous: '0.0012', source: 'user'})).toMatchObject({kind: 'emptied', before: '«0.0012»', after: '', note: 'assets.profile.changes.note.emptied'});
+        expect(parts({has_previous: true, previous: null, value: '0.0014', previous_source: 'user'})).toMatchObject({kind: 'refilled', before: '', after: '«0.0014»'});
+    });
+
+    it('notes who had corrected a value the source took back, and by whom it is now', () => {
+        asked.length = 0;
+        const back = parts({has_previous: true, previous: '0.0012', value: '0.0014', previous_source: 'user', previous_user_name: 'anna', previous_read_on: '2026-11-02'});
+        expect(back).toEqual({kind: 'backFromHand', before: '«0.0012»', after: '«0.0014»', note: 'assets.profile.changes.note.backFromHand'});
+        expect(asked.at(-1)?.values).toEqual({date: '[2026-11-02]', name: 'anna', source: '<justetf>'});
     });
 
     it('names a deleted author with the words of the profile, never an empty name', () => {
         asked.length = 0;
-        changeSentence(change({has_previous: true, previous: '0.0012', value: '0.0014', previous_source: 'user', previous_user_name: null, previous_read_on: '2026-11-02'}), TER, {translate, format, day, source});
+        parts({has_previous: true, previous: '0.0012', value: '0.0014', previous_source: 'user', previous_user_name: null, previous_read_on: '2026-11-02'});
         expect(asked.map((entry) => entry.key)).toContain('assets.profile.changes.who.deletedUser');
     });
 
-    it('drops the final full stop of a value: the sentence ends with its own', () => {
+    it('dates a breakdown by its source dates, beside its two values', () => {
         asked.length = 0;
-        changeSentence(change({key: 'description', source: 'user', user_id: 3, value: 'A fund of the test.'}), DESCRIPTION, {translate, format: (_voice, value) => String(value), day, source});
-        expect(asked.at(-1)?.values).toEqual({to: 'A fund of the test'});
+        const dated = parts({key: 'geography', has_previous: true, previous: {USA: '1'}, value: {USA: '0.6'}, previous_source: 'justetf', source_date: '2026-09-30', previous_source_date: '2026-08-31'}, GEOGRAPHY);
+        expect(dated).toMatchObject({kind: 'newSourceDate', before: '«{"USA":"1"}»', after: '«{"USA":"0.6"}»'});
+        expect(asked.at(-1)).toEqual({key: 'assets.profile.changes.note.newSourceDate', values: {date: '[2026-09-30]', previousDate: '[2026-08-31]'}});
     });
 
-    it('dates a breakdown by its source dates', () => {
-        asked.length = 0;
-        const fields = {key: 'geography', has_previous: true, previous: {USA: '1'}, value: {USA: '0.6'}, previous_source: 'justetf', source_date: '2026-09-30', previous_source_date: '2026-08-31'};
-        changeSentence(change(fields), GEOGRAPHY, {translate, format, day, source});
-        expect(asked.at(-1)).toEqual({key: 'assets.profile.changes.what.newSourceDate', values: {date: '[2026-09-30]', previousDate: '[2026-08-31]'}});
+    it('shows a value of a voice the catalogue does not list as it is stored', () => {
+        expect(parts({key: 'unknown', has_previous: true, previous: 'a', value: 'b', previous_source: 'justetf'}, null)).toMatchObject({before: 'a', after: 'b'});
     });
 });

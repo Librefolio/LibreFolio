@@ -26,6 +26,8 @@ _DATASET_ID_PATTERN = re.compile(r"^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$")
 # i18n keys must be dotted with at least 2 segments (e.g. "aiExport.analysis.x.display"),
 # never bare English text - mirrors the pattern used by `datasets.spec`.
 _I18N_KEY_PATTERN = re.compile(r"^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)+$")
+# A LibreFolio tool's `tool_code`, as the tool registry declares it (e.g. "pac_allocator").
+_TOOL_CODE_PATTERN = re.compile(r"^[a-z][a-z0-9_]*$")
 
 
 class AnalysisSpecError(ValueError):
@@ -65,6 +67,21 @@ class AdditionalExportSuggestion:
             raise AnalysisSpecError(f"{self.dataset_id}: recommended_detail must be a DetailLevel member")
         if not isinstance(self.necessity, AdditionalExportNecessity):
             raise AnalysisSpecError(f"{self.dataset_id}: necessity must be an AdditionalExportNecessity member")
+
+
+@dataclass(frozen=True, slots=True)
+class ToolSuggestion:
+    """A LibreFolio tool the analysis sends the user to (78 L4a): its code only, never text.
+
+    The frontend writes the path and the inputs in the interface language from the tool's own i18n keys, so a label
+    that changes in the tool changes in the prompt too.
+    """
+
+    tool_code: str
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.tool_code, str) or not _TOOL_CODE_PATTERN.fullmatch(self.tool_code):
+            raise AnalysisSpecError(f"suggested tool_code has invalid format: {self.tool_code!r}")
 
 
 def _validate_code_tuple(values: tuple[str, ...], *, label: str, analysis_id: str, pattern: re.Pattern[str], allow_empty: bool) -> tuple[str, ...]:
@@ -123,6 +140,7 @@ class AnalysisSpec:
     response_contract_version: int
     supports_notes: bool = True
     additional_export_suggestions: tuple[AdditionalExportSuggestion, ...] = ()
+    suggested_tools: tuple[ToolSuggestion, ...] = ()
     visibility: CatalogVisibility = CatalogVisibility.INTERNAL
 
     def __post_init__(self) -> None:  # noqa: C901 — flat field-validation chain
@@ -167,6 +185,13 @@ class AnalysisSpec:
         if len(suggestion_ids) != len(set(suggestion_ids)):
             raise AnalysisSpecError(f"{self.analysis_id}: additional export dataset IDs must be unique")
         object.__setattr__(self, "additional_export_suggestions", suggestions)
+        tools = tuple(self.suggested_tools)
+        if any(not isinstance(tool, ToolSuggestion) for tool in tools):
+            raise AnalysisSpecError(f"{self.analysis_id}: suggested_tools must contain ToolSuggestion values")
+        tool_codes = [tool.tool_code for tool in tools]
+        if len(tool_codes) != len(set(tool_codes)):
+            raise AnalysisSpecError(f"{self.analysis_id}: suggested tool codes must be unique")
+        object.__setattr__(self, "suggested_tools", tools)
         if not isinstance(self.visibility, CatalogVisibility):
             raise AnalysisSpecError(f"{self.analysis_id}: visibility must be a CatalogVisibility member, got {self.visibility!r}")
 

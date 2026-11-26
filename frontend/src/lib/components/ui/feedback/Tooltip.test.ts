@@ -21,6 +21,7 @@ import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import {createRawSnippet, mount, unmount, flushSync} from 'svelte';
 import {cleanup, fireEvent, render, screen, waitFor, within} from '$test/component';
 import Tooltip from './Tooltip.svelte';
+import TooltipInControlHarness from './__tests__/TooltipInControlHarness.svelte';
 
 /**
  * Evaluate `expression` in the page's own realm — the one inline handlers run in — and return the
@@ -318,5 +319,148 @@ describe('Tooltip — an anchor other than the trigger (77 SEL-M)', () => {
         // 300 − 8 − 40 = 252, centred on the menu: 510 − 75 = 435
         await waitFor(() => expect(tip.style.top).toBe('252px'));
         expect(tip.style.left).toBe('435px');
+    });
+});
+
+/**
+ * External-target mode (85 BTN-0, the standard button): `trigger` names an element owned by someone else (`pressable`),
+ * and `open` decides. No wrapper is rendered and no gesture is read here: a click or a touch elsewhere does not close
+ * it, since the owner does that. The pointer over the body is reported to the owner (`onbodypointer`). The wrapper mode
+ * is the positive control: the same click outside closes a pinned tooltip there.
+ */
+describe('Tooltip — external-target mode (85 BTN-0)', () => {
+    function externalTrigger(): HTMLElement {
+        const trigger = document.createElement('span');
+        trigger.dataset.testid = 'probe-external-trigger';
+        trigger.textContent = 'trigger';
+        document.body.appendChild(trigger);
+        return trigger;
+    }
+
+    afterEach(() => {
+        document.querySelector('[data-testid="probe-external-trigger"]')?.remove();
+    });
+
+    it('renders no wrapper, and shows the content exactly while open', async () => {
+        const trigger = externalTrigger();
+        const view = render(Tooltip, {props: {trigger, open: false, html: '<strong>Edit</strong>'}});
+        expect(view.container.querySelector('[role="button"]'), 'no wrapper: the trigger lives elsewhere').toBeNull();
+        expect(view.container.children).toHaveLength(0);
+        expect(screen.queryByTestId('tooltip-content')).toBeNull();
+
+        await view.rerender({trigger, open: true, html: '<strong>Edit</strong>'});
+        const content = await screen.findByTestId('tooltip-content');
+        expect(content).toHaveAttribute('role', 'tooltip');
+        expect(content.querySelector('strong')).toHaveTextContent('Edit');
+
+        await view.rerender({trigger, open: false, html: '<strong>Edit</strong>'});
+        await waitFor(() => expect(screen.queryByTestId('tooltip-content')).toBeNull());
+    });
+
+    it('open with a null trigger shows nothing', () => {
+        render(Tooltip, {props: {trigger: null, open: true, text: 'Edit'}});
+        expect(screen.queryByTestId('tooltip-content')).toBeNull();
+    });
+
+    it('a click or a touch elsewhere does not close it: the owner does', async () => {
+        const trigger = externalTrigger();
+        render(Tooltip, {props: {trigger, open: true, text: 'Edit'}});
+        expect(await screen.findByTestId('tooltip-content')).toBeInTheDocument();
+        await fireEvent.click(document.body);
+        await fireEvent.touchStart(document.body);
+        await fireEvent.click(trigger);
+        expect(screen.getByTestId('tooltip-content')).toBeInTheDocument();
+    });
+
+    it('positive control: in the wrapper mode the same click elsewhere closes a pinned tooltip', async () => {
+        render(Tooltip, {props: {text: 'Pinned'}});
+        await fireEvent.click(screen.getByRole('button'));
+        expect(await screen.findByTestId('tooltip-content')).toBeInTheDocument();
+        await fireEvent.click(document.body);
+        await waitFor(() => expect(screen.queryByTestId('tooltip-content')).toBeNull());
+    });
+
+    it('reports the pointer entering and leaving its body to the owner', async () => {
+        const trigger = externalTrigger();
+        const onbodypointer = vi.fn();
+        render(Tooltip, {props: {trigger, open: true, text: 'Edit', onbodypointer}});
+        const content = await screen.findByTestId('tooltip-content');
+        await fireEvent.mouseEnter(content);
+        await fireEvent.mouseLeave(content);
+        expect(onbodypointer.mock.calls).toEqual([[true], [false]]);
+    });
+});
+
+/**
+ * `insideControl` (85 BTN-0c, D16): a tooltip that names a part of a larger control (a provider badge inside a route
+ * row, a ⚠ inside an option) is only a hover. Its wrapper takes no click (it neither pins nor stops the click, so the
+ * control acts), has no role and no tab stop (the control is the one stop), and opens on a mouse rest, closing on leave.
+ * The control case: the same harness without the prop swallows the click — the defect D16 found in the route picker.
+ */
+describe('Tooltip — insideControl: a part of a larger control (85 BTN-0c, D16)', () => {
+    afterEach(() => {
+        vi.useRealTimers();
+    });
+
+    function harness(insideControl: boolean) {
+        const onpress = vi.fn();
+        render(TooltipInControlHarness, {props: {onpress, insideControl}});
+        return {onpress, control: screen.getByTestId('probe-control'), part: screen.getByTestId('probe-part'), badge: screen.getByTestId('probe-badge')};
+    }
+
+    it('a click on the part reaches the control, once, and does not pin the tooltip', async () => {
+        const {onpress, badge} = harness(true);
+        await fireEvent.click(badge);
+        expect(onpress).toHaveBeenCalledTimes(1);
+        expect(screen.queryByTestId('tooltip-content'), 'a click opens nothing: it is the control’s').toBeNull();
+    });
+
+    it('control: the old wrapper (no insideControl) swallows the click, and the control never acts', async () => {
+        const {onpress, badge} = harness(false);
+        await fireEvent.click(badge);
+        expect(onpress, 'the defect D16: the wrapper stopped the click').not.toHaveBeenCalled();
+        expect(screen.getByTestId('tooltip-content'), 'and pinned its own tooltip instead').toBeInTheDocument();
+    });
+
+    it('the part is no tab stop: no role, no tabindex, nothing focusable between the control and the next element', () => {
+        const {part, control} = harness(true);
+        expect(part.hasAttribute('role')).toBe(false);
+        expect(part.hasAttribute('tabindex')).toBe(false);
+        expect(part.tagName).toBe('SPAN');
+        const focusable = [...document.body.querySelectorAll<HTMLElement>('button, a[href], input, select, textarea, [tabindex]')].filter((el) => el.tabIndex >= 0);
+        expect(focusable.map((el) => el.dataset.testid)).toEqual(['probe-control', 'probe-next']);
+        expect(control.contains(part)).toBe(true);
+    });
+
+    it('control: the old wrapper is an extra tab stop inside the control', () => {
+        const {part} = harness(false);
+        expect(part).toHaveAttribute('role', 'button');
+        expect(part).toHaveAttribute('tabindex', '0');
+    });
+
+    it('a mouse rest opens it after the delay, and leaving closes it', async () => {
+        vi.useFakeTimers();
+        const {part} = harness(true);
+        await fireEvent.mouseEnter(part);
+        await vi.advanceTimersByTimeAsync(499);
+        expect(screen.queryByTestId('tooltip-content'), 'not before the delay').toBeNull();
+        await vi.advanceTimersByTimeAsync(1);
+        expect(screen.getByTestId('tooltip-content')).toHaveTextContent('European Central Bank');
+        await fireEvent.mouseLeave(part);
+        await vi.advanceTimersByTimeAsync(1_000);
+        expect(screen.queryByTestId('tooltip-content')).toBeNull();
+    });
+
+    it('a click while it shows does not pin it: leaving still closes it', async () => {
+        vi.useFakeTimers();
+        const {part, badge, onpress} = harness(true);
+        await fireEvent.mouseEnter(part);
+        await vi.advanceTimersByTimeAsync(500);
+        expect(screen.getByTestId('tooltip-content')).toBeInTheDocument();
+        await fireEvent.click(badge);
+        expect(onpress).toHaveBeenCalledTimes(1);
+        await fireEvent.mouseLeave(part);
+        await vi.advanceTimersByTimeAsync(1_000);
+        expect(screen.queryByTestId('tooltip-content'), 'a pinned tooltip would wait thirty seconds').toBeNull();
     });
 });

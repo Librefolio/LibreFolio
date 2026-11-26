@@ -34,6 +34,7 @@ from enum import StrEnum
 
 from backend.app.db.models import AssetType
 from backend.app.logging_config import get_logger
+from backend.app.services.enrichers.admission import count_shared_call
 from backend.app.services.enrichers.base import STRONG_IDENTIFIER_TYPES, EnricherBinding, EnricherPlugin, EnricherRecognition
 from backend.app.services.enrichers.bindings import installed_enrichers
 
@@ -126,6 +127,8 @@ class _Cascade:
     async def _call(self, plugin: EnricherPlugin, binding: EnricherBinding) -> None:
         """One «recognize» in a worker thread; its answer, or its failure, goes to the queue in the order they end."""
         try:
+            # Counted on the account the enricher shares (CoinGecko); a full limit is this enricher's «error» answer
+            await count_shared_call(plugin)
             answer: EnricherRecognition | BaseException = await asyncio.to_thread(plugin.recognize, binding)
         except Exception as error:  # noqa: BLE001 — isolation boundary: a plugin that fails is one «error» answer
             logger.warning("Enricher recognize failed", enricher=plugin.code, identifier_type=binding.identifier_type, exc_info=error)

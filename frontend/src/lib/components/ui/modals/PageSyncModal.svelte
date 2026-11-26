@@ -9,6 +9,8 @@
     import SyncResultRow from '$lib/components/ui/modals/SyncResultRow.svelte';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import {_ as t} from '$lib/i18n';
+    import {asFxSyncBusy, FxSyncBusyError, fxPairsSyncing, fxSyncBusyText, guardedFxSync} from '$lib/features/fx/fxSyncGuard.svelte';
+    import {get} from 'svelte/store';
     import type {SyncRequestOptions, SyncResult, SyncSection} from '$lib/utils/sync/syncHelpers';
     import {loadStoredPriceCounts, type StoredPriceCount} from '$lib/utils/sync/storedPriceCounts';
     import {DEFAULT_PROVIDER_COLOR, ensureAssetProvidersCached, getAssetProviderIconUrl, getFxProviderIconUrl, parseProviderChain, PROVIDER_COLORS} from '$lib/utils/providerHelpers';
@@ -121,7 +123,14 @@
 
     async function doFxSync(targetIds: string[], options: SyncRequestOptions): Promise<SyncResult[]> {
         const generation = openGeneration;
-        const response = await zodiosApi.sync_rates_api_v1_fx_currencies_sync_post({pairs: targetIds, start: dateStart, end: dateEnd}, {timeout: options.timeoutMs});
+        let response;
+        try {
+            // One sync per pair at a time (81 U35): a busy pair ends the request here, said in the reader's language.
+            response = await guardedFxSync(targetIds, () => zodiosApi.sync_rates_api_v1_fx_currencies_sync_post({pairs: targetIds, start: dateStart, end: dateEnd}, {timeout: options.timeoutMs}));
+        } catch (error) {
+            const busy = asFxSyncBusy(error);
+            throw busy ? new Error(fxSyncBusyText(get(t), busy)) : error;
+        }
         const r = response as any;
         return recordAccepted(
             (r.results ?? []).map(
@@ -169,6 +178,12 @@
             });
     });
 
+    /** A pair of this sync is syncing already (81 U35): Start is off, with the reason. */
+    let busyReason = $derived.by(() => {
+        const busy = fxPairsSyncing(fxPairs);
+        return busy.length > 0 ? fxSyncBusyText($t, new FxSyncBusyError(busy, null)) : null;
+    });
+
     let sections: SyncSection[] = $derived([
         {
             id: 'assets',
@@ -192,7 +207,18 @@
     ]);
 </script>
 
-<SyncModalBase bind:open bind:this={syncModalBase} {dateEnd} {dateStart} description={$t('assetDetail.pageSyncDescription') ?? 'Synchronize asset prices and FX rates for this page.'} {onclose} onsynced={handleSynced} {sections} testId="page-sync-modal" title={$t('common.sync') ?? 'Sync'}
+<SyncModalBase
+    bind:open
+    bind:this={syncModalBase}
+    {dateEnd}
+    {dateStart}
+    description={$t('assetDetail.pageSyncDescription') ?? 'Synchronize asset prices and FX rates for this page.'}
+    {onclose}
+    onsynced={handleSynced}
+    {sections}
+    startBlockedReason={busyReason}
+    testId="page-sync-modal"
+    title={$t('common.sync') ?? 'Sync'}
 ></SyncModalBase>
 
 <!-- Asset result row snippet -->

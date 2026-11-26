@@ -3041,8 +3041,11 @@ test.describe('Asset list — the risk columns (RN-23)', () => {
         analytics: Array<{instance_id: string; analytic_code: string}>;
     }
 
-    /** The risk requests the table's columns send (their instances are `list-…`), as the browser sent them, and the HTTP status of each answer. */
-    function recordListRiskRequests(page: Page): {sent: ListRiskRequest[]; refused: string[]} {
+    /**
+     * The risk requests the table's columns send (their instances are `list-…`), as the browser sent them, and the HTTP status of
+     * each refused answer, 404 about an asset the test does not own (`own`) left out.
+     */
+    function recordListRiskRequests(page: Page, own: Set<number>): {sent: ListRiskRequest[]; refused: string[]} {
         const sent: ListRiskRequest[] = [];
         const refused: string[] = [];
         const isList = (request: Request) => request.method() === 'POST' && request.url().includes('/api/v1/risk/query') && (request.postDataJSON() as ListRiskRequest).analytics.some((analytic) => analytic.instance_id.startsWith('list-'));
@@ -3050,7 +3053,11 @@ test.describe('Asset list — the risk columns (RN-23)', () => {
             if (isList(request)) sent.push(request.postDataJSON() as ListRiskRequest);
         });
         page.on('response', (answer) => {
-            if (isList(answer.request()) && answer.status() !== 200) refused.push(`${answer.status()} ${(answer.request().postDataJSON() as ListRiskRequest).mode}`);
+            if (!isList(answer.request()) || answer.status() === 200) return;
+            const asked = answer.request().postDataJSON() as ListRiskRequest;
+            // A neighbour test may delete its own asset between the list and this question: that 404 is not the engine's refusal.
+            if (answer.status() === 404 && !own.has(asked.scope.asset_id ?? -1)) return;
+            refused.push(`${answer.status()} ${asked.mode}`);
         });
         return {sent, refused};
     }
@@ -3069,7 +3076,7 @@ test.describe('Asset list — the risk columns (RN-23)', () => {
     test('each row asks about its own asset over the page’s period: the max drawdown shown, a blank with its reason', async ({page}) => {
         const apple = await assetIdByName(page, 'Apple Inc.');
         const btpPiu = await assetIdByName(page, 'BTP Più Sc Fb33 EUR');
-        const {sent, refused} = recordListRiskRequests(page);
+        const {sent, refused} = recordListRiskRequests(page, new Set([apple, btpPiu]));
         const period = {start: daysAgoIso(120), end: todayIso()};
         const root = await openTable(page, period);
 

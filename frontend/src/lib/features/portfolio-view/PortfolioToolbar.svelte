@@ -15,7 +15,7 @@
     import {_} from '$lib/i18n';
     import {Pause, RefreshCw} from 'lucide-svelte';
     import AiExportMenu from '$lib/features/ai-export/AiExportMenu.svelte';
-    import {prepareAiExport, type AiExportRequestContext, type PreparedAiExport} from '$lib/features/ai-export/aiExportClipboard';
+    import {prepareAiExport, type AiExportRequestContext, type AiExportStep, type PreparedAiExport} from '$lib/features/ai-export/aiExportClipboard';
     import type {AiExportOptionsSelection} from '$lib/features/ai-export/aiExportOptions';
     import {aiExportCatalogLoader, emptyAiExportCompatibility, type AiExportCatalogCompatibilityResult} from '$lib/features/ai-export/catalog/compatibility';
     import {buildAiExportMenuLabels, getAiExportErrorMessage, getAiExportSuccessMessages} from '$lib/features/ai-export/ui';
@@ -99,8 +99,8 @@
         }
     }
 
-    function handleAiExport(options: AiExportOptionsSelection): Promise<PreparedAiExport> {
-        return prepareAiExport({context: aiExport.context(), options, compatibility: aiExportCompatibility, translate: (key) => $_(key)});
+    function handleAiExport(options: AiExportOptionsSelection, onstep: (step: AiExportStep) => void): Promise<PreparedAiExport> {
+        return prepareAiExport({context: aiExport.context(), options, compatibility: aiExportCompatibility, translate: (key, values) => $_(key, values ? {values} : undefined)}, {onstep});
     }
 
     function handleAiExportCopied(result: PreparedAiExport) {

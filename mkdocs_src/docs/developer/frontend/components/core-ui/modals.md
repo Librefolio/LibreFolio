@@ -158,13 +158,19 @@ be longer than the field.
 
 | Component | Syncs | Used by |
 |---|---|---|
-| `AssetSyncModal` (`features/assets/`) | Asset prices | Assets list |
+| `AssetSyncModal` (`features/assets/`) | Asset prices; below, a **Profile** section of its own (`profileAssets`) calls the assets' enrichers together | Assets list |
 | `FxSyncModal` (`features/fx/`) | FX rates | FX list, transaction form, PAC planner |
 | `PageSyncModal` (`ui/modals/`) | Asset prices **and** the FX pairs they need, in parallel | Asset detail, FX detail, risk panels |
 
 `PageSyncModal` reports `onsynced({accepted})`: `accepted` is true when at least one item of the
 current run came back `ok` or `partial`, so callers refresh only after a run that changed something.
 `SyncResultRow.svelte` renders one result line for the three modals.
+
+**A section of the caller's own** (`below`, a snippet) sits under the sync's results: it is no `SyncSection`, it starts by
+itself and never enters the countdown or the summary. `startLabel` then names what the Start button starts.
+`AssetSyncModal` puts `ProfileBulkRefreshSection` there, on the state of `profileBulkRefresh.svelte.ts`: one
+`POST /assets/profile/refresh` with every asset that has enrichers, its own 15-minute wait (a wait that ends first is
+«the server is still reading», never a failure), no progress drawn, and the run outlives a closed window.
 
 **The warning before the start (C-66).** A sync replaces the stored rows of its period with the
 provider's values, manual edits included. A section's optional `existingIds` lists the targets whose

@@ -9,6 +9,7 @@
     import {goto} from '$app/navigation';
     import {_ as t} from '$lib/i18n';
     import {deltaPeriodLabel} from '$lib/features/assets/assetPriceDerived';
+    import {isFxPairSyncing} from '$lib/features/fx/fxSyncGuard.svelte';
     import DataTable from '$lib/components/table/DataTable.svelte';
     import type {BulkAction, ColumnDef} from '$lib/components/table/types';
     import {ArrowLeftRight, RefreshCw, RotateCw, Trash2} from 'lucide-svelte';
@@ -306,6 +307,8 @@
             },
             // A pair with no provider has nothing to sync: not offered (77 SEL-M, Q-SEL-17)
             visible: (row) => !row.manualOnly,
+            // A pair that is syncing: off, reachable, and the menu says why (81 U35, one sync per pair at a time)
+            blocked: (row) => (isFxPairSyncing(row.slug) ? {hint: () => $t('fx.sync.alreadyRunning', {values: {pairs: `${row.base}/${row.quote}`}}), reason: 'syncing'} : null),
             iconClass: (row) => (syncingRowIds.has(row.slug) ? 'animate-spin' : ''),
         },
         {

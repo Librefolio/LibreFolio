@@ -28,11 +28,13 @@ import {PRIVACY_PLACEHOLDER} from '$lib/utils/privacy/maskable';
 import ProfileHarness from '../../__tests__/ProfileHarness.svelte';
 import {catalogCurrencyDigits, formatExactMoneyPlain, formatExactPercent, formatExactPoints} from '../format';
 import {resultNames} from './model';
-import {REBALANCER_PLANNER_PROFILE} from '../profile';
+import {PAC_PLANNER_PROFILE, REBALANCER_PLANNER_PROFILE} from '../profile';
 import type {PlannerReadyResult} from '../types';
 import browser from './__fixtures__/rebalancer-browser.json';
 import t5 from './__fixtures__/rebalancer-t5.json';
 import targetFirst from './__fixtures__/rebalancer-t4-target-first.json';
+import contribution from './__fixtures__/rebalancer-t4-contribution.json';
+import topUp from './__fixtures__/rebalancer-y-top-up.json';
 import KpiCards from './KpiCards.svelte';
 
 beforeAll(async () => {
@@ -70,6 +72,7 @@ function unrelated(): Json {
     solution.plan_accounts.initial_wealth = money('1000');
     solution.plan_accounts.final_wealth = money('900');
     solution.plan_accounts.uninvested = money('42');
+    solution.plan_accounts.final_cash = money('58');
     for (const key of Object.keys(solution.plan_accounts.money_lost)) solution.plan_accounts.money_lost[key] = money('0');
     solution.plan_accounts.money_lost.buy_fees = money('7');
     solution.plan_accounts.money_lost.rounding = money('0.5');
@@ -98,7 +101,7 @@ function mounted(result: Json): Json {
 const tile = (kpi: string) => document.querySelector(`[data-testid="${P}-kpi-item"][data-kpi="${kpi}"]`) as HTMLElement | null;
 const value = (kpi: string) => tile(kpi)?.querySelector(`[data-testid="${P}-kpi-value"]`)?.textContent?.trim() ?? null;
 const chip = (kpi: string, id: string) => tile(kpi)?.querySelector(`[data-testid="${P}-kpi-chip"][data-chip="${id}"]`)?.textContent?.replace(/\s+/g, ' ').trim() ?? null;
-const KPIS = ['value_today', 'value_after', 'money_lost', 'largest_deviation', 'uninvested', 'orders'];
+const KPIS = ['value_today', 'value_after', 'money_lost', 'largest_deviation', 'final_cash', 'orders'];
 
 describe('the Rebalancer key figures', () => {
     it('key figures read published fields, largest deviation included', () => {
@@ -116,8 +119,9 @@ describe('the Rebalancer key figures', () => {
         // The deviation is the score's, after the plan as the value, before it as an entry.
         expect(value('largest_deviation')).toContain(formatExactPoints(solution.score.largest_deviation_after));
         expect(chip('largest_deviation', 'before')).toContain(formatExactPoints(solution.score.largest_deviation_before));
-        expect(value('uninvested')).toBe(formatExactMoneyPlain(solution.plan_accounts.uninvested));
-        expect(chip('uninvested', 'share')).toContain(formatExactPercent(solution.uninvested_row.final_weight));
+        // TL-5: «Left in cash» is all the cash at the end, a published field; N and its share are no longer a tile.
+        expect(value('final_cash')).toBe(formatExactMoneyPlain(solution.plan_accounts.final_cash));
+        expect(tile('final_cash')?.querySelectorAll(`[data-testid="${P}-kpi-chip"]`)).toHaveLength(0);
         expect(value('orders')).toBe(String(solution.order_rows.length));
         expect(chip('orders', 'transfers')).toContain(String(solution.transfers.length));
     });
@@ -167,7 +171,8 @@ describe('the Rebalancer key figures', () => {
         setPrivacyEnabled(true);
         flushSync();
         await tick();
-        for (const kpi of ['value_today', 'value_after', 'money_lost', 'uninvested']) expect(value(kpi), kpi).toContain(PRIVACY_PLACEHOLDER);
+        for (const kpi of ['value_today', 'value_after', 'money_lost', 'final_cash']) expect(value(kpi), kpi).toContain(PRIVACY_PLACEHOLDER);
+        for (const row of cashRows('final_cash')) expect(row.text, row.currency ?? undefined).toContain(PRIVACY_PLACEHOLDER);
         expect(value('largest_deviation')).toContain(formatExactPoints(solution.score.largest_deviation_after));
         expect(value('largest_deviation')).not.toContain(PRIVACY_PLACEHOLDER);
         expect(value('orders')).toBe(String(solution.order_rows.length));
@@ -175,6 +180,80 @@ describe('the Rebalancer key figures', () => {
         flushSync();
         await tick();
         expect(value('value_today')).toBe(formatExactMoneyPlain(solution.plan_accounts.initial_wealth));
+    });
+});
+
+/** The cash rows of a tile (TL-5): the currency and the text of each, in the order shown. */
+function cashRows(kpi: string, prefix = P): {currency: string | null; text: string; unused: string | null}[] {
+    const item = document.querySelector(`[data-testid="${prefix}-kpi-item"][data-kpi="${kpi}"]`);
+    return [...(item?.querySelectorAll(`[data-testid="${prefix}-kpi-cash-row"]`) ?? [])].map((row) => ({
+        currency: row.getAttribute('data-currency'),
+        text: row.textContent?.replace(/\s+/g, ' ').trim() ?? '',
+        unused: row.querySelector(`[data-testid="${prefix}-kpi-cash-unused"]`)?.textContent?.replace(/\s+/g, ' ').trim() ?? null,
+    }));
+}
+
+const eur = (value: string) => formatExactMoneyPlain({value: {kind: 'finite_decimal', value}, currency: 'EUR'});
+
+/**
+ * TL-5 of project 67 (the developer's answers of 24/11, the consultant REB's of the same day): «Left in cash», all the cash
+ * at the end in the valuation currency, and under it the cash of every currency in its own, at the start and at the end,
+ * with the contributions not used. Every figure is published (`plan_accounts.final_cash`, `cash_by_currency`).
+ */
+describe('the cash left, currency by currency (TL-5)', () => {
+    it('the G5 answer: two currencies, each in its own, the valuation currency first', () => {
+        const solution = mounted(structuredClone(browser.result) as Json);
+        const published = solution.plan_accounts.cash_by_currency as Json[];
+        expect(
+            published.map((row) => [row.currency, formatExactMoneyPlain(row.initial), formatExactMoneyPlain(row.final)]),
+            'PREMISE: the figures of the consultant’s answer',
+        ).toEqual([
+            ['EUR', eur('25550'), eur('6582.73')],
+            ['USD', formatExactMoneyPlain({value: {kind: 'finite_decimal', value: '5344.53'}, currency: 'USD'}), formatExactMoneyPlain({value: {kind: 'finite_decimal', value: '7012.73'}, currency: 'USD'})],
+        ]);
+        expect(value('final_cash')).toBe(formatExactMoneyPlain(solution.plan_accounts.final_cash));
+        const rows = cashRows('final_cash');
+        expect(rows.map((row) => row.currency)).toEqual(['EUR', 'USD']);
+        published.forEach((row, index) => {
+            expect(rows[index].text).toContain(formatExactMoneyPlain(row.initial));
+            expect(rows[index].text).toContain(formatExactMoneyPlain(row.final));
+            expect(rows[index].unused, 'every contribution used').toBeNull();
+        });
+    });
+
+    it('a contribution not deposited stays at the end, and says so', () => {
+        const solution = mounted(structuredClone(contribution.result) as Json);
+        expect(value('final_cash')).toBe(eur('70'));
+        const [row, ...others] = cashRows('final_cash');
+        expect(others).toEqual([]);
+        expect(row.currency).toBe('EUR');
+        expect(row.text).toContain(eur('500'));
+        expect(row.text).toContain(eur('70'));
+        expect(row.unused).toContain(formatExactMoneyPlain(solution.plan_accounts.cash_by_currency[0].unused_contributions));
+    });
+
+    it('a rounding top-up: the cash ends a cent below zero, shown as it is', () => {
+        mounted(structuredClone(topUp.result) as Json);
+        expect(value('final_cash')).toBe(eur('-0.01'));
+        expect(cashRows('final_cash')[0].text).toContain(eur('-0.01'));
+    });
+});
+
+/**
+ * TL-5 in the PAC: its «Not invested» keeps its figure (the shortfall, the name of an objective) and its parts; the cash of
+ * every currency goes under them. Mounted with the PAC's profile, on the G5 answer's accounts.
+ */
+describe('the PAC’s «Not invested» with the cash by currency (TL-5)', () => {
+    it('keeps the shortfall, and lists the cash at the start and at the end of each currency', () => {
+        const result = structuredClone(browser.result) as Json;
+        const solution = result.primary_solution;
+        render(ProfileHarness, {props: {profile: PAC_PLANNER_PROFILE, child: KpiCards, childProps: {solution, result: result as unknown as PlannerReadyResult, metrics: METRICS, digits: catalogCurrencyDigits(result.catalogs.currencies)}}});
+        flushSync();
+        const pac = 'pac-planner';
+        const shortfall = document.querySelector(`[data-testid="${pac}-kpi-item"][data-kpi="shortfall"] [data-testid="${pac}-kpi-value"]`)?.textContent?.trim();
+        expect(shortfall).toBe(formatExactMoneyPlain(solution.accounting.shortfall));
+        expect(cashRows('shortfall', pac).map((row) => row.currency)).toEqual(['EUR', 'USD']);
+        expect(document.querySelector(`[data-testid="${pac}-kpi-item"][data-kpi="final_cash"]`), 'the Rebalancer’s tile only').toBeNull();
     });
 });
 

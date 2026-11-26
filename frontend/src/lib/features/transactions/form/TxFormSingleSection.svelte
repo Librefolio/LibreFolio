@@ -16,6 +16,7 @@
     import {UNIT_PRICE_DECIMALS, type TradeAmountDriver} from '$lib/features/transactions/form/txTradeAmount';
     import TxCellMark from '$lib/features/transactions/form/TxCellMark.svelte';
     import type {TxFormCell, TxFormCheckKind} from '$lib/features/transactions/form/txFormChecks';
+    import Button from '$lib/components/ui/button/Button.svelte';
     import CompactCashCell from '$lib/features/transactions/form/CompactCashCell.svelte';
     import TransactionTypeSearchSelect from '../TransactionTypeSearchSelect.svelte';
     import WacPreviewSection from '../wac/WacPreviewSection.svelte';
@@ -40,6 +41,8 @@
         autocompleteNonce: string;
         brokerIdValue: number | null;
         rowSaved: boolean;
+        /** 66 TL-12: raised when a change was refused: the selects keep a value of their own, so they are drawn again. */
+        revertSeq?: number;
         /** Project 66 (TL-3b): the row is in an all-new group of the Bulk — broker and asset change on every row of it. */
         groupSync?: boolean;
         brokerImmutable: boolean;
@@ -73,6 +76,9 @@
         /** The day of the close the shown value on receipt comes from, while it is the price history's suggestion (a
          *  REWARD, project 79); null once the user changes it or when there is none. */
         rewardValueDate?: string | null;
+        /** The day whose close the link under the value brings back: set while the user's own value differs from it (86). */
+        rewardCloseDate?: string | null;
+        onUseRewardClose?: () => void;
         typeImmutable: boolean;
         wacAvailableCurrencies: string[];
         handleSyncFx: () => Promise<void>;
@@ -101,17 +107,18 @@
         autocompleteNonce,
         brokerIdValue,
         rowSaved,
+        revertSeq = 0,
         groupSync = false,
         brokerImmutable,
         brokers,
         brokersForSelect,
-        cashHint,
+        cashHint: cashHintProp,
         cashLabel,
         displayedCostBasis,
         externalWacResult,
         isReadonly,
         pairLayout,
-        qtyHint,
+        qtyHint: qtyHintProp,
         qtyLabel,
         quantityHintId,
         quantityInputId,
@@ -126,6 +133,8 @@
         rule,
         showCostBasisField,
         rewardValueDate = null,
+        rewardCloseDate = null,
+        onUseRewardClose,
         typeImmutable,
         wacAvailableCurrencies,
         handleSyncFx,
@@ -141,9 +150,14 @@
         setType,
     }: Props = $props();
 
+    /** P-18 (66 TL-1d): the sign hints are an instruction for typing; a read-only form has nothing to type. */
+    let qtyHint = $derived(isReadonly ? '' : qtyHintProp);
+    let cashHint = $derived(isReadonly ? '' : cashHintProp);
+
     // B-48: the reason a quantity or a cash amount past the significant digits is refused, said under the field.
-    let quantitySignificantError = $derived(exceedsSignificantDigits(draft.quantity, REAL_SIGNIFICANT_DIGITS));
-    let cashSignificantError = $derived(exceedsSignificantDigits(showTradePrice ? cashCellValue?.amount : draft.cash?.amount, REAL_SIGNIFICANT_DIGITS));
+    // P-18 (66 TL-1d): no error under a field of a read-only form.
+    let quantitySignificantError = $derived(!isReadonly && exceedsSignificantDigits(draft.quantity, REAL_SIGNIFICANT_DIGITS));
+    let cashSignificantError = $derived(!isReadonly && exceedsSignificantDigits(showTradePrice ? cashCellValue?.amount : draft.cash?.amount, REAL_SIGNIFICANT_DIGITS));
 </script>
 
 <!-- Required section -->
@@ -157,7 +171,9 @@
          even on mobile (always-on, never wraps to 1-col); Qty/Cash
          get their own sub-grid that collapses to a single
          full-width Cash row when the type forces quantity=0. -->
-    <div class="grid grid-cols-2 gap-3 text-sm">
+    <!-- P-18 (66 TL-1d): one column below `sm`, as the Quantity + Cash grid below — at 16px (the zoom guard of app.css)
+         the date does not fit half a phone. -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
         <!-- Date -->
         <div class="flex flex-col gap-1" data-testid="tx-form-date-wrap">
             <span class="text-xs text-lf-muted">{$t('common.date')}</span>
@@ -190,7 +206,9 @@
                     <span class="font-medium">{$t(`transactions.types.${draft.type}`) || draft.type}</span>
                 </div>
             {:else}
-                <TransactionTypeSearchSelect value={draft.type} onchange={(v) => setType(v)} disabled={isReadonly} types={allowedTypes} compact testid="tx-form-type" />
+                {#key revertSeq}
+                    <TransactionTypeSearchSelect value={draft.type} onchange={(v) => setType(v)} disabled={isReadonly} types={allowedTypes} compact testid="tx-form-type" />
+                {/key}
             {/if}
         </div>
     </div>
@@ -328,7 +346,7 @@
                     <p class="mt-1 text-xs text-lf-danger" data-testid="tx-form-cash-significant-error">{$t('transactions.errors.significantDigitsExceeded', {values: {max: REAL_SIGNIFICANT_DIGITS}})}</p>
                 {/if}
                 {#if cashHint}
-                    <span class="text-[10px] text-lf-muted">{cashHint}</span>
+                    <span class="text-[10px] text-lf-muted" data-testid="tx-form-cash-hint">{cashHint}</span>
                 {/if}
                 <span class="text-[10px] text-lf-muted italic">💡 {$t('transactions.form.cashLabelTotal')}</span>
             </div>
@@ -343,7 +361,9 @@
                 >{$t('common.asset')}{rule.assetField === 'required' ? ' *' : ''}{#if rule.assetField === 'optional'}
                     <span class="text-lf-muted italic">({$t('common.optional')})</span>{/if}</span
             >
-            <TxCellMark cell="asset" marks={markedCells}><TxFormAssetField value={draft.asset_id} disabled={isReadonly || rowSaved} onchange={setAsset} onCreateNew={isReadonly || rowSaved ? undefined : () => (createAssetOpen = true)} /></TxCellMark>
+            {#key revertSeq}
+                <TxCellMark cell="asset" marks={markedCells}><TxFormAssetField value={draft.asset_id} disabled={isReadonly || rowSaved} onchange={setAsset} onCreateNew={isReadonly || rowSaved ? undefined : () => (createAssetOpen = true)} /></TxCellMark>
+            {/key}
         </div>
     {/if}
 
@@ -359,7 +379,9 @@
                 <span class="font-medium">{b?.name ?? `#${draft.broker_id}`}</span>
             </div>
         {:else}
-            <TxCellMark cell="broker" marks={markedCells}><BrokerSearchSelect brokers={brokersForSelect} value={brokerIdValue} onchange={(id) => setBroker(id ?? 0)} createLabel={$t('common.createNew') || 'Create new'} onCreateNew={() => (createBrokerOpen = true)} /></TxCellMark>
+            {#key revertSeq}
+                <TxCellMark cell="broker" marks={markedCells}><BrokerSearchSelect brokers={brokersForSelect} value={brokerIdValue} onchange={(id) => setBroker(id ?? 0)} createLabel={$t('common.createNew') || 'Create new'} onCreateNew={() => (createBrokerOpen = true)} /></TxCellMark>
+            {/key}
         {/if}
         {#if groupSync}
             <span class="text-[11px] text-lf-muted italic" data-testid="tx-form-group-sync-hint">💡 {$t('transactions.form.groupSyncHint')}</span>
@@ -403,9 +425,12 @@
                     {/if}
                 </p>
             {:else if draft.type === 'REWARD' && rewardValueDate}
-                <p class="text-xs text-lf-muted mt-1" data-testid="tx-form-reward-value-from-history">
+                <p class="text-xs text-lf-muted mt-1" data-testid="tx-form-reward-value-from-history" data-date={rewardValueDate}>
                     {$t('transactions.costBasisOverride.rewardFromHistory', {values: {date: rewardValueDate}}) || `From the price history: the close of ${rewardValueDate}. Change it if the platform shows another value.`}
                 </p>
+            {/if}
+            {#if rewardCloseDate}
+                <Button label={$t('transactions.costBasisOverride.rewardUseClose', {values: {date: rewardCloseDate}})} variant="link" size="sm" class="mt-1" onclick={onUseRewardClose} data-testid="tx-form-reward-use-close" data-date={rewardCloseDate} />
             {/if}
         </div>
     {/if}

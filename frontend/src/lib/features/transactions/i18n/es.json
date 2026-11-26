@@ -138,7 +138,13 @@
       },
       "openFailed": "No se pudo abrir la transacción",
       "candidatesFailed": "No se pudieron cargar las transacciones para enlazar",
-      "groupSyncHint": "Mientras las filas de este grupo (la transacción y sus gastos vinculados) son todas nuevas, comparten bróker y activo: cambiarlos aquí los cambia en cada fila del grupo."
+      "groupSyncHint": "Mientras las filas de este grupo (la transacción y sus gastos vinculados) son todas nuevas, comparten bróker y activo: cambiarlos aquí los cambia en cada fila del grupo.",
+      "savedLinks": {
+        "title": "¿Desenlazar {n, plural, one {una transacción guardada} other {# transacciones guardadas}}?",
+        "message": "{n, plural, one {Esta transacción ya está guardada y conserva su bróker y su activo, así que no puede seguir el cambio: si continúas, deja de estar vinculada a la que estás editando.} other {Estas transacciones ya están guardadas y conservan su bróker y su activo, así que no pueden seguir el cambio: si continúas, dejan de estar vinculadas a la que estás editando.}}",
+        "wayOut": "Para mantenerlas juntas: cancela, clónalas con el nuevo activo o bróker y elimina los originales.",
+        "confirm": "Desenlazar y cambiar"
+      }
     },
     "bulk": {
       "resetRow": "Restablecer fila",
@@ -205,7 +211,8 @@
         "failed": "No se pudieron leer los precios: no se rellenó ningún valor. Inténtalo de nuevo."
       },
       "cloneChargesReadFailed": "No se pudieron leer los gastos vinculados de {ids}: la copia se hizo sin ellos.",
-      "cloneChargeFree": "{reason, select, deleted {La copia del gasto no está vinculada: la transacción a la que estaba vinculado está marcada para eliminar.} paired {La copia del gasto no está vinculada: la transacción a la que estaba vinculado es parte de un par.} other {La copia del gasto no está vinculada: no se puede vincular a la misma transacción.}}"
+      "cloneChargeFree": "{reason, select, deleted {La copia del gasto no está vinculada: la transacción a la que estaba vinculado está marcada para eliminar.} paired {La copia del gasto no está vinculada: la transacción a la que estaba vinculado es parte de un par.} other {La copia del gasto no está vinculada: no se puede vincular a la misma transacción.}}",
+      "unlinkSelected": "Desenlazar los gastos"
     },
     "commit": {
       "serverError": "Guardado imposible — error del servidor"
@@ -216,7 +223,8 @@
       "rewardLabel": "Valor al recibirlo",
       "rewardTooltip": "Lo que valían estas unidades el día en que las recibió: es a la vez el ingreso de la recompensa y el coste del lote que abre.",
       "warningReward": "El valor al recibirlo está vacío: sin él, la recompensa no se puede guardar. Introduzca lo que valían estas unidades el día en que las recibió, o 0 para contarlas sin coste.",
-      "rewardFromHistory": "Del historial de precios: el cierre del {date}. Cámbielo si la plataforma muestra otro valor."
+      "rewardFromHistory": "Del historial de precios: el cierre del {date}. Cámbielo si la plataforma muestra otro valor.",
+      "rewardUseClose": "Usar el cierre del {date}"
     },
     "wacPreview": {
       "calculating": "Calculando...",
@@ -515,6 +523,10 @@
       "allAfter": "no queda ninguna de las {n} filas",
       "all": "Eliminar todo ({n})",
       "loadFailed": "No se pudieron leer los gastos de esta transacción"
+    },
+    "chargesUnlink": {
+      "failed": "No se pudieron desenlazar los gastos",
+      "target": "{n, plural, one {# gasto ya no enlazado: queda como transacción propia} other {# gastos ya no enlazados: cada uno queda como transacción propia}}"
     }
   }
 }

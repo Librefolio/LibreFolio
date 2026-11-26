@@ -155,18 +155,18 @@
     },
     "emailChange": {
       "page": {
-        "ready": "Confirm the **new email address** of your account.\nFrom now on you will sign in and receive emails with it.",
+        "ready": "Confirm the **new email address**: from now on you use it to sign in and for emails.",
         "checking": "Checking the link…",
         "expired": "This link has **expired**.\nIf you asked for the change in your profile, **ask for the change again** there.\nIf the host of this instance changed the address, ask the host for a new link.",
         "consumed": "This link has **already been used**.\nIf your address was changed, sign in with the new one.",
-        "revoked": "This link **no longer works**: the request was cancelled or replaced, or the address already belongs to another account.\n**Nothing has changed.**\n**Ask for the change again**, or ask the host of this instance.",
+        "revoked": "This link **no longer works**: the request was cancelled or replaced, or the address already belongs to another account.",
         "unknown": "This link is **not valid**.\nOpen it again, whole, from the email.\nIf it still fails, **ask for the change again** or ask the host of this instance.",
         "blocked": "This instance is **blocked** by its hosting provider, so the link cannot be checked now.\nOpen it again once the instance is unblocked.",
         "missing": "This link is **incomplete**.\nOpen it again from the email.",
         "error": "The link could not be checked.\nTry again.",
         "confirm": "Confirm the new address",
         "notExpected": "If you did not expect this change, close this page: **nothing happens**.",
-        "signin": "To confirm the new address, **sign in with the account that asked for this change**, not with another account you use.\nIf another account is signed in on this browser, it is signed out first.\nYou then come back here, and **one click** is enough.",
+        "signin": "To confirm the new address, **sign in with the account that asked for this change**.",
         "signinAction": "Sign in with that account to confirm",
         "otherAccount": "This link belongs to **another account**, not to the one signed in on this browser.\n**Nothing has changed.**\nSign out, then sign in with the account that asked for this change.",
         "otherAccountAction": "Sign out and sign in with the right account"

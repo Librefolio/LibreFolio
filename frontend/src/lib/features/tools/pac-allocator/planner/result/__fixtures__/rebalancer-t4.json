@@ -552,6 +552,54 @@
         "final_weight": {
           "kind": "finite_decimal",
           "value": "0.0005"
+        },
+        "untargeted_cash": {
+          "before_value": {
+            "value": {
+              "kind": "finite_decimal",
+              "value": "200"
+            },
+            "currency": "EUR"
+          },
+          "before_weight": {
+            "kind": "finite_decimal",
+            "value": "0.02"
+          },
+          "final_value": {
+            "value": {
+              "kind": "finite_decimal",
+              "value": "0"
+            },
+            "currency": "EUR"
+          },
+          "final_weight": {
+            "kind": "finite_decimal",
+            "value": "0"
+          }
+        },
+        "costs": {
+          "before_value": {
+            "value": {
+              "kind": "finite_decimal",
+              "value": "0"
+            },
+            "currency": "EUR"
+          },
+          "before_weight": {
+            "kind": "finite_decimal",
+            "value": "0"
+          },
+          "final_value": {
+            "value": {
+              "kind": "finite_decimal",
+              "value": "5"
+            },
+            "currency": "EUR"
+          },
+          "final_weight": {
+            "kind": "finite_decimal",
+            "value": "0.0005"
+          }
         }
       },
       "funding_actions": [],
@@ -1037,7 +1085,40 @@
             "value": "5"
           },
           "currency": "EUR"
-        }
+        },
+        "final_cash": {
+          "value": {
+            "kind": "finite_decimal",
+            "value": "0"
+          },
+          "currency": "EUR"
+        },
+        "cash_by_currency": [
+          {
+            "currency": "EUR",
+            "initial": {
+              "value": {
+                "kind": "finite_decimal",
+                "value": "200"
+              },
+              "currency": "EUR"
+            },
+            "final": {
+              "value": {
+                "kind": "finite_decimal",
+                "value": "0"
+              },
+              "currency": "EUR"
+            },
+            "unused_contributions": {
+              "value": {
+                "kind": "finite_decimal",
+                "value": "0"
+              },
+              "currency": "EUR"
+            }
+          }
+        ]
       },
       "score": {
         "distance_weight": {

@@ -85,7 +85,7 @@ group `coingecko` (an API key; the free Demo plan is enough).
 - **Identifier type**: `COINGECKO_ID`, CoinGecko's own id (`bitcoin`), received as `IdentifierType.OTHER`
 - **Provider params**: `vs_currency`, required, one of 45 national currencies; it must be the asset's currency
 - **Key details**: the point at 00:00 UTC of day D is the close of D−1; the Demo plan answers the last 365 days, and the
-  refresh says from which day; «Powered by CoinGecko» shown with its prices
+  refresh says from which day; «Powered by CoinGecko» shown on its settings card and its manual page
 - 📖 [Technical Details →](provider_coingecko.md)
 
 ---

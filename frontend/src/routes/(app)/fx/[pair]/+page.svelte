@@ -59,6 +59,7 @@
     import {currentLanguage} from '$lib/stores/app/language';
     import {defaultDisplayCurrency} from '$lib/stores/app/settings';
     import type {ViewMode} from '$lib/components/charts/ChartToolbar.svelte';
+    import {asFxSyncBusy, fxSyncBusyFor, fxSyncBusyText, guardedFxSync, isFxPairSyncing} from '$lib/features/fx/fxSyncGuard.svelte';
     import {apiResultsToCanonicalFxDataPoints, displayFxRate, ensureFxRangeLoaded, type FxDataPoint, getFxStore} from '$lib/features/fx/fxStoreRegistry';
     import {fetchFxPeriodChanges} from '$lib/utils/periodChanges';
     import type {RangeDelta} from '$lib/utils/rangeChange';
@@ -88,7 +89,7 @@
     import {collectConfigurableSecondaryAxes} from '$lib/components/charts/chartCoreHelpers';
     import {exchangeRateAxisLabel, percentageAxisLabel, secondaryAxisLabel} from '$lib/components/charts/axisLabelHelpers';
     import AiExportMenu from '$lib/features/ai-export/AiExportMenu.svelte';
-    import {prepareAiExport, type PreparedAiExport} from '$lib/features/ai-export/aiExportClipboard';
+    import {prepareAiExport, type AiExportStep, type PreparedAiExport} from '$lib/features/ai-export/aiExportClipboard';
     import type {AiExportOptionsSelection} from '$lib/features/ai-export/aiExportOptions';
     import {aiExportCatalogLoader, emptyAiExportCompatibility, type AiExportCatalogCompatibilityResult} from '$lib/features/ai-export/catalog/compatibility';
     import {buildAiExportMenuLabels, getAiExportErrorMessage, getAiExportSuccessMessages} from '$lib/features/ai-export/ui';
@@ -140,6 +141,8 @@
     /** Stores either a raw message or an i18n key prefixed with `_i18n:` for reactive translation */
     let error: string | null = $state(null);
     let syncing = $state(false);
+    /** A sync of this page's pair is running (81 U35): the toolbar's Sync is off, with the reason. */
+    let pairSyncing = $derived(isFxPairSyncing(data.canonicalSlug));
 
     /** Reactively resolved error message — translates i18n keys when language changes */
     let errorMessage = $derived.by(() => {
@@ -1347,19 +1350,22 @@
         }
     }
 
-    function handleFxAiExport(options: AiExportOptionsSelection): Promise<PreparedAiExport> {
-        return prepareAiExport({
-            context: {
-                domain: 'fx',
-                baseCurrency: data.canonicalBase,
-                quoteCurrency: data.canonicalQuote,
-                snapshotAsOf: dateEnd,
-                targetCurrency: fxAiExportTargetCurrency,
+    function handleFxAiExport(options: AiExportOptionsSelection, onstep: (step: AiExportStep) => void): Promise<PreparedAiExport> {
+        return prepareAiExport(
+            {
+                context: {
+                    domain: 'fx',
+                    baseCurrency: data.canonicalBase,
+                    quoteCurrency: data.canonicalQuote,
+                    snapshotAsOf: dateEnd,
+                    targetCurrency: fxAiExportTargetCurrency,
+                },
+                options,
+                compatibility: fxAiExportCompatibility,
+                translate: (key) => $t(key),
             },
-            options,
-            compatibility: fxAiExportCompatibility,
-            translate: (key) => $t(key),
-        });
+            {onstep},
+        );
     }
 
     function handleFxAiExportCopied(result: PreparedAiExport) {
@@ -1452,13 +1458,21 @@
     }
 
     async function handleSyncPair(slug: string) {
+        // One sync per pair at a time (81 U35): asked before `syncing` is set, so a refused press leaves the running sync's alone.
+        const busyNow = fxSyncBusyFor([slug]);
+        if (busyNow) {
+            toasts.warning(fxSyncBusyText(get(t), busyNow));
+            return;
+        }
         try {
             syncing = true;
-            const response = await zodiosApi.sync_rates_api_v1_fx_currencies_sync_post({
-                pairs: [slug],
-                start: syncDateStart,
-                end: dateEnd,
-            });
+            const response = await guardedFxSync([slug], () =>
+                zodiosApi.sync_rates_api_v1_fx_currencies_sync_post({
+                    pairs: [slug],
+                    start: syncDateStart,
+                    end: dateEnd,
+                }),
+            );
             const r = (response as any)?.results?.[0];
             if (r) {
                 const tr = get(t);
@@ -1475,7 +1489,10 @@
                 overlayDataVersion++;
             }
         } catch (e: any) {
-            toasts.error($t('fxDetail.syncFailed', {values: {error: e?.message || $t('common.unknownError')}}));
+            const busy = asFxSyncBusy(e);
+            // One sync per pair at a time (81 U35): say it and make the reader wait; nothing failed.
+            if (busy) toasts.warning(fxSyncBusyText(get(t), busy));
+            else toasts.error($t('fxDetail.syncFailed', {values: {error: e?.message || $t('common.unknownError')}}));
         } finally {
             syncing = false;
         }
@@ -1675,9 +1692,10 @@
                 class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-lf-card border border-lf-subtle rounded-lg hover:bg-lf-hover text-lf-secondary transition-colors
                            {isManualOnly ? 'opacity-50 cursor-not-allowed' : ''}"
                 data-testid="fx-detail-sync-btn"
-                disabled={isManualOnly}
+                data-syncing={pairSyncing}
+                disabled={isManualOnly || pairSyncing}
                 onclick={handleSync}
-                title={isManualOnly ? $t('fxDetail.syncDisabledManual') : ''}
+                title={isManualOnly ? $t('fxDetail.syncDisabledManual') : pairSyncing ? $t('fx.sync.alreadyRunning', {values: {pairs: data.canonicalSlug.replace('-', '/')}}) : ''}
             >
                 <RotateCw size={14} />
                 {#if showActionLabels}<span>{$t('common.sync')}</span>{/if}
@@ -1779,7 +1797,18 @@
                     <button class="absolute top-0 right-0 p-1 rounded-lg text-lf-muted hover:text-lf-secondary hover:bg-lf-hover transition-colors" onclick={() => (showAesthetics = false)} title={$t('common.close')}>
                         <X size={16} />
                     </button>
-                    <ChartAestheticsSection colorByBaseline={settings.colorByBaseline} areaFill={settings.areaFill} gridLines={settings.gridLines} staleGradient={settings.staleGradient} lineShape={resolveLineShape(settings)} lineShapeFollowsGlobal={!settings.lineShape && lineShapeFollowsGlobal()} onlineshapechange={handleLineShapeChange} axisRows={aestheticsAxisRows} onchange={handleAestheticsChange} onaxischange={handleAxisScaleChange} />
+                    <ChartAestheticsSection
+                        colorByBaseline={settings.colorByBaseline}
+                        areaFill={settings.areaFill}
+                        gridLines={settings.gridLines}
+                        staleGradient={settings.staleGradient}
+                        lineShape={resolveLineShape(settings)}
+                        lineShapeFollowsGlobal={!settings.lineShape && lineShapeFollowsGlobal()}
+                        onlineshapechange={handleLineShapeChange}
+                        axisRows={aestheticsAxisRows}
+                        onchange={handleAestheticsChange}
+                        onaxischange={handleAxisScaleChange}
+                    />
                 </div>
             {/if}
 
@@ -1915,7 +1944,7 @@
                     {:else}
                         <p class="text-lf-muted mb-3">{$t('fxDetail.noData')}</p>
                         <div class="flex items-center gap-2 justify-center">
-                            <button class="px-4 py-2 text-sm bg-lf-action text-lf-on-action rounded-lg hover:bg-lf-action-hover transition-colors" onclick={handleSync}>
+                            <button class="px-4 py-2 text-sm bg-lf-action text-lf-on-action rounded-lg hover:bg-lf-action-hover transition-colors disabled:opacity-50" disabled={pairSyncing} onclick={handleSync}>
                                 {$t('fxDetail.syncRates')}
                             </button>
                             <button

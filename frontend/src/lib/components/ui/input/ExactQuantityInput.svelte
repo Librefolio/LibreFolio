@@ -160,7 +160,9 @@
     let signState = $derived(signStateFor(rawValue));
     let signInvalid = $derived(signState === 'bad');
     let significantInvalid = $derived(maxSignificantDigits !== undefined && exceedsSignificantDigits(rawValue, maxSignificantDigits));
-    let canShowSignColor = $derived(!externalInvalid && !decimalValidity.empty && decimalValidity.syntaxValid && decimalValidity.digitsValid && !significantInvalid && decimalValidity.rangeValid);
+    // P-18 (66 TL-1d): a field the user cannot change shows neither its own sign or digit errors nor the sign colour.
+    let editable = $derived(!disabled && !readOnly);
+    let canShowSignColor = $derived(editable && !externalInvalid && !decimalValidity.empty && decimalValidity.syntaxValid && decimalValidity.digitsValid && !significantInvalid && decimalValidity.rangeValid);
     let signBorderColor = $derived(canShowSignColor && signState === 'bad' ? 'color-mix(in oklab, var(--lf-danger) 70%, transparent)' : canShowSignColor && signState === 'ok' ? 'color-mix(in oklab, var(--lf-success) 70%, transparent)' : '');
     let mergedStyle = $derived(`${inlineStyle.trim().replace(/;$/, '')}${inlineStyle.trim() && signBorderColor ? '; ' : ''}${signBorderColor ? `border-color: ${signBorderColor}` : ''}`);
 
@@ -222,7 +224,7 @@
     {ariaLabel}
     {ariaDescribedby}
     {ariaErrormessage}
-    externalInvalid={externalInvalid || signInvalid || significantInvalid}
+    externalInvalid={externalInvalid || (editable && (signInvalid || significantInvalid))}
     {testid}
     {className}
     style={mergedStyle}

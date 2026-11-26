@@ -21,7 +21,8 @@
 -->
 <script lang="ts">
     import {_} from '$lib/i18n';
-    import {AlertTriangle, AlertCircle, Info, ChevronDown, ChevronUp, Loader2} from 'lucide-svelte';
+    import {AlertTriangle, AlertCircle, Info, ChevronDown, ChevronUp} from 'lucide-svelte';
+    import Button from '$lib/components/ui/button/Button.svelte';
     import {formatPairSlugHtml} from '$lib/utils/currency/currencyFormat';
     import {DATA_QUALITY_TONE, STATUS_TONES} from '$lib/theme/toneClasses';
     import {ctaIcon, ctaLabel, fixShape} from './dataQualityCta';
@@ -54,7 +55,7 @@
         mode?: 'grouped' | 'flat';
         /** Called when a CTA button is clicked. Parent handles modals/navigation. */
         onaction?: (action: string, target: string | null, issue: DataQualityIssue) => void;
-        /** Issue code currently performing its CTA action → shows spinner + disabled on that issue's CTA button. */
+        /** Issue code currently performing its CTA action → its CTA button shows the spinner and is busy (`aria-busy`). */
         busyCode?: string | null;
     }
 
@@ -84,10 +85,11 @@
         return names.length > 3 ? `${shown} +${names.length - 3}` : shown;
     }
 
-    /** The colours of a severity: its state's tint, icon and divider, and its chips and buttons (designer, round 3). */
+    /** The colours of a severity: its state's tint, icon and divider (designer, round 3); its chips and buttons are
+     *  `Button variant="chip"` in `tone` (85 BTN-2d). */
     function getSeverityStyles(severity: IssueSeverity) {
         const tone = DATA_QUALITY_TONE[severity] ?? 'info';
-        return {tone, ...STATUS_TONES.dataQuality[tone], chip: `border ${STATUS_TONES.bannerChip[tone].base} ${STATUS_TONES.bannerChip[tone].hover}`};
+        return {tone, ...STATUS_TONES.dataQuality[tone]};
     }
 
     function getIcon(severity: IssueSeverity) {
@@ -160,7 +162,7 @@
     <div class="flex flex-col gap-1 text-xs {divided ? `pt-2.5 border-t ${dividerClass}` : ''}" data-testid="data-quality-issue-{issue.code}" data-severity={issue.severity} data-tone={rowStyles.tone}>
         {#if shape === 'all'}
             <!-- One button fixes the whole category: it comes first, and what it fixes hangs under it. -->
-            <DataQualityIssueActions {issue} placement="head" chipClass={rowStyles.chip} {onaction} {busyCode} />
+            <DataQualityIssueActions {issue} placement="head" tone={rowStyles.tone} {onaction} {busyCode} />
             <div class="flex flex-col gap-1 ml-1 pl-2.5 border-l-2 {rowStyles.divider}" data-testid="data-quality-fixes-{issue.code}">
                 {@render issueMessage(issue, false)}
                 {#if pairs.length > 0}
@@ -174,7 +176,7 @@
         {:else}
             {@render issueMessage(issue, shape === 'none')}
             <!-- One chip per asset or per pair, under the message: each chip is an item and its fix. -->
-            <DataQualityIssueActions {issue} placement="items" chipClass={rowStyles.chip} {onaction} {busyCode} />
+            <DataQualityIssueActions {issue} placement="items" tone={rowStyles.tone} {onaction} {busyCode} />
         {/if}
     </div>
 {/snippet}
@@ -250,14 +252,7 @@
             <!-- Right: CTA -->
             {#if issue.cta_action}
                 <div class="flex items-center gap-1 self-end sm:self-auto sm:ml-auto">
-                    <button class="inline-flex items-center gap-1 px-2 py-0.5 rounded {styles.chip} transition-colors font-medium disabled:opacity-60 disabled:cursor-not-allowed" onclick={() => handleCta(issue)} disabled={busyCode === issue.code} data-testid="data-quality-cta-{issue.code}">
-                        {#if busyCode === issue.code}
-                            <Loader2 size={13} class="animate-spin" />
-                        {:else}
-                            <CtaIcon size={13} />
-                        {/if}
-                        {ctaLabel(translate, issue.cta_action)}
-                    </button>
+                    <Button variant="chip" tone={styles.tone} size="xs" icon={CtaIcon} label={ctaLabel(translate, issue.cta_action)} busy={busyCode === issue.code} onclick={() => handleCta(issue)} data-testid="data-quality-cta-{issue.code}" />
                 </div>
             {/if}
         </div>

@@ -89,6 +89,13 @@ export function buildAiExportMenuLabels(t: AiExportTranslate, compatibility: AiE
             prepareLabel: t('aiExport.copy'),
             preparingLabel: t('aiExport.preparing'),
             copyAnywayLabel: t('aiExport.copyAnyway'),
+            copyReadyLabel: t('aiExport.copyReady'),
+            stepLabels: {
+                request: t('aiExport.step.request'),
+                render: t('aiExport.step.render'),
+                copy: t('aiExport.step.copy'),
+            },
+            progressLabel: t('aiExport.progress'),
             useCompactLabel: t('aiExport.useCompact'),
         },
     };
@@ -124,6 +131,6 @@ export function getAiExportErrorMessage(t: AiExportTranslate, error: unknown): s
     if (error instanceof AiExportProblemError) return problemMessage(t, error.problem);
     if (error instanceof AiExportValidationError) return t('aiExport.validationFailed');
     if (error instanceof AiExportNetworkError) return t('aiExport.networkFailed');
-    if (error instanceof AiExportClipboardUnavailableError) return t('aiExport.clipboardUnavailable');
+    if (error instanceof AiExportClipboardUnavailableError) return t(error.reason === 'not_focused' ? 'aiExport.clipboardNotFocused' : 'aiExport.clipboardUnavailable');
     return t('aiExport.genericFailed');
 }

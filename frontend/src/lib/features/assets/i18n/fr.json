@@ -106,14 +106,15 @@
     "sync": {
       "toastOk": "{name} synchronisé\n{fetched}↓ {changed}Δ",
       "toastFailed": "Échec de la synchronisation pour {name}",
-      "modalTitle": "Synchroniser les Prix",
+      "modalTitle": "Synchroniser les actifs",
       "modalDescription": "Synchronisez les prix des fournisseurs configurés pour la plage de dates sélectionnée.",
       "assetsCount": "actifs",
       "confirmTitle": "Synchroniser {name} ?",
       "confirmMessage": "{stored, plural, one {# prix enregistré} many {# prix enregistrés} other {# prix enregistrés}} sur cette période {stored, plural, one {sera remplacé} many {seront remplacés} other {seront remplacés}} par les valeurs du fournisseur.",
       "confirmManual": "{manual, plural, one {# a été saisi à la main et sera remplacé} many {# ont été saisis à la main et seront remplacés} other {# ont été saisis à la main et seront remplacés}} aussi.",
       "confirmAction": "Synchroniser",
-      "overwriteManual": "{manual, plural, one {# a été saisi à la main} many {# ont été saisis à la main} other {# ont été saisis à la main}}."
+      "overwriteManual": "{manual, plural, one {# a été saisi à la main} many {# ont été saisis à la main} other {# ont été saisis à la main}}.",
+      "startPrices": "Synchroniser les prix"
     },
     "delete": {
       "confirmQuestion": "Supprimer \"{name}\" ?",
@@ -411,7 +412,8 @@
       "deleteSelected": "Supprimer les lignes sélectionnées",
       "deleteConfirmMessage": "Supprimer {n} entrées de cette distribution ?",
       "weightPercent": "Poids (%)",
-      "balance": "Équilibrer"
+      "balance": "Équilibrer",
+      "askNoSource": "Aucune source ne peut encore être interrogée pour cet actif"
     },
     "showInactive": "Inactifs",
     "edit": {
@@ -510,7 +512,8 @@
       "removeUrl": "Retirer l'URL",
       "toBeRemoved": "À retirer",
       "urlNone": "aucune URL",
-      "alreadyWithout": "{already} déjà sans"
+      "alreadyWithout": "{already} déjà sans",
+      "triLeave": "Inchangé"
     },
     "docsHelp": {
       "list": "Tous les actifs que LibreFolio suit, avec la source de leurs prix, leur dernier prix et leur variation. Ouvrez-en un pour son graphique, ses événements et ses données."

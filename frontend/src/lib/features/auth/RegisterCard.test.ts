@@ -759,7 +759,7 @@ describe('RegisterCard — clearing an error', () => {
         await submit();
         await waitFor(() => expect(banner()).not.toBeNull());
 
-        await fireEvent.click(within(banner()!).getByRole('button', {name: 'Dismiss'}));
+        await fireEvent.click(within(banner()!).getByTestId('info-banner-dismiss'));
 
         await waitFor(() => expect(banner()).toBeNull());
         expect(screen.getByTestId('register-email')).toHaveValue('alice@example.com');

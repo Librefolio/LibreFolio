@@ -2,6 +2,7 @@ import {schemas} from '$lib/api';
 
 import {findAiExportResponseContract} from '../templates/responseContracts';
 import {findAiExportAnalysisInstruction} from '../templates/sharedInstructions';
+import {isAiExportToolCode} from '../templates/toolGuides';
 import {
     AI_EXPORT_ANALYSIS_IDS,
     AI_EXPORT_CATALOG_VERSION,
@@ -21,7 +22,16 @@ import {
     type AiExportSelectionKind,
 } from './shared';
 
-export type AiExportCompatibilityReasonCode = 'schema_version_mismatch' | 'catalog_version_mismatch' | 'dataset_catalog_mismatch' | 'analysis_catalog_mismatch' | 'selection_version_mismatch' | 'selection_metadata_mismatch' | 'instruction_contract_mismatch' | 'response_contract_mismatch';
+export type AiExportCompatibilityReasonCode =
+    | 'schema_version_mismatch'
+    | 'catalog_version_mismatch'
+    | 'dataset_catalog_mismatch'
+    | 'analysis_catalog_mismatch'
+    | 'selection_version_mismatch'
+    | 'selection_metadata_mismatch'
+    | 'instruction_contract_mismatch'
+    | 'response_contract_mismatch'
+    | 'tool_suggestion_mismatch';
 
 export interface AiExportCatalogCompatibilityResult {
     readonly status: 'compatible' | 'disabled';
@@ -51,7 +61,12 @@ function analysisContractsMatch(entry: AiExportAnalysisCatalogEntry): boolean {
     if (!isAiExportAnalysisId(entry.id)) return false;
     const instruction = findAiExportAnalysisInstruction(entry.id);
     const responseContract = findAiExportResponseContract(entry.id);
-    return instruction?.id === entry.instruction_template_id && instruction.version === entry.instruction_template_version && responseContract?.id === entry.response_contract_id && responseContract.version === entry.response_contract_version;
+    return instruction?.id === entry.instruction_template_id && instruction.version === entry.instruction_template_version && responseContract?.id === entry.response_contract_id && responseContract.version === entry.response_contract_version && suggestedToolsKnown(entry);
+}
+
+/** 78 L4a: every tool the backend suggests is one the frontend can write; otherwise the catalog closes (fail closed). */
+function suggestedToolsKnown(entry: AiExportAnalysisCatalogEntry): boolean {
+    return (entry.suggested_tools ?? []).every((tool) => isAiExportToolCode(tool.tool_code));
 }
 
 function selectionMetadataMatches(entry: AiExportCatalogEntry): boolean {
@@ -113,6 +128,7 @@ export function reconcileAiExportCatalog(catalog: AiExportBackendCatalogResponse
             if (instruction?.id !== entry.instruction_template_id || instruction?.version !== entry.instruction_template_version) reasons.push('instruction_contract_mismatch');
             const responseContract = isAiExportAnalysisId(entry.id) ? findAiExportResponseContract(entry.id) : undefined;
             if (responseContract?.id !== entry.response_contract_id || responseContract?.version !== entry.response_contract_version) reasons.push('response_contract_mismatch');
+            if (!suggestedToolsKnown(entry)) reasons.push('tool_suggestion_mismatch');
         }
     }
 

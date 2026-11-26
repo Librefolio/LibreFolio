@@ -1,11 +1,9 @@
 /**
- * profileChanges.ts — «Cosa è cambiato» of one change of the asset profile (plan 68, E6a), for the «Ultime variazioni»
- * panel and the «Storia del dato» window: which kind of sentence a change gets, and the values it names.
- *
- * The wording is the mock's (round 39, approved in round 41): «Primo valore letto: 3,52 %», «Salito da 3,40 % a
- * 3,61 %», «Corretto a mano: da 3,59 % a 3,40 %», «Tornato a 0,14 %: il 2 novembre Anna l'aveva corretto a mano a
- * 0,12 %, ma justETF dice 0,14 %», «Ora sono i dati del 30 settembre (prima, del 31 agosto)». The kind is published on
- * the row (`data-kind`), so the tests read it instead of a translated text.
+ * profileChanges.ts — one change of the asset profile as the «Ultime variazioni» panel and the «Storia del dato» window
+ * show it (plan 68, E6a; 87, A3): its kind, the value before, the value after, and a short note with what the two values
+ * do not say («Corretto a mano», «Tornato al valore di justETF: il 2 novembre Anna l'aveva corretto a mano», «Dati del 30
+ * settembre (prima, del 31 agosto)»). Until 87 the same facts were one sentence, too long for a description. The kind is
+ * published on the row (`data-kind`), so the tests read it instead of a translated text.
  *
  * Plain module: the caller hands in its translation and formatters.
  */
@@ -17,7 +15,7 @@ import type {ProfileVoice} from './profileStore';
 /** One change of the profile, as `POST /assets/profile/query` answers it with `changes`. */
 export type ProfileChange = z.infer<typeof schemas.FAProfileChange>;
 
-/** The kinds of «Cosa è cambiato»: each one is a key under `assets.profile.changes.what`. */
+/** The kinds of a change: each one with something to add is a key under `assets.profile.changes.note`. */
 export type ChangeKind = 'first' | 'firstByHand' | 'firstLegacy' | 'refilled' | 'emptied' | 'emptiedBySource' | 'byHand' | 'backFromHand' | 'newSourceDate' | 'up' | 'down' | 'changed';
 
 const USER = 'user';
@@ -30,7 +28,7 @@ export function text(value: unknown): string | null {
     return typeof value === 'string' ? value : null;
 }
 
-/** Which sentence a change gets. */
+/** Which kind a change is. */
 export function changeKind(change: ProfileChange, voice: ProfileVoice | undefined): ChangeKind {
     if (change.value === null || change.value === undefined) return change.source === USER ? 'emptied' : 'emptiedBySource';
     if (!change.has_previous) {
@@ -52,8 +50,8 @@ export function changeKind(change: ProfileChange, voice: ProfileVoice | undefine
     return 'changed';
 }
 
-/** What `changeSentence` needs from its caller: the translation with values, and the formatters of the page. */
-export interface ChangeSentenceContext {
+/** What `changeParts` needs from its caller: the translation with values, and the formatters of the page. */
+export interface ChangePartsContext {
     translate: (key: string, values?: Record<string, string>) => string;
     /** A stored value as the profile writes it (`formatProfileValue`). */
     format: (voice: ProfileVoice, value: unknown) => string;
@@ -63,39 +61,28 @@ export interface ChangeSentenceContext {
     source: (code: string) => string;
 }
 
-/** «Cosa è cambiato» of one change: its kind and its text. */
-export function changeSentence(change: ProfileChange, voice: ProfileVoice | undefined, context: ChangeSentenceContext): {kind: ChangeKind; text: string} {
+/** A change as the table shows it: the value before and after («» when there is none), and a note the two values alone
+ *  do not say («» for a value that simply moved or changed). */
+export interface ChangeParts {
+    kind: ChangeKind;
+    before: string;
+    after: string;
+    note: string;
+}
+
+/** The kinds whose two values say it all: no note. */
+const PLAIN = new Set<ChangeKind>(['up', 'down', 'changed']);
+
+/** «Prima», «Dopo» and the note of one change (87, A3). */
+export function changeParts(change: ProfileChange, voice: ProfileVoice | undefined, context: ChangePartsContext): ChangeParts {
     const kind = changeKind(change, voice);
-    // A value's own final full stop goes: the sentence ends with its own («…test.» never «…test..»)
-    const show = (value: unknown) => (voice ? context.format(voice, value) : String(value ?? '')).replace(/\.\s*$/, '');
-    const to = show(change.value);
-    const from = show(change.previous);
-    let values: Record<string, string>;
-    switch (kind) {
-        case 'backFromHand':
-            values = {
-                to,
-                from,
-                date: text(change.previous_read_on) ? context.day(text(change.previous_read_on) ?? '') : '',
-                name: text(change.previous_user_name) ?? context.translate('assets.profile.changes.who.deletedUser'),
-                source: context.source(change.source),
-            };
-            break;
-        case 'newSourceDate':
-            values = {date: context.day(text(change.source_date) ?? ''), previousDate: context.day(text(change.previous_source_date) ?? '')};
-            break;
-        case 'byHand':
-        case 'up':
-        case 'down':
-        case 'changed':
-            values = {from, to};
-            break;
-        case 'emptied':
-        case 'emptiedBySource':
-            values = {};
-            break;
-        default:
-            values = {to};
+    const show = (value: unknown) => (value === null || value === undefined ? '' : voice ? context.format(voice, value) : String(value));
+    let values: Record<string, string> = {};
+    if (kind === 'backFromHand') {
+        const date = text(change.previous_read_on);
+        values = {date: date ? context.day(date) : '', name: text(change.previous_user_name) ?? context.translate('assets.profile.changes.who.deletedUser'), source: context.source(change.source)};
+    } else if (kind === 'newSourceDate') {
+        values = {date: context.day(text(change.source_date) ?? ''), previousDate: context.day(text(change.previous_source_date) ?? '')};
     }
-    return {kind, text: context.translate(`assets.profile.changes.what.${kind}`, values)};
+    return {kind, before: change.has_previous ? show(change.previous) : '', after: show(change.value), note: PLAIN.has(kind) ? '' : context.translate(`assets.profile.changes.note.${kind}`, values)};
 }

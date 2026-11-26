@@ -118,9 +118,11 @@ class EmailChangeCheckResponse(StrictModel):
     ``ready``: the click can confirm (a link asked from Profile, with its account signed in here; or the host's link of the
     instance owner, which needs no session). ``signin``: sign in with the account that asked for the change first.
     ``other_account``: another account is signed in here. A dead link is the 400 ``TOKEN_INVALID`` of the confirmation.
-    Never names the account."""
+    Never names the account. Only ``ready`` carries ``new_email`` (81 U46): the address the click would confirm, for the
+    page to show as a double check; the field is absent from every other answer."""
 
     status: Literal["ready", "signin", "other_account"] = Field(..., description="What the page shows before the click")
+    new_email: Optional[str] = Field(None, description="Only with `ready`: the address the click would confirm (the page shows it as a double check). Absent with `signin`, `other_account` and a dead link")
 
 
 class EmailChangeConfirmResponse(StrictModel):

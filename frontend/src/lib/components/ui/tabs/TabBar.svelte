@@ -2,6 +2,7 @@
     import type {ComponentType} from 'svelte';
     import {applyLinearShrink, innerContentWidth, type ShrinkTarget} from '$lib/utils/layout/labelShrink';
     import {guideAnchor} from '$lib/features/onboarding/guideAnchors.svelte';
+    import {pressable} from '$lib/components/ui/button/pressable.svelte';
 
     export interface TabItem {
         id: string;
@@ -46,6 +47,25 @@
 
     let {tabs, activeTab = $bindable(''), onchange, class: className = '', hideLabelOnMobile = false, showLabels, fillWidth = false, shrinkLabelsToFit = false, scrollable = false}: Props = $props();
 
+    /** Whether the tab's word is in view now: a tab without an icon always shows it, a hidden one never does, and the
+     *  responsive one (`hidden sm:inline`) is measured. A tab whose word is out of view names itself (long press, rest,
+     *  Tab) through `pressable` (85 BTN-2d, D8: no `title`); for a reader, a label that may hide (`showLabels={false}`,
+     *  or `hideLabelOnMobile` below `sm`) leaves the name to `aria-label`. */
+    function tabWordVisible(tab: TabItem): boolean {
+        if (!tab.icon || showLabels === true) return true;
+        if (showLabels === false) return false;
+        if (!hideLabelOnMobile) return true;
+        const label = labelRefs[tab.id];
+        return !!label && label.getClientRects().length > 0;
+    }
+
+    /** The name of a tab whose word may hide: the label and what it carries (a badge's number, the dot's words), which an
+     *  `aria-label` would otherwise cover. */
+    function tabName(tab: TabItem): string {
+        const extra = tab.badge != null && tab.badge > 0 ? String(tab.badge) : tab.dot?.label;
+        return extra ? `${tab.label}, ${extra}` : tab.label;
+    }
+
     function handleTabClick(tabId: string) {
         activeTab = tabId;
         onchange?.(tabId);
@@ -57,24 +77,46 @@
     let buttonRefs: Record<string, HTMLButtonElement> = {};
     let labelRefs: Record<string, HTMLSpanElement> = {};
 
+    /** The width of what a tab draws beside its label — icon, badge, dot — with the flex gap each one adds. It never
+     *  scales with the label. An out-of-flow child (the dot's words for a screen reader) takes no room. */
+    function partsBesideLabel(button: HTMLElement, label: HTMLElement | undefined): number {
+        const gap = parseFloat(getComputedStyle(button).columnGap || '') || 8; // matches this bar's gap-2
+        let width = 0;
+        for (const child of Array.from(button.children)) {
+            if (child === label || getComputedStyle(child).position === 'absolute') continue;
+            width += child.getBoundingClientRect().width + gap;
+        }
+        return width;
+    }
+
+    /** The box around a tab's content: paddings and borders, whatever the content is. */
+    function frameWidth(button: HTMLElement): number {
+        return button.offsetWidth - innerContentWidth(button);
+    }
+
     function remeasure() {
         if (!shrinkLabelsToFit || showLabels === false) return;
         const targets: ShrinkTarget[] = [];
+        // What the row cannot give the labels: every tab's frame and the parts beside its label — a tab whose label is
+        // hidden included, for the room it takes.
+        let fixedWidth = 0;
         for (const tab of tabs) {
             const button = buttonRefs[tab.id];
+            if (!button) continue;
             const label = labelRefs[tab.id];
-            if (!button || !label || label.offsetParent === null) continue; // not rendered/visible right now
-            // "Available width" = the button's own content box minus whatever its icon+gap
-            // already claims — stable regardless of the label's OWN current font-size, so this
-            // works correctly both when shrinking AND when growing back (e.g. locale switched
-            // back to a shorter language, or the bar got wider). Badge (also a <span>, like the
-            // label) is intentionally excluded by looking for a NON-span child specifically.
-            const icon = Array.from(button.children).find((c) => c !== label && c.tagName !== 'SPAN') as HTMLElement | undefined;
-            const gap = parseFloat(getComputedStyle(button).columnGap || '') || 8; // matches this bar's gap-2
-            const iconWidth = icon ? icon.getBoundingClientRect().width + gap : 0;
-            targets.push({label, availableWidth: innerContentWidth(button) - iconWidth});
+            const visible = !!label && label.offsetParent !== null; // rendered and shown right now
+            const beside = partsBesideLabel(button, label);
+            fixedWidth += frameWidth(button) + beside;
+            if (!label || !visible) continue;
+            // "Available width" for THIS label = the button's own content box minus what stands beside it — stable
+            // regardless of the label's OWN current font-size, so this works correctly both when shrinking AND when
+            // growing back (e.g. locale switched back to a shorter language, or the bar got wider).
+            targets.push({label, availableWidth: innerContentWidth(button) - beside});
         }
-        applyLinearShrink(targets);
+        // The row as a whole (toolbar-width-sweep): a one-word label holds its button at its natural width, so its own
+        // available width never shrinks; only the row's width says the tabs overflow it. A scrollable row is as wide as
+        // its content: its width says nothing.
+        applyLinearShrink(targets, undefined, containerRef && !scrollable ? {width: containerRef.clientWidth, fixedWidth} : undefined);
     }
 
     $effect(() => {
@@ -191,8 +233,8 @@
                 use:guideAnchor={tab.guideAnchor ?? ''}
                 role="tab"
                 aria-selected={activeTab === tab.id}
-                aria-label={tab.icon && showLabels === false ? tab.label : undefined}
-                title={tab.label}
+                aria-label={tab.icon && (showLabels === false || (showLabels === undefined && hideLabelOnMobile)) ? tabName(tab) : undefined}
+                use:pressable={{label: tab.label, tipPosition: 'bottom', wordVisible: () => tabWordVisible(tab)}}
                 onclick={() => handleTabClick(tab.id)}
             >
                 {#if tab.icon}

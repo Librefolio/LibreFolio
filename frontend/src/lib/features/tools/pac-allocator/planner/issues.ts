@@ -122,7 +122,8 @@ export function entityLabel(draft: PlannerDraft, entity: {kind: string; id: stri
     }
 }
 
-function paramValues(issue: AnyIssue): Record<string, string> {
+/** An issue's typed params as the sentence's values: money through the personal formatter, so privacy masks it. */
+export function issueParamValues(issue: Pick<AnyIssue, 'params'>): Record<string, string> {
     const values: Record<string, string> = {};
     for (const param of issue.params as readonly Record<string, unknown>[]) {
         const name = String(param.name);
@@ -130,7 +131,9 @@ function paramValues(issue: AnyIssue): Record<string, string> {
             case 'money': {
                 // planner: {value: {amount, currency}}; copy: {amount, currency}
                 const money = (param.value ?? param) as {amount?: unknown; currency?: unknown};
-                values[name] = formatPlannerMoneyPlain(String(money.amount ?? ''), String(money.currency ?? ''));
+                // At the currency's minor unit, `≈` when that rounds it (R14): the sum of the minimums and its base may carry
+                // more digits (TL-4 of project 67), and then read as the preview's total does.
+                values[name] = formatPlannerMoneyPlain(String(money.amount ?? ''), String(money.currency ?? ''), {minorUnit: true});
                 break;
             }
             case 'decimal':
@@ -146,13 +149,21 @@ function paramValues(issue: AnyIssue): Record<string, string> {
     return values;
 }
 
-export function issueMessageKey(code: string): string {
+/**
+ * The codes whose sentence names a figure of the Tool's own (TL-4 of project 67): the Rebalancer says them with its words,
+ * from its own catalogue. «The cash the plan can invest» is the PAC's base; the Rebalancer's is «the total that enters the
+ * plan».
+ */
+const REBALANCER_OWN_SENTENCES: ReadonlySet<string> = new Set(['allocation.bounds_min_sum_exceeds_reference']);
+
+export function issueMessageKey(code: string, text: 'pac' | 'rebalancer' = 'pac'): string {
+    if (text === 'rebalancer' && REBALANCER_OWN_SENTENCES.has(code)) return `tools.portfolioRebalancer.planner.issues.${code}`;
     return `tools.pacAllocator.planner.issues.${code}`;
 }
 
-export function presentIssue(issue: AnyIssue, draft: PlannerDraft, ids?: RequestIdMap): PresentedIssue {
+export function presentIssue(issue: AnyIssue, draft: PlannerDraft, ids?: RequestIdMap, text: 'pac' | 'rebalancer' = 'pac'): PresentedIssue {
     const entity = pathEntity(issue.path);
-    const values = paramValues(issue);
+    const values = issueParamValues(issue);
     values.code = issue.code;
     return {
         id: `${issue.code}|${JSON.stringify(issue.path)}|${JSON.stringify(issue.params)}`,
@@ -162,14 +173,14 @@ export function presentIssue(issue: AnyIssue, draft: PlannerDraft, ids?: Request
         step: issueStep(issue.path),
         entity: entityLabel(draft, entity, ids),
         field: pathField(issue.path),
-        messageKey: issueMessageKey(issue.code),
+        messageKey: issueMessageKey(issue.code, text),
         fallback: 'The backend reported an issue ({code}).',
         values,
     };
 }
 
-export function presentIssues(issues: readonly PlannerIssue[], draft: PlannerDraft, ids?: RequestIdMap): PresentedIssue[] {
-    return dedupe(issues.map((issue) => presentIssue(issue, draft, ids)));
+export function presentIssues(issues: readonly PlannerIssue[], draft: PlannerDraft, ids?: RequestIdMap, text: 'pac' | 'rebalancer' = 'pac'): PresentedIssue[] {
+    return dedupe(issues.map((issue) => presentIssue(issue, draft, ids, text)));
 }
 
 /**

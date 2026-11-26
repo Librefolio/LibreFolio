@@ -103,7 +103,7 @@ def _component(
 _PORTFOLIO_COMPONENTS: tuple[ComponentSpec, ...] = (
     _component(Domain.PORTFOLIO, "summary", "Portfolio summary", period_behavior=PeriodBehavior.AS_OF),
     _component(Domain.PORTFOLIO, "positions", "All portfolio positions", version=2, period_behavior=PeriodBehavior.AS_OF),
-    _component(Domain.PORTFOLIO, "allocations_cash", "Allocations and cash", version=2, dependencies=("portfolio.positions",), period_behavior=PeriodBehavior.AS_OF),
+    _component(Domain.PORTFOLIO, "allocations_cash", "Allocations and cash", version=3, dependencies=("portfolio.positions",), period_behavior=PeriodBehavior.AS_OF),
     _component(Domain.PORTFOLIO, "provenance", "Semantics and provenance", version=4, period_behavior=PeriodBehavior.NONE),
     _component(Domain.PORTFOLIO, "performance", "Portfolio performance and contributors", period_behavior=PeriodBehavior.WINDOWED),
     _component(Domain.PORTFOLIO, "flows_income", "Flows and income", version=2, period_behavior=PeriodBehavior.WINDOWED),
@@ -114,7 +114,7 @@ _PORTFOLIO_COMPONENTS: tuple[ComponentSpec, ...] = (
     _component(Domain.PORTFOLIO, "technical_breadth", "Breadth metrics", period_behavior=PeriodBehavior.WINDOWED),
     _component(Domain.PORTFOLIO, "technical_events", "Technical state-change events", period_behavior=PeriodBehavior.WINDOWED),
     _component(Domain.PORTFOLIO, "technical_coverage", "Technical universe and Signal coverage", period_behavior=PeriodBehavior.WINDOWED),
-    _component(Domain.PORTFOLIO, "asset_market_context", "Focused per-asset market context", period_behavior=PeriodBehavior.WINDOWED),
+    _component(Domain.PORTFOLIO, "asset_market_context", "Focused per-asset market context", version=2, period_behavior=PeriodBehavior.WINDOWED),
     _component(Domain.PORTFOLIO, "asset_drawdown_snapshot", "Focused per-asset drawdown comparison", version=2, dependencies=("portfolio.asset_market_context",), period_behavior=PeriodBehavior.WINDOWED),
     _component(Domain.PORTFOLIO, "context_events", "Focused per-asset structural events", period_behavior=PeriodBehavior.WINDOWED),
     _component(Domain.PORTFOLIO, "event_digest", "Aggregate recent technical event digest", period_behavior=PeriodBehavior.WINDOWED),
@@ -143,7 +143,7 @@ _BROKER_COMPONENTS: tuple[ComponentSpec, ...] = (
     _component(Domain.BROKER, "technical_breadth", "Breadth metrics (broker-scoped)", period_behavior=PeriodBehavior.WINDOWED),
     _component(Domain.BROKER, "technical_events", "Technical state-change events (broker-scoped)", period_behavior=PeriodBehavior.WINDOWED),
     _component(Domain.BROKER, "technical_coverage", "Broker-scoped technical coverage", period_behavior=PeriodBehavior.WINDOWED),
-    _component(Domain.BROKER, "asset_market_context", "Broker-scoped per-asset market context", period_behavior=PeriodBehavior.WINDOWED),
+    _component(Domain.BROKER, "asset_market_context", "Broker-scoped per-asset market context", version=2, period_behavior=PeriodBehavior.WINDOWED),
     _component(Domain.BROKER, "context_events", "Broker-scoped structural events", period_behavior=PeriodBehavior.WINDOWED),
     _component(Domain.BROKER, "fifo_summary", "Broker-scoped FIFO summary", version=3, period_behavior=PeriodBehavior.WINDOWED),
     _component(Domain.BROKER, "fifo_lots", "All applicable FIFO lots (broker-scoped)", version=3, dependencies=("broker.fifo_summary",), period_behavior=PeriodBehavior.WINDOWED),
@@ -169,7 +169,7 @@ _ASSET_COMPONENTS: tuple[ComponentSpec, ...] = (
     _component(Domain.ASSET, "indicators", "Technical indicators", dependencies=("asset.ohlc_returns",), period_behavior=PeriodBehavior.AGGREGATED, aggregator=_SIGNAL_PROFILE_BUCKET_AGGREGATOR),
     _component(Domain.ASSET, "states_events", "Technical states and events", period_behavior=PeriodBehavior.WINDOWED),
     _component(Domain.ASSET, "technical_coverage", "Single-asset technical coverage", period_behavior=PeriodBehavior.WINDOWED),
-    _component(Domain.ASSET, "position_market_context", "Focused position market context", period_behavior=PeriodBehavior.WINDOWED),
+    _component(Domain.ASSET, "position_market_context", "Focused position market context", version=2, period_behavior=PeriodBehavior.WINDOWED),
     _component(Domain.ASSET, "drawdown_summary", "Asset drawdown context", version=2, dependencies=("asset.market_snapshot",), period_behavior=PeriodBehavior.WINDOWED),
 )
 
@@ -180,14 +180,14 @@ _FX_COMPONENTS: tuple[ComponentSpec, ...] = (
     _component(Domain.FX, "current_rate", "Current rate", dependencies=("fx.pair_identity",), period_behavior=PeriodBehavior.AS_OF),
     _component(Domain.FX, "conversion_provenance", "Conversion provenance", period_behavior=PeriodBehavior.NONE),
     _component(Domain.FX, "rate_ohlc", "Rate OHLC", version=2, dependencies=("fx.pair_identity",), period_behavior=PeriodBehavior.AGGREGATED, aggregator=_OHLC_BUCKET_AGGREGATOR),
-    _component(Domain.FX, "returns_volatility", "Returns and volatility", dependencies=("fx.rate_ohlc",), period_behavior=PeriodBehavior.WINDOWED),
+    _component(Domain.FX, "returns_volatility", "Returns and volatility", version=2, dependencies=("fx.rate_ohlc",), period_behavior=PeriodBehavior.WINDOWED),
     _component(Domain.FX, "indicators", "Technical indicators", dependencies=("fx.rate_ohlc",), period_behavior=PeriodBehavior.AGGREGATED, aggregator=_SIGNAL_PROFILE_BUCKET_AGGREGATOR),
     _component(Domain.FX, "states_events", "Technical states and events", period_behavior=PeriodBehavior.WINDOWED),
     _component(Domain.FX, "technical_coverage", "FX source and Signal coverage", period_behavior=PeriodBehavior.WINDOWED),
-    _component(Domain.FX, "market_summary", "Focused FX market context", period_behavior=PeriodBehavior.WINDOWED),
+    _component(Domain.FX, "market_summary", "Focused FX market context", version=2, period_behavior=PeriodBehavior.WINDOWED),
     _component(Domain.FX, "exposure_base_quote", "Direct base/quote exposures", period_behavior=PeriodBehavior.WINDOWED),
     _component(Domain.FX, "exposure_provenance", "Conversion provenance for exposures", dependencies=("fx.exposure_base_quote",), period_behavior=PeriodBehavior.NONE),
-    _component(Domain.FX, "timing_context", "FX conversion timing context", dependencies=("fx.current_rate", "fx.conversion_provenance"), period_behavior=PeriodBehavior.WINDOWED),
+    _component(Domain.FX, "timing_context", "FX conversion timing context", version=2, dependencies=("fx.current_rate", "fx.conversion_provenance"), period_behavior=PeriodBehavior.WINDOWED),
 )
 
 ALL_FOUNDATION_COMPONENTS: tuple[ComponentSpec, ...] = _PORTFOLIO_COMPONENTS + _BROKER_COMPONENTS + _ASSET_COMPONENTS + _FX_COMPONENTS

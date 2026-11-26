@@ -355,9 +355,8 @@ describe('GlobalSettingsTab — closing the lock over pending edits', () => {
         expect(within(dialog).getByTestId('confirm-modal-cancel')).toHaveTextContent('common.cancel');
         expect(confirm).toHaveTextContent('common.discard');
         // Approved feature assertion: selection uses testid; amber is the subject.
-        expect(confirm).toHaveClass('btn-warning');
-        expect(confirm).not.toHaveClass('btn-danger');
-        expect(confirm).not.toHaveClass('btn-primary');
+        // ConfirmModal publishes its variant as data-tone (BTN-2a): one value, so warning excludes danger and primary.
+        expect(confirm).toHaveAttribute('data-tone', 'warning');
         expect(editedNumber()).toHaveValue(48);
         expect(uploadLimit).toHaveValue(20);
         expect(editedNumber()).toBeEnabled();
@@ -1654,8 +1653,8 @@ describe('GlobalSettingsTab — the mobile category dropdown', () => {
     // Both keys claimed (registration_mode by security, A5b), so the list has no Other: All plus the five base categories.
     const ITEMS = [setting('session_ttl_hours', '24', 'int'), setting('registration_mode', 'open', 'string')];
 
-    /** The whole `sm:hidden` block: its trigger, and the list when it is open. */
-    const mobileSection = () => screen.getByText('settings.category').parentElement!;
+    /** The phone box: its trigger, and the list when it is open (the label stands outside it since 81 U38). */
+    const mobileSection = () => screen.getByTestId('global-settings-mobile-category-box');
 
     it('is closed to begin with', async () => {
         await mount(ITEMS);

@@ -1,5 +1,6 @@
 <!--
   EnricherTile — an enricher's icon, or its initials when it has none or the icon does not load (plan 68, E7b2).
+  `size="sm"` is the small one of a table cell (the profile's «Chi», 87).
 -->
 <script lang="ts">
     interface Props {
@@ -9,9 +10,11 @@
         icon: string | (string | null)[] | null;
         /** Drawn off: the instance does not serve it, or it is not configured. */
         muted?: boolean;
+        /** `sm`: beside a name in a table cell (the profile's «Chi», 87). */
+        size?: 'md' | 'sm';
     }
 
-    let {code, name, icon, muted = false}: Props = $props();
+    let {code, name, icon, muted = false, size = 'md'}: Props = $props();
 
     let failed = $state(false);
     let source = $derived(Array.isArray(icon) ? (icon.find((candidate) => !!candidate) ?? null) : icon);
@@ -27,9 +30,9 @@
     });
 </script>
 
-<span class="shrink-0 inline-flex items-center justify-center w-8 h-8 rounded-md border border-lf-subtle bg-lf-panel text-[10px] font-bold text-lf-secondary {muted ? 'opacity-50' : ''}" aria-hidden="true" data-testid="enricher-tile-{code}">
+<span class="shrink-0 inline-flex items-center justify-center border border-lf-subtle bg-lf-panel font-bold text-lf-secondary {size === 'sm' ? 'w-5 h-5 rounded text-[8px]' : 'w-8 h-8 rounded-md text-[10px]'} {muted ? 'opacity-50' : ''}" aria-hidden="true" data-testid="enricher-tile-{code}">
     {#if source && !failed}
-        <img src={source} alt="" class="w-4 h-4" loading="lazy" onerror={() => (failed = true)} />
+        <img src={source} alt="" class={size === 'sm' ? 'w-3.5 h-3.5' : 'w-4 h-4'} loading="lazy" onerror={() => (failed = true)} />
     {:else}
         {initials}
     {/if}

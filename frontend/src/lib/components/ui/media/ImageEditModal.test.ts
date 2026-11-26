@@ -36,6 +36,8 @@ vi.mock('./ImageCropper.svelte', async () => ({default: (await import('$test/har
 import {fireEvent, render, screen, setupI18n, waitFor} from '$test/component';
 import type {PresetName} from '$lib/utils/files/imageCrop';
 import ImageEditModal from './ImageEditModal.svelte';
+import {get} from 'svelte/store';
+import {_} from 'svelte-i18n';
 
 function imageFile(name: string, type = 'image/png'): File {
     return new File(['binary'], name, {type});
@@ -206,5 +208,99 @@ describe('ImageEditModal', () => {
             expect(scope).toBe('personal');
             await waitFor(() => expect(complete).toHaveBeenCalledTimes(1));
         });
+    });
+});
+
+/**
+ * The standard buttons (85 BTN-2b). While the editor is not ready its controls are off but reachable — `aria-disabled`
+ * with `data-disabled-reason="edit-not-ready"`, in the tab order, a click doing nothing — and they come alive with
+ * `data-edit-ready`. The presets, the ratios and the round preview are toggles (`aria-pressed` follows the choice). The
+ * quality − / + are a `ButtonGroup` filled from this legacy component's markup: the group's context reaches them, so
+ * they draw as segments. The confirm button is busy while the upload runs. The reset exists only with a change, which
+ * needs the editor ready: its off state cannot be reached.
+ */
+describe('ImageEditModal — the standard buttons (85 BTN-2b)', () => {
+    const jpeg = () => imageFile('portrait.jpg', 'image/jpeg');
+    const NOT_READY_CONTROLS = ['image-edit-quality-down', 'image-edit-quality-up', 'image-edit-ellipse-toggle', 'image-edit-preset-avatar', 'image-edit-preset-broker-icon', 'image-edit-preset-custom', 'image-edit-aspect-1x1', 'image-edit-aspect-free'];
+    const qualityValue = () => screen.getByTestId('image-edit-quality').textContent?.replace(/\s+/g, '') ?? '';
+
+    async function ready(): Promise<void> {
+        await fireEvent.click(screen.getByTestId('image-cropper-stub-report'));
+        await waitFor(() => expect(screen.getByTestId('image-edit-modal')).toHaveAttribute('data-edit-ready', 'true'), {timeout: 5_000});
+    }
+
+    it('while not ready: every control is off with its reason, reachable, and a click does nothing', async () => {
+        mount({file: jpeg(), preset: 'custom'});
+        for (const id of NOT_READY_CONTROLS) {
+            const control = screen.getByTestId(id);
+            expect(control, id).toHaveAttribute('aria-disabled', 'true');
+            expect(control, id).toHaveAttribute('data-disabled-reason', 'edit-not-ready');
+            expect(control.hasAttribute('disabled'), `${id}: reachable, never natively disabled`).toBe(false);
+            expect(control.tabIndex, id).toBe(0);
+        }
+        const quality = qualityValue();
+        const avatar = screen.getByTestId('image-edit-preset-avatar');
+        await fireEvent.click(screen.getByTestId('image-edit-quality-up'));
+        await fireEvent.click(avatar);
+        await fireEvent.click(screen.getByTestId('image-edit-ellipse-toggle'));
+        expect(qualityValue(), 'the quality did not move').toBe(quality);
+        expect(avatar).toHaveAttribute('aria-pressed', 'false');
+        expect(screen.getByTestId('image-edit-ellipse-toggle')).toHaveAttribute('aria-pressed', 'false');
+        expect(screen.queryByTestId('image-edit-reset'), 'nothing changed').toBeNull();
+    });
+
+    it('once ready the controls are live: the presets and the ratios are toggles that follow the choice', async () => {
+        mount({file: jpeg(), preset: 'custom'});
+        await ready();
+        for (const id of NOT_READY_CONTROLS) expect(screen.getByTestId(id), id).not.toHaveAttribute('aria-disabled');
+
+        const sixteenNine = screen.getByTestId('image-edit-aspect-16x9');
+        await fireEvent.click(sixteenNine);
+        expect(sixteenNine).toHaveAttribute('aria-pressed', 'true');
+        const pressedRatios = [...screen.getByTestId('image-edit-aspect-row').querySelectorAll('[aria-pressed="true"]')].map((el) => el.getAttribute('data-testid'));
+        expect(pressedRatios, 'one ratio at a time').toEqual(['image-edit-aspect-16x9']);
+
+        const avatar = screen.getByTestId('image-edit-preset-avatar');
+        await fireEvent.click(avatar);
+        expect(avatar).toHaveAttribute('aria-pressed', 'true');
+        expect(screen.getByTestId('image-edit-preset-custom')).toHaveAttribute('aria-pressed', 'false');
+        // Avatar turns the round preview on (selectPreset), and the toggle says so.
+        expect(screen.getByTestId('image-edit-ellipse-toggle')).toHaveAttribute('aria-pressed', 'true');
+        // A change was made: the reset is there, live.
+        expect(screen.getByTestId('image-edit-reset')).not.toHaveAttribute('aria-disabled');
+    });
+
+    it('the quality − / + are a named group of segments, from a legacy parent', async () => {
+        mount({file: jpeg(), preset: 'custom'});
+        const group = screen.getByTestId('image-edit-quality');
+        expect(group).toHaveAttribute('role', 'group');
+        expect(group).toHaveAttribute('aria-label', get(_)('uploads.quality'));
+        for (const id of ['image-edit-quality-down', 'image-edit-quality-up']) {
+            const segment = screen.getByTestId(id);
+            expect(group.contains(segment)).toBe(true);
+            expect(segment.classList.contains('lf-btn-segment'), `${id}: the ButtonGroup context reached it`).toBe(true);
+        }
+        await ready();
+        const before = qualityValue();
+        await fireEvent.click(screen.getByTestId('image-edit-quality-down'));
+        expect(qualityValue()).not.toBe(before);
+    });
+
+    it('confirm is busy while the upload runs: aria-busy, its busy word, a second click drops', async () => {
+        let finish: (url: string) => void = () => {};
+        media.uploadFile.mockReset().mockImplementation(() => new Promise<string>((resolve) => (finish = resolve)));
+        media.crop.mockReset().mockResolvedValue(new Blob(['cropped'], {type: 'image/png'}));
+        const {complete} = mount();
+        await ready();
+        const confirm = screen.getByTestId('image-edit-confirm');
+        await fireEvent.click(confirm);
+        await waitFor(() => expect(confirm).toHaveAttribute('aria-busy', 'true'));
+        expect(confirm).toHaveAttribute('aria-disabled', 'true');
+        expect(confirm.textContent).toContain(get(_)('common.uploading'));
+        await fireEvent.click(confirm);
+        expect(media.uploadFile, 'nothing starts twice').toHaveBeenCalledTimes(1);
+        expect(screen.getByTestId('image-edit-cancel'), 'cancel is natively off during the upload').toHaveAttribute('disabled');
+        finish('/uploads/cropped.png');
+        await waitFor(() => expect(complete).toHaveBeenCalledTimes(1));
     });
 });

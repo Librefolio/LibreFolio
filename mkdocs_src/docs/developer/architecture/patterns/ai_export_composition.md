@@ -140,6 +140,39 @@ Semantic Composition V2 adds backend-owned projection components:
 - task-specific evidence: dated income, broker concentration, broker
   cost/turnover, and non-predictive FX conversion timing.
 
+**Daily return volatility, one definition (78 L6).** The market rows of the Portfolio and Broker overviews
+(`portfolio.asset_market_context`, `broker.asset_market_context`, v2) carry each asset's `daily_return_volatility_ratio`,
+and so does the FX summary (`fx.market_summary`, v2). Every row computes it the same way, in `technical_shared.py`
+(`daily_return_volatility`): the simple returns between consecutive observed values of the period
+(`financial_math.returns.price_return`; no carried-forward day), and their sample standard deviation
+(`risk.metrics.sample_standard_deviation`, ddof = 1, the Risk engine's). It is a daily figure, `None` under two
+returns; it gives a volatility to a close-only asset, which NATR (it needs highs and lows) cannot. Until v1 the FX
+summary and `fx.timing_context` (v2, 78 L6 S2b: the same pair and period now give one figure) used a population
+deviation, as `fx.returns_volatility` did for each bucket until v1 (v2: the sample one, 78 L6 S2b). The factor is
+√(n/(n−1)) for n returns, so small buckets move most: two returns +41%, five +12%.
+
+**Cash per broker (78 L6).** `portfolio.allocations_cash` (v3) lists `cash_by_broker`: each broker's cash in the
+report currency and its native balances, taken from the report's own `summary.by_broker` (the Dashboard's broker cards),
+never recomputed. The rows add up to `cash_total`, an owner's share applied as everywhere in the portfolio.
+`cash_by_broker_basis` names that basis (`user_ownership_share`), because «Export Data» has no domain notes: for a
+co-owned broker the figure is the user's part, while the PAC allocator's «From your Brokers» shows the whole account.
+`cash_in_transit` is the cash sent between brokers that has not arrived on the as-of day, read from the engine's step of
+the report history (`series_steps.value_at`), not derived by difference: it is in no broker's row nor in `cash_total`,
+and the Liquidity slice of `by_type` is `cash_total` plus it. The history omits a zero amount, so the component writes
+an explicit zero; it is null only when the history has no step on that day.
+
+**Market rows declare what they report (78 L6 S2).** The four market-context components each have their own row in
+`technical_context.py`: `TechnicalMarketContextRow` for the Portfolio and Broker overviews (with each asset's
+`portfolio_weight_ratio` and NATR), `AssetPositionMarketContextRow` (`asset.position_market_context`, v2: EMA 20, NATR,
+ATR and the Bollinger bands) and `FxMarketContextRow` (`fx.market_summary`: EMA 20, PPO and ROC; no NATR, since a rate
+has no highs and lows), all on `MarketContextRowBase`.
+`_market_context_row` takes the row's class and fills only the columns it declares. A column a component does not report
+is therefore not in its payload, so the renderer never names it on `omitted_null_columns` («explicitly unavailable»),
+even when its signal is computed for the breadth or the events and the coverage table lists it as `ok`;
+a declared column that cannot be computed (an EMA 200 on a short history) stays `null` and is still named. Every row
+prints its columns in one order, `MARKET_CONTEXT_COLUMN_ORDER`. The asset's row also carries the daily return
+volatility, on the definition above.
+
 Projection builders read the same request-scoped price/rate/Signal resources as
 the complete components. They do not filter rendered payloads and do not repeat
 I/O or Signal calculation. Signal/output allowlists, limited-history depth, and
@@ -555,7 +588,8 @@ analysis take the same shape, or the renderer fails closed (`incompatible_select
 #### The new shape
 
 Today the two market-driver analyses (`portfolio.performance_market_drivers`,
-`broker.performance_market_drivers`). The answer is written for a person: the answer first,
+`broker.performance_market_drivers`), the protection strategies (`portfolio.protection_strategies`), the PAC
+(`portfolio.pac_planning`, 78 L4a) and the rebalancing (`portfolio.rebalancing`, 78 L4b). The answer is written for a person: the answer first,
 about 700 words, and a closing list of the follow-up questions worth asking.
 
 1. **Your Task** — the analysis's own task (`task` of its instruction template)
@@ -566,12 +600,25 @@ about 700 words, and a closing list of the follow-up questions worth asking.
 5. **Snapshot Metadata and Dataset Manifest**
 6. **Snapshot Data**
 7. **Additional LibreFolio Data**
-8. **Domain Notes**
-9. **Legal Notice**
-10. **User Question**, only when the user wrote one: a trusted sentence (it directs and
+8. **Calcolalo in LibreFolio** (section `librefolio_tool`, 78 L4a), only for an analysis whose catalog entry
+   suggests a tool (`suggested_tools`; today the PAC, `pac_allocator`, and the rebalancing, `portfolio_rebalancer`)
+9. **Domain Notes**
+10. **Legal Notice**
+11. **User Question**, only when the user wrote one: a trusted sentence (it directs and
     narrows the task, it cannot change the rules) over the question, safely serialized as
     the notes are
-11. **Response Language**
+12. **Response Language**
+
+**Calcolalo in LibreFolio.** The backend declares only the code of the tool an analysis sends the user to
+(`ToolSuggestion` in `analyses/spec.py`, `suggested_tools` on the catalog entry), the way it declares the datasets it
+suggests. The frontend writes the block in the interface language from `templates/toolGuides.ts`: the tool's name and
+one numbered list (78 L4b), whose first three points are the way to the tool (open LibreFolio, Tools in the sidebar,
+the tool's card) and the rest its inputs step by step. The two tools share the planner, so the same nine steps and their
+names; a label still changing in the tool's lane is described by its role instead of quoted. Every label of the tool is the tool's own
+i18n key (`tools.pacAllocator.planner.steps.*`, `…review.calculate`…), quoted, so a label that changes in the tool
+changes in the prompt; the AI Export writes only the sentences around them (`aiExport.tool.*`), whose `{name}`
+placeholders take those labels through the caller's `translate`. A suggested code the frontend cannot write closes the
+catalog (`tool_suggestion_mismatch`).
 
 There is no Analysis Objective, Shared Verification Instructions, Response Contract or
 Answer Focus in this shape. The texts are copied from the plan's drafts
@@ -601,16 +648,17 @@ for unknown component versions. The User Question remains safely serialized untr
 The Legal Notice (section `legal_notice`, `renderLegalNotice()` in `promptRenderer.ts`)
 is the instance's disclaimer, the one the app shows in Settings › About
 ([The legal notice](../../frontend/components/features/settings.md#legal-notice)):
-a `##` heading with `legal.title`, a blank line, then `legal.disclaimer`, both from the
-caller's `translate`, so in the interface language (the probe translates from the same
-catalogue, `probeTranslation`). It is local, allow-listed copy: never inside a fenced
+a `##` heading, a blank line, then the disclaimer, in **fixed English** (D-23: like the rest of
+the prompt; the answer's language stays the user's): `AI_EXPORT_LEGAL_NOTICE_TITLE` and
+`AI_EXPORT_LEGAL_NOTICE`, kept equal to the English catalogue's `legal.title` and
+`legal.disclaimer` by a test. It is local, allow-listed copy: never inside a fenced
 block, no URL (the instance's terms and privacy links stay out), nothing from the
 snapshot. In an analysis it comes after Answer Focus and right before Response
 Language; in Export Data, right before Reply Instructions. Either way the app's
 trusted instruction stays the prompt's last word. `promptRenderer.test.ts`
 (`./dev.py test front-ai-export unit`) pins both places, with and without a user question,
-and renders the section once, under its own heading, with no fence and no URL in any
-of the four languages.
+and renders the section once, under its own heading, in fixed English whatever the
+interface's language, with no fence and no URL.
 
 Answer Focus and Reply Instructions keep the receiving AI from restating the export,
 whose figures the user has already seen in LibreFolio. Both are trusted local copy in
@@ -639,9 +687,8 @@ conclusions rely on it.
 A ban alone would contradict any instruction asking for a restatement, so none does in
 today's shape: every response contract of that shape opens with **Key Facts** (formerly "LibreFolio Facts"), which
 cites briefly only the supplied facts the conclusions rely on, and the first step of
-six Analysis Objectives (`portfolio.pac_planning`, `portfolio.rebalancing`,
-`broker.review`, `asset.position_review`, `asset.market_analysis`,
-`fx.pair_analysis`) follows the pattern "Use … to …; mention only what changes the
+four Analysis Objectives (`broker.review`, `asset.position_review`,
+`asset.market_analysis`, `fx.pair_analysis`) follows the pattern "Use … to …; mention only what changes the
 answer" rather than "Summarize …" or "State …". Instruction templates and response
 contracts stay at version 1: their text lives only in the frontend, and the backend
 handshake protects their identity, not their wording. In the new shape the same holds
@@ -978,7 +1025,8 @@ Frontend flow:
 2. submit selected V1 IDs and versions;
 3. validate snapshot identity and analysis contract;
 4. render safe deterministic text;
-5. write through Clipboard API, with textarea fallback where required.
+5. write through the shared writer (`writeTextToClipboard`, `lib/utils/clipboard.ts`): the Clipboard API, then the
+   textarea copy when the API is missing or refuses.
 
 Clipboard transport changes only how the same final prompt is copied. It never
 switches builders, serializers, financial logic, sampling, or contract versions.
@@ -1012,6 +1060,15 @@ The options panel decides what is requested and when the copy happens
   the panel shows the final size with **Use Compact** (hidden on Compact) and
   **Copy Anyway**. Copy Anyway stores the options fingerprint, so the same options
   copy without asking while the draft lives.
+- **A refused copy** (testlist of 25/11): the browser may refuse to write, most often because the window is no longer
+  the active one when the answer arrives. The prepared text and its context stay, and the panel offers **Copy the ready
+  text** (`ai-export-copy-ready`), whatever the size: it copies that text, with no new request. The error
+  (`AiExportClipboardUnavailableError`) carries a `reason`: `not_focused` (the document had no focus) gets its own
+  message, `refused` keeps the permission one. A change of the options drops the ready text.
+- **Progress**: while it prepares, the panel shows the client's real steps as text, with a bar that only moves
+  (`prefers-reduced-motion`: it stands): `request` (the server computes the snapshot), `render` (the prompt is written),
+  `copy`. `prepareAiExport` reports the first two through `onstep`; the copy is the menu's. The server reports no finer
+  step, so none is invented and no percentage is shown.
 - **Draft memory**: options, the notes draft, and that fingerprint are kept per
   memory key (`portfolio`, `broker:<id>`, `asset:<id>`, `fx:<slug>`) in an in-memory
   cache mirrored to `sessionStorage` (`lf_<userId>_ai_export_session_<key>`) for 10

@@ -15,6 +15,8 @@
 -->
 <script generics="T" lang="ts">
     import {ChevronDown, ChevronUp, GripVertical} from 'lucide-svelte';
+    import {_} from '$lib/i18n';
+    import Button from '$lib/components/ui/button/Button.svelte';
     import type {Snippet} from 'svelte';
 
     // =========================================================================
@@ -151,12 +153,10 @@
             <!-- Arrow buttons (visible below md) -->
             {#if !disabled}
                 <div class="flex flex-col md:hidden gap-0.5">
-                    <button type="button" class="p-0.5 rounded text-lf-muted hover:text-lf-secondary disabled:opacity-30 disabled:cursor-not-allowed" disabled={index === 0} onclick={() => moveUp(index)} title="Move up">
-                        <ChevronUp size={14} />
-                    </button>
-                    <button type="button" class="p-0.5 rounded text-lf-muted hover:text-lf-secondary disabled:opacity-30 disabled:cursor-not-allowed" disabled={index === items.length - 1} onclick={() => moveDown(index)} title="Move down">
-                        <ChevronDown size={14} />
-                    </button>
+                    <!-- Stacked neighbours (85 BTN-2a): `dense`, a 24 px target, so the two never cover each other; the name
+                         «Move up» / «Move down» in the user's language (D12), reachable even while an arrow is off. -->
+                    <Button label={$_('common.moveUp')} icon={ChevronUp} display="icon" variant="ghost" size="xs" dense disabled={index === 0} onclick={() => moveUp(index)} />
+                    <Button label={$_('common.moveDown')} icon={ChevronDown} display="icon" variant="ghost" size="xs" dense disabled={index === items.length - 1} onclick={() => moveDown(index)} />
                 </div>
             {/if}
         </div>

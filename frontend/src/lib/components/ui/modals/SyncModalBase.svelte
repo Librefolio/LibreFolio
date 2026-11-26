@@ -12,7 +12,7 @@
   Uses Svelte 5 runes.
 -->
 <script lang="ts">
-    import {onDestroy} from 'svelte';
+    import {onDestroy, type Snippet} from 'svelte';
     import {Clock, Info, RefreshCw, SkipForward, Timer, X} from 'lucide-svelte';
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
     import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
@@ -43,9 +43,33 @@
         zIndex?: number;
         /** Max width token passed to ModalBase (default max-w-md) */
         maxWidth?: string;
+        /** Why starting is off right now (a pair of the sync is already syncing, 81 U35): the Start button is off and says it. */
+        startBlockedReason?: string | null;
+        /** The word of the Start button, where the window holds more than this sync (87, A5: the assets' profiles). */
+        startLabel?: string;
+        /** A section of the caller's own under the sync's: it is no `SyncSection`, and starts by itself (87, A5). */
+        below?: Snippet;
     }
 
-    let {open = $bindable(), dateStart, dateEnd, title, description, testId, headerIcon: HeaderIcon = RefreshCw, headerIconBg = 'bg-lf-warning-soft', headerIconColor = 'text-lf-warning', sections, onsynced, onclose, zIndex = 50, maxWidth = 'max-w-md'}: Props = $props();
+    let {
+        open = $bindable(),
+        dateStart,
+        dateEnd,
+        title,
+        description,
+        testId,
+        headerIcon: HeaderIcon = RefreshCw,
+        headerIconBg = 'bg-lf-warning-soft',
+        headerIconColor = 'text-lf-warning',
+        sections,
+        onsynced,
+        onclose,
+        zIndex = 50,
+        maxWidth = 'max-w-md',
+        startBlockedReason = null,
+        startLabel,
+        below,
+    }: Props = $props();
 
     // =========================================================================
     // State
@@ -502,9 +526,14 @@
                 </InfoBanner>
             </div>
         {/if}
+
+        {@render below?.()}
     </div>
 
     <!-- Footer -->
+    {#if startBlockedReason}
+        <p class="px-6 pb-2 text-xs text-lf-warning" data-testid="sync-modal-blocked">{startBlockedReason}</p>
+    {/if}
     <div class="flex justify-end gap-2 px-6 py-4 border-t border-lf-subtle">
         <button class="px-4 py-2 text-sm font-medium bg-lf-panel text-lf-secondary rounded-lg hover:bg-lf-neutral transition-colors" data-testid="sync-modal-close" onclick={onclose}>
             {hasResults || isTimeout ? ($t('common.close') ?? 'Close') : ($t('common.cancel') ?? 'Cancel')}
@@ -515,7 +544,7 @@
                 data-busy={syncing}
                 data-testid="sync-modal-start"
                 onclick={hasResults && failedItems.length > 0 ? handleRetryFailed : handleSyncAll}
-                disabled={syncing || itemCount === 0}
+                disabled={syncing || itemCount === 0 || !!startBlockedReason}
             >
                 <RefreshCw size={15} class={syncing ? 'animate-spin' : ''} />
                 {#if failedItems.length > 0 && hasResults}
@@ -523,7 +552,7 @@
                 {:else if syncing}
                     {$t('common.syncing') ?? 'Syncing...'}
                 {:else}
-                    {$t('fx.sync.start') ?? 'Start Sync'}
+                    {startLabel ?? $t('fx.sync.start') ?? 'Start Sync'}
                 {/if}
             </button>
         {/if}

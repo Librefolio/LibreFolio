@@ -276,6 +276,15 @@ describe('PlannerPreview', () => {
         expect(draft.previewFingerprint).not.toBe(key);
     });
 
+    it('the «Custom» figure remembered (TL-1) is outside both keys, and a new draft forgets it', () => {
+        const draft = draftOf();
+        const keys = [draft.fingerprint, draft.previewFingerprint];
+        draft.customLambdaMemory = '0.6';
+        expect([draft.fingerprint, draft.previewFingerprint]).toEqual(keys);
+        draft.reset('EUR', draft.data.policy);
+        expect(draft.customLambdaMemory).toBe('');
+    });
+
     it('the preview request carries «Balanced» whatever the fidelity, and never the euros (R1-F b)', async () => {
         const draft = draftOf();
         draft.data.fidelity = {kind: 'custom', lambda: '0.6'};
@@ -372,6 +381,9 @@ describe('PlannerPreview', () => {
         await vi.runAllTimersAsync();
 
         expect(draft.data.fidelity).toEqual({kind: 'level', level: 'balanced'});
+        // TL-1: the figure is not lost, though: it is remembered for the «Custom» column, outside the plan's facts.
+        // 60·20 000/(2·1 000²) = 0.6.
+        expect(draft.customLambdaMemory).toBe('0.6');
         preview.dispose();
     });
 

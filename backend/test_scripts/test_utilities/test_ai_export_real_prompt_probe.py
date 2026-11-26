@@ -247,12 +247,19 @@ def test_target_case_representative_scope_supports_asset_and_fx_domains():
     assert fx["scope_alias"] == "fx_pair_anon_01"
 
 
-def test_targeted_pac_diagnostics_count_questions_and_drawdown_rows():
+def test_targeted_pac_diagnostics_measure_the_tool_block_and_drawdown_rows():
+    """78 L4a: the tool block from the section ids, its input steps by their shape; the path's steps are not inputs."""
     prompt = """
-Capital and cadence — REQUIRED WHEN MISSING: immediate capital; periodic amount.
-Goals and horizon — REQUIRED WHEN MISSING: horizon; objective.
-Risk preferences — OPTIONAL WHEN MATERIAL: high-risk cap; exclusions.
-Operational constraints — REQUIRED WHEN MISSING AND MATERIAL: sales allowed; usable brokers.
+## Calcolalo in LibreFolio
+### Allocatore PAC
+- **Percorso LibreFolio**:
+  1. Apri LibreFolio
+  2. Barra laterale: "Strumenti"
+  3. Scheda: "Allocatore PAC"
+- **Che cosa inserire, passo per passo**:
+  1. "Scenario": la "Valuta di valutazione", in cui gli importi si confrontano.
+  2. "Liquidità": da dove arriva il denaro: "Nuovo versamento" con l'importo della rata.
+  3. "Riepilogo": un ultimo controllo, poi "Calcola piano".
 COMPONENT portfolio.drawdown_summary
 SUMMARY
 |field|value|
@@ -264,12 +271,12 @@ TABLE rows
 |1|A1|-2%|
 |2|A2|-4%|
 """
-    diagnostics = measure_targeted_adequacy_diagnostics("portfolio.pac_planning", prompt)
-    assert diagnostics["question_category_count"] == 4
-    assert diagnostics["required_question_count"] == 6
-    assert diagnostics["optional_question_count"] == 2
+    diagnostics = measure_targeted_adequacy_diagnostics("portfolio.pac_planning", prompt, ["task", "additional_librefolio_data", "librefolio_tool"])
+    assert diagnostics["tool_section_present"] is True
+    assert diagnostics["tool_input_step_count"] == 3
     assert diagnostics["portfolio_drawdown_rows"] == 2
     assert diagnostics["asset_drawdown_rows"] == 2
+    assert measure_targeted_adequacy_diagnostics("portfolio.pac_planning", prompt)["tool_section_present"] is False
 
 
 def test_broker_scope_diagnostics_distinguish_scope_positions_and_period_contributors():

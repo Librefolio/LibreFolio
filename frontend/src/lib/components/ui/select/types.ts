@@ -41,6 +41,7 @@ export interface SelectOption {
     badge?: string;
     /** Tailwind classes for the badge */
     badgeClass?: string;
-    /** Tooltip text shown on hover over the badge */
+    /** What the badge means: shown by the item on a mouse rest over the badge, and by the option itself (`SearchSelect`) on
+     *  a long press, a keyboard focus and to a screen reader */
     badgeTooltip?: string;
 }

@@ -25,6 +25,7 @@
     import TxChargesActionModal from '$lib/features/transactions/TxChargesActionModal.svelte';
     import {createChargesDeleteFlow} from '$lib/features/transactions/chargesDeleteFlow.svelte';
     import {createChargesLinkFlow} from '$lib/features/transactions/chargesLinkFlow.svelte';
+    import {createChargesUnlinkFlow} from '$lib/features/transactions/chargesUnlinkFlow.svelte';
     import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
     import type {BulkAction} from '$lib/components/table/types';
     import {txStoreSetAll, txStoreCanEdit} from '$lib/features/transactions/txStore.svelte';
@@ -181,17 +182,26 @@
         },
     });
 
+    /** «Unlink the charges» from the bar, as on the Transactions page (66 TL-9). It needs no type rules: one ticked charge is enough. */
+    const chargesUnlink = createChargesUnlinkFlow({
+        onUnlinked: async () => {
+            clearTxSelection();
+            await view?.refresh();
+        },
+    });
+
     /** The workspace saved something: the rows the selection pointed at may have changed or gone, and the page asks again. */
     async function handleBulkCommitted() {
         clearTxSelection();
         await view?.refresh();
     }
 
-    /** 77 SEL-B: the bulk actions of the table's selection panel. Edit and Delete take the rows the user can edit, with their number; «Link the charges» is decided by the whole selection (66 TL-5). */
+    /** 77 SEL-B: the bulk actions of the table's selection panel. Edit and Delete take the rows the user can edit, with their number; «Link the charges» is decided by the whole selection (66 TL-5); «Unlink the charges» takes the linked ones among the rows (66 TL-9). */
     const txBulkActions = $derived<BulkAction<TXReadItem>[]>([
         {id: 'edit', icon: Pencil, label: () => $_('common.edit'), primary: true, appliesTo: (row) => txStoreCanEdit(row.id), onClick: (rows) => editSelectedTx(rows)},
         {id: 'clone', icon: Copy, label: () => $_('transactions.actions.clone'), onClick: (rows) => cloneSelectedTx(rows)},
         chargesLink.action,
+        chargesUnlink.action,
         {id: 'delete', icon: Trash2, label: () => $_('common.delete'), variant: 'danger', appliesTo: (row) => txStoreCanEdit(row.id), onClick: (rows) => deleteSelectedTx(rows)},
     ]);
 
@@ -420,6 +430,7 @@
         onCommitted={handleBulkCommitted}
     />
     <TxChargesActionModal open={chargesLink.open} mode="link" parents={chargesLink.parent ? [chargesLink.parent] : []} charges={chargesLink.charges} loading={chargesLink.linking} onConfirm={chargesLink.confirm} onCancel={chargesLink.cancel} />
+    <TxChargesActionModal open={chargesUnlink.open} mode="unlink" parents={[]} charges={chargesUnlink.charges} loading={chargesUnlink.unlinking} onConfirm={chargesUnlink.confirm} onCancel={chargesUnlink.cancel} />
     <TxChargesActionModal
         open={chargesDelete.panel != null}
         mode="deleteParent"

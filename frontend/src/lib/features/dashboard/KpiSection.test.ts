@@ -1073,3 +1073,44 @@ describe('KpiSection — the timing effect publishes its direction, and has no c
         ]);
     });
 });
+
+describe('KpiSection — the three cards draw one shape (86, A6)', () => {
+    it('the Net Worth card keeps its figure, its gain and its rows in one block, as the period P&L card does', async () => {
+        render(KpiSection, {summary: summary(), history: [], loading: false, displayCurrency: 'EUR'});
+        await waitFor(() => expect(screen.getByTestId('kpi-total-pnl-delta')).toBeInTheDocument());
+        const rowsOf = (card: string) => within(screen.getByTestId(card)).getByTestId('kpi-rows');
+        const netWorth = rowsOf('kpi-net-worth');
+        expect(netWorth.parentElement).toBe(screen.getByTestId('kpi-total-pnl-delta').parentElement);
+        // The block is the card's own gap-free column, never the card itself (whose gap would push the rows down).
+        for (const card of ['kpi-period-pnl', 'kpi-net-worth']) expect(rowsOf(card).parentElement, card).not.toBe(screen.getByTestId(card));
+        expect(netWorth.className).toBe(rowsOf('kpi-period-pnl').className);
+    });
+});
+
+describe('KpiSection — the income row and its three kinds (86, D-21)', () => {
+    async function openIncomeTooltip(over: Record<string, unknown> = {}): Promise<HTMLElement> {
+        render(KpiSection, {summary: {...summary(), ...over}, history: [], loading: false, displayCurrency: 'EUR'});
+        await waitFor(() => expect(screen.getByTestId('kpi-income')).toBeInTheDocument());
+        await fireEvent.keyDown(within(screen.getByTestId('kpi-income')).getByRole('button'), {key: 'Enter'});
+        return screen.findByTestId('tooltip-content');
+    }
+    const SPLIT = {period_income: EUR('60'), period_dividends: EUR('45'), period_interest: EUR('-5'), period_rewards: EUR('20')};
+
+    it('lists dividends, interest and rewards in this order, each with its own figure as the backend sent it', async () => {
+        const tooltip = await openIncomeTooltip(SPLIT);
+        const rows = ['kpi-income-dividends', 'kpi-income-interest', 'kpi-income-rewards'];
+        expect(Array.from(tooltip.querySelectorAll('tr')).map((row) => row.getAttribute('data-testid'))).toEqual(rows);
+        for (const [id, amount] of [
+            [rows[0], 45],
+            [rows[1], -5],
+            [rows[2], 20],
+        ] as const)
+            expect(within(tooltip).getByTestId(id).textContent, id).toContain(formatCurrencyAmountPlain(amount, 'EUR', {showSign: true}));
+    });
+
+    it('without the split (an answer that carries none) it keeps a plain tooltip', async () => {
+        const tooltip = await openIncomeTooltip();
+        expect(tooltip.querySelectorAll('tr')).toHaveLength(0);
+        expect(tooltip.textContent?.trim()).toBeTruthy();
+    });
+});

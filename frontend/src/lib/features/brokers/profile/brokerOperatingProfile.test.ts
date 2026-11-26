@@ -7,7 +7,7 @@
  * regime hands them back untouched (fact 8). The local checks are the backend's D4 refusals, said before sending.
  */
 import {describe, expect, it} from 'vitest';
-import {copyRules, draftsEqual, fromDraft, newRule, profileProblems, toDraft, type OperatingProfileDocument, type ProfileDraft} from './brokerOperatingProfile';
+import {copyRules, DEFAULT_CONVERSION_MODE, draftsEqual, fromDraft, newRule, profileProblems, toDraft, type OperatingProfileDocument, type ProfileDraft} from './brokerOperatingProfile';
 
 const DOCUMENT: OperatingProfileDocument = {
     profile_version: 1,
@@ -70,13 +70,32 @@ describe('brokerOperatingProfile', () => {
 
     it('an empty box is no profile', () => {
         expect(fromDraft(toDraft(null))).toBeNull();
-        // The backend serves `conversion_mode: "manual"` always (its default): a profile left with nothing else is no profile.
-        expect(fromDraft(toDraft({profile_version: 1, order_modes: [], conversion_mode: 'manual'}))).toBeNull();
+        // The backend serves `conversion_mode` always: a profile left with the default alone is no profile (TL-6: «automatic»).
+        expect(fromDraft(toDraft({profile_version: 1, order_modes: [], conversion_mode: 'automatic'}))).toBeNull();
         // A choice that differs from the default is a profile; an untouched regime writes no tax_regime (it reads «declarative»).
         const draft = toDraft(null);
-        draft.conversionMode = 'automatic';
-        expect(fromDraft(draft)).toEqual({profile_version: 1, order_modes: [], conversion_mode: 'automatic'});
+        draft.conversionMode = 'manual';
+        expect(fromDraft(draft)).toEqual({profile_version: 1, order_modes: [], conversion_mode: 'manual'});
         expect(fromDraft(draft)).not.toHaveProperty('tax_regime');
+    });
+
+    it('the conversion, as TL-6 saves it: the Broker converting is the default, «Converti tu» is a choice', () => {
+        expect(DEFAULT_CONVERSION_MODE).toBe('automatic');
+        const withMode = (conversionMode: ProfileDraft['conversionMode']): ProfileDraft => ({...toDraft(null), conversionMode});
+        // Nothing chosen, or the default alone: nothing to save.
+        expect(fromDraft(withMode(null))).toBeNull();
+        expect(fromDraft(withMode('automatic'))).toBeNull();
+        // «Converti tu» alone is saved, and read back as it was saved.
+        const manual = fromDraft(withMode('manual'));
+        expect(manual).toEqual({profile_version: 1, order_modes: [], conversion_mode: 'manual'});
+        expect(toDraft(manual).conversionMode).toBe('manual');
+        // Rules with no choice leave the key out (the backend reads the default).
+        const rules = {...withMode(null), rules: [newRule('EUR')]};
+        expect(fromDraft(rules)).not.toHaveProperty('conversion_mode');
+        // A stored «Converti tu» alone, switched to the default, goes back to «no profile».
+        const stored = toDraft({profile_version: 1, order_modes: [], conversion_mode: 'manual'});
+        expect(draftsEqual(stored, {...stored, conversionMode: 'automatic'})).toBe(false);
+        expect(fromDraft({...stored, conversionMode: 'automatic'})).toBeNull();
     });
 
     it.each([

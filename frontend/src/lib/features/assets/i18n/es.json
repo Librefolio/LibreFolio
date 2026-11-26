@@ -106,14 +106,15 @@
     "sync": {
       "toastOk": "{name} sincronizado\n{fetched}↓ {changed}Δ",
       "toastFailed": "Error de sincronización para {name}",
-      "modalTitle": "Sincronizar Precios",
+      "modalTitle": "Sincronizar activos",
       "modalDescription": "Sincronice los precios de los proveedores configurados para el rango de fechas seleccionado.",
       "assetsCount": "activos",
       "confirmTitle": "¿Sincronizar {name}?",
       "confirmMessage": "{stored, plural, one {# precio guardado} other {# precios guardados}} en este intervalo {stored, plural, one {se reemplazará} other {se reemplazarán}} con los valores del proveedor.",
       "confirmManual": "{manual, plural, one {# se introdujo a mano y se reemplazará} other {# se introdujeron a mano y se reemplazarán}} también.",
       "confirmAction": "Sincronizar",
-      "overwriteManual": "{manual, plural, one {# se introdujo a mano} other {# se introdujeron a mano}}."
+      "overwriteManual": "{manual, plural, one {# se introdujo a mano} other {# se introdujeron a mano}}.",
+      "startPrices": "Sincronizar los precios"
     },
     "delete": {
       "confirmQuestion": "¿Eliminar \"{name}\"?",
@@ -411,7 +412,8 @@
       "deleteSelected": "Eliminar filas seleccionadas",
       "deleteConfirmMessage": "¿Eliminar {n} entradas de esta distribución?",
       "weightPercent": "Peso (%)",
-      "balance": "Equilibrar"
+      "balance": "Equilibrar",
+      "askNoSource": "Todavía no hay ninguna fuente que consultar para este activo"
     },
     "showInactive": "Inactivos",
     "edit": {
@@ -510,7 +512,8 @@
       "removeUrl": "Quitar la URL",
       "toBeRemoved": "Por quitar",
       "urlNone": "ninguna URL",
-      "alreadyWithout": "{already} ya sin"
+      "alreadyWithout": "{already} ya sin",
+      "triLeave": "Sin cambios"
     },
     "docsHelp": {
       "list": "Todos los activos que sigue LibreFolio, con la fuente de sus precios, su último precio y su variación. Abre uno para ver su gráfico, eventos y datos."

@@ -635,7 +635,40 @@
           "value": "5"
         },
         "currency": "EUR"
-      }
+      },
+      "final_cash": {
+        "value": {
+          "kind": "finite_decimal",
+          "value": "5"
+        },
+        "currency": "EUR"
+      },
+      "cash_by_currency": [
+        {
+          "currency": "EUR",
+          "initial": {
+            "value": {
+              "kind": "finite_decimal",
+              "value": "5"
+            },
+            "currency": "EUR"
+          },
+          "final": {
+            "value": {
+              "kind": "finite_decimal",
+              "value": "5"
+            },
+            "currency": "EUR"
+          },
+          "unused_contributions": {
+            "value": {
+              "kind": "finite_decimal",
+              "value": "0"
+            },
+            "currency": "EUR"
+          }
+        }
+      ]
     },
     "objectives": {
       "stages": [

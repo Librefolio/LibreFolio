@@ -4,7 +4,8 @@
  *
  *   (a) A saved BUY with its FEE and TAX, opened alone in the Bulk (edit): the Bulk reads its charges on entry; the BUY
  *       row carries the chip `tx-bulk-charges-toggle-<rowId>` with `data-charges-count="2"`, closed; the chip opens
- *       the group: two indented rows (`↳`, `data-charge-of` = the BUY's row), no selection checkbox.
+ *       the group: two indented rows (`↳`, `data-charge-of` = the BUY's row), each with its own selection checkbox
+ *       (66 TL-4, P-2 = C: was «no selection checkbox»).
  *   (b) BUY, FEE and TAX selected together in the table and opened: the group comes open.
  *   (c) A double-click on an indented row opens the charge's own Form (its parent section names the BUY).
  *   (d) Paging at 5 rows: a parent whose open group crosses the page boundary keeps the group on its page; the row
@@ -100,13 +101,13 @@ async function chipOf(bulk: Locator, row: Locator): Promise<Locator> {
 }
 
 /** Expect `row` indented under the parent row `parentRow`: `data-charge-of` names it, `↳` stands for the number, and it
- *  has no selection checkbox. */
+ *  has its own selection checkbox (66 TL-4, P-2 = C: was «no selection checkbox»). */
 async function expectIndentedUnder(row: Locator, parentRow: Locator): Promise<void> {
     const parentRowId = await parentRow.getAttribute('data-row-id');
     const label = row.getByTestId('tx-bulk-row-label');
     await expect(label).toHaveAttribute('data-charge-of', parentRowId ?? '<none>', {timeout: 8_000});
     await expect(label).toContainText('↳');
-    await expect(row.locator('[data-testid^="dt-row-checkbox-"]')).toHaveCount(0);
+    await expect(row.locator('[data-testid^="dt-row-checkbox-"]'), 'TL-4: an indented charge has its own checkbox').toHaveCount(1);
 }
 
 test.describe('Bulk — linked charges grouped under their parent (BK2)', () => {

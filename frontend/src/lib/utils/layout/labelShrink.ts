@@ -56,6 +56,10 @@ export function measureNaturalWidth(el: HTMLElement, naturalFontSizePx: number):
     clone.style.left = '-9999px';
     clone.style.top = '-9999px';
     clone.style.fontSize = `${naturalFontSizePx}px`;
+    // The clone hangs from the body: what the label inherits from its own place (a tab's medium weight, above all) has to
+    // come along, or the clone is narrower than the label it stands for (toolbar-width-sweep: 3–6 px over a row of tabs).
+    const {fontWeight, fontFamily, fontStyle, letterSpacing, textTransform} = getComputedStyle(el);
+    Object.assign(clone.style, {fontWeight, fontFamily, fontStyle, letterSpacing, textTransform});
     document.body.appendChild(clone);
     const width = clone.getBoundingClientRect().width;
     document.body.removeChild(clone);
@@ -94,6 +98,30 @@ export interface ShrinkTarget {
     availableWidth: number;
 }
 
+/** A row whose labels share one line: what the row can give them once the parts that never shrink are taken out. */
+export interface ShrinkRow {
+    /** The row's own inner width, in px. */
+    width: number;
+    /** Everything in the row that is not a label and does not scale: paddings, icons, gaps, badges — of every item,
+     *  those whose label is hidden included. */
+    fixedWidth: number;
+}
+
+/**
+ * The scale at which labels of the given natural widths, side by side, fill the room a row leaves them: below 1 the row
+ * does not hold them at full size. Pure (numbers in, number out): the caller measures.
+ *
+ * It exists because a per-label ratio cannot see the row (toolbar-width-sweep, 25/11/2026): a one-word label holds its
+ * own item at its natural width — with `min-width: auto` an item never gets narrower than its content — so «what the item
+ * gives this label» is exactly the label's own width, the ratio is 1, and the row never shrinks however far it overflows.
+ * (A two-word label nearly passes: its item can go down to the longer word.)
+ */
+export function rowShrinkRatio(naturalWidths: readonly number[], row: ShrinkRow): number {
+    const natural = naturalWidths.reduce((sum, width) => sum + width, 0);
+    if (natural <= 0) return 1;
+    return (row.width - row.fixedWidth) / natural;
+}
+
 /**
  * One measure→compute→apply pass over a group of labels that must shrink/grow UNIFORMLY (same
  * scale for every label in the group, so mixed-length text still reads as one consistent set —
@@ -106,19 +134,28 @@ export interface ShrinkTarget {
  * computed font-size, which would silently fight any Tailwind `text-*` class already on the
  * label and produce the wrong absolute size.
  *
+ * `row`: when the labels stand on one line (the tabs), the scale also has to let the whole row hold them, together:
+ * the smaller of the per-label ratios and of `rowShrinkRatio`.
+ *
  * Returns the applied scale (1 = untouched, `floor` = as small as allowed).
  */
-export function applyLinearShrink(targets: ShrinkTarget[], floor: number = DEFAULT_LABEL_SHRINK_FLOOR): number {
+export function applyLinearShrink(targets: ShrinkTarget[], floor: number = DEFAULT_LABEL_SHRINK_FLOOR, row?: ShrinkRow): number {
     if (targets.length === 0) return 1;
 
     const measured = targets.map(({label, availableWidth}) => {
         const naturalPx = captureNaturalFontSizePx(label);
         const naturalWidth = measureNaturalWidth(label, naturalPx);
         const ratio = naturalWidth <= 0 ? 1 : availableWidth / naturalWidth;
-        return {label, naturalPx, ratio};
+        return {label, naturalPx, naturalWidth, ratio};
     });
 
-    let scale = Math.max(floor, Math.min(1, Math.min(...measured.map((m) => m.ratio))));
+    const rowRatio = row
+        ? rowShrinkRatio(
+              measured.map((m) => m.naturalWidth),
+              row,
+          )
+        : 1;
+    let scale = Math.max(floor, Math.min(1, rowRatio, ...measured.map((m) => m.ratio)));
     applyScale(measured, scale);
 
     // Safety net: measurement margin (subpixel rounding, gap/padding read slightly off) can

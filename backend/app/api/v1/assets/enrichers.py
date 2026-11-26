@@ -19,6 +19,7 @@ from backend.app.api.v1.auth import get_current_user
 from backend.app.db.models import AssetType, User
 from backend.app.logging_config import get_logger
 from backend.app.schemas.assets.enrichers import ENRICHER_CODE, FAEnricherBinding, FAEnricherRecognition, FAEnricherRecognizeRequest, FAEnrichersCatalogue, FAEnricherSearchResult, FAEnricherTestRequest
+from backend.app.services.enrichers.admission import count_shared_call
 from backend.app.services.enrichers.base import EnricherBinding, EnricherPlugin, EnricherSearchResult
 from backend.app.services.enrichers.bindings import default_order, enrichers_catalogue, installed_enrichers
 from backend.app.services.enrichers.recognize import IdentifierLearned, Recognized, RecognizeStatus, Seed, recognize_cascade
@@ -159,6 +160,7 @@ async def search_enricher(code: str, q: str = Query(..., min_length=1, max_lengt
     if not plugin.supports_search:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"The enricher '{code}' does not search")
     try:
+        await count_shared_call(plugin)
         results = await asyncio.to_thread(plugin.search, q)
     except RateLimitedError as refused:
         raise source_refused(code, refused) from refused
@@ -237,11 +239,15 @@ async def search_across_enrichers(
 @enricher_router.post("/enrichers/{code}/test", response_model=FAEnricherRecognition, tags=["FA Enrichers"])
 async def test_enricher(code: str, request: FAEnricherTestRequest, current_user: User = Depends(get_current_user)) -> FAEnricherRecognition:
     """«Recognize» one binding on one enricher (the E7 window's «test»): writes nothing; counted on the probe's per-user
-    limit (plan C0)."""
+    limit (plan C0), and on the account an enricher shares (82 CG-C: 429 ``RATE_LIMITED`` when a limit of it is full)."""
     enforce_probe_limit(current_user.id)
     plugin = await _enricher(code)
     extra = {key: value for key, value in request.binding.model_dump().items() if key not in ("identifier_type", "identifier")}
     binding = EnricherBinding(identifier_type=request.binding.identifier_type, identifier=request.binding.identifier, params=extra)
+    try:
+        await count_shared_call(plugin)
+    except RateLimitedError as refused:
+        raise source_refused(code, refused) from refused
     try:
         answer = await asyncio.to_thread(plugin.recognize, binding)
     except Exception as error:  # noqa: BLE001 — isolation boundary: a plugin that fails answers «error», logged

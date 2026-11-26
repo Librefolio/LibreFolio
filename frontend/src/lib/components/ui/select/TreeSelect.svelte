@@ -17,12 +17,17 @@
   `charts/SignalTreeSelect.svelte` is now a thin adapter over this component, and
   `SignalTreeSelect.test.ts` pins that nothing changed for the signals panel and for
   `e2e/gallery.spec.ts`, which relies on the first group opening by itself (`defaultExpanded`).
+
+  The search's clear is the standard `Button` (85 BTN-2c), `{testId}-search-clear`. It sits inside the combobox, so
+  the combobox's Enter and Space act only on the combobox itself: an Enter on the clear used to choose the highlighted
+  row instead of clearing (B-TS1).
 -->
 <script generics="T extends TreeSelectItem" lang="ts">
     import type {Snippet} from 'svelte';
     import {ChevronDown, ChevronRight, Search, X} from 'lucide-svelte';
 
     import {_ as t} from '$lib/i18n';
+    import Button from '$lib/components/ui/button/Button.svelte';
     import type {TreeSelectGroup, TreeSelectItem} from './treeSelect';
 
     type NavigationEntry =
@@ -353,6 +358,8 @@
             {isOpen ? 'border-lf-focus ring-2 ring-lf-focus' : `${triggerBorderClass} hover:border-lf-input-hover`}"
         onclick={toggle}
         onkeydown={(event) => {
+            // B-TS1: Enter or Space on a control inside the combobox (the search's clear) is that control's own press.
+            if (event.target !== event.currentTarget && (event.key === 'Enter' || event.key === ' ')) return;
             if (!isOpen && (event.key === 'Enter' || event.key === ' ' || event.key === 'ArrowDown' || event.key === 'ArrowUp' || event.key.length === 1)) {
                 event.preventDefault();
                 open(event.key === 'ArrowUp');
@@ -382,19 +389,22 @@
                 }}
             />
             {#if query}
-                <button
-                    type="button"
-                    class="shrink-0 text-lf-muted hover:text-lf-secondary"
-                    aria-label={$t('common.clear')}
+                <!-- `xs` + `dense`: a 20 px box, the line's height, so the open trigger does not grow. -->
+                <Button
+                    label={$t('common.clear')}
+                    icon={X}
+                    display="icon"
+                    variant="ghost"
+                    size="xs"
+                    dense
                     onclick={(event) => {
                         event.stopPropagation();
                         query = '';
                         defer(() => setActiveIndex(0));
                         inputRef?.focus();
                     }}
-                >
-                    <X size={14} />
-                </button>
+                    data-testid={testId ? `${testId}-search-clear` : undefined}
+                />
             {/if}
         {:else if selectedEntry && selectedItem}
             <div class="min-w-0 flex-1">

@@ -19,6 +19,7 @@ projected by ``rebalancer_report``, which reuses the shared builders here.
 
 from __future__ import annotations
 
+from collections import defaultdict
 from datetime import datetime
 from decimal import Decimal
 
@@ -41,6 +42,7 @@ from backend.app.schemas.pac_allocator.rows import (
     PlannerCatalogs,
     PlannerConversion,
     PlannerCostTotals,
+    PlannerCurrencyCash,
     PlannerFundingAction,
     PlannerLedgerRow,
     PlannerMoneyLost,
@@ -52,7 +54,7 @@ from backend.app.schemas.pac_allocator.rows import (
     WholeQuantityInstruction,
 )
 from backend.app.services.pac_allocator.evaluation.economics import final_cash_by_cell
-from backend.app.services.pac_allocator.evaluation.limits import limit_reference, resolve_scenario_limits
+from backend.app.services.pac_allocator.evaluation.limits import plan_reference, resolve_scenario_limits
 from backend.app.services.pac_allocator.evaluation.scenario import build_scenario_index, exact_scenario_fingerprint
 from backend.app.services.pac_allocator.models import (
     ExactAsset,
@@ -447,7 +449,7 @@ def build_asset_rows(scenario: ExactPlannerScenario, evaluation: ExactEvaluation
     currency = scenario.valuation_currency
     final_invested = accounting.final_invested
     zero_denominator = final_invested == _EXACT_ZERO
-    bounds = resolve_scenario_limits(scenario, limit_reference(scenario, accounting)).assets()
+    bounds = resolve_scenario_limits(scenario, plan_reference(scenario, accounting)).assets()
     rows: list[PacAssetPlanRow] = []
     for row in evaluation.assets:
         limit = bounds.get(row.asset_id)
@@ -477,7 +479,7 @@ def build_cash_rows(scenario: ExactPlannerScenario, evaluation: ExactEvaluation)
     accounting = _require_accounting(evaluation)
     currency = scenario.valuation_currency
     index = build_scenario_index(scenario)
-    bounds = resolve_scenario_limits(scenario, limit_reference(scenario, accounting)).cash()
+    bounds = resolve_scenario_limits(scenario, plan_reference(scenario, accounting)).cash()
     final_by_cell = final_cash_by_cell(index, evaluation.ledgers)
     return [
         PacCashEntryRow(
@@ -740,7 +742,32 @@ def build_plan_accounts(scenario: ExactPlannerScenario, evaluation: ExactEvaluat
             rounding=_money(accounting.rounding_adjustment + accounting.identity_delta, currency),
         ),
         uninvested=_money(accounting.uninvested, currency),
+        final_cash=_money(accounting.final_wealth - accounting.final_invested, currency),
+        cash_by_currency=build_cash_by_currency(scenario, evaluation),
     )
+
+
+def build_cash_by_currency(scenario: ExactPlannerScenario, evaluation: ExactEvaluation) -> list[PlannerCurrencyCash]:
+    """The plan's cash currency by currency, each in its own (TL-5 of project 67, contract §6.1): at the start the cash chosen
+    on every Broker plus the contributions declared; at the end the spendable balance of every Broker's ledger plus the
+    contributions' part not deposited (a deposit is already in the ledger's ``funding_in``). A currency with no cash at
+    either end has no row; the valuation currency comes first, then the others by code."""
+    initial: dict[str, ExactRatio] = defaultdict(lambda: _EXACT_ZERO)
+    final: dict[str, ExactRatio] = defaultdict(lambda: _EXACT_ZERO)
+    unused: dict[str, ExactRatio] = defaultdict(lambda: _EXACT_ZERO)
+    for cash in scenario.existing_cash:
+        initial[cash.selected.currency] += cash.selected.amount
+    for contribution in scenario.contributions:
+        initial[contribution.amount.currency] += contribution.amount.amount
+    for ledger in evaluation.ledgers:
+        final[ledger.currency] += ledger.final_spendable
+    for source in evaluation.funding_sources:
+        if source.source_kind == "contribution":
+            unused[source.currency] += source.remaining
+            final[source.currency] += source.remaining
+    shown = {code for code in (*initial, *final) if initial[code] != _EXACT_ZERO or final[code] != _EXACT_ZERO}
+    valuation = scenario.valuation_currency
+    return [PlannerCurrencyCash(currency=code, initial=_money(initial[code], code), final=_money(final[code], code), unused_contributions=_money(unused[code], code)) for code in sorted(shown, key=lambda code: (code != valuation, code))]
 
 
 def build_objective_results(scenario: ExactPlannerScenario, view: ExactPolicyView, evaluation: ExactEvaluation) -> PlannerObjectiveResults:

@@ -184,7 +184,8 @@
       "placeholder": "Buscar plugins o ajustes...",
       "noMatchAll": "Ningún plugin coincide con «{query}».",
       "noMatchFamily": "Ningún plugin de «{family}» coincide con «{query}».",
-      "searchAll": "Buscar en todas las familias ({count})"
+      "searchAll": "Buscar en todas las familias ({count})",
+      "inShared": "{count, plural, one {# resultado en Compartidos} other {# resultados en Compartidos}}"
     }
   }
 }

@@ -7,7 +7,7 @@
     import {Pencil, RefreshCw, RotateCw} from 'lucide-svelte';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import AiExportMenu, {type AiExportMenuLabels} from '$lib/features/ai-export/AiExportMenu.svelte';
-    import type {PreparedAiExport} from '$lib/features/ai-export/aiExportClipboard';
+    import type {AiExportStep, PreparedAiExport} from '$lib/features/ai-export/aiExportClipboard';
     import type {AiExportOptionsSelection} from '$lib/features/ai-export/aiExportOptions';
     import type {AiExportCatalogCompatibilityResult} from '$lib/features/ai-export/catalog/compatibility';
     import {getAiExportErrorMessage} from '$lib/features/ai-export/ui';
@@ -22,7 +22,7 @@
         aiExportLabels: AiExportMenuLabels;
         /** The AI export catalogue is loading or failed, or the asset is not loaded yet. */
         aiExportDisabled: boolean;
-        onaiexportprepare: (options: AiExportOptionsSelection) => Promise<PreparedAiExport>;
+        onaiexportprepare: (options: AiExportOptionsSelection, onstep: (step: AiExportStep) => void) => Promise<PreparedAiExport>;
         onaiexportcopied: (result: PreparedAiExport) => void;
         /** The asset or its classification is not loaded yet. */
         editDisabled: boolean;

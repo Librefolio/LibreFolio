@@ -5,7 +5,8 @@
  * - E6c2 (PROF 19/11): with only enrichers this instance cannot use, «Aggiorna» stays, and says nothing was read
  *   (`enrichers_read` 0 in the event), never «nothing changed»;
  * - an asset without enrichers shows the box «Nessun arricchitore configurato»: its «Configura» opens the asset window
- *   with the enrichers' window on top, for that opening only.
+ *   with the enrichers' window on top, for that opening only;
+ * - 87 A5: the Assets list's «Sync All» window calls the enrichers of every asset that has some, with its own button.
  *
  * The lane serves only `mockenrich` (`./dev.py server --test`, E8a): no step reaches a real site. Each asset is the
  * test's own (a unique name and ISIN under the user-assigned «ZZ» prefix), created over the API and deleted by id. Read
@@ -120,6 +121,46 @@ test.describe('«Aggiorna» and «Configura» on the Profilo tab (plan 68, E6c)'
             const event = await waitForEvent(page, 'asset.profile.refreshed', {since});
             expect(event.detail as Record<string, unknown>).toMatchObject({asset_id: assetId, enrichers_read: 0, written: []});
             await expect(button).toHaveAttribute('data-state', 'idle', {timeout: 10_000});
+        } finally {
+            await page.request.delete(`${API_BASE}/assets?asset_ids=${assetId}`);
+        }
+    });
+
+    test('«Sync All» calls the enrichers of the assets that have some, apart from the prices, and lists what came of it (87 A5)', async ({page}) => {
+        test.setTimeout(60_000);
+        const isin = `ZZ${uniqueToken(9)}0`.toUpperCase();
+        // No price provider: the profiles' list is not the prices'
+        const assetId = await createEtf(page, `E2E profile bulk ${uniqueToken(8)}`, isin, {mockenrich: {identifier_type: 'ISIN', identifier: isin}});
+        try {
+            // The window's read of who has enrichers, cut to this test's asset: the others are their neighbours' to refresh
+            await page.route(
+                (url) => url.pathname === `${API_BASE}/assets` && url.searchParams.has('asset_ids'),
+                async (route) => {
+                    const response = await route.fetch();
+                    const rows = (await response.json()) as AssetRow[];
+                    await route.fulfill({response, json: rows.map((row) => (row.asset_id === assetId ? row : {...row, enrichers: null}))});
+                },
+            );
+            await page.goto('/assets');
+            await page.waitForSelector('[data-testid="assets-page"][data-busy="false"]', {timeout: 20_000});
+            const paths: string[] = [];
+            page.on('request', (request) => paths.push(`${request.method()} ${new URL(request.url()).pathname}`));
+            await page.getByTestId('assets-sync-all-button').click();
+            const section = page.getByTestId('asset-sync-profile');
+            await expect(section).toHaveAttribute('data-status', 'ready', {timeout: 10_000});
+            await expect(section).toHaveAttribute('data-count', '1');
+
+            const since = await eventSeq(page);
+            const [refresh] = await Promise.all([page.waitForRequest((request) => request.method() === 'POST' && new URL(request.url()).pathname === `${API_BASE}/assets/profile/refresh`), page.getByTestId('asset-sync-profile-start').click()]);
+            expect(refresh.postDataJSON()).toEqual([assetId]);
+            const event = await waitForEvent(page, 'asset.profiles.refreshed', {since});
+            expect(event.detail as Record<string, unknown>).toMatchObject({assets: 1, read: 1, failed: 0});
+            await expect(section).toHaveAttribute('data-run', 'done');
+            await expect(section.getByTestId('asset-sync-profile-row')).toHaveAttribute('data-outcome', /^(written|unchanged)$/);
+            expect(
+                paths.filter((path) => path.endsWith('/prices/sync')),
+                'the prices start by their own button',
+            ).toEqual([]);
         } finally {
             await page.request.delete(`${API_BASE}/assets?asset_ids=${assetId}`);
         }

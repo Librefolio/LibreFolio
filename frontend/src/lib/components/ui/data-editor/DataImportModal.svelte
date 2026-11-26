@@ -19,6 +19,8 @@
     import CsvEditor from './CsvEditor.svelte';
     import {FileText, HelpCircle, Upload} from 'lucide-svelte';
     import {t} from '$lib/i18n';
+    import Button from '$lib/components/ui/button/Button.svelte';
+    import CloseButton from '$lib/components/ui/button/CloseButton.svelte';
 
     // =========================================================================
     // Props
@@ -51,7 +53,7 @@
         oncsvtextchange?: (text: string) => void;
     }
 
-    let {open = $bindable(false), title = 'Import CSV Data', columns, identity, strict = false, validateRows, headerSlot, headerActions, helpContent, onimport, onclose, oncsvtextchange}: Props = $props();
+    let {open = $bindable(false), title = $t('csvImport.title'), columns, identity, strict = false, validateRows, headerSlot, headerActions, helpContent, onimport, onclose, oncsvtextchange}: Props = $props();
 
     // =========================================================================
     // State
@@ -208,16 +210,15 @@
         <div class="flex items-center gap-2">
             <h2 class="text-lg font-semibold text-lf-primary">{title}</h2>
             {#if helpContent}
-                <button aria-label={$t('csvImport.helpTitle')} data-testid="data-import-modal-help" class="p-1 text-lf-muted hover:text-lf-info rounded transition-colors" onclick={() => (showHelp = !showHelp)} title={$t('csvImport.helpTitle')}>
-                    <HelpCircle size={18} />
-                </button>
+                <!-- Opens the help panel below: a disclosure (`aria-expanded`), drawn as today's icon (85 BTN-2a). -->
+                <Button label={$t('csvImport.helpTitle')} icon={HelpCircle} display="icon" variant="ghost" size="sm" aria-expanded={showHelp} onclick={() => (showHelp = !showHelp)} data-testid="data-import-modal-help" />
             {/if}
         </div>
         <div class="flex items-center gap-1">
             {#if headerActions}
                 {@render headerActions()}
             {/if}
-            <button aria-label={$t('common.close')} data-testid="data-import-modal-close" class="p-1 text-lf-muted hover:text-lf-secondary rounded" onclick={requestClose}>✕ </button>
+            <CloseButton size="sm" onclick={requestClose} data-testid="data-import-modal-close" />
         </div>
     </div>
 
@@ -284,19 +285,18 @@
             {/if}
         </div>
         <div class="flex gap-2">
-            <button class="px-4 py-2 text-sm bg-lf-panel text-lf-secondary rounded-lg hover:bg-lf-neutral transition-colors" data-testid="data-import-cancel" onclick={requestClose}>{$t('common.cancel')}</button>
-            <button
-                class="px-4 py-2 text-sm bg-lf-action text-lf-on-action rounded-lg hover:bg-lf-action-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            <Button label={$t('common.cancel')} variant="secondary" onclick={requestClose} data-testid="data-import-cancel" />
+            <Button
+                label={$t('csvImport.import', {values: {n: validRows.length}})}
+                variant="primary"
+                disabled={!canImport}
+                onclick={handleConfirm}
                 data-domain-error={domainError ? 'true' : 'false'}
                 data-error-count={errorCount}
                 data-has-duplicates={hasDuplicates ? 'true' : 'false'}
                 data-testid="data-import-confirm"
                 data-valid-rows={validRows.length}
-                disabled={!canImport}
-                onclick={handleConfirm}
-            >
-                {$t('csvImport.import', {values: {n: validRows.length}})}
-            </button>
+            />
         </div>
     </div>
 </ModalBase>

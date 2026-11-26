@@ -549,7 +549,8 @@ class TestIncomeTimelineEqualsPeriodIncome:
         300 EUR on 05-02; inside the window (2041-05-02, 2041-05-31]: DIVIDEND 12 EUR on X (05-05), its negative
         correction −2 (05-09), REWARD 4 X valued 2.5 EUR each (05-12, no cash) and INTEREST 3 EUR on cash (05-20).
         Summary period_income (0.5 × (12 − 2 + 10 + 3)) = 11.5; the income timeline of the same user, scope and
-        window: target_total 11.5 EUR, reward_count 1 — the same figure.
+        window: target_total 11.5 EUR, reward_count 1 — the same figure. Its three parts (86, D-21): dividends 0.5 × (12 − 2) = 5,
+        interest 1.5, rewards 5, and they add up to it.
 
         Isolation: no other test of this module uses 2041; the session is rolled back."""
         broker = await _owned_broker(session, keep_alive, test_user, "R", Decimal("0.5"))
@@ -611,6 +612,9 @@ class TestIncomeTimelineEqualsPeriodIncome:
                 ("timeline status", IncomeTimelineStatus.OK.value, payload.get("status")),
                 ("timeline reward_count", 1, (payload.get("summary") or {}).get("reward_count")),
                 ("summary period_income", Decimal("11.5"), period_income),
+                ("summary period_dividends", Decimal("5"), summary.period_dividends.amount if summary.period_dividends is not None else None),
+                ("summary period_interest", Decimal("1.5"), summary.period_interest.amount if summary.period_interest is not None else None),
+                ("summary period_rewards", Decimal("5"), summary.period_rewards.amount if summary.period_rewards is not None else None),
                 ("timeline target_total, against the summary period_income", period_income, timeline_total),
             ],
         )

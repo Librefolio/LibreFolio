@@ -360,6 +360,52 @@ describe('Header document scroll thresholds', () => {
     });
 });
 
+/**
+ * What the header takes of the window, published for the boxes that stick under it (81 U38, `utils/layout/headerOffset.ts`):
+ * `--lf-header-offset` is its height while it shows or is pinned and 0 while it is hidden; `--lf-header-height` is its
+ * height always. The settings filter menu reads them; its real stand under a real scroll is `settings-filter-menu.spec.ts`.
+ */
+describe('Header publishes its offset', () => {
+    const offset = () => document.documentElement.style.getPropertyValue('--lf-header-offset');
+    const height = () => document.documentElement.style.getPropertyValue('--lf-header-height');
+
+    it('the height while it shows, 0 while it is hidden, the height again on a scroll up; the whole height throughout', async () => {
+        await mount();
+        expect({offset: offset(), height: height()}).toEqual({offset: '64px', height: '64px'});
+        await scrollTo(130);
+        expectState('hidden');
+        expect({offset: offset(), height: height()}).toEqual({offset: '0px', height: '64px'});
+        await scrollTo(120);
+        expectState('visible');
+        expect({offset: offset(), height: height()}).toEqual({offset: '64px', height: '64px'});
+    });
+
+    it('stays at the height while a pin holds it, through a scroll down that would hide it', async () => {
+        await mount({sidebarOpen: true});
+        await scrollTo(400);
+        expectState('pinned');
+        expect(offset()).toBe('64px');
+    });
+
+    it('follows the height it measures', async () => {
+        await mount();
+        measuredHeight = 80;
+        ownResizeObserver().deliver();
+        await tick();
+        expect({offset: offset(), height: height()}).toEqual({offset: '80px', height: '80px'});
+    });
+
+    it('takes both variables back when it goes away, and says so', async () => {
+        const mounted = await mount();
+        const heard = vi.fn();
+        window.addEventListener('lf-header-offset', heard);
+        mounted.unmount();
+        window.removeEventListener('lf-header-offset', heard);
+        expect({offset: offset(), height: height()}).toEqual({offset: '', height: ''});
+        expect(heard).toHaveBeenCalled();
+    });
+});
+
 describe('Header visibility pins', () => {
     it.each(['sidebarOpen', 'keepVisible', 'guideActive'] as const)('pins on %s and establishes a fresh baseline on release', async (prop) => {
         const mounted = await mount();
@@ -647,9 +693,12 @@ describe('Header navigation, resizing and teardown', () => {
             expect(removeWindow).toHaveBeenCalledWith(type, registration?.[1]);
         }
         for (const type of ['focusin', 'focusout']) {
-            const registration = addDocument.mock.calls.find(([eventType]) => eventType === type);
-            expect(registration).toBeDefined();
-            expect(removeDocument).toHaveBeenCalledWith(type, registration?.[1], true);
+            // Header's own listeners are the capture-phase ones (`true`). Svelte registers its event-delegation handler
+            // on the document too, for every delegated event of the tree (`{passive: false}`, before Header's onMount):
+            // identified by position, the first `focusin` registration was Svelte's, not Header's (85 BTN-2a triage).
+            const own = addDocument.mock.calls.filter(([eventType, , options]) => eventType === type && options === true);
+            expect(own, `Header registers exactly one capture-phase ${type} listener`).toHaveLength(1);
+            expect(removeDocument).toHaveBeenCalledWith(type, own[0][1], true);
         }
         window.dispatchEvent(new Event('scroll'));
         window.dispatchEvent(new Event('resize'));

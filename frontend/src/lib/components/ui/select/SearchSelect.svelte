@@ -4,6 +4,10 @@
   Dropdown select with search: a substring match on value, label, searchText and emoji icon,
   best matches first (see optionFilter.ts). Supports keyboard navigation and custom item
   rendering via snippets.
+
+  The search's clear is the standard `Button` (85 BTN-2c; it had no name and no `type`). The «create new» footer stays a
+  hand-written `<button>` on the recipe (`buttonClasses`): a full-width row whose word cuts and sits left, which
+  `Button` (centred) cannot draw.
 -->
 <script lang="ts">
     import {untrack, type Snippet} from 'svelte';
@@ -11,6 +15,9 @@
     import {filterOptions, firstSelectable as firstSelectableIn, isSelectable, stepSelectable} from './optionFilter';
     import {ChevronDown, Search, X, Plus} from 'lucide-svelte';
     import {_} from '$lib/i18n';
+    import Button from '$lib/components/ui/button/Button.svelte';
+    import {buttonClasses} from '$lib/components/ui/button/buttonClasses';
+    import {pressable} from '$lib/components/ui/button/pressable.svelte';
 
     interface Props {
         /** Currently selected value */
@@ -43,6 +50,12 @@
         onchange?: (value: string) => void;
         /** Compact mode: smaller trigger padding to match standard inputs */
         compact?: boolean;
+        /** A choice is missing or refused: the trigger takes the danger border and `aria-invalid`. */
+        invalid?: boolean;
+        /** The id of the text that says why (`aria-describedby` of the trigger). */
+        describedBy?: string;
+        /** The accessible name of the trigger, when no visible label gives it one. */
+        ariaLabel?: string;
         /** W43/W44: Label for the "Create new" sticky footer action.
          *  When set (non-empty), a persistent footer row is rendered at the
          *  bottom of the dropdown. Clicking it fires `onCreateNew`. */
@@ -75,6 +88,9 @@
         selectedItem,
         onchange,
         compact = false,
+        invalid = false,
+        describedBy,
+        ariaLabel,
         createLabel = '',
         createLabelFor,
         onCreateNew,
@@ -395,6 +411,9 @@
 
     // Unique ID for aria-controls
     const listboxId = `searchselect-listbox-${Math.random().toString(36).substring(2, 9)}`;
+    /** The option the arrows stand on: the focus stays in the search, so a screen reader reads it — its description
+     *  included — through `aria-activedescendant` (85 BTN-0c, D16). */
+    let activeOptionId = $derived(isOpen && isSelectable(filteredOptions[highlightedIndex]) ? `${listboxId}-${highlightedIndex}` : undefined);
 
     function scrollToHighlighted() {
         setTimeout(() => {
@@ -415,10 +434,13 @@
         aria-disabled={disabled}
         aria-expanded={isOpen}
         aria-haspopup="listbox"
+        aria-invalid={invalid ? 'true' : undefined}
+        aria-describedby={describedBy}
+        aria-label={ariaLabel}
         class="w-full flex items-center justify-between {compact ? 'px-3 py-2 text-sm' : 'px-3 py-2'} border rounded-lg
                transition-all text-left gap-2
                {disabled ? 'bg-lf-panel text-lf-muted cursor-not-allowed opacity-60' : 'bg-lf-field text-lf-primary cursor-pointer'}
-               {isOpen ? 'ring-2 ring-lf-focus border-lf-focus' : disabled ? 'border-lf-subtle' : 'border-lf-input hover:border-lf-input-hover'}"
+               {isOpen ? 'ring-2 ring-lf-focus border-lf-focus' : invalid ? 'border-lf-danger' : disabled ? 'border-lf-subtle' : 'border-lf-input hover:border-lf-input-hover'}"
         onclick={() => toggleDropdown()}
         onfocus={() => {
             triggerFocusedAt = Date.now();
@@ -441,6 +463,7 @@
                     handleSearchKeydown(e);
                 }}
                 onclick={(e) => e.stopPropagation()}
+                aria-activedescendant={activeOptionId}
                 class="flex-1 min-w-0 bg-transparent border-none outline-none text-sm text-lf-primary placeholder:text-lf-placeholder"
                 placeholder={$_('common.search')}
                 data-testid={testId ? `${testId}-search` : undefined}
@@ -486,6 +509,7 @@
                             bind:this={inputRef}
                             bind:value={searchQuery}
                             onkeydown={handleSearchKeydown}
+                            aria-activedescendant={activeOptionId}
                             type="text"
                             class="w-full pl-9 pr-8 py-2 text-sm border border-lf-input bg-lf-field text-lf-primary placeholder:text-lf-placeholder hover:border-lf-input-hover rounded-lg
                                focus:outline-none focus:ring-2 focus:ring-lf-focus focus:border-lf-focus"
@@ -493,9 +517,9 @@
                             data-testid={testId ? `${testId}-search` : undefined}
                         />
                         {#if searchQuery}
-                            <button onclick={() => (searchQuery = '')} class="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-lf-muted hover:text-lf-secondary" data-testid={testId ? `${testId}-search-clear` : undefined}>
-                                <X size={14} />
-                            </button>
+                            <div class="absolute right-2 top-1/2 -translate-y-1/2">
+                                <Button label={$_('common.clear')} icon={X} display="icon" variant="ghost" size="xs" dense onclick={() => (searchQuery = '')} data-testid={testId ? `${testId}-search-clear` : undefined} />
+                            </div>
                         {/if}
                     </div>
                 </div>
@@ -520,6 +544,8 @@
                         {:else}
                             <button
                                 type="button"
+                                id="{listboxId}-{index}"
+                                use:pressable={{label: option.label, help: option.badgeTooltip, partTips: true, wordVisible: () => true}}
                                 onclick={() => selectOption(option)}
                                 onmouseenter={() => (highlightedIndex = index)}
                                 disabled={option.disabled}
@@ -559,20 +585,24 @@
             <!-- W43/W44: Sticky "Create new" footer -->
             {#if createLabel && onCreateNew}
                 {@const typed = searchQuery.trim()}
-                <button
-                    type="button"
-                    class="w-full flex items-center gap-2 px-4 py-2.5 text-left text-sm text-lf-link hover:bg-lf-selected border-t border-lf-subtle transition-colors"
-                    onclick={(e) => {
-                        e.stopPropagation();
-                        const query = searchQuery.trim();
-                        closeDropdown();
-                        onCreateNew?.(query);
-                    }}
-                    data-testid="search-select-create-new"
-                >
-                    <Plus size={14} class="shrink-0" />
-                    <span class="font-medium truncate">{typed !== '' && createLabelFor ? createLabelFor(typed) : createLabel}</span>
-                </button>
+                <!-- On the recipe, not `Button` (85 BTN-2c): `Button` centres its word, and this row's word sits left and cuts.
+                     The word takes the free width (`flex-1`), so no `justify-*` fights the recipe's. -->
+                <div class="border-t border-lf-subtle">
+                    <button
+                        type="button"
+                        class="{buttonClasses({variant: 'link', truncate: true})} w-full px-4 py-2.5"
+                        onclick={(e) => {
+                            e.stopPropagation();
+                            const query = searchQuery.trim();
+                            closeDropdown();
+                            onCreateNew?.(query);
+                        }}
+                        data-testid="search-select-create-new"
+                    >
+                        <Plus size={14} class="shrink-0" aria-hidden="true" />
+                        <span class="min-w-0 flex-1 truncate text-left">{typed !== '' && createLabelFor ? createLabelFor(typed) : createLabel}</span>
+                    </button>
+                </div>
             {/if}
         </div>
     {/if}

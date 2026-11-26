@@ -110,8 +110,9 @@ class TestValidation:
             liquidity_bucket = await post_allocation(client, {"exclude_buckets": ["Liquidity"]})
             unknown_field = await post_allocation(client, {"include_everything": True})
             empty_class = await post_allocation(client, {"classes": [""]})
-            fine = await post_allocation(client, {"dimension": "asset", "exclude_buckets": ["Unknown", "Other"], "classes": []})
-        assert (bad_dimension.status_code, liquidity_bucket.status_code, unknown_field.status_code, empty_class.status_code) == (422, 422, 422, 422)
+            empty_type = await post_allocation(client, {"types": [""]})
+            fine = await post_allocation(client, {"dimension": "asset", "exclude_buckets": ["Unknown", "Other"], "classes": [], "types": ["ETF_STOCK"]})
+        assert (bad_dimension.status_code, liquidity_bucket.status_code, unknown_field.status_code, empty_class.status_code, empty_type.status_code) == (422, 422, 422, 422, 422)
         assert fine.status_code == 200, fine.text
         assert fine.json()["applicable_buckets"] == [], "the asset dimension has no excludable bucket"
 
@@ -138,12 +139,27 @@ class TestTheView:
         assert {(row["asset_id"], row["asset_class"], row["asset_type"]) for row in body["assets"]} == {(equity, "STOCK", "ETF_STOCK"), (bond, "BOND", "ETF_BOND")}
         assert all(row["name"].startswith("Alloc_") for row in body["assets"]), "the assets carry their names"
         assert [(row["asset_class"], _d(row["amount"])) for row in body["classes"]] == [("STOCK", Decimal("500")), ("Liquidity", Decimal("300")), ("BOND", Decimal("200"))], "largest first"
-        cells = {(cell["asset_class"], cell["key"]): _d(cell["amount"]) for cell in body["matrix"]["cells"]}
-        assert cells == {("STOCK", "ETF_STOCK"): Decimal("500"), ("BOND", "ETF_BOND"): Decimal("200"), ("Liquidity", "Liquidity"): Decimal("300")}, "the matrix is the whole portfolio"
+        assert {row["asset_class"]: [(item["asset_type"], _d(item["amount"])) for item in row["types"]] for row in body["classes"]} == {"STOCK": [("ETF_STOCK", Decimal("500"))], "BOND": [("ETF_BOND", Decimal("200"))], "Liquidity": []}
+        assert body["matrix"] is None, "the type dimension has no matrix (86, D-15)"
         history = body["history"]
         assert history and history[-1]["through"] == WINDOW["end"]
         assert all(_d(step["base"]) == sum((_d(c["amount"]) for c in step["components"]), Decimal("0")) for step in history)
         assert _d(history[-1]["base"]) == Decimal("500")
+
+    async def test_a_type_kept_on_its_own(self, test_server):  # noqa: F811
+        print_section("Allocation: a type kept beside the classes, and the matrix of the sectors")
+        async with httpx.AsyncClient() as client, _user(client) as owned:
+            _broker_id, equity, _bond = await _book(client, owned)
+            resp = await post_allocation(client, {"date_range": WINDOW, "dimension": "type", "classes": ["Liquidity"], "types": ["ETF_STOCK"]})
+            sector = await post_allocation(client, {"date_range": WINDOW, "dimension": "sector", "classes": [], "types": ["ETF_STOCK"]})
+        assert resp.status_code == sector.status_code == 200, resp.text
+        body = resp.json()
+        assert {row["key"]: _d(row["amount"]) for row in body["slices"]} == {"ETF_STOCK": Decimal("500"), "Liquidity": Decimal("300")}
+        assert {row["asset_class"]: _d(row["amount"]) for row in body["outside"]["by_class"]} == {"BOND": Decimal("200")}
+        assert _identity(body) == _d(body["portfolio_total"])
+        assert _d(sector.json()["base"]) == Decimal("500")
+        assert {cell["asset_class"] for cell in sector.json()["matrix"]["cells"]} == {"STOCK", "BOND", "Liquidity"}, "the matrix is the whole portfolio"
+        assert equity
 
     async def test_the_geography_and_no_history_by_default(self, test_server):  # noqa: F811
         print_section("Allocation: geography, the cash has no country")

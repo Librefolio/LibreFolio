@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections import defaultdict
+from fractions import Fraction
 from typing import Annotated, Literal
 
 from pydantic import Field, model_validator
@@ -109,6 +111,23 @@ def _validate_rounding_top_ups(solution: PacPlanSolution | RebalancerPlanSolutio
             raise ValueError(f"A {label} rounding top-up cannot count more rounded postings than its ledger scope carries")
 
 
+def _validate_cash_by_currency(solution: PacPlanSolution | RebalancerPlanSolution, label: str) -> None:
+    """Bind the cash at the end, currency by currency (TL-5 of project 67), to the ledger it reads: the spendable balances of
+    a currency, every Broker summed, plus its contributions not deposited; a currency with no row ends with nothing."""
+    spendable: dict[str, Fraction] = defaultdict(Fraction)
+    for row in solution.ledger_rows:
+        spendable[row.currency] += fixed_fraction(row.final_spendable)
+    rows = {row.currency: row for row in solution.plan_accounts.cash_by_currency}
+    for currency in {*spendable, *rows}:
+        row = rows.get(currency)
+        expected = spendable[currency] + (money_fraction(row.unused_contributions) if row is not None else Fraction())
+        if expected != (money_fraction(row.final) if row is not None else Fraction()):
+            raise ValueError(f"{label} cash at the end of a currency must be its ledger's spendable balance plus the contributions not deposited")
+    accounts = solution.plan_accounts
+    if money_fraction(accounts.final_cash) != money_fraction(accounts.final_wealth) - money_fraction(solution.accounting.final_invested):
+        raise ValueError(f"{label} cash at the end must be the final wealth less the Assets after the plan")
+
+
 class PacPlanSolution(AllocationStrictModel):
     solution_id: PlannerId
     solution_kind: Literal["primary"]
@@ -138,6 +157,7 @@ class PacPlanSolution(AllocationStrictModel):
         require_unique([(row.broker_id, row.currency) for row in self.ledger_rows], "PAC ledger scopes")
         require_unique([(row.dimension, row.category_id) for row in self.exposure_rows], "PAC exposure rows")
         _validate_rounding_top_ups(self, "PAC")
+        _validate_cash_by_currency(self, "PAC")
         return self
 
 
@@ -181,6 +201,7 @@ class RebalancerPlanSolution(AllocationStrictModel):
         require_unique([(row.source_broker_id, row.destination_broker_id, row.amount.currency) for row in self.transfers], "Rebalancer transfer lanes")
         require_unique([(row.broker_id, row.currency) for row in self.ledger_rows], "Rebalancer ledger scopes")
         _validate_rounding_top_ups(self, "Rebalancer")
+        _validate_cash_by_currency(self, "Rebalancer")
         require_unique([(row.dimension, row.kind, getattr(row, "category_id", "")) for row in self.exposure_rows], "Rebalancer exposure rows")
         require_unique([(row.scope.model_dump_json(), row.basket_id) for row in self.tax_basket_rows], "Rebalancer tax basket rows")
         require_unique([row.scope.model_dump_json() for row in self.tax_scope_rows], "Rebalancer tax scope rows")

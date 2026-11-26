@@ -91,11 +91,9 @@ function sidebar(container: HTMLElement): HTMLElement {
     return nav;
 }
 
-/** The phone block, found through the label it owns rather than its class. */
+/** The phone box (the trigger and its list): by its test id. The label stands outside it since 81 U38, so the box can stick under the header alone. */
 function mobileBlock(): HTMLElement {
-    const el = screen.getByText('settings.category').closest('div');
-    if (!el) throw new Error('no mobile block rendered');
-    return el;
+    return screen.getByTestId('settings-mobile-category-box');
 }
 
 /** The dropdown trigger, by its test id: it is rendered open or closed. */

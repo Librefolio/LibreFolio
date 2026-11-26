@@ -86,7 +86,7 @@ const DARK_SPREADSHEET: Record<string, ChartRole> = {
     underlayBackgroundColor: '--lf-surface-field',
 };
 
-/** A very dark disc, a very light one, and one as `FilesTable` draws it (`getStringColor(seed).text`, 30 % lightness). */
+/** A very dark disc, a very light one, and one as `initialAvatar` draws it (`getStringColor(seed).text`, 30 % lightness). */
 const DISCS = {veryDark: '#050505', veryLight: '#fafafa', drawn: 'hsl(237.5, 50%, 30%)'};
 
 afterEach(() => {

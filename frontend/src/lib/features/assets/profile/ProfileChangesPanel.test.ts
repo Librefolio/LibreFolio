@@ -15,7 +15,7 @@ const readAssetProfile = vi.fn();
 const forgetProfileRows = vi.fn();
 const notify = vi.fn();
 vi.mock('./profileStore', () => ({readAssetProfile: (...args: unknown[]) => readAssetProfile(...args), forgetProfileRows: (...args: unknown[]) => forgetProfileRows(...args)}));
-vi.mock('./profileSources', async (original) => ({...((await original()) as object), loadEnricherNames: vi.fn(async () => ({justetf: 'justETF'}))}));
+vi.mock('./profileSources', async (original) => ({...((await original()) as object), loadProfileSources: vi.fn(async () => ({justetf: {name: 'justETF', icon: null}}))}));
 vi.mock('$lib/stores/app/notify.svelte', () => ({notify: (...args: unknown[]) => notify(...args)}));
 vi.mock('$lib/stores/reference/countryStore', () => ({ensureCountriesLoaded: vi.fn(async () => undefined), getCountryInfo: (iso3: string) => ({name: iso3})}));
 

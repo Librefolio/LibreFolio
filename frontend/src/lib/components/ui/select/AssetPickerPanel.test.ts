@@ -43,6 +43,7 @@ import {dirname, join, relative, resolve, sep} from 'node:path';
 import {fileURLToPath} from 'node:url';
 
 import {cleanup, fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
+import {longPress, touch} from '$test/longPress';
 import {reactiveBox} from '$test/runes.svelte';
 import type {EligibilityView} from '$lib/features/risk/eligibility';
 import type {AssetInfo} from '$lib/stores/reference/assetStore';
@@ -686,6 +687,40 @@ describe('AssetPickerPanel, mode="multi": the lab’s «+»', () => {
         expect(meridian).toHaveAttribute('aria-selected', 'true');
     });
 
+    // 85 BTN-0c, D16: the ⚠'s tooltip is only a hover (`insideControl`); its old wrapper stopped the click.
+    it('a click on the ⚠ itself checks the row, as a click on the row does', async () => {
+        mountMulti();
+        const panel = await openMulti();
+        const meridian = multiRow(panel, 16);
+        expect(meridian).not.toHaveAttribute('aria-selected', 'true');
+        await fireEvent.click(within(meridian).getByTestId(`${MULTI}-warning-16`));
+        expect(meridian).toHaveAttribute('aria-selected', 'true');
+        expect(checkedIds(panel)).toContain(16);
+    });
+
+    // 85 BTN-0c, D16: the ⚠ speaks to the mouse alone; the row gives its texts to the finger and to a screen reader.
+    it('a long press on a warning row shows its texts and checks nothing; a row with no warning stays an ordinary press', async () => {
+        mountMulti();
+        const panel = await openMulti();
+        const meridian = multiRow(panel, 16);
+        const text = await longPress(meridian);
+        for (const warning of WARN_TEXTS) expect(text).toContain(warning);
+        expect(meridian, 'the long press explains, it does not check').not.toHaveAttribute('aria-selected', 'true');
+        expect(meridian).toHaveAccessibleDescription(new RegExp(WARN_TEXTS.join('\\s')));
+        await fireEvent.keyDown(document, {key: 'Tab'});
+        meridian.focus();
+        await waitFor(() => expect(document.querySelector('[role="tooltip"]')?.textContent, 'Tab shows them').toContain(WARN_TEXTS[0]));
+        expect(meridian, 'its name is still the row alone').not.toHaveAccessibleName(new RegExp(WARN_TEXTS[0]));
+
+        const plain = multiRow(panel, 11);
+        expect(plain).not.toHaveAttribute('aria-describedby');
+        touch(plain, 'pointerdown');
+        await new Promise((resolve) => setTimeout(resolve, 600));
+        touch(plain, 'pointerup');
+        await fireEvent.click(plain);
+        expect(plain, 'nothing to explain: the press is the row’s').toHaveAttribute('aria-selected', 'true');
+    });
+
     it('lists the ruled-out assets read-only, with their reasons, under the caller’s label', async () => {
         const {onadd} = mountMulti();
         const panel = await openMulti();
@@ -845,6 +880,19 @@ describe('AssetPickerPanel, mode="multi": the lab’s «+»', () => {
         await fireEvent.click(multiConfirm(panel));
         expect(onadd).toHaveBeenCalledExactlyOnceWith([14, 15]);
         expect(screen.queryByTestId(`${MULTI}-panel`)).toBeNull();
+    });
+
+    // 85 BTN-2c: Cancel is a standard Button with a test id of its own; it closes and adds nothing, the checks dropped.
+    it('Cancel closes the panel and adds nothing', async () => {
+        const {onadd} = mountMulti();
+        const panel = await openMulti();
+        await fireEvent.click(multiRow(panel, 13));
+        expect(multiConfirm(panel), 'barrier: something is checked').not.toBeDisabled();
+        const cancel = within(panel).getByTestId(`${MULTI}-cancel`);
+        expect(cancel.tagName).toBe('BUTTON');
+        await fireEvent.click(cancel);
+        expect(screen.queryByTestId(`${MULTI}-panel`)).toBeNull();
+        expect(onadd).not.toHaveBeenCalled();
     });
 
     it('confirms on Enter in the search, and does nothing on Enter with nothing checked', async () => {
@@ -1241,6 +1289,33 @@ describe('AssetPickerPanel, mode="single": SearchSelect’s drop-in', () => {
 
             await fireEvent.click(lumen);
             expect(onchange).toHaveBeenCalledExactlyOnceWith(22);
+        });
+
+        // 85 BTN-0c, D16: a click on the ⚠ is the option's click.
+        it('a click on the ⚠ itself chooses the option', async () => {
+            const {onchange} = mountSingle();
+            await openSingle();
+            await fireEvent.click(within(choice(22)).getByTestId(`${SINGLE}-warning-22`));
+            expect(onchange).toHaveBeenCalledExactlyOnceWith(22);
+        });
+
+        it('a long press on a warning option shows its texts and chooses nothing', async () => {
+            const {onchange} = mountSingle();
+            await openSingle();
+            expect(await longPress(choice(22))).toContain(WARN_TEXTS[0]);
+            expect(onchange).not.toHaveBeenCalled();
+            expect(choice(22)).toHaveAccessibleDescription(WARN_TEXTS[0]);
+        });
+
+        it('the arrows read the ⚠ too: the search points at the option they stand on', async () => {
+            mountSingle();
+            await openSingle();
+            const search = within(singleRoot()).getByTestId(`${SINGLE}-search`);
+            for (let step = 0; step < 10 && choice(22).dataset.highlighted !== 'true'; step++) await fireEvent.keyDown(search, {key: 'ArrowDown'});
+            expect(choice(22), 'barrier: the arrows reached the warned option').toHaveAttribute('data-highlighted', 'true');
+            expect(choice(22).id).not.toBe('');
+            expect(search).toHaveAttribute('aria-activedescendant', choice(22).id);
+            expect(document.getElementById(choice(22).id)).toHaveAccessibleDescription(WARN_TEXTS[0]);
         });
 
         it('has no blocked section, and no blocked label, when nothing is ruled out', async () => {

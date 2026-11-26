@@ -472,7 +472,7 @@ describe('saving', () => {
         await fireEvent.click(saveButton());
         await waitFor(() => expect(screen.getByTestId('info-banner-error')).toBeInTheDocument());
 
-        await fireEvent.click(within(screen.getByTestId('info-banner-error')).getByLabelText('Dismiss'));
+        await fireEvent.click(within(screen.getByTestId('info-banner-error')).getByTestId('info-banner-dismiss'));
 
         expect(screen.queryByTestId('info-banner-error')).toBeNull();
     });

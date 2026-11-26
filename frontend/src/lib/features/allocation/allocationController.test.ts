@@ -36,8 +36,8 @@ describe('filters per page', () => {
     });
 
     it('open on what the page stored', () => {
-        const {controller, deps} = make({}, JSON.stringify({classes: ['STOCK'], excludeBuckets: ['Unknown'], excludeAssetIds: [4]}));
-        expect(controller.filters).toEqual({classes: ['STOCK'], excludeBuckets: ['Unknown'], excludeAssetIds: [4]});
+        const {controller, deps} = make({}, JSON.stringify({classes: ['STOCK'], types: [], excludeBuckets: ['Unknown'], excludeAssetIds: [4]}));
+        expect(controller.filters).toEqual({classes: ['STOCK'], types: [], excludeBuckets: ['Unknown'], excludeAssetIds: [4]});
         expect(deps.read).toHaveBeenCalledWith('allocation-filters:dashboard');
     });
 
@@ -47,11 +47,11 @@ describe('filters per page', () => {
 
     it('are written under the page key at each change, and «Rimuovi filtri» writes the first opening', () => {
         const {controller, storage} = make();
-        controller.setFilters({classes: ['BOND'], excludeBuckets: [], excludeAssetIds: []});
-        expect(JSON.parse(storage.get('allocation-filters:dashboard')!)).toEqual({classes: ['BOND'], excludeBuckets: [], excludeAssetIds: []});
+        controller.setFilters({classes: ['BOND'], types: [], excludeBuckets: [], excludeAssetIds: []});
+        expect(JSON.parse(storage.get('allocation-filters:dashboard')!)).toEqual({classes: ['BOND'], types: [], excludeBuckets: [], excludeAssetIds: []});
         controller.resetFilters();
         expect(controller.filters).toEqual(emptyFilters());
-        expect(JSON.parse(storage.get('allocation-filters:dashboard')!)).toEqual({classes: null, excludeBuckets: [], excludeAssetIds: []});
+        expect(JSON.parse(storage.get('allocation-filters:dashboard')!)).toEqual({classes: null, types: [], excludeBuckets: [], excludeAssetIds: []});
     });
 });
 

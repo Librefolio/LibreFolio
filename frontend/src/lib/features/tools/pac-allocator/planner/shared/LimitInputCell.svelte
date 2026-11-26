@@ -10,6 +10,8 @@
     import {t} from '$lib/i18n';
     import type {PlannerDraft} from '../draft.svelte';
     import {limitsConflict, parseLimit, shareAboveHundred, type LimitSide} from '../limits';
+    import {minimumAboveTotal} from '../request';
+    import type {PlannerExactMoney} from '../types';
     import {INPUT} from '../ui';
     import {getPlannerProfile, testId} from '../profile';
 
@@ -21,16 +23,22 @@
         draft: PlannerDraft;
         assetKey: string;
         label: string;
+        /**
+         * An Asset's row: the Tool's base of the last preview, read when drawn. A minimum, an amount, alone above it is drawn
+         * red at once (TL-4 of project 67, `minimumAboveTotal`). A cash entry passes none: its trapped cash counts too.
+         */
+        total?: () => PlannerExactMoney | null;
     }
 
-    let {draft, assetKey, label}: Props = $props();
+    let {draft, assetKey, label, total}: Props = $props();
 
     const limits = $derived(draft.data.limits[assetKey]);
     const conflict = $derived(limitsConflict(limits));
+    const aboveTotal = $derived(total !== undefined && minimumAboveTotal(draft, assetKey, total()));
 
     function wrong(side: LimitSide): boolean {
         const limit = parseLimit(limits?.[side]);
-        return conflict || limit === 'invalid' || shareAboveHundred(limit);
+        return conflict || limit === 'invalid' || shareAboveHundred(limit) || (side === 'minimum' && aboveTotal);
     }
 
     const SIDES = [
@@ -39,7 +47,7 @@
     ] as const;
 </script>
 
-<div class="flex flex-col items-end gap-1 md:flex-row md:items-center" data-testid={testId('limit', profile)} data-asset-key={assetKey} data-conflict={conflict ? 'true' : 'false'}>
+<div class="flex flex-col items-end gap-1 md:flex-row md:items-center" data-testid={testId('limit', profile)} data-asset-key={assetKey} data-conflict={conflict ? 'true' : 'false'} data-above-total={aboveTotal ? 'true' : 'false'}>
     {#each SIDES as field (field.side)}
         {@const invalid = wrong(field.side)}
         <input

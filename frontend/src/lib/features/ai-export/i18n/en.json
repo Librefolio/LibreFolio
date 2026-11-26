@@ -316,6 +316,55 @@
     "replyInstructions": {
       "dataReceived": "Data received, I'm ready for your questions."
     },
-    "noOwnedBrokers": "You own no broker: this selection reads your positions and cash, and those in brokers shared with you are not included."
+    "noOwnedBrokers": "You own no broker: this selection reads your positions and cash, and those in brokers shared with you are not included.",
+    "tool": {
+      "heading": "Calculate it in LibreFolio",
+      "intro": "The number of units and the orders are calculated with LibreFolio's tool, which uses a mathematical optimization engine and weighs fees, minimum orders, currency conversions and rounding together. Give the user this path, with the values of your plan in place of the descriptions. A calculation done in the chat is discouraged: do it only if the user asks, and say so.",
+      "when": "When to use it",
+      "steps": {
+        "sidebar": "Sidebar",
+        "card": "Card"
+      },
+      "inputs": "What to do, step by step",
+      "returns": "What it returns",
+      "pacAllocator": {
+        "when": "to split new money among several Assets. It starts from an empty portfolio: what the user already holds is not counted.",
+        "steps": {
+          "scenario": "the {currency}, in which amounts are compared and summarized.",
+          "liquidity": "where the money comes from: {contribution} with the instalment amount, {fromBrokers} for the cash already on the Brokers, or {external}. The sources can be combined.",
+          "brokers": "the Brokers where the plan may buy, with their fees and order modes. LibreFolio does not record them: the user enters them.",
+          "assets": "the Assets the plan may buy. The {auto} price is the latest price stored in LibreFolio.",
+          "routing": "which Broker may buy which Asset (usually {allowAll}).",
+          "targets": "the percentage of this contribution for each Asset. The total must be 100%.",
+          "fx": "it appears only when exchange rates are needed. Each rate usually stays on {auto}, the latest one stored in LibreFolio. When a Broker can pay for an Asset with cash in another currency, there is also the conversion spread: a percentage of every converted amount, which starts at 0.",
+          "strategy": "{proportional}: purchases only, it sells nothing.",
+          "review": "a last check, then {calculate}."
+        },
+        "returns": "the orders to enter, Broker by Broker (in units or as an amount), the costs, the money left not invested and, for each Asset, the weight reached next to its target. It is a simulation: no order is sent."
+      },
+      "portfolioRebalancer": {
+        "when": "to bring an already invested portfolio closer to its targets. It starts from what the user holds today, plus the cash the user selects. Today it only buys: it sells nothing.",
+        "steps": {
+          "scenario": "the {currency}, in which amounts are compared and summarized.",
+          "liquidity": "the cash the plan may use: {fromBrokers} for the cash already on the Brokers, {contribution} for new money, or {external}. The sources can be combined.",
+          "brokers": "the Brokers where the plan may buy, with their fees and the way each one takes orders. LibreFolio does not record them: the user enters them.",
+          "assets": "the Assets of the plan. Under each Asset, the {positions} table shows what the user holds of it, Broker by Broker, as LibreFolio records it today: the plan starts from those quantities. The {auto} price is the latest price stored in LibreFolio.",
+          "routing": "which Broker may buy which Asset (usually {allowAll}).",
+          "targets": "the target weight of each Asset and of the cash, as a percentage of the total that enters the plan: today's holdings plus the cash selected.",
+          "fx": "it appears only when exchange rates are needed. Each rate usually stays on {auto}, the latest one stored in LibreFolio. When a Broker can pay for an Asset with cash in another currency, there is also the conversion spread: a percentage of every converted amount, which starts at 0.",
+          "strategy": "{investOnly}: it buys what is below target with the cash and sells nothing. Then the {fidelity}, that is how much getting closer to the target is worth compared with what it costs: {costAware} spends little to get closer, {balanced} sits in between, {faithful} gets close even when it costs more, {targetFirst} reaches the closest possible portfolio first and only then cuts the costs. A custom value is also available.",
+          "review": "a last check, then {calculate}."
+        },
+        "returns": "every Asset and cash item before the plan, at its target and after, as an amount and as a percentage; the steps in the order to execute them; the money the plan loses, item by item. It is a simulation: no order is sent."
+      }
+    },
+    "copyReady": "Copy the ready text",
+    "clipboardNotFocused": "The text is ready, but the browser did not copy it because this window was not active. Press «Copy the ready text».",
+    "progress": "Export in progress",
+    "step": {
+      "request": "Computing the data on the server…",
+      "render": "Writing the text…",
+      "copy": "Copying to the clipboard…"
+    }
   }
 }

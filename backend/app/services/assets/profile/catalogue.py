@@ -53,6 +53,7 @@ _KEY_FIGURES = (ProfileGroup.KEY_FIGURES,)
 _FUND = (ProfileGroup.FUND,)
 _COMPANY = (ProfileGroup.COMPANY,)
 _BOND = (ProfileGroup.BOND,)
+_CRYPTO = (ProfileGroup.CRYPTO,)
 _IDENTITY = (ProfileGroup.IDENTITY,)
 
 _NON_NEGATIVE = ProfileSign.NON_NEGATIVE
@@ -91,7 +92,7 @@ _VOICES: tuple[FAProfileVoice, ...] = (
     _voice("distribution_policy", ProfileShape.CHOICE, topic=_T.STRUCTURE, groups=_FUND, choices=("accumulating", "distributing")),
     _voice("fund_domicile", ProfileShape.COUNTRY, topic=_T.STRUCTURE, groups=_FUND),
     _voice("fund_currency", ProfileShape.CURRENCY, topic=_T.STRUCTURE, groups=_FUND),
-    _voice("inception_date", ProfileShape.DATE, topic=_T.STRUCTURE, groups=_FUND),
+    _voice("inception_date", ProfileShape.DATE, topic=_T.STRUCTURE, groups=(ProfileGroup.FUND, ProfileGroup.CRYPTO)),
     # The fund's management fee (C2e, the developer's «voce sua»): only a part of the TER, so a detail of the fund and
     # never a key figure; a source that gives it never writes it as «ter»
     _voice("management_fee", ProfileShape.PERCENTAGE, topic=_T.COSTS, sign=_NON_NEGATIVE, groups=_FUND),
@@ -100,9 +101,12 @@ _VOICES: tuple[FAProfileVoice, ...] = (
     _voice("issuer_country", ProfileShape.COUNTRY, topic=_T.ISSUER, groups=_COMPANY),
     # The company's own site, and its two headline figures of the last fiscal year (BI-PROF): each figure is dated by
     # the end of its fiscal year (``source_date``), which the tab shows beside it
-    _voice("website", ProfileShape.TEXT, topic=_T.ISSUER, groups=_COMPANY),
+    _voice("website", ProfileShape.TEXT, topic=_T.ISSUER, groups=(ProfileGroup.COMPANY, ProfileGroup.CRYPTO)),
     _voice("revenue", ProfileShape.AMOUNT, topic=_T.FINANCIALS, sign=_NON_NEGATIVE, groups=_COMPANY, period=ProfilePeriod.FISCAL_YEAR),
     _voice("net_income", ProfileShape.AMOUNT, topic=_T.FINANCIALS, sign=ProfileSign.ANY, groups=_COMPANY, period=ProfilePeriod.FISCAL_YEAR),
+    # The coin (82 CG-D, D-27): the categories of its source, in the source's words, one text. A coin's site is the
+    # «website» above, its launch day the «inception_date»: their first group is where the profile editor puts them
+    _voice("crypto_categories", ProfileShape.TEXT, topic=_T.CATEGORIES, groups=_CRYPTO),
     # The bond
     _voice("coupon_period_rate", ProfileShape.PERCENTAGE, topic=_T.COUPONS, sign=_NON_NEGATIVE, groups=_BOND),
     _voice("coupon_frequency", ProfileShape.CHOICE, topic=_T.COUPONS, groups=_BOND, choices=("monthly", "quarterly", "semiannual", "annual", "at_maturity")),

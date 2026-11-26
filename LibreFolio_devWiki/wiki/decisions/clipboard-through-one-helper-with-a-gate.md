@@ -30,8 +30,8 @@ fallback, and the grid said «copied» even when nothing was (C-63). M-20 went t
   copy buttons work on plain HTTP», train 72).
 - **A gate keeps it so**: `frontend/src/clipboardSink.gate.test.ts`, built like the HTML-sink gate
   ([[decisions/html-escape-at-the-source]]), fails on any other `navigator.clipboard.writeText` or `execCommand('copy')`
-  in the frontend. The one exception, with its reason written in the gate, is AI Export's own writer
-  (`aiExportClipboard.ts`), which turns every failure into a typed error its interface reports. The gate runs in
+  in the frontend. It has no exception: AI Export kept a writer of its own until the testlist of 2026-11-25, and now
+  writes through the helper too, turning a refusal into its typed error (`aiExportClipboard.ts`). The gate runs in
   `front-utility core-unit`; before the fix it listed 11 direct transports.
 - **A known limit, accepted** (the coordinator's choice (b), 2026-10-12): in a secure context, after `window.open`, a
   refusal cannot fall back — the new tab has used up the click's activation, and without it Chromium refuses
@@ -55,7 +55,7 @@ fallback, and the grid said «copied» even when nothing was (C-63). M-20 went t
 | The helper (`writeTextToClipboard`, `legacyCopy`) | `frontend/src/lib/utils/clipboard.ts` |
 | The gate | `frontend/src/clipboardSink.gate.test.ts` |
 | The model gate (HTML sinks) | `frontend/src/htmlSink.gate.test.ts` |
-| AI Export's own writer (the exception) | `frontend/src/lib/features/ai-export/aiExportClipboard.ts` |
+| AI Export's writer, through the helper | `frontend/src/lib/features/ai-export/aiExportClipboard.ts` |
 | File list and grid (C-63) | `frontend/src/lib/features/files/FilesTable.svelte`, `frontend/src/lib/features/files/FileGrid.svelte` |
 | Copy-and-go E2E | `frontend/e2e/support-copy-and-go.spec.ts` |
 | Plan 48 | `LibreFolio_developer_journal/Release_2/Phase_0/48_uiPolish/plan-phase00UiPolish.prompt.md` |

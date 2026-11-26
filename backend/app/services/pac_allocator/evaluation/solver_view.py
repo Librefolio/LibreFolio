@@ -18,6 +18,7 @@ from __future__ import annotations
 from collections import defaultdict
 
 from backend.app.services.pac_allocator.evaluation.facts import rebalancer_score_of
+from backend.app.services.pac_allocator.evaluation.limits import plan_reference
 from backend.app.services.pac_allocator.evaluation.scenario import build_scenario_index, to_valuation
 from backend.app.services.pac_allocator.models import ExactEvaluation, ExactObjectiveCode, ExactPlannerScenario, ExactPolicyView
 from backend.app.services.pac_allocator.numeric import ExactRatio
@@ -54,5 +55,5 @@ def solver_view_objectives(scenario: ExactPlannerScenario, view: ExactPolicyView
     targeted = sum((moved[(row.broker_id, row.currency)] for row in evaluation.cash_targets), _EXACT_ZERO)
     residuals = (*(item.residual for item in evaluation.assets), *(row.residual + moved[(row.broker_id, row.currency)] for row in evaluation.cash_targets))
     wealth_loss = accounting.wealth_loss - sum(moved.values(), _EXACT_ZERO)
-    seen = rebalancer_score_of(scenario.target_fidelity, residuals, uninvested=accounting.uninvested - targeted, wealth_loss=wealth_loss, initial_wealth=accounting.initial_wealth)
+    seen = rebalancer_score_of(scenario.target_fidelity, residuals, uninvested=accounting.uninvested - targeted, wealth_loss=wealth_loss, reference=plan_reference(scenario, accounting))
     return values | {code: value for code, value in seen.items() if code in values}

@@ -14,6 +14,7 @@
     import type {RangeDelta} from '$lib/utils/rangeChange';
     import {ensureCurrenciesLoaded, getCurrencyInfo} from '$lib/stores/reference/currencyStore';
     import {isCardInverted, setCardInverted} from '$lib/features/fx/fxCardInversionStore';
+    import {isFxPairSyncing} from '$lib/features/fx/fxSyncGuard.svelte';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
     import {nextCardPrimaryView, type ChartPrimaryView, type ChartSettings} from '$lib/stores/chartSettingsStore.svelte';
     import type {CalendarReturnViewState} from '$lib/features/signals/calendarReturn';
@@ -100,6 +101,8 @@
     }
 
     let inverted = $state(getInitialInversion());
+    /** A sync of this pair is running (81 U35): its sync button is off, with the reason. */
+    let pairSyncing = $derived(isFxPairSyncing(slug));
 
     /** The price views draw the rates; the rolling-return view draws the return, already in percent (Y-40). */
     let isCalendarView = $derived(primaryView === 'calendar-return');
@@ -301,14 +304,17 @@
             >
                 <Settings size={15} />
             </button>
+            <!-- A pair that is syncing is off, with the reason (81 U35): one sync per pair at a time -->
             <button
-                class="p-1.5 rounded-md transition-colors {manualOnly ? 'text-lf-muted/50 cursor-not-allowed' : 'hover:bg-lf-neutral text-lf-muted hover:text-lf-warning'}"
-                disabled={manualOnly}
+                class="p-1.5 rounded-md transition-colors {manualOnly || pairSyncing ? 'text-lf-muted/50 cursor-not-allowed' : 'hover:bg-lf-neutral text-lf-muted hover:text-lf-warning'}"
+                disabled={manualOnly || pairSyncing}
+                data-testid="fx-pair-sync-{slug}"
+                data-syncing={pairSyncing}
                 onclick={(e) => {
                     stop(e);
-                    if (!manualOnly) onsync?.({slug, base, quote});
+                    if (!manualOnly && !pairSyncing) onsync?.({slug, base, quote});
                 }}
-                title={manualOnly ? $t('fx.card.manualOnly') : $t('fx.card.syncFromProvider')}
+                title={manualOnly ? $t('fx.card.manualOnly') : pairSyncing ? $t('fx.sync.alreadyRunning', {values: {pairs: `${base}/${quote}`}}) : $t('fx.card.syncFromProvider')}
             >
                 <RotateCw class={loading ? 'animate-spin' : ''} size={15} />
             </button>

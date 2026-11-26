@@ -155,12 +155,12 @@ describe('a ready Rebalancer result renders', () => {
  * still accepts it.
  */
 describe('the Rebalancer allocation (F4a step 3)', () => {
-    it('shows the Rebalancer table, with Assets, cash entries and the uninvested row, not the PAC one', () => {
+    it('shows the Rebalancer table, with Assets, cash entries and the uninvested row’s two parts, not the PAC one', () => {
         mounted(browser);
         expect(screen.getByTestId('rebalancer-planner-allocation-table')).toBeTruthy();
         expect(screen.queryByTestId('rebalancer-planner-assets-table')).toBeNull();
         const ids = [...document.querySelectorAll('[data-testid="rebalancer-planner-allocation-table"] tbody tr[data-row-id]')].map((row) => row.getAttribute('data-row-id'));
-        expect(ids.at(-1)).toBe('uninvested');
+        expect(ids.slice(-2)).toEqual(['untargeted_cash', 'costs']);
         expect(ids.filter((id) => id?.startsWith('cash:'))).toHaveLength(browser.result.primary_solution.cash_rows.length);
     });
 });
@@ -263,7 +263,7 @@ describe('the Rebalancer exposures', () => {
         for (const name of ['Real Estate', 'Consumer Discretionary', 'Energy']) expect(drawn, name).toContain(categoryColor('sector', name, false));
     });
 
-    it('are three bullet charts, the legend once, no bars; the countries also on the two maps, under their bullets', async () => {
+    it('are three bullet charts, the legend once, no bars; the countries also on the two maps, above their bullets (TL-5)', async () => {
         mounted(browser);
         const section = screen.getAllByTestId('rebalancer-planner-result-section').find((item) => item.getAttribute('data-section') === 'exposures');
         await fireEvent.click(section?.querySelector('[data-testid="rebalancer-planner-result-section-toggle"]') as HTMLElement);
@@ -273,14 +273,14 @@ describe('the Rebalancer exposures', () => {
         expect([...exposures.querySelectorAll('[data-testid="rebalancer-planner-exposures-bullets"]')].map((chart) => chart.getAttribute('data-dimension'))).toEqual(['asset_type', 'sector', 'geography']);
         expect(exposures.querySelectorAll('[data-testid="rebalancer-planner-exposures-legend"]')).toHaveLength(1);
         expect(exposures.querySelectorAll('[data-testid="rebalancer-planner-exposures-bars"]')).toHaveLength(0);
-        // R1-C/D of project 67 (the developer, 20/11: «per l'area geografica mi aspettavo comunque la mappa doppia … sotto a
-        // questo a proiettile»): the two maps, target and after the plan, in the geography block only, after its bullets.
+        // R1-C/D of project 67: the two maps, target and after the plan, in the geography block only; TL-5 (the developer,
+        // 23/11: «prima la mappa e poi i grafici a barre»): before its bullets.
         const maps = [...exposures.querySelectorAll('[data-testid="rebalancer-planner-exposures-maps"]')];
         expect(maps).toHaveLength(1);
         const geography = exposures.querySelector('[data-testid="rebalancer-planner-exposures-dimension"][data-dimension="geography"]') as HTMLElement;
         expect(geography.contains(maps[0])).toBe(true);
         const bullets = geography.querySelector('[data-testid="rebalancer-planner-exposures-bullets"]') as HTMLElement;
-        expect(bullets.compareDocumentPosition(maps[0]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+        expect(maps[0].compareDocumentPosition(bullets) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
         // The cash is no place: it stays in the bullets, never in the maps nor in their list of what is not on them.
         const offMap = geography.querySelector('[data-testid="rebalancer-planner-exposures-off-map"]');
         expect(offMap?.textContent ?? '').not.toContain('Cash');

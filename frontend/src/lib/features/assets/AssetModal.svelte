@@ -1787,6 +1787,9 @@
                 onenrichers={tourPreview ? undefined : openEnrichers}
             />
 
+            <!-- The profile's data (plan 68, E8b2), right under the description (87, A1): a window over this one; what it keeps leaves with the save -->
+            <AssetModalProfileRow summary={profileSummary} onopen={openProfile} disabled={tourPreview} />
+
             <!-- More Info (collapsible — Identifiers) -->
             <div class="border border-lf-subtle rounded-lg" use:guideAnchor={'asset.provider'} data-testid="asset-tour-provider">
                 <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -1837,9 +1840,6 @@
                 {saving}
                 onreconcile={reconcileProviderContext}
             />
-
-            <!-- The profile's data (plan 68, E8b2): a window over this one; what it keeps leaves with the save -->
-            <AssetModalProfileRow summary={profileSummary} onopen={openProfile} disabled={tourPreview} />
 
             <!-- Auto-assign info banner -->
             {#if searchResultSelected && hasProvider && !editMode}

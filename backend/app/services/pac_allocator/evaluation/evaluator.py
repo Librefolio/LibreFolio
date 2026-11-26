@@ -24,7 +24,7 @@ from backend.app.services.pac_allocator.evaluation.economics import EconomicStat
 from backend.app.services.pac_allocator.evaluation.errors import ExactPolicyContractError, ExactReplayRejectedError
 from backend.app.services.pac_allocator.evaluation.facts import constraint_facts, objective_value_map
 from backend.app.services.pac_allocator.evaluation.keys import candidate_quanta
-from backend.app.services.pac_allocator.evaluation.limits import limit_reference, resolve_scenario_limits
+from backend.app.services.pac_allocator.evaluation.limits import plan_reference, resolve_scenario_limits
 from backend.app.services.pac_allocator.evaluation.policy import baseline_state_for_purpose, build_decision_accesses, canonical_tie_breaks, default_exact_view_id, validate_policy_purpose, validate_primary_baseline
 from backend.app.services.pac_allocator.evaluation.references import build_constraint_refs, build_objective_refs
 from backend.app.services.pac_allocator.evaluation.scenario import ScenarioIndex, build_scenario_index, exact_scenario_fingerprint, to_valuation
@@ -368,7 +368,7 @@ def cash_limit_overshoots(scenario: ExactPlannerScenario, evaluation: ExactEvalu
     if evaluation.accounting is None or "ENTRY_VALUE_WITHIN_LIMITS" not in evaluation.conflict_codes:
         return ()
     index = build_scenario_index(scenario)
-    entries = {f"{_LIMIT_REF_PREFIX}{entry.key}": entry for entry in resolve_scenario_limits(scenario, limit_reference(scenario, evaluation.accounting)).by_entry}
+    entries = {f"{_LIMIT_REF_PREFIX}{entry.key}": entry for entry in resolve_scenario_limits(scenario, plan_reference(scenario, evaluation.accounting)).by_entry}
     reserves = posting_reserves(scenario)
     kept: dict[tuple[str, str], list[ExactRatio]] = {}
     for posting in evaluation.postings:

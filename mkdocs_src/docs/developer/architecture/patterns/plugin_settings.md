@@ -883,7 +883,7 @@ class CoinGeckoProvider(AssetSourceProvider):
   `UNKNOWN_FIELD` (`service._switched_off_group()`). While one reader is on, it is listed and
   `used_by` names only the readers that are on.
 - **The group `coingecko`** (`groups/coingecko.py`, project 76 P1): one CoinGecko account, read by
-  the CoinGecko price provider (and, later, an enricher of the same source). A secret `api_key`,
+  the CoinGecko price provider and the [CoinGecko enricher](enricher_plugin_guide.md#coingecko). A secret `api_key`,
   **required** (with its own phrase for the «to configure» window, `missing_key`), and a select
   `plan`, `demo` (default) or `pro`, which picks the API root. `shares_credits`: the readers' calls
   count, and are limited, on the group, which got the five call-limit fields. Its texts are in the
@@ -931,7 +931,9 @@ name.
   providers that read it). A full window refuses that binding and the following ones as `RATE_LIMITED`
   with the counter's `retry_after`, never cached; a binding served from the read cache is not counted,
   and a counter that fails lets the reads go. Only an enricher whose class says `calls_external_service`
-  is counted: the shipped justETF enricher does not say it yet (lane 68's `EnricherPlugin`).
+  is counted: `True` by default (`EnricherPlugin`), `False` for the test double. An enricher of a
+  credit-sharing group counts its recognizes, searches and tests on the group too
+  ([Calls on a Shared Account](enricher_plugin_guide.md#shared-calls)).
 - **The readiness and N2 read nothing for them**: `readiness.plugin_may_be_unconfigured` is true only
   for a group, a required field or a field whose variable is set. A provider whose only fields are the
   limits is always configured.

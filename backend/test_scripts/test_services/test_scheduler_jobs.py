@@ -88,6 +88,7 @@ from backend.app.schemas.refresh import (
     SyncDateRangeModel,
     SyncStatus,
 )
+from backend.app.services.fx.sync_claims import claim_pairs, reset_for_tests
 from backend.app.services.platform.scheduler import joblog, jobs
 from backend.app.services.platform.scheduler.state import JobState, SchedulerState
 
@@ -617,6 +618,30 @@ async def test_history_sync_skips_manual_routes(monkeypatch, isolated_joblog_dir
 
     assert fx_recorder["pairs"] == ["EUR-USD"]
     assert {item["pair"] for item in _sole_entry("history_sync")["fx"]} == {"EUR-USD"}
+
+
+@pytest.mark.asyncio
+async def test_history_sync_leaves_a_pair_being_synced_to_that_sync(monkeypatch, isolated_joblog_dir):
+    """81 U35: one sync per pair at a time. A pair a reader's sync is running is left to it (not handed to the sync, said in
+    the log); the other pairs are synced, and the claim of the job ends with it."""
+    reset_for_tests()
+    routes = [_route("EUR", "USD"), _route("EUR", "GBP")]
+    _install_fake_session(monkeypatch, asset_rows=[], routes=routes)
+    fx_recorder: dict = {}
+    _install_fx_double(monkeypatch, recorder=fx_recorder)
+
+    state = SchedulerState()
+    with capture_logs() as logs, claim_pairs(["EUR-USD"]):
+        await jobs.run_history_sync(state)
+
+    try:
+        assert fx_recorder["pairs"] == ["EUR-GBP"], "the busy pair was handed to the sync, or the free one was not"
+        skipped = [line for line in logs if line.get("event") == "Scheduler: FX pairs skipped, a sync of each is already running"]
+        assert skipped and skipped[0]["pairs"] == ["EUR-USD"]
+        with claim_pairs(["EUR-GBP"]):  # the job's claim ended with it
+            pass
+    finally:
+        reset_for_tests()
 
 
 @pytest.mark.asyncio

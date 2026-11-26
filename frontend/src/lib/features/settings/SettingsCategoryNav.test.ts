@@ -15,14 +15,18 @@
  *
  * `$lib/i18n` is mocked with an identity translator: the label reads `settings.category`.
  */
-import {afterEach, describe, expect, it, vi} from 'vitest';
+import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import {readable} from 'svelte/store';
 import {Globe, User} from 'lucide-svelte';
 import {cleanup, fireEvent, render, screen, within} from '$test/component';
 
 vi.mock('$lib/i18n', () => ({_: readable((key: string) => key)}));
+// The scroll itself is the helper's (headerOffset.test.ts) and a real browser's (settings-filter-menu.spec.ts); here it is
+// only asked for, with the right element.
+vi.mock('$lib/utils/layout/headerOffset', async (importOriginal) => ({...(await importOriginal<typeof import('$lib/utils/layout/headerOffset')>()), scrollStartIntoView: vi.fn()}));
 
 import SettingsCategoryNav from './SettingsCategoryNav.svelte';
+import {clearHeaderOffset, HEADER_OFFSET_EVENT, publishHeaderOffset, scrollStartIntoView} from '$lib/utils/layout/headerOffset';
 
 const ENTRIES = [
     {id: '', testKey: 'all', label: 'All'},
@@ -36,7 +40,19 @@ function mount(props: Record<string, unknown> = {}) {
     return {...result, onselect};
 }
 
-afterEach(cleanup);
+beforeEach(() => {
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+        callback(0);
+        return 1;
+    });
+});
+afterEach(() => {
+    cleanup();
+    clearHeaderOffset();
+    vi.mocked(scrollStartIntoView).mockClear();
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+});
 
 describe('SettingsCategoryNav — the sidebar', () => {
     it('draws one button per entry, in order, each with its test id', () => {
@@ -79,7 +95,7 @@ describe('SettingsCategoryNav — the sidebar', () => {
 
 describe('SettingsCategoryNav — the phone dropdown', () => {
     const phone = (props: Record<string, unknown> = {}) => mount({mode: 'phone', triggerLabel: 'Global', triggerIcon: Globe, selected: 'global', ...props});
-    const block = () => screen.getByText('settings.category').closest('div') as HTMLElement;
+    const block = () => screen.getByTestId('nav-mobile-category-box');
 
     it("shows the label, and a trigger with the page's text and icon", () => {
         phone();
@@ -165,5 +181,105 @@ describe('SettingsCategoryNav — counts and dots (76 S1b, the Plugins menu)', (
         mount();
         expect(screen.getByTestId('nav-category-profile')).not.toHaveAttribute('data-count');
         expect(screen.getByTestId('nav-category-profile').textContent?.trim()).toBe('Profile');
+    });
+});
+
+/**
+ * It follows the window (81 U38). Which element a choice brings back under the header is decided here; how far it scrolls
+ * is `headerOffset`'s; what sticks where is a real browser's (`e2e/settings/settings-filter-menu.spec.ts`).
+ */
+describe('SettingsCategoryNav — a choice brings the start of the list back', () => {
+    const asked = () => vi.mocked(scrollStartIntoView).mock.calls.map(([anchor]) => anchor);
+
+    it('sidebar: the row that holds the menu and the content, after the choice has been reported', async () => {
+        const {onselect, container} = mount();
+        await fireEvent.click(screen.getByTestId('nav-category-global'));
+        expect(onselect).toHaveBeenCalledWith('global');
+        await vi.waitFor(() => expect(asked()).toHaveLength(1));
+        expect(asked()[0]).toBe(screen.getByTestId('nav-category-nav').parentElement);
+        expect(container.contains(asked()[0] as Element)).toBe(true);
+    });
+
+    it('sidebar: the entry already selected asks as well (the person is lost in the page, not in the filter)', async () => {
+        mount({selected: 'global'});
+        await fireEvent.click(screen.getByTestId('nav-category-global'));
+        await vi.waitFor(() => expect(asked()).toHaveLength(1));
+    });
+
+    it("phone: the menu's own top (its label), once, and the list closes", async () => {
+        const {onselect} = mount({mode: 'phone', triggerLabel: 'Global', selected: 'global'});
+        await fireEvent.click(screen.getByTestId('nav-mobile-category-trigger'));
+        await fireEvent.click(screen.getByTestId('nav-mobile-category-profile'));
+        expect(onselect).toHaveBeenCalledWith('profile');
+        await vi.waitFor(() => expect(asked()).toHaveLength(1));
+        expect(asked()[0]).toBe(screen.getByTestId('nav-mobile-category-label'));
+        expect(screen.queryByTestId('nav-mobile-category-menu')).toBeNull();
+    });
+
+    it('asks for nothing before a choice', () => {
+        mount();
+        mount({mode: 'phone'});
+        expect(asked()).toHaveLength(0);
+    });
+});
+
+describe('SettingsCategoryNav — the phone box is stuck when the header has been passed', () => {
+    /** The sentinel is the only aria-hidden div the phone mode draws: it stands where the box would be if it were not stuck. */
+    function placeSentinel(top: () => number): void {
+        vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+            const t = this.getAttribute('aria-hidden') === 'true' ? top() : 0;
+            return {top: t, bottom: t, left: 0, right: 0, width: 0, height: 0, x: 0, y: t, toJSON: () => ({})};
+        });
+    }
+    const box = () => screen.getByTestId('nav-mobile-category-box');
+
+    it('not stuck while the box is below the header, stuck once its place has passed it', async () => {
+        publishHeaderOffset(64, false);
+        let top = 300;
+        placeSentinel(() => top);
+        mount({mode: 'phone'});
+        expect(box()).toHaveAttribute('data-stuck', 'false');
+        top = 10;
+        window.dispatchEvent(new Event('scroll'));
+        await vi.waitFor(() => expect(box()).toHaveAttribute('data-stuck', 'true'));
+        top = 200;
+        window.dispatchEvent(new Event('scroll'));
+        await vi.waitFor(() => expect(box()).toHaveAttribute('data-stuck', 'false'));
+    });
+
+    it('is judged against the offset the header publishes: the same place is stuck under a shown header and free under a hidden one', async () => {
+        publishHeaderOffset(64, true);
+        placeSentinel(() => 30);
+        mount({mode: 'phone'});
+        expect(box()).toHaveAttribute('data-stuck', 'false');
+        publishHeaderOffset(64, false);
+        await vi.waitFor(() => expect(box()).toHaveAttribute('data-stuck', 'true'));
+        publishHeaderOffset(64, true);
+        await vi.waitFor(() => expect(box()).toHaveAttribute('data-stuck', 'false'));
+    });
+
+    it('draws the border and the shadow only while stuck, and keeps the label outside the box', async () => {
+        publishHeaderOffset(64, false);
+        placeSentinel(() => 0);
+        mount({mode: 'phone'});
+        await vi.waitFor(() => expect(box()).toHaveAttribute('data-stuck', 'true'));
+        expect(box().className).toContain('shadow-lf-shadow');
+        expect(box().className).toContain('border-lf-subtle');
+        expect(box().contains(screen.getByTestId('nav-mobile-category-label'))).toBe(false);
+    });
+
+    it('listens to the window only while it lives', () => {
+        const add = vi.spyOn(window, 'addEventListener');
+        const remove = vi.spyOn(window, 'removeEventListener');
+        const {unmount} = mount({mode: 'phone'});
+        for (const type of ['scroll', 'resize', HEADER_OFFSET_EVENT]) {
+            const registration = add.mock.calls.find(([eventType]) => eventType === type);
+            expect(registration, `no ${type} listener`).toBeDefined();
+        }
+        unmount();
+        for (const type of ['scroll', 'resize', HEADER_OFFSET_EVENT]) {
+            const registration = add.mock.calls.find(([eventType]) => eventType === type);
+            expect(remove).toHaveBeenCalledWith(type, registration?.[1]);
+        }
     });
 });

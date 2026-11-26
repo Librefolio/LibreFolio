@@ -8,6 +8,7 @@
   Broker detail share the same keys, like PositionsPanel.
 -->
 <script lang="ts">
+    import LinkBadge from '$lib/components/ui/display/LinkBadge.svelte';
     import {onMount, untrack} from 'svelte';
     import {_} from '$lib/i18n';
     import {PieChart, AreaChart} from 'lucide-svelte';
@@ -154,11 +155,14 @@
 
 <div class="lg:col-span-2 bg-lf-card text-lf-primary rounded-xl border border-lf-subtle shadow-sm shadow-lf-shadow-card p-4 flex flex-col gap-3 min-h-[380px] lg:min-h-0" data-testid="allocation-panel">
     <div class="flex items-center gap-2">
-        <h2 class="text-sm font-semibold text-lf-secondary">{$_('dashboard.allocation')}</h2>
+        <h2 class="min-w-0 text-sm font-semibold text-lf-secondary">{$_('dashboard.allocation')}</h2>
         {#if onAnalyze}
-            <button type="button" class="text-xs text-lf-link hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lf-focus" onclick={onAnalyze} data-testid="allocation-analyze">{$_('dashboard.analyzeAllocation')}</button>
+            <LinkBadge onclick={onAnalyze} testId="allocation-analyze">
+                <PieChart size={12} aria-hidden="true" />
+                {$_('dashboard.analyzeAllocation')}
+            </LinkBadge>
         {/if}
-        <div class="ml-auto flex rounded-lg overflow-hidden border border-lf-subtle text-xs font-medium">
+        <div class="ml-auto flex shrink-0 rounded-lg overflow-hidden border border-lf-subtle text-xs font-medium">
             <button
                 class="px-2.5 py-1.5 transition-colors {allocationView === 'now' ? 'bg-lf-action text-lf-on-action' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}"
                 onclick={() => selectView('now')}

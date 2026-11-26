@@ -16,6 +16,7 @@
     import {ChevronDown, ChevronsDownUp, ChevronsUpDown, ExternalLink, RefreshCw, Search} from 'lucide-svelte';
     import AskAdminModal from '$lib/features/update-check/AskAdminModal.svelte';
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
+    import Button from '$lib/components/ui/button/Button.svelte';
     import {CHANGELOG_REMOTE_URL, baseLanguage, localizedChangelog, type ChangelogChapter, type ChangelogSection, type DisplayedChapter} from '$lib/features/changelog/changelog';
     import {auth} from '$lib/stores/app/auth';
     import {notify} from '$lib/stores/app/notify.svelte';
@@ -312,12 +313,8 @@
             <!-- Row 1 -->
             <h2 class="text-lg font-semibold text-lf-primary shrink-0 order-1">{$_('changelog.title')}</h2>
             <div class="flex items-center gap-1 shrink-0 order-2 sm:order-2 ml-auto">
-                <button type="button" class="p-1.5 rounded-lg text-lf-muted hover:text-lf-secondary hover:bg-lf-hover transition-colors" title={$_('changelog.expandAll')} onclick={() => setAll(true)} data-testid="changelog-expand-all">
-                    <ChevronsUpDown size={15} />
-                </button>
-                <button type="button" class="p-1.5 rounded-lg text-lf-muted hover:text-lf-secondary hover:bg-lf-hover transition-colors" title={$_('changelog.collapseAll')} onclick={() => setAll(false)} data-testid="changelog-collapse-all">
-                    <ChevronsDownUp size={15} />
-                </button>
+                <Button label={$_('changelog.expandAll')} icon={ChevronsUpDown} display="icon" variant="ghost" size="sm" onclick={() => setAll(true)} data-testid="changelog-expand-all" />
+                <Button label={$_('changelog.collapseAll')} icon={ChevronsDownUp} display="icon" variant="ghost" size="sm" onclick={() => setAll(false)} data-testid="changelog-collapse-all" />
                 <a href={CHANGELOG_REMOTE_URL} target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5 text-xs font-medium text-lf-link hover:underline ml-1" data-testid="changelog-remote-link">
                     <ExternalLink size={13} />
                     <span class="hidden sm:inline">{$_('changelog.viewRemote')}</span>
@@ -339,17 +336,8 @@
                      self-hosted: a managed instance is updated by its operator (F05, workstream A), and nothing shows
                      before the answer or after a failed request. -->
                 {#if selfHostedConfirmed()}
-                    <button
-                        type="button"
-                        class="inline-flex items-center gap-1 px-2 py-1.5 text-xs font-medium rounded-lg border border-lf-subtle text-lf-secondary hover:bg-lf-hover transition-colors disabled:opacity-50"
-                        onclick={handleCheckNow}
-                        disabled={checkState === 'checking'}
-                        title={$_('changelog.checkNow')}
-                        data-testid="changelog-check-update"
-                    >
-                        <RefreshCw size={13} class={checkState === 'checking' ? 'animate-spin' : ''} />
-                        <span class="hidden sm:inline">{$_('changelog.checkNow')}</span>
-                    </button>
+                    <!-- The word hides on a phone as before (`hidden sm:inline` = `hideWordBelow="sm"`); busy while it checks. -->
+                    <Button label={$_('changelog.checkNow')} icon={RefreshCw} display="auto" hideWordBelow="sm" size="sm" busy={checkState === 'checking'} onclick={handleCheckNow} data-testid="changelog-check-update" />
                 {/if}
             </div>
         </div>
@@ -378,14 +366,10 @@
             <!-- Version index -->
             <div class="flex gap-1.5 overflow-x-auto px-4 py-2 border-b border-lf-subtle shrink-0" data-testid="changelog-index">
                 {#each chapters as chapter, i (chapter.version + chapter.date)}
-                    <button
-                        type="button"
-                        class="px-2.5 py-1 text-xs font-mono font-medium rounded-full whitespace-nowrap transition-colors {isChapterOpen(i, chapter) ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-panel text-lf-secondary hover:bg-lf-neutral'}"
-                        onclick={() => jumpTo(i)}
-                        data-testid="changelog-index-{i}"
-                    >
-                        v{chapter.version}
-                    </button>
+                    <!-- A pill segment (C16): the open chapter is pressed; the version in its monospaced word. -->
+                    <Button label="v{chapter.version}" size="sm" compact segment pill pressed={isChapterOpen(i, chapter)} onclick={() => jumpTo(i)} data-testid="changelog-index-{i}">
+                        <span class="font-mono">v{chapter.version}</span>
+                    </Button>
                 {/each}
             </div>
 

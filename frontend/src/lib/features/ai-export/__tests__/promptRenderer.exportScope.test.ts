@@ -18,7 +18,7 @@ import {compatibilityFixture, selectionFixture, snapshotFixture} from './runtime
 /** One selection of each prompt shape. */
 const SHAPES: readonly [string, AiExportCompatibleSelection][] = [
     ['an analysis in the new shape', selectionFixture('analysis', 'portfolio.protection_strategies')],
-    ['an analysis in the old shape', selectionFixture('analysis', 'portfolio.pac_planning')],
+    ['an analysis in the old shape', selectionFixture('analysis', 'portfolio.fiscal_lots')],
     ['Export Data', selectionFixture('dataset', 'portfolio.overview_and_history')],
 ];
 

@@ -20,6 +20,7 @@ import {invalidateFxRoutes} from '$lib/stores/reference/fxRoutesStore';
 import {getClientSessionGeneration, isClientSessionCurrent} from '$lib/stores/app/clientSession';
 import {buildAssetSyncToast, buildFxSyncToast, historyStartsSummary} from '$lib/utils/sync/syncToastHelpers';
 import {buildMissingFxRatesSyncRequest} from '$lib/utils/sync/syncRange';
+import {asFxSyncBusy, fxSyncBusyText, guardedFxSync} from '$lib/features/fx/fxSyncGuard.svelte';
 import {fxPairHtml} from '$lib/utils/providerHelpers';
 import {extractErrorMessage} from '$lib/utils/trySave';
 import {escapeHtml} from '$lib/utils/core/escapeHtml';
@@ -87,9 +88,11 @@ export class PortfolioBannerActions {
             let response: FxSyncResponse | undefined;
             let transportError: string | undefined;
             try {
-                response = await zodiosApi.sync_rates_api_v1_fx_currencies_sync_post(request, {timeout: FX_SYNC_TIMEOUT_MS});
+                response = await guardedFxSync(request.pairs, () => zodiosApi.sync_rates_api_v1_fx_currencies_sync_post(request, {timeout: FX_SYNC_TIMEOUT_MS}));
             } catch (error) {
-                transportError = extractErrorMessage(error, t('prices.sync.failedDefault'));
+                // One sync per pair at a time (81 U35): a pair already syncing is said as that, not as a failure of the sync.
+                const busy = asFxSyncBusy(error);
+                transportError = busy ? fxSyncBusyText(t, busy) : extractErrorMessage(error, t('prices.sync.failedDefault'));
             }
             if (!current()) return;
             const {requestedResults, operationErrors, outcome, variant: outcomeVariant} = classifyFxSyncOutcome(request.pairs, response, transportError);

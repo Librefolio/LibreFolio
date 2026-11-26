@@ -1158,3 +1158,64 @@ describe('AllocationPieChart — the asset pie: one ring, the asset names as sen
         expect(new Set(colours).size, 'two assets in one colour').toBe(ranks.length);
     });
 });
+
+// =============================================================================
+// Switching view — the pie of the «Allocazione» tab keeps one chart and changes its mode (86, A1)
+// =============================================================================
+
+/**
+ * The tab draws Sector, Type and Asset with one mounted pie whose `mode` changes. ECharts merges an option into the one on
+ * screen: series by index and the legend field by field, so what the new mode does not write stays from the old one — the
+ * outer ring of Type, a hidden legend of Asset, a legend formatter that reads type icons. A change of mode therefore hands
+ * ECharts a whole option that replaces the old one, never the data-only update and never a merge.
+ */
+describe('AllocationPieChart — a change of mode replaces the whole option', () => {
+    const SECTORS: Slice[] = [slice('Technology', 60), slice('Energy', 40)];
+    const ASSETS = [
+        {...slice('First', 70), id: 71},
+        {...slice('Second', 30), id: 72},
+    ];
+    const DATA: Record<string, Slice[]> = {type: CROWDFUND_CASE, sector: SECTORS, asset: ASSETS};
+    const propsOf = (mode: string, over: Record<string, unknown> = {}) => ({data: DATA[mode], mode, legendPosition: 'bottom', currency: 'EUR', ...over}) as unknown as ComponentProps<PieComponent>;
+
+    async function switchMode(from: string, to: string, toProps: Record<string, unknown> = {}) {
+        const view = render(AllocationPieChart, {props: propsOf(from)});
+        await waitFor(() => expect(chartInstances[0]?.setOptionCalls.length ?? 0).toBeGreaterThan(0), {timeout: 5_000});
+        const chart = chartInstances[0];
+        const before = chart.setOptionCalls.length;
+        await view.rerender(propsOf(to, toProps));
+        await waitFor(() => expect(chart.setOptionCalls.length).toBeGreaterThan(before));
+        return {chart, first: chart.setOptionCalls[before]};
+    }
+
+    it.each([
+        ['type', 'asset'],
+        ['type', 'sector'],
+        ['asset', 'sector'],
+        ['asset', 'type'],
+        ['sector', 'asset'],
+        ['sector', 'type'],
+    ])('%s → %s: a full option, not merged', async (from, to) => {
+        const {first} = await switchMode(from, to);
+        expect(chartInstances, 'the same chart, not a new one').toHaveLength(1);
+        expect(first.option.tooltip, 'the whole option').toBeDefined();
+        expect(first.option.legend).toBeDefined();
+        expect((first.opts as {notMerge?: boolean} | undefined)?.notMerge).toBe(true);
+        expect(drawing().rings).toBe(to === 'type');
+    });
+
+    it('type → sector with the sector data one tick late: the second update is data only, on the sector option', async () => {
+        const {chart} = await switchMode('type', 'sector');
+        await waitFor(() => expect(drawing().inner.map((arc) => arc.rawName)).toEqual(['Technology', 'Energy']));
+        // The emoji of the sector list may rebuild once more: no call after the switch draws a ring again.
+        const after = chart.setOptionCalls.slice(1).flatMap(({option}) => (option.series as Array<{id?: string}>).map((entry) => entry.id));
+        expect(after.every((id) => id === undefined)).toBe(true);
+    });
+
+    it('the same mode with new numbers stays a data-only update', async () => {
+        const {chart, first} = await switchMode('asset', 'asset', {data: ASSETS.map((entry) => ({...entry, amount: entry.amount + 1}))});
+        expect(first.option.tooltip).toBeUndefined();
+        expect((first.opts as {notMerge?: boolean} | undefined)?.notMerge).not.toBe(true);
+        expect(chart.setOptionCalls.length).toBeGreaterThan(1);
+    });
+});

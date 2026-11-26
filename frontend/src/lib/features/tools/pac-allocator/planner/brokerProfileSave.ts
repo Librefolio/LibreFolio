@@ -15,7 +15,7 @@
  * `planProfileSave` is pure; `readStoredProfile` and `writeStoredProfile` are the two calls.
  */
 import {zodiosApi} from '$lib/api';
-import {fromDraft, newRule, toDraft, type ConversionMode, type OperatingProfileDocument, type ProfileDraft, type RuleDraft} from '$lib/features/brokers/profile/brokerOperatingProfile';
+import {DEFAULT_CONVERSION_MODE, fromDraft, newRule, toDraft, type ConversionMode, type OperatingProfileDocument, type ProfileDraft, type RuleDraft} from '$lib/features/brokers/profile/brokerOperatingProfile';
 import {profileDraftOf} from './brokerProfileAdapter';
 import type {DraftMode} from './draft.svelte';
 
@@ -57,7 +57,7 @@ export function planProfileSave(stored: OperatingProfileDocument | null, modes: 
         if (rowOf(next) !== rowOf(merged.rules[index])) changes.push({kind: 'currency', currency: rule.currency, change: 'updated'});
         merged.rules[index] = next;
     }
-    if ((merged.conversionMode ?? 'manual') !== conversionMode) changes.push({kind: 'conversion', mode: conversionMode});
+    if ((merged.conversionMode ?? DEFAULT_CONVERSION_MODE) !== conversionMode) changes.push({kind: 'conversion', mode: conversionMode});
     merged.conversionMode = conversionMode;
     return {changes, document: fromDraft(merged)};
 }

@@ -5,7 +5,7 @@
     import {schemas} from '$lib/api';
     import DataTable from '$lib/components/table/DataTable.svelte';
     import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
-    import type {ColumnDef, EnumOption, FooterCellContent, HtmlCell, RowAction} from '$lib/components/table/types';
+    import type {CellContent, ColumnDef, EnumOption, FooterCellContent, HtmlCell, RowAction} from '$lib/components/table/types';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
     import {getBrokerColor, type BrokerLike} from '$lib/utils/broker/brokerColors';
     import {getBrokerIconCandidates, getBrokerIconHtmlById} from '$lib/utils/broker/brokerHelpers';
@@ -20,7 +20,7 @@
     import {isUnknownOrNonZero} from './lotChartShared';
     import {compareRowsByColumn, formatCellDate} from '$lib/components/table/dataTableLogic';
     import type {SortState} from '$lib/components/table/types';
-    import {arrangeRows, groupRewardLots, groupSelection, lotRowsOf, lotsAfterTableSelection, tableRowIdsFor} from './rewardLotGroups';
+    import {arrangeRows, groupRewardLots, groupSelection, lotRowsOf, lotsAfterTableSelection, rewardEntriesByLot, rewardEntryRowId, tableRowIdsFor, withRewardEntries, type RewardEntry, type RewardEventRow} from './rewardLotGroups';
     import {SIGN_TEXT} from '$lib/theme/toneClasses';
 
     type LotSummarySchema = z.infer<typeof schemas.LotSummarySchema>;
@@ -40,6 +40,8 @@
         onRowDoubleClick?: (lotId: number) => void;
         /** The matching method on screen (project 69): the hint names it. */
         matchingMethod?: string;
+        /** The lots' events: the rewards that entered a lot (`REWARD_MERGE`, the «Rewards in lots» view) are listed under it (86, D-22). */
+        lotEvents?: ReadonlyArray<RewardEventRow>;
     }
 
     interface DisplayRow {
@@ -74,13 +76,16 @@
         /** STK-2c: the group row of a broker's reward lots (its own id, its lots' sums), or a lot shown under one. */
         groupHead?: {size: number; firstDate: string; lastDate: string};
         groupChildOf?: string;
+        /** 86, D-22: how many rewards entered the lot, or (`entry`) the row of one of them, under its lot. */
+        entryCount?: number;
+        entry?: RewardEntry;
     }
 
     const PRIMARY_STATE_ORDER: PrimaryLotState[] = ['OPEN', 'PARTIALLY_CLOSED', 'CLOSED', 'DEGRADED'];
     const STATUS_FILTER_VALUES: LotState[] = ['OPEN', 'PARTIALLY_CLOSED', 'CLOSED', 'DISTRIBUTED', 'IN_TRANSIT', 'DEGRADED'];
     const IN_TRANSIT_FILTER_VALUE = '__IN_TRANSIT__';
 
-    let {lots = [], currency, brokers = [], selectedLotIds = undefined, onSelectionChange, onCustodyCellClick, onViewGanttLot, onGotoOpeningTransaction, onRowDoubleClick, matchingMethod = 'FIFO'}: Props = $props();
+    let {lots = [], currency, brokers = [], selectedLotIds = undefined, onSelectionChange, onCustodyCellClick, onViewGanttLot, onGotoOpeningTransaction, onRowDoubleClick, matchingMethod = 'FIFO', lotEvents = []}: Props = $props();
 
     let tableRef: DataTable<DisplayRow> | undefined = $state(undefined);
     let internalSelectedLotIds = $state<number[]>(untrack(() => selectedLotIds ?? []));
@@ -145,6 +150,7 @@
 
     function getRowClass(row: DisplayRow): string {
         if (row.groupHead) return 'reward-group-row';
+        if (row.entry) return 'lot-row-tinted reward-group-child reward-entry-row';
         return row.groupChildOf ? 'lot-row-tinted reward-group-child' : 'lot-row-tinted';
     }
 
@@ -160,6 +166,35 @@
             type: 'html',
             html: `<span class="inline-flex items-start gap-1.5" data-testid="reward-group-head" data-group-id="${escapeHtml(row.rowId)}" data-state="${open ? 'open' : 'closed'}" aria-expanded="${open}" title="${escapeHtml(toggle)}"><span class="w-3 text-lf-secondary" aria-hidden="true">${open ? '▾' : '▸'}</span><span class="reward-group-dot mt-1.5 inline-block size-2 shrink-0 rounded-full" aria-hidden="true"></span><span class="flex flex-col"><span class="font-semibold text-lf-primary">${escapeHtml(title)}</span><span class="text-xs text-lf-muted tabular-nums">${escapeHtml(dates)}</span></span></span>`,
             onClick: () => toggleGroup(row.rowId),
+        };
+    }
+
+    const dayText = (value: string): string => formatCellDate(value, 'date', {today: $_('date.today') || 'Today', yesterday: $_('date.yesterday') || 'Yesterday'});
+    const rewardTag = (): string => `<span class="rounded bg-lf-cat-index-soft px-1 text-[11px] font-medium text-lf-cat-index-on-soft" data-testid="reward-lot-tag">${escapeHtml(label('transactions.types.REWARD', 'Reward'))}</span>`;
+
+    /** The date of a lot: with the reward tag on a lot a REWARD opened (the mockup of STK-2c); on a lot rewards entered, the
+     *  chevron that lists them and how many they are; every other lot keeps the plain date cell. */
+    function openingDateCell(row: DisplayRow): CellContent {
+        const isReward = row.lot.opening_kind === 'REWARD';
+        if (!isReward && !row.entryCount) return {type: 'date', value: row.openingDate, format: 'date'};
+        const date = `<span class="inline-flex max-w-full flex-wrap items-center gap-x-1.5"><span>${escapeHtml(dayText(row.openingDate))}</span>${isReward ? rewardTag() : ''}</span>`;
+        if (!row.entryCount) return {type: 'html', html: date};
+        const open = expandedEntries.has(row.rowId);
+        const count = translateOr((key) => $_(key, {values: {n: row.entryCount ?? 0}}), 'brokers.lots.rewardGroup.title', `${row.entryCount} rewards`);
+        const toggle = open ? label('brokers.lots.rewardEntry.close', 'Hide the rewards that entered this lot') : label('brokers.lots.rewardEntry.open', 'Show the rewards that entered this lot');
+        return {
+            type: 'html',
+            html: `<span class="inline-flex items-start gap-1.5" data-testid="reward-entries-toggle" data-lot-id="${row.lotId}" data-state="${open ? 'open' : 'closed'}" aria-expanded="${open}" title="${escapeHtml(toggle)}"><span class="w-3 text-lf-secondary" aria-hidden="true">${open ? '▾' : '▸'}</span><span class="flex flex-col items-start text-left">${date}<span class="text-xs text-lf-muted">${escapeHtml(count)}</span></span></span>`,
+            onClick: () => toggleEntries(row.rowId),
+        };
+    }
+
+    /** The first cell of a reward that entered a lot: its day, the reward tag and the units the lot took. */
+    function rewardEntryCell(entry: RewardEntry): HtmlCell {
+        const units = entry.quantity == null ? '—' : $_('brokers.lots.rewardEntry.units', {values: {quantity: formatLotQuantityMasked(entry.quantity)}});
+        return {
+            type: 'html',
+            html: `<span class="flex flex-col items-start text-left" data-testid="reward-entry" data-transaction-id="${entry.transactionId}"><span class="inline-flex max-w-full flex-wrap items-center gap-x-1.5"><span>${escapeHtml(dayText(entry.date))}</span>${rewardTag()}</span><span class="text-xs tabular-nums text-lf-muted" data-testid="reward-entry-units">${escapeHtml(units)}</span></span>`,
         };
     }
 
@@ -365,6 +400,7 @@
                 totalPnl: safeDecimal(lot.total_pnl),
                 totalReturn: safeDecimal(lot.total_return),
                 annualizedReturn: safeDecimal(lot.annualized_return),
+                entryCount: entriesByLot.get(lot.lot_id)?.length,
                 allocatedFees: safeDecimal(lot.allocated_fees),
                 allocatedTaxes: safeDecimal(lot.allocated_taxes),
                 netTotalPnl: safeDecimal(lot.net_total_pnl),
@@ -380,6 +416,22 @@
     // is exactly what it was: the rows as given, sorted by the table itself.
     let rewardGroups = $derived(groupRewardLots(rows, (row) => row.lot.opening_kind === 'REWARD'));
     let expandedGroups = $state<Set<string>>(new Set());
+    // 86, D-22: the rewards that entered each lot, and the lots whose list is open
+    let entriesByLot = $derived(rewardEntriesByLot(lotEvents, safeDecimal));
+    let expandedEntries = $state<Set<string>>(new Set());
+
+    function toggleEntries(rowId: string): void {
+        const next = new Set(expandedEntries);
+        if (next.has(rowId)) next.delete(rowId);
+        else next.add(rowId);
+        expandedEntries = next;
+    }
+
+    /** The rows under an open lot, one per reward that entered it: the lot's own row with only the reward's facts shown. */
+    function entryRowsOf(row: DisplayRow): DisplayRow[] {
+        if (row.groupHead) return [];
+        return (entriesByLot.get(row.lotId) ?? []).map((entry) => ({...row, rowId: rewardEntryRowId(row.lotId, entry.transactionId), lotId: -1, entryCount: undefined, entry}));
+    }
     let sortState = $state<SortState | null>(null);
 
     function toggleGroup(groupId: string): void {
@@ -451,7 +503,9 @@
         const column = state ? baseColumns.find((candidate) => candidate.id === state.columnId) : undefined;
         return state && column ? (a, b) => compareRowsByColumn(column, a, b, state.direction) : undefined;
     });
-    let visibleRows = $derived(rewardGroups.size === 0 ? rows : arrangeRows(topLevelRows(), childRows, expandedGroups, sortComparator));
+    // Rows the table must not order by itself: a group's lots and a lot's rewards stay under it
+    let ordered = $derived(rewardGroups.size > 0 || entriesByLot.size > 0);
+    let visibleRows = $derived(ordered ? withRewardEntries(arrangeRows(topLevelRows(), childRows, expandedGroups, sortComparator), entryRowsOf, expandedEntries) : rows);
 
     let statusEnumOptions = $derived.by<EnumOption[]>(() =>
         STATUS_FILTER_VALUES.map((state) => ({
@@ -480,26 +534,26 @@
             label: () => label('brokers.lots.viewLotDetail', 'View lot detail'),
             onClick: (row) => onCustodyCellClick?.(row.lot),
             // A page that cannot open it does not offer it (77 SEL-M, Q-SEL-12)
-            visible: (row) => onCustodyCellClick != null && !row.groupHead,
+            visible: (row) => onCustodyCellClick != null && !row.groupHead && !row.entry,
         },
         {
             id: 'lot-view-gantt-action',
             icon: BarChart3,
             label: () => label('brokers.lots.viewGanttLot', 'Go to lot in Gantt'),
             onClick: (row) => onViewGanttLot?.(row.lotId),
-            visible: (row) => onViewGanttLot != null && !row.groupHead,
+            visible: (row) => onViewGanttLot != null && !row.groupHead && !row.entry,
         },
         {
             id: 'lot-goto-opening-transaction-action',
             icon: ExternalLink,
             label: () => label('brokers.lots.goToOpeningTransaction', 'Go to opening transaction'),
             onClick: (row) => onGotoOpeningTransaction?.(row.lot),
-            visible: (row) => onGotoOpeningTransaction != null && !row.groupHead,
+            visible: (row) => onGotoOpeningTransaction != null && !row.groupHead && !row.entry,
         },
         {
             id: 'lot-copy-id-action',
             icon: Copy,
-            visible: (row) => !row.groupHead,
+            visible: (row) => !row.groupHead && !row.entry,
             label: () => label('brokers.lots.copyLotIdentifier', 'Copy lot identifier'),
             onClick: async (row) => {
                 try {
@@ -559,9 +613,10 @@
         {
             id: 'opening-date',
             header: () => label('brokers.lots.openingDate', 'Opening Date'),
-            cell: (row) => (row.groupHead ? groupHeadCell(row) : {type: 'date', value: row.openingDate, format: 'date'}),
+            cell: (row) => (row.groupHead ? groupHeadCell(row) : row.entry ? rewardEntryCell(row.entry) : openingDateCell(row)),
             type: 'date',
-            width: 140,
+            // Room for the reward tag beside the date, inside the indent of a group; narrower, it goes under the date.
+            width: entriesByLot.size > 0 || rows.some((row) => row.lot.opening_kind === 'REWARD') ? 190 : 140,
             minWidth: 130,
             sortable: true,
             getValue: (row) => row.openingDate,
@@ -787,7 +842,8 @@
     ]);
 
     // With groups the rows reach the table already in order: its own sort keeps them (stable), the header still shows it.
-    let columns = $derived(rewardGroups.size === 0 ? baseColumns : baseColumns.map((column) => (column.sortable === false ? column : {...column, sortFn: () => 0})));
+    // A reward that entered a lot has its first cell only: the figures are its lot's, and one row shows them.
+    let columns = $derived(!ordered ? baseColumns : baseColumns.map((column): ColumnDef<DisplayRow> => ({...column, ...(column.sortable === false ? {} : {sortFn: () => 0}), cell: (row) => (row.entry && column.id !== 'opening-date' ? '' : column.cell(row))})));
 
     let effectiveSelectedLotIds = $derived(selectedLotIds ?? internalSelectedLotIds);
     // STK-2c: the selection is the set of lot ids; the table's rows show it (a group row when all its lots are selected)
@@ -843,12 +899,14 @@
     <div class="flex flex-wrap items-center justify-between gap-3 border-b border-lf-subtle/80 px-4 py-3">
         <div class="flex min-w-0 items-center gap-3">
             <div>
-                <div class="text-base font-semibold text-lf-primary">{label('brokers.lots.unifiedLots', 'Lots')}</div>
+                <div class="flex items-center gap-2">
+                    <div class="text-base font-semibold text-lf-primary" data-testid="unified-lots-title">{label('brokers.lots.unifiedLots', 'Lots')}</div>
+                    <span class="inline-flex min-w-7 items-center justify-center rounded-full bg-lf-neutral px-2 py-0.5 text-xs font-semibold tabular-nums text-lf-secondary" data-testid="unified-lots-count">
+                        {lots.length}
+                    </span>
+                </div>
                 <div class="text-xs text-lf-muted">{translateOr((key) => $_(key, {values: {method: matchingMethod}}), 'brokers.lots.unifiedLotsHint', `Unified lots view (${matchingMethod}) with multi-selection and custody drill-down.`)}</div>
             </div>
-            <span class="inline-flex min-w-7 items-center justify-center rounded-full bg-lf-neutral px-2 py-0.5 text-xs font-semibold tabular-nums text-lf-secondary">
-                {lots.length}
-            </span>
         </div>
         <div class="flex flex-wrap items-center gap-2">
             <ColumnVisibilityToggle {tableRef} />
@@ -881,9 +939,16 @@
             tableLayout="fixed"
             defaultPageSize={25}
             {emptyMessage}
-            footerCells={(footerRows: DisplayRow[]) => buildFooterCells(lotRowsOf(footerRows, rewardGroups))}
+            footerCells={(footerRows: DisplayRow[]) =>
+                buildFooterCells(
+                    lotRowsOf(
+                        footerRows.filter((row) => !row.entry),
+                        rewardGroups,
+                    ),
+                )}
             getRowSelectionState={(row: DisplayRow) => (row.groupHead && groupSelection(rewardGroups.get(row.rowId) ?? [], new Set(effectiveSelectedLotIds)) === 'partial' ? 'partial' : null)}
-            opensPage={(row: DisplayRow) => !row.groupChildOf}
+            opensPage={(row: DisplayRow) => !row.groupChildOf && !row.entry}
+            isRowSelectable={(row: DisplayRow) => !row.entry}
             onSortChange={(state) => (sortState = state)}
             onSelectionChange={handleTableSelectionChange}
             onRowClick={(row) => (row.groupHead ? toggleGroup(row.rowId) : tableRef?.toggleRowSelectionById(row.rowId))}
@@ -936,6 +1001,10 @@
         }
         .unified-lots-table-wrap tr.reward-group-child > td:nth-child(2) {
             padding-left: 2rem;
+        }
+        /* A reward that entered a lot is its lot's detail, one step quieter. */
+        .unified-lots-table-wrap tr.reward-entry-row > td {
+            cursor: default;
         }
         .unified-lots-table-wrap .reward-group-dot {
             background: var(--lf-cat-index);

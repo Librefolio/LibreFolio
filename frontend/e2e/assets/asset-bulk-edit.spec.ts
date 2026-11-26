@@ -17,7 +17,7 @@
  */
 import {expect, test} from '../fixtures/playwright';
 import type {Page} from '../fixtures/playwright';
-import {login} from '../fixtures/auth-helpers';
+import {login, setLanguage} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
 import {eventSeq, waitForEvent, waitForSettled} from '../fixtures/app-events';
 import {daysAgoIso} from '../fixtures/dates';
@@ -330,6 +330,119 @@ test.describe('Asset bulk edit', () => {
                 const now = await box(`asset-bulk-${field}-now`);
                 expect(now.y, `«Now» of ${field} is under its control`).toBeGreaterThanOrEqual(control.y + control.height - 1);
             }
+        } finally {
+            await deleteOwned(page, owned);
+        }
+    });
+
+    // 81 U45 (testlist 9.3): the first segment of Active and Benchmark said «Leave as is» and was cut («Lascia c…»). It says the
+    // state in one short word now; read in the browser, in the four languages, on a phone and wide: no segment is cut.
+    // One test per language (81, triage of the merge check of 24/11): the four in one body took 26 s of the 30 s a test has (two opens of the window and a
+    // language switch each), so a machine under load, or one extra request on the page, ended it inside its cleanup. Each
+    // language now has its own 30 s (about 7 s used), and the four run side by side.
+    for (const language of ['en', 'it', 'fr', 'es'] as const) {
+        test(`the segments of Active and Benchmark are not cut in ${language}, at 390 px and wide`, async ({page}) => {
+            const owned: Owned = {assetIds: [], brokerIds: []};
+            const token = uniqueToken(6);
+            try {
+                await createAssets(page, owned, token, ['A', 'B', 'C']);
+                // Every cut is collected and said at the end: the report is the table the width is chosen from.
+                const cuts: string[] = [];
+                await setLanguage(page, language);
+                for (const width of [390, 1280]) {
+                    await page.setViewportSize({width, height: 900});
+                    await openBulkEdit(page, token, 3);
+                    await page.getByTestId('asset-bulk-active').scrollIntoViewIfNeeded();
+                    for (const field of ['active', 'is_benchmark']) {
+                        for (const option of ['leave', 'yes', 'no']) {
+                            const cut = await page.getByTestId(`asset-bulk-${field}-${option}`).evaluate((element) => Math.round(element.scrollWidth - element.clientWidth));
+                            if (cut > 0) cuts.push(`${language}@${width} ${field}/${option}: ${cut}px`);
+                        }
+                    }
+                    await page.keyboard.press('Escape');
+                    await expect(page.getByTestId('asset-bulk-edit')).toHaveCount(0);
+                }
+                expect(cuts, `segments cut by this many pixels: ${cuts.join(' · ')}`).toEqual([]);
+            } finally {
+                await deleteOwned(page, owned);
+            }
+        });
+    }
+
+    // 81 U44 (testlist of 23/11, the developer's photo): the icon block — the label, the round «pick» button, «Remove icon» and its
+    // «Now» line — is centred: on a wide window vertically against the two fields beside it (User URL and Type), on every width
+    // on one vertical axis, which on a phone, where the block sits above the fields, is the middle of the window.
+    test('the icon block is centred: against User URL and Type on a wide window, on one axis (the window’s middle on a phone)', async ({page}) => {
+        const owned: Owned = {assetIds: [], brokerIds: []};
+        const token = uniqueToken(6);
+        try {
+            const assets = await createAssets(page, owned, token, ['A', 'B', 'C']);
+            const patched = await page.request.patch(`${API_BASE}/assets`, {
+                data: [
+                    {asset_id: assets[0].id, icon_url: 'https://example.test/a.png'},
+                    {asset_id: assets[2].id, icon_url: 'https://example.test/c.png'},
+                ],
+            });
+            expect(patched.ok(), 'give A and C an icon, so «Remove icon» is offered').toBe(true);
+            await openBulkEdit(page, token, 3);
+            await expect(page.getByTestId('asset-bulk-icon-remove'), 'premise: «Remove icon» is offered').toBeVisible();
+
+            // One evaluate: the boxes are read in the same frame, whatever reflows between two awaited reads.
+            const measure = () =>
+                page.evaluate(() => {
+                    const rect = (selector: string) => {
+                        const element = document.querySelector<HTMLElement>(selector);
+                        if (!element) throw new Error(`${selector} is not on the page`);
+                        const box = element.getBoundingClientRect();
+                        return {top: box.top, bottom: box.bottom, centreX: box.left + box.width / 2};
+                    };
+                    const label = rect('#asset-bulk-icon-label');
+                    const pick = rect('[data-testid="asset-bulk-icon-pick"]');
+                    const remove = rect('[data-testid="asset-bulk-icon-remove"]');
+                    const now = rect('[data-testid="asset-bulk-icon_url-now"]');
+                    const cell = rect('[data-testid="asset-bulk-field-icon_url"]');
+                    const urlHead = rect('label[for="asset-bulk-user-url"]');
+                    const typeNow = rect('[data-testid="asset-bulk-asset_type-now"]');
+                    return {
+                        axis: [label.centreX, pick.centreX, remove.centreX, now.centreX],
+                        cellCentreX: cell.centreX,
+                        blockCentreY: (label.top + now.bottom) / 2,
+                        fieldsCentreY: (urlHead.top + typeNow.bottom) / 2,
+                    };
+                });
+
+            await page.setViewportSize({width: 1280, height: 1000});
+            await page.getByTestId('asset-bulk-icon-pick').scrollIntoViewIfNeeded();
+            await expect
+                .poll(
+                    async () => {
+                        const m = await measure();
+                        return Math.abs(m.blockCentreY - m.fieldsCentreY);
+                    },
+                    {message: 'wide: the icon block is not centred against User URL and Type', timeout: 5_000},
+                )
+                .toBeLessThanOrEqual(3);
+            await expect
+                .poll(
+                    async () => {
+                        const {axis} = await measure();
+                        return Math.max(...axis) - Math.min(...axis);
+                    },
+                    {message: 'wide: the label, the pick button, «Remove icon» and «Now» are not on one axis', timeout: 5_000},
+                )
+                .toBeLessThanOrEqual(2);
+
+            await page.setViewportSize({width: 375, height: 812});
+            await page.getByTestId('asset-bulk-icon-pick').scrollIntoViewIfNeeded();
+            await expect
+                .poll(
+                    async () => {
+                        const {axis, cellCentreX} = await measure();
+                        return Math.max(...axis.map((x) => Math.abs(x - cellCentreX)));
+                    },
+                    {message: 'phone: the icon block is not centred in the window', timeout: 5_000},
+                )
+                .toBeLessThanOrEqual(2);
         } finally {
             await deleteOwned(page, owned);
         }

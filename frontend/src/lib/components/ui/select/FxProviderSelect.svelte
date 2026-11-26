@@ -21,6 +21,9 @@
     icon in place of +, reachable; a touch asks the parent to explain (`onneedssetup`), it never adds the route. A
     provider the pair's saved routes already use (`savedProviderCodes`) is never switched off, and a selected route
     through a provider that is not configured shows a yellow triangle that asks the same.
+  - The standard buttons (85 BTN-2c): the triangle, the remove, the picker toggle, the search clear and «show more».
+    The triangle is never `reason` or `disabled`: its click must reach `onneedssetup`. The route rows and the chain
+    headers stay hand-written (rich content: flags, provider marks, badges).
 -->
 <script lang="ts">
     import {_} from '$lib/i18n';
@@ -32,6 +35,8 @@
     import OrderableList from '$lib/components/ui/OrderableList.svelte';
     import {getPriorityBadgeStyle, getProviderColor} from '$lib/utils/colors';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
+    import Button from '$lib/components/ui/button/Button.svelte';
+    import {pressable} from '$lib/components/ui/button/pressable.svelte';
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
 
     /** A provider note's level (`warning_level`): a data limit that can mislead, or a fact worth knowing. */
@@ -562,6 +567,17 @@
     }
 
     /**
+     * The texts of a route row's badges and ⚠, for the finger, the keyboard and a screen reader (`use:pressable` with
+     * `partTips`, 85 BTN-0c D16): the parts' own tooltips are the mouse's alone, so the click on them stays the row's.
+     */
+    function routeHelp(route: RouteOption, off: ProviderInfo | undefined): string {
+        const lines: string[] = off ? [setupHint(off)] : [];
+        for (const code of new Set(route.providers)) lines.push([getProviderName(code), getProviderDescByCode(code)].filter(Boolean).join(': '));
+        lines.push(...getRouteWarnings(route));
+        return lines.join('\n');
+    }
+
+    /**
      * The providers legend (R1-C of project 67, the developer, 20/11): a plain click on an entry only shows or hides its
      * tooltip, a double click opens the provider's guide. The entry stays a link, so the keyboard (Enter: a click with no
      * pointer, `detail` 0), a click with a modifier key, a middle click and the long press of a phone keep opening it.
@@ -674,9 +690,8 @@
                         <!-- N3c: a provider of this saved route is not configured: the yellow triangle says why -->
                         {#if unconfiguredOf(route)}
                             {@const needs = unconfiguredOf(route)!}
-                            <button type="button" class="p-0.5 rounded-md text-lf-warning hover:bg-lf-warning-soft flex-shrink-0" data-testid="fx-route-needs-setup" data-provider={needs.code} title={setupHint(needs)} aria-label={setupHint(needs)} onclick={() => onneedssetup?.(needs)}>
-                                <AlertTriangle size={13} />
-                            </button>
+                            <!-- Never `reason` or `disabled` (76 N3c): the click must reach `onneedssetup`. -->
+                            <Button label={setupHint(needs)} icon={AlertTriangle} display="icon" variant="ghost" tone="warning" size="xs" dense onclick={() => onneedssetup?.(needs)} data-testid="fx-route-needs-setup" data-provider={needs.code} />
                         {/if}
                         <!-- Provider warnings triangle -->
                         {#if getRouteWarnings(route).length > 0}
@@ -686,9 +701,7 @@
                         {/if}
                         <!-- Remove button -->
                         {#if !disabled}
-                            <button type="button" class="p-1 rounded-md hover:bg-lf-danger-soft text-lf-muted hover:text-lf-danger-on-soft transition-all flex-shrink-0" onclick={() => removeRoute(route.key)} title="Remove" data-testid="fx-route-remove">
-                                <Trash2 size={13} />
-                            </button>
+                            <Button label={$_('common.remove')} icon={Trash2} display="icon" variant="ghost" size="xs" dense onclick={() => removeRoute(route.key)} data-testid="fx-route-remove" />
                         {/if}
                     </div>
                 {/snippet}
@@ -699,24 +712,21 @@
         <!-- ADD ROUTE — Collapsible picker                                -->
         <!-- ============================================================= -->
         {#if hasAnyRoutes && hasUnselectedRoutes}
-            <button
-                type="button"
-                class="w-full flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg border border-dashed transition-colors
-                    {pickerOpen ? 'border-lf-focus bg-lf-selected text-lf-link' : 'border-lf-input text-lf-muted hover:border-lf-focus hover:text-lf-link'}"
+            <!-- A disclosure whose panel this component draws: `aria-expanded` as an attribute (the icon already turns). -->
+            <Button
+                label={pickerOpen ? $_('fx.route.hideRoutes') : $_('fx.route.addRoute')}
+                icon={pickerOpen ? ChevronUp : Plus}
+                variant="secondary"
+                size="sm"
+                dashed
+                class="w-full"
                 onclick={() => {
                     pickerOpen = !pickerOpen;
                 }}
+                aria-expanded={pickerOpen ? 'true' : 'false'}
                 data-testid="fx-route-picker-toggle"
-                data-open={pickerOpen}
-            >
-                {#if pickerOpen}
-                    <ChevronUp size={14} />
-                    {$_('fx.route.hideRoutes')}
-                {:else}
-                    <Plus size={14} />
-                    {$_('fx.route.addRoute')}
-                {/if}
-            </button>
+                data-open={pickerOpen ? 'true' : 'false'}
+            />
         {/if}
 
         {#if pickerOpen && hasUnselectedRoutes}
@@ -770,9 +780,9 @@
                         data-testid="fx-route-search"
                     />
                     {#if searchQuery}
-                        <button class="absolute right-2 top-1/2 -translate-y-1/2 text-lf-muted hover:text-lf-secondary transition-colors" onclick={clearSearch} data-testid="fx-route-search-clear">
-                            <X size={13} />
-                        </button>
+                        <div class="absolute right-1 top-1/2 -translate-y-1/2">
+                            <Button label={$_('common.clear')} icon={X} display="icon" variant="ghost" size="xs" dense onclick={clearSearch} data-testid="fx-route-search-clear" />
+                        </div>
                     {/if}
                 </div>
 
@@ -793,6 +803,7 @@
                             {@const off = blockedBy(route)}
                             <button
                                 type="button"
+                                use:pressable={{label: route.label, help: routeHelp(route, off), partTips: true, wordVisible: () => true}}
                                 data-testid="fx-route-direct-{route.providers[0]}"
                                 data-route-key={route.key}
                                 data-needs-setup={off ? 'true' : 'false'}
@@ -811,7 +822,7 @@
                                     {/if}
                                     <span class="text-sm emoji-flag">{fromInfo.flag_emoji}</span>
                                     <span class="font-medium text-lf-secondary text-[11px]">{step.from}</span>
-                                    <Tooltip html={providerTooltipHtml(step.provider)} position="top">
+                                    <Tooltip html={providerTooltipHtml(step.provider)} position="top" insideControl>
                                         <span class="inline-flex items-center gap-0.5 px-1 py-0.5 rounded border flex-shrink-0" style="background: {provColor.bg}; border-color: {provColor.border}">
                                             <ArrowLeftRight size={10} class="text-lf-muted flex-shrink-0" />
                                             {@render providerMark(step.provider, 'md')}
@@ -821,7 +832,7 @@
                                     <span class="text-sm emoji-flag">{toInfo.flag_emoji}</span>
                                     <span class="font-medium text-lf-secondary text-[11px]">{step.to}</span>
                                     {#if warnings.length > 0}
-                                        <Tooltip html={warningsTooltipHtml(warnings)} position="top">
+                                        <Tooltip html={warningsTooltipHtml(warnings)} position="top" insideControl>
                                             {@render noteIcon(getRouteWarningLevel(route), 11)}
                                         </Tooltip>
                                     {/if}
@@ -839,8 +850,10 @@
                         <!-- Collapsible header -->
                         <button
                             type="button"
+                            use:pressable={{label: $_('fx.route.chainSection'), help: $_('fx.route.chainWarning'), partTips: true, wordVisible: () => true}}
                             class="w-full flex items-center gap-1.5 text-[10px] font-semibold text-lf-muted uppercase tracking-wider hover:text-lf-secondary transition-colors"
                             onclick={() => toggleChainGroup(group.stepCount)}
+                            aria-expanded={isExpanded}
                             data-testid="fx-route-chain-toggle-{group.stepCount}"
                             data-expanded={isExpanded}
                         >
@@ -854,7 +867,7 @@
                             {$_('fx.route.steps')}
                             <span class="ml-1 text-[9px] font-mono px-1 py-0.5 rounded bg-lf-info-soft text-lf-info-on-soft">{group.routes.length}</span>
                             <!-- Chain risk info icon -->
-                            <Tooltip text={$_('fx.route.chainWarning')} position="top">
+                            <Tooltip text={$_('fx.route.chainWarning')} position="top" insideControl>
                                 <Info size={10} class="text-lf-info" />
                             </Tooltip>
                         </button>
@@ -867,6 +880,7 @@
                                 {@const off = blockedBy(route)}
                                 <button
                                     type="button"
+                                    use:pressable={{label: route.label, help: routeHelp(route, off), partTips: true, wordVisible: () => true}}
                                     data-testid="fx-route-chain-{route.stepCount}step-{route.providers.join('-')}"
                                     data-route-key={route.key}
                                     data-needs-setup={off ? 'true' : 'false'}
@@ -892,7 +906,7 @@
                                                     <span class="text-sm emoji-flag">{fromInfo.flag_emoji}</span>
                                                     <span class="font-medium text-[11px] text-lf-secondary">{step.from}</span>
                                                 {/if}
-                                                <Tooltip html={providerTooltipHtml(step.provider)} position="top">
+                                                <Tooltip html={providerTooltipHtml(step.provider)} position="top" insideControl>
                                                     <span class="inline-flex items-center gap-0.5 px-0.5 py-0.5 rounded border flex-shrink-0" style="background: {provColor.bg}; border-color: {provColor.border}">
                                                         <ArrowLeftRight size={8} class="text-lf-muted flex-shrink-0" />
                                                         {@render providerMark(step.provider, 'sm')}
@@ -904,7 +918,7 @@
                                             {/each}
                                         </span>
                                         {#if warnings.length > 0}
-                                            <Tooltip html={warningsTooltipHtml(warnings)} position="top">
+                                            <Tooltip html={warningsTooltipHtml(warnings)} position="top" insideControl>
                                                 {@render noteIcon(getRouteWarningLevel(route), 11)}
                                             </Tooltip>
                                         {/if}
@@ -916,15 +930,16 @@
                                 </button>
                             {/each}
                             {#if group.routes.length > limit}
-                                <button
-                                    type="button"
-                                    class="w-full px-2.5 py-1.5 rounded-lg border border-dashed border-lf-subtle text-xs text-lf-link hover:bg-lf-hover transition-colors"
+                                <Button
+                                    label={$_('fx.route.showMore', {values: {count: group.routes.length - limit}})}
+                                    variant="secondary"
+                                    size="sm"
+                                    dashed
+                                    class="w-full"
                                     onclick={() => showMoreChains(group.stepCount)}
                                     data-testid="fx-route-chain-more-{group.stepCount}"
                                     data-hidden={group.routes.length - limit}
-                                >
-                                    {$_('fx.route.showMore', {values: {count: group.routes.length - limit}})}
-                                </button>
+                                />
                             {/if}
                         {/if}
                     </div>

@@ -7,16 +7,20 @@
   - Consistent API with ImageEditModal (same events, same pattern)
   - Fallback modal for files that don't have specialized editors
   - Uses ModalBase for backdrop/keydown/z-index handling
+  - The standard buttons (85 BTN-2b): the ✕ is `CloseButton`, the reset an amber ghost icon, the confirm `busy` while it
+    uploads (the spinner and «Uploading…» are the Button's own)
 -->
 <script lang="ts">
     import {createEventDispatcher} from 'svelte';
     import {_} from '$lib/i18n';
-    import {Check, FileIcon, Loader2, RefreshCw, X} from 'lucide-svelte';
+    import {Check, FileIcon, RefreshCw} from 'lucide-svelte';
     import {formatBytes, uploadFile} from '$lib/utils/files/upload';
     import StorageLimitRefusal from '$lib/components/ui/feedback/StorageLimitRefusal.svelte';
     import {storageLimitNumbersOfError, type StorageLimitNumbers} from '$lib/utils/files/storageLimit';
     import type {UploadScope} from '$lib/types';
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
+    import Button from '$lib/components/ui/button/Button.svelte';
+    import CloseButton from '$lib/components/ui/button/CloseButton.svelte';
     import {uiLocaleStore} from '$lib/stores/app/uiLocale';
 
     // Props
@@ -127,7 +131,7 @@
             dispatch('complete', {url: uploadedUrl, file: renamedFile});
         } catch (err) {
             console.error('Upload failed:', err);
-            error = err instanceof Error ? err.message : 'Upload failed';
+            error = err instanceof Error ? err.message : $_('uploads.uploadFailed');
             refusal = storageLimitNumbersOfError(err);
             dispatch('error', {message: error});
         } finally {
@@ -142,17 +146,13 @@
         <div class="modal-header" data-testid="file-edit-modal">
             <h2 class="modal-title">
                 <FileIcon size={20} />
-                {$_('uploads.editFile') || 'Edit File'}
+                {$_('uploads.editFile')}
             </h2>
             <div class="header-actions">
                 {#if hasChanges}
-                    <button type="button" class="restore-btn" on:click={restoreOriginal} title={$_('common.resetAllChanges') || 'Reset All'}>
-                        <RefreshCw size={16} />
-                    </button>
+                    <Button label={$_('common.resetAllChanges')} icon={RefreshCw} display="icon" variant="ghost" tone="warning" onclick={restoreOriginal} data-testid="file-edit-reset" />
                 {/if}
-                <button type="button" class="close-btn" on:click={requestClose} title={$_('common.close') || 'Close'}>
-                    <X size={20} />
-                </button>
+                <CloseButton onclick={requestClose} data-testid="file-edit-close" />
             </div>
         </div>
 
@@ -161,7 +161,7 @@
             <!-- File name editing - top (consistent with ImageEditModal) -->
             <div class="filename-editor">
                 <label class="filename-label" for="file-edit-name">
-                    {$_('uploads.fileName') || 'File name'}:
+                    {$_('uploads.fileName')}:
                 </label>
                 <div class="filename-input-group">
                     <!-- svelte-ignore a11y_autofocus -->
@@ -172,11 +172,11 @@
 
             <!-- File info (metadata below) -->
             <div class="file-info-row">
-                <span class="info-label">{$_('uploads.fileSize') || 'Size'}:</span>
+                <span class="info-label">{$_('uploads.fileSize')}:</span>
                 <span class="info-value">{formatBytes(file.size, $_, $uiLocaleStore)}</span>
             </div>
             <div class="file-info-row">
-                <span class="info-label">{$_('common.type') || 'Type'}:</span>
+                <span class="info-label">{$_('common.type')}:</span>
                 <span class="info-value">{file.type || 'unknown'}</span>
             </div>
 
@@ -190,22 +190,8 @@
 
         <!-- Footer -->
         <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" on:click={requestClose} disabled={isUploading}>
-                {$_('common.cancel') || 'Cancel'}
-            </button>
-            <button type="button" class="btn btn-primary" on:click={handleConfirm} disabled={isUploading} data-testid="file-edit-confirm">
-                {#if isUploading}
-                    <Loader2 size={16} class="animate-spin" />
-                    {$_('common.uploading') || 'Uploading...'}
-                {:else}
-                    <Check size={16} />
-                    {#if uploadOnComplete}
-                        {$_('uploads.renameAndUpload') || 'Rename & Upload'}
-                    {:else}
-                        {$_('uploads.rename') || 'Rename'}
-                    {/if}
-                {/if}
-            </button>
+            <Button label={$_('common.cancel')} variant="secondary" disabled={isUploading} onclick={requestClose} data-testid="file-edit-cancel" />
+            <Button label={$_(uploadOnComplete ? 'uploads.renameAndUpload' : 'uploads.rename')} icon={Check} variant="primary" busy={isUploading} busyLabel={$_('common.uploading')} onclick={handleConfirm} data-testid="file-edit-confirm" />
         </div>
     </ModalBase>
 {/if}
@@ -215,18 +201,14 @@
     <div class="confirm-content">
         <div class="confirm-header">
             <span class="confirm-icon">⚠️</span>
-            <h3>{$_('common.discardChanges') || 'Discard changes?'}</h3>
+            <h3>{$_('common.discardChanges')}</h3>
         </div>
         <p class="confirm-message">
-            {$_('common.discardChangesMessage') || 'You have unsaved changes. Are you sure you want to close?'}
+            {$_('common.discardChangesMessage')}
         </p>
         <div class="confirm-actions">
-            <button class="btn btn-secondary" on:click={cancelClose}>
-                {$_('common.cancel') || 'Cancel'}
-            </button>
-            <button class="btn btn-warning" on:click={confirmClose}>
-                {$_('common.discardAndClose') || 'Discard & Close'}
-            </button>
+            <Button label={$_('common.cancel')} variant="secondary" onclick={cancelClose} data-testid="file-edit-discard-cancel" />
+            <Button label={$_('common.discardAndClose')} variant="warning" onclick={confirmClose} data-testid="file-edit-discard-confirm" />
         </div>
     </div>
 </ModalBase>
@@ -248,25 +230,6 @@
         gap: 0.25rem;
     }
 
-    .restore-btn {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        width: 32px;
-        height: 32px;
-        border-radius: 0.5rem;
-        border: none;
-        background: var(--lf-warning-soft);
-        color: var(--lf-warning);
-        cursor: pointer;
-        transition: all 0.15s;
-    }
-
-    .restore-btn:hover {
-        background: var(--lf-warning-line);
-        color: var(--lf-warning-on-soft);
-    }
-
     .modal-title {
         display: flex;
         align-items: center;
@@ -275,25 +238,6 @@
         font-weight: 600;
         color: var(--lf-text-primary);
         margin: 0;
-    }
-
-    .close-btn {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        width: 32px;
-        height: 32px;
-        border-radius: 0.5rem;
-        border: none;
-        background: transparent;
-        color: var(--lf-text-muted);
-        cursor: pointer;
-        transition: all 0.15s;
-    }
-
-    .close-btn:hover {
-        background: var(--lf-surface-hover);
-        color: var(--lf-text-secondary);
     }
 
     .modal-body {
@@ -387,57 +331,6 @@
         background: var(--lf-surface-panel);
     }
 
-    .btn {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.5rem;
-        padding: 0.5rem 1rem;
-        font-size: 0.875rem;
-        font-weight: 500;
-        border-radius: 0.5rem;
-        border: none;
-        cursor: pointer;
-        transition: all 0.15s;
-    }
-
-    .btn:disabled {
-        opacity: 0.5;
-        cursor: not-allowed;
-    }
-
-    .btn-primary {
-        background: var(--lf-action);
-        color: var(--lf-on-action);
-    }
-
-    .btn-primary:hover:not(:disabled) {
-        background: var(--lf-action-hover);
-    }
-
-    .btn-secondary {
-        background: var(--lf-surface-card);
-        color: var(--lf-text-secondary);
-        box-shadow: inset 0 0 0 1px var(--lf-border-subtle);
-    }
-
-    .btn-secondary:hover:not(:disabled) {
-        background: var(--lf-surface-hover);
-        color: var(--lf-text-primary);
-    }
-
-    :global(.animate-spin) {
-        animation: spin 1s linear infinite;
-    }
-
-    @keyframes spin {
-        from {
-            transform: rotate(0deg);
-        }
-        to {
-            transform: rotate(360deg);
-        }
-    }
-
     /* Confirmation Dialog Content */
     .confirm-content {
         padding: 1.5rem;
@@ -471,15 +364,5 @@
         display: flex;
         justify-content: flex-end;
         gap: 0.75rem;
-    }
-
-    .btn-warning {
-        background: var(--lf-warning);
-        color: var(--lf-on-status);
-        border: none;
-    }
-
-    .btn-warning:hover {
-        background: var(--lf-warning-hover);
     }
 </style>

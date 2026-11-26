@@ -404,6 +404,52 @@ test.describe('Broker Detail Page', () => {
             expect(await lots.evaluate((el) => el.getBoundingClientRect().top), 'the start of the section is not scrolled past').toBeGreaterThanOrEqual(-2);
         });
 
+        test('the reward tag of a lot is whole in its date cell, in a group and on a narrow screen', async ({page}) => {
+            // The answer's lots become reward lots (three at least, so they make a group): the mock holds none.
+            await page.route('**/api/v1/portfolio/lots/analysis', async (route) => {
+                const response = await route.fetch();
+                const answer: unknown = await response.json();
+                const visit = (node: unknown): void => {
+                    if (Array.isArray(node)) {
+                        const lots = node.filter((item): item is {lot_id: number; opening_kind: string} => typeof item === 'object' && item !== null && 'opening_kind' in item && 'lot_id' in item);
+                        for (const lot of lots) lot.opening_kind = 'REWARD';
+                        for (let copy = 1; lots.length > 0 && node.length < 3; copy++) node.push({...lots[0], lot_id: lots[0].lot_id + 900_000 * copy});
+                    }
+                    if (typeof node === 'object' && node !== null) for (const child of Object.values(node)) visit(child);
+                };
+                visit(answer);
+                await route.fulfill({response, json: answer});
+            });
+            await goToBrokerWithHoldings(page);
+            await clickRowAction(page, await firstHoldingRow(page), 'analyze-lots');
+            await expectLotsPanelOpen(page);
+            const table = page.getByTestId('unified-lots-table');
+            const head = table.getByTestId('reward-group-head').first();
+            await expect(head).toBeVisible({timeout: 20_000});
+            await head.click();
+            await expect(head).toHaveAttribute('data-state', 'open');
+            const tags = table.getByTestId('reward-lot-tag');
+            await expect(tags.first()).toBeVisible();
+
+            const clipped = () =>
+                tags.evaluateAll(
+                    (nodes) =>
+                        nodes.filter((node) => {
+                            const tag = node.getBoundingClientRect();
+                            const cell = node.closest('td')!.getBoundingClientRect();
+                            return tag.right > cell.right || tag.bottom > cell.bottom || tag.width < 10;
+                        }).length,
+                );
+            expect(await tags.count()).toBeGreaterThanOrEqual(2);
+            expect(await clipped(), 'a tag cut by its cell').toBe(0);
+            await table.scrollIntoViewIfNeeded();
+            await table.screenshot({path: test.info().outputPath('reward-tags.png')});
+            await page.setViewportSize({width: 375, height: 812});
+            await expect(tags.first()).toBeAttached();
+            expect(await clipped(), 'a tag cut by its cell at 375 px').toBe(0);
+            await table.screenshot({path: test.info().outputPath('reward-tags-375.png')});
+        });
+
         test('closing the panel clears the ?asset= query param', async ({page}) => {
             await goToBrokerWithHoldings(page);
 

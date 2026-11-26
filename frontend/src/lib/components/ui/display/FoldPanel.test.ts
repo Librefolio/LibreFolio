@@ -57,4 +57,17 @@ describe('FoldPanel', () => {
         render(FoldPanel, {title: 'Advanced', testId: 'fold', children});
         expect(screen.getByTestId('inside'), 'the body stays mounted: a typed value survives a fold').toBeInTheDocument();
     });
+
+    it('a control sits beside the title line, outside the fold, so it works while the panel is closed; none when not given', () => {
+        const control = createRawSnippet(() => ({render: () => '<button data-testid="all">All</button>'}));
+        const {unmount} = render(FoldPanel, {title: 'Classes', testId: 'fold', children, control});
+        expect(panel().open).toBe(false);
+        expect(panel(), 'not inside the folded details').not.toContainElement(screen.getByTestId('all'));
+        expect(screen.getByTestId('fold-toggle')).toHaveClass('pr-[4.5rem]');
+        unmount();
+
+        render(FoldPanel, {title: 'Classes', testId: 'fold', children});
+        expect(screen.queryByTestId('all')).toBeNull();
+        expect(screen.getByTestId('fold-toggle')).toHaveClass('pr-3');
+    });
 });

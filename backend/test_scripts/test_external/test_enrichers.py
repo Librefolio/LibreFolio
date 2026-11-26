@@ -1,8 +1,8 @@
 """
 External suite of the enrichers (plan 68 §C): every real enricher against its real source.
 
-For each enricher ``EnricherRegistry`` serves that is not test-only (today ``justetf``; Borsa Italiana, Yahoo and ESMA
-join by declaring ``test_cases``), and each of its ``test_cases``
+For each enricher ``EnricherRegistry`` serves that is not test-only (justETF, Borsa Italiana, Yahoo, ESMA and CoinGecko, each
+declaring ``test_cases``), and each of its ``test_cases``
 (``{"binding": {"identifier_type", "identifier", …params}, "asset_type": "<AssetType value>"}``):
 
 - ``recognize`` finds the binding, with a name;
@@ -11,8 +11,15 @@ join by declaring ``test_cases``), and each of its ``test_cases``
   ``fund_provider`` and ``distribution_policy`` are there.
 
 Then, per enricher, the not-found side when this file knows one for it (``NOT_FOUND_CASES``: for justETF the ISIN of a
-stock, Enel, which the site answers with its empty «ETF Screener» sheet), and, when it searches, one search for
-«MSCI World» with at least one result bound by ISIN.
+stock, Enel, which the site answers with its empty «ETF Screener» sheet; for CoinGecko an id no coin has), and, when it
+searches, one search with at least one result bound by the type the enricher binds (``SEARCH_CASES``): «MSCI World» by
+ISIN by default (justETF, Borsa Italiana), by TICKER for Yahoo Finance (the symbol with its market's suffix), and for
+CoinGecko «bitcoin» by ``COINGECKO_ID``, with ``bitcoin`` among the results. ESMA does not search.
+
+An enricher whose required settings, its own or its groups', have no value (CoinGecko without its API key) is skipped with
+«<code>: not configured», in the recognize, read, not-found and search tests, **before any request**. The settings are
+bound offline, from the environment only (``LIBREFOLIO_PLUGIN_GROUP_COINGECKO_API_KEY``), with no database: the same
+resolver the app uses (``build_bound_settings``).
 
 A refusal for too many requests fails the test with a message saying so, never a silent skip. The plugin's own pause
 between page calls is kept. Network: yes, by design. No database, no server.
@@ -20,6 +27,7 @@ between page calls is kept. Network: yes, by design. No database, no server.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any
 
 import pytest
@@ -29,6 +37,9 @@ from backend.app.services.assets.base import rate_limited_from_exception
 from backend.app.services.assets.profile.catalogue import ProfileValueError, normalize_value
 from backend.app.services.enrichers.base import RATE_LIMITED, EnricherBinding, EnricherPlugin, EnricherReadItem, EnricherReadStatus
 from backend.app.services.enrichers.registry import EnricherRegistry
+from backend.app.services.plugin_settings.contract import PluginSettingsMixin
+from backend.app.services.plugin_settings.groups import plugin_groups
+from backend.app.services.plugin_settings.resolver import build_bound_settings
 from backend.test_scripts.test_utils import print_info, print_success
 
 #: The voices an ETF's read must give, among those its enricher declares for the type: justETF declares all three,
@@ -39,8 +50,27 @@ ETF_REQUIRED_VOICES = frozenset({"ter", "fund_provider", "distribution_policy"})
 NOT_FOUND_CASES: dict[str, list[EnricherBinding]] = {
     # Enel, a stock: justETF answers its empty «ETF Screener» sheet
     "justetf": [EnricherBinding("ISIN", "IT0003128367")],
+    # An id CoinGecko does not have (its answer is a 404, «not found», never an error)
+    "coingecko": [EnricherBinding("COINGECKO_ID", "librefolio-no-such-coin")],
 }
-SEARCH_QUERY = "MSCI World"
+
+
+@dataclass(frozen=True)
+class SearchCase:
+    """What one enricher's search is asked and must answer: the text, the identifier type of the bindings it gives, and an
+    identifier that must be among them (None: any result of the type is enough)."""
+
+    query: str = "MSCI World"
+    identifier_type: str = "ISIN"
+    expected_identifier: str | None = None
+
+
+#: Per enricher code, when it is not the default («MSCI World», bound by ISIN: justETF and Borsa Italiana). ESMA does not search.
+SEARCH_CASES: dict[str, SearchCase] = {
+    # Yahoo's search binds the symbol with its market's suffix (ENR-3b)
+    "yfinance": SearchCase(identifier_type="TICKER"),
+    "coingecko": SearchCase(query="bitcoin", identifier_type="COINGECKO_ID", expected_identifier="bitcoin"),
+}
 
 
 def _real_enricher_codes() -> list[str]:
@@ -52,8 +82,23 @@ REAL_CODES = _real_enricher_codes()
 
 
 def _plugin(code: str) -> EnricherPlugin:
+    """The registry's instance with its settings bound offline (the environment and the defaults, no database)."""
     plugin = EnricherRegistry.get_plugin_instance(code)
     assert plugin is not None, f"{code}: the registry serves no instance"
+    if isinstance(plugin, PluginSettingsMixin):
+        groups = plugin_groups(type(plugin))
+        fields = getattr(type(plugin), "settings_fields", ())
+        plugin.bind_settings(build_bound_settings(EnricherRegistry.settings_family(), plugin.code, fields, {}, None, user_id=None, groups=[(group, {}) for group in groups]))
+    return plugin
+
+
+def _ready(code: str) -> EnricherPlugin:
+    """The bound plugin, or a skip, with no request, when a required setting of it has no value (as the asset providers'
+    external suite does for CoinGecko without its key)."""
+    plugin = _plugin(code)
+    if isinstance(plugin, PluginSettingsMixin) and plugin.settings.missing:
+        print_info(f"{code} is not configured ({', '.join(plugin.settings.missing)}) - SKIPPING")
+        pytest.skip(f"{code}: not configured")
     return plugin
 
 
@@ -111,7 +156,7 @@ def test_at_least_one_real_enricher_is_served():
 
 @pytest.mark.parametrize(("code", "index"), _cases())
 def test_recognize_finds_the_case(code: str, index: int):
-    plugin = _plugin(code)
+    plugin = _ready(code)
     case = plugin.test_cases[index]
     binding = _binding(case)
     try:
@@ -126,7 +171,7 @@ def test_recognize_finds_the_case(code: str, index: int):
 
 @pytest.mark.parametrize(("code", "index"), _cases())
 def test_read_gives_declared_voices_in_stored_form(code: str, index: int):
-    plugin = _plugin(code)
+    plugin = _ready(code)
     case = plugin.test_cases[index]
     binding = _binding(case)
     asset_type = AssetType(case["asset_type"])
@@ -171,22 +216,26 @@ def _not_found_params() -> list[Any]:
 
 @pytest.mark.parametrize(("code", "binding"), _not_found_params())
 def test_unknown_identifier_is_not_found(code: str, binding: EnricherBinding):
-    item = _read_one(code, _plugin(code), binding)
+    item = _read_one(code, _ready(code), binding)
     assert item.status == EnricherReadStatus.NOT_FOUND, f"{code}: {binding.identifier} should be unknown to the source: {item}"
     print_success(f"{code}: {binding.identifier} not found, as expected")
 
 
 @pytest.mark.parametrize("code", REAL_CODES)
-def test_search_finds_an_isin_bound_result(code: str):
-    plugin = _plugin(code)
+def test_search_finds_a_result_bound_as_the_enricher_binds(code: str):
+    plugin = _ready(code)
     if not plugin.supports_search:
         print_info(f"{code}: does not search")
         return
+    case = SEARCH_CASES.get(code, SearchCase())
     try:
-        results = plugin.search(SEARCH_QUERY)
+        results = plugin.search(case.query)
     except Exception as exc:  # noqa: BLE001 — name a 429 for what it is; any other failure is reported with its cause
-        _fail_if_refused(code, exc, f"the search for {SEARCH_QUERY!r}")
-        pytest.fail(f"{code}: search raised for {SEARCH_QUERY!r}: {exc!r}")
-    isin_bound = [result for result in results if result.binding.identifier_type == "ISIN" and result.binding.identifier]
-    assert isin_bound, f"{code}: no result bound by ISIN for {SEARCH_QUERY!r} among {len(results)}: {results[:5]}"
-    print_success(f"{code}: {len(results)} results for {SEARCH_QUERY!r}, {len(isin_bound)} bound by ISIN, e.g. {isin_bound[0].name} ({isin_bound[0].binding.identifier})")
+        _fail_if_refused(code, exc, f"the search for {case.query!r}")
+        pytest.fail(f"{code}: search raised for {case.query!r}: {exc!r}")
+    bound = [result for result in results if result.binding.identifier_type == case.identifier_type and result.binding.identifier]
+    assert bound, f"{code}: no result bound by {case.identifier_type} for {case.query!r} among {len(results)}: {results[:5]}"
+    if case.expected_identifier is not None:
+        found = {result.binding.identifier for result in bound}
+        assert case.expected_identifier in found, f"{code}: {case.expected_identifier!r} is not among the results for {case.query!r}: {sorted(found)[:10]}"
+    print_success(f"{code}: {len(results)} results for {case.query!r}, {len(bound)} bound by {case.identifier_type}, e.g. {bound[0].name} ({bound[0].binding.identifier})")

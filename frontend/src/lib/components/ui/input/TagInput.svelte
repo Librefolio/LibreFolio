@@ -15,7 +15,9 @@
   - data-testid on all interactive elements
 -->
 <script lang="ts">
-    import {ChevronDown, X} from 'lucide-svelte';
+    import {X} from 'lucide-svelte';
+    import {_ as t} from '$lib/i18n';
+    import Button from '$lib/components/ui/button/Button.svelte';
     import {getStringBadgeStyle} from '$lib/utils/colors';
 
     interface Props {
@@ -195,18 +197,24 @@
             >
                 {tag}
                 {#if !disabled}
-                    <button
-                        type="button"
-                        class="opacity-70 hover:opacity-100 leading-none"
-                        aria-label="remove tag"
-                        onclick={(e) => {
-                            e.stopPropagation();
-                            removeTag(i);
-                        }}
-                        data-testid={`tag-chip-remove-${i}`}
-                    >
-                        <X size={12} />
-                    </button>
+                    <!-- stopPropagation: the chip's own click would focus it instead. The wrapper's negative margin gives the
+                         button's padding back: the chip keeps the height of the bare ✕. `tint="current"` (C15): the ✕
+                         takes the tag's own colour, dimmed, full on hover — the look of today on any tag colour. -->
+                    <span class="-m-1 flex">
+                        <Button
+                            tint="current"
+                            size="xs"
+                            dense
+                            icon={X}
+                            display="icon"
+                            label={$t('common.removeTag', {values: {tag}})}
+                            onclick={(e) => {
+                                e.stopPropagation();
+                                removeTag(i);
+                            }}
+                            data-testid={`tag-chip-remove-${i}`}
+                        />
+                    </span>
                 {/if}
             </span>
         {/each}
@@ -229,9 +237,8 @@
                 data-testid="tag-input-field"
             />
             {#if availableTags.length > 0}
-                <button type="button" class="text-lf-muted hover:text-lf-secondary shrink-0 p-0.5" onclick={toggleDropdown} data-testid="tag-input-toggle" aria-label="Toggle tag suggestions">
-                    <ChevronDown size={14} class={dropdownOpen ? 'rotate-180 transition-transform' : 'transition-transform'} />
-                </button>
+                <!-- A disclosure (C14): the ▾ turns while the suggestions are open. -->
+                <Button variant="ghost" size="xs" dense display="icon" label={$t('common.showSuggestions')} expanded={dropdownOpen} onclick={toggleDropdown} data-testid="tag-input-toggle" />
             {/if}
         {/if}
     </div>

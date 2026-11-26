@@ -7,9 +7,11 @@
     import {getUserStorage, setUserStorage} from '$lib/utils/storage';
     import {userSettings} from '$lib/stores/app/settings';
     import {resetNavDepth} from '$lib/stores/app/navigationStore';
-    import {ArrowRightLeft, BarChart3, Briefcase, Coins, Files, LayoutDashboard, LogOut, Settings, User, Wrench, X} from 'lucide-svelte';
+    import {ArrowRightLeft, BarChart3, Briefcase, Coins, Files, LayoutDashboard, LogOut, Settings, User, Wrench} from 'lucide-svelte';
     import {APP_VERSION} from '$lib/version';
-    import {guideAnchor} from '$lib/features/onboarding/guideAnchors.svelte';
+    import {guideAnchor, guideAnchors} from '$lib/features/onboarding/guideAnchors.svelte';
+    import Button from '$lib/components/ui/button/Button.svelte';
+    import CloseButton from '$lib/components/ui/button/CloseButton.svelte';
     import ChangelogModal from './ChangelogModal.svelte';
     import {changelogModal} from '$lib/features/changelog/changelogModalStore.svelte';
     import ConnectionSecurityIndicator from './ConnectionSecurityIndicator.svelte';
@@ -86,6 +88,19 @@
         resetNavDepth();
     }
 
+    // The collapse toggle is a Button, and a component takes no action: it registers its own element as the guide's
+    // anchor of the navigation step (the target is the button itself, `sidebar-collapse-toggle`).
+    let collapseToggle: HTMLElement | undefined;
+    let releaseToggleAnchor: (() => void) | null = null;
+
+    function anchorCollapseToggle(element: HTMLElement | undefined) {
+        releaseToggleAnchor?.();
+        releaseToggleAnchor = element ? guideAnchors.register('nav.toggle.desktop', element) : null;
+    }
+
+    $: anchorCollapseToggle(collapseToggle);
+    onDestroy(() => releaseToggleAnchor?.());
+
     function navigationAnchorId(href: string): string {
         return `nav.${href.slice(1).replaceAll('/', '.')}`;
     }
@@ -106,27 +121,35 @@
 		{collapsed ? 'w-16' : 'w-64'}
 		{isOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0"
 >
-    <!-- Logo Header: one with the green sidebar (D-T17); the logo keeps its white tile (N1) -->
-    <div class="p-4 flex items-center text-lf-on-brand {collapsed ? 'justify-center' : 'justify-between'}" data-testid="sidebar-brand">
-        <button
-            class="flex items-center space-x-3 cursor-pointer rounded-lg focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-lf-bar-focus"
-            on:click={toggleCollapsed}
-            title={collapsed ? $_('nav.expandSidebar') : $_('nav.collapseSidebar')}
+    <!-- Logo Header: one with the green sidebar (D-T17); the logo keeps its white tile (N1). The row's padding plus the
+         toggle's own keep the logo where it was (16 px from the edges). -->
+    <div class="px-1 py-2 flex items-center text-lf-on-brand {collapsed ? 'justify-center' : 'justify-between'}" data-testid="sidebar-brand">
+        <!-- The logo is the collapse toggle: named by its action, the wordmark is its rich word (85 BTN-2d, C1 + C6). The
+             wordmark is in view, so the action shows as the help of a mouse rest; collapsed, the name itself shows. -->
+        <Button
+            bind:element={collapseToggle}
+            variant="bar-ghost"
+            label={collapsed ? $_('nav.expandSidebar') : $_('nav.collapseSidebar')}
+            display={collapsed ? 'icon' : 'icon-text'}
+            help={collapsed ? undefined : $_('nav.collapseSidebar')}
+            tipPosition="right"
+            onclick={toggleCollapsed}
             data-testid="sidebar-collapse-toggle"
-            use:guideAnchor={'nav.toggle.desktop'}
         >
-            <div class="w-8 h-8 flex-shrink-0 rounded-lg flex items-center justify-center p-1 bg-lf-logo">
-                <img alt="LibreFolio" class="max-w-full max-h-full object-contain" src="/logo.png" />
-            </div>
-            {#if !collapsed}
-                <span class="text-xl font-bold tracking-wide whitespace-nowrap">LibreFolio</span>
-            {/if}
-        </button>
+            {#snippet leading()}
+                <span class="w-8 h-8 flex-shrink-0 rounded-lg flex items-center justify-center p-1 bg-lf-logo">
+                    <img alt="" class="max-w-full max-h-full object-contain" src="/logo.png" />
+                </span>
+            {/snippet}
+            {#snippet children()}
+                <span class="ml-1.5 text-xl font-bold tracking-wide text-lf-on-brand">LibreFolio</span>
+            {/snippet}
+        </Button>
         <!-- Mobile close button -->
         {#if !collapsed}
-            <button class="lg:hidden p-2 hover:bg-lf-bar-hover rounded-lg focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-lf-bar-focus" on:click={closeSidebar} aria-label={$_('nav.closeSidebar')}>
-                <X size={20} />
-            </button>
+            <div class="lg:hidden pr-2.5">
+                <CloseButton variant="bar-ghost" size="lg" label={$_('nav.closeSidebar')} onclick={closeSidebar} />
+            </div>
         {/if}
     </div>
 
@@ -262,35 +285,15 @@
             {/if}
         </a>
 
-        <!-- Logout Button -->
-        <button
-            class="w-full flex items-center justify-center px-4 py-2
-				bg-lf-bar-logout hover:bg-lf-bar-logout-hover rounded-lg transition-all text-sm focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-lf-bar-focus
-				{collapsed ? '' : 'space-x-2'}"
-            data-testid="logout-button"
-            on:click={handleLogout}
-            title={collapsed ? $_('auth.logout') : ''}
-        >
-            <LogOut class="flex-shrink-0" size={16} />
-            {#if !collapsed}
-                <span class="whitespace-nowrap">{$_('auth.logout')}</span>
-            {/if}
-        </button>
+        <!-- Logout Button: the word hides while the sidebar is collapsed, the name then shows by long press, rest or Tab -->
+        <Button variant="bar-solid" icon={LogOut} label={$_('auth.logout')} display="auto" hideWord={collapsed} tipPosition="right" class="w-full" onclick={handleLogout} data-testid="logout-button" />
 
         <!-- How safely this browser talks to LibreFolio (plan 36) -->
         <ConnectionSecurityIndicator {collapsed} onExpand={expandSidebar} />
 
         <!-- Version — click opens the bundled changelog (F12) -->
         {#if !collapsed}
-            <button
-                type="button"
-                class="w-full text-center text-lf-bar-muted hover:text-lf-bar-text text-xs pt-2 transition-colors cursor-pointer rounded focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-lf-bar-focus"
-                title="LibreFolio {APP_VERSION} — {$_('changelog.title')}"
-                on:click={() => changelogModal.show()}
-                data-testid="sidebar-version"
-            >
-                {APP_VERSION}
-            </button>
+            <Button variant="bar-link" size="sm" label="LibreFolio {APP_VERSION} — {$_('changelog.title')}" shortLabel={APP_VERSION} class="w-full mt-2" onclick={() => changelogModal.show()} data-testid="sidebar-version" />
             <!-- The compact legal notice of the instance (F09, workstream A) -->
             <div class="px-2 text-center" data-testid="sidebar-legal-links">
                 <LegalLinks tone="bar" />

@@ -228,6 +228,18 @@ def front_tx_form_phone_width(verbose: bool = False, ui: bool = False, headed: b
     return _run_playwright("transactions/tx-form-phone-width.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_tx_form_mobile(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """The transaction form on an Android phone (lane 66, TL-1d): view values and fit, date field, charge row."""
+    print_section("Frontend TX Form Mobile Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("transactions/tx-form-mobile.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_tx_charges_table(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Linked charges folded under their parent in the transactions table (project 66, F5)."""
     print_section("Frontend TX Linked Charges Table Tests")
@@ -250,6 +262,18 @@ def front_tx_charges_link_delete(verbose: bool = False, ui: bool = False, headed
     if not _ensure_test_users():
         return False
     return _run_playwright("transactions/tx-charges-link-delete.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
+def front_tx_charges_unlink(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """«Unlink the charges» from the Transactions page's selection bar, saved after a confirmation (project 66, TL-9)."""
+    print_section("Frontend TX Charges Unlink Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("transactions/tx-charges-unlink.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
 def front_tx_charges_write(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
@@ -300,6 +324,18 @@ def front_tx_bulk_charges_link(verbose: bool = False, ui: bool = False, headed: 
     return _run_playwright("transactions/tx-bulk-charges-link.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_tx_bulk_charges_unlink(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """A checkbox on the charges under their parent and «Scollega» on the Bulk's selection bar (project 66, TL-4)."""
+    print_section("Frontend TX Bulk Charges Unlink Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("transactions/tx-bulk-charges-unlink.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_tx_clone_charges(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """«Clona» carries the linked-charges structure: a parent's charges copied under its copy, a charge's copy linked to the same parent (project 66, TL-3)."""
     print_section("Frontend TX Clone Charges Tests")
@@ -334,6 +370,18 @@ def front_tx_bulk_group_sync(verbose: bool = False, ui: bool = False, headed: bo
     if not _ensure_test_users():
         return False
     return _run_playwright("transactions/tx-bulk-group-sync.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
+def front_tx_bulk_new_group_nav(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """In the Bulk, moving between a new parent and its charges, and unlinking them, from both forms (project 66, TL-11)."""
+    print_section("Frontend TX Bulk New Group Navigation Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("transactions/tx-bulk-new-group-nav.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
 def front_tx_view_open_edit(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
@@ -956,8 +1004,24 @@ def populate_registry(registry: dict) -> None:
         desc="Testlist 3.9, at 375 px on a disposable account: a BUY and an asset TRANSFER pair of IWDA (long display name) opened in view mode then edit mode — tx-form-body and tx-form-modal-root do not scroll sideways, the view-mode pencil sits inside the screen",
         tests="transactions/tx-form-phone-width.spec.ts",
     )
+    add_test(
+        cat,
+        "tx-form-mobile",
+        front_tx_form_mobile,
+        name="TX Form Mobile Tests",
+        desc="Lane 66 TL-1d, on a disposable account: the view of a BUY of a long-named asset at 412/375 px fits sideways and shows the saved quantity and the amount's magnitude with no check fired; the date field shows the whole date at 320-640 px in the New and Edit forms; a new FEE's trash, and a saved FEE's Open/Unlink/trash in the Bulk edit form, sit on the charge's title line; guard at 1280 px",
+        tests="transactions/tx-form-mobile.spec.ts",
+    )
     add_test(cat, "tx-charges-table", front_tx_charges_table, name="TX Linked Charges Table Tests", desc="Project 66 F5: charges folded under the BUY, kept under a broker filter, on their own under types=FEE, flat under a sort", tests="transactions/tx-charges-table.spec.ts")
     add_test(cat, "tx-charges-link-delete", front_tx_charges_link_delete, name="TX Charges Link and Delete Tests", desc="Project 66 F6: link BUY+FEE+TAX from the bar, otherBroker off, delete with all/keep, no panel if all selected", tests="transactions/tx-charges-link-delete.spec.ts")
+    add_test(
+        cat,
+        "tx-charges-unlink",
+        front_tx_charges_unlink,
+        name="TX Charges Unlink Tests",
+        desc="Project 66 TL-9: on the Transactions page, a BUY and its TAX ticked → «Unlink» (count 1) → the panel; cancel saves nothing; confirm → event tx.charges.unlinked and the TAX has no parent, read back by id; a BUY and a free FEE → no «Unlink»; on a phone a BUY and the TAX of another BUY → «Link» off (linked) and «Unlink» (1) together, no sideways scroll, «Unlink» tapped",
+        tests="transactions/tx-charges-unlink.spec.ts",
+    )
     add_test(
         cat,
         "tx-charges-write",
@@ -992,6 +1056,14 @@ def populate_registry(registry: dict) -> None:
     )
     add_test(
         cat,
+        "tx-bulk-charges-unlink",
+        front_tx_bulk_charges_unlink,
+        name="TX Bulk Charges Unlink Tests",
+        desc="Project 66 TL-4: in the Bulk, a charge under its parent ticked → «Scollega» (saved, read back by id); P-19 «Delete selected» keeps a «del» charge «del»; select-all with an open and a closed group; long press on a phone; «Reset selected» after «Scollega»",
+        tests="transactions/tx-bulk-charges-unlink.spec.ts",
+    )
+    add_test(
+        cat,
         "tx-clone-charges",
         front_tx_clone_charges,
         name="TX Clone Charges Tests",
@@ -1011,8 +1083,16 @@ def populate_registry(registry: dict) -> None:
         "tx-bulk-group-sync",
         front_tx_bulk_group_sync,
         name="TX Bulk Group Sync Tests",
-        desc="Project 66 TL-3b: in the Bulk, an all-new group (a BUY copy from «Clona» and its charge copies) keeps broker and asset in step — the asset changed in a charge copy's Form moves the parent and the sibling (help line shown), a FEE born in the parent's Form keeps the asset of its own Form and moves the group; guard: a new BUY with a saved FEE linked under it is not synced (no help line, chargeAssetMismatch, «Save all» refused) — read back from the server",
+        desc="Project 66 TL-3b: in the Bulk, an all-new group (a BUY copy from «Clona» and its charge copies) keeps broker and asset in step — the asset changed in a charge copy's Form moves the parent and the sibling (help line shown), a FEE born in the parent's Form keeps the asset of its own Form and moves the group; a new BUY with a saved FEE linked under it (no help line): its asset changed in a reopened Form (TL-12) asks first, naming the FEE — «Cancel» keeps everything, «Confirm» leaves the FEE free on its asset and «Save all» passes; the same with the FEE picked in the same opening, beside a new FEE that follows — read back from the server",
         tests="transactions/tx-bulk-group-sync.spec.ts",
+    )
+    add_test(
+        cat,
+        "tx-bulk-new-group-nav",
+        front_tx_bulk_new_group_nav,
+        name="TX Bulk New Group Navigation Tests",
+        desc="Project 66 TL-11: in the Bulk, a new BUY and the FEE born in its form — the FEE's form shows the BUY by its row label, «Open» there (the FEE highlighted) and back, «Unlink» from either form → a row of its own, saved with no parent on the BUY's broker, asset and date; a saved free FEE linked under a new BUY, unlinked in its form → nothing sent about its parent, still free — read back by id",
+        tests="transactions/tx-bulk-new-group-nav.spec.ts",
     )
     add_test(
         cat,

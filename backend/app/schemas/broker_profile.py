@@ -19,7 +19,9 @@ P1 of project 67 (contract §7; decisioni-REB §2, M6, M18, M21). The account ke
   ``operating_profile_text`` writes the canonical text and enforces the weight cap (decision D6).
 
 A new optional field keeps ``profile_version`` 1; a change of shape or meaning of a field is a new version, and the
-reader converts the old one (decision D15). A test pins the JSON schema's fingerprint.
+reader converts the old one (decision D15). A test pins the JSON schema's fingerprint. The default of
+``conversion_mode`` moved from ``manual`` to ``automatic`` in version 1 (TL-6 of project 67): every saved text carries
+the key, so only a profile never saved reads the new default.
 """
 
 from __future__ import annotations
@@ -158,7 +160,10 @@ class BrokerOperatingProfile(StrictModel):
 
     profile_version: Literal[1] = Field(json_schema_extra={"enum": [1]})
     order_modes: list[BrokerProfileOrderMode] = []
-    conversion_mode: PlannerConversionMode = "manual"
+    #: Absent reads ``automatic``, the Broker converting when the orders execute (TL-6 of project 67, the developer's choice
+    #: of 23/11: «per tutti, prima di essere specificato»). It was ``manual`` until then; ``operating_profile_text`` writes
+    #: the key in every profile it saves, so no stored profile changes meaning and the version stays 1 (D15).
+    conversion_mode: PlannerConversionMode = "automatic"
     #: Absent means ``declarative``: read it through ``effective_tax_regime``. An explicit ``null`` is refused, and an absent
     #: one is served absent (``exclude_if``), so what GET serves a PATCH takes back.
     tax_regime: TaxRegime | None = Field(default=None, exclude_if=lambda value: value is None)

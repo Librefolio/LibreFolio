@@ -44,6 +44,7 @@
     import {buildBackendSignalRequestPlan, getLocalSignalDefinitions, mapSignalInstanceResults, SignalResultState, type RenderedSignal, type SignalConfig, type SignalDefinition, type SignalInstanceResult} from '$lib/features/signals';
     import {fxPointToLineDataPoint, renderBackendResults, renderCalendarComparisons, renderCalendarPairComparisons, renderLocalSignals, type SignalDataSources} from '$lib/features/signals/chartSignalRendering';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
+    import {asFxSyncBusy, fxSyncBusyFor, fxSyncBusyText, guardedFxSync} from '$lib/features/fx/fxSyncGuard.svelte';
     import {createPairSlug, type FxDataPoint, type FxPairConfig, getFxStore, invalidateAllFxStores, loadFxRatesAndSignalsBulk, removeFxStore} from '$lib/features/fx/fxStoreRegistry';
     import {bulkRefusalMessage} from '$lib/api/bulkRefusal';
     import {hasStoredPointInRange} from '$lib/utils/sync/syncHelpers';
@@ -1382,13 +1383,21 @@
         const {slug} = detail;
         const idx = pairs.findIndex((p) => p.config.slug === slug);
         if (idx < 0) return;
+        // One sync per pair at a time (81 U35): asked before the spinner is set, so a refused press leaves the running sync's alone.
+        const busyNow = fxSyncBusyFor([slug]);
+        if (busyNow) {
+            toasts.warning(fxSyncBusyText(get(_), busyNow));
+            return;
+        }
         pairs[idx] = {...pairs[idx], loading: true};
         try {
-            const response = await zodiosApi.sync_rates_api_v1_fx_currencies_sync_post({
-                pairs: [slug],
-                start: syncDateStart,
-                end: dateEnd,
-            });
+            const response = await guardedFxSync([slug], () =>
+                zodiosApi.sync_rates_api_v1_fx_currencies_sync_post({
+                    pairs: [slug],
+                    start: syncDateStart,
+                    end: dateEnd,
+                }),
+            );
             const r = (response as any)?.results?.[0];
             if (r) {
                 const t = get(_);
@@ -1400,6 +1409,13 @@
             store.invalidateRange(dateStart, dateEnd);
             await fetchPairData(idx);
         } catch (e: any) {
+            const busy = asFxSyncBusy(e);
+            if (busy) {
+                // One sync per pair at a time (81 U35): say it and make the reader wait; nothing failed.
+                toasts.warning(fxSyncBusyText(get(_), busy));
+                pairs[idx] = {...pairs[idx], loading: false};
+                return;
+            }
             toasts.error(get(_)('fx.sync.toastFailed', {values: {pair: slug.replace('-', '/')}}));
             console.error('Sync failed for', slug, e);
             pairs[idx] = {...pairs[idx], loading: false};

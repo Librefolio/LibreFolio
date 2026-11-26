@@ -47,6 +47,18 @@ export interface ChargeDraft {
 
 export type ChargeState = 'linked' | 'unlink' | 'delete';
 
+/** A charge's parent that is a new row of the Bulk (66 TL-11): its key (`op-<tempId>`), its name there («row 3»), its values. */
+export interface HandedNewParent {
+    key: string;
+    ref: string;
+    row: TXReadItem;
+}
+
+/** The Bulk's row behind a key `op-<tempId>`; `null` for a saved row or one typed in the form. */
+export function bulkRowOf(key: string): string | null {
+    return key.startsWith('op-') ? key.slice(3) : null;
+}
+
 /** What a new charge takes from its parent: the broker and the asset (rules 2 and 3), and the date it starts from. */
 export interface ChargesParent {
     broker_id: number;
@@ -125,6 +137,22 @@ export function chargeRowsMissingAmount(charges: readonly ChargeDraft[]): string
     return linkedCharges(charges)
         .filter((charge) => !charge.cash || charge.cash.amount.trim() === '')
         .map((charge) => charge.key);
+}
+
+/** What a link needs equal on its two ends (rules 2 and 3). */
+export interface LinkContext {
+    broker_id: number;
+    asset_id: number | null;
+}
+
+/**
+ * The links made in this Bulk, not saved yet, that a change of broker or asset would break because their other end is
+ * saved and cannot follow (66 TL-12): the saved charges linked under this new parent, or the saved parent of this new
+ * charge. A new charge is not among them (an all-new group moves together, TL-3b), nor a charge saved under this parent.
+ */
+export function brokenSavedLinks<T>(current: LinkContext, next: LinkContext, charges: readonly ChargeDraft[], parent: T | null): {charges: ChargeDraft[]; parent: T | null} {
+    if (current.broker_id === next.broker_id && current.asset_id === next.asset_id) return {charges: [], parent: null};
+    return {charges: linkedCharges(charges).filter((charge) => charge.id !== null && charge.linkNew === true), parent};
 }
 
 /** The section's state as one string, for the form's unsaved-changes baseline and its anti-bounce. */

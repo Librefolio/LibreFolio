@@ -21,7 +21,7 @@
  */
 import {afterEach, beforeAll, describe, expect, it, vi} from 'vitest';
 import {get} from 'svelte/store';
-import {cleanup, fireEvent, render, screen, setupI18n, waitFor} from '$test/component';
+import {cleanup, fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
 import {_} from '$lib/i18n';
 import ProfileEditModal from './ProfileEditModal.svelte';
 import type {ProfileVoice} from './profileStore';
@@ -93,11 +93,21 @@ async function keep(onkeep: ReturnType<typeof vi.fn>): Promise<PendingChanges> {
     return onkeep.mock.calls[0][0] as PendingChanges;
 }
 
+/** The selector of a row: its trigger, and the options of its open list (the top search box draws options too). */
+const voiceTrigger = (id: string) => screen.getByTestId(`profile-row-voice-${id}-trigger`);
+const voiceOption = (id: string, key: string) => within(screen.getByTestId(`profile-row-voice-${id}`)).queryByTestId(`search-select-option-${key}`);
+
+async function chooseVoice(id: string, key: string): Promise<void> {
+    await fireEvent.click(voiceTrigger(id));
+    const option = voiceOption(id, key);
+    if (!option) throw new Error(`no option ${key} in the selector of ${id}`);
+    await fireEvent.click(option);
+}
+
 async function addRowWithVoice(key: string): Promise<string> {
     await fireEvent.click(screen.getByTestId('profile-edit-add-row'));
     const id = 'row-1';
-    await fireEvent.click(screen.getByTestId(`profile-row-voice-${id}-button`));
-    await fireEvent.click(screen.getByTestId(`profile-row-voice-${id}-option-${key}`));
+    await chooseVoice(id, key);
     return id;
 }
 
@@ -140,6 +150,42 @@ describe('ProfileEditModal — rows and panels', () => {
         expect(row('row-1')).not.toBeNull();
         expect(validity().dataset.valid).toBe('false');
         expect(screen.getByTestId('profile-edit-keep')).toBeDisabled();
+    });
+
+    // 87 A4: the developer found the empty selector out of scale and its written error ugly: the border says where to click.
+    it('a new row is a selector with a search, its border red until a voice is chosen, and no written error', async () => {
+        mount();
+        await fireEvent.click(screen.getByTestId('profile-edit-add-row'));
+        expect(voiceTrigger('row-1')).toHaveAttribute('aria-invalid', 'true');
+        const reason = document.getElementById(voiceTrigger('row-1').getAttribute('aria-describedby') ?? '');
+        expect(reason, 'a screen reader still hears why').toHaveTextContent(get(_)('assets.profile.edit.issueNoVoice'));
+        expect(rowState('row-1')).toHaveAttribute('data-issue', 'no_voice');
+        expect(rowState('row-1').closest('td')).not.toHaveTextContent(get(_)('assets.profile.edit.issueNoVoice'));
+
+        await fireEvent.click(voiceTrigger('row-1'));
+        const search = screen.getByTestId('profile-row-voice-row-1-search');
+        await fireEvent.input(search, {target: {value: get(_)('assets.profile.voices.distribution_policy')}});
+        await waitFor(() => expect(voiceOption('row-1', 'ter')).toBeNull());
+        await fireEvent.click(voiceOption('row-1', 'distribution_policy')!);
+        expect(voiceTrigger('row-1')).not.toHaveAttribute('aria-invalid');
+        expect(voiceTrigger('row-1')).toHaveTextContent(get(_)('assets.profile.voices.distribution_policy'));
+    });
+
+    it('a row is offered only the voices no other row holds, and its own', async () => {
+        mount();
+        const id = await addRowWithVoice('ter');
+        await fireEvent.click(voiceTrigger(id));
+        expect(voiceOption(id, 'ter'), 'its own').not.toBeNull();
+        expect(voiceOption(id, 'fund_provider'), 'the file’s row holds it').toBeNull();
+    });
+
+    it('a value that is no number is still said in words: a border would not say it', async () => {
+        mount();
+        const id = await addRowWithVoice('ter');
+        await fireEvent.input(valueInput(id), {target: {value: 'abc'}});
+        await fireEvent.blur(valueInput(id));
+        await waitFor(() => expect(rowState(id)).toHaveAttribute('data-issue', 'not_a_number'));
+        expect(rowState(id).closest('td')).toHaveTextContent(get(_)('assets.profile.edit.issueNotANumber'));
     });
 
     it('a percentage typed in percent is kept as an exact fraction; the file row comes back as it was', async () => {
@@ -205,14 +251,13 @@ describe('ProfileEditModal — the sources and the units (E10c3)', () => {
         expect(unit(id)).toHaveTextContent(/^%$/);
         expect(unit('fund_provider')).toBeNull();
         await fireEvent.click(screen.getByTestId('profile-edit-add-row'));
-        await fireEvent.click(screen.getByTestId('profile-row-voice-row-2-button'));
-        await fireEvent.click(screen.getByTestId('profile-row-voice-row-2-option-modified_duration'));
+        await chooseVoice('row-2', 'modified_duration');
         expect(unit('row-2')).toHaveTextContent(get(_)('assets.profile.units.years'));
     });
 
     it('the panels ask «the source», not «the provider»', () => {
         mount();
-        expect(screen.getByTestId('distribution-ask-provider-sector')).toHaveAttribute('title', get(_)('assets.profile.edit.askSource'));
+        expect(screen.getByTestId('distribution-ask-provider-sector')).toHaveAttribute('aria-label', get(_)('assets.profile.edit.askSource'));
     });
 
     it('the comparison window is «compare with the sources»', async () => {

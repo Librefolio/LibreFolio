@@ -3,6 +3,7 @@ import {AI_EXPORT_PAGE_FEATURE_LABEL_KEYS, AI_EXPORT_PAGE_LABEL_KEYS, AI_EXPORT_
 import {renderFencedSection, serializeYaml} from '../serialization';
 import {findAiExportResponseContract, type AiExportFollowUpsResponseContract, type AiExportSectionsResponseContract} from './responseContracts';
 import {renderSnapshotDataText, type RenderedSnapshotDataText, type SnapshotFormatDiagnostics, type SnapshotSignalMetric} from './snapshotDataRenderer';
+import {AI_EXPORT_TOOL_GUIDES, AI_EXPORT_TOOLS_NAV_KEY} from './toolGuides';
 import {
     AI_EXPORT_ANSWER_FOCUS_INSTRUCTIONS,
     AI_EXPORT_DATA_RECEIVED_KEY,
@@ -10,6 +11,8 @@ import {
     AI_EXPORT_EXPORT_SCOPE_INSTRUCTIONS,
     AI_EXPORT_GROUND_RULES,
     AI_EXPORT_HOW_TO_ANSWER,
+    AI_EXPORT_LEGAL_NOTICE,
+    AI_EXPORT_LEGAL_NOTICE_TITLE,
     AI_EXPORT_SHARED_VERIFICATION_INSTRUCTIONS,
     AI_EXPORT_USER_QUESTION_INTRO,
     aiExportReplyInstructions,
@@ -39,8 +42,11 @@ export interface RenderAiExportPromptInput {
     readonly snapshot: AiExportSnapshotResponse;
     readonly responseLanguage: AiExportResponseLanguageDisplayName;
     readonly userNotes?: string;
-    readonly translate?: (key: string) => string;
+    /** The interface's translation; `values` fill a message's `{name}` placeholders (78 L4a: the tool's labels). */
+    readonly translate?: AiExportPromptTranslate;
 }
+
+export type AiExportPromptTranslate = (key: string, values?: Readonly<Record<string, string>>) => string;
 
 export interface AiExportFinalPromptStats {
     readonly characterCountUtf16CodeUnits: number;
@@ -62,6 +68,7 @@ export interface RenderedAiExportPrompt {
 
 export type AiExportPromptSectionId =
     | 'export_scope'
+    | 'librefolio_tool'
     | 'analysis_objective'
     | 'shared_verification_instructions'
     | 'response_contract'
@@ -321,6 +328,42 @@ function renderSnapshotData(
     };
 }
 
+/**
+ * «Calcolalo in LibreFolio» (78 L4a): for each tool the analysis suggests, where to find it and what to enter, step by
+ * step. Every label of the tool is the tool's own i18n key, quoted; the AI Export writes only the sentences around them.
+ * Null when the analysis suggests no tool.
+ */
+/** The way to the tool, the first points of the list: open LibreFolio, the sidebar's Tools, the tool's card. */
+const TOOL_PATH_STEPS = 3;
+
+function renderLibreFolioTool(entry: AiExportAnalysisCatalogEntry, translate: AiExportPromptTranslate = (key) => key): string | null {
+    const tools = entry.suggested_tools ?? [];
+    if (tools.length === 0) return null;
+    const lines = [`## ${translate('aiExport.tool.heading')}`, '', translate('aiExport.tool.intro')];
+    for (const {tool_code: toolCode} of tools) {
+        const guide = AI_EXPORT_TOOL_GUIDES[toolCode];
+        if (!guide) throw new AiExportPromptRenderError('incompatible_selection', `Unknown suggested tool: ${toolCode}`);
+        const name = translate(guide.nameKey);
+        lines.push(
+            '',
+            `### ${name}`,
+            '',
+            `- **${translate('aiExport.tool.when')}**: ${translate(guide.whenKey)}`,
+            // 78 L4b: one numbered list, the way to the tool as its first three points (two lists lost the way in the trials)
+            `- **${translate('aiExport.tool.inputs')}**:`,
+            `  1. ${translate('aiExport.additionalData.steps.openLibreFolio')}`,
+            `  2. ${translate('aiExport.tool.steps.sidebar')}: "${translate(AI_EXPORT_TOOLS_NAV_KEY)}"`,
+            `  3. ${translate('aiExport.tool.steps.card')}: "${name}"`,
+            ...guide.steps.map((step, index) => {
+                const values = Object.fromEntries(Object.entries(step.values ?? {}).map(([placeholder, key]) => [placeholder, `"${translate(key)}"`]));
+                return `  ${index + TOOL_PATH_STEPS + 1}. "${translate(step.labelKey)}": ${translate(step.explanationKey, values)}`;
+            }),
+            `- **${translate('aiExport.tool.returns')}**: ${translate(guide.returnsKey)}`,
+        );
+    }
+    return lines.join('\n');
+}
+
 function renderAdditionalData(input: RenderAiExportPromptInput): string {
     if (input.selection.kind !== 'analysis' || input.selection.entry.kind !== 'analysis') {
         throw new AiExportPromptRenderError('incompatible_selection', 'Additional LibreFolio data guidance requires an analysis selection');
@@ -414,13 +457,12 @@ function renderExportScope(snapshot: AiExportSnapshotResponse): string | null {
 }
 
 /**
- * The instance's legal notice (F09, workstream A), in the interface language: local, allow-listed copy under its own
+ * The instance's legal notice (F09, workstream A), in fixed English (D-23): local, allow-listed copy under its own
  * heading — never a fenced data block, never a URL or anything the instance or the snapshot provides — so the UI and
- * the probe, which translate from the same catalogue, render the same bytes.
+ * the probe render the same bytes in every interface language.
  */
-function renderLegalNotice(input: RenderAiExportPromptInput): string {
-    const translate = input.translate ?? ((key: string) => key);
-    return [`## ${translate('legal.title')}`, '', translate('legal.disclaimer')].join('\n');
+function renderLegalNotice(): string {
+    return [`## ${AI_EXPORT_LEGAL_NOTICE_TITLE}`, '', AI_EXPORT_LEGAL_NOTICE].join('\n');
 }
 
 /** Request Analysis' closing instruction (E-24): answer the question from the data, never restate the data. Fixed English. */
@@ -431,7 +473,7 @@ function renderAnswerFocus(): string {
 /**
  * Export Data's last word (E-24): data only, already seen in LibreFolio, so the assistant answers only a question the
  * user adds, and otherwise replies with the catalogue's sentence (`AI_EXPORT_DATA_RECEIVED_KEY`), in the interface
- * language through the caller's `translate`, as the legal notice. Fixed English around that one sentence.
+ * language through the caller's `translate` (the legal notice is fixed English, D-23). Fixed English around that one sentence.
  */
 function renderReplyInstructions(input: RenderAiExportPromptInput): string {
     const translate = input.translate ?? ((key: string) => key);
@@ -476,8 +518,11 @@ function buildAiExportPrompt(input: RenderAiExportPromptInput, diagnostics: bool
             sections.push({id: 'snapshot_metadata', content: snapshotMetadata.content});
             sections.push({id: 'snapshot_data', content: snapshotData.content});
             sections.push({id: 'additional_librefolio_data', content: renderAdditionalData(input)});
+            // 78 L4a: «Calcolalo in LibreFolio», the tool the analysis sends the user to, after the data it suggests
+            const tool = renderLibreFolioTool(entry, input.translate);
+            if (tool !== null) sections.push({id: 'librefolio_tool', content: tool});
             sections.push({id: 'domain_notes', content: renderDomainNotes(input.snapshot)});
-            sections.push({id: 'legal_notice', content: renderLegalNotice(input)});
+            sections.push({id: 'legal_notice', content: renderLegalNotice()});
             if (notes) sections.push({id: 'user_question', content: renderUserQuestion(notes)});
             sections.push(language);
         } else {
@@ -494,13 +539,13 @@ function buildAiExportPrompt(input: RenderAiExportPromptInput, diagnostics: bool
             // The trusted closing, after the untrusted user question: the answer focus (E-24), the legal notice, then the response
             // language, the prompt's last word (J, A9)
             sections.push({id: 'answer_focus', content: renderAnswerFocus()});
-            sections.push({id: 'legal_notice', content: renderLegalNotice(input)});
+            sections.push({id: 'legal_notice', content: renderLegalNotice()});
             sections.push(language);
         }
     } else {
         sections.push({id: 'snapshot_metadata', content: snapshotMetadata.content});
         sections.push({id: 'snapshot_data', content: snapshotData.content});
-        sections.push({id: 'legal_notice', content: renderLegalNotice(input)});
+        sections.push({id: 'legal_notice', content: renderLegalNotice()});
         // Export Data's last word: how to reply, never a restatement of the data (E-24)
         sections.push({id: 'reply_instructions', content: renderReplyInstructions(input)});
     }

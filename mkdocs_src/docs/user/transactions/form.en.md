@@ -107,7 +107,8 @@ The form of a Buy, a Sell, a Dividend, an Interest, a Deposit or a Withdrawal li
 
 - **+ Fee** and **+ Tax** add a new charge: type its amount (in the transaction's currency unless you pick another) and, if you like, a note. It takes the transaction's broker, asset and date. A new charge without an amount shows *Enter the amount of this charge*, and **Apply** waits.
 - **Link an existing charge…** picks Fees and Taxes of the same broker and asset that are not linked to anything yet. In the bulk editor it also offers the rows of the batch you have not saved yet, named by their row number, and the charges you unlinked there; a row you marked for deletion, or linked to another transaction there, is not offered. Picking a row of the batch moves that row under this transaction: it is never copied.
-- **Unlink** takes a saved charge out of the list: when you save, it stays as a transaction of its own. **Delete** deletes it.
+- A transaction already saved keeps its broker and asset. So if a charge already saved is linked to a new transaction, or a new charge to a saved one, changing the broker or the asset first opens a window: it names the saved transactions that would be unlinked and says how to keep them together (clone them with the new values and delete the originals). **Cancel** leaves the old value.
+- **Unlink** takes a charge out of the list: it stays as a transaction of its own. It is there for a saved charge and, in the bulk editor, for a new one already in the batch; a charge you are still typing has only **Delete**, which takes it away. **Delete** on a saved charge deletes it.
 
 Under the list, a read-only line adds it up: **Total charged** on a Buy or a Withdrawal (the amount plus its charges), **Net received** on a Sell, a Dividend, an Interest or a Deposit (the amount minus its charges). There is one figure per currency: a charge in another currency is never converted.
 
@@ -119,6 +120,7 @@ Under the list, a read-only line adds it up: **Total charged** on a Buy or a Wit
 
 The form of a Fee or a Tax shows **Linked to**: the transaction it belongs to, with its type, number, date and amount.
 
+- A transaction not saved yet is named by its row in the bulk editor, such as *row 3*.
 - **Unlink**: when you save, the charge becomes a transaction of its own.
 - **Link to a transaction…** appears on a charge with no link: pick a transaction of the same broker and asset. It shows as *Will be linked when saved*, and **Undo** drops it.
 
@@ -126,7 +128,7 @@ The form of a Fee or a Tax shows **Linked to**: the transaction it belongs to, w
 
 **Open** (the eye) on a charge, or on its transaction in **Linked to**, shows that transaction in the same window. When you go from a charge to its transaction, the charge is highlighted in the list. If you have changed something, the form asks first whether to discard it.
 
-From the Transactions list the window stays read-only. In the bulk workspace, **Open** also brings that transaction into the workspace as a row, ready to edit; just bringing it in is not a change, so closing the workspace afterwards does not ask to discard anything. A transaction marked for deletion asks first whether to restore it. **Open** is there only for saved transactions.
+From the Transactions list the window stays read-only. In the bulk workspace, **Open** also brings that transaction into the workspace as a row, ready to edit; just bringing it in is not a change, so closing the workspace afterwards does not ask to discard anything. A transaction marked for deletion asks first whether to restore it. In the bulk workspace **Open** also moves between rows not saved yet.
 
 ---
 

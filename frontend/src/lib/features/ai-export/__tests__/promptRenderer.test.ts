@@ -4,7 +4,9 @@ import {handleProbeMessage, probeTranslation} from '../../../../../scripts/ai-ex
 import {AI_EXPORT_ANALYSIS_IDS, AI_EXPORT_DATASET_IDS, type AiExportCompatibleSelection} from '../catalog/shared';
 import {AiExportPromptRenderError, renderAiExportPrompt, renderAiExportPromptDiagnostics, type AiExportPromptDiagnostics, type AiExportResponseLanguageDisplayName} from '../templates/promptRenderer';
 import * as sharedInstructions from '../templates/sharedInstructions';
-import {findAiExportAnalysisInstruction} from '../templates/sharedInstructions';
+import {AI_EXPORT_DOMAIN_NOTES, AI_EXPORT_LEGAL_NOTICE, AI_EXPORT_LEGAL_NOTICE_TITLE, findAiExportAnalysisInstruction} from '../templates/sharedInstructions';
+import appCatalogue from '../../../i18n/app/en.json';
+import {serializeYaml} from '../serialization/yaml';
 import {backendCatalogFixture, compatibilityFixture, selectionFixture, snapshotFixture} from './runtimeFixtures';
 
 const markKey = (key: string): string => `⟦${key}⟧`;
@@ -216,16 +218,29 @@ describe('AI Export prompt renderer', () => {
             }));
         }
 
-        expect(legalNotices(markKey)).toEqual([
-            {mode: 'full_prompt', contents: ['## ⟦legal.title⟧\n\n⟦legal.disclaimer⟧']},
-            {mode: 'data_only', contents: ['## ⟦legal.title⟧\n\n⟦legal.disclaimer⟧']},
-        ]);
-        for (const locale of ['en', 'it', 'fr', 'es'] as const) {
-            for (const {mode, contents} of legalNotices(probeTranslation(locale))) {
-                expect(contents, `${locale} ${mode}: exactly one legal_notice`).toHaveLength(1);
-                expect(contents[0], `${locale} ${mode}: no fence`).not.toContain('```');
-                expect(contents[0], `${locale} ${mode}: no URL`).not.toMatch(/http/iu);
-            }
+        // D-23: fixed English, title and text, whatever the interface's language: the translation of the caller is not read
+        const english = `## ${AI_EXPORT_LEGAL_NOTICE_TITLE}\n\n${AI_EXPORT_LEGAL_NOTICE}`;
+        expect(english).not.toContain('```');
+        expect(english).not.toMatch(/http/iu);
+        for (const translate of [markKey, ...(['en', 'it', 'fr', 'es'] as const).map((locale) => probeTranslation(locale))]) {
+            expect(legalNotices(translate)).toEqual([
+                {mode: 'full_prompt', contents: [english]},
+                {mode: 'data_only', contents: [english]},
+            ]);
+        }
+    });
+
+    it('keeps the English legal notice equal to the catalogue the app shows (D-23)', () => {
+        expect(AI_EXPORT_LEGAL_NOTICE_TITLE).toBe(appCatalogue.legal.title);
+        expect(AI_EXPORT_LEGAL_NOTICE).toBe(appCatalogue.legal.disclaimer);
+    });
+
+    it('writes no domain note with a colon and a space: YAML quotes it, and the notes look mixed', () => {
+        for (const notes of Object.values(AI_EXPORT_DOMAIN_NOTES)) for (const note of notes) expect(note).not.toContain(': ');
+        // As the prompt prints them: every note of every domain a plain YAML item, none in quotes
+        for (const notes of Object.values(AI_EXPORT_DOMAIN_NOTES)) {
+            const yaml = serializeYaml({domain_notes: notes});
+            for (const line of yaml.split('\n').filter((row) => row.startsWith('  - '))) expect(line, line).toMatch(/^ {2}- [^'"]/u);
         }
     });
 

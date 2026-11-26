@@ -1,4 +1,11 @@
+<!--
+  CompactDurationBadge — the «Custom» window beside the period presets: a toggle that opens its inline editor. A standard
+  Button (85 BTN-2d), the presets' size; chosen by hand it is amber like its editor (`pressed` + `tone="warning"`, C4+C5).
+  `drp-trigger` stays on the button itself: the pickers' click-outside reads it, and the presets' row groups its buttons
+  by their parent to see a wrap (a wrapper would hide this one from it).
+-->
 <script lang="ts">
+    import Button from '$lib/components/ui/button/Button.svelte';
     import {numericArrows} from '$lib/actions/numericArrows';
     import {SimpleSelect} from '$lib/components/ui/select';
     import type {SelectOption} from '$lib/components/ui/select/types';
@@ -19,13 +26,13 @@
         buttonTestId?: string;
         amountTestId?: string;
         unitTestId?: string;
-        buttonElement?: HTMLButtonElement | null;
+        buttonElement?: HTMLElement;
         editorElement?: HTMLDivElement | null;
         isAllowed?: (amount: number, unit: DurationUnit) => boolean;
         onapply?: (amount: number, unit: DurationUnit) => void;
     }
 
-    let {amount = $bindable(3), unit = $bindable('years'), editing = $bindable(false), active = false, options, customLabel, min = 1, max, buttonTestId, amountTestId, unitTestId, buttonElement = $bindable(null), editorElement = $bindable(null), isAllowed, onapply}: Props = $props();
+    let {amount = $bindable(3), unit = $bindable('years'), editing = $bindable(false), active = false, options, customLabel, min = 1, max, buttonTestId, amountTestId, unitTestId, buttonElement = $bindable(), editorElement = $bindable(null), isAllowed, onapply}: Props = $props();
 
     let draftAmount = $state(untrack(() => amount));
     let draftUnit: DurationUnit = $state(untrack(() => unit));
@@ -112,15 +119,5 @@
         <SimpleSelect value={draftUnit} {options} onchange={handleUnitChange} class="inline-block w-auto" dropdownPosition="auto" compact showChevron={false} testId={unitTestId} />
     </div>
 {:else}
-    <button
-        type="button"
-        bind:this={buttonElement}
-        data-testid={buttonTestId}
-        data-active={active ? 'true' : 'false'}
-        class="drp-trigger px-2.5 py-1 text-xs font-medium rounded-lg transition-all duration-150
-            {active ? 'bg-lf-warning text-lf-on-status shadow-sm' : 'bg-lf-panel text-lf-secondary hover:bg-lf-neutral'}"
-        onclick={toggleEditing}
-    >
-        {active ? `${amount}${selectedUnitLabel}` : customLabel}
-    </button>
+    <Button label={active ? `${amount}${selectedUnitLabel}` : customLabel} size="sm" compact segment pressed={active} tone="warning" class="drp-trigger" bind:element={buttonElement} onclick={toggleEditing} data-testid={buttonTestId} data-active={active ? 'true' : 'false'} />
 {/if}

@@ -10,6 +10,7 @@
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import {_ as t} from '$lib/i18n';
     import {get} from 'svelte/store';
+    import {asFxSyncBusy, FxSyncBusyError, fxPairsSyncing, fxSyncBusyText, guardedFxSync} from '$lib/features/fx/fxSyncGuard.svelte';
     import type {SyncRequestOptions, SyncResult, SyncSection} from '$lib/utils/sync/syncHelpers';
     import {DEFAULT_PROVIDER_COLOR, formatSyncDetail, getFxProviderIconUrl, parseProviderChain, PROVIDER_COLORS} from '$lib/utils/providerHelpers';
     import {getCurrencyInfo} from '$lib/stores/reference/currencyStore';
@@ -32,20 +33,35 @@
 
     let syncModalBase: SyncModalBase | undefined = $state(undefined);
 
+    /** A pair of this sync is syncing already (81 U35): Start is off, with the reason. */
+    let busyReason = $derived.by(() => {
+        const busy = fxPairsSyncing(pairs);
+        return busy.length > 0 ? fxSyncBusyText($t, new FxSyncBusyError(busy, null)) : null;
+    });
+
     // Ensure FX provider icons are cached when modal opens
     $effect(() => {
         if (open) getCurrencyGraph();
     });
 
     async function doSyncFn(targetIds: string[], options: SyncRequestOptions): Promise<SyncResult[]> {
-        const response = await zodiosApi.sync_rates_api_v1_fx_currencies_sync_post(
-            {
-                pairs: targetIds,
-                start: dateStart,
-                end: dateEnd,
-            },
-            {timeout: options.timeoutMs},
-        );
+        let response;
+        try {
+            // One sync per pair at a time (81 U35): a busy pair ends the request here, said in the reader's language.
+            response = await guardedFxSync(targetIds, () =>
+                zodiosApi.sync_rates_api_v1_fx_currencies_sync_post(
+                    {
+                        pairs: targetIds,
+                        start: dateStart,
+                        end: dateEnd,
+                    },
+                    {timeout: options.timeoutMs},
+                ),
+            );
+        } catch (error) {
+            const busy = asFxSyncBusy(error);
+            throw busy ? new Error(fxSyncBusyText(get(t), busy)) : error;
+        }
         const r = response as any;
         return (r.results ?? []).map(
             (pr: any) =>
@@ -86,6 +102,7 @@
     {onsynced}
     {sections}
     {zIndex}
+    startBlockedReason={busyReason}
     testId="fx-sync-modal"
     title={$t('common.syncFxRates') ?? 'Sync FX Rates'}
 ></SyncModalBase>

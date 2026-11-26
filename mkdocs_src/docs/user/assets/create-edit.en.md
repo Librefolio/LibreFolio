@@ -301,7 +301,7 @@ button beside **Ask Provider**) and for the rest of the profile, see [Profile](d
 - **The description** is the **Description** field of the asset form. What you type there is
   saved with the asset, as a change to its profile.
 - **The sectors and the countries** are in the **Profile data** window:
-    - in the asset form, click the **Profile data** row. The window opens over the form;
+    - in the asset form, click the **Profile data** row, under the description. The window opens over the form;
       **Keep the changes** hands your changes back to the form, which saves them with the asset,
       and the row counts them until then;
     - on the asset page, click **Edit data** in the **Profile** tab. There **Save all** saves them

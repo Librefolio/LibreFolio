@@ -206,13 +206,16 @@ export class PlannerPreview {
     /**
      * The euros waiting become the draft's λ on `ready`'s total, only while its choice is still «Custom» (the user may have
      * picked a level meanwhile). A λ the plan's request cannot carry is not written: the step keeps «Custom» without one.
+     * Either way the λ is the draft's `customLambdaMemory`, the «Custom» column kept for comparison (TL-1).
      */
     #convert(draft: PlannerDraft, ready: PreviewReady): void {
         const euros = this.#customEuros;
         if (euros === null) return;
         this.#customEuros = null;
-        if (draft.data.fidelity.kind !== 'custom') return;
         const lambda = lambdaFromReferenceAmount(ready.total, euros) ?? '';
+        // TL-1: the figure is remembered for the «Custom» column even when another choice was made meanwhile.
+        draft.customLambdaMemory = lambda;
+        if (draft.data.fidelity.kind !== 'custom') return;
         if (draft.data.fidelity.lambda !== lambda) draft.data.fidelity = {kind: 'custom', lambda};
     }
 

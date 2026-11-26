@@ -8,7 +8,7 @@
  * shot ever reaches a real site. The real enrichers are then absent from the catalogue, and the seeded fund
  * (`PROFILE_HISTORY_FUND` in `populate_mock_data.py`, bound to justETF and Borsa Italiana) would show its sources by code
  * and its enrichers as «not active on this instance» — not what a user's instance shows. {@link serveGalleryEnrichers}
- * answers the catalogue instead, as an instance with the four real enrichers answers it. No read and no test reaches a
+ * answers the catalogue instead, as an instance with the five real enrichers answers it. No read and no test reaches a
  * site (the shots only open and close windows); «Riconosci» and «Cerca online» of the enrichers' window are answered by
  * {@link serveGalleryEnricherAnswers} (82 ENR-4), as the real enrichers would answer for the seeded iShares Core MSCI
  * World (`GALLERY_RECOGNIZED_ASSET`).
@@ -18,10 +18,10 @@
  * Generated from the plugins' declarations, no network — regenerate it whole, never by hand, when an enricher's
  * declarations change:
  *
- *     LIBREFOLIO_ENRICHERS_ENABLED=justetf,yfinance,borsa_italiana,esma pipenv run python -c "import json; from backend.app.services.enrichers.bindings import enrichers_catalogue; print(json.dumps(enrichers_catalogue().model_dump(mode='json'), indent=4, ensure_ascii=False))"
+ *     LIBREFOLIO_ENRICHERS_ENABLED=justetf,yfinance,borsa_italiana,esma,coingecko pipenv run python -c "import json; from backend.app.services.enrichers.bindings import enrichers_catalogue; print(json.dumps(enrichers_catalogue().model_dump(mode='json'), indent=4, ensure_ascii=False))"
  *
  * and paste the output as {@link GALLERY_ENRICHERS_CATALOGUE}. `configured` is the route's readiness, true for the
- * four: none has a required setting.
+ * five: only CoinGecko has a required setting (its key), and the instance shown has one.
  */
 import type {Page} from '@playwright/test';
 import {schemas} from '../../src/lib/api/generated';
@@ -119,6 +119,97 @@ export const GALLERY_ENRICHERS_CATALOGUE = {
             missing_settings: [],
         },
         {
+            code: 'coingecko',
+            name: 'CoinGecko',
+            icon: 'https://www.coingecko.com/favicon.ico',
+            help_url: '/mkdocs/user/assets/providers/coingecko/',
+            terms: 'self_hosted',
+            accepted_identifier_types: ['COINGECKO_ID'],
+            params_schema: [
+                {
+                    key: 'vs_currency',
+                    type: 'select',
+                    required: false,
+                    options: [
+                        'AED',
+                        'ARS',
+                        'AUD',
+                        'BDT',
+                        'BHD',
+                        'BMD',
+                        'BRL',
+                        'CAD',
+                        'CHF',
+                        'CLP',
+                        'CNY',
+                        'CZK',
+                        'DKK',
+                        'EUR',
+                        'GBP',
+                        'GEL',
+                        'HKD',
+                        'HUF',
+                        'IDR',
+                        'ILS',
+                        'INR',
+                        'JPY',
+                        'KRW',
+                        'KWD',
+                        'LKR',
+                        'MMK',
+                        'MXN',
+                        'MYR',
+                        'NGN',
+                        'NOK',
+                        'NZD',
+                        'PHP',
+                        'PKR',
+                        'PLN',
+                        'RUB',
+                        'SAR',
+                        'SEK',
+                        'SGD',
+                        'THB',
+                        'TRY',
+                        'TWD',
+                        'UAH',
+                        'USD',
+                        'VND',
+                        'ZAR',
+                    ],
+                    default: 'EUR',
+                    label: 'Market capitalisation currency',
+                    'x-i18n-key': 'enrichers.coingecko.params.vs_currency',
+                },
+            ],
+            supports_search: true,
+            voices: {
+                CRYPTO: ['crypto_categories', 'description', 'inception_date', 'market_cap', 'website'],
+            },
+            default_priority: {
+                STOCK: null,
+                ETF: null,
+                BOND: null,
+                CRYPTO: 10,
+                FUND: null,
+                CROWDFUND: null,
+                HOLD: null,
+                COMMODITY: null,
+                REAL_ESTATE: null,
+                INDEX: null,
+                OTHER: null,
+                ETF_STOCK: null,
+                ETF_BOND: null,
+                ETF_COMMODITY: null,
+                ETF_REAL_ESTATE: null,
+                ETF_CRYPTO: null,
+                ETF_MONETARY: null,
+                CROWDFUND_REAL_ESTATE: null,
+            },
+            configured: true,
+            missing_settings: [],
+        },
+        {
             code: 'esma',
             name: 'ESMA (FIRDS)',
             icon: 'https://www.esma.europa.eu/themes/custom/esma_webst_theme/favicon.ico',
@@ -132,13 +223,13 @@ export const GALLERY_ENRICHERS_CATALOGUE = {
                 BOND: ['coupon_rate', 'coupon_type', 'issuer_lei', 'issuer_type', 'legal_form', 'maturity_date'],
                 FUND: ['distribution_policy', 'issuer_lei'],
                 COMMODITY: ['issuer_lei', 'legal_form'],
+                ETF_STOCK: ['distribution_policy', 'issuer_lei'],
+                ETF_MONETARY: ['distribution_policy', 'issuer_lei'],
+                ETF: ['distribution_policy', 'issuer_lei'],
+                ETF_BOND: ['distribution_policy', 'issuer_lei'],
                 ETF_REAL_ESTATE: ['distribution_policy', 'issuer_lei'],
                 ETF_COMMODITY: ['distribution_policy', 'issuer_lei'],
-                ETF_STOCK: ['distribution_policy', 'issuer_lei'],
                 ETF_CRYPTO: ['distribution_policy', 'issuer_lei'],
-                ETF_BOND: ['distribution_policy', 'issuer_lei'],
-                ETF: ['distribution_policy', 'issuer_lei'],
-                ETF_MONETARY: ['distribution_policy', 'issuer_lei'],
             },
             default_priority: {
                 STOCK: 30,
@@ -173,14 +264,14 @@ export const GALLERY_ENRICHERS_CATALOGUE = {
             params_schema: [],
             supports_search: true,
             voices: {
+                ETF_STOCK: ['description', 'distribution_policy', 'fund_currency', 'fund_domicile', 'fund_provider', 'fund_size', 'geography', 'inception_date', 'index_name', 'replication', 'sector', 'ter'],
+                ETF_MONETARY: ['description', 'distribution_policy', 'fund_currency', 'fund_domicile', 'fund_provider', 'fund_size', 'geography', 'inception_date', 'index_name', 'replication', 'sector', 'ter'],
+                ETF: ['description', 'distribution_policy', 'fund_currency', 'fund_domicile', 'fund_provider', 'fund_size', 'geography', 'inception_date', 'index_name', 'legal_form', 'replication', 'sector', 'ter'],
                 COMMODITY: ['description', 'distribution_policy', 'fund_currency', 'fund_domicile', 'fund_provider', 'fund_size', 'geography', 'inception_date', 'index_name', 'legal_form', 'replication', 'sector', 'ter'],
+                ETF_BOND: ['description', 'distribution_policy', 'fund_currency', 'fund_domicile', 'fund_provider', 'fund_size', 'geography', 'inception_date', 'index_name', 'replication', 'sector', 'ter'],
                 ETF_REAL_ESTATE: ['description', 'distribution_policy', 'fund_currency', 'fund_domicile', 'fund_provider', 'fund_size', 'geography', 'inception_date', 'index_name', 'replication', 'sector', 'ter'],
                 ETF_COMMODITY: ['description', 'distribution_policy', 'fund_currency', 'fund_domicile', 'fund_provider', 'fund_size', 'geography', 'inception_date', 'index_name', 'legal_form', 'replication', 'sector', 'ter'],
-                ETF_STOCK: ['description', 'distribution_policy', 'fund_currency', 'fund_domicile', 'fund_provider', 'fund_size', 'geography', 'inception_date', 'index_name', 'replication', 'sector', 'ter'],
                 ETF_CRYPTO: ['description', 'distribution_policy', 'fund_currency', 'fund_domicile', 'fund_provider', 'fund_size', 'geography', 'inception_date', 'index_name', 'legal_form', 'replication', 'sector', 'ter'],
-                ETF_BOND: ['description', 'distribution_policy', 'fund_currency', 'fund_domicile', 'fund_provider', 'fund_size', 'geography', 'inception_date', 'index_name', 'replication', 'sector', 'ter'],
-                ETF: ['description', 'distribution_policy', 'fund_currency', 'fund_domicile', 'fund_provider', 'fund_size', 'geography', 'inception_date', 'index_name', 'legal_form', 'replication', 'sector', 'ter'],
-                ETF_MONETARY: ['description', 'distribution_policy', 'fund_currency', 'fund_domicile', 'fund_provider', 'fund_size', 'geography', 'inception_date', 'index_name', 'replication', 'sector', 'ter'],
             },
             default_priority: {
                 STOCK: null,
@@ -216,14 +307,14 @@ export const GALLERY_ENRICHERS_CATALOGUE = {
             supports_search: true,
             voices: {
                 STOCK: ['description', 'industry', 'issuer_country', 'market_cap', 'sector'],
+                ETF_STOCK: ['description', 'fund_provider', 'inception_date', 'sector', 'ter'],
+                ETF_MONETARY: ['description', 'fund_provider', 'inception_date', 'sector', 'ter'],
+                ETF: ['description', 'fund_provider', 'inception_date', 'sector', 'ter'],
+                FUND: ['description', 'fund_provider', 'inception_date', 'sector', 'ter'],
+                ETF_BOND: ['description', 'fund_provider', 'inception_date', 'sector', 'ter'],
                 ETF_REAL_ESTATE: ['description', 'fund_provider', 'inception_date', 'sector', 'ter'],
                 ETF_COMMODITY: ['description', 'fund_provider', 'inception_date', 'sector', 'ter'],
-                FUND: ['description', 'fund_provider', 'inception_date', 'sector', 'ter'],
-                ETF_STOCK: ['description', 'fund_provider', 'inception_date', 'sector', 'ter'],
                 ETF_CRYPTO: ['description', 'fund_provider', 'inception_date', 'sector', 'ter'],
-                ETF_BOND: ['description', 'fund_provider', 'inception_date', 'sector', 'ter'],
-                ETF: ['description', 'fund_provider', 'inception_date', 'sector', 'ter'],
-                ETF_MONETARY: ['description', 'fund_provider', 'inception_date', 'sector', 'ter'],
             },
             default_priority: {
                 STOCK: 10,
@@ -253,7 +344,7 @@ export const GALLERY_ENRICHERS_CATALOGUE = {
         STOCK: ['yfinance', 'borsa_italiana', 'esma'],
         ETF: ['justetf', 'yfinance', 'esma'],
         BOND: ['borsa_italiana', 'esma'],
-        CRYPTO: [],
+        CRYPTO: ['coingecko'],
         FUND: ['borsa_italiana', 'yfinance', 'esma'],
         CROWDFUND: [],
         HOLD: [],

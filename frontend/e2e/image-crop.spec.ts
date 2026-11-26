@@ -117,7 +117,7 @@ test.describe('File Upload with Image Editing', () => {
 
         // If a confirm dialog appeared, click Discard
         // Optional by design: the dialog is raised only if init events set hasChanges; "no dialog" ends in the modal closing.
-        const discardBtn = page.locator('.confirm-dialog .btn-warning');
+        const discardBtn = page.getByTestId('image-edit-discard-confirm');
         if (await appears(discardBtn, 1_000)) {
             await discardBtn.click();
         }
@@ -228,23 +228,31 @@ test.describe('ImageEditModal - Controls & Settings', () => {
         await expect(page.getByTestId('cropper-flip-h')).toBeVisible();
         await expect(page.getByTestId('cropper-flip-v')).toBeVisible();
 
-        // Click flip horizontal
-        await page.getByTestId('cropper-flip-h').click();
-        // Click flip vertical
-        await page.getByTestId('cropper-flip-v').click();
+        // The flips are toggles (85 BTN-2b): aria-pressed follows the image's mirror, both ways.
+        const flipH = page.getByTestId('cropper-flip-h');
+        const flipV = page.getByTestId('cropper-flip-v');
+        await expect(flipH).toHaveAttribute('aria-pressed', 'false');
+        await flipH.click();
+        await expect(flipH).toHaveAttribute('aria-pressed', 'true');
+        await flipV.click();
+        await expect(flipV).toHaveAttribute('aria-pressed', 'true');
+        await flipH.click();
+        await expect(flipH).toHaveAttribute('aria-pressed', 'false');
+        await expect(flipV, 'one flip does not undo the other').toHaveAttribute('aria-pressed', 'true');
     });
 
     test('B4: preset selection updates UI', async ({page}) => {
-        // Find preset buttons — they are in the controls section
-        const presetBtns = page.locator('.preset-btn');
-        const count = await presetBtns.count();
-        expect(count).toBeGreaterThan(0);
-
-        // The first preset of the row is Avatar (presetOptions order); the labels are translated, the position is the contract.
-        const avatarPreset = page.getByTestId('image-edit-preset-row').locator('.preset-btn').first();
+        // The presets are standard toggles (85 BTN-2b): each has its test id, the choice is aria-pressed.
+        const row = page.getByTestId('image-edit-preset-row');
+        const avatarPreset = row.getByTestId('image-edit-preset-avatar');
+        const customPreset = row.getByTestId('image-edit-preset-custom');
         await expect(avatarPreset).toBeEnabled();
         await avatarPreset.click();
-        await expect(avatarPreset).toHaveClass(/active/);
+        await expect(avatarPreset).toHaveAttribute('aria-pressed', 'true');
+        await expect(customPreset).toHaveAttribute('aria-pressed', 'false');
+        await customPreset.click();
+        await expect(customPreset).toHaveAttribute('aria-pressed', 'true');
+        await expect(avatarPreset).toHaveAttribute('aria-pressed', 'false');
     });
 
     test('B5: filename input is editable', async ({page}) => {
@@ -325,6 +333,13 @@ test.describe('ImageEditModal - Confirmation & Edge Cases', () => {
 
         // Confirmation dialog should appear
         await expect(page.getByTestId('image-edit-confirm-dialog')).toBeVisible({timeout: 8000});
+
+        // The discard button the optional probes of A3 and C2 look for: proved present here, where the dialog must show,
+        // so a miss there means «no dialog», never a selector that finds nothing (85 BTN-2b).
+        const discard = page.getByTestId('image-edit-discard-confirm');
+        await expect(discard).toBeVisible();
+        await discard.click();
+        await expect(page.getByTestId('image-edit-modal')).toBeHidden({timeout: 10_000});
     });
 
     test('C2: closing without changes closes immediately', async ({page}) => {
@@ -337,7 +352,7 @@ test.describe('ImageEditModal - Confirmation & Edge Cases', () => {
         // If confirm dialog appeared (edge case), dismiss it
         // Optional by design: init has settled (asserted above), so the dialog is not expected; if it is raised anyway, dismiss it.
         // Either way the test ends asserting the modal closed.
-        const discardBtn = page.locator('.confirm-dialog .btn-warning');
+        const discardBtn = page.getByTestId('image-edit-discard-confirm');
         if (await appears(discardBtn, 500)) {
             await discardBtn.click();
         }
@@ -427,14 +442,16 @@ test.describe('AssetPickerModal', () => {
         await openBrokerIconPicker(page);
         await page.getByTestId('asset-picker-existing-tab').click();
 
-        // Toggle buttons are always rendered on the existing tab: [grid, list]
-        const gridBtn = page.locator('.toggle-btn').first();
-        const listBtn = page.locator('.toggle-btn').last();
+        // The view toggles are standard toggles (85 BTN-2b), always rendered on the existing tab; the choice is aria-pressed.
+        const gridBtn = page.getByTestId('asset-picker-view-grid');
+        const listBtn = page.getByTestId('asset-picker-view-list');
         await expect(gridBtn).toBeVisible({timeout: 3_000});
         await listBtn.click();
-        await expect(listBtn).toHaveClass(/active/);
+        await expect(listBtn).toHaveAttribute('aria-pressed', 'true');
+        await expect(gridBtn).toHaveAttribute('aria-pressed', 'false');
         await gridBtn.click();
-        await expect(gridBtn).toHaveClass(/active/);
+        await expect(gridBtn).toHaveAttribute('aria-pressed', 'true');
+        await expect(listBtn).toHaveAttribute('aria-pressed', 'false');
     });
 
     test('D8: circular preview overlay for avatar/icon context', async ({page}) => {

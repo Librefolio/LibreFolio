@@ -3,10 +3,12 @@
      * LanguageSelector - Svelte 5
      * Language selector dropdown for header.
      * Uses custom dropdown styling optimized for header placement (minimal, transparent).
+     * The trigger is the standard Button (85 BTN-2d): the flag in `leading`, named by the current language, a disclosure
+     * (`expanded`, the turning ▾) whose panel is a menu; the rows stay `menuitem`s.
      */
     import {availableLanguages, currentLanguage, currentLanguageFlag, currentLanguageName} from '$lib/stores/app/language';
     import type {SupportedLocale} from '$lib/i18n';
-    import {ChevronDown} from 'lucide-svelte';
+    import Button from '$lib/components/ui/button/Button.svelte';
 
     interface Props {
         onOpenChange?: (open: boolean) => void;
@@ -58,19 +60,11 @@
 </script>
 
 <div bind:this={containerRef} class="relative" data-language={$currentLanguage} data-menu-open={isOpen ? 'true' : 'false'} data-testid="language-selector">
-    <button
-        class="flex items-center space-x-1 p-2 rounded-lg hover:bg-lf-hover transition-all focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lf-focus"
-        data-testid="language-selector-button"
-        aria-label={$currentLanguageName}
-        aria-haspopup="menu"
-        aria-expanded={isOpen}
-        aria-controls="language-selector-panel"
-        onclick={() => setOpen(!isOpen)}
-        type="button"
-    >
-        <span class="text-xl emoji-flag">{$currentLanguageFlag}</span>
-        <ChevronDown class="text-lf-secondary transition-transform {isOpen ? 'rotate-180' : ''}" size={14} />
-    </button>
+    <Button variant="ghost-strong" display="icon" label={$currentLanguageName} expanded={isOpen} aria-haspopup="menu" aria-controls="language-selector-panel" tipPosition="bottom" onclick={() => setOpen(!isOpen)} data-testid="language-selector-button">
+        {#snippet leading()}
+            <span class="text-xl emoji-flag">{$currentLanguageFlag}</span>
+        {/snippet}
+    </Button>
 
     {#if isOpen}
         <div id="language-selector-panel" class="absolute right-0 mt-2 w-40 bg-lf-card rounded-lg shadow-xl shadow-lf-shadow border border-lf-raised overflow-hidden z-50" role="menu" data-menu-open="true" data-testid="language-selector-panel">

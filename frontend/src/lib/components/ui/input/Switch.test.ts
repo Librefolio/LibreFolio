@@ -36,6 +36,11 @@ describe('Switch', () => {
         expect(lever()).toHaveAttribute('aria-checked', 'true');
     });
 
+    it.each(['sm', 'md'] as const)('%s: never shrinks beside a long label (86, A2)', (size) => {
+        render(Switch, {checked: true, testId: 'sw', size});
+        expect(lever()).toHaveClass('shrink-0');
+    });
+
     it('has two sizes, and the knob sits at the other end when on', () => {
         const md = render(Switch, {checked: false, testId: 'sw'});
         expect(lever()).toHaveClass('h-6', 'w-11');
@@ -53,6 +58,28 @@ describe('Switch', () => {
 
         render(Switch, {checked: true, testId: 'sw', size: 'sm'});
         expect(lever().firstElementChild).toHaveClass('translate-x-[18px]');
+    });
+
+    it('a switch that stands for several is a three-state checkbox: mixed rests in the middle with a dash, and a click asks for true', async () => {
+        const onchange = vi.fn();
+        const view = render(Switch, {checked: false, mixed: true, testId: 'sw', onchange});
+        expect(lever()).toHaveAttribute('role', 'checkbox');
+        expect(lever()).toHaveAttribute('aria-checked', 'mixed');
+        expect(lever()).toHaveClass('bg-lf-checked');
+        expect(lever().firstElementChild).toHaveClass('translate-x-3.5', 'bg-lf-switch-knob-on');
+        expect(lever().firstElementChild?.firstElementChild, 'the dash').toHaveClass('bg-lf-checked');
+        await fireEvent.click(lever());
+        expect(onchange.mock.calls[0][0]).toBe(true);
+        view.unmount();
+
+        const off = render(Switch, {checked: false, mixed: false, testId: 'sw'});
+        expect(lever()).toHaveAttribute('aria-checked', 'false');
+        expect(lever()).toHaveAttribute('role', 'checkbox');
+        expect(lever().firstElementChild?.firstElementChild).toBeNull();
+        off.unmount();
+
+        render(Switch, {checked: false, mixed: true, testId: 'sw', size: 'sm'});
+        expect(lever().firstElementChild).toHaveClass('translate-x-[11px]');
     });
 
     it('semantics="pressed" keeps a plain toggle button: aria-pressed, no role, no aria-checked', () => {

@@ -47,14 +47,15 @@ function mounted(fixture: {result: unknown}): RebalancerSolution {
 const cellText = (rowId: string, column: string) => document.querySelector(`tr[data-row-id="${rowId}"] td[data-column-id="${column}"]`)?.textContent?.trim() ?? null;
 
 describe('the Rebalancer allocation table', () => {
-    it('one row per Asset, per cash entry, then the uninvested row', () => {
+    it('one row per Asset, per cash entry, then the uninvested row’s two parts (TL-5)', () => {
         const solution = mounted(browser);
         expect(screen.getByTestId('rebalancer-planner-allocation-table')).toBeTruthy();
         const ids = [...document.querySelectorAll('tbody tr[data-row-id]')].map((row) => row.getAttribute('data-row-id'));
-        expect(ids).toEqual([...solution.asset_rows.map((row) => row.asset_id), ...solution.cash_rows.map((row) => `cash:${row.broker_id}:${row.currency}`), 'uninvested']);
+        expect(ids).toEqual([...solution.asset_rows.map((row) => row.asset_id), ...solution.cash_rows.map((row) => `cash:${row.broker_id}:${row.currency}`), 'untargeted_cash', 'costs']);
+        expect([...document.querySelectorAll('[data-testid="rebalancer-planner-allocation-uninvested-note"]')].map((note) => note.getAttribute('data-kind'))).toEqual(['untargeted_cash', 'costs']);
     });
 
-    it('before, target and after are the published fields, for an Asset, a cash entry and the uninvested row', () => {
+    it('before, target and after are the published fields, for an Asset, a cash entry and the uninvested row’s parts', () => {
         const solution = mounted(browser);
         const asset = solution.asset_rows[0];
         expect(cellText(asset.asset_id, 'beforeShare')).toBe(formatExactPercent(asset.before_weight));
@@ -68,13 +69,20 @@ describe('the Rebalancer allocation table', () => {
         expect(cellText(cashId, 'beforeValue')).toBe(formatExactMoneyPlain(cash.before_value));
         expect(cellText(cashId, 'finalValue')).toBe(formatExactMoneyPlain(cash.final_value));
         expect(cellText(cashId, 'residual')).toBe(formatExactMoneyPlain(cash.residual, {signed: true}));
-        const uninvested = solution.uninvested_row;
-        expect(cellText('uninvested', 'beforeShare')).toBe(formatExactPercent(uninvested.before_weight));
-        expect(cellText('uninvested', 'finalValue')).toBe(formatExactMoneyPlain(uninvested.final_value));
-        expect(cellText('uninvested', 'final')).toBe(formatExactPercent(uninvested.final_weight));
-        // The uninvested row has no target: its target cells are empty, never a computed zero.
-        expect(cellText('uninvested', 'target')).toBe('');
-        expect(cellText('uninvested', 'targetValue')).toBe('');
+        // TL-5: the cash with no target (8 200,00 € → 321,73 € in the G5 answer) and the costs (0 → 0,02 €), each its published part.
+        for (const kind of ['untargeted_cash', 'costs'] as const) {
+            const part = solution.uninvested_row[kind];
+            expect(cellText(kind, 'beforeShare'), kind).toBe(formatExactPercent(part.before_weight));
+            expect(cellText(kind, 'beforeValue'), kind).toBe(formatExactMoneyPlain(part.before_value));
+            expect(cellText(kind, 'finalValue'), kind).toBe(formatExactMoneyPlain(part.final_value));
+            expect(cellText(kind, 'final'), kind).toBe(formatExactPercent(part.final_weight));
+            // No target: the target cells are empty, never a computed zero.
+            expect(cellText(kind, 'target'), kind).toBe('');
+            expect(cellText(kind, 'targetValue'), kind).toBe('');
+            expect(cellText(kind, 'residual'), kind).toBe('');
+        }
+        expect(formatExactMoneyPlain(solution.uninvested_row.untargeted_cash.before_value), 'PREMISE: the figures of the developer’s answer').toBe(formatExactMoneyPlain({value: {kind: 'finite_decimal', value: '8200'}, currency: 'EUR'}));
+        expect(formatExactMoneyPlain(solution.uninvested_row.untargeted_cash.final_value)).toBe(formatExactMoneyPlain({value: {kind: 'finite_decimal', value: '321.73'}, currency: 'EUR'}));
     });
 
     it('the minimum and maximum columns appear only when an entry carries a limit', () => {

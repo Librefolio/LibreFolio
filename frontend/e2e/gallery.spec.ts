@@ -2390,7 +2390,9 @@ test.describe('Gallery Screenshots', () => {
 
             await forEachLanguageAndTheme(page, async (lang, theme) => {
                 const shot = `${viewport}/${lang}/${theme}/settings/plugin-group-coingecko`;
-                await navigateTo(page, '/settings?tab=plugins');
+                // The shared groups are under «Shared», not in «All» (81 U37): the address chooses the family. The tab's own
+                // address (pluginsHref): the 1.2 `/settings?tab=plugins` is replaced by `/settings/plugins`, query dropped.
+                await navigateTo(page, '/settings/plugins?family=group');
                 await expect(page.getByTestId('settings-tab-plugins')).toHaveAttribute('aria-selected', 'true', {timeout: 10_000});
                 const tab = page.getByTestId('plugin-settings-tab');
                 await waitForSettled(tab, 15_000);

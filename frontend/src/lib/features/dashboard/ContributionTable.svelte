@@ -9,11 +9,10 @@
 -->
 <script lang="ts">
     import {onMount, untrack} from 'svelte';
-    import {goto} from '$app/navigation';
-    import {ExternalLink, Layers} from 'lucide-svelte';
+    import {assetRowActions} from './assetActions';
     import {_} from '$lib/i18n';
     import DataTable from '$lib/components/table/DataTable.svelte';
-    import type {ColumnDef, RowAction} from '$lib/components/table/types';
+    import type {ColumnDef} from '$lib/components/table/types';
     import BrokerBadge from '$lib/components/ui/display/BrokerBadge.svelte';
     import {getAssetInfo} from '$lib/stores/reference/assetStore';
     import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
@@ -230,15 +229,6 @@
         return `${row.isFullySold ? 'italic' : ''} ${row.assetId === analyzedAssetId ? 'row-analyzed' : ''}`.trim();
     }
 
-    /** Desktop double-click / mobile long-press → asset detail page. The plain `goto()`
-     *  push (not `enter`) keeps the shared dateRangeStore state as-is (only 'enter'
-     *  navigations re-seed it from URL params) and lets the asset detail page's existing
-     *  `goBack('/assets')` correctly pop back to the dashboard via navigationStore's stack. */
-    function goToAssetDetail(row: DisplayRow) {
-        if (row.assetId == null) return;
-        void goto(`/assets/${row.assetId}`);
-    }
-
     // Row selection (FB-12): the table's row ids are `pos-<broker>-<asset>`, the chart's keys `makePositionKey(asset, broker)`.
     // `appliedKeys` is what the table holds; `syncingSelection` mutes the callback while the parent's keys are pushed in.
     // Both are plain variables on purpose: the sync effect must not re-run because of them.
@@ -276,23 +266,7 @@
         appliedKeys = validKeys;
     });
 
-    const rowActions: RowAction<DisplayRow>[] = [
-        {
-            id: 'view-asset',
-            icon: ExternalLink,
-            label: () => $_('brokers.lots.viewAsset') || 'View Asset',
-            onClick: (row) => goToAssetDetail(row),
-        },
-        {
-            id: 'analyze-lots',
-            icon: Layers,
-            label: () => $_('brokers.lots.analyze') || 'Analyze Lots',
-            onClick: (row) => {
-                if (row.assetId == null) return;
-                onAnalyze?.(row.assetId);
-            },
-        },
-    ];
+    const rowActions = assetRowActions<DisplayRow>({t: (key) => $_(key), assetIdOf: (row) => row.assetId, onAnalyze: () => onAnalyze});
 
     let columns = $derived.by<ColumnDef<DisplayRow>[]>(() => {
         const openStatusLabel = label('dashboard.openAtPeriodEnd', 'Open at period end');

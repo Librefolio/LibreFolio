@@ -63,6 +63,14 @@ and by the scheduler's history-sync job — walks a pair's routes in priority or
 next one when a route fails. See [FX Configuration & Routing](configuration.md) for routes, chains and
 the `MANUAL` sentinel.
 
+**One sync per pair at a time** (`services/fx/sync_claims.py`). `POST /api/v1/fx/currencies/sync` claims the request's
+pairs (alphabetical keys) in an in-process registry before `sync_pairs_bulk()` and releases them when it ends, whatever
+the end. A request touching a pair that is already syncing is refused whole with **409**, `detail`
+`{"code": "fx_sync_in_progress", "pairs": [{"pair", "started_at"}]}`: no pair of it is synced, none claimed. The
+scheduler's history-sync job takes the free pairs (`claim_free_pairs`) and logs the busy ones. The registry is per
+process: with several workers each has its own. The browser keeps its own registry too
+(`frontend/src/lib/features/fx/fxSyncGuard.svelte.ts`: buttons off with the reason, `FxSyncBusyError` for the 409).
+
 `ensure_rates_multi_source()` is an older single-provider orchestrator with no production caller: it is
 kept, unwired, as the extension point for future multi-base providers.
 

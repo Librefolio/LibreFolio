@@ -91,18 +91,43 @@ describe('AI Export clipboard orchestration', () => {
         expect(writer).toHaveBeenCalledOnce();
     });
 
-    it('surfaces clipboard permission failures as typed unavailable errors', async () => {
-        const denied = Object.assign(new Error('Permission denied'), {
-            name: 'NotAllowedError',
-        });
+    it('tells the steps as they begin, the request before the rendering', async () => {
+        const selection = selectionFixture('analysis', 'asset.market_analysis');
+        const order: string[] = [];
+        await prepareAiExport(
+            {context: {domain: 'asset', assetId: 7, snapshotAsOf: '2026-03-31', targetCurrency: 'EUR'}, options, compatibility: compatibilityFixture()},
+            {
+                transport: async (request) => {
+                    order.push('transport');
+                    return snapshotFixture(selection, request.detail_level, request.period);
+                },
+                onstep: (step) => order.push(step),
+            },
+        );
+        // The copy is the caller's step: preparing reports the request and the rendering, nothing else
+        expect(order).toEqual(['request', 'transport', 'render']);
+    });
+
+    /** The refusals of the default writer: the shared one, on a page with no working transport. */
+    async function refusal(hasFocus: boolean): Promise<AiExportClipboardUnavailableError> {
+        const denied = Object.assign(new Error('Permission denied'), {name: 'NotAllowedError'});
         const writeText = vi.fn().mockRejectedValue(denied);
         vi.stubGlobal('navigator', {clipboard: {writeText}});
-
-        await expect(defaultAiExportClipboardWriter('prompt')).rejects.toMatchObject({
-            name: 'AiExportClipboardUnavailableError',
-            kind: 'clipboard_unavailable',
-            cause: denied,
-        } satisfies Partial<AiExportClipboardUnavailableError>);
+        vi.stubGlobal('window', {isSecureContext: true});
+        vi.stubGlobal('document', {hasFocus: () => hasFocus, activeElement: null, body: {appendChild: () => {}}, createElement: () => ({style: {}, focus: () => {}, select: () => {}, setSelectionRange: () => {}, remove: () => {}})});
+        vi.stubGlobal('HTMLElement', class {});
+        const error = await defaultAiExportClipboardWriter('prompt').catch((caught: unknown) => caught);
+        expect(error).toBeInstanceOf(AiExportClipboardUnavailableError);
         expect(writeText).toHaveBeenCalledWith('prompt');
+        expect(error).toMatchObject({name: 'AiExportClipboardUnavailableError', kind: 'clipboard_unavailable', cause: denied});
+        return error as AiExportClipboardUnavailableError;
+    }
+
+    it('surfaces a refusal as a typed unavailable error, for a permission', async () => {
+        expect((await refusal(true)).reason).toBe('refused');
+    });
+
+    it('says when the window simply was not the active one', async () => {
+        expect((await refusal(false)).reason).toBe('not_focused');
     });
 });

@@ -14,7 +14,7 @@ from backend.app.schemas.pac_allocator.base import PlannerIssueCode, PlannerMone
 from backend.app.schemas.pac_allocator.exact import ExactNumber as WireExactNumber
 from backend.app.schemas.pac_allocator.exact import ExactRatio as WireExactRatio
 from backend.app.schemas.pac_allocator.exact import FiniteDecimal
-from backend.app.schemas.pac_allocator.issues import CurrencyIssueParam, IdIssueParam, PlannerIssue, PlannerIssueParam, PlannerIssuePath, TextIssueParam
+from backend.app.schemas.pac_allocator.issues import CurrencyIssueParam, IdIssueParam, MoneyIssueParam, PlannerIssue, PlannerIssueParam, PlannerIssuePath, TextIssueParam
 from backend.app.schemas.pac_allocator.request import (
     AmountFeeCap,
     ContributionFundingSourceRef,
@@ -46,7 +46,7 @@ from backend.app.services.pac_allocator.issues import (
     normalizer_issue_definition,
     section_path,
 )
-from backend.app.services.pac_allocator.limits import check_maximum_below_current, check_minimum_above_maximum, check_minimums_exceed_reference, limit_reference_of, trapped_cash_by_cell
+from backend.app.services.pac_allocator.limits import check_maximum_below_current, check_minimum_above_maximum, check_minimums_exceed_reference, plan_reference_of, trapped_cash_by_cell
 from backend.app.services.pac_allocator.models import (
     FIDELITY_LEVEL_WEIGHTS,
     ExactAsset,
@@ -77,6 +77,7 @@ from backend.app.services.pac_allocator.models import (
 from backend.app.services.pac_allocator.numeric import (
     ExactRatio,
 )
+from backend.app.services.pac_allocator.wire_numbers import ratio_to_display_decimal
 
 # Shared by v2: these were defined inside the P1 block removed on 2026-09-21.
 type _PlannerV2Request = PacPlannerRequest | RebalancerPlannerRequest
@@ -1232,7 +1233,7 @@ class _PlannerV2Normalizer:
         """
         if not entries_with_limits(scenario):
             return []
-        reference = limit_reference_of(scenario)
+        reference = plan_reference_of(scenario)
         problems = [
             *check_minimum_above_maximum(scenario, reference),
             *check_minimums_exceed_reference(scenario, reference, trapped_cash_by_cell(scenario)),
@@ -1241,9 +1242,11 @@ class _PlannerV2Normalizer:
         found: list[PlannerIssue] = []
         for problem in problems:
             field = "maximum" if problem.code == "bound_max_below_current" else "minimum"
+            # The sum of the minimums names the two figures it compared (TL-4 of project 67): the sentence says them.
+            params = () if problem.sums is None else tuple(MoneyIssueParam(kind="money", name=name, value=PlannerMoneyInput(amount=ratio_to_display_decimal(value), currency=scenario.valuation_currency)) for name, value in zip(("minimums", "reference"), problem.sums, strict=True))
             for entry in problem.entries:
                 entity_id = entry.asset_id if entry.kind == "asset" else f"{entry.broker_id}:{entry.currency}"
-                found.append(make_issue(normalizer_issue_definition(f"allocation.{problem.code}"), field_path("targets", entry.kind, entity_id, field)))
+                found.append(make_issue(normalizer_issue_definition(f"allocation.{problem.code}"), field_path("targets", entry.kind, entity_id, field), params=params))
         return found
 
 

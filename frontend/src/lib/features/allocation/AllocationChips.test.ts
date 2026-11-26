@@ -26,7 +26,7 @@ describe('AllocationChips', () => {
     });
 
     it('draws one chip per choice: a class kept, a bucket and an asset taken out', () => {
-        mount({classes: ['STOCK'], excludeBuckets: ['Unknown'], excludeAssetIds: [2]});
+        mount({classes: ['STOCK'], types: [], excludeBuckets: ['Unknown'], excludeAssetIds: [2]});
         const chips = screen.getAllByTestId('c-chip').map((chip) => [chip.getAttribute('data-kind'), chip.getAttribute('data-value')]);
         expect(chips).toEqual([
             ['class', 'STOCK'],
@@ -37,16 +37,16 @@ describe('AllocationChips', () => {
     });
 
     it('names an asset by its number before the answer that holds its name', () => {
-        mount({classes: null, excludeBuckets: [], excludeAssetIds: [77]}, makeView({assets: []}));
+        mount({classes: null, types: [], excludeBuckets: [], excludeAssetIds: [77]}, makeView({assets: []}));
         expect(screen.getByTestId('c-chip')).toHaveTextContent('#77');
     });
 
     it('the cross asks for the filters without that choice; the last class kept goes back to every class', async () => {
-        const onchange = mount({classes: ['STOCK'], excludeBuckets: ['Unknown'], excludeAssetIds: []});
+        const onchange = mount({classes: ['STOCK'], types: [], excludeBuckets: ['Unknown'], excludeAssetIds: []});
         const [classChip, bucketChip] = screen.getAllByTestId('c-chip');
         await fireEvent.click(within(bucketChip).getByTestId('c-chip-remove'));
-        expect(onchange).toHaveBeenLastCalledWith({classes: ['STOCK'], excludeBuckets: [], excludeAssetIds: []});
+        expect(onchange).toHaveBeenLastCalledWith({classes: ['STOCK'], types: [], excludeBuckets: [], excludeAssetIds: []});
         await fireEvent.click(within(classChip).getByTestId('c-chip-remove'));
-        expect(onchange).toHaveBeenLastCalledWith({classes: null, excludeBuckets: ['Unknown'], excludeAssetIds: []});
+        expect(onchange).toHaveBeenLastCalledWith({classes: null, types: [], excludeBuckets: ['Unknown'], excludeAssetIds: []});
     });
 });

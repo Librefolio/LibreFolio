@@ -145,7 +145,11 @@
       "tooManyItems": "Rien n'a été enregistré : le serveur accepte au plus {max, number} valeurs par enregistrement, et celui-ci en contenait {count, number}. Enregistrez-les en plusieurs fois."
     },
     "errorWithRequestId": "{message} (code : {requestId})",
-    "selectionActions": "Actions sur la sélection"
+    "selectionActions": "Actions sur la sélection",
+    "moveUp": "Monter",
+    "moveDown": "Descendre",
+    "removeTag": "Retirer {tag}",
+    "showSuggestions": "Afficher les suggestions"
   },
   "csvImport": {
     "title": "Importer des données CSV",
@@ -284,7 +288,9 @@
     "resolvingStart": "Recherche…",
     "openCalendar": "Ouvrir le calendrier",
     "formatHint": "Saisissez la date ou choisissez-la dans le calendrier. Formats acceptés : 2026-08-07, 2026/8/7, 7-8-2026, 7.8.2026 — l’année doit être écrite en entier.",
-    "invalidDate": "Saisissez une date valide et disponible."
+    "invalidDate": "Saisissez une date valide et disponible.",
+    "previousMonth": "Mois précédent",
+    "nextMonth": "Mois suivant"
   },
   "error": {
     "pageNotFound": "Page Non Trouvée",
@@ -348,7 +354,7 @@
     "Telecommunication": "Télécommunication",
     "Utilities": "Services publics",
     "Other": "Autre",
-    "Unknown": "Non classifié",
+    "Unknown": "Sans donnée",
     "Liquidity": "Liquidités",
     "CorporateBonds": "Obligations d’entreprise",
     "GovernmentBonds": "Obligations d’État"
@@ -362,7 +368,8 @@
     "syncAllHint": "Demande aux fournisseurs de données les nouvelles données et les enregistre dans LibreFolio.",
     "refreshAllHint": "Recharge ce que vous voyez depuis LibreFolio, sans interroger les fournisseurs de données.",
     "viewGrid": "Afficher en cartes",
-    "viewTable": "Afficher en tableau"
+    "viewTable": "Afficher en tableau",
+    "viewMode": "Affichage"
   },
   "table": {
     "columns": "Colonnes",
@@ -380,7 +387,13 @@
     "confirmBulkAction": "Êtes-vous sûr de vouloir effectuer cette action sur",
     "filterLabel": "Filtre",
     "resetLayout": "Réinitialiser la disposition",
-    "selectionHint": "Sélectionnez une ou plusieurs lignes pour agir sur toutes ensemble."
+    "selectionHint": "Sélectionnez une ou plusieurs lignes pour agir sur toutes ensemble.",
+    "copyCell": "Copier la cellule",
+    "copyRow": "Copier la ligne",
+    "cellCopied": "Cellule copiée",
+    "rowCopied": "Ligne copiée",
+    "copyFailed": "Impossible de copier dans le presse-papiers",
+    "showSelectedOnly": "Afficher uniquement la sélection"
   },
   "date": {
     "today": "Aujourd'hui",

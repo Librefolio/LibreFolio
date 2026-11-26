@@ -106,14 +106,15 @@
     "sync": {
       "toastOk": "{name} synced\n{fetched}↓ {changed}Δ",
       "toastFailed": "Sync failed for {name}",
-      "modalTitle": "Sync Asset Prices",
+      "modalTitle": "Sync Assets",
       "modalDescription": "Synchronize prices from configured providers for the selected date range.",
       "assetsCount": "assets",
       "confirmTitle": "Sync {name}?",
       "confirmMessage": "{stored, plural, one {# stored price} other {# stored prices}} in this range will be replaced with the provider's values.",
       "confirmManual": "{manual, plural, one {# was entered by hand} other {# were entered by hand}} and will be replaced too.",
       "confirmAction": "Sync",
-      "overwriteManual": "{manual, plural, one {# of them was entered by hand} other {# of them were entered by hand}}."
+      "overwriteManual": "{manual, plural, one {# of them was entered by hand} other {# of them were entered by hand}}.",
+      "startPrices": "Sync the prices"
     },
     "delete": {
       "confirmQuestion": "Delete \"{name}\"?",
@@ -411,7 +412,8 @@
       "deleteSelected": "Delete selected rows",
       "deleteConfirmMessage": "Delete {n} entries from this distribution?",
       "weightPercent": "Weight %",
-      "balance": "Balance"
+      "balance": "Balance",
+      "askNoSource": "No source can be asked for this asset yet"
     },
     "showInactive": "Inactive",
     "edit": {
@@ -510,7 +512,8 @@
       "removeUrl": "Remove URL",
       "toBeRemoved": "To be removed",
       "urlNone": "no URL",
-      "alreadyWithout": "{already} already without"
+      "alreadyWithout": "{already} already without",
+      "triLeave": "Unchanged"
     },
     "docsHelp": {
       "list": "Every asset LibreFolio follows, with the source of its prices, its latest price and its change. Open one for its chart, events and data."

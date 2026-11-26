@@ -25,7 +25,8 @@
 <script lang="ts">
     import type {Snippet} from 'svelte';
     import {_ as t} from '$lib/i18n';
-    import {RefreshCw, Loader2, X as XIcon, Plus, Scale, Trash2, Upload} from 'lucide-svelte';
+    import {RefreshCw, X as XIcon, Plus, Scale, Trash2, Upload} from 'lucide-svelte';
+    import Button from '$lib/components/ui/button/Button.svelte';
     import DataTable from '$lib/components/table/DataTable.svelte';
     import type {BulkAction, ColumnDef, RowAction} from '$lib/components/table/types';
     import ConfirmModal from '$lib/components/ui/modals/ConfirmModal.svelte';
@@ -60,11 +61,11 @@
         readonly?: boolean;
         disabled?: boolean;
         onchange?: (value: Record<string, number>) => void;
-        /** Optional per-section Ask Provider */
+        /** Optional per-section Ask Provider; `hasProvider` false keeps the button off with its reason (D5). */
         hasProvider?: boolean;
         askingProvider?: boolean;
         onAskProvider?: () => void;
-        /** The ask button's text and title; «Chiedi al Provider» when absent (the profile asks its sources, E10c3). */
+        /** The ask button's word and name; «Chiedi al Provider» when absent (the profile asks its sources, E10c3). */
         askLabel?: string;
         zIndex?: number;
     }
@@ -449,8 +450,9 @@
 <!-- The section head (77 SEL-D2): the title, the table's selection bar, the section's own buttons. The table draws it and
      hands it the bar; with no row (or read-only, where nothing can be ticked) it is drawn here with an empty bar. -->
 {#snippet head(bar: Snippet)}
-    <!-- 77 SEL-D2: the buttons' words may break on two lines beside the compact bar; `leading-3` keeps them within the
-         head's 32 px, so the head does not grow when rows are ticked. -->
+    <!-- 77 SEL-D2: the section's buttons are the standard `xs` Button (85 BTN-2d); beside the compact bar their words may
+         break on two lines (`wrap`, C17), 14 px each, so the head stays 32 px when rows are ticked; below `sm` they show
+         the icon alone. -->
     <!-- 77 SEL-D2 (a): in a narrow head, while rows are ticked, the bar takes the title's place. The title is only visually
          hidden (CSS below): a screen reader finds the same heading, and the table's first column repeats it in view. -->
     <div class="mb-1 flex min-h-8 items-center justify-between gap-2" class:selecting data-selecting={selecting ? 'true' : 'false'} data-testid="distribution-head-{kind}">
@@ -460,47 +462,37 @@
         <div class="flex min-w-0 items-center gap-1.5">
             {@render bar()}
             {#if !isReadonly && !disabled}
-                <button
-                    type="button"
-                    onclick={() => (showImportModal = true)}
-                    data-testid="distribution-import-{kind}"
-                    class="flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] leading-3 font-medium rounded text-lf-muted hover:text-lf-secondary transition-colors"
-                    title={$t('dataEditor.importCsv')}
-                >
-                    <Upload size={10} />
-                    <span class="hidden sm:inline">{$t('dataEditor.importCsv')}</span>
-                </button>
-                <button
-                    type="button"
+                <Button variant="ghost" size="xs" wrap icon={Upload} display="auto" hideWordBelow="sm" label={$t('dataEditor.importCsv')} onclick={() => (showImportModal = true)} data-testid="distribution-import-{kind}" />
+                <Button
+                    variant="ghost"
+                    size="xs"
+                    wrap
+                    icon={Plus}
+                    display="auto"
+                    hideWordBelow="sm"
+                    label={kind === 'sector' ? $t('assets.distribution.addSector') : $t('assets.distribution.addCountry')}
+                    busy={addingEntry}
                     onclick={addEntry}
-                    disabled={addingEntry}
                     data-busy={addingEntry}
                     data-testid="distribution-add-{kind}"
-                    class="flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] leading-3 font-medium rounded text-lf-muted hover:text-lf-secondary transition-colors disabled:opacity-50"
-                    title={kind === 'sector' ? $t('assets.distribution.addSector') : $t('assets.distribution.addCountry')}
-                >
-                    <Plus size={10} />
-                    <span class="hidden sm:inline">{kind === 'sector' ? $t('assets.distribution.addSector') : $t('assets.distribution.addCountry')}</span>
-                </button>
+                />
             {/if}
             {#if !isReadonly && !disabled && onAskProvider}
-                <button
-                    type="button"
+                <!-- Off while nothing can be asked (D5): the reason says why at the first tap, click or Tab. -->
+                <Button
+                    variant="ghost"
+                    size="xs"
+                    wrap
+                    icon={RefreshCw}
+                    display="auto"
+                    hideWordBelow="sm"
+                    label={askLabel ?? $t('assets.identifiers.askProvider')}
+                    busy={askingProvider}
+                    reason={hasProvider ? undefined : $t('assets.distribution.askNoSource')}
+                    reasonCode="no-source"
                     onclick={onAskProvider}
-                    disabled={!hasProvider || askingProvider}
                     data-testid="distribution-ask-provider-{kind}"
-                    class="flex items-center gap-1 px-1.5 py-0.5 text-[10px] leading-3 font-medium rounded
-                               text-lf-muted hover:text-lf-secondary
-                               disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                    title={askLabel ?? $t('assets.identifiers.askProvider')}
-                >
-                    {#if askingProvider}
-                        <Loader2 size={10} class="animate-spin" />
-                    {:else}
-                        <RefreshCw size={10} />
-                    {/if}
-                    <span class="hidden sm:inline">{askLabel ?? $t('assets.identifiers.askProvider')}</span>
-                </button>
+                />
             {/if}
         </div>
     </div>

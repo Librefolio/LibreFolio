@@ -35,6 +35,7 @@
     import {currentLanguage} from '$lib/stores/app/language';
     import {fractionToPercent} from '$lib/utils/core/exactDecimal';
     import ProviderComparisonModal from '../ProviderComparisonModal.svelte';
+    import ProfileVoiceSelect from './ProfileVoiceSelect.svelte';
     import type {DiffItem} from '../ProviderComparisonModal.svelte';
     import {patchIssueMessage, type AssetPatchAnswer, type AssetPatchIssue} from '../assetPatchResult';
     import type {ProfileVoice} from './profileStore';
@@ -283,6 +284,9 @@
         emptied: 'assets.profile.edit.stateEmptied',
     };
 
+    /** What is wrong with the choice of the voice itself: the selector shows it on its border. */
+    const CHOICE_ISSUES = new Set<RowIssue>(['no_voice', 'duplicate']);
+
     function stateCell(row: EditRow): CellContent {
         const voice = row.key ? voices.get(row.key) : undefined;
         const change = voice ? pendingFromRow(row, voice) : null;
@@ -291,7 +295,8 @@
         const issue = issues[row.id];
         const backend = refused[row.id];
         const issueAttribute = backend ? ' data-issue="backend"' : issue ? ` data-issue="${issue}"` : '';
-        const reason = backend ? $t('assets.profile.edit.issueBackend', {values: {reason: backend}}) : issue ? issueText(issue) : '';
+        // A missing or repeated choice is the red border of the «Dato» selector, not a written error (87, A4)
+        const reason = backend ? $t('assets.profile.edit.issueBackend', {values: {reason: backend}}) : issue && !CHOICE_ISSUES.has(issue) ? issueText(issue) : '';
         return {
             type: 'html',
             html:
@@ -311,14 +316,27 @@
         return options;
     });
 
+    /** The voices a row may take: its own and those no other row holds; a group left without any loses its title. */
+    function optionsFor(row: EditRow): SelectOption[] {
+        const taken = new Set(rows.filter((other) => other.id !== row.id).map((other) => other.key));
+        const free = voiceOptions.filter((option) => option.header || !taken.has(option.value));
+        return free.filter((option, index) => !option.header || (free[index + 1] && !free[index + 1].header));
+    }
+
     function voiceCell(row: EditRow): CellContent {
+        const issue = issues[row.id];
         return {
-            type: 'editable-select',
-            value: row.key ?? '',
-            options: voiceOptions,
-            placeholder: $t('assets.profile.edit.chooseVoice'),
-            testId: `profile-row-voice-${row.id}`,
-            onchange: (key) => updateRow(row.id, {key: key || null, input: '', amount: null, emptied: false, origin: 'new', base: null}),
+            type: 'custom',
+            component: ProfileVoiceSelect,
+            props: {
+                rowId: row.id,
+                value: row.key ?? '',
+                options: optionsFor(row),
+                placeholder: $t('assets.profile.edit.chooseVoice'),
+                ariaLabel: $t('assets.profile.edit.columnVoice'),
+                issue: issue && CHOICE_ISSUES.has(issue) ? issueText(issue) : null,
+                onchange: (key: string) => updateRow(row.id, {key: key || null, input: '', amount: null, emptied: false, origin: 'new', base: null}),
+            },
         };
     }
 
@@ -543,7 +561,11 @@
             <div class="flex flex-col sm:flex-row sm:items-center gap-2">
                 <div class="flex-1 min-w-0 flex items-center gap-2">
                     <Search size={16} class="text-lf-muted shrink-0" aria-hidden="true" />
-                    <SearchSelect bind:value={searchValue} options={searchOptions} placeholder={$t('assets.profile.edit.searchVoice')} class="flex-1" testId="profile-edit-search" onchange={pickVoice} />
+                    <SearchSelect bind:value={searchValue} options={searchOptions} placeholder={$t('assets.profile.edit.searchVoice')} class="flex-1" testId="profile-edit-search" onchange={pickVoice}>
+                        {#snippet item(option)}
+                            <span class="block truncate text-sm">{option.label}</span>
+                        {/snippet}
+                    </SearchSelect>
                 </div>
                 <!-- On the phone the two buttons take their own row, in equal parts (the developer, round 43) -->
                 <div class="grid auto-cols-fr grid-flow-col gap-2 sm:flex">
@@ -605,7 +627,8 @@
                 />
             </div>
 
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <!-- One below the other, at any width: side by side the titles and the buttons wrapped (the developer, 25/11) -->
+            <div class="space-y-4" data-testid="profile-edit-panels">
                 {#each mapVoices as voice (voice.key)}
                     <section class="rounded-lg border border-lf-subtle bg-lf-card p-3 space-y-2" data-testid="profile-panel-{voice.key}" data-changed={panelChanges[voice.key] ? panelChanges[voice.key].origin : 'none'}>
                         <!-- The editor titles itself; the line says where the values come from. -->

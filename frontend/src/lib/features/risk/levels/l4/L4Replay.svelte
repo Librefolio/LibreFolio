@@ -238,7 +238,8 @@
             <span>{$t('risk.stress.preset')}</span>
             <SimpleSelect value={presetId} options={presetOptions} compact triggerClass={CONTROL_HEIGHT} dropdownPosition="auto" ariaLabel={$t('risk.stress.preset')} onchange={applyPreset} testId="risk-replay-preset" />
         </div>
-        <div class="flex flex-col gap-1 text-xs text-lf-muted" data-testid="risk-replay-period">
+        <!-- min-w-0: without it the picker is as wide as its content, and on a phone it sticks out of the page (TL 25/11). -->
+        <div class="flex max-w-full min-w-0 flex-col gap-1 text-xs text-lf-muted" data-testid="risk-replay-period">
             <span>{$t('risk.levels.l4.replayPeriod')}</span>
             <!-- The quick ranges are back beside the dates (D376, reversing F3), MAX excepted: its
                  «all history» sentinel is resolved by the page's own date filter, not here. -->

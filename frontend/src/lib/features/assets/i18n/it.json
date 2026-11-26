@@ -106,14 +106,15 @@
     "sync": {
       "toastOk": "{name} sincronizzato\n{fetched}↓ {changed}Δ",
       "toastFailed": "Sincronizzazione fallita per {name}",
-      "modalTitle": "Sincronizza Prezzi",
+      "modalTitle": "Sincronizza gli asset",
       "modalDescription": "Sincronizza i prezzi dai provider configurati per l'intervallo di date selezionato.",
       "assetsCount": "asset",
       "confirmTitle": "Sincronizzare {name}?",
       "confirmMessage": "{stored, plural, one {# prezzo salvato} other {# prezzi salvati}} in questo intervallo {stored, plural, one {sarà sostituito} other {saranno sostituiti}} con i valori del provider.",
       "confirmManual": "Di questi, {manual, plural, one {# è stato inserito a mano e sarà sostituito} other {# sono stati inseriti a mano e saranno sostituiti}} comunque.",
       "confirmAction": "Sincronizza",
-      "overwriteManual": "{manual, plural, one {# è stato inserito a mano} other {# sono stati inseriti a mano}}."
+      "overwriteManual": "{manual, plural, one {# è stato inserito a mano} other {# sono stati inseriti a mano}}.",
+      "startPrices": "Sincronizza i prezzi"
     },
     "delete": {
       "confirmQuestion": "Eliminare \"{name}\"?",
@@ -411,7 +412,8 @@
       "deleteSelected": "Elimina righe selezionate",
       "deleteConfirmMessage": "Eliminare {n} voci da questa distribuzione?",
       "weightPercent": "Peso %",
-      "balance": "Bilancia"
+      "balance": "Bilancia",
+      "askNoSource": "Non c'è ancora una fonte da interrogare per questo asset"
     },
     "showInactive": "Inattivi",
     "edit": {
@@ -510,7 +512,8 @@
       "removeUrl": "Rimuovi URL",
       "toBeRemoved": "Da rimuovere",
       "urlNone": "nessun URL",
-      "alreadyWithout": "{already} già senza"
+      "alreadyWithout": "{already} già senza",
+      "triLeave": "Invariato"
     },
     "docsHelp": {
       "list": "Tutti gli asset che LibreFolio segue, con la fonte dei prezzi, l'ultimo prezzo e la variazione. Aprine uno per grafico, eventi e dati."

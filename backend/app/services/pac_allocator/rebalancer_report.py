@@ -25,13 +25,14 @@ from backend.app.schemas.pac_allocator.rows import (
     RebalancerScoreSummary,
     RebalancerTieBreakStage,
     RebalancerUnavailableWeight,
+    RebalancerUninvestedPart,
     RebalancerUninvestedRow,
 )
 from backend.app.services.financial_math.weights import largest_weight_deviation_at
 from backend.app.services.pac_allocator import planner_report as report
 from backend.app.services.pac_allocator.evaluation.economics import final_cash_by_cell, initial_cash_by_cell
 from backend.app.services.pac_allocator.evaluation.facts import rebalancer_score
-from backend.app.services.pac_allocator.evaluation.limits import limit_reference, resolve_scenario_limits
+from backend.app.services.pac_allocator.evaluation.limits import plan_reference, resolve_scenario_limits
 from backend.app.services.pac_allocator.evaluation.scenario import build_scenario_index
 from backend.app.services.pac_allocator.models import FIDELITY_LEVEL_WEIGHTS, ExactEvaluation, ExactPlannerScenario, ExactPolicyView, ExactRoundingTopUp
 from backend.app.services.pac_allocator.numeric import ExactRatio
@@ -86,8 +87,9 @@ def build_rebalancer_asset_rows(scenario: ExactPlannerScenario, evaluation: Exac
     """One row per Asset, before / target / after, every weight a share of ``F`` (contract §6.2)."""
     accounting = _accounting(evaluation)
     currency = scenario.valuation_currency
-    wealth = accounting.initial_wealth
-    bounds = resolve_scenario_limits(scenario, limit_reference(scenario, accounting)).assets()
+    # ``R`` (lot SLIP, ``plan_reference``): ``F`` in the Rebalancer.
+    wealth = plan_reference(scenario, accounting)
+    bounds = resolve_scenario_limits(scenario, plan_reference(scenario, accounting)).assets()
     rows = []
     for row in evaluation.assets:
         limit = bounds.get(row.asset_id)
@@ -120,9 +122,10 @@ def build_cash_item_rows(scenario: ExactPlannerScenario, evaluation: ExactEvalua
     cells' spendable cash as ``evaluation.economics`` reads it, the one reading the replay's distance and limits use."""
     accounting = _accounting(evaluation)
     currency = scenario.valuation_currency
-    wealth = accounting.initial_wealth
+    # ``R`` (lot SLIP, ``plan_reference``): ``F`` in the Rebalancer.
+    wealth = plan_reference(scenario, accounting)
     before, final = _cash_values(scenario, evaluation)
-    bounds = resolve_scenario_limits(scenario, limit_reference(scenario, accounting)).cash()
+    bounds = resolve_scenario_limits(scenario, plan_reference(scenario, accounting)).cash()
     rows = []
     for entry in scenario.cash_entries:
         cell = (entry.broker_id, entry.currency)
@@ -151,15 +154,30 @@ def build_uninvested_row(scenario: ExactPlannerScenario, evaluation: ExactEvalua
     accounting's ``uninvested``; before, the same reading on the starting values."""
     accounting = _accounting(evaluation)
     currency = scenario.valuation_currency
-    wealth = accounting.initial_wealth
+    # ``R`` (lot SLIP, ``plan_reference``): ``F`` in the Rebalancer.
+    wealth = plan_reference(scenario, accounting)
     before, _final = _cash_values(scenario, evaluation)
     before_items = sum((before.get((entry.broker_id, entry.currency), _ZERO) for entry in scenario.cash_entries if entry.weight != _ZERO), _ZERO)
     before_value = wealth - accounting.current_invested - before_items
+    # TL-5 of project 67: the row's two parts. The money lost is ``F − W`` (``wealth_loss``); what is left of ``N`` is the
+    # cash with no target and the contributions not deposited.
+    lost = accounting.wealth_loss
+
+    def part(before: ExactRatio, final: ExactRatio) -> RebalancerUninvestedPart:
+        return RebalancerUninvestedPart(
+            before_value=ratio_to_money(before, currency),
+            before_weight=_share(before, wealth),
+            final_value=ratio_to_money(final, currency),
+            final_weight=_share(final, wealth),
+        )
+
     return RebalancerUninvestedRow(
         before_value=ratio_to_money(before_value, currency),
         before_weight=_share(before_value, wealth),
         final_value=ratio_to_money(accounting.uninvested, currency),
         final_weight=_share(accounting.uninvested, wealth),
+        untargeted_cash=part(before_value, accounting.uninvested - lost),
+        costs=part(_ZERO, lost),
     )
 
 
@@ -287,9 +305,10 @@ def build_score(scenario: ExactPlannerScenario, view: ExactPolicyView, evaluatio
     ``financial_math.weights``, and the tie-breaks from the solver run."""
     accounting = _accounting(evaluation)
     currency = scenario.valuation_currency
-    wealth = accounting.initial_wealth
+    # ``R`` (lot SLIP, ``plan_reference``): ``F`` in the Rebalancer.
+    wealth = plan_reference(scenario, accounting)
     fidelity = scenario.target_fidelity
-    score = rebalancer_score(fidelity, evaluation.assets, evaluation.cash_targets, accounting)
+    score = rebalancer_score(fidelity, evaluation.assets, evaluation.cash_targets, accounting, reference=wealth)
     weighted = fidelity is not None and fidelity.kind == "weighted"
     before, final = _cash_values(scenario, evaluation)
     # The items of the distance in the order the plan publishes them (X14: the first item at the largest deviation is named):

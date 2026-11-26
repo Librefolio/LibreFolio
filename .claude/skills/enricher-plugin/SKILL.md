@@ -61,6 +61,10 @@ the merge of several sources, **not** the scheduler and **not** the cache: those
     out, «Chiedi» reports it as an error outcome, `test` and `search` answer the coded 422 `NOT_CONFIGURED`.
     `LIBREFOLIO_ENRICHERS_ENABLED` can turn it off on an instance: its bindings stay, the reads skip it, its routes
     answer 404.
+11. **A shared account is counted by the core.** An enricher on a settings group whose credits are shared (CoinGecko's,
+    with its price provider) declares `settings_groups` and counts nothing itself: the core counts every read,
+    «Riconosci», search and test before it calls the plugin, and refuses them when a limit of the group is full. Code the
+    two plugins share lives in a core package of its own, never in one of the plugins.
 
 ## 🛠️ Rough shape of the work
 
@@ -84,12 +88,13 @@ This skill is intentionally **high-level and durable**. For the precise, current
 the 30-minute cache, the «Riconosci» cascade, the weekly read, the routes and their refusals, worked examples — **always
 read the developer guide**, which is the source of truth:
 
-- **Enricher Plugin Guide** — `mkdocs_src/docs/developer/architecture/patterns/enricher_plugin_guide.md`
+- **Enricher Plugin Guide** — `mkdocs_src/docs/developer/architecture/patterns/enricher_plugin_guide.en.md`
 - **Plugin Settings** — `mkdocs_src/docs/developer/architecture/patterns/plugin_settings.md` (settings, readiness,
   `NOT_CONFIGURED`)
 - **Reference code** — `backend/app/services/enrichers/` (`base.py` the contract, `registry.py`, `usable.py`,
   `bindings.py`, `recognize.py`, `refresh.py`), and the plugins `mockenrich/`, `justetf/`, `yahoo_finance/`,
-  `borsa_italiana/` (with its `params_schema` and `i18n/`) in `backend/app/services/enricher_providers/`.
+  `borsa_italiana/` (with its `params_schema` and `i18n/`), `esma_firds/` and `coingecko/` (one asset type, an account
+  shared with the price provider) in `backend/app/services/enricher_providers/`.
 
 Do not rely on this page for method signatures or exact conventions — they can change; the developer guide is kept up to
 date.

@@ -238,13 +238,14 @@ export const STATUS_TONES = {
      * its text in `X-on-soft`, 6.8–12.4:1 there, and its edge in `X`, 4.6–9.6:1 on the card and on the tint: the
      * developer and the designer chose it on 17/10 (T3-b) over the `X-line` of her proposal, 1.1–1.6:1, under the
      * 3:1 of a control's border. `hover` is a step into the family, the `X-soft` fill: a button takes it, a pill
-     * that is no control does not. The component adds the border width.
+     * that is no control does not. The hover is guarded (85 BTN-2·0): a chip that is off or busy never lights up. The
+     * component adds the border width.
      */
     bannerChip: {
-        success: {base: 'border-lf-success bg-lf-card text-lf-success-on-soft', hover: 'hover:bg-lf-success-soft'},
-        warning: {base: 'border-lf-warning bg-lf-card text-lf-warning-on-soft', hover: 'hover:bg-lf-warning-soft'},
-        danger: {base: 'border-lf-danger bg-lf-card text-lf-danger-on-soft', hover: 'hover:bg-lf-danger-soft'},
-        info: {base: 'border-lf-info bg-lf-card text-lf-info-on-soft', hover: 'hover:bg-lf-info-soft'},
+        success: {base: 'border-lf-success bg-lf-card text-lf-success-on-soft', hover: 'not-disabled:not-aria-disabled:hover:bg-lf-success-soft'},
+        warning: {base: 'border-lf-warning bg-lf-card text-lf-warning-on-soft', hover: 'not-disabled:not-aria-disabled:hover:bg-lf-warning-soft'},
+        danger: {base: 'border-lf-danger bg-lf-card text-lf-danger-on-soft', hover: 'not-disabled:not-aria-disabled:hover:bg-lf-danger-soft'},
+        info: {base: 'border-lf-info bg-lf-card text-lf-info-on-soft', hover: 'not-disabled:not-aria-disabled:hover:bg-lf-info-soft'},
     },
     /**
      * Data-quality banners (`DataQualityBanner`, `LotDataQualityBanner`): each severity in its own state since round
@@ -261,6 +262,51 @@ export const STATUS_TONES = {
     /** The «Updates paused» pill of the live prices: a neutral chip. */
     liveUpdates: {
         paused: 'bg-lf-neutral text-lf-secondary',
+    },
+} as const;
+
+/**
+ * The colours of a standard button in a state (85 BTN-2·0, the consultant's C4 + C5): one axis, `tone`, read by
+ * `buttonClasses`. The state roles only, the same families as the tables above; every hover is guarded, so a button
+ * that is off or busy never lights up.
+ * - `ghost`: a ghost button in the state's colour (the amber retry, the restore icons, the «needs setup» triangle): the
+ *   text in `X` (4.85:1 for warning on the soft fill in light, 7.61 in dark), and on hover the `X-soft` fill with the
+ *   `X-on-soft` text — the family `danger` already used.
+ * - `pressed`: a toggle that is on, filled with the state (`CompactDurationBadge`'s amber duration).
+ * - `tint`: a button standing on a fill of the state (the ✕ of a toast or a banner): the text of the fill
+ *   (`text-current`), and on hover a step down the family, `X-line` — the toast's dismiss of the designer's round 3.
+ */
+export const BUTTON_TONES = {
+    ghost: {
+        success: 'text-lf-success not-disabled:not-aria-disabled:hover:bg-lf-success-soft not-disabled:not-aria-disabled:hover:text-lf-success-on-soft',
+        warning: 'text-lf-warning not-disabled:not-aria-disabled:hover:bg-lf-warning-soft not-disabled:not-aria-disabled:hover:text-lf-warning-on-soft',
+        danger: 'text-lf-danger not-disabled:not-aria-disabled:hover:bg-lf-danger-soft not-disabled:not-aria-disabled:hover:text-lf-danger-on-soft',
+        info: 'text-lf-info not-disabled:not-aria-disabled:hover:bg-lf-info-soft not-disabled:not-aria-disabled:hover:text-lf-info-on-soft',
+    },
+    pressed: {
+        success: 'border border-lf-success bg-lf-success text-lf-on-status',
+        warning: 'border border-lf-warning bg-lf-warning text-lf-on-status',
+        danger: 'border border-lf-danger bg-lf-danger text-lf-on-status',
+        info: 'border border-lf-info bg-lf-info text-lf-on-status',
+    },
+    /** A segment pressed in a state (C16, the hand-chosen duration's amber badge): the fill of `pressed`, no border, so
+     *  the width never moves between rest and pressed. */
+    segmentPressed: {
+        success: 'bg-lf-success text-lf-on-status',
+        warning: 'bg-lf-warning text-lf-on-status',
+        danger: 'bg-lf-danger text-lf-on-status',
+        info: 'bg-lf-info text-lf-on-status',
+    },
+    tint: {
+        success: 'text-current not-disabled:not-aria-disabled:hover:bg-lf-success-line',
+        warning: 'text-current not-disabled:not-aria-disabled:hover:bg-lf-warning-line',
+        danger: 'text-current not-disabled:not-aria-disabled:hover:bg-lf-danger-line',
+        info: 'text-current not-disabled:not-aria-disabled:hover:bg-lf-info-line',
+        /**
+         * On a fill whose colour is not a state (C15, the tags of `TagInput`: their colour comes from
+         * `getStringBadgeStyle`): the fill's text, dimmed, full on hover — no colour of its own, so none is invented.
+         */
+        current: 'text-current opacity-70 not-disabled:not-aria-disabled:hover:opacity-100',
     },
 } as const;
 

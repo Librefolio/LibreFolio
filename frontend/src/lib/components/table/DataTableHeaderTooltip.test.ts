@@ -108,6 +108,25 @@ function useFakeTimers() {
 }
 
 describe('DataTable — header tooltips', () => {
+    // 85: the label's own tooltip drew «$\\large (1 + …)$» raw («Δ%/year» of the measure panel); only the guide icon's
+    // tooltip typeset a formula.
+    it('a formula in a header tooltip with no guide is typeset, never shown raw', async () => {
+        render(DataTable, {
+            data: [{id: 'r1', name: 'Alpha'}],
+            columns: [{...column(), headerTooltip: '$\\frac{365}{d}$', headerTooltipUrl: undefined}] as ColumnDef<unknown>[],
+            getRowId: ((row: Row) => row.id) as (row: unknown) => string,
+            storageKey: 'header-tooltip-math',
+            enableSelection: false,
+            enableActions: false,
+            enableColumnFilters: false,
+            enableColumnResize: false,
+        });
+        await fireEvent.click(await screen.findByTestId('dt-sort-name'));
+        const tooltip = await screen.findByRole('tooltip');
+        expect(tooltip.querySelector('.katex')).not.toBeNull();
+        expect(tooltip.textContent).not.toContain('$');
+    });
+
     it('positions both the sortable label tooltip and the guide tooltip above their triggers', async () => {
         const frames = new Map<number, FrameRequestCallback>();
         let nextFrame = 0;

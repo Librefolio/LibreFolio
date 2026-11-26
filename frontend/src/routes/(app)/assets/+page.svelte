@@ -215,6 +215,8 @@
     /** The card or row Sync waiting for the user's yes: the prices already stored in its range, and the manual ones (X-R61). */
     let syncConfirm = $state<{asset: any; stored: number; manual: number} | null>(null);
     let syncModalAssets = $state<AssetInfo[]>([]);
+    /** The assets of the «Profilo» section: an asset without a price provider may have enrichers (87, A5). */
+    let syncModalProfileAssets = $state<AssetInfo[]>([]);
 
     // Asset modal (create/edit)
     let assetModalOpen = $state(false);
@@ -653,25 +655,25 @@
             assets = items.map((item: any) => {
                 const kept = previousRows?.get(item.id);
                 return {
-                id: item.id,
-                display_name: item.display_name,
-                currency: item.currency,
-                icon_url: item.icon_url ?? null,
-                asset_type: item.asset_type ?? null,
-                is_benchmark: item.is_benchmark === true,
-                quote_base_quantity: item.quote_base_quantity ?? 1,
-                user_url: item.user_url ?? null,
-                provider_code: item.provider_code ?? null,
-                active: item.active ?? true,
-                tx_count: item.tx_count ?? 0,
-                held_by_me: item.held_by_me ?? false,
-                held_by_others: item.held_by_others ?? false,
-                lastPrice: kept?.lastPrice ?? null,
-                chartData: kept?.chartData ?? [],
-                // Born already waiting for wave 2, so the row draws its own
-                // skeleton the instant it appears instead of a bare empty cell.
-                // A soft reload keeps the row's last price on screen instead.
-                loadingPrices: kept ? false : true,
+                    id: item.id,
+                    display_name: item.display_name,
+                    currency: item.currency,
+                    icon_url: item.icon_url ?? null,
+                    asset_type: item.asset_type ?? null,
+                    is_benchmark: item.is_benchmark === true,
+                    quote_base_quantity: item.quote_base_quantity ?? 1,
+                    user_url: item.user_url ?? null,
+                    provider_code: item.provider_code ?? null,
+                    active: item.active ?? true,
+                    tx_count: item.tx_count ?? 0,
+                    held_by_me: item.held_by_me ?? false,
+                    held_by_others: item.held_by_others ?? false,
+                    lastPrice: kept?.lastPrice ?? null,
+                    chartData: kept?.chartData ?? [],
+                    // Born already waiting for wave 2, so the row draws its own
+                    // skeleton the instant it appears instead of a bare empty cell.
+                    // A soft reload keeps the row's last price on screen instead.
+                    loadingPrices: kept ? false : true,
                 };
             });
         } catch (e: any) {
@@ -1555,6 +1557,7 @@
     /** Open sync modal for all assets that have a provider */
     function handleSyncAllAssets() {
         syncModalAssets = assets.filter((a) => !!a.provider_code);
+        syncModalProfileAssets = assets;
         syncModalOpen = true;
     }
 
@@ -1632,6 +1635,7 @@
 
     function handleBulkSyncAssets(rows: AssetRow[] = selectedAssetRows) {
         syncModalAssets = rows.filter((r) => !!r.provider_code);
+        syncModalProfileAssets = rows;
         syncModalOpen = true;
     }
 
@@ -2660,6 +2664,7 @@
 <!-- Asset Sync Modal -->
 <AssetSyncModal
     assets={syncModalAssets}
+    profileAssets={syncModalProfileAssets}
     bind:open={syncModalOpen}
     {dateEnd}
     dateStart={syncDateStart}

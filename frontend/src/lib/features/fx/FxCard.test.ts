@@ -46,9 +46,10 @@ vi.mock('$lib/stores/reference/currencyStore', () => ({
     getCurrencyInfo: (code: string) => ({code, flag_emoji: '🏳️'}),
 }));
 
-import {fireEvent, render, setupI18n, within} from '$test/component';
+import {fireEvent, render, setupI18n, waitFor, within} from '$test/component';
 import {uiLocale} from '$lib/stores/app/uiLocale';
 import {clearCardInversions} from '$lib/features/fx/fxCardInversionStore';
+import {guardedFxSync, resetFxSyncGuard} from '$lib/features/fx/fxSyncGuard.svelte';
 import {formatFixed, formatPrice} from '$lib/utils/core/formatFixed';
 import FxCard from './FxCard.svelte';
 
@@ -133,5 +134,43 @@ describe('FxCard — the rate keeps its significant digits, either way round (C-
 
         expect(pairOf(card), 'barrier: the card shows the pair as stored').toEqual(['EUR', 'USD']);
         expect(textOf(card), 'the rate').toMatch(numberToken('1.0823'));
+    });
+});
+
+// 81 U35: one sync per pair at a time. A card whose pair is syncing has its sync button off, with the reason; the button of
+// another pair is untouched, and the card is as before when the sync ends.
+describe('FxCard — the sync button of a pair that is syncing (81 U35)', () => {
+    afterEach(() => {
+        resetFxSyncGuard();
+    });
+
+    it('is off, and says which pair is syncing, while that pair syncs; on again when it ends', async () => {
+        const onsync = vi.fn();
+        const {container} = render(FxCard, {base: 'EUR', quote: 'USD', slug: 'EUR-USD', data: [{date: '2026-10-16', rate: 1.08, backwardFillInfo: null}], onsync});
+        const button = within(container).getByTestId('fx-pair-sync-EUR-USD');
+        expect(button).toBeEnabled();
+
+        let end!: () => void;
+        const running = guardedFxSync(['EUR-USD'], () => new Promise<void>((resolve) => (end = resolve)));
+        await waitFor(() => expect(button).toBeDisabled());
+        expect(button).toHaveAttribute('data-syncing', 'true');
+        expect(button.getAttribute('title')).toContain('EUR/USD');
+        await fireEvent.click(button);
+        expect(onsync).not.toHaveBeenCalled();
+
+        end();
+        await running;
+        await waitFor(() => expect(button).toBeEnabled());
+        await fireEvent.click(button);
+        expect(onsync).toHaveBeenCalledTimes(1);
+    });
+
+    it('leaves the card of another pair alone', async () => {
+        const {container} = render(FxCard, {base: 'EUR', quote: 'GBP', slug: 'EUR-GBP', data: [{date: '2026-10-16', rate: 0.85, backwardFillInfo: null}]});
+        let end!: () => void;
+        const running = guardedFxSync(['EUR-USD'], () => new Promise<void>((resolve) => (end = resolve)));
+        expect(within(container).getByTestId('fx-pair-sync-EUR-GBP')).toBeEnabled();
+        end();
+        await running;
     });
 });

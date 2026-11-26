@@ -510,3 +510,31 @@ describe('«send by email» and «forgot password» (lot E4a) — their words', 
         for (const key of ['label', 'submit', 'sending', 'accepted']) expectInEveryCatalogue(`email.forgot.${key}`, []);
     });
 });
+
+// 81 U46 (testlist 9.6, 9.7): the texts of the page of a change-of-address link, shorter. The shape is the contract — never the
+// words, which are the developer's in Italian and follow in the other languages: whoever is asked to sign in is told that and
+// nothing more (one line); a link that no longer works says why in one sentence and stops (one line); the confirmation is two
+// lines at most.
+describe('the page of a change-of-address link — its texts are short (81 U46)', () => {
+    const page = (language: string, state: string): string => {
+        const message = messageOf(CATALOGUES[language], `email.emailChange.page.${state}`);
+        if (typeof message !== 'string') throw new Error(`${language}: no email.emailChange.page.${state}`);
+        return message;
+    };
+    const lines = (text: string) => text.split('\n').filter((line) => line.trim() !== '');
+
+    it.each(Object.keys(CATALOGUES))('%s: «sign in» is one line: the account to sign in with, and no more', (language) => {
+        expect(lines(page(language, 'signin')), 'the extra sentences are still there').toHaveLength(1);
+        expect(page(language, 'signin'), 'the account that asked for the change is the one thing said, emphasised').toMatch(/\*\*[^*]+\*\*/);
+    });
+
+    it.each(Object.keys(CATALOGUES))('%s: a link that no longer works says why in one line and stops', (language) => {
+        expect(lines(page(language, 'revoked')), 'the text goes on after the reasons').toHaveLength(1);
+    });
+
+    it.each(Object.keys(CATALOGUES))('%s: the confirmation is two lines at most, and shorter than it was', (language) => {
+        const text = page(language, 'ready');
+        expect(lines(text).length).toBeLessThanOrEqual(2);
+        expect(text.length, 'the confirmation did not get shorter').toBeLessThan(100);
+    });
+});

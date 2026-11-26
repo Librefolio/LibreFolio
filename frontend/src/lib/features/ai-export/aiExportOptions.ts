@@ -64,6 +64,11 @@ export interface AiExportOptionsPanelLabels {
     readonly prepareLabel: string;
     readonly preparingLabel: string;
     readonly copyAnywayLabel: string;
+    /** The button that copies a text the browser refused to copy by itself. */
+    readonly copyReadyLabel: string;
+    /** The real steps of the client, in order. */
+    readonly stepLabels: Readonly<Record<'request' | 'render' | 'copy', string>>;
+    readonly progressLabel: string;
     readonly useCompactLabel: string;
 }
 

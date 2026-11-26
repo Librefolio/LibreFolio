@@ -138,7 +138,13 @@
       },
       "openFailed": "La transaction n'a pas pu être ouverte",
       "candidatesFailed": "Les transactions à lier n'ont pas pu être chargées",
-      "groupSyncHint": "Tant que les lignes de ce groupe (la transaction et ses frais liés) sont toutes nouvelles, elles partagent courtier et actif : les changer ici les change sur chaque ligne du groupe."
+      "groupSyncHint": "Tant que les lignes de ce groupe (la transaction et ses frais liés) sont toutes nouvelles, elles partagent courtier et actif : les changer ici les change sur chaque ligne du groupe.",
+      "savedLinks": {
+        "title": "Délier {n, plural, one {une transaction enregistrée} other {# transactions enregistrées}} ?",
+        "message": "{n, plural, one {Cette transaction est déjà enregistrée et garde son courtier et son actif : elle ne peut pas suivre la modification. Si vous continuez, elle n'est plus liée à celle que vous modifiez.} other {Ces transactions sont déjà enregistrées et gardent leur courtier et leur actif : elles ne peuvent pas suivre la modification. Si vous continuez, elles ne sont plus liées à celle que vous modifiez.}}",
+        "wayOut": "Pour les garder ensemble : annulez, clonez-les avec le nouvel actif ou le nouveau courtier, puis supprimez les originaux.",
+        "confirm": "Délier et modifier"
+      }
     },
     "bulk": {
       "resetRow": "Réinitialiser la ligne",
@@ -205,7 +211,8 @@
         "failed": "Les prix n’ont pas pu être lus : aucune valeur n’a été remplie. Réessayez."
       },
       "cloneChargesReadFailed": "Impossible de lire les frais liés de {ids} : la copie a été faite sans eux.",
-      "cloneChargeFree": "{reason, select, deleted {La copie du frais n'est pas liée : la transaction à laquelle il était lié est marquée pour suppression.} paired {La copie du frais n'est pas liée : la transaction à laquelle il était lié fait partie d'une paire.} other {La copie du frais n'est pas liée : elle ne peut pas être liée à la même transaction.}}"
+      "cloneChargeFree": "{reason, select, deleted {La copie du frais n'est pas liée : la transaction à laquelle il était lié est marquée pour suppression.} paired {La copie du frais n'est pas liée : la transaction à laquelle il était lié fait partie d'une paire.} other {La copie du frais n'est pas liée : elle ne peut pas être liée à la même transaction.}}",
+      "unlinkSelected": "Délier les frais"
     },
     "commit": {
       "serverError": "Sauvegarde impossible — erreur serveur"
@@ -216,7 +223,8 @@
       "rewardLabel": "Valeur à la réception",
       "rewardTooltip": "Ce que valaient ces unités le jour où vous les avez reçues : c'est à la fois le revenu de la récompense et le coût du lot qu'elle ouvre.",
       "warningReward": "La valeur à la réception est vide : sans elle, la récompense ne peut pas être enregistrée. Saisissez ce que valaient ces unités le jour où vous les avez reçues, ou 0 pour les compter sans coût.",
-      "rewardFromHistory": "Depuis l'historique des prix : la clôture du {date}. Modifiez-la si la plateforme indique une autre valeur."
+      "rewardFromHistory": "Depuis l'historique des prix : la clôture du {date}. Modifiez-la si la plateforme indique une autre valeur.",
+      "rewardUseClose": "Utiliser la clôture du {date}"
     },
     "wacPreview": {
       "calculating": "Calcul en cours...",
@@ -515,6 +523,10 @@
       "allAfter": "aucune des {n} lignes ne reste",
       "all": "Tout supprimer ({n})",
       "loadFailed": "Impossible de lire les frais de cette transaction"
+    },
+    "chargesUnlink": {
+      "failed": "La suppression du lien des frais a échoué",
+      "target": "{n, plural, one {# frais qui n'est plus lié : il reste une transaction à part} other {# frais qui ne sont plus liés : chacun reste une transaction à part}}"
     }
   }
 }

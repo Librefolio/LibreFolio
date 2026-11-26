@@ -30,7 +30,7 @@ How much money did your investments make in the selected period? The **Period P&
 - **The line under it** — for example `-1,141 € (-1.95%)`: how much your Total P&L moved since yesterday, and that change as a percentage of yesterday's portfolio value (panel below)
 - **Unrealized change** — how the unrealized gain or loss of your holdings moved over the period, exchange-rate effect included → [Period PnL](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/period-pnl.md)
 - **Sales** — the realized gain or loss of the period's sales, against the average cost of the units sold. An adjustment that removes units has no value: it counts here as a sale for nothing, a loss of what those units cost (see [Outgoing Adjustments](../../financial-theory/instruments/transaction-types/adjustment.md#outgoing-adjustments)) → [Weighted Average Cost](../../financial-theory/technical-analysis/performance-metrics/weighted-average-cost.md)
-- **Dividends & interest** — dividends, coupons and P2P interest received → [Dividend & Interest](../../financial-theory/instruments/transaction-types/dividend-interest.md)
+- **Income** — what your assets and your cash paid you: dividends, interest (coupons and P2P interest included) and [Rewards](../../financial-theory/instruments/transaction-types/reward.md) at their value on receipt; its tooltip gives the three figures → [Dividend & Interest](../../financial-theory/instruments/transaction-types/dividend-interest.md)
 - **Fees & taxes** — commissions and taxes recorded as transactions; hover the row for the split → [Fee & Tax](../../financial-theory/instruments/transaction-types/fee.md)
 
 **How to read it**

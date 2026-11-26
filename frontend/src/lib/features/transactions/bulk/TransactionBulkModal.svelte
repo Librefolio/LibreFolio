@@ -27,6 +27,7 @@
     import {todayIso} from '$lib/utils/dateOnly';
     import {onDestroy, tick, untrack} from 'svelte';
     import {_ as t} from '$lib/i18n';
+    import {asFxSyncBusy, fxSyncBusyText, guardedFxSync} from '$lib/features/fx/fxSyncGuard.svelte';
     import {currentLanguage} from '$lib/stores/app/language';
     import {X, Plus, Pencil, Copy, Trash2, Check, Undo2, Save, Unlink, Link2, Lightbulb, Upload, ChevronDown, ChevronRight} from 'lucide-svelte';
 
@@ -107,6 +108,8 @@
         planBulkDelete,
         withoutRows,
         bulkLinkSelection,
+        unlinkableCharges,
+        unlinkSelectedCharges,
         linkInBulk,
         rowsWithLinkedCharges,
         unlinkCharge,
@@ -124,7 +127,7 @@
     import {txRowRef} from '../chargeLinkRules';
     import {canEditBroker} from '$lib/stores/reference/brokerStore';
     import TxChargesActionModal from '../TxChargesActionModal.svelte';
-    import type {ChargeDraft} from '../form/txCharges';
+    import type {ChargeDraft, HandedNewParent} from '../form/txCharges';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
     import {notify} from '$lib/stores/app/notify.svelte';
     import {guideAnchor, guideAnchors} from '$lib/features/onboarding/guideAnchors.svelte';
@@ -1945,11 +1948,14 @@
         const pairs = allPairs.map((p) => p.replace('/', '-'));
         syncFxLoading = true;
         try {
-            await zodiosApi.post('/api/v1/fx/currencies/sync', {pairs, start, end});
+            await guardedFxSync(pairs, () => zodiosApi.post('/api/v1/fx/currencies/sync', {pairs, start, end}));
             toasts.success($t('transactions.wac.syncSuccess') || 'FX rates synced');
             scheduler.trigger('change');
-        } catch {
-            toasts.error($t('transactions.wac.syncFailed') || 'Failed to sync FX rates');
+        } catch (error) {
+            // One sync per pair at a time (81 U35): a pair already syncing is said as that, not as a failure.
+            const busy = asFxSyncBusy(error);
+            if (busy) toasts.warning(fxSyncBusyText($t, busy));
+            else toasts.error($t('transactions.wac.syncFailed') || 'Failed to sync FX rates');
         } finally {
             syncFxLoading = false;
         }
@@ -2887,6 +2893,8 @@
     let formChargeEdits = $state(true);
     /** 66 F7-d: the saved row the Form highlights — the one the user came from with «Open». */
     let formHighlightTxId = $state<number | null>(null);
+    /** 66 TL-11: the same for a new row, which has no id: its key (`op-<tempId>`). */
+    let formHighlightKey = $state<string | null>(null);
     /** Guards the charges' read before a parent's Form: an answer for an older open is dropped. */
     let chargesReadRequest = 0;
 
@@ -3107,6 +3115,7 @@
         ++chargesReadRequest;
         formChargeEdits = true;
         formHighlightTxId = null;
+        formHighlightKey = null;
         formMode = 'create';
         formItems = null;
         formEditingTempId = null;
@@ -3115,20 +3124,20 @@
     }
 
     /** The highlight the «restore and edit» question carries to the Form it opens (66 F7-d, «Open»). */
-    let confirmEditDeleteHighlight: number | null = null;
+    let confirmEditDeleteHighlight: {txId: number | null; key: string | null} = {txId: null, key: null};
 
     /** B23 Step 4: intercept edit on deleted row — show confirm before restoring. `highlightTxId`: the row the Form
-     *  highlights (66 F7-d, the row «Open» came from). */
-    function handleEditRowClick(row: PendingOp, highlightTxId: number | null = null) {
+     *  highlights (66 F7-d, the row «Open» came from); `highlightKey` when that row is new (66 TL-11). */
+    function handleEditRowClick(row: PendingOp, highlightTxId: number | null = null, highlightKey: string | null = null) {
         // W4b: block edit if partner is inaccessible
         if (getPartnerOp(row.tempId)?.inaccessible) return;
         if (deriveStatus(row) === 'delete') {
             confirmEditDeleteRow = row;
-            confirmEditDeleteHighlight = highlightTxId;
+            confirmEditDeleteHighlight = {txId: highlightTxId, key: highlightKey};
             confirmEditDeleteOpen = true;
             return;
         }
-        openEditRowForm(row, highlightTxId);
+        openEditRowForm(row, highlightTxId, highlightKey);
     }
 
     /** B23 Step 4: user confirmed restore-and-edit on a deleted row. */
@@ -3140,8 +3149,8 @@
         const highlight = confirmEditDeleteHighlight;
         confirmEditDeleteOpen = false;
         confirmEditDeleteRow = null;
-        confirmEditDeleteHighlight = null;
-        openEditRowForm(row, highlight);
+        confirmEditDeleteHighlight = {txId: null, key: null};
+        openEditRowForm(row, highlight.txId, highlight.key);
     }
 
     /**
@@ -3182,7 +3191,18 @@
         const target = findSavedRow(id);
         if (!target) return;
         if (target.chargeOf !== undefined && isUnderParent(target, ops)) openGroup(target.chargeOf);
-        handleEditRowClick(target, fromTxId);
+        handleEditRowClick(target, fromTxId, fromOp && fromTxId === null ? `op-${fromOp.tempId}` : null);
+    }
+
+    /** 66 TL-11: «Open» in the Form on a new row of the Bulk, by its `tempId`: the same entry as `handleFormOpenTransaction`,
+     *  the group of a charge opened, the row the user came from highlighted (by its id, or its key when it is new too). */
+    function handleFormOpenRow(tempId: string) {
+        const from = formEditingTempId !== null ? ops.find((d) => d.tempId === formEditingTempId) : undefined;
+        const target = ops.find((d) => d.tempId === tempId);
+        if (!target) return;
+        if (target.chargeOf !== undefined && isUnderParent(target, ops)) openGroup(target.chargeOf);
+        const fromTxId = from ? (opTxId(from) ?? null) : null;
+        handleEditRowClick(target, fromTxId, from && fromTxId === null ? `op-${from.tempId}` : null);
     }
 
     /** The row on screen of the saved transaction `txId`: its own, or the visible half of its pair. */
@@ -3341,23 +3361,24 @@
         return current ? parentChargesMissing(current) : false;
     }
 
-    function openEditRowForm(row: PendingOp, highlightTxId: number | null = null) {
+    function openEditRowForm(row: PendingOp, highlightTxId: number | null = null, highlightKey: string | null = null) {
         const request = ++chargesReadRequest;
         const current = ops.find((d) => d.tempId === row.tempId);
         if (!current || !parentChargesMissing(current)) {
-            showRowForm(row.tempId, true, highlightTxId);
+            showRowForm(row.tempId, true, highlightTxId, highlightKey);
             return;
         }
         void ensureParentCharges(row.tempId).then((ok) => {
             if (request !== chargesReadRequest || !open) return;
-            showRowForm(row.tempId, ok, highlightTxId);
+            showRowForm(row.tempId, ok, highlightTxId, highlightKey);
         });
     }
 
-    function showRowForm(tempId: string, chargesEditable: boolean, highlightTxId: number | null = null) {
+    function showRowForm(tempId: string, chargesEditable: boolean, highlightTxId: number | null = null, highlightKey: string | null = null) {
         const row = ops.find((d) => d.tempId === tempId);
         if (!row) return;
         formHighlightTxId = highlightTxId;
+        formHighlightKey = highlightKey;
         // When editing a 'new' draft, open in create mode so type stays editable;
         // formEditingTempId is still set so handleFormPushed patches (not adds).
         formMode = deriveStatus(row) === 'new' ? 'create' : 'edit';
@@ -3367,10 +3388,18 @@
         // re-pairing them as the original transfer.
         const items = resolveFormItemsFromOps(row, ops, opToTxLikeForForm, txStoreGet);
         // 66 F7-b (§11.6): the parent's charges always handed over, `[]` too, so the Form in the Bulk never reads them.
-        formItems = items && items.length === 1 ? [{...items[0], _charges: chargeDraftsFor(row, ops, txStoreGet)} as TXReadItem] : items;
+        formItems = items && items.length === 1 ? [{...items[0], _charges: chargeDraftsFor(row, ops, txStoreGet), ...newParentOf(row)} as TXReadItem] : items;
         formChargeEdits = chargesEditable;
         formKey++;
         formOpen = true;
+    }
+
+    /** 66 TL-11: the parent of a charge under a NEW row, handed to the charge's Form: it has no id the Form could read. */
+    function newParentOf(row: PendingOp): {_newParent?: HandedNewParent} {
+        if (row.chargeOf === undefined || row.parentUnlink || !isUnderParent(row, ops)) return {};
+        const owner = ops.find((d) => d.tempId === row.chargeOf);
+        if (owner?.op !== 'create') return {};
+        return {_newParent: {key: `op-${owner.tempId}`, ref: bulkRowRef(owner), row: panelItem(owner)}};
     }
 
     /** 66 F7-b: what the Form hands back about the linked charges, onto the operations (`bulkCharges.ts`). */
@@ -3658,6 +3687,18 @@
             pointless: () => bulkLinkState.kind === 'hidden',
             blocked: () => (bulkLinkState.kind === 'disabled' ? {hint: () => bulkLinkHint, reason: bulkLinkState.reason} : null),
             onClick: () => openLinkPanel(),
+        },
+        {
+            // 66 TL-4 (P-2 = C): the ticked charges still linked under their parent, unlinked as «Scollega» in their Form
+            // does; no panel (nothing is saved before «Save all»; «Reset» links back a saved charge); the selection empties.
+            id: 'unlink-charges',
+            testid: 'tx-bulk-unlink-charges',
+            icon: Unlink,
+            label: () => $t('transactions.bulk.unlinkSelected') || 'Unlink the charges',
+            shortLabel: () => $t('transactions.form.charges.unlink') || 'Unlink',
+            appliesTo: (row) => unlinkableCharges([row], ops).length > 0,
+            pointless: (rows) => unlinkableCharges(rows, ops).length === 0,
+            onClick: (rows) => unlinkSelectedRows(rows.map((row) => row.tempId)),
         },
         {
             id: 'delete-selected',
@@ -4307,27 +4348,27 @@
         return !indentedIds.has(row.tempId);
     }
 
-    /** 66 F7-c1 (§13.5): an indented row has no checkbox; the selection is of top-level rows. */
+    /** 66 TL-4 (P-2 = C, was F7-c1 §13.5): every drawn row has its checkbox, a charge under its parent too — ticking the
+     *  parent never ticks its charges, nor the reverse. Only the half a merge hides (`pairedWith`) is never selectable. */
     function isGridRowSelectable(row: PendingOp): boolean {
-        return !indentedIds.has(row.tempId);
+        return row.pairedWith === undefined;
     }
 
-    // 66 F7-c1 (§14.6): a selected top-level row that goes under its parent (a «Restore», a link in the parent's Form)
-    // leaves the selection. 66 C21: so does the half a merge hides (`pairedWith`): «Reset selected» would reset it alone and
-    // break the pair still waiting for the save.
+    // 66 C21: the half a merge hides (`pairedWith`) leaves the selection: «Reset selected» would reset it alone and break
+    // the pair still waiting for the save. 66 TL-4: a selected row that goes under its parent (a «Restore», a link in the
+    // parent's Form) keeps its tick (it was F7-c1 §14.6).
     let hiddenPairHalves = $derived(new Set(ops.filter((op) => op.pairedWith !== undefined).map((op) => op.tempId)));
     $effect(() => {
-        const indented = indentedIds;
         const hidden = hiddenPairHalves;
         untrack(() => {
-            for (const row of bulkTableSelectedRows) if (indented.has(row.tempId) || hidden.has(row.tempId)) tableRef?.toggleRowSelectionById(row.tempId);
+            for (const row of bulkTableSelectedRows) if (hidden.has(row.tempId)) tableRef?.toggleRowSelectionById(row.tempId);
         });
     });
 
     /**
      * 66 F7-c1: clicks the grid's HTML cells cannot handle themselves, caught in the capture phase before the row's own
-     * handlers: the chip of a parent toggles its group and nothing else (no selection, no menu, no Form); a double-click
-     * on an indented row opens its Form (the table ignores a double-click on a row that cannot be selected).
+     * handlers: the chip of a parent toggles its group and nothing else (no selection, no menu, no Form). A double-click
+     * on an indented row reaches the table's own handler (66 TL-4: the row is selectable), so the Form opens once.
      */
     function captureChargeChip(node: HTMLElement) {
         const onClick = (ev: MouseEvent) => {
@@ -4343,14 +4384,7 @@
             if (target?.closest?.('[data-tx-bulk-charges-toggle]')) {
                 ev.preventDefault();
                 ev.stopPropagation();
-                return;
             }
-            const rowId = (target?.closest?.('tbody tr[data-row-id]') as HTMLElement | null)?.getAttribute('data-row-id');
-            if (!rowId || !indentedIds.has(rowId)) return;
-            const row = ops.find((o) => o.tempId === rowId);
-            if (!row) return;
-            ev.stopPropagation();
-            handleEditRowClick(row);
         };
         node.addEventListener('click', onClick, true);
         node.addEventListener('dblclick', onDblClick, true);
@@ -4404,6 +4438,13 @@
         if (!parent || charges.length === 0) return;
         ops = linkInBulk(ops, parent, charges);
         openGroup(parent.tempId);
+        tableRef?.clearSelection();
+        bulkTableSelectedRows = [];
+    }
+
+    /** 66 TL-4: «Scollega» on the selection (`unlinkSelectedCharges`); the selection empties, as after «Link». */
+    function unlinkSelectedRows(tempIds: string[]) {
+        ops = unlinkSelectedCharges(ops, tempIds, txStoreGet);
         tableRef?.clearSelection();
         bulkTableSelectedRows = [];
     }
@@ -4494,6 +4535,7 @@
             <DataTable
                 bind:this={tableRef}
                 data={gridRows}
+                selectionData={visibleOps}
                 opensPage={opensGridPage}
                 isRowSelectable={isGridRowSelectable}
                 {columns}
@@ -4676,7 +4718,9 @@
     }}
     editingTempId={formEditingTempId}
     onOpenTransaction={(id) => void handleFormOpenTransaction(id)}
+    onOpenRow={handleFormOpenRow}
     highlightTxId={formHighlightTxId}
+    highlightKey={formHighlightKey}
     pendingTxIds={pendingTxIds.size > 0 ? pendingTxIds : null}
     onClose={() => {
         formOpen = false;

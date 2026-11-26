@@ -44,12 +44,12 @@ from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 from sqlalchemy.pool import NullPool
 
 from backend.app.db.base import SQLModel  # imports every model
-from backend.app.services.asset_source_providers.coingecko import _sdk
-from backend.app.services.asset_source_providers.coingecko._currencies import DEFAULT_VS_CURRENCY, VS_CURRENCIES
 from backend.app.services.asset_source_providers.coingecko.plugin import CoinGeckoProvider
 from backend.app.services.assets import core
 from backend.app.services.assets.base import AssetRateLimitedError, AssetSourceError
 from backend.app.services.assets.registry import AssetProviderRegistry
+from backend.app.services.coingecko import sdk
+from backend.app.services.coingecko.currencies import DEFAULT_VS_CURRENCY, VS_CURRENCIES
 from backend.app.services.plugin_settings import readiness, resolver, runtime
 from backend.app.services.plugin_settings.call_limits import CALL_LIMIT_KEYS
 from backend.app.services.plugin_settings.fields import SettingScope, claimed_env_variables, env_name
@@ -195,8 +195,8 @@ def test_p1_vs_currency_is_required_and_one_of_them():
 def test_p1_the_client_never_retries_and_takes_the_root_of_its_plan(monkeypatch: pytest.MonkeyPatch, plan: str, root: str, header: str):
     wire = _Wire(body=_fixture("simple_price_bitcoin_pepe_eur.json")["body"])
     provider = _provider(monkeypatch, wire, plan=plan)
-    client = _sdk.build_client(KEY, plan)
-    assert (client.max_retries, str(client.base_url), client.timeout) == (0, root, _sdk.REQUEST_TIMEOUT_SECONDS)
+    client = sdk.build_client(KEY, plan)
+    assert (client.max_retries, str(client.base_url), client.timeout) == (0, root, sdk.REQUEST_TIMEOUT_SECONDS)
 
     _price(provider)
 
@@ -238,7 +238,7 @@ def test_p1_the_recorded_errors_have_codes_of_their_own(monkeypatch: pytest.Monk
         _price(provider)
 
     assert refused.value.error_code == code
-    assert refused.value.details["coingecko_error_code"] == _sdk.coingecko_error_code(recorded["body"])
+    assert refused.value.details["coingecko_error_code"] == sdk.coingecko_error_code(recorded["body"])
     assert KEY not in _texts(refused.value)
 
 
@@ -266,11 +266,11 @@ def test_p1_other_failures_have_the_cores_codes(monkeypatch: pytest.MonkeyPatch,
 
 
 def test_p1_the_error_code_is_found_in_all_three_shapes():
-    assert _sdk.coingecko_error_code(_fixture("error_10012_range_over_365d.json")["body"]) == 10012
-    assert _sdk.coingecko_error_code(_fixture("error_10005_paid_endpoint.json")["body"]) == 10005
-    assert _sdk.coingecko_error_code(_fixture("error_10011_demo_key_on_pro_root.json")["body"]) == 10011
-    assert _sdk.coingecko_error_code({"status": {"error_code": True}}) is None
-    assert _sdk.coingecko_error_code("not a body") is None
+    assert sdk.coingecko_error_code(_fixture("error_10012_range_over_365d.json")["body"]) == 10012
+    assert sdk.coingecko_error_code(_fixture("error_10005_paid_endpoint.json")["body"]) == 10005
+    assert sdk.coingecko_error_code(_fixture("error_10011_demo_key_on_pro_root.json")["body"]) == 10011
+    assert sdk.coingecko_error_code({"status": {"error_code": True}}) is None
+    assert sdk.coingecko_error_code("not a body") is None
 
 
 # =============================================================================
@@ -298,7 +298,7 @@ def test_p1_a_client_the_provider_builds_is_closed_after_the_call_an_injected_on
     """Every call builds a client with its own connection pool: closed after the call, error or not. The tests'
     injected client belongs to the test, never closed by the provider."""
     built: list[Any] = []
-    real_build = _sdk.build_client
+    real_build = sdk.build_client
 
     def recording_build(api_key: str, plan: str, *, http_client: Any = None) -> Any:
         own = http_client or httpx.Client(transport=httpx.MockTransport(_Wire(body={"bitcoin": {"eur": 1}})))
@@ -306,7 +306,7 @@ def test_p1_a_client_the_provider_builds_is_closed_after_the_call_an_injected_on
         built.append(client)
         return client
 
-    monkeypatch.setattr(_sdk, "build_client", recording_build)
+    monkeypatch.setattr(sdk, "build_client", recording_build)
     provider = CoinGeckoProvider()
     provider.bind_settings(_Bound(KEY))  # type: ignore[arg-type]
     monkeypatch.setattr(CoinGeckoProvider, "_http_client", None)
@@ -315,13 +315,13 @@ def test_p1_a_client_the_provider_builds_is_closed_after_the_call_an_injected_on
     assert built[-1].is_closed(), "a client the provider built is closed after a call"
 
     failing = httpx.Client(transport=httpx.MockTransport(_Wire(status=500, body={})))
-    monkeypatch.setattr(_sdk, "build_client", lambda api_key, plan, *, http_client=None: built.append(real_build(api_key, plan, http_client=http_client or failing)) or built[-1])
+    monkeypatch.setattr(sdk, "build_client", lambda api_key, plan, *, http_client=None: built.append(real_build(api_key, plan, http_client=http_client or failing)) or built[-1])
     with pytest.raises(AssetSourceError):
         _price(provider)
     assert built[-1].is_closed(), "closed after an error too"
 
     injected = httpx.Client(transport=httpx.MockTransport(_Wire(body={"bitcoin": {"eur": 1}})))
-    monkeypatch.setattr(_sdk, "build_client", real_build)
+    monkeypatch.setattr(sdk, "build_client", real_build)
     monkeypatch.setattr(CoinGeckoProvider, "_http_client", injected)
     _price(provider)
     assert not injected.is_closed, "the tests' client is the test's"

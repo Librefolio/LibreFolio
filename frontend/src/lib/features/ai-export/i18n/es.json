@@ -316,6 +316,55 @@
     "replyInstructions": {
       "dataReceived": "Datos recibidos, estoy listo para escuchar tus preguntas."
     },
-    "noOwnedBrokers": "No posees ningún bróker: esta selección lee tus posiciones y tu efectivo, y los de los brókeres compartidos contigo no se incluyen."
+    "noOwnedBrokers": "No posees ningún bróker: esta selección lee tus posiciones y tu efectivo, y los de los brókeres compartidos contigo no se incluyen.",
+    "tool": {
+      "heading": "Calcúlalo en LibreFolio",
+      "intro": "El número de unidades y las órdenes se calculan con la herramienta de LibreFolio, que usa un motor matemático de optimización y tiene en cuenta a la vez comisiones, órdenes mínimas, cambios de divisa y redondeos. Indica al usuario esta ruta, con los valores de tu plan en lugar de las descripciones. Un cálculo hecho en el chat no es recomendable: hazlo solo si el usuario lo pide, y dilo.",
+      "when": "Cuándo usarlo",
+      "steps": {
+        "sidebar": "Barra lateral",
+        "card": "Tarjeta"
+      },
+      "inputs": "Qué hacer, paso a paso",
+      "returns": "Qué devuelve",
+      "pacAllocator": {
+        "when": "para repartir dinero nuevo entre varios activos. Parte de una cartera vacía: lo que el usuario ya posee no se cuenta.",
+        "steps": {
+          "scenario": "la {currency}, en la que se comparan y resumen los importes.",
+          "liquidity": "de dónde viene el dinero: {contribution} con el importe de la cuota, {fromBrokers} para el efectivo que ya está en los brókeres, o {external}. Las fuentes se pueden combinar.",
+          "brokers": "los brókeres en los que el plan puede comprar, con sus comisiones y modos de orden. LibreFolio no los registra: los introduce el usuario.",
+          "assets": "los activos que el plan puede comprar. El precio {auto} es el último precio guardado en LibreFolio.",
+          "routing": "qué bróker puede comprar qué activo (normalmente {allowAll}).",
+          "targets": "el porcentaje de esta aportación para cada activo. El total debe ser 100 %.",
+          "fx": "solo aparece si hacen falta tipos de cambio. Cada tipo se deja normalmente en {auto}, el último guardado en LibreFolio. Cuando un bróker puede pagar un activo con efectivo en otra divisa, aparece también el spread de conversión: un porcentaje de cada importe convertido, que empieza en 0.",
+          "strategy": "{proportional}: solo compras, no vende nada.",
+          "review": "una última comprobación y, después, {calculate}."
+        },
+        "returns": "las órdenes que hay que introducir, bróker por bróker (en unidades o por importe), los costes, el dinero que queda sin invertir y, para cada activo, el peso alcanzado junto a su objetivo. Es una simulación: no se envía ninguna orden."
+      },
+      "portfolioRebalancer": {
+        "when": "para acercar a sus objetivos una cartera ya invertida. Parte de lo que el usuario tiene hoy, más el efectivo que elige. Hoy solo compra: no vende nada.",
+        "steps": {
+          "scenario": "la {currency}, en la que se comparan y resumen los importes.",
+          "liquidity": "el efectivo que el plan puede usar: {fromBrokers} para el efectivo que ya está en los brókeres, {contribution} para dinero nuevo, o {external}. Las fuentes se pueden combinar.",
+          "brokers": "los brókeres en los que el plan puede comprar, con sus comisiones y la forma en que cada uno acepta las órdenes. LibreFolio no los registra: los introduce el usuario.",
+          "assets": "los activos del plan. Debajo de cada activo, la tabla {positions} muestra lo que el usuario tiene de él, bróker por bróker, tal como LibreFolio lo registra hoy: el plan parte de esas cantidades. El precio {auto} es el último precio guardado en LibreFolio.",
+          "routing": "qué bróker puede comprar qué activo (normalmente {allowAll}).",
+          "targets": "el peso objetivo de cada activo y del efectivo, en porcentaje del total que entra en el plan: las posiciones de hoy más el efectivo elegido.",
+          "fx": "solo aparece si hacen falta tipos de cambio. Cada tipo se deja normalmente en {auto}, el último guardado en LibreFolio. Cuando un bróker puede pagar un activo con efectivo en otra divisa, aparece también el spread de conversión: un porcentaje de cada importe convertido, que empieza en 0.",
+          "strategy": "{investOnly}: compra con el efectivo lo que está por debajo del objetivo y no vende nada. Después la {fidelity}, es decir, cuánto vale acercarse al objetivo frente a lo que cuesta: {costAware} gasta poco para acercarse, {balanced} queda en medio, {faithful} se acerca aunque cueste más, {targetFirst} alcanza primero la cartera más cercana posible y solo después reduce los costes. También hay un valor personalizado.",
+          "review": "una última comprobación y, después, {calculate}."
+        },
+        "returns": "cada activo y cada partida de efectivo antes del plan, en su objetivo y después, en importe y en porcentaje; los pasos en el orden en que ejecutarlos; el dinero que el plan pierde, partida por partida. Es una simulación: no se envía ninguna orden."
+      }
+    },
+    "copyReady": "Copiar el texto listo",
+    "clipboardNotFocused": "El texto está listo, pero el navegador no lo copió porque la ventana no estaba activa. Pulsa «Copiar el texto listo».",
+    "progress": "Exportación en curso",
+    "step": {
+      "request": "Calculando los datos en el servidor…",
+      "render": "Escribiendo el texto…",
+      "copy": "Copiando al portapapeles…"
+    }
   }
 }

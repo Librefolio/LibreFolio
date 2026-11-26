@@ -12,7 +12,7 @@
     import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
     import {REAL_SIGNIFICANT_DIGITS} from '$lib/utils/core/parseDecimalInput';
     import CompactCashCell from './CompactCashCell.svelte';
-    import {chargesTotal, linkedCharges, newCharge, type ChargeCash, type ChargeDraft, type ChargeType} from './txCharges';
+    import {bulkRowOf, chargesTotal, linkedCharges, newCharge, type ChargeCash, type ChargeDraft, type ChargeType} from './txCharges';
     import type {CashDirection} from './txTradeAmount';
 
     interface Props {
@@ -32,13 +32,18 @@
         missingKeys: readonly string[];
         /** Open a saved charge in the same window (F3); `null` hides «Open». */
         onOpen?: ((id: number) => void) | null;
-        /** The charge the user came from, highlighted (F3). */
+        /** 66 TL-11: open a new charge of the Bulk (`op-<tempId>`) in the same window; `null` hides «Open» on it. */
+        onOpenRow?: ((tempId: string) => void) | null;
+        /** The charge the user came from, highlighted (F3); a new row of the Bulk by its key (66 TL-11). */
         highlightId?: number | null;
+        highlightKey?: string | null;
+        /** 66 TL-11: the keys of the Bulk's new rows picked in this opening: never this parent's, «Unlink» takes them back out. */
+        pickedKeys?: ReadonlySet<string>;
         /** «Link an existing charge…» (F4): the form opens the picker; `null` hides it. */
         onLinkExisting?: (() => void) | null;
     }
 
-    let {charges = $bindable(), editable, canAdd, parentCash, direction, loadState, missingKeys, onOpen = null, highlightId = null, onLinkExisting = null}: Props = $props();
+    let {charges = $bindable(), editable, canAdd, parentCash, direction, loadState, missingKeys, onOpen = null, onOpenRow = null, highlightId = null, highlightKey = null, pickedKeys = new Set(), onLinkExisting = null}: Props = $props();
 
     let seq = 0;
     const shown = $derived(linkedCharges(charges));
@@ -60,7 +65,7 @@
 
     /** A charge picked in this form (F4) was never linked: unlinking it only takes it back out of the section. */
     function unlink(charge: ChargeDraft) {
-        if (charge.linkNew) drop(charge.key);
+        if (charge.linkNew || pickedKeys.has(charge.key)) drop(charge.key);
         else update(charge.key, {state: 'unlink'});
     }
 
@@ -68,6 +73,14 @@
     function remove(charge: ChargeDraft) {
         if (charge.id === null || charge.linkNew) drop(charge.key);
         else update(charge.key, {state: 'delete'});
+    }
+
+    /** «Open» on this charge: a saved one by its id, a new row of the Bulk by its key; `null` for a row typed here. */
+    function openOf(charge: ChargeDraft): (() => void) | null {
+        const id = charge.id;
+        if (id !== null) return onOpen ? () => onOpen(id) : null;
+        const tempId = bulkRowOf(charge.key);
+        return tempId !== null && onOpenRow ? () => onOpenRow(tempId) : null;
     }
 
     function totalText(amount: string, code: string): string {
@@ -86,7 +99,8 @@
 
     {#each shown as charge, index (charge.key)}
         {@const missing = missingKeys.includes(charge.key)}
-        {@const highlighted = highlightId != null && charge.id === highlightId}
+        {@const highlighted = (highlightId != null && charge.id === highlightId) || (highlightKey != null && charge.key === highlightKey)}
+        {@const open = openOf(charge)}
         <div
             class="py-2 flex flex-col gap-1.5 {index > 0 ? 'border-t border-lf-subtle' : ''} {highlighted ? 'bg-lf-selected -mx-2 px-2 rounded' : ''}"
             data-testid="tx-form-charge-row"
@@ -96,31 +110,33 @@
             data-missing={missing ? 'true' : 'false'}
             data-highlighted={highlighted ? 'true' : 'false'}
         >
+            <!-- P-18 (66 TL-1d): below `sm` the title and the icons share the first line (the icons right), the amount takes
+                 the next; from `sm` up the three sit on one line, as before. -->
             <div class="flex flex-wrap items-center gap-2">
-                <span class="min-w-0 flex items-center gap-2 grow">
-                    <span class="font-medium">{$t(`transactions.types.${charge.type}`)}</span>
+                <span class="min-w-0 flex items-center gap-2 grow order-1">
+                    <span class="font-medium" data-testid="tx-form-charge-title">{$t(`transactions.types.${charge.type}`)}</span>
                     {#if charge.id !== null}
                         <span class="text-xs {highlighted ? 'text-lf-secondary' : 'text-lf-muted'}">#{charge.id}</span>
                     {:else}
                         <span class="text-[10px] px-1.5 py-px rounded-full bg-lf-info-soft text-lf-info-on-soft">{$t('transactions.form.charges.new')}</span>
                     {/if}
                 </span>
-                <span class="w-full sm:w-64 min-w-0">
+                <span class="w-full sm:w-64 min-w-0 order-3 sm:order-2">
                     <CompactCashCell value={charge.cash} onChange={(next) => update(charge.key, {cash: next})} signHint="negative" defaultCode={parentCash?.code} disabled={!editable} testid={`tx-form-charge-cash-${charge.key}`} maxSignificantDigits={REAL_SIGNIFICANT_DIGITS} />
                 </span>
-                {#if (onOpen && charge.id !== null) || editable}
-                    <span class="inline-flex gap-1.5">
-                        {#if onOpen && charge.id !== null}
+                {#if open || editable}
+                    <span class="inline-flex gap-1.5 shrink-0 order-2 sm:order-3">
+                        {#if open}
                             <button
                                 type="button"
                                 class="p-1.5 rounded-lg border border-lf-input text-lf-link bg-lf-card hover:bg-lf-hover focus-visible:outline-2 focus-visible:outline-lf-focus"
                                 aria-label={$t('transactions.form.charges.open')}
                                 title={$t('transactions.form.charges.open')}
                                 data-testid={`tx-form-charge-open-${charge.key}`}
-                                onclick={() => charge.id !== null && onOpen?.(charge.id)}><Eye size={14} /></button
+                                onclick={() => open()}><Eye size={14} /></button
                             >
                         {/if}
-                        {#if editable && charge.id !== null}
+                        {#if editable && (charge.id !== null || bulkRowOf(charge.key) !== null)}
                             <button
                                 type="button"
                                 class="p-1.5 rounded-lg border border-lf-input text-lf-link bg-lf-card hover:bg-lf-hover focus-visible:outline-2 focus-visible:outline-lf-focus"

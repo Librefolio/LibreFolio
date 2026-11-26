@@ -28,6 +28,9 @@ vi.mock('$lib/api', () => ({
     zodiosApi: {
         sync_prices_bulk_api_v1_assets_prices_sync_post: vi.fn(),
         count_stored_prices_api_v1_assets_prices_stored_count_post: vi.fn(),
+        read_assets_bulk_api_v1_assets_get: vi.fn(),
+        refresh_profile_api_v1_assets_profile_refresh_post: vi.fn(),
+        list_enrichers_api_v1_assets_enrichers_get: vi.fn().mockResolvedValue({enrichers: [{code: 'justetf', name: 'justETF', icon: null}], default_order: {}}),
         // The open-effect warms the provider icon cache through this endpoint;
         // it is not the subject, but it must not reject into nothing. Exactly one
         // provider carries an icon, so both halves of the badge — image and code
@@ -374,5 +377,99 @@ describe('AssetSyncModal — mapping the response into rows', () => {
         expect(errorBanner()).toHaveTextContent('Network Error');
         // The error is repeated per row, so each one says why it failed.
         expect(rowOf('2')).toHaveTextContent('Network Error');
+    });
+});
+
+// =========================================================================
+// «Profilo»: the enrichers of the window's assets, together (87 A5)
+// =========================================================================
+
+describe('AssetSyncModal — the profiles', () => {
+    const readAssets = vi.mocked(zodiosApi.read_assets_bulk_api_v1_assets_get);
+    const refresh = vi.mocked(zodiosApi.refresh_profile_api_v1_assets_profile_refresh_post);
+    const bound = (id: number) => ({asset_id: id, enrichers: {config: {justetf: {identifier_type: 'ISIN', identifier: 'X'}}}});
+    const section = () => screen.getByTestId('asset-sync-profile');
+    const rowOutcome = (id: number) => section().querySelector(`[data-testid="asset-sync-profile-row"][data-asset-id="${id}"]`)?.getAttribute('data-outcome');
+
+    beforeEach(() => {
+        readAssets.mockReset();
+        refresh.mockReset();
+    });
+
+    it('draws no section where the caller hands no asset for it', () => {
+        mount();
+        expect(screen.queryByTestId('asset-sync-profile')).toBeNull();
+        expect(readAssets).not.toHaveBeenCalled();
+    });
+
+    it('calls together the enrichers of every asset that has some, also without a price provider, and nothing of the prices', async () => {
+        const assets = [asset(1), asset(2, {provider_code: null}), asset(3)];
+        readAssets.mockResolvedValue([bound(1), bound(2), {asset_id: 3, enrichers: null}] as never);
+        refresh.mockResolvedValue({
+            results: [
+                {asset_id: 2, written: [], outcomes: [{code: 'justetf', status: 'error'}], error: null, enrichers_read: 1},
+                {asset_id: 1, written: ['ter'], outcomes: [], error: null, enrichers_read: 1},
+            ],
+        } as never);
+        mount({assets: [asset(1), asset(3)], profileAssets: assets});
+
+        await waitFor(() => expect(section()).toHaveAttribute('data-status', 'ready'));
+        expect(section()).toHaveAttribute('data-count', '2');
+        await fireEvent.click(screen.getByTestId('asset-sync-profile-start'));
+        await waitFor(() => expect(section()).toHaveAttribute('data-run', 'done'));
+
+        expect(refresh).toHaveBeenCalledTimes(1);
+        expect(refresh.mock.calls[0][0], 'one call, only the assets with enrichers').toEqual([1, 2]);
+        expect(syncPrices, 'the prices start by their own button').not.toHaveBeenCalled();
+        expect(rowOutcome(1)).toBe('written');
+        expect(rowOutcome(2)).toBe('partial');
+        expect(section().querySelectorAll('[data-testid="asset-sync-profile-row"]')).toHaveLength(2);
+    });
+
+    it('waits far longer than a normal call: the sources are read slowly', async () => {
+        readAssets.mockResolvedValue([bound(1)] as never);
+        refresh.mockResolvedValue({results: []} as never);
+        mount({profileAssets: [asset(1)]});
+        await waitFor(() => expect(section()).toHaveAttribute('data-status', 'ready'));
+        await fireEvent.click(screen.getByTestId('asset-sync-profile-start'));
+        await waitFor(() => expect(section()).toHaveAttribute('data-run', 'done'));
+        expect((refresh.mock.calls[0][1] as {timeout?: number}).timeout).toBeGreaterThanOrEqual(10 * 60_000);
+        expect(rowOutcome(1), 'an asset the answer leaves out is not read, never «nothing changed»').toBe('failed');
+    });
+
+    it('says it is reading while it reads, with no invented progress, and goes on when the window closes', async () => {
+        readAssets.mockResolvedValue([bound(1)] as never);
+        let answer: (value: unknown) => void = () => {};
+        refresh.mockReturnValue(new Promise((resolve) => (answer = resolve)) as never);
+        const {rerender} = mount({profileAssets: [asset(1)]});
+        await waitFor(() => expect(section()).toHaveAttribute('data-status', 'ready'));
+        await fireEvent.click(screen.getByTestId('asset-sync-profile-start'));
+        expect(section()).toHaveAttribute('data-run', 'running');
+        // The standard button (85): busy, a second click does nothing
+        expect(screen.getByTestId('asset-sync-profile-start')).toHaveAttribute('aria-busy', 'true');
+        await fireEvent.click(screen.getByTestId('asset-sync-profile-start'));
+        expect(refresh).toHaveBeenCalledTimes(1);
+        expect(section().querySelector('[role="progressbar"]')).toBeNull();
+
+        await rerender({open: false});
+        await rerender({open: true});
+        expect(section(), 'opened again: still reading').toHaveAttribute('data-run', 'running');
+        expect(readAssets, 'the read under way is left alone').toHaveBeenCalledTimes(1);
+        answer({results: [{asset_id: 1, written: [], outcomes: [], error: null, enrichers_read: 1}]});
+        await waitFor(() => expect(section()).toHaveAttribute('data-run', 'done'));
+        expect(rowOutcome(1)).toBe('unchanged');
+    });
+
+    it('says no asset has enrichers, and offers no button', async () => {
+        readAssets.mockResolvedValue([{asset_id: 1, enrichers: null}] as never);
+        mount({profileAssets: [asset(1)]});
+        expect(await screen.findByTestId('asset-sync-profile-none')).toBeInTheDocument();
+        expect(screen.queryByTestId('asset-sync-profile-start')).toBeNull();
+    });
+
+    it('says so when it cannot tell which assets have enrichers', async () => {
+        readAssets.mockRejectedValue(new Error('down'));
+        mount({profileAssets: [asset(1)]});
+        expect(await screen.findByTestId('asset-sync-profile-unknown')).toBeInTheDocument();
     });
 });

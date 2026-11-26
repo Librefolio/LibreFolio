@@ -1685,7 +1685,18 @@ const COMPACT_COMPONENT_VERSIONS: ReadonlyMap<string, ReadonlySet<number>> = new
     ['portfolio.asset_drawdown_snapshot', new Set([1, 2])],
     // The allocation bump (MF-C2) only lets a slice percent be null; the concentration bump (T-U9) moves two shares
     // through the one percentage formula and splits the reason code of an unavailable comparison.
-    ['portfolio.allocations_cash', new Set([1, 2])],
+    // 78 L6 S7: the cash per broker (v3); S1: the per-asset volatility in the two asset market contexts (v2); the FX summary's
+    // volatility on the same definition (v2)
+    ['portfolio.allocations_cash', new Set([1, 2, 3])],
+    ['portfolio.asset_market_context', new Set([1, 2])],
+    ['broker.asset_market_context', new Set([1, 2])],
+    ['fx.market_summary', new Set([1, 2])],
+    // 78 L6 S2: the asset's position row declares only what it reports (no PPO, ROC or weight) and gains the volatility
+    ['asset.position_market_context', new Set([1, 2])],
+    // 78 L6 S2b: the timing context's volatility on the same definition as the FX summary's (sample)
+    ['fx.timing_context', new Set([1, 2])],
+    // 78 L6 S2b: each bucket's volatility on the same definition (sample)
+    ['fx.returns_volatility', new Set([1, 2])],
     ['broker.concentration_context', new Set([1, 2])],
     // 78 L10b: the comparison's base is the user's owned brokers, whole; a broker not owned is unavailable.
     ['broker.concentration_comparison', new Set([1, 2, 3])],

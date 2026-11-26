@@ -120,6 +120,13 @@ afterEach(() => {
     vi.restoreAllMocks();
 });
 
+// 87 A1: the developer, 25/11: «il link in modifica asset appena sotto descrizione».
+it('offers the profile data right under the description, before the identifiers and the provider', async () => {
+    render(AssetModal, {open: true, editMode: false, prefillData: PREFILL, initialNoProvider: true, oncreated: vi.fn()});
+    const order = [...form().querySelectorAll('[data-testid="asset-modal-description"], [data-testid="asset-modal-profile-row"], [data-testid="asset-modal-more-info"]')].map((element) => element.getAttribute('data-testid'));
+    expect(order).toEqual(['asset-modal-description', 'asset-modal-profile-row', 'asset-modal-more-info']);
+});
+
 describe('at creation', () => {
     it('asks the settled enrichers once, fills the empty voices, and saves them with the asset', async () => {
         createFn().mockResolvedValue({results: [{success: true, asset_id: 42}]});

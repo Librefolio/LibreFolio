@@ -13,7 +13,8 @@
  * - «Dimentica» sends `[{asset_id, update_ids, as_of}]` and forgets that asset's reads on success; a refusal 409
  *   `PROFILE_UPDATES_NEWER` or 404 `PROFILE_UPDATES_NOT_FOUND` is a typed result (with the ids), never a throw, and
  *   forgets the asset's reads too (the page reloads); any other error is thrown as it came;
- * - «Aggiorna» (E6c) sends `[asset_id]`, answers that asset's result and forgets its reads, whatever the server says.
+ * - «Aggiorna» (E6c) sends `[asset_id]`, answers that asset's result and forgets its reads, whatever the server says;
+ *   «Riallinea i profili» (87 A5) sends every id in one call, answers one result per id asked and forgets all their reads.
  */
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 
@@ -27,7 +28,7 @@ const mocks = vi.hoisted(() => ({
 }));
 vi.mock('$lib/api', () => ({zodiosApi: mocks.api}));
 
-import {clearProfileMemory, forgetProfileRows, invalidateAssetProfile, loadProfileCatalogue, profileVoice, readAssetProfile, refreshAssetProfile} from './profileStore';
+import {clearProfileMemory, forgetProfileRows, invalidateAssetProfile, loadProfileCatalogue, profileVoice, readAssetProfile, refreshAssetProfile, refreshAssetProfiles} from './profileStore';
 
 const catalogueCall = mocks.api.profile_catalogue_api_v1_assets_profile_catalogue_get;
 const queryCall = mocks.api.query_profile_api_v1_assets_profile_query_post;
@@ -188,6 +189,36 @@ describe('«Aggiorna» (E6c)', () => {
         await readAssetProfile(7, RANGE);
 
         await expect(refreshAssetProfile(7)).rejects.toBe(failure);
+        await readAssetProfile(7, RANGE);
+        expect(queryCall).toHaveBeenCalledTimes(2);
+    });
+});
+
+describe('«Riallinea i profili» (87 A5)', () => {
+    it('asks every asset in one call and answers one result per asset, in the order asked', async () => {
+        queryCall.mockImplementation(async (items: Array<{asset_id: number}>) => answer(items[0].asset_id));
+        refreshCall.mockResolvedValue({results: [{asset_id: 8, written: ['ter'], outcomes: [], error: null, enrichers_read: 1}]});
+        await readAssetProfile(7, RANGE);
+        await readAssetProfile(8, RANGE);
+
+        const results = await refreshAssetProfiles([7, 8]);
+        expect(refreshCall).toHaveBeenCalledTimes(1);
+        expect(refreshCall.mock.calls[0][0]).toEqual([7, 8]);
+        expect(results.map((result) => [result.asset_id, result.error])).toEqual([
+            [7, 'missing'],
+            [8, null],
+        ]);
+        await readAssetProfile(7, RANGE);
+        await readAssetProfile(8, RANGE);
+        expect(queryCall, 'both assets are read again').toHaveBeenCalledTimes(4);
+    });
+
+    it('forgets the reads when the wait ends first too: the server goes on writing', async () => {
+        queryCall.mockResolvedValue(answer(7));
+        refreshCall.mockRejectedValue(Object.assign(new Error('timeout'), {code: 'ECONNABORTED'}));
+        await readAssetProfile(7, RANGE);
+
+        await expect(refreshAssetProfiles([7])).rejects.toMatchObject({code: 'ECONNABORTED'});
         await readAssetProfile(7, RANGE);
         expect(queryCall).toHaveBeenCalledTimes(2);
     });

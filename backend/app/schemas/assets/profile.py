@@ -70,6 +70,7 @@ class ProfileGroup(StrEnum):
     FUND = "fund"
     COMPANY = "company"
     BOND = "bond"
+    CRYPTO = "crypto"
     IDENTITY = "identity"
 
 
@@ -98,6 +99,7 @@ class ProfileTopic(StrEnum):
     FINANCIALS = "financials"
     LEGAL_FORM = "legal_form"
     ISSUER = "issuer"
+    CATEGORIES = "categories"
     DESCRIPTION = "description"
 
 

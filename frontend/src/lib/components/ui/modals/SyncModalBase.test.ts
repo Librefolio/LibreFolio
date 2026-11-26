@@ -271,6 +271,25 @@ describe('SyncModalBase — active sections', () => {
 // Parallelism and result ownership
 // =========================================================================
 
+describe('SyncModalBase — a start that is blocked (81 U35)', () => {
+    it('turns Start off and says why while a reason is given, and starts nothing on its own', () => {
+        const alpha = answersWith('ok');
+        mount([{id: 'alpha', targetIds: ['a1'], doSyncFn: alpha}], {startBlockedReason: 'A sync of EUR/USD is already running'});
+
+        // A real browser sends no click to a disabled button: the `disabled` attribute is the contract.
+        expect(startButton()).toBeDisabled();
+        expect(screen.getByTestId('sync-modal-blocked')).toHaveTextContent('EUR/USD');
+        expect(alpha).not.toHaveBeenCalled();
+    });
+
+    it('offers Start as usual with no reason', () => {
+        mount([{id: 'alpha', targetIds: ['a1'], doSyncFn: answersWith('ok')}]);
+
+        expect(startButton()).toBeEnabled();
+        expect(screen.queryByTestId('sync-modal-blocked')).toBeNull();
+    });
+});
+
 describe('SyncModalBase — several sections at once', () => {
     it('runs every active section and files each result under the section that produced it', async () => {
         const alpha = answersWith('ok', 3, 1);

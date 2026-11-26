@@ -24,9 +24,17 @@ The profile is the asset's descriptive data, as opposed to its prices:
       distributing), domicile, fund currency, inception date, management fee;
     - **The company** — sector, industry, issuer's country, website, and the revenue and net income of the last fiscal
       year, with that year beside them (for example *78,057,000,000 € (fiscal year 2025)*);
+    - **The coin** — inception date (the day of the first block), website, categories; on a cryptocurrency only
+      (the note below);
     - **Identity** — legal form and issuer type, beside the asset's ISIN, ticker and other identifiers (the free ones, with no kind, are one row of chips);
     - **The bond** — coupon per period, coupon frequency and type, day count, net yield, accrued interest, issuer,
       minimum lot, interest start date, loyalty bonus, coupon schedule, payout terms.
+
+!!! info "🪙 The coin"
+
+    A cryptocurrency shows **The coin** and **Identity**; **The fund**, **The company** and **The bond** are not for it, and
+    appear there only if they hold a saved value. On any other asset it is the other way round: **The coin** is not shown,
+    unless a value of it is already saved on that asset, and that value stays visible.
 
 Each item has a **history**. A value holds from a given day until another one replaces it, and LibreFolio remembers who
 gave it: a source, or a person who wrote it by hand. A new value is saved only when it differs from the current one,
@@ -39,7 +47,7 @@ The profile also feeds other parts of LibreFolio: the Dashboard's allocation cha
 
 ## 🔌 Enrichers: where the data comes from {: #enrichers }
 
-An **enricher** is a source that reads an asset's profile from a website or a public register. LibreFolio ships four:
+An **enricher** is a source that reads an asset's profile from a website or a public register. LibreFolio ships five:
 
 | Enricher | Typically reads |
 |---|---|
@@ -47,6 +55,7 @@ An **enricher** is a source that reads an asset's profile from a website or a pu
 | [Yahoo Finance](../providers/yahoo-finance.md) | Shares: description, sector, industry, country, market capitalisation. Funds: description, annual cost, management company, inception date, sectors |
 | [Borsa Italiana](../providers/borsa-italiana.md) | Bonds: coupons, maturity, yields, modified duration, issuer, description, countries, sectors. Shares: sector, and from the company's profile page its description, country, website, and the revenue and net income of the last fiscal year. Funds: currency, inception date, management fee |
 | ESMA (FIRDS) | Any instrument traded on a European market, from the official register of the European Securities and Markets Authority: the issuer's LEI and the legal form; for a bond its maturity, the type of coupon, a fixed coupon and whether a State guarantees it; for a fund whether it accumulates or distributes. It comes after the other sources, filling what they leave empty |
+| [CoinGecko](../providers/coingecko.md#profile) | Cryptocurrencies only: description, website, inception date (the day of the first block), market capitalisation, categories. It needs the instance's CoinGecko API key |
 
 An asset can have several enrichers, **in order**: the order is their priority. For each item, the first enricher in
 the list that gives a value wins it; if that source does not answer, the item goes to the next one.
@@ -138,7 +147,8 @@ the **Enrichers** window asks once, as for an asset that exists.
   The administrator sets the day and the time
   ([Market Data Scheduler](../../../admin/settings.md#market-data-scheduler)).
 - **Right after a save** that creates an asset with enrichers, or changes an asset's enrichers.
-- **When you ask**, with [Refresh](#refresh) in the **Profile** tab.
+- **When you ask**, with [Refresh](#refresh) in the **Profile** tab, or for many assets together with
+  [**Realign the profiles**](#refresh-all) in the **Sync All** window of the Assets page.
 
 Prices are not part of this: they stay with the toolbar's **Sync**.
 
@@ -180,6 +190,18 @@ A notice tells you how it went:
 
 **Refresh** shows only when the asset has at least one enricher.
 
+#### 🔁 All the profiles together {: #refresh-all }
+
+On the [Assets page](../index.md), the **Sync All** window has a **Profile** section under the prices: **Realign the
+profiles** reads the enrichers of every asset that has some, also of an asset without a price provider, and saves what
+changed. The enrichers are still chosen asset by asset.
+
+- Each source is read slowly, so it can take a few minutes. There is no percentage to show: while it reads, the section
+  says so. You can close the window: the read goes on, and a notice tells you when it ends.
+- At the end each asset has its line: how many data items were updated, *nothing changed*, or which source gave no
+  answer.
+- The prices are apart: **Sync the prices**, at the bottom of the window, starts them.
+
 ### 🧭 No enricher configured {: #no-enricher }
 
 An asset without enrichers shows, at the top of the tab, the box **No enricher configured**: the data on the tab was
@@ -190,7 +212,8 @@ the asset form with the **Asset enrichers** window already on top ([Choose the e
 
 **Edit data** opens the **Profile data** window, to write the profile by hand:
 
-- **Find a data item and add it**, then write its value, or choose **Leave empty** to empty it on purpose.
+- **Find a data item and add it**, then write its value, or choose **Leave empty** to empty it on purpose. **Add row**
+  adds a row to choose its item in, with a search: its box is outlined in red until you choose one.
 - The sectors and the countries each have their own editor: see
   **Set the description, sectors and countries** in [Create & Edit](../create-edit.md).
 - **Ask** (on a row) and **Ask all** ask the asset's enrichers without saving: an empty item is filled *from the
@@ -198,7 +221,7 @@ the asset form with the **Asset enrichers** window already on top ([Choose the e
   from a source is saved in that source's name, not yours.
 - **Save all** saves everything at once.
 
-The same window opens from the **Profile data** row of the asset form; there **Keep the changes** hands them to the
+The same window opens from the **Profile data** row of the asset form, right under the description; there **Keep the changes** hands them to the
 form, which saves them with the asset.
 
 ### 📜 Latest changes {: #latest-changes }
@@ -208,9 +231,11 @@ asset's latest changes, newest first, twenty per page (the pages are in the bar 
 
 - **When** — the day of the change;
 - **Data** — the item;
-- **What changed** — a sentence, such as *Written by hand: …*, *Corrected by hand: from … to …*, *First value read:
-  …*, *Up from … to …*, *Left empty on purpose*;
-- **Who** — the person who wrote it by hand, or the source that gave it; a value that was already there before the profile existed reads **System**.
+- **Before** and **After** — the two values, side by side; a dash when there is none. A short note under **After** says
+  what the two values do not: *First value read*, *Written by hand*, *Corrected by hand*, *Left empty on purpose*, *Back to
+  the value of …*, *Data of … (before, of …)*;
+- **Who** — the person who wrote it by hand, or the source that gave it, with its icon; a value that was already there
+  before the profile existed reads **System**.
 
 The values that change at every read (fund size, market capitalisation, gross and net yield, modified duration,
 accrued interest) appear here only when written by hand, and with the read that replaced them: their other steps are in
@@ -247,5 +272,5 @@ To write a new value, close the window and use **Edit data**.
 
 - 🗂️ **[Classification](classification.md)** — The sector and geographic distribution in detail
 - ➕ **[Create & Edit](../create-edit.md)** — The asset form, where the enrichers are chosen
-- 🔌 **[Providers](../providers/index.md)** — justETF, Yahoo Finance, Borsa Italiana and the other sources
+- 🔌 **[Providers](../providers/index.md)** — justETF, Yahoo Finance, Borsa Italiana, CoinGecko and the other sources
 - 🕐 **[Market Data Scheduler](../../../admin/settings.md#market-data-scheduler)** — For administrators: the day and time of the weekly read

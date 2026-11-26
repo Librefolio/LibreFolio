@@ -35,6 +35,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from datetime import date as Date
 from decimal import Decimal
+from typing import Literal
 
 from pydantic import Field
 
@@ -90,6 +91,7 @@ from backend.app.services.ai_export.components.spec import ComponentSpec
 from backend.app.services.ai_export.components.types import BuildScope, Domain, PeriodBehavior, ResourceKey
 from backend.app.services.ai_export.dependencies import BuildContext
 from backend.app.services.financial_math.portfolio.period import is_reconciled, period_identity_residual
+from backend.app.services.financial_math.series_steps import value_at
 
 _PORTFOLIO_FIFO_ASSET_METADATA_RESOURCE: ResourceKey[Mapping[int, Asset]] = ResourceKey("portfolio.fifo_asset_metadata", Mapping)
 
@@ -200,6 +202,14 @@ async def _build_portfolio_positions(context: BuildContext, dependencies: Mappin
 # =============================================================================
 
 
+class BrokerCashRow(StrictModel):
+    """One broker's cash (78 L6 S7): the report's own per-broker slice, never recomputed here."""
+
+    broker_id: int
+    cash_total: Currency = Field(..., description="The broker's cash in the report currency, at the as-of day's rates; the brokers' rows add up to cash_total")
+    cash_balances: list[Currency] = Field(default_factory=list, description="The broker's cash balance per currency, native (unconverted)")
+
+
 class PortfolioAllocationsCashPayload(StrictModel):
     as_of: Date
     target_currency: CurrencyCode
@@ -219,7 +229,31 @@ class PortfolioAllocationsCashPayload(StrictModel):
     concentration_semantics: str
     cash_total: Currency
     cash_balances: list[Currency] = Field(default_factory=list)
+    cash_by_broker: list[BrokerCashRow] = Field(
+        default_factory=list,
+        description="78 L6 S7: the cash of each broker in scope, from the report's per-broker breakdown (the Dashboard's broker cards); the rows add up to cash_total",
+    )
+    cash_by_broker_basis: Literal["user_ownership_share"] = Field(
+        "user_ownership_share",
+        description="78 L6: every broker's cash counts at the user's ownership share, as the whole portfolio does: for a co-owned broker it is the user's part, not the whole account (the PAC allocator's «From your Brokers» shows the whole account)",
+    )
+    cash_in_transit: Currency | None = Field(
+        None,
+        description="78 L6: cash sent between brokers that has not arrived on the as-of day, from the engine's daily state; it is in no broker's cash nor in cash_total, and the Liquidity slice of by_type is cash_total plus this",
+    )
     market_value: Currency | None = None
+
+
+def _cash_in_transit(history: list[PortfolioHistoryPoint], as_of: Date, currency_code: CurrencyCode) -> Currency | None:
+    """The engine's cash in transit on the as-of day, read from its step of the history.
+
+    The history leaves the amount out when it is zero, so a step without it is an explicit zero: the prompt then shows
+    that nothing is in flight. None only when the history has no step on that day.
+    """
+    point = value_at(history, as_of)
+    if point is None:
+        return None
+    return point.in_transit_cash_value or Currency(code=currency_code, amount=Decimal("0"))
 
 
 async def _build_portfolio_allocations_cash(context: BuildContext, dependencies: Mapping[str, SectionEnvelope]) -> PortfolioAllocationsCashPayload:
@@ -261,6 +295,8 @@ async def _build_portfolio_allocations_cash(context: BuildContext, dependencies:
         concentration_semantics="Largest-position weight and HHI use position nav_weight_percent: current position value / total NAV. Cash is included in the denominator but is not itself an HHI term.",
         cash_total=summary.cash_total,
         cash_balances=list(summary.cash_balances),
+        cash_by_broker=[BrokerCashRow(broker_id=row.broker_id, cash_total=row.cash_total, cash_balances=list(row.cash_balances)) for row in summary.by_broker or ()],
+        cash_in_transit=_cash_in_transit(report.history or [], scope.snapshot_as_of, currency_code),
         market_value=summary.market_value,
     )
 
@@ -665,7 +701,7 @@ PORTFOLIO_POSITIONS_COMPONENT = ComponentSpec(
 
 PORTFOLIO_ALLOCATIONS_CASH_COMPONENT = ComponentSpec(
     component_id="portfolio.allocations_cash",
-    version=2,  # v2 (MF-C2): slice percents are null when the slices sum to zero or less
+    version=3,  # v2 (MF-C2): slice percents are null when the slices sum to zero or less; v3 (78 L6 S7): the cash per broker
     domains=frozenset({Domain.PORTFOLIO}),
     output_model=PortfolioAllocationsCashPayload,
     builder=_build_portfolio_allocations_cash,

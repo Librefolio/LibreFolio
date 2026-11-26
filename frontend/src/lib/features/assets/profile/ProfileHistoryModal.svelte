@@ -23,8 +23,8 @@
     import type {ProfileChange} from './profileChanges';
     import {forgetChanges} from './profileForget';
     import {historyCharted, historyPoints, type HistoryPoint} from './profileHistory';
-    import {loadEnricherNames, profileSourceName} from './profileSources';
-    import {loadProfileCatalogue, readAssetProfile, type ProfileVoice} from './profileStore';
+    import {loadProfileSources, profileSourceName, type ProfileSource} from './profileSources';
+    import {loadProfileCatalogue, profileVoice, readAssetProfile, type ProfileVoice} from './profileStore';
     import {formatProfileDay, formatProfileValue} from './profileTabState';
 
     interface Props {
@@ -52,12 +52,14 @@
     let page = $state(0);
     /** The `as_of` of the changes read: «Dimentica» sends it back. */
     let asOf = $state('');
-    let sourceNames = $state<Record<string, string>>({});
+    let sources = $state<Record<string, ProfileSource>>({});
     /** Bumped to read again (after a forget). */
     let again = $state(0);
     let latest = 0;
 
     const voice = $derived(voiceKey ? voices[voiceKey] : undefined);
+    /** A text's two values need more room than a figure's (87, A3); the catalogue is in memory before the window opens. */
+    const width = $derived(((voiceKey ? profileVoice(voiceKey) : undefined) ?? voice)?.shape === 'text' ? '6xl' : '4xl');
     const charted = $derived(voice ? historyCharted(voice) : false);
 
     function today(): string {
@@ -80,7 +82,7 @@
         void again;
         const mine = ++latest;
         status = 'loading';
-        void loadEnricherNames().then((names) => (sourceNames = names));
+        void loadProfileSources().then((known) => (sources = known));
         Promise.all([loadProfileCatalogue(), readAssetProfile(id, {start: 'min', end: today()}, {keys: [key]}), readAssetProfile(id, {start: today()}, {keys: [], changes: {key, page: asked}})]).then(
             ([catalogue, steps, changes]) => {
                 if (mine !== latest) return;
@@ -105,7 +107,7 @@
 
     function sourceName(code: string): string {
         if (code === 'user') return $t('assets.profile.history.byHand');
-        return profileSourceName(code, (key) => $t(key), sourceNames);
+        return profileSourceName(code, (key) => $t(key), sources);
     }
 
     /** The sources the chart shows, once each, in the order they come: the legend. */
@@ -133,7 +135,7 @@
     }
 </script>
 
-<ModalBase {open} maxWidth="3xl" onRequestClose={close} {zIndex} testId="profile-history-modal" labelledBy="profile-history-title">
+<ModalBase {open} maxWidth={width} onRequestClose={close} {zIndex} testId="profile-history-modal" labelledBy="profile-history-title">
     <div class="flex max-h-[90vh] flex-col text-lf-primary" data-testid="profile-history" data-voice={voiceKey ?? ''} data-status={status} data-busy={status === 'loading' ? 'true' : 'false'} aria-busy={status === 'loading'}>
         <header class="flex items-center justify-between gap-3 border-b border-lf-subtle px-4 py-4 sm:px-6">
             <h2 id="profile-history-title" class="min-w-0 truncate text-lg font-semibold text-lf-primary">
@@ -163,7 +165,7 @@
                         </div>
                     </section>
                 {/if}
-                <ProfileChangesTable {rows} {voices} {total} {page} {sourceNames} busy={status === 'loading'} storageKey="profileHistoryModal" onforget={forget} onpage={(next) => (page = next)} />
+                <ProfileChangesTable {rows} {voices} {total} {page} {sources} busy={status === 'loading'} storageKey="profileHistoryModal" onforget={forget} onpage={(next) => (page = next)} />
             {/if}
         </div>
 

@@ -202,15 +202,16 @@ async def _session_account_id(request: Request, session: AsyncSession) -> int | 
         return None
 
 
-@router.post("/email-change/check", response_model=EmailChangeCheckResponse, summary="Read what a change link's page shows, without spending the link")
+@router.post("/email-change/check", response_model=EmailChangeCheckResponse, response_model_exclude_none=True, summary="Read what a change link's page shows, without spending the link")
 async def check_email_change_link(body: EmailChangeConfirmRequest, request: Request, session: AsyncSession = Depends(get_session_generator)) -> EmailChangeCheckResponse:
-    """The page of a change link asks this on opening (lots E2, E3): ``ready``, ``signin`` or ``other_account``. The link is neither spent nor revoked, and the answer names no account. A link
-    that no longer works answers as its click would: 400 ``TOKEN_INVALID`` with its ``status``, whoever asks."""
+    """The page of a change link asks this on opening (lots E2, E3): ``ready``, ``signin`` or ``other_account``. The link is neither spent nor revoked, and the answer names no account. With ``ready``
+    only, the answer also carries ``new_email``, the address the click would confirm (81 U46: the page shows it as a double check); with ``signin`` and ``other_account`` the field is absent. A link
+    that no longer works answers as its click would: 400 ``TOKEN_INVALID`` with its ``status``, whoever asks, and no address."""
     try:
-        status_ = await email_change.check_link(session, body.token, acting_user_id=await _session_account_id(request, session))
+        checked = await email_change.check_link(session, body.token, acting_user_id=await _session_account_id(request, session))
     except email_change.ProfileEmailChangeLinkInvalidError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail={"error_code": "TOKEN_INVALID", "status": exc.code, "message": "This confirmation link is not valid"}) from None
-    return EmailChangeCheckResponse(status=status_)
+    return EmailChangeCheckResponse(status=checked.status, new_email=checked.new_email)
 
 
 @router.post("/email-change/confirm", response_model=EmailChangeConfirmResponse, summary="Confirm a new email address: spend the link emailed to it")

@@ -2,7 +2,7 @@
   InfoBanner — Reusable banner for info/warning/error/success messages.
 
   Consistent styling with dark mode. Supports slot content OR message prop.
-  Optional dismiss button (X).
+  Optional dismiss button: the standard CloseButton on the banner's tint, named common.close (85 BTN-2d).
 
   Usage:
     <InfoBanner variant="warning">This is a warning!</InfoBanner>
@@ -10,8 +10,10 @@
     <InfoBanner variant="success" message="Done!" />
 -->
 <script lang="ts">
-    import {AlertCircle, AlertTriangle, CheckCircle, Info, X} from 'lucide-svelte';
+    import {AlertCircle, AlertTriangle, CheckCircle, Info} from 'lucide-svelte';
     import type {Snippet} from 'svelte';
+    import CloseButton from '$lib/components/ui/button/CloseButton.svelte';
+    import type {ButtonTone} from '$lib/components/ui/button/buttonClasses';
 
     type Variant = 'warning' | 'info' | 'error' | 'success';
 
@@ -39,29 +41,29 @@
         {
             container: string;
             icon: string;
-            /** The dismiss button's hover, a step down the family (designer, round 3: no opacity on it). */
-            dismiss: string;
+            /** The state the dismiss ✕ stands on (its hover a step down the family, designer, round 3). */
+            tint: ButtonTone;
         }
     > = {
         warning: {
             container: 'bg-lf-warning-soft border-lf-warning-line text-lf-warning-on-soft',
             icon: 'text-lf-warning',
-            dismiss: 'hover:bg-lf-warning-line',
+            tint: 'warning',
         },
         info: {
             container: 'bg-lf-info-soft border-lf-info-line text-lf-info-on-soft',
             icon: 'text-lf-info',
-            dismiss: 'hover:bg-lf-info-line',
+            tint: 'info',
         },
         error: {
             container: 'bg-lf-danger-soft border-lf-danger-line text-lf-danger-on-soft',
             icon: 'text-lf-danger',
-            dismiss: 'hover:bg-lf-danger-line',
+            tint: 'danger',
         },
         success: {
             container: 'bg-lf-success-soft border-lf-success-line text-lf-success-on-soft',
             icon: 'text-lf-success',
-            dismiss: 'hover:bg-lf-success-line',
+            tint: 'success',
         },
     };
 
@@ -91,9 +93,7 @@
             {/if}
         </div>
         {#if dismissible && ondismiss}
-            <button type="button" class="shrink-0 p-0.5 rounded transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-lf-focus {styles.dismiss}" onclick={ondismiss} aria-label="Dismiss">
-                <X size={14} />
-            </button>
+            <CloseButton size="xs" tint={styles.tint} onclick={ondismiss} data-testid="info-banner-dismiss" />
         {/if}
     </div>
 {/if}
