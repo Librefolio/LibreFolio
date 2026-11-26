@@ -17,8 +17,9 @@ vi.mock('./profileStore', () => ({
     readAssetProfile: (...args: unknown[]) => readAssetProfile(...args),
     forgetProfileRows: (...args: unknown[]) => forgetProfileRows(...args),
     loadProfileCatalogue: vi.fn(async () => CATALOGUE),
+    profileVoice: (key: string) => CATALOGUE.find((voice) => voice.key === key),
 }));
-vi.mock('./profileSources', async (original) => ({...((await original()) as object), loadEnricherNames: vi.fn(async () => ({borsa_italiana: 'Borsa Italiana'}))}));
+vi.mock('./profileSources', async (original) => ({...((await original()) as object), loadProfileSources: vi.fn(async () => ({borsa_italiana: {name: 'Borsa Italiana', icon: null}}))}));
 vi.mock('$lib/stores/app/notify.svelte', () => ({notify: vi.fn()}));
 vi.mock('$lib/stores/reference/countryStore', () => ({ensureCountriesLoaded: vi.fn(async () => undefined), getCountryInfo: (iso3: string) => ({name: iso3})}));
 vi.mock('echarts', () => ({init: () => ({setOption: vi.fn(), resize: vi.fn(), dispose: vi.fn(), on: vi.fn()})}));

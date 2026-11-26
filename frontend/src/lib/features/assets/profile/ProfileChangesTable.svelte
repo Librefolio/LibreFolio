@@ -3,8 +3,9 @@
   variazioni» panel shows the latest changes of every voice, the «Storia del dato» window every row of one voice. The
   table never reads: its host owns the read, the page and the `as_of` «Dimentica» sends back.
 
-  - Columns: «Quando» (the day of the row), «Dato» (`showVoice`, the panel only), «Cosa è cambiato» (`profileChanges`,
-    its kind on `data-kind`), «Chi» (the author of a value written by hand, or the source).
+  - Columns: «Quando» (the day of the row), «Dato» (`showVoice`, the panel only), «Prima» and «Dopo» (`profileChanges`,
+    the kind on `data-kind`, the note under «Dopo»; 87, A3), «Chi» (the author of a value written by hand, or the
+    source with its icon). The two values share what is left, never under a readable width: a text takes more.
   - «Dimentica» of one row (its menu) and of the rows chosen asks first: the change leaves the history and does not come
     back. On confirm, `onforget(ids)`. The rows chosen are the table's selection panel (77 SEL-D): the bar at the top,
     «Dimentica» with the number of rows it takes, the dock when the top leaves the view.
@@ -22,15 +23,27 @@
     import {ensureCountriesLoaded, getCountryInfo} from '$lib/stores/reference/countryStore';
     import {type BulkAction, type ColumnDef, ConfirmModal, DataTable, type RowAction} from '$lib/components/table';
     import DataTablePagination from '$lib/components/table/DataTablePagination.svelte';
+    import ProfileChangeBefore from './ProfileChangeBefore.svelte';
     import ProfileChangeWhat from './ProfileChangeWhat.svelte';
     import ProfileChangeWho from './ProfileChangeWho.svelte';
-    import {changeSentence, text, type ProfileChange} from './profileChanges';
-    import {profileSourceName} from './profileSources';
+    import {changeParts, text, type ProfileChange} from './profileChanges';
+    import {profileSourceName, type ProfileSource} from './profileSources';
     import type {ProfileVoice} from './profileStore';
     import {formatProfileDay, formatProfileValue, type ProfileFormatContext} from './profileTabState';
 
     /** The server's page of changes (`CHANGES_PAGE_SIZE`). */
     const PAGE_SIZE = 20;
+    /** The columns beside the two values, in pixels: the day, the voice, who wrote it, and the checkbox with the actions (their
+     *  header is a word, longer in some languages). */
+    const WHEN_WIDTH = 105;
+    const VOICE_WIDTH = 165;
+    const WHO_WIDTH = 160;
+    const FRAME_WIDTH = 144;
+    /** The least width of «Prima» and «Dopo»: a figure or a short text, and a long text (a description). */
+    const VALUE_LEAST = 160;
+    const TEXT_LEAST = 280;
+    /** A text this long on either side reads as a strip under the figure's least width. */
+    const LONG_TEXT = 120;
 
     interface Props {
         rows: ProfileChange[];
@@ -39,8 +52,8 @@
         /** How many changes there are in all, and the page shown (0 first). */
         total: number;
         page: number;
-        /** The enrichers' declared names, by code. */
-        sourceNames?: Record<string, string>;
+        /** The enrichers' declared names and icons, by code. */
+        sources?: Record<string, ProfileSource>;
         /** The «Dato» column: the panel shows it, the window of one voice does not. */
         showVoice?: boolean;
         /** A read of the host is under way. */
@@ -51,7 +64,7 @@
         onpage: (page: number) => void;
     }
 
-    let {rows, voices, total, page, sourceNames = {}, showVoice = false, busy = false, storageKey, onforget, onpage}: Props = $props();
+    let {rows, voices, total, page, sources = {}, showVoice = false, busy = false, storageKey, onforget, onpage}: Props = $props();
 
     /** Bumped when the countries' names arrive: a map's sentence names its countries. */
     let countriesVersion = $state(0);
@@ -66,12 +79,12 @@
     });
 
     function sourceName(code: string): string {
-        return profileSourceName(code, (key) => $t(key), sourceNames);
+        return profileSourceName(code, (key) => $t(key), sources);
     }
 
-    function sentence(change: ProfileChange) {
+    function parts(change: ProfileChange) {
         const format = context;
-        return changeSentence(change, voices[change.key], {
+        return changeParts(change, voices[change.key], {
             translate: (key, values) => $t(key, {values}),
             format: (voice, value) => formatProfileValue(voice, value, format),
             day: (iso) => formatProfileDay(iso, format.locale),
@@ -80,43 +93,55 @@
     }
 
     function author(change: ProfileChange): string {
-        // The sentence says «before the profile»; the «Chi» cell says who: the system (81 U26a).
+        // The note says «before the profile»; the «Chi» cell says who: the system (81 U26a).
         if (change.source === 'legacy') return $t('assets.profile.changes.who.system');
         if (change.source !== 'user') return sourceName(change.source);
         return text(change.user_name) ?? $t('assets.profile.changes.who.deletedUser');
     }
 
-    /** A phone (below 640 px): one column, the sentence over the day, the voice and who wrote it (the mock's shot 14). */
-    let compact = $state(false);
+    /** The table's own width decides (0 before it is drawn); until then, a phone (below 640 px) is one column: the values
+     *  over the day, the voice and who wrote it (the mock's shot 14). */
+    let width = $state(0);
+    let phone = $state(false);
+    const least = $derived(rows.some((row) => voices[row.key]?.shape === 'text' && [row.value, row.previous].some((side) => typeof side === 'string' && side.length > LONG_TEXT)) ? TEXT_LEAST : VALUE_LEAST);
+    /** What is left for each of the two values: they share it, so every column stays in sight («Chi» included).
+     *  `tableLayout="auto"`: a fixed table would ignore the least widths. */
+    const valueWidth = $derived(Math.floor((width - FRAME_WIDTH - WHEN_WIDTH - WHO_WIDTH - (showVoice ? VOICE_WIDTH : 0)) / 2));
+    const compact = $derived(width > 0 ? valueWidth < least : phone);
     $effect(() => {
         if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
         const query = window.matchMedia('(max-width: 639px)');
-        compact = query.matches;
-        const follow = (event: MediaQueryListEvent) => (compact = event.matches);
+        phone = query.matches;
+        const follow = (event: MediaQueryListEvent) => (phone = event.matches);
         query.addEventListener('change', follow);
         return () => query.removeEventListener('change', follow);
     });
 
     function whatCell(row: ProfileChange) {
-        const detail = compact ? {when: formatProfileDay(row.read_on, context.locale), voice: showVoice ? $t(`assets.profile.voices.${row.key}`) : undefined, source: row.source, name: author(row), avatarUrl: text(row.user_avatar_url)} : null;
-        return {type: 'custom' as const, component: ProfileChangeWhat, props: {...sentence(row), changeId: row.id, compact: detail}};
+        const detail = compact ? {when: formatProfileDay(row.read_on, context.locale), voice: showVoice ? $t(`assets.profile.voices.${row.key}`) : undefined, source: row.source, name: author(row), avatarUrl: text(row.user_avatar_url), icon: sources[row.source]?.icon ?? null} : null;
+        return {type: 'custom' as const, component: ProfileChangeWhat, props: {...parts(row), changeId: row.id, compact: detail}};
     }
 
     const columns: ColumnDef<ProfileChange>[] = $derived.by(() => {
-        const what: ColumnDef<ProfileChange> = {id: 'what', header: () => $t('assets.profile.changes.columns.what'), type: 'text', sortable: false, filterable: false, minWidth: 220, cell: whatCell};
-        if (compact) return [what];
-        const list: ColumnDef<ProfileChange>[] = [{id: 'when', header: () => $t('assets.profile.changes.columns.when'), type: 'text', sortable: false, filterable: false, width: 110, cell: (row) => formatProfileDay(row.read_on, context.locale)}];
+        if (compact) return [{id: 'what', header: () => $t('assets.profile.changes.columns.what'), type: 'text', sortable: false, filterable: false, minWidth: 220, cell: whatCell}];
+        const value = {minWidth: Math.max(valueWidth, least)};
+        const list: ColumnDef<ProfileChange>[] = [{id: 'when', header: () => $t('assets.profile.changes.columns.when'), type: 'text', sortable: false, filterable: false, width: WHEN_WIDTH, minWidth: WHEN_WIDTH, cell: (row) => formatProfileDay(row.read_on, context.locale)}];
         if (showVoice) {
-            list.push({id: 'voice', header: () => $t('assets.profile.changes.columns.voice'), type: 'text', sortable: false, filterable: false, width: 150, cell: (row) => $t(`assets.profile.voices.${row.key}`)});
+            list.push({id: 'voice', header: () => $t('assets.profile.changes.columns.voice'), type: 'text', sortable: false, filterable: false, width: VOICE_WIDTH, minWidth: VOICE_WIDTH, cell: (row) => $t(`assets.profile.voices.${row.key}`)});
         }
-        list.push(what, {
+        list.push(
+            {id: 'before', header: () => $t('assets.profile.changes.columns.before'), type: 'text', sortable: false, filterable: false, ...value, cell: (row) => ({type: 'custom', component: ProfileChangeBefore, props: {before: parts(row).before, changeId: row.id}})},
+            {id: 'after', header: () => $t('assets.profile.changes.columns.after'), type: 'text', sortable: false, filterable: false, ...value, cell: whatCell},
+        );
+        list.push({
             id: 'who',
             header: () => $t('assets.profile.changes.columns.who'),
             type: 'text',
             sortable: false,
             filterable: false,
-            width: 160,
-            cell: (row) => ({type: 'custom', component: ProfileChangeWho, props: {changeId: row.id, source: row.source, name: author(row), avatarUrl: text(row.user_avatar_url)}}),
+            width: WHO_WIDTH,
+            minWidth: WHO_WIDTH,
+            cell: (row) => ({type: 'custom', component: ProfileChangeWho, props: {changeId: row.id, source: row.source, name: author(row), avatarUrl: text(row.user_avatar_url), icon: sources[row.source]?.icon ?? null}}),
         });
         return list;
     });
@@ -178,7 +203,7 @@
     const last = $derived(Math.max(0, Math.ceil(total / PAGE_SIZE) - 1));
 </script>
 
-<div class="flex flex-col gap-2 text-lf-primary" data-testid="profile-changes-table" data-busy={busy || forgetting ? 'true' : 'false'} aria-busy={busy || forgetting}>
+<div bind:clientWidth={width} class="flex flex-col gap-2 text-lf-primary" data-testid="profile-changes-table" data-layout={compact ? 'compact' : 'columns'} data-busy={busy || forgetting ? 'true' : 'false'} aria-busy={busy || forgetting}>
     {#snippet pager(docked: boolean)}
         <!-- The table's balloon on the server's pages; its range on stable handles. -->
         <div class="contents" data-testid="profile-changes-pager" data-from={from} data-to={to} data-total={total} data-page={page}>
@@ -191,6 +216,7 @@
             {columns}
             getRowId={(row) => String(row.id)}
             {storageKey}
+            tableLayout="auto"
             selectionMode="multi"
             {rowActions}
             {bulkActions}
