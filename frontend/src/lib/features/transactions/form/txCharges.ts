@@ -139,6 +139,22 @@ export function chargeRowsMissingAmount(charges: readonly ChargeDraft[]): string
         .map((charge) => charge.key);
 }
 
+/** What a link needs equal on its two ends (rules 2 and 3). */
+export interface LinkContext {
+    broker_id: number;
+    asset_id: number | null;
+}
+
+/**
+ * The links made in this Bulk, not saved yet, that a change of broker or asset would break because their other end is
+ * saved and cannot follow (66 TL-12): the saved charges linked under this new parent, or the saved parent of this new
+ * charge. A new charge is not among them (an all-new group moves together, TL-3b), nor a charge saved under this parent.
+ */
+export function brokenSavedLinks<T>(current: LinkContext, next: LinkContext, charges: readonly ChargeDraft[], parent: T | null): {charges: ChargeDraft[]; parent: T | null} {
+    if (current.broker_id === next.broker_id && current.asset_id === next.asset_id) return {charges: [], parent: null};
+    return {charges: linkedCharges(charges).filter((charge) => charge.id !== null && charge.linkNew === true), parent};
+}
+
 /** The section's state as one string, for the form's unsaved-changes baseline and its anti-bounce. */
 export function chargesKey(charges: readonly ChargeDraft[]): string {
     return JSON.stringify(charges.map((charge) => [charge.key, charge.state, charge.type, charge.cash?.amount ?? null, charge.cash?.code ?? null, charge.description, charge.linkNew === true]));
