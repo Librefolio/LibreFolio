@@ -289,11 +289,24 @@ export const BUTTON_TONES = {
         danger: 'border border-lf-danger bg-lf-danger text-lf-on-status',
         info: 'border border-lf-info bg-lf-info text-lf-on-status',
     },
+    /** A segment pressed in a state (C16, the hand-chosen duration's amber badge): the fill of `pressed`, no border, so
+     *  the width never moves between rest and pressed. */
+    segmentPressed: {
+        success: 'bg-lf-success text-lf-on-status',
+        warning: 'bg-lf-warning text-lf-on-status',
+        danger: 'bg-lf-danger text-lf-on-status',
+        info: 'bg-lf-info text-lf-on-status',
+    },
     tint: {
         success: 'text-current not-disabled:not-aria-disabled:hover:bg-lf-success-line',
         warning: 'text-current not-disabled:not-aria-disabled:hover:bg-lf-warning-line',
         danger: 'text-current not-disabled:not-aria-disabled:hover:bg-lf-danger-line',
         info: 'text-current not-disabled:not-aria-disabled:hover:bg-lf-info-line',
+        /**
+         * On a fill whose colour is not a state (C15, the tags of `TagInput`: their colour comes from
+         * `getStringBadgeStyle`): the fill's text, dimmed, full on hover — no colour of its own, so none is invented.
+         */
+        current: 'text-current opacity-70 not-disabled:not-aria-disabled:hover:opacity-100',
     },
 } as const;
 

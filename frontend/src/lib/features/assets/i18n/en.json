@@ -411,7 +411,8 @@
       "deleteSelected": "Delete selected rows",
       "deleteConfirmMessage": "Delete {n} entries from this distribution?",
       "weightPercent": "Weight %",
-      "balance": "Balance"
+      "balance": "Balance",
+      "askNoSource": "No source can be asked for this asset yet"
     },
     "showInactive": "Inactive",
     "edit": {

@@ -411,7 +411,8 @@
       "deleteSelected": "Supprimer les lignes sélectionnées",
       "deleteConfirmMessage": "Supprimer {n} entrées de cette distribution ?",
       "weightPercent": "Poids (%)",
-      "balance": "Équilibrer"
+      "balance": "Équilibrer",
+      "askNoSource": "Aucune source ne peut encore être interrogée pour cet actif"
     },
     "showInactive": "Inactifs",
     "edit": {

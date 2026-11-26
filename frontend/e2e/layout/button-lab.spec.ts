@@ -109,6 +109,8 @@ async function fingerRowMenu(page: Page, point: {x: number; y: number}): Promise
         }
         await expect(page.getByTestId('context-menu')).toBeVisible();
     });
+    // Every caller's path is on stdout: a run says for each test which of the two served.
+    console.log(`row menu by finger at ${point.x},${point.y}: contextmenu ${source}`);
     return source;
 }
 
@@ -294,7 +296,6 @@ test.describe('Button Lab — a finger: the name’s size and the row menu (mobi
 
         const source = await fingerRowMenu(page, point);
         testInfo.annotations.push({type: 'contextmenu-source', description: source});
-        console.log(`row menu by finger, contextmenu ${source}`);
 
         const menu = page.getByTestId('context-menu');
         await expect(menu).toHaveAttribute('data-origin', 'finger');

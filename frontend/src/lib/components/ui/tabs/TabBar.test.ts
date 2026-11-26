@@ -14,9 +14,9 @@
  *   2. when it does hide a label, the button carries `aria-label={tab.label}`;
  *   3. (guard) while labels are shown, the visible text names the tab and no `aria-label` is added.
  *
- * Every button already carries `title={tab.label}`, which browsers fall back on for a name when
- * the content has none: the name is implicit today, not missing. The contract asked for is the
- * explicit `aria-label`.
+ * Since 85 BTN-2d (D8) a tab carries no `title`: its name shows in the standard tooltip — a long
+ * press, a mouse rest, Tab — while its word is out of view (`pressable`), and a tab whose word may
+ * hide, `hideLabelOnMobile` included, always carries the explicit `aria-label`.
  *
  * Why the assertions read a class and an attribute. jsdom loads no Tailwind, so `hidden` and
  * `sm:inline` compute to nothing and `toBeVisible()` would be true for every label: the class
@@ -28,9 +28,10 @@
  * Every label is a value this file passes in as a prop, never a translated string.
  */
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
-import {tick} from 'svelte';
+import {flushSync, tick} from 'svelte';
 import {cleanup, fireEvent, render, screen, within} from '$test/component';
 import {ChartLine, Shield} from 'lucide-svelte';
+import {HOVER_DELAY_MS, LONG_PRESS_MS} from '$lib/components/ui/button/pressable.svelte';
 import TabBar, {type TabItem} from './TabBar.svelte';
 
 const PLAIN_LABEL = 'Plain label';
@@ -108,6 +109,98 @@ describe('TabBar — label visibility and accessible names', () => {
             const {label} = setup({hideLabelOnMobile: true});
 
             expect(label('tab-plain', PLAIN_LABEL), 'below sm an icon-less tab would be an empty button').not.toHaveClass('hidden');
+        });
+
+        // 85 BTN-2d: below sm the word is hidden by CSS alone, so the name cannot depend on it.
+        it('a tab with an icon always carries its aria-label; one without keeps its word as the name', () => {
+            const {tab} = setup({hideLabelOnMobile: true});
+            expect(tab('tab-iconic')).toHaveAttribute('aria-label', ICON_LABEL);
+            expect(tab('tab-iconic-2')).toHaveAttribute('aria-label', SECOND_ICON_LABEL);
+            expect(tab('tab-plain')).not.toHaveAttribute('aria-label');
+        });
+
+        it('the name keeps what the tab carries: a badge number, or the words of its dot', () => {
+            cleanup();
+            render(TabBar, {
+                tabs: [
+                    {id: 'badged', label: 'Transactions', icon: Shield, testId: 'tab-badged', badge: 3},
+                    {id: 'dotted', label: 'Email', icon: Shield, testId: 'tab-dotted', dot: {label: 'needs attention'}},
+                    {id: 'plainer', label: 'Users', icon: Shield, testId: 'tab-plainer', badge: 0},
+                ],
+                activeTab: 'badged',
+                hideLabelOnMobile: true,
+            });
+            expect(screen.getByTestId('tab-badged')).toHaveAttribute('aria-label', 'Transactions, 3');
+            expect(screen.getByTestId('tab-dotted')).toHaveAttribute('aria-label', 'Email, needs attention');
+            expect(screen.getByTestId('tab-plainer')).toHaveAttribute('aria-label', 'Users');
+        });
+    });
+
+    // jsdom lays nothing out: an element has no client rects, unless the case gives its label one.
+    describe('the standard press (85 BTN-2d, D8): the name of a tab whose word is out of view', () => {
+        function pointer(element: HTMLElement, type: string, pointerType: 'touch' | 'mouse'): void {
+            const event = new MouseEvent(type, {bubbles: !type.endsWith('enter'), cancelable: true, clientX: 10, clientY: 10});
+            Object.defineProperty(event, 'pointerType', {value: pointerType});
+            element.dispatchEvent(event);
+            flushSync();
+        }
+        async function advance(ms: number): Promise<void> {
+            await vi.advanceTimersByTimeAsync(ms);
+            flushSync();
+        }
+        const inView = (element: HTMLElement) => vi.spyOn(element, 'getClientRects').mockReturnValue([{}] as unknown as DOMRectList);
+
+        beforeEach(() => {
+            vi.useFakeTimers();
+        });
+        afterEach(() => {
+            vi.runOnlyPendingTimers();
+            cleanup();
+            vi.restoreAllMocks();
+            vi.useRealTimers();
+        });
+
+        it('no tab carries a native title', () => {
+            const {tab} = setup({hideLabelOnMobile: true});
+            for (const id of ['tab-plain', 'tab-iconic', 'tab-iconic-2']) expect(tab(id).hasAttribute('title'), id).toBe(false);
+        });
+
+        it('a long press on a tab whose word is hidden shows its name and does not select it; a tap selects it', async () => {
+            const onchange = vi.fn();
+            render(TabBar, {tabs: TABS, activeTab: 'plain', hideLabelOnMobile: true, onchange});
+            const tab = screen.getByTestId('tab-iconic');
+            pointer(tab, 'pointerdown', 'touch');
+            await advance(LONG_PRESS_MS);
+            expect(screen.getByRole('tooltip')).toHaveTextContent(ICON_LABEL);
+            pointer(tab, 'pointerup', 'touch');
+            await fireEvent.click(tab);
+            expect(onchange, 'the click of a long press is dropped').not.toHaveBeenCalled();
+
+            const other = screen.getByTestId('tab-iconic-2');
+            pointer(other, 'pointerdown', 'touch');
+            await advance(100);
+            pointer(other, 'pointerup', 'touch');
+            await fireEvent.click(other);
+            expect(onchange).toHaveBeenCalledExactlyOnceWith('iconic-2');
+        });
+
+        it('with the word in view (from sm up) a rest shows nothing: the word is the name', async () => {
+            const {tab, label} = setup({hideLabelOnMobile: true});
+            inView(label('tab-iconic', ICON_LABEL));
+            pointer(tab('tab-iconic'), 'pointerenter', 'mouse');
+            await advance(HOVER_DELAY_MS + 100);
+            expect(screen.queryByRole('tooltip')).toBeNull();
+            // The control: the same rest on the neighbour, whose word has no box, shows its name.
+            pointer(tab('tab-iconic-2'), 'pointerenter', 'mouse');
+            await advance(HOVER_DELAY_MS);
+            expect(screen.getByRole('tooltip')).toHaveTextContent(SECOND_ICON_LABEL);
+        });
+
+        it('a tab without an icon never shows a name: its word is always in view', async () => {
+            const {tab} = setup({showLabels: false});
+            pointer(tab('tab-plain'), 'pointerenter', 'mouse');
+            await advance(HOVER_DELAY_MS + 100);
+            expect(screen.queryByRole('tooltip')).toBeNull();
         });
     });
 });

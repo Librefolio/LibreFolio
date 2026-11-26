@@ -25,6 +25,8 @@ export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'ghost-strong' |
 export type ButtonSize = 'xs' | 'sm' | 'md' | 'lg';
 /** A state's colour: with `ghost` the button in that colour, with `chip` the chip of a banner, with `pressed` the fill. */
 export type ButtonTone = 'success' | 'warning' | 'danger' | 'info';
+/** What a button stands on (`tint`): a state's fill, or a fill of another colour whose text it inherits (`current`, C15). */
+export type ButtonTint = ButtonTone | 'current';
 /** `text`: the word; `icon-text`: icon and word; `icon`: the icon alone; `auto`: the word hides below a threshold. */
 export type ButtonDisplay = 'text' | 'icon-text' | 'icon' | 'auto';
 /**
@@ -43,13 +45,28 @@ export interface ButtonClassOptions {
     /** A state's colour (C4 + C5): `ghost` in that colour, the `chip` of a banner (mandatory there), the `pressed` fill. */
     tone?: ButtonTone;
     /** A button standing on a fill of that state (the ✕ of a toast or a banner): the fill's text, the hover a step down. */
-    tint?: ButtonTone;
-    /** A segment of a `ButtonGroup` (C2): no border and no radius of its own, the focus inside, the presets' colours. */
+    tint?: ButtonTint;
+    /**
+     * A segment (C2, C16, C18): a filled toggle with no border, `checked` pressed (a `tone` wins when pressed), and the
+     * focus inside. Alone it has nothing around it, so it shows by its own fill: `panel` at rest, `neutral` on hover,
+     * `rounded-lg` (`rounded-full` with `pill`). `joined` (inside a `ButtonGroup`) the group bounds it: `card` and muted
+     * at rest, `hover` on hover, no radius, and its finger target grows in height only.
+     */
     segment?: boolean;
+    /** The segment stands joined to its neighbours in a `ButtonGroup`: no radius, on the card, the target grows in height only. */
+    joined?: boolean;
+    /** One step less vertical padding (C16): `sm` → `py-1`, `md` → `py-1.5`; `xs`, `lg` and icons unchanged. */
+    compact?: boolean;
     /** Fully rounded (C3): a pill. */
     pill?: boolean;
     /** The word may shrink and cut (C7): no `shrink-0`, `min-w-0`; the word takes `truncate`. */
     truncate?: boolean;
+    /**
+     * The word may break on lines (C17, a section head in a narrow dialog): no `shrink-0`, no nowrap, and — on `xs` only —
+     * 14 px lines, so two of them fit in a 32 px row. No `min-w-0`: the button stays at least as wide as its longest word.
+     * Never with `truncate`.
+     */
+    wrap?: boolean;
     /** Inside a field or beside a neighbour (C9): the finger's target is 24 px (WCAG 2.5.8), not 40. */
     dense?: boolean;
     /**
@@ -64,7 +81,7 @@ export interface ButtonClassOptions {
     dashed?: boolean;
 }
 
-const BASE = 'lf-btn relative inline-flex items-center justify-center font-medium whitespace-nowrap transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-busy:cursor-progress';
+const BASE = 'lf-btn relative inline-flex items-center justify-center font-medium transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-busy:cursor-progress';
 
 /** The focus outline (C1): the page's colour or the bar's, outside the button or inside it. */
 const FOCUS = {
@@ -98,11 +115,21 @@ const VARIANTS: Record<Exclude<ButtonVariant, 'chip'>, string> = {
 const PRESSED_ON = 'border border-lf-checked bg-lf-checked text-lf-on-checked';
 const PRESSED_OFF = 'border border-lf-input bg-lf-card text-lf-muted not-disabled:not-aria-disabled:hover:bg-lf-hover not-disabled:not-aria-disabled:hover:text-lf-secondary';
 
-/** A segment (C2): the colours of today's presets, no border, so the width never moves when it is pressed. */
+/** A segment (C2): no border, so the width never moves when it is pressed. Alone, the colours of the presets; joined in a
+ *  group, those of the groups the app had (C18, the developer, 25/11/2026). */
 const SEGMENT_ON = 'bg-lf-checked text-lf-on-checked';
 const SEGMENT_OFF = 'bg-lf-panel text-lf-secondary not-disabled:not-aria-disabled:hover:bg-lf-neutral';
+const SEGMENT_JOINED_OFF = 'bg-lf-card text-lf-muted not-disabled:not-aria-disabled:hover:bg-lf-hover';
 
 /** Padding, gap and text size; the radius is apart (`pill`, `segment`). */
+/** `compact` (C16): the same sizes one step lower — `text-xs py-1`, `text-sm py-1.5`, frequent in the app. */
+const COMPACT_SIZES: Record<ButtonSize, string> = {
+    xs: 'gap-1 px-2 py-0.5 text-[11px]',
+    sm: 'gap-1 px-2.5 py-1 text-xs',
+    md: 'gap-1.5 px-3 py-1.5 text-sm',
+    lg: 'w-full gap-2 px-4 py-2.5 text-sm',
+};
+
 const SIZES: Record<ButtonSize, string> = {
     xs: 'gap-1 px-2 py-0.5 text-[11px]',
     sm: 'gap-1 px-2.5 py-1.5 text-xs',
@@ -156,9 +183,10 @@ function isLink(variant: ButtonVariant): boolean {
     return variant === 'link' || variant === 'bar-link';
 }
 
-function colours({variant = 'secondary', pressed, tone, tint, segment}: ButtonClassOptions): string {
+function colours({variant = 'secondary', pressed, tone, tint, segment, joined}: ButtonClassOptions): string {
     if (tint) return BUTTON_TONES.tint[tint];
-    if (segment) return pressed ? SEGMENT_ON : SEGMENT_OFF;
+    if (segment && !pressed) return joined ? SEGMENT_JOINED_OFF : SEGMENT_OFF;
+    if (segment) return tone ? BUTTON_TONES.segmentPressed[tone] : SEGMENT_ON;
     if (pressed !== undefined) {
         if (!pressed) return PRESSED_OFF;
         return tone ? BUTTON_TONES.pressed[tone] : PRESSED_ON;
@@ -173,13 +201,13 @@ function colours({variant = 'secondary', pressed, tone, tint, segment}: ButtonCl
 
 /** The classes of a standard button. */
 export function buttonClasses(options: ButtonClassOptions = {}): string {
-    const {variant = 'secondary', size = 'md', shape = 'default', pressed, segment = false, pill = false, truncate = false, dense = false, inline = false, dashed = false} = options;
+    const {variant = 'secondary', size = 'md', shape = 'default', pressed, segment = false, joined = false, compact = false, pill = false, truncate = false, dense = false, inline = false, dashed = false, wrap = false} = options;
     const link = isLink(variant) && pressed === undefined && !segment;
-    const box = inline ? INLINE_BOX : link ? LINK_SIZES[size] : shape === 'icon' ? ICON_SIZES[size] : SIZES[size];
-    const radius = segment ? 'rounded-none' : pill ? 'rounded-full' : link || inline ? 'rounded' : 'rounded-lg';
+    const box = inline ? INLINE_BOX : link ? LINK_SIZES[size] : shape === 'icon' ? ICON_SIZES[size] : compact ? COMPACT_SIZES[size] : SIZES[size];
+    const radius = segment && joined ? 'rounded-none' : pill ? 'rounded-full' : link || inline ? 'rounded' : 'rounded-lg';
     const focus = isBar(variant) ? FOCUS.bar : segment ? FOCUS.pageInset : FOCUS.page;
-    const flex = truncate ? 'min-w-0' : 'shrink-0';
-    const marks = [segment ? 'lf-btn-segment' : '', dense || inline ? 'lf-btn-dense' : ''].filter(Boolean).join(' ');
+    const flex = truncate ? 'min-w-0 whitespace-nowrap' : wrap ? (size === 'xs' ? 'whitespace-normal leading-3.5' : 'whitespace-normal') : 'shrink-0 whitespace-nowrap';
+    const marks = [segment && joined ? 'lf-btn-segment' : '', dense || inline ? 'lf-btn-dense' : ''].filter(Boolean).join(' ');
     const edged = !options.tint && !segment && pressed === undefined && (variant === 'secondary' || variant === 'chip');
     const edge = dashed && edged ? 'border-dashed' : '';
     return [BASE, flex, focus, box, radius, colours(options), edge, marks].filter(Boolean).join(' ');

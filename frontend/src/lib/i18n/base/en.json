@@ -147,7 +147,9 @@
     "errorWithRequestId": "{message} (code: {requestId})",
     "selectionActions": "Actions on the selection",
     "moveUp": "Move up",
-    "moveDown": "Move down"
+    "moveDown": "Move down",
+    "removeTag": "Remove {tag}",
+    "showSuggestions": "Show suggestions"
   },
   "csvImport": {
     "title": "Import CSV Data",
@@ -366,7 +368,8 @@
     "syncAllHint": "Ask the data providers for new data and save it in LibreFolio.",
     "refreshAllHint": "Reload what you see from LibreFolio, without asking the data providers.",
     "viewGrid": "Show as cards",
-    "viewTable": "Show as table"
+    "viewTable": "Show as table",
+    "viewMode": "View"
   },
   "table": {
     "columns": "Columns",

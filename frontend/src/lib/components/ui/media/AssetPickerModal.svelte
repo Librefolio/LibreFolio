@@ -9,8 +9,9 @@
 
   Returns the selected URL or uploaded file URL.
 
-  The standard buttons (85 BTN-2b): the ✕ is `CloseButton`; «Existing» and «URL» keep their own markup for now (they
-  look like tabs, but a real ARIA tab list needs its arrow keys and panels: the lot that brings `TabBar`); «Upload» is an action beside them (it opens the file dialog, it is never selected), a `Button`; the grid/list
+  The standard buttons (85 BTN-2b): the ✕ is `CloseButton`; «Existing» and «URL» keep their own markup (they look like
+  tabs, but a real ARIA tab list needs its arrow keys and panels, which `TabBar` has not either), with `use:pressable`
+  for the standard press (85 BTN-2d; their word is always in view, so they never need to show a name); «Upload» is an action beside them (it opens the file dialog, it is never selected), a `Button`; the grid/list
   toggles are `pressed` buttons; the confirm is `busy` while a personal file is made common.
 -->
 <script lang="ts">
@@ -27,6 +28,7 @@
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
     import Button from '$lib/components/ui/button/Button.svelte';
     import CloseButton from '$lib/components/ui/button/CloseButton.svelte';
+    import {pressable} from '$lib/components/ui/button/pressable.svelte';
     import type {ColumnDef} from '$lib/components/table';
     import {DataTable} from '$lib/components/table';
     import type {UploadedFile} from '$lib/types';
@@ -270,11 +272,11 @@
         <!-- Tabs -->
         <div class="picker-tabs">
             <div class="picker-tablist">
-                <button class="tab-btn" class:active={activeTab === 'existing'} data-testid="asset-picker-existing-tab" on:click={() => (activeTab = 'existing')} type="button">
+                <button class="tab-btn" class:active={activeTab === 'existing'} data-testid="asset-picker-existing-tab" use:pressable={{label: $_('uploads.existingFiles'), wordVisible: () => true}} on:click={() => (activeTab = 'existing')} type="button">
                     <FolderOpen size={14} />
                     {$_('uploads.existingFiles')}
                 </button>
-                <button class="tab-btn" class:active={activeTab === 'url'} data-testid="asset-picker-url-tab" on:click={() => (activeTab = 'url')} type="button">
+                <button class="tab-btn" class:active={activeTab === 'url'} data-testid="asset-picker-url-tab" use:pressable={{label: $_('uploads.fromUrl'), wordVisible: () => true}} on:click={() => (activeTab = 'url')} type="button">
                     <Link size={14} />
                     {$_('uploads.fromUrl')}
                 </button>

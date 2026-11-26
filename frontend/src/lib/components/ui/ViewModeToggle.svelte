@@ -1,6 +1,6 @@
 <!--
-  ViewModeToggle — a segmented toggle of view modes, each an icon (and, when asked, a label), with the design system's tooltip.
-  Svelte 5 runes, colour roles.
+  ViewModeToggle — a segmented toggle of view modes, each an icon (and, when asked, a label): a `ButtonGroup` of `pressed`
+  Buttons (85 BTN-2d, C2), each naming itself (long press, rest, Tab). Svelte 5 runes, colour roles.
 
   Without `options` it is the grid/list toggle of the /assets and /fx list pages, persisted per user in localStorage under
   `storageKey`. With `options` it toggles any set of modes (project 74: the Positions panel's «Globale / Broker»); the
@@ -23,7 +23,8 @@
 
 <script lang="ts">
     import {LayoutGrid, List} from 'lucide-svelte';
-    import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
+    import Button from '$lib/components/ui/button/Button.svelte';
+    import ButtonGroup from '$lib/components/ui/button/ButtonGroup.svelte';
     import {_ as t} from '$lib/i18n';
     import {getUserStorage, setUserStorage} from '$lib/utils/storage';
 
@@ -40,7 +41,7 @@
         showLabels?: boolean;
         /** The height of the panel toggles beside it (`text-xs`, a 14 px icon) instead of a page header's. */
         compact?: boolean;
-        /** Accessible name of the group. */
+        /** Accessible name of the group; «View» when absent. */
         groupLabel?: string;
         testId?: string;
     }
@@ -68,29 +69,24 @@
     }
 </script>
 
-<!-- Each button says what it does in the design system's tooltip; a click is the button's own, so it stops before the tooltip's click, which would pin the hint over the list that is redrawn. -->
-<div class="flex rounded-lg border border-lf-subtle text-lf-primary overflow-hidden {compact ? 'text-xs' : ''}" role="group" aria-label={groupLabel} data-testid={testId}>
+<!-- A click stays the button's own: it never reaches a clickable parent around the toggle. -->
+<ButtonGroup label={groupLabel ?? $t('sharedResource.viewMode')} data-testid={testId}>
     {#each items as item (item.value)}
-        {@const Icon = item.icon}
-        <Tooltip text={item.hint ?? item.label} position="bottom" interactiveChild testId="{item.testId}-tooltip">
-            <button
-                type="button"
-                aria-label={item.label}
-                aria-pressed={mode === item.value}
-                data-testid={item.testId}
-                class="flex items-center justify-center gap-1.5 transition-colors focus-visible:outline-lf-focus
-                       {compact ? 'px-2.5 py-1' : 'px-2.5 py-1.5'}
-                       {mode === item.value ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}"
-                onclick={(event) => {
-                    event.stopPropagation();
-                    setMode(item.value);
-                }}
-            >
-                <Icon size={compact ? 14 : 16} />
-                {#if showLabels}
-                    <span class="hidden sm:inline" data-testid="{item.testId}-label">{item.label}</span>
-                {/if}
-            </button>
-        </Tooltip>
+        <Button
+            label={item.label}
+            help={item.hint}
+            icon={item.icon}
+            display={showLabels ? 'auto' : 'icon'}
+            hideWordBelow="sm"
+            size={compact ? 'sm' : 'md'}
+            {compact}
+            pressed={mode === item.value}
+            tipPosition="bottom"
+            onclick={(event) => {
+                event.stopPropagation();
+                setMode(item.value);
+            }}
+            data-testid={item.testId}
+        />
     {/each}
-</div>
+</ButtonGroup>

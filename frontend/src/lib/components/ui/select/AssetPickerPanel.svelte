@@ -39,6 +39,7 @@
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import Button from '$lib/components/ui/button/Button.svelte';
     import {buttonClasses} from '$lib/components/ui/button/buttonClasses';
+    import {pressable, type PressableOptions} from '$lib/components/ui/button/pressable.svelte';
     import {_ as t} from '$lib/i18n';
     import {currentLanguage} from '$lib/stores/app/language';
     import {currencyStoreVersion, ensureCurrenciesLoaded, getCurrencyInfo} from '$lib/stores/reference/currencyStore';
@@ -443,6 +444,18 @@
         });
     });
 
+    /**
+     * The ⚠ of a row speaks to the mouse (`Tooltip insideControl`: its click is the row's); the row itself gives the same
+     * texts to the finger (long press), the keyboard and a screen reader (85 BTN-0c, D16).
+     */
+    function rowTip(asset: PickerAsset, verdict: PickerVerdict | undefined): PressableOptions {
+        return {label: asset.display_name, help: verdict?.level === 'warning' ? verdict.texts.join('\n') : undefined, partTips: true, wordVisible: () => true};
+    }
+
+    /** Single mode: the option the arrows stand on. The focus stays in the search, so a screen reader reads it — its
+     *  description included — through `aria-activedescendant` (85 BTN-0c, D16). */
+    let activeOptionId = $derived(mode === 'single' && open && isSelectable(listed[highlightedIndex]) ? `${listboxId}-${highlightedIndex}` : undefined);
+
     /** A filter can take the highlighted row away: the highlight moves to one that is there. */
     $effect(() => {
         if (listed.length === 0 || isSelectable(listed[highlightedIndex])) return;
@@ -461,6 +474,7 @@
             class="w-full rounded-md border border-lf-input bg-lf-field py-1.5 pl-8 pr-2 text-sm text-lf-primary placeholder:text-lf-placeholder hover:border-lf-input-hover focus:border-lf-focus focus:ring-1 focus:ring-lf-focus"
             placeholder={placeholderText}
             onkeydown={handleSearchKeydown}
+            aria-activedescendant={activeOptionId}
             data-testid="{testId}-search"
         />
     </div>
@@ -556,6 +570,7 @@
                                 type="button"
                                 role="option"
                                 aria-selected={on}
+                                use:pressable={rowTip(asset, verdict)}
                                 class="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] text-lf-secondary hover:bg-lf-hover disabled:cursor-not-allowed disabled:opacity-40"
                                 disabled={!on && full}
                                 onclick={() => toggleRow(asset.id)}
@@ -680,6 +695,8 @@
                                     type="button"
                                     role="option"
                                     aria-selected={asset.id === value}
+                                    id="{listboxId}-{index}"
+                                    use:pressable={rowTip(asset, verdict)}
                                     class="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] text-lf-secondary transition-colors {index === highlightedIndex ? 'bg-lf-selected' : 'hover:bg-lf-hover'}"
                                     onclick={() => choose(option)}
                                     onmouseenter={() => (highlightedIndex = index)}

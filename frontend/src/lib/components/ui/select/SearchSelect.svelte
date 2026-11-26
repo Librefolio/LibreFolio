@@ -17,6 +17,7 @@
     import {_} from '$lib/i18n';
     import Button from '$lib/components/ui/button/Button.svelte';
     import {buttonClasses} from '$lib/components/ui/button/buttonClasses';
+    import {pressable} from '$lib/components/ui/button/pressable.svelte';
 
     interface Props {
         /** Currently selected value */
@@ -401,6 +402,9 @@
 
     // Unique ID for aria-controls
     const listboxId = `searchselect-listbox-${Math.random().toString(36).substring(2, 9)}`;
+    /** The option the arrows stand on: the focus stays in the search, so a screen reader reads it — its description
+     *  included — through `aria-activedescendant` (85 BTN-0c, D16). */
+    let activeOptionId = $derived(isOpen && isSelectable(filteredOptions[highlightedIndex]) ? `${listboxId}-${highlightedIndex}` : undefined);
 
     function scrollToHighlighted() {
         setTimeout(() => {
@@ -447,6 +451,7 @@
                     handleSearchKeydown(e);
                 }}
                 onclick={(e) => e.stopPropagation()}
+                aria-activedescendant={activeOptionId}
                 class="flex-1 min-w-0 bg-transparent border-none outline-none text-sm text-lf-primary placeholder:text-lf-placeholder"
                 placeholder={$_('common.search')}
                 data-testid={testId ? `${testId}-search` : undefined}
@@ -492,6 +497,7 @@
                             bind:this={inputRef}
                             bind:value={searchQuery}
                             onkeydown={handleSearchKeydown}
+                            aria-activedescendant={activeOptionId}
                             type="text"
                             class="w-full pl-9 pr-8 py-2 text-sm border border-lf-input bg-lf-field text-lf-primary placeholder:text-lf-placeholder hover:border-lf-input-hover rounded-lg
                                focus:outline-none focus:ring-2 focus:ring-lf-focus focus:border-lf-focus"
@@ -526,6 +532,8 @@
                         {:else}
                             <button
                                 type="button"
+                                id="{listboxId}-{index}"
+                                use:pressable={{label: option.label, help: option.badgeTooltip, partTips: true, wordVisible: () => true}}
                                 onclick={() => selectOption(option)}
                                 onmouseenter={() => (highlightedIndex = index)}
                                 disabled={option.disabled}

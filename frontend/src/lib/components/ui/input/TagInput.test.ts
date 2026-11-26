@@ -14,11 +14,19 @@
  * on that call — which is the actual contract — and use `rerender` when the
  * follow-up state matters.
  */
-import {describe, expect, it, vi} from 'vitest';
-import {fireEvent, render, screen} from '$test/component';
+import {beforeAll, describe, expect, it, vi} from 'vitest';
+import {get} from 'svelte/store';
+import {waitLocale} from 'svelte-i18n';
+import {cleanup, fireEvent, render, screen, setupI18n} from '$test/component';
+import {_} from '$lib/i18n';
 import TagInput from './TagInput.svelte';
 
 const AVAILABLE = ['alpha', 'beta', 'gamma', 'delta'];
+
+// The ✕ and the toggle are named from the catalogue (85 BTN-2d).
+beforeAll(async () => {
+    await setupI18n();
+});
 
 function setup(props: Record<string, unknown> = {}) {
     const onchange = vi.fn();
@@ -191,5 +199,65 @@ describe('TagInput', () => {
         expect(screen.queryByTestId('tag-input-field')).toBeNull();
         expect(screen.queryByTestId('tag-input-toggle')).toBeNull();
         expect(screen.queryByTestId('tag-chip-remove-0')).toBeNull();
+    });
+});
+
+/**
+ * The ✕ of a tag and the suggestions toggle are standard Buttons (85 BTN-2d), named from the catalogue with the tag's
+ * own text: until then they said «remove tag» and «Toggle tag suggestions», in English, in every language.
+ */
+describe('TagInput — the standard buttons (85 BTN-2d)', () => {
+    it.each(['en', 'it'])('the ✕ names its own tag, in the interface’s language (%s)', async (lang) => {
+        await setupI18n(lang);
+        await waitLocale(lang);
+        try {
+            setup({value: ['alpha', 'beta']});
+            for (const [index, tag] of ['alpha', 'beta'].entries()) {
+                const expected = get(_)('common.removeTag', {values: {tag}});
+                expect(expected, 'premise: the catalogue names the tag').toContain(tag);
+                expect(expected).not.toBe('common.removeTag');
+                const remove = screen.getByTestId(`tag-chip-remove-${index}`);
+                expect(remove).toHaveAttribute('aria-label', expected);
+                expect(remove.hasAttribute('title')).toBe(false);
+            }
+        } finally {
+            cleanup();
+            await setupI18n('en');
+        }
+    });
+
+    it('premise of the case above: the two languages do not say it the same way', async () => {
+        const en = get(_)('common.removeTag', {values: {tag: 'alpha'}});
+        await setupI18n('it');
+        try {
+            expect(get(_)('common.removeTag', {values: {tag: 'alpha'}})).not.toBe(en);
+        } finally {
+            await setupI18n('en');
+        }
+    });
+
+    it('a click on the ✕ removes its tag and stays its own: it does not reach the chip', async () => {
+        const {onchange} = setup({value: ['alpha', 'beta']});
+        const chip = screen.getByTestId('tag-chip-0');
+        const onChip = vi.fn();
+        chip.addEventListener('click', onChip);
+        await fireEvent.click(screen.getByTestId('tag-chip-remove-0'));
+        expect(onchange).toHaveBeenCalledExactlyOnceWith(['beta']);
+        expect(onChip).not.toHaveBeenCalled();
+    });
+
+    it('the suggestions toggle is a named disclosure: aria-expanded follows the list', async () => {
+        setup();
+        const toggle = screen.getByTestId('tag-input-toggle');
+        const name = get(_)('common.showSuggestions');
+        expect(name).not.toBe('common.showSuggestions');
+        expect(toggle).toHaveAttribute('aria-label', name);
+        expect(toggle).toHaveAttribute('aria-expanded', 'false');
+        await fireEvent.click(toggle);
+        expect(toggle).toHaveAttribute('aria-expanded', 'true');
+        expect(screen.getByTestId('tag-input-dropdown')).toBeInTheDocument();
+        await fireEvent.click(toggle);
+        expect(toggle).toHaveAttribute('aria-expanded', 'false');
+        expect(screen.queryByTestId('tag-input-dropdown')).toBeNull();
     });
 });

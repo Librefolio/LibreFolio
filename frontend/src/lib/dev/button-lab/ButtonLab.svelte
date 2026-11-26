@@ -119,9 +119,9 @@
         </label>
         <div bind:this={autoBox} class="rounded-lg border border-lf-subtle p-2" style="width: {width}px; max-width: 100%" data-testid="lab-auto-box" data-labels={autoLayout.showActionLabels ? 'shown' : 'hidden'}>
             <div class="flex gap-2">
-                <Button label="Add goal" icon={Plus} display="auto" compact={!autoLayout.showActionLabels} variant="primary" onclick={() => note('action: add goal')} data-testid="lab-auto-add" />
-                <Button label="Suggest" icon={Sparkles} display="auto" compact={!autoLayout.showActionLabels} onclick={() => note('action: suggest')} data-testid="lab-auto-suggest" />
-                <Button label="Reset all" icon={RefreshCw} display="auto" compact={!autoLayout.showActionLabels} variant="danger" onclick={() => note('action: reset')} data-testid="lab-auto-reset" />
+                <Button label="Add goal" icon={Plus} display="auto" hideWord={!autoLayout.showActionLabels} variant="primary" onclick={() => note('action: add goal')} data-testid="lab-auto-add" />
+                <Button label="Suggest" icon={Sparkles} display="auto" hideWord={!autoLayout.showActionLabels} onclick={() => note('action: suggest')} data-testid="lab-auto-suggest" />
+                <Button label="Reset all" icon={RefreshCw} display="auto" hideWord={!autoLayout.showActionLabels} variant="danger" onclick={() => note('action: reset')} data-testid="lab-auto-reset" />
             </div>
         </div>
         <p class="mt-3 mb-2 text-sm text-lf-muted">The other rule of today, a word hidden on a narrow screen (<code>hidden sm:inline</code>), is the same class: <code>hideWordBelow="sm"</code>.</p>

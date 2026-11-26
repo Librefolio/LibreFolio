@@ -29,6 +29,7 @@
 import {beforeEach, describe, expect, it, vi} from 'vitest';
 import {tick, type ComponentProps} from 'svelte';
 import {fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
+import {longPress, touch} from '$test/longPress';
 import type {ChainStep, ProviderInfo} from '$lib/utils/currency/currencyGraph';
 import {findConversionPaths, getCachedFxProviders, refreshFxProviderReadiness} from '$lib/stores/currencyGraphStore';
 import FxProviderSelect from './FxProviderSelect.svelte';
@@ -762,6 +763,81 @@ describe('FxProviderSelect — a click on a part of a row acts as the row (85 BT
         expect(onneedssetup).toHaveBeenCalledTimes(1);
         expect(onneedssetup.mock.calls[0][0]).toMatchObject({code: 'FED'});
         expect(onSelectionChange).not.toHaveBeenCalled();
+    });
+});
+
+// =========================================================================
+// 85 BTN-0c, D16 — the texts of a row's parts reach the finger and the keyboard
+// =========================================================================
+
+/**
+ * The parts' own tooltips answer a mouse rest alone (above): the row gives their texts to a long press, which adds
+ * nothing, and to a screen reader as its description. Before this, they were reachable by the mouse only.
+ */
+describe('FxProviderSelect — the texts of a row’s parts, without a mouse (85 BTN-0c, D16)', () => {
+    const NOTED: ProviderInfo[] = [{...ECB, description_i18n: {en: 'probe: reference rates'}, warning_i18n: {en: 'probe: published once a day'}} as ProviderInfo, FED, BOE, MANUAL];
+
+    beforeEach(() => {
+        vi.clearAllMocks();
+        graphReturns([DIRECT, CHAIN], NOTED);
+    });
+
+    it('a direct route: a long press shows the provider and its note and adds nothing; a tap still adds it', async () => {
+        await setupI18n();
+        const {onSelectionChange} = mount();
+        await settled();
+        const picker = await openPicker();
+        const row = within(picker).getByTestId('fx-route-direct-ECB');
+        await fireEvent.keyDown(document, {key: 'Tab'});
+        row.focus();
+        await waitFor(() => expect(document.querySelector('[role="tooltip"]')?.textContent, 'Tab shows it').toContain('probe: published once a day'));
+        row.blur();
+        await waitFor(() => expect(document.querySelector('[role="tooltip"]')).toBeNull());
+        const text = await longPress(row);
+        expect(text).toContain('European Central Bank');
+        expect(text).toContain('probe: published once a day');
+        expect(onSelectionChange, 'the long press explains, it does not choose').not.toHaveBeenCalled();
+        touch(row, 'pointerdown');
+        touch(row, 'pointerup');
+        await fireEvent.click(row);
+        expect(onSelectionChange).toHaveBeenCalledWith([DIRECT]);
+    });
+
+    it('a direct route and a chain are described by their providers and notes', async () => {
+        await setupI18n();
+        mount();
+        await settled();
+        const picker = await openPicker();
+        expect(within(picker).getByTestId('fx-route-direct-ECB')).toHaveAccessibleDescription(/European Central Bank.*probe: published once a day/s);
+        await fireEvent.click(within(picker).getByTestId('fx-route-chain-toggle-2'));
+        expect(within(picker).getByTestId('fx-route-chain-2step-ECB-FED')).toHaveAccessibleDescription(/European Central Bank.*Federal Reserve/s);
+    });
+
+    it('the ⓘ of a chain group: a long press on the header shows the risk and leaves the group shut', async () => {
+        await setupI18n();
+        mount();
+        await settled();
+        const picker = await openPicker();
+        const toggle = within(picker).getByTestId('fx-route-chain-toggle-2');
+        expect(toggle, 'barrier: shut while a direct route exists').toHaveAttribute('data-expanded', 'false');
+        const risk = get(_)('fx.route.chainWarning');
+        expect(await longPress(toggle)).toContain(risk);
+        expect(toggle).toHaveAttribute('data-expanded', 'false');
+        expect(toggle.getAttribute('aria-describedby')).not.toBeNull();
+        expect(document.getElementById(toggle.getAttribute('aria-describedby')!)).toHaveTextContent(risk);
+    });
+
+    it('a route that needs setup says so in its description too', async () => {
+        await setupI18n();
+        graphReturns([DIRECT, CHAIN], [ECB, {...FED, configured: false, missing_settings: ['api_key'], missing_reason: 'missing_fields', invalid_variables: []}, BOE, MANUAL]);
+        mount();
+        await settled();
+        const picker = await openPicker();
+        await fireEvent.click(within(picker).getByTestId('fx-route-chain-toggle-2'));
+        const chain = picker.querySelector<HTMLElement>(`[data-route-key="${CHAIN_KEY}"]`)!;
+        expect(chain).toHaveAttribute('data-needs-setup', 'true');
+        const described = document.getElementById(chain.getAttribute('aria-describedby') ?? '');
+        expect(described).toHaveTextContent(get(_)('pluginSettings.notConfigured.tooltip', {values: {provider: 'Federal Reserve'}}));
     });
 });
 

@@ -88,7 +88,7 @@
 <div class="header-content" style={column.align === 'center' ? 'justify-content:center' : column.align === 'right' ? 'justify-content:flex-end' : ''}>
     {#if getColumnTooltip(column)}
         {@const tooltipText = getColumnTooltip(column) ?? ''}
-        <Tooltip text={tooltipText} position="top">
+        <Tooltip text={tooltipText} position="top" math={tooltipText.includes('$')}>
             <button type="button" class="header-sort-btn" data-testid="dt-sort-{column.id}" onclick={() => toggleSort(column.id)} disabled={column.sortable === false || !enableSorting}>
                 {#if getColumnHeaderHtml(column)}
                     <span class="header-text">{@html getColumnHeaderHtml(column)}</span>

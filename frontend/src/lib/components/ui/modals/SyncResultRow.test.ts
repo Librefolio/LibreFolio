@@ -35,6 +35,8 @@ import {flushSync, tick} from 'svelte';
 import {get} from 'svelte/store';
 import {locale, waitLocale} from 'svelte-i18n';
 import {fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
+import {_} from '$lib/i18n';
+import {buttonClasses} from '$lib/components/ui/button/buttonClasses';
 import {currentLanguage} from '$lib/stores/app/language';
 import type {SyncResult, SyncStatus} from '$lib/utils/sync/syncHelpers';
 
@@ -100,6 +102,21 @@ async function hoverTooltip(trigger: HTMLElement): Promise<string> {
 }
 
 const wrapperOf = (el: HTMLElement) => el.parentElement as HTMLElement;
+
+/** The elements between `el` and `root`, both left out. */
+function ancestorsWithin(el: HTMLElement, root: HTMLElement): HTMLElement[] {
+    const out: HTMLElement[] = [];
+    for (let node = el.parentElement; node && node !== root; node = node.parentElement) out.push(node);
+    return out;
+}
+
+/** The mouse rests on a standard Button: its own tooltip, opened by `pressable` from the pointer events (85 BTN-2d). */
+async function restTooltip(button: HTMLElement): Promise<HTMLElement> {
+    const event = new MouseEvent('pointerenter', {cancelable: true});
+    Object.defineProperty(event, 'pointerType', {value: 'mouse'});
+    button.dispatchEvent(event);
+    return screen.findByTestId('tooltip-content');
+}
 
 beforeAll(async () => {
     await setupI18n();
@@ -338,11 +355,31 @@ describe('SyncResultRow — the parts the caller supplies', () => {
         expect(screen.queryByTestId('tooltip-content')).toBeNull();
     });
 
-    it('offers the tooltip on the retry button too, which is what a failed row shows instead of an icon', async () => {
+    it('says it on the retry button too, as its help under its name: a failed row shows the retry instead of an icon', async () => {
         mount(res('a1', 'failed', {message: 'down'}), {statusTooltip: 'tried ecb, then frankfurter'});
 
+        const tip = await restTooltip(retryOf('a1') as HTMLElement);
+        expect(tip.querySelector('strong')?.textContent).toBe(get(_)('common.retry'));
+        expect(tip.textContent).toContain('tried ecb, then frankfurter');
+    });
+
+    it.each(['failed', 'partial'] as const)('the retry of a %s row is a named native button in its state’s colour, one Tab stop with no wrapper, and its click retries', async (status) => {
+        const onRetry = vi.fn();
+        mount(res('a1', status, {message: 'down'}), {onRetry, statusTooltip: 'tried ecb, then frankfurter'});
         const retry = retryOf('a1') as HTMLElement;
-        expect(await hoverTooltip(wrapperOf(retry))).toContain('tried ecb, then frankfurter');
+        const name = get(_)('common.retry');
+        expect(name, 'the name is in the catalogue').not.toBe('common.retry');
+        expect(retry.tagName).toBe('BUTTON');
+        expect(retry).toHaveAttribute('aria-label', name);
+        expect(retry.className).toBe(buttonClasses({variant: 'ghost', tone: status === 'failed' ? 'danger' : 'warning', size: 'xs', dense: true, shape: 'icon'}));
+        // The old Tooltip wrapper was a `role="button" tabindex="0"` of its own: two stops for one control.
+        const aroundRetry = [retry, ...ancestorsWithin(retry, rowOf('a1'))].filter((el) => el.tabIndex >= 0);
+        expect(aroundRetry, 'one Tab stop').toEqual([retry]);
+        // Enter on a focused <button> is the browser's click, which jsdom does not synthesise: the native element and its click.
+        retry.focus();
+        expect(document.activeElement).toBe(retry);
+        await fireEvent.click(retry);
+        expect(onRetry).toHaveBeenCalledExactlyOnceWith('a1');
     });
 
     it('shows the elapsed time only when the result carries one', async () => {

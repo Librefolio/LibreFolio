@@ -10,7 +10,7 @@
  *   by the stylesheet's order); every hover is guarded (`not-disabled:not-aria-disabled:hover:`), so a button off or
  *   busy never lights up. A chip without a tone throws.
  * - The options of BTN-2·0 (C1–C11): `tone` (ghost, chip, pressed), `tint` wins over every other colour, `segment`
- *   (a ButtonGroup's member), the bar variants (the green sidebar's focus), `truncate`, `pill`, `dense`, the size `xs`.
+ *   (a filled toggle, alone or `joined` in a ButtonGroup), `compact`, the bar variants (the green sidebar's focus), `truncate`, `pill`, `dense`, the size `xs`.
  * - A toggle (`pressed`) replaces the variant's colours; a link has no padding and the small radius.
  * - `WORD_HIDDEN_BELOW` holds whole Tailwind classes written as literals in the source.
  *
@@ -88,7 +88,19 @@ describe('buttonClasses — colour roles only, in every combination', () => {
         expect(failures.slice(0, 20), `${failures.length} combinations break a rule`).toEqual([]);
     });
 
-    it.each([{pill: true}, {truncate: true}, {dense: true}, {inline: true}, {pill: true, truncate: true, dense: true}, {inline: true, truncate: true}])('the shape options keep the rules: %o', (shapeOptions) => {
+    it.each([
+        {pill: true},
+        {truncate: true},
+        {dense: true},
+        {inline: true},
+        {pill: true, truncate: true, dense: true},
+        {inline: true, truncate: true},
+        {compact: true},
+        {segment: true},
+        {segment: true, joined: true},
+        {segment: true, joined: true, compact: true, pill: true},
+        {tint: 'current'},
+    ] as const)('the shape options keep the rules: %o', (shapeOptions) => {
         for (const variant of VARIANTS) {
             const options = {variant, tone: variant === 'chip' ? ('info' as const) : undefined, ...shapeOptions};
             expect(brokenRules(options), variant).toEqual([]);
@@ -138,16 +150,50 @@ describe('buttonClasses — tone, chip and tint (C4, C5)', () => {
 });
 
 describe('buttonClasses — segment, bar, shape options (C1, C2, C3, C7, C9)', () => {
-    it('a segment: rounded-none, lf-btn-segment, the focus inside, no border; the presets’ colours on and off', () => {
+    it('a segment alone (C16): a filled toggle, rounded-lg (rounded-full with pill), no border, the focus inside, no lf-btn-segment', () => {
         for (const pressed of [true, false, undefined]) {
             const classes = tokens(buttonClasses({segment: true, pressed}));
-            expect(classes).toEqual(expect.arrayContaining(['rounded-none', 'lf-btn-segment', 'focus-visible:-outline-offset-2', 'lf-btn-inset']));
-            expect(classes).not.toContain('border');
-            expect(classes).not.toContain('rounded-lg');
-            expect(classes).not.toContain('focus-visible:outline-offset-2');
+            expect(classes).toEqual(expect.arrayContaining(['rounded-lg', 'focus-visible:-outline-offset-2', 'lf-btn-inset']));
+            for (const absent of ['border', 'rounded-none', 'lf-btn-segment', 'focus-visible:outline-offset-2']) expect(classes, absent).not.toContain(absent);
+            const pill = tokens(buttonClasses({segment: true, pressed, pill: true}));
+            expect(pill).toContain('rounded-full');
+            expect(pill).not.toContain('rounded-lg');
         }
+    });
+
+    it('a joined segment (inside a ButtonGroup): rounded-none and lf-btn-segment, whatever the pill; joined without segment changes nothing', () => {
+        for (const pressed of [true, false, undefined]) {
+            for (const pill of [true, false]) {
+                const classes = tokens(buttonClasses({segment: true, joined: true, pressed, pill}));
+                expect(classes).toEqual(expect.arrayContaining(['rounded-none', 'lf-btn-segment', 'focus-visible:-outline-offset-2', 'lf-btn-inset']));
+                for (const absent of ['border', 'rounded-lg', 'rounded-full', 'focus-visible:outline-offset-2']) expect(classes, absent).not.toContain(absent);
+            }
+        }
+        expect(buttonClasses({joined: true})).toBe(buttonClasses());
+    });
+
+    it.each(TONES)('a pressed segment with tone %s is filled with the state, with no border; at rest the tone changes nothing', (tone) => {
+        const classes = tokens(buttonClasses({segment: true, pressed: true, tone}));
+        for (const literal of tokens(BUTTON_TONES.segmentPressed[tone])) expect(classes).toContain(literal);
+        expect(
+            tokens(BUTTON_TONES.segmentPressed[tone]).filter((t) => t.startsWith('border')),
+            'the tone table draws no border',
+        ).toEqual([]);
+        expect(classes.filter((t) => t === 'border' || t.startsWith('border-'))).toEqual([]);
+        expect(classes, 'the checked fill is replaced').not.toContain('bg-lf-checked');
+        expect(buttonClasses({segment: true, pressed: false, tone})).toBe(buttonClasses({segment: true, pressed: false}));
+    });
+
+    it('a lone segment’s colours on and off are the presets’', () => {
         expect(tokens(buttonClasses({segment: true, pressed: true}))).toEqual(expect.arrayContaining(['bg-lf-checked', 'text-lf-on-checked']));
         expect(tokens(buttonClasses({segment: true, pressed: false}))).toEqual(expect.arrayContaining(['bg-lf-panel', 'text-lf-secondary', `${GUARD}bg-lf-neutral`]));
+    });
+
+    it('a segment joined in a group is on the card and muted at rest, like the groups it replaces (C18); pressed it is the same', () => {
+        const off = tokens(buttonClasses({segment: true, joined: true, pressed: false}));
+        expect(off).toEqual(expect.arrayContaining(['bg-lf-card', 'text-lf-muted', `${GUARD}bg-lf-hover`]));
+        for (const absent of ['bg-lf-panel', 'text-lf-secondary']) expect(off, absent).not.toContain(absent);
+        expect(tokens(buttonClasses({segment: true, joined: true, pressed: true}))).toEqual(expect.arrayContaining(['bg-lf-checked', 'text-lf-on-checked']));
     });
 
     it.each(['bar-ghost', 'bar-solid', 'bar-link'] as const)('%s carries the bar’s focus (outline-lf-bar-focus, inside) and lf-btn-bar', (variant) => {
@@ -160,6 +206,50 @@ describe('buttonClasses — segment, bar, shape options (C1, C2, C3, C7, C9)', (
         const classes = tokens(buttonClasses());
         expect(classes).toEqual(expect.arrayContaining(['focus-visible:outline-lf-focus', 'focus-visible:outline-offset-2']));
         expect(classes).not.toContain('lf-btn-bar');
+    });
+
+    it('tint current (C15): the text’s own colour at 70 %, whole on a guarded hover; no fill', () => {
+        for (const options of [{}, {variant: 'primary' as const}, {pressed: true}, {segment: true, pressed: true}]) {
+            const classes = tokens(buttonClasses({...options, tint: 'current'}));
+            expect(classes, JSON.stringify(options)).toEqual(expect.arrayContaining(['text-current', 'opacity-70', `${GUARD}opacity-100`]));
+            expect(
+                classes.filter((t) => /(^|:)bg-/.test(t)),
+                `${JSON.stringify(options)}: no fill`,
+            ).toEqual([]);
+        }
+    });
+
+    it('compact (C16): sm → py-1 and md → py-1.5, the rest of the recipe unchanged; xs, lg and icons unchanged', () => {
+        const swap = (classes: string, from: string, to: string) => tokens(classes).map((t) => (t === from ? to : t));
+        expect(tokens(buttonClasses({size: 'sm'})), 'premise').toContain('py-1.5');
+        expect(tokens(buttonClasses({size: 'md'})), 'premise').toContain('py-2');
+        expect(tokens(buttonClasses({size: 'sm', compact: true}))).toEqual(swap(buttonClasses({size: 'sm'}), 'py-1.5', 'py-1'));
+        expect(tokens(buttonClasses({size: 'md', compact: true}))).toEqual(swap(buttonClasses({size: 'md'}), 'py-2', 'py-1.5'));
+        for (const size of ['xs', 'lg'] as const) expect(buttonClasses({size, compact: true}), size).toBe(buttonClasses({size}));
+        for (const size of SIZES) expect(buttonClasses({size, shape: 'icon', compact: true}), `icon ${size}`).toBe(buttonClasses({size, shape: 'icon'}));
+    });
+
+    it('wrap (C17): the word may break — no shrink-0 and no min-w-0, 14 px lines on xs only, nowrap again without it', () => {
+        for (const size of SIZES) {
+            const classes = tokens(buttonClasses({size, wrap: true}));
+            expect(classes, size).toContain('whitespace-normal');
+            expect(classes, size).not.toContain('whitespace-nowrap');
+            expect(classes, size).not.toContain('shrink-0');
+            expect(classes, size).not.toContain('min-w-0');
+            // Two lines of `xs` fit a 32 px row with the padding: 2 × 14 + 2 × 2 (C17). The other sizes keep their leading.
+            expect(classes.includes('leading-3.5'), size).toBe(size === 'xs');
+        }
+        const oneLine = tokens(buttonClasses({size: 'xs'}));
+        expect(oneLine).toContain('whitespace-nowrap');
+        expect(oneLine).toContain('shrink-0');
+        expect(oneLine).not.toContain('leading-3.5');
+        // Never two whitespace utilities on one element.
+        for (const options of [{}, {wrap: true}, {truncate: true}]) {
+            expect(
+                tokens(buttonClasses(options)).filter((t) => t.startsWith('whitespace-')),
+                JSON.stringify(options),
+            ).toHaveLength(1);
+        }
     });
 
     it('truncate: min-w-0 and no shrink-0; without it, shrink-0', () => {

@@ -2,5 +2,5 @@
 export {default as Button} from './Button.svelte';
 export {default as CloseButton} from './CloseButton.svelte';
 export {default as ButtonGroup} from './ButtonGroup.svelte';
-export {buttonClasses, ICON_PX, WORD_HIDDEN_BELOW, type ButtonClassOptions, type ButtonDisplay, type ButtonSize, type ButtonTone, type ButtonVariant, type WordThreshold} from './buttonClasses';
+export {buttonClasses, ICON_PX, WORD_HIDDEN_BELOW, type ButtonClassOptions, type ButtonDisplay, type ButtonSize, type ButtonTint, type ButtonTone, type ButtonVariant, type WordThreshold} from './buttonClasses';
 export {pressable, tipHtml, LONG_PRESS_MS, MOVE_TOLERANCE_PX, HOVER_DELAY_MS, LONG_PRESS_CLICK_WINDOW_MS, type PressableOptions, type TipPosition} from './pressable.svelte';

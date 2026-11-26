@@ -6,7 +6,8 @@
   - Click to open custom dual-calendar popover with SEMI-INDEPENDENT columns
     (each column has its own month/year selector, auto-swap if out of order)
   - Click any two dates → min is "from", max is "to"
-  - Quick-select preset buttons: 1W, 1M, 1Y, Custom (inline editable badge)
+  - Quick-select preset buttons: 1W, 1M, 1Y, Custom (inline editable badge) — standard segment Buttons (85 BTN-2d, C16),
+    each its own pill in the spread row (a ButtonGroup would join them and break the measured one-row/two-row fill)
   - Custom window: number + granularity (days/weeks/months/years) going backwards from today
   - All presets compute "from today backwards"
   - i18n for weekdays and month names
@@ -23,6 +24,8 @@
     import type {CalendarHighlights} from './CalendarMonth.svelte';
     import CalendarMonth from './CalendarMonth.svelte';
     import CompactDurationBadge from './CompactDurationBadge.svelte';
+    import Button from '$lib/components/ui/button/Button.svelte';
+    import {buttonClasses} from '$lib/components/ui/button/buttonClasses';
     import {attachLayoutDebugExtra, type LayoutMode} from '$lib/utils/layout/responsiveLayout.svelte';
     import {parseTypedDate} from '$lib/utils/core/parseTypedDate';
     import {isOutsideClick} from '$lib/utils/core/clickOutside';
@@ -607,15 +610,21 @@
     // leftover space across every gap instead of dumping it all into one seam (Round 5b bug) or
     // leaving it as unfilled trailing margin (Round 5b's fixed-gap-1 regression).
     let presetRowRef: HTMLDivElement | null = $state(null);
-    let coreBadgeRefs: (HTMLButtonElement | null)[] = $state([]);
-    let trailingBadgeRefs: (HTMLButtonElement | null)[] = $state([]); // YTD, Tutti (2 items)
-    let customPlainBtnRef: HTMLButtonElement | null = $state(null); // "Personalizzato" button (not editing)
+    let coreBadgeRefs: (HTMLElement | undefined)[] = $state([]);
+    let trailingBadgeRefs: (HTMLElement | undefined)[] = $state([]); // YTD, Tutti (2 items)
+    let customPlainBtnRef: HTMLElement | undefined = $state(undefined); // "Personalizzato" button (not editing)
     // Hidden (position:absolute; visibility:hidden — never in normal flow), always rendered
     // with all 6 possible jolly badges so their REAL widths can be measured — replaces an
     // earlier proxy-estimate approach ("reuse 2Y/YTD width + fudge factor") that Playwright
     // testing proved inaccurate enough to cause visible overflow/wrap once actually rendered.
     let durationMeasureRefs: (HTMLButtonElement | null)[] = $state([]);
     let periodMeasureRefs: (HTMLButtonElement | null)[] = $state([]);
+    // The presets' size, shared by the real Buttons and by the hidden measurement clones: the clones call buttonClasses
+    // with exactly the options the real presets take, never a minimal copy of their classes.
+    const PRESET_SIZE = 'sm';
+    /** The presets are segments (C16): filled toggles without a border, one step lower (`compact`), so pressed or not they
+     *  keep one width. The hidden measuring copies take the very same classes. */
+    const PRESET_MEASURE_CLASSES = buttonClasses({size: PRESET_SIZE, compact: true, segment: true, pressed: false});
 
     let isSingleRow = $derived(!layoutMode || layoutMode === 'oneRow');
     // Round 10.1: the picker's own max-width cap is different for 1-row vs 2-row — a single
@@ -1193,15 +1202,17 @@
 
 {#snippet coreButtons()}
     {#each presets.slice(0, 6).filter(isOffered) as preset, i}
-        <button
-            type="button"
-            bind:this={coreBadgeRefs[i]}
+        <Button
+            label={preset.label}
+            size={PRESET_SIZE}
+            compact
+            segment
+            pressed={effectivePreset === preset.key}
+            bind:element={coreBadgeRefs[i]}
+            onclick={() => handlePresetClick(preset.key)}
             data-testid="date-preset-{preset.key.toLowerCase()}"
             data-active={effectivePreset === preset.key ? 'true' : 'false'}
-            class="px-2.5 py-1 text-xs font-medium rounded-lg transition-all duration-150
-                {effectivePreset === preset.key ? 'bg-lf-checked text-lf-on-checked shadow-sm' : 'bg-lf-panel text-lf-secondary hover:bg-lf-neutral'}"
-            onclick={() => handlePresetClick(preset.key)}>{preset.label}</button
-        >
+        />
     {/each}
 {/snippet}
 
@@ -1209,42 +1220,30 @@
     <!-- Duration pool (3Y/5Y/10Y) — JS-measured, never a fixed CSS breakpoint set. Fills
          leftover space in Block A only up to how many actually fit (see measureAndFill). -->
     {#each durationFillPresets.slice(0, extrasToShowDuration).filter(isOffered) as preset}
-        <button
-            type="button"
-            data-testid="date-preset-{preset.key.toLowerCase()}"
-            data-active={effectivePreset === preset.key ? 'true' : 'false'}
-            class="px-2.5 py-1 text-xs font-medium rounded-lg transition-all duration-150
-                {effectivePreset === preset.key ? 'bg-lf-checked text-lf-on-checked shadow-sm' : 'bg-lf-panel text-lf-secondary hover:bg-lf-neutral'}"
-            onclick={() => handlePresetClick(preset.key)}>{preset.label}</button
-        >
+        <Button label={preset.label} size={PRESET_SIZE} compact segment pressed={effectivePreset === preset.key} onclick={() => handlePresetClick(preset.key)} data-testid="date-preset-{preset.key.toLowerCase()}" data-active={effectivePreset === preset.key ? 'true' : 'false'} />
     {/each}
 {/snippet}
 
 {#snippet periodJollyButtons()}
     <!-- Period pool (WTD/MTD/QTD) — same idea as durationJollyButtons but for Block B. -->
     {#each periodFillPresets.slice(0, extrasToShowPeriod).filter(isOffered) as preset}
-        <button
-            type="button"
-            data-testid="date-preset-{preset.key.toLowerCase()}"
-            data-active={effectivePreset === preset.key ? 'true' : 'false'}
-            class="px-2.5 py-1 text-xs font-medium rounded-lg transition-all duration-150
-                {effectivePreset === preset.key ? 'bg-lf-checked text-lf-on-checked shadow-sm' : 'bg-lf-panel text-lf-secondary hover:bg-lf-neutral'}"
-            onclick={() => handlePresetClick(preset.key)}>{preset.label}</button
-        >
+        <Button label={preset.label} size={PRESET_SIZE} compact segment pressed={effectivePreset === preset.key} onclick={() => handlePresetClick(preset.key)} data-testid="date-preset-{preset.key.toLowerCase()}" data-active={effectivePreset === preset.key ? 'true' : 'false'} />
     {/each}
 {/snippet}
 
 {#snippet trailingButtons()}
     {#each presets.slice(6).filter(isOffered) as preset, i}
-        <button
-            type="button"
-            bind:this={trailingBadgeRefs[i]}
+        <Button
+            label={preset.label}
+            size={PRESET_SIZE}
+            compact
+            segment
+            pressed={effectivePreset === preset.key}
+            bind:element={trailingBadgeRefs[i]}
+            onclick={() => handlePresetClick(preset.key)}
             data-testid="date-preset-{preset.key.toLowerCase()}"
             data-active={effectivePreset === preset.key ? 'true' : 'false'}
-            class="px-2.5 py-1 text-xs font-medium rounded-lg transition-all duration-150
-                {effectivePreset === preset.key ? 'bg-lf-checked text-lf-on-checked shadow-sm' : 'bg-lf-panel text-lf-secondary hover:bg-lf-neutral'}"
-            onclick={() => handlePresetClick(preset.key)}>{preset.label}</button
-        >
+        />
     {/each}
 {/snippet}
 
@@ -1323,10 +1322,10 @@
              meant to be seen or interacted with. -->
         <div class="absolute invisible pointer-events-none" style="top: 0; left: 0;" aria-hidden="true">
             {#each durationFillPresets as preset, i}
-                <button type="button" bind:this={durationMeasureRefs[i]} class="px-2.5 py-1 text-xs font-medium rounded-lg" tabindex="-1">{preset.label}</button>
+                <button type="button" bind:this={durationMeasureRefs[i]} class={PRESET_MEASURE_CLASSES} tabindex="-1"><span>{preset.label}</span></button>
             {/each}
             {#each periodFillPresets as preset, i}
-                <button type="button" bind:this={periodMeasureRefs[i]} class="px-2.5 py-1 text-xs font-medium rounded-lg" tabindex="-1">{preset.label}</button>
+                <button type="button" bind:this={periodMeasureRefs[i]} class={PRESET_MEASURE_CLASSES} tabindex="-1"><span>{preset.label}</span></button>
             {/each}
         </div>
     {/if}

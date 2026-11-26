@@ -147,7 +147,9 @@
     "errorWithRequestId": "{message} (codice: {requestId})",
     "selectionActions": "Azioni sulla selezione",
     "moveUp": "Sposta su",
-    "moveDown": "Sposta giù"
+    "moveDown": "Sposta giù",
+    "removeTag": "Rimuovi {tag}",
+    "showSuggestions": "Mostra suggerimenti"
   },
   "csvImport": {
     "title": "Importa dati CSV",
@@ -366,7 +368,8 @@
     "syncAllHint": "Chiede ai fornitori di dati i dati nuovi e li salva in LibreFolio.",
     "refreshAllHint": "Ricarica quello che vedi da LibreFolio, senza interrogare i fornitori di dati.",
     "viewGrid": "Mostra come schede",
-    "viewTable": "Mostra come tabella"
+    "viewTable": "Mostra come tabella",
+    "viewMode": "Vista"
   },
   "table": {
     "columns": "Colonne",

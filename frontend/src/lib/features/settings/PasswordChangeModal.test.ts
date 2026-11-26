@@ -409,7 +409,7 @@ describe('PasswordChangeModal — errors reported by the server', () => {
         await fireEvent.click(saveButton());
         await waitFor(() => expect(banner()).not.toBeNull());
 
-        await fireEvent.click(within(banner()!).getByRole('button', {name: 'Dismiss'}));
+        await fireEvent.click(within(banner()!).getByTestId('info-banner-dismiss'));
 
         await waitFor(() => expect(banner()).toBeNull());
         expect(screen.getByTestId('password-current')).toHaveValue(OLD_PASSWORD);

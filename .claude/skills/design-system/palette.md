@@ -17,7 +17,7 @@ and in the dark theme, and when to use it. Rule numbers refer to `SKILL.md`.
 | `--lf-surface-app` | `bg-lf-app` | `#f3f5f3` | `#0d1110` | Behind the app shell: the background of every page inside the app. The same colour as `page` since round 2 |
 | `--lf-surface-page` | `bg-lf-page` | `#f3f5f3` | `#0d1110` | A page outside the shell: login, sign-up, welcome, error, offline, splash, server unreachable |
 | `--lf-surface-card` | `bg-lf-card` | `#fafbfa` | `#151b19` | Cards, modals, menus, dropdowns, popovers |
-| `--lf-surface-panel` | `bg-lf-panel` | `#e8ece9` | `#1b2421` | The secondary surface: panels, table heads, boxes inside a card, the track of a segmented control, a secondary button, inline code |
+| `--lf-surface-panel` | `bg-lf-panel` | `#e8ece9` | `#1b2421` | The secondary surface: panels, table heads, boxes inside a card, a segment that stands alone (the presets; the segments joined in a `ButtonGroup` stay on the card), a secondary button, inline code |
 | `--lf-surface-field` | `bg-lf-field` | `#ffffff` | `#0f1413` | The inside of an input, a select trigger, a textarea |
 | `--lf-surface-hover` | `hover:bg-lf-hover` | `#e8ece9` | `#1b2421` | A row or an item under the pointer, on a card or a page. It equals `panel`: on a panel, hover with `hover:bg-lf-neutral` (SKILL.md, «Values the designer has not confirmed», rule 2) |
 | `--lf-surface-neutral` | `bg-lf-neutral` | `#d8e0dc` | `#222c28` | Neutral fills: progress tracks, skeletons, neutral chips; the hover of a control that sits on a panel |
@@ -38,7 +38,7 @@ and in the dark theme, and when to use it. Rule numbers refer to `SKILL.md`.
 |---|---|---|---|---|
 | `--lf-border-subtle` | `border-lf-subtle`, `divide-lf-subtle` | `#d8e0dc` | `#222c28` | Borders and dividers of cards, tables and sections; the edge of inline code |
 | `--lf-border-raised` | `border-lf-raised` | `#d8e0dc` | `#2e3b36` | The border of a surface that floats: modal, dropdown, menu, popover, the login card (N3) |
-| `--lf-border-input` | `border-lf-input` | `#7e8984` | `#606f6a` | The border of a field or a control at rest, 3:1 on every surface (D-T18); the edge of a switch knob turned off |
+| `--lf-border-input` | `border-lf-input` | `#7e8984` | `#606f6a` | The border of a field or a control at rest, 3:1 on every surface (D-T18); the edge of a switch knob turned off. Not the outer border of a `ButtonGroup`, which is `border-lf-subtle`: its chosen segment is what tells it (85 C18) |
 | `--lf-border-input-hover` | `hover:border-lf-input-hover` | `#616d67` | `#7f8c87` | The border of a field under the pointer: the muted text colour (D-T18). `focus:border-lf-focus` wins over it |
 
 ## Brand and action

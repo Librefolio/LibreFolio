@@ -637,7 +637,7 @@ describe('PreferencesTab — when the save fails', () => {
         await fireEvent.click(rowButton(themeRow(), 'save')!);
         await waitFor(() => expect(banner()).not.toBeNull());
 
-        await fireEvent.click(within(banner()!).getByRole('button', {name: 'Dismiss'}));
+        await fireEvent.click(within(banner()!).getByTestId('info-banner-dismiss'));
 
         await waitFor(() => expect(banner()).toBeNull());
         expect(rowButton(themeRow(), 'save')).not.toBeNull();

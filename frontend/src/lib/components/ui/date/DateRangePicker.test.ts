@@ -37,6 +37,7 @@ import en from '$lib/i18n/en.json';
 import itCatalogue from '$lib/i18n/it.json';
 import fr from '$lib/i18n/fr.json';
 import es from '$lib/i18n/es.json';
+import {buttonClasses} from '$lib/components/ui/button/buttonClasses';
 import CompactDurationBadge from './CompactDurationBadge.svelte';
 import DateRangePicker, {type QuickPreset} from './DateRangePicker.svelte';
 
@@ -275,6 +276,49 @@ describe('DateRangePicker — presets', () => {
         fireEvent.click(screen.getByTestId('date-preset-max'));
         expect(onchange).toHaveBeenCalledWith('min', 'max');
         expect(screen.getByTestId('date-preset-max')).toHaveAttribute('data-active', 'true');
+    });
+});
+
+/**
+ * The presets are standard segments (85 BTN-2d, C16), and the picker measures how many of its extra presets fit with
+ * hidden copies (`aria-hidden`, only in the `align="start"` layout). A copy with classes of its own measured another
+ * width once: here the two class strings are read off the DOM and compared, so neither side can drift.
+ */
+describe('DateRangePicker — the presets are segments, and the hidden copies measure the same button (85 BTN-2d)', () => {
+    it('the chosen preset is the one pressed, the others are not', async () => {
+        setup();
+        const keys = ['1w', '1m', '1y'];
+        await fireEvent.click(screen.getByTestId('date-preset-1m'));
+        expect(keys.map((key) => screen.getByTestId(`date-preset-${key}`).getAttribute('aria-pressed'))).toEqual(['false', 'true', 'false']);
+        await fireEvent.click(screen.getByTestId('date-preset-1y'));
+        expect(keys.map((key) => screen.getByTestId(`date-preset-${key}`).getAttribute('aria-pressed'))).toEqual(['false', 'false', 'true']);
+    });
+
+    it('the hidden copies carry the very classes of an idle preset', () => {
+        // The default range (2024) matches no preset window: every preset is idle.
+        const {root} = setup({align: 'start', compact: true});
+        const preset = screen.getByTestId('date-preset-1y');
+        expect(preset, 'premise: an idle preset').toHaveAttribute('aria-pressed', 'false');
+        const copies = [...root.querySelectorAll<HTMLElement>('[aria-hidden="true"] button')];
+        expect(copies.length, 'premise: the measuring copies are drawn').toBeGreaterThan(0);
+        expect([...new Set(copies.map((copy) => copy.className.trim()))]).toEqual([preset.className.trim()]);
+        expect(
+            copies.every((copy) => copy.tabIndex === -1),
+            'a copy is never reached by the keyboard',
+        ).toBe(true);
+    });
+
+    it('pressed or idle, a preset has the same box: only its colours change', async () => {
+        setup();
+        const preset = screen.getByTestId('date-preset-1y');
+        const colours = /(^|:)(bg|text)-lf-/;
+        const box = () => [...preset.classList].filter((token) => !colours.test(token)).sort();
+        const idle = box();
+        const idleClasses = preset.className;
+        await fireEvent.click(preset);
+        expect(preset).toHaveAttribute('aria-pressed', 'true');
+        expect(box()).toEqual(idle);
+        expect(preset.className, 'control: the colours did change').not.toBe(idleClasses);
     });
 });
 
@@ -656,6 +700,18 @@ describe('DateRangePicker — the custom "N units back" window', () => {
 });
 
 describe('CompactDurationBadge', () => {
+    // 85 BTN-2d, C4 + C16: a toggle of the presets' size; chosen by hand it is amber, like its editor.
+    it.each([true, false])('active %s: the warning fill when chosen, the idle segment otherwise; a toggle, with the pickers’ marker', (active) => {
+        setupCompactDurationBadge({active});
+        const badge = screen.getByTestId('compact-duration');
+        expect(badge).toHaveAttribute('aria-pressed', String(active));
+        expect(badge).toHaveAttribute('data-active', String(active));
+        expect(badge.classList.contains('drp-trigger'), 'the pickers’ click-outside reads this marker').toBe(true);
+        const recipe = buttonClasses({size: 'sm', compact: true, segment: true, pressed: active, tone: 'warning'});
+        expect(badge.className).toBe(`${recipe} drp-trigger`);
+        expect(badge.classList.contains('bg-lf-warning')).toBe(active);
+    });
+
     it.each(DURATION_CASES)('applies positive integer amounts in $label units', async ({unit, label}) => {
         const {onapply} = setupCompactDurationBadge({amount: 2, unit});
 

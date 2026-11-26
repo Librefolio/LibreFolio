@@ -19,6 +19,7 @@
 <script lang="ts">
     import {Eraser} from 'lucide-svelte';
     import {_ as t} from '$lib/i18n';
+    import Button from '$lib/components/ui/button/Button.svelte';
     import {decimalArrowStep, normalizeDecimalInput} from '$lib/utils/core/parseDecimalInput';
     import {CLEARED_CELL} from './DataEditorTypes';
 
@@ -98,21 +99,17 @@
 
 <div class="relative flex items-center group pl-5 text-lf-primary" data-testid="erasable-number-cell">
     <!-- Eraser at LEFT (absolute) - hidden until hover/focus to avoid covering
-         the number input up/down spinner arrows which live at the RIGHT side. -->
-    <button
-        type="button"
-        class="absolute left-0 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity p-0.5 rounded text-lf-muted hover:text-lf-danger"
-        onclick={handleEraseClick}
-        onmousedown={(e) => e.preventDefault()}
-        title={$t('dataEditor.cell.clearField')}
-        data-testid="erasable-cell-eraser"
-        tabindex="-1"
-    >
-        <Eraser size={12} />
-    </button>
+         the number input up/down spinner arrows which live at the RIGHT side.
+         The wrapper holds the position and the mousedown that keeps the input focused
+         (a Button takes neither): the event bubbles from the button to it. -->
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <span class="absolute left-0 top-1/2 -translate-y-1/2 flex opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity" onmousedown={(e) => e.preventDefault()}>
+        <Button variant="ghost" size="xs" dense icon={Eraser} display="icon" label={$t('dataEditor.cell.clearField')} tabindex={-1} onclick={handleEraseClick} data-testid="erasable-cell-eraser" />
+    </span>
 
     {#if isCleared && !editing}
-        <!-- Cleared state: italic red. Click re-enters edit mode with empty draft. -->
+        <!-- Cleared state: italic red. Click re-enters edit mode with empty draft. A field's placeholder, not an action
+             button: its visible word is its name (the old «Clear field» title named the eraser's action, not this one). -->
         <button
             type="button"
             class="w-full text-left text-xs italic text-lf-danger cursor-text px-1.5 py-1 rounded hover:bg-lf-danger-soft"
@@ -120,7 +117,6 @@
                 draft = '';
                 editing = true;
             }}
-            title={$t('dataEditor.cell.clearField')}
         >
             - {$t('dataEditor.cell.notSet')} -
         </button>

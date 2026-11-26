@@ -50,7 +50,7 @@ describe('portfolioScopeProfile · the Dashboard', () => {
 
     it('keeps its toolbar thresholds', () => {
         expect(portfolio.toolbar).toEqual({
-            thresholds: {oneRow: 1000, denseRow: 990, stackFilters: 510, oneColumn: 390, noExtraLabel: 410, labelHideActions: 210, labelHideTabs: 570},
+            thresholds: {oneRow: 1000, denseRow: 990, stackFilters: 510, oneColumn: 390, noExtraLabel: 410, labelHideActions: 210, labelHideTabs: 610},
             debugName: 'dashboard',
             pickerMaxWidthTwoRow: undefined,
         });
@@ -104,7 +104,7 @@ describe('portfolioScopeProfile · a broker', () => {
 
     it('keeps its toolbar thresholds and the wider period picker', () => {
         expect(broker.toolbar).toEqual({
-            thresholds: {oneRow: 1000, denseRow: 840, stackFilters: 530, oneColumn: 430, labelHideActions: 270, labelHideTabs: 660},
+            thresholds: {oneRow: 1000, denseRow: 840, stackFilters: 530, oneColumn: 430, labelHideActions: 270, labelHideTabs: 710},
             debugName: 'brokerDetail',
             pickerMaxWidthTwoRow: 470,
         });
